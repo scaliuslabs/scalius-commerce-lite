@@ -2,7 +2,10 @@
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import { recommendationTitle } from "@/lib/recommendations";
 import {
+  getProductRecommendations,
   getAccountOwnerReceiptProof,
   getActiveCheckoutLanguage,
   getOrderReceipt,
@@ -305,6 +308,11 @@ const merchantReceiptName = layoutData?.business?.companyName?.trim()
 const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.code);
 const orderNumber = order ? formatOrderNumber(order.orderNumber, order.id) : "";
 const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, orderSuccessView.kind, copy) : [];
+// Keep shopping: products related to what was just ordered (public catalog
+// data only; nothing about the order leaves the page).
+const orderRecommendations = order && showsSuccessHero
+  ? await getProductRecommendations(orderItemsFromApi.map((item) => item.productId), 4).catch(() => null)
+  : null;
 ---
 
 <Layout
@@ -670,6 +678,22 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
       copy={copy}
       client:load
     />
+    {orderRecommendations && orderRecommendations.products.length > 0 && (
+      <section aria-labelledby="order-recommendations" class="mt-10 print:hidden">
+        <h2 id="order-recommendations" class="mb-4 text-lg font-semibold text-foreground">
+          {recommendationTitle(orderRecommendations.reason)}
+        </h2>
+        <div class="product-grid">
+          {orderRecommendations.products.map((product) => (
+            <ProductCard
+              product={product}
+              currencySymbol={layoutData?.currency?.symbol}
+              currencyCode={layoutData?.currency?.code}
+            />
+          ))}
+        </div>
+      </section>
+    )}
     </>
     ) : (
       <div class="mx-auto max-w-lg py-10 text-center">

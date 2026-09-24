@@ -14,13 +14,16 @@ import {
   hasProductImage,
   PRODUCT_IMAGE_FALLBACK,
 } from "@/lib/product-media";
+import type { StorefrontProductThumbnailPlacement } from "@scalius/shared/storefront-theme";
 
 interface Props {
   product: Product;
   media: ProductMedia[];
+  /** Theme → Product page: thumbnails beside or below the main photo. */
+  thumbnails?: StorefrontProductThumbnailPlacement;
 }
 
-const { product, media } = Astro.props;
+const { product, media, thumbnails = "beside" } = Astro.props;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
 const imageWidths = GALLERY_CONFIG.imageWidths;
@@ -106,11 +109,12 @@ const hasMultipleMedia = optimizedMedia.length > 1;
   data-fallback-zoom-url={productFallbackZoomUrl}
   data-fallback-media-id={product.imageMediaId ?? undefined}
   data-fallback-alt={product.imageAlt?.trim() || product.name}
+  data-thumbnails={thumbnails}
   class="group/gallery relative w-full lg:col-span-7 xl:col-span-6"
 >
   <div
     class:list={[
-      "flex flex-col gap-2 lg:sticky lg:gap-5",
+      "gallery-layout flex flex-col gap-2 lg:sticky lg:gap-5",
       hasMultipleMedia
         ? "lg:grid lg:grid-cols-[80px_1fr] xl:grid-cols-[100px_1fr]"
         : "lg:block",
@@ -123,7 +127,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
         hasMultipleMedia && "lg:col-start-2 lg:row-start-1",
       ]}
     >
-      <div class="flex items-stretch gap-2">
+      <div class="gallery-stage-row flex items-stretch gap-2">
         <div class="group/main relative flex-1">
           <button
             type="button"
@@ -243,7 +247,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
 
         {
           hasMultipleMedia && (
-            <div class="relative w-[18vw] max-w-[80px] shrink-0 lg:hidden">
+            <div class="gallery-mobile-rail relative w-[18vw] max-w-[80px] shrink-0 lg:hidden">
               <button
                 type="button"
                 data-scroll-control="mobile-up"
@@ -360,7 +364,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
 
     {
       hasMultipleMedia && (
-        <div class="relative hidden h-full w-full lg:col-start-1 lg:row-start-1 lg:block">
+        <div class="gallery-desktop-rail relative hidden h-full w-full lg:col-start-1 lg:row-start-1 lg:block">
           <button
             type="button"
             data-scroll-control="desktop-up"
@@ -533,7 +537,51 @@ const hasMultipleMedia = optimizedMedia.length > 1;
     background-color: #94a3b8;
   }
   .thumbnail-btn .thumb-ring.\!border-foreground {
-    border-color: #000 !important;
+    border-color: var(--foreground) !important;
+  }
+
+  /* Thumbnails below the main photo: one horizontal strip on every screen. */
+  [data-thumbnails="below"] .gallery-stage-row {
+    flex-direction: column;
+  }
+  [data-thumbnails="below"] .gallery-mobile-rail {
+    width: 100%;
+    max-width: none;
+    height: 4.5rem;
+  }
+  [data-thumbnails="below"] [data-thumbnail-rail] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    touch-action: pan-x;
+    scroll-snap-type: x mandatory;
+  }
+  [data-thumbnails="below"] [data-thumbnail-rail="mobile"] > div {
+    flex-direction: row;
+    height: 100%;
+  }
+  [data-thumbnails="below"] .gallery-mobile-rail .thumbnail-btn {
+    width: 4.25rem;
+    height: 4.25rem;
+  }
+  [data-thumbnails="below"] [data-scroll-control] {
+    display: none;
+  }
+  @media (min-width: 64rem) {
+    [data-thumbnails="below"] .gallery-layout {
+      display: flex;
+      flex-direction: column;
+    }
+    [data-thumbnails="below"] .gallery-desktop-rail {
+      order: 2;
+      height: 6rem;
+    }
+    [data-thumbnails="below"] [data-thumbnail-rail="desktop"] {
+      flex-direction: row;
+    }
+    [data-thumbnails="below"] .gallery-desktop-rail .thumbnail-btn {
+      width: 5.5rem;
+      height: 5.5rem;
+    }
   }
   @media (max-width: 1023px) {
     .mobile-media-stage {

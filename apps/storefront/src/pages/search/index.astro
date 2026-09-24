@@ -7,11 +7,14 @@ import {
   getAllCategories,
   getAllProducts,
   getLayoutData,
+  getProductRecommendations,
   type Category,
   type Product,
   type PaginatedResponse,
   type LayoutData,
+  type ProductRecommendations,
 } from "@/lib/api";
+import { recommendationTitle } from "@/lib/recommendations";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import {
   buildProductListHref,
@@ -66,16 +69,16 @@ if (isMissingProductListPage(pagination)) return new Response(null, { status: 40
 const activeFilterCount = countActiveProductListFilters(currentFilters);
 const refinements = activeFilterCount - (query ? 1 : 0);
 
-// Nothing matched: help instead of a dead end (Baymard) with new arrivals and
-// categories. The newest-products read is the cached default /search listing.
-let newArrivals: Product[] = [];
+// Nothing matched: help instead of a dead end (Baymard) with the store's
+// popular products (or its newest, titled as such) and categories.
+let suggestions: ProductRecommendations | null = null;
 let categories: Category[] = [];
 if (products.length === 0) {
-  const [latest, allCategories] = await Promise.all([
-    getAllProducts({ page: 1, limit: 20, sort: "newest" }).catch(() => null),
+  const [storeRecommendations, allCategories] = await Promise.all([
+    getProductRecommendations([], 8).catch(() => null),
     getAllCategories().catch(() => null),
   ]);
-  newArrivals = (latest?.data ?? []).slice(0, 8);
+  suggestions = storeRecommendations?.products.length ? storeRecommendations : null;
   categories = (allCategories ?? []).slice(0, 12);
 }
 
@@ -189,14 +192,14 @@ const analyticsProductData = products.map((p) => ({
               </nav>
             )}
           </section>
-          {newArrivals.length > 0 && (
-            <section aria-labelledby="search-new-arrivals" class="mt-8">
+          {suggestions && (
+            <section aria-labelledby="search-suggestions" class="mt-8">
               <div class="mb-4 flex items-baseline justify-between gap-4">
-                <h2 id="search-new-arrivals" class="text-lg font-semibold text-foreground">New arrivals</h2>
+                <h2 id="search-suggestions" class="text-lg font-semibold text-foreground">{recommendationTitle(suggestions.reason)}</h2>
                 <a href="/search" class="text-sm font-medium text-primary hover:underline">Browse all products</a>
               </div>
-              <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
-                {newArrivals.map((product) => (
+              <div class="product-grid">
+                {suggestions.products.map((product) => (
                   <ProductCard
                     product={product}
                     currencySymbol={currencySymbol}

@@ -3,7 +3,8 @@
 import "../styles/global.css";
 import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
-import { getLayoutData, resolveThemePreview, type LayoutData } from "@/lib/api";
+import { getLayoutData, type LayoutData } from "@/lib/api";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import type { AnalyticsConfig } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
 import {
@@ -31,11 +32,9 @@ import {
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import {
   buildStorefrontThemeTokens,
-  sanitizeStorefrontThemeSettings,
 } from "@scalius/shared/storefront-theme";
 import {
   clearThemePreviewCookieHeader,
-  readThemePreviewCookie,
 } from "@/lib/theme-preview-cookie";
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
@@ -90,12 +89,11 @@ const {
 const layoutData = providedLayoutData ?? (await getLayoutData());
 setRuntimeImageCdnPolicy(layoutData?.media);
 
-const themePreviewToken = readThemePreviewCookie(
-  Astro.request.headers.get("cookie"),
-);
-const themePreview = themePreviewToken
-  ? await resolveThemePreview(themePreviewToken)
-  : null;
+const {
+  theme: storefrontTheme,
+  previewToken: themePreviewToken,
+  preview: themePreview,
+} = await resolveRequestTheme(Astro, layoutData?.theme);
 const isThemePreview = themePreview !== null;
 if (themePreviewToken) {
   Astro.response.headers.set(
@@ -226,9 +224,7 @@ const currencyDecimalPlaces =
   layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
 
 // Build CSS only from shared enum constants and sanitized color overrides.
-const storefrontTheme = sanitizeStorefrontThemeSettings(
-  themePreview?.theme ?? layoutData?.theme,
-);
+const themeLayout = storefrontTheme.layout;
 const themeTokenEntries = Object.entries(
   buildStorefrontThemeTokens(storefrontTheme),
 );
@@ -400,6 +396,8 @@ if (!window.$RefreshReg$) {
     data-theme-button-style={storefrontTheme.components.buttons}
     data-theme-input-style={storefrontTheme.components.inputs}
     data-theme-card-style={storefrontTheme.components.cards}
+    data-theme-grid-desktop={themeLayout.grid.desktop}
+    data-theme-grid-mobile={themeLayout.grid.mobile}
     data-storefront-route={storefrontRouteKind}
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
@@ -420,6 +418,7 @@ if (!window.$RefreshReg$) {
             storeName={storeDisplayName}
             storePhone={storePhone}
             social={storeSocial}
+            variant={themeLayout.header}
           />
         )
       }
@@ -437,6 +436,8 @@ if (!window.$RefreshReg$) {
             storePhone={storePhone}
             social={storeSocial}
             policies={layoutData?.policies ?? []}
+            variant={themeLayout.footer}
+            business={businessInfo}
           />
         </div>
       )

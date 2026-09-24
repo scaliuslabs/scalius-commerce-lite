@@ -24,7 +24,7 @@ Product CRUD, variant management, ordered image/video associations, rich content
 - `getProductDetails()` fetches `productRichContent` (mapped to `additionalInfo`) and `productAttributeValues` (mapped to `attributes`)
 - Storefront product listing with attribute-based filtering (AND logic across attributes), with page rows/count read in one DB wave and image/category enrichment read in one dependent wave
 - Storefront category-product listing delegates to `getStorefrontCategoryProducts()`, which reuses the shared public product predicate/sort/attribute-filter helpers without paying for the global product list's variant/category enrichment
-- Storefront product detail: parallel fetching of images, variants, rich content, attributes, category, and up to 6 related products from same category
+- Storefront product detail: parallel fetching of images, variants, rich content, attributes, category, and ranked recommendations (`products.recommendations.ts`)
 - Storefront search: lightweight variant-aware product search for cart/checkout use
 - Discounted price calculation supporting both percentage and flat discount types
 - Feature extraction from description (parses bullet-point lines)
@@ -62,7 +62,7 @@ Storefront ([slug].astro)
     --> fetch(/api/storefront/products/:slug)
       --> apps/api/src/routes/products.ts [Hono route, 1h cache middleware]
         --> packages/core/src/modules/products/products.storefront.ts [getStorefrontProductBySlug]
-          --> D1: parallel queries for ordered product media, variants, richContent, attributes, category, relatedProducts
+          --> D1: parallel queries for ordered product media, variants, richContent, attributes, category, recommendations
         --> apps/storefront/src/lib/product-sellable-variants.ts [buyer-visible SKU resolver]
           --> simple: one active no-option SKU; optioned: customer-option SKUs only; fake "default"/ambiguous rows fail closed
 
@@ -135,7 +135,8 @@ Storefront category ([slug].astro)
 | GET | `/` | `getStorefrontProducts` | Paginated list with category, search, price range, freeDelivery, hasDiscount, attribute filters, sort, `hasVariants`, and SKU-aware `availableForSale` |
 | GET | `/feed` | `getStorefrontFeedProducts` | Dedicated feed projection with description, primary image, category summary, filterable attributes, SKU-aware availability, and buyer-safe variants bulk-read for the current page |
 | GET | `/search` | `searchStorefrontProducts` | Lightweight search with variants for cart/checkout |
-| GET | `/{slug}` | `getStorefrontProductBySlug` | Full product detail with variants, images, attributes, additionalInfo, relatedProducts |
+| GET | `/recommendations` | `getStorefrontProductRecommendations` | Ranked buyable products for up to 20 source ids (cart, order) or, without ids, popular/newest. `reason` (`also_bought` only with ≥2 distinct co-buyers for at least half the list, `similar`, `popular`, `new_arrivals`) drives an honest title. One ranking statement plus one media read; cached by store cache generation, so order-based ranking refreshes with the next buyer-visible write or the one-day ceiling. |
+| GET | `/{slug}` | `getStorefrontProductBySlug` | Full product detail with variants, images, attributes, additionalInfo, recommendations |
 
 ### Storefront Category Products (`/api/v1/categories`)
 

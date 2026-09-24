@@ -2,6 +2,7 @@
 import SearchBar from "../search/SearchBar.astro";
 import { Phone, ShoppingCart, Menu, Search } from "lucide-react";
 import type { HeaderData } from "@/lib/api";
+import type { StorefrontHeaderStyle } from "@scalius/shared/storefront-theme";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import {
   getMobileHeaderLogoWidth,
@@ -14,9 +15,16 @@ interface Props {
   headerData: HeaderData;
   /** Without a header menu there is no second row (and no second rule). */
   hasNavigation: boolean;
+  /**
+   * classic: logo left, search centre, icons right; collapses into a compact
+   * menu on scroll. centered: logo in the middle, search as an icon, menu row
+   * below. marketplace: a wide search bar that stays put (and a search bar
+   * under the header on phones), as Daraz/Chaldal shoppers expect.
+   */
+  variant: StorefrontHeaderStyle;
 }
 
-const { headerData, hasNavigation } = Astro.props;
+const { headerData, hasNavigation, variant } = Astro.props;
 const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 // Social links live in the footer and the phone menu, so the desktop header
@@ -43,6 +51,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
 
 <div
   id="main-header"
+  data-header-style={variant}
   class="sticky top-0 z-50 w-full bg-background/95 backdrop-blur-xl border-b border-border transition-[box-shadow,background-color,border-color] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group/header"
 >
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -65,7 +74,10 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
         <button
           id="mobile-search-toggle"
           type="button"
-          class="flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:bg-accent"
+          class:list={[
+            "flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:bg-accent",
+            variant === "marketplace" && "hidden",
+          ]}
           aria-label="Search"
         >
           <Search className="h-5 w-5 stroke-[1.5]" />
@@ -73,7 +85,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       </div>
 
       <div
-        class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:translate-x-0 lg:translate-y-0 shrink-0 z-20 flex items-center justify-center lg:justify-start"
+        class="header-logo absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:translate-x-0 lg:translate-y-0 shrink-0 z-20 flex items-center justify-center lg:justify-start"
       >
         {/* The logo's alt text (the store name) is the link's name. */}
         <a href="/" class="block group">
@@ -212,6 +224,14 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
     </div>
 
     {
+      variant === "marketplace" && (
+        <div class="pb-3 lg:hidden">
+          <SearchBar mobileView />
+        </div>
+      )
+    }
+
+    {
       hasNavigation && (
         <div class="header-full-nav-row hidden border-t border-border lg:block">
           <div class="py-2 flex justify-center relative z-50">
@@ -250,7 +270,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       visibility 0s linear 160ms;
   }
 
-  #main-header.is-scrolled .header-expanded-center {
+  #main-header[data-header-style="classic"].is-scrolled .header-expanded-center {
     pointer-events: none;
     visibility: hidden;
     opacity: 0;
@@ -261,7 +281,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       visibility 0s linear 160ms;
   }
 
-  #main-header.is-scrolled .header-compact-center {
+  #main-header[data-header-style="classic"].is-scrolled .header-compact-center {
     pointer-events: auto;
     visibility: visible;
     opacity: 1;
@@ -284,7 +304,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       border-color 120ms ease;
   }
 
-  #main-header.is-scrolled .header-full-nav-row {
+  #main-header[data-header-style="classic"].is-scrolled .header-full-nav-row {
     max-height: 0;
     overflow: hidden;
     border-top-width: 0;
@@ -327,12 +347,12 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       visibility 0s linear 160ms;
   }
 
-  #main-header.is-scrolled .header-action-morph {
+  #main-header[data-header-style="classic"].is-scrolled .header-action-morph {
     width: 2.5rem;
     margin-right: 0.75rem;
   }
 
-  #main-header.is-scrolled .header-expanded-actions {
+  #main-header[data-header-style="classic"].is-scrolled .header-expanded-actions {
     pointer-events: none;
     visibility: hidden;
     opacity: 0;
@@ -343,7 +363,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       visibility 0s linear 160ms;
   }
 
-  #main-header.is-scrolled .header-scroll-search {
+  #main-header[data-header-style="classic"].is-scrolled .header-scroll-search {
     pointer-events: auto;
     visibility: visible;
     opacity: 1;
@@ -376,9 +396,46 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       margin-right: var(--header-actions-gap-xl);
     }
 
-    #main-header.is-scrolled .header-action-morph {
+    #main-header[data-header-style="classic"].is-scrolled .header-action-morph {
       width: 2.5rem;
       margin-right: 0.75rem;
+    }
+  }
+
+  /* Centered: logo in the middle, search as an icon, the menu row below. */
+  @media (min-width: 64rem) {
+    #main-header[data-header-style="centered"] .header-logo {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    #main-header[data-header-style="centered"] .header-expanded-center,
+    #main-header[data-header-style="centered"] .header-compact-center,
+    #main-header[data-header-style="centered"] .header-expanded-actions {
+      display: none;
+    }
+
+    #main-header[data-header-style="centered"] .header-action-morph {
+      width: 2.5rem;
+      margin-right: 0.75rem;
+    }
+
+    #main-header[data-header-style="centered"] .header-scroll-search {
+      pointer-events: auto;
+      visibility: visible;
+      opacity: 1;
+      transform: none;
+    }
+
+    /* Marketplace: a wide search bar that never collapses. */
+    #main-header[data-header-style="marketplace"] .header-expanded-center {
+      max-width: 44rem;
+    }
+
+    #main-header[data-header-style="marketplace"] .header-compact-center {
+      display: none;
     }
   }
 
@@ -458,22 +515,6 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
   document
     .getElementById("scrolled-search-trigger")
     ?.addEventListener("click", triggerSearch);
-
-  const phoneBtn = document.getElementById("desktop-phone-btn");
-  const iconSuccess = document.getElementById("phone-icon-success");
-  if (phoneBtn && iconSuccess) {
-    phoneBtn.addEventListener("click", async () => {
-      const phone = phoneBtn.getAttribute("data-phone");
-      if (!phone) return;
-      try {
-        await navigator.clipboard.writeText(phone);
-        iconSuccess.classList.remove("translate-y-full");
-        setTimeout(() => iconSuccess.classList.add("translate-y-full"), 2000);
-      } catch {
-        window.location.href = `tel:${phone}`;
-      }
-    });
-  }
 
   window.addEventListener("scroll", scheduleScrollState, { passive: true });
   applyScrollState();

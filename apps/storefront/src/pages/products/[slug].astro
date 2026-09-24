@@ -16,6 +16,7 @@ import ProductGallery from "@/components/product/ProductGallery.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import StickyBuyBar from "@/components/product/StickyBuyBar.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { GALLERY_CONFIG } from "@/components/product/config";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { resolveMediaUrl } from "@/lib/media-url";
@@ -79,8 +80,12 @@ if (productResult.state === "unavailable" || !layoutData) {
   return response;
 }
 
+// Theme → Product page: photos beside the details or stacked above them.
+const { theme: requestTheme } = await resolveRequestTheme(Astro, layoutData.theme);
+const productPageLayout = requestTheme.layout.productPage;
+
 const productData = productResult.data;
-const { product, category, media, variants, relatedProducts } = productData;
+const { product, category, media, variants, recommendations } = productData;
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
 const configuredCurrencyDecimalPlaces = layoutData.currency?.decimalPlaces;
@@ -615,8 +620,11 @@ const productCategoryAnalytics = productCategory
     <section
       class="mx-auto max-w-7xl px-3 py-1.5 sm:px-6 sm:py-4 lg:px-8 lg:py-6"
     >
-      <div class="grid grid-cols-1 gap-x-10 gap-y-2 lg:grid-cols-12 lg:gap-y-8">
-        <ProductGallery product={product} media={media} />
+      <div
+        class="product-layout grid grid-cols-1 gap-x-10 gap-y-2 lg:grid-cols-12 lg:gap-y-8"
+        data-gallery={productPageLayout.gallery}
+      >
+        <ProductGallery product={product} media={media} thumbnails={productPageLayout.thumbnails} />
         <ProductSummary
           product={product}
           category={productCategory}
@@ -638,7 +646,7 @@ const productCategoryAnalytics = productCategory
     <StickyBuyBar productName={product.name} />
 
     <RelatedProducts
-      relatedProducts={relatedProducts}
+      recommendations={recommendations}
       currencySymbol={currencySymbol}
       currencyCode={currencyCode}
     />
@@ -729,9 +737,23 @@ const productCategoryAnalytics = productCategory
   .product-container {
     scroll-behavior: smooth;
   }
-  button:focus-visible,
-  a:focus-visible {
-    outline: 2px solid hsl(var(--primary));
-    outline-offset: 2px;
+</style>
+
+<style>
+  /* Stacked product page: photos full width on top, details centred below. */
+  @media (min-width: 64rem) {
+    .product-layout[data-gallery="stacked"] > :global(*) {
+      grid-column: 1 / -1;
+      width: 100%;
+      max-width: 48rem;
+      margin-inline: auto;
+    }
+    .product-layout[data-gallery="stacked"] :global(.gallery-layout) {
+      position: static;
+    }
+    /* Keep the name and price close to the fold under the photo. */
+    .product-layout[data-gallery="stacked"] > :global(#product-gallery) {
+      max-width: 36rem;
+    }
   }
 </style>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    resolveProductCardImages,
     resolveProductImageRepresentation,
     resolveSkuImageRepresentation,
     type ProductMediaProjection,
@@ -105,6 +106,37 @@ describe("product media representation", () => {
         expect(resolveSkuImageRepresentation([featured, video], video.id)).toMatchObject({
             productMediaId: featured.id,
             source: "featured-image",
+        });
+    });
+});
+
+describe("product card images", () => {
+    it("pairs the primary photo with the next gallery photo and skips videos", () => {
+        const result = resolveProductCardImages([
+            item({ id: "pmed_video", mediaId: "media_video", kind: "video", url: "/v.mp4", isPrimary: false, sortOrder: 0 }),
+            item({ id: "pmed_featured", mediaId: "media_featured", url: "/featured.webp", isPrimary: true, sortOrder: 2 }),
+            item({ id: "pmed_second", mediaId: "media_second", url: "/second.webp", isPrimary: false, sortOrder: 1 }),
+            item({ id: "pmed_third", mediaId: "media_third", url: "/third.webp", isPrimary: false, sortOrder: 3 }),
+        ]);
+        expect(result).toEqual({
+            imageUrl: "/featured.webp",
+            imageMediaId: "media_featured",
+            imageAlt: "Product image",
+            secondaryImageUrl: "/second.webp",
+        });
+    });
+
+    it("has no hover photo for a single photo, a repeated photo, or an empty gallery", () => {
+        expect(resolveProductCardImages([item()]).secondaryImageUrl).toBeNull();
+        expect(resolveProductCardImages([
+            item(),
+            item({ id: "pmed_again", isPrimary: false, sortOrder: 1 }),
+        ]).secondaryImageUrl).toBeNull();
+        expect(resolveProductCardImages([])).toEqual({
+            imageUrl: null,
+            imageMediaId: null,
+            imageAlt: null,
+            secondaryImageUrl: null,
         });
     });
 });
