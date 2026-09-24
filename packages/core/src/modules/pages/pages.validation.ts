@@ -121,6 +121,8 @@ const updatePublishedAtSchema = publishedAtInputSchema
 export const createPageSchema = z
   .object({
     ...pageFieldSchemas,
+    slug: pageFieldSchemas.slug.optional()
+      .describe("Omit to derive the web address from the title; a taken or reserved one gets a -2, -3… suffix."),
     contentType: contentEntryTypeSchema.default("page"),
     excerpt: pageFieldSchemas.excerpt.default(null),
     author: pageFieldSchemas.author.default(null),
@@ -132,8 +134,10 @@ export const createPageSchema = z
     hideTitle: z.boolean().default(false),
   })
   .superRefine((value, ctx) => {
-    const publicPath = contentEntryPath(value.contentType, value.slug);
-    if (!isValidContentEntryPath(value.contentType, publicPath)) {
+    if (
+      value.slug !== undefined &&
+      !isValidContentEntryPath(value.contentType, contentEntryPath(value.contentType, value.slug))
+    ) {
       ctx.addIssue({
         code: "custom",
         path: ["slug"],

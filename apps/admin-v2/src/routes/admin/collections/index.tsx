@@ -10,7 +10,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
 import { createListSearchValidator } from "~/lib/list-helpers";
-import { adoptListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, listSearchKey, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -44,7 +44,7 @@ function listQuery(search: ReturnType<typeof validateCollectionSearch>, term: st
 export const Route = createFileRoute("/admin/collections/")({
   validateSearch: validateCollectionSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("collections", deps.q))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("collections", deps), deps.q))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "collections") }] }),
   component: CollectionsPage,
   errorComponent: RouteErrorComponent,
@@ -55,7 +55,7 @@ const ids = (rows: CollectionSummaryDto[]) => rows.map((row) => row.id);
 
 function CollectionsPage() {
   const search = Route.useSearch();
-  const [term] = useListSearch("collections");
+  const [term] = useListSearch(listSearchKey("collections", search));
   const t = useMessages(catalogMessages);
   const { collections: can } = useCatalogActionPermissions();
   const update = useResourceMutation(

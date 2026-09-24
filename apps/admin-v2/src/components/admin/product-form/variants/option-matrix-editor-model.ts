@@ -33,6 +33,9 @@ export type DraftOption = {
 /** Editor rows always carry a quantity; the save payload omits it for untouched rows. */
 export type DraftVariant = Omit<ProductOptionMatrixInput["variants"][number], "stock"> & { stock: number };
 
+/** The lowest and highest variant price while the product has options. */
+export type VariantPriceRange = { min: number; max: number };
+
 /** What a new product's composition adds to the create request. */
 export type ProductCreateComposition = Pick<CreateProductInput, "optionMatrix" | "defaultSku">;
 

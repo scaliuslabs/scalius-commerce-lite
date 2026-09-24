@@ -48312,7 +48312,8 @@
                     "type": "string",
                     "minLength": 3,
                     "maxLength": 100,
-                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                    "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
                   },
                   "metaTitle": {
                     "type": "string",
@@ -48392,7 +48393,6 @@
                 "required": [
                   "name",
                   "description",
-                  "slug",
                   "metaTitle",
                   "metaDescription",
                   "image"
@@ -53862,6 +53862,31 @@
                               "price": {
                                 "type": "number"
                               },
+                              "priceRange": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "from": {
+                                    "type": "number",
+                                    "description": "The storefront's \"From\" price: the lowest price buyers can pay now."
+                                  },
+                                  "to": {
+                                    "type": "number",
+                                    "description": "The highest price in the same buyer pool; equal to from for one price."
+                                  },
+                                  "compareAt": {
+                                    "type": "number",
+                                    "nullable": true,
+                                    "description": "The undiscounted price of the \"From\" SKU when it is on sale."
+                                  }
+                                },
+                                "required": [
+                                  "from",
+                                  "to",
+                                  "compareAt"
+                                ],
+                                "description": "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price."
+                              },
                               "categoryId": {
                                 "type": "string",
                                 "nullable": true
@@ -53891,6 +53916,7 @@
                               "id",
                               "name",
                               "price",
+                              "priceRange",
                               "categoryId",
                               "categoryName",
                               "isActive",
@@ -62531,7 +62557,8 @@
                     "type": "string",
                     "minLength": 3,
                     "maxLength": 100,
-                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                    "description": "Omit to derive the web address from the title; a taken or reserved one gets a -2, -3… suffix."
                   },
                   "content": {
                     "type": "string"
@@ -62693,7 +62720,6 @@
                 },
                 "required": [
                   "title",
-                  "slug",
                   "content",
                   "metaTitle",
                   "metaDescription"
@@ -80072,6 +80098,11 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "orderNumber": {
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "The order's short number (#1073); null for movements without an order."
+                              },
                               "type": {
                                 "type": "string"
                               },
@@ -80177,6 +80208,7 @@
                               "id",
                               "variantId",
                               "orderId",
+                              "orderNumber",
                               "type",
                               "quantity",
                               "previousStock",
@@ -157453,6 +157485,31 @@
                               "price": {
                                 "type": "number"
                               },
+                              "priceRange": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "from": {
+                                    "type": "number",
+                                    "description": "The storefront's \"From\" price: the lowest price buyers can pay now."
+                                  },
+                                  "to": {
+                                    "type": "number",
+                                    "description": "The highest price in the same buyer pool; equal to from for one price."
+                                  },
+                                  "compareAt": {
+                                    "type": "number",
+                                    "nullable": true,
+                                    "description": "The undiscounted price of the \"From\" SKU when it is on sale."
+                                  }
+                                },
+                                "required": [
+                                  "from",
+                                  "to",
+                                  "compareAt"
+                                ],
+                                "description": "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price."
+                              },
                               "description": {
                                 "type": "string",
                                 "nullable": true
@@ -157544,6 +157601,7 @@
                               "name",
                               "slug",
                               "price",
+                              "priceRange",
                               "description",
                               "isActive",
                               "discountPercentage",
@@ -169186,6 +169244,31 @@
                               "price": {
                                 "type": "number"
                               },
+                              "priceRange": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "from": {
+                                    "type": "number",
+                                    "description": "The storefront's \"From\" price: the lowest price buyers can pay now."
+                                  },
+                                  "to": {
+                                    "type": "number",
+                                    "description": "The highest price in the same buyer pool; equal to from for one price."
+                                  },
+                                  "compareAt": {
+                                    "type": "number",
+                                    "nullable": true,
+                                    "description": "The undiscounted price of the \"From\" SKU when it is on sale."
+                                  }
+                                },
+                                "required": [
+                                  "from",
+                                  "to",
+                                  "compareAt"
+                                ],
+                                "description": "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price."
+                              },
                               "description": {
                                 "type": "string",
                                 "nullable": true
@@ -169272,6 +169355,7 @@
                               "name",
                               "slug",
                               "price",
+                              "priceRange",
                               "description",
                               "isActive",
                               "discountPercentage",
@@ -169616,6 +169700,7 @@
                   },
                   "categoryId": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "isActive": {
@@ -169679,7 +169764,8 @@
                     "type": "string",
                     "minLength": 3,
                     "maxLength": 100,
-                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                    "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
                   },
                   "media": {
                     "type": "array",
@@ -170006,7 +170092,6 @@
                   "metaTitle",
                   "metaDescription",
                   "productCondition",
-                  "slug",
                   "media"
                 ]
               }
@@ -170828,6 +170913,31 @@
                               "price": {
                                 "type": "number"
                               },
+                              "priceRange": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "from": {
+                                    "type": "number",
+                                    "description": "The storefront's \"From\" price: the lowest price buyers can pay now."
+                                  },
+                                  "to": {
+                                    "type": "number",
+                                    "description": "The highest price in the same buyer pool; equal to from for one price."
+                                  },
+                                  "compareAt": {
+                                    "type": "number",
+                                    "nullable": true,
+                                    "description": "The undiscounted price of the \"From\" SKU when it is on sale."
+                                  }
+                                },
+                                "required": [
+                                  "from",
+                                  "to",
+                                  "compareAt"
+                                ],
+                                "description": "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price."
+                              },
                               "categoryId": {
                                 "type": "string",
                                 "nullable": true
@@ -170845,6 +170955,7 @@
                               "id",
                               "name",
                               "price",
+                              "priceRange",
                               "categoryId",
                               "primaryImage",
                               "discountPercentage"
@@ -187451,7 +187562,8 @@
                     "type": "string",
                     "minLength": 2,
                     "maxLength": 100,
-                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                    "description": "Omit to derive the handle from the name; a taken one gets a -2, -3… suffix."
                   },
                   "filterable": {
                     "type": "boolean",
@@ -187468,8 +187580,7 @@
                   }
                 },
                 "required": [
-                  "name",
-                  "slug"
+                  "name"
                 ]
               }
             }

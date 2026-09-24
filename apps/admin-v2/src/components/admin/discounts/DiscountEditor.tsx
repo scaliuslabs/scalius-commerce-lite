@@ -214,7 +214,8 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     scope: (picked: Scope) => scopeLabel(picked, items),
   };
   const summary = summarizeDraft(draft, currencyCode, format);
-  const prices = draft.appliesTo.ids.map((id) => appliesItems.get(id)?.price);
+  // Each product's highest price buyers pay: an amount above all of them makes every item free.
+  const prices = draft.appliesTo.ids.map((id) => appliesItems.get(id)?.priceRange?.to);
   const aboveEveryPrice = exceedsEveryPrice(
     draft,
     prices.every((price) => price !== undefined) ? (prices as number[]) : null,

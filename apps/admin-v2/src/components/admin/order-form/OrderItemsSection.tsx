@@ -68,6 +68,7 @@ function normalizeCatalogProduct(product: CatalogProduct): Product {
     discountAmount: product.discountAmount ?? null,
     variantCount: product.variantCount ?? 0,
     primaryImage: product.primaryImage,
+    priceRange: product.priceRange,
     availableStock: product.availableStock,
     variants: [],
   };

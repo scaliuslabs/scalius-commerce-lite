@@ -3,8 +3,10 @@ import { useCallback, useSyncExternalStore } from "react";
 /**
  * A list's search term lives in this tab's session, never in the URL: search
  * terms can be phone numbers, emails or codes (AGENTS.md). Lists are keyed by
- * name ("products", "customers", …). To open a list already searched, write
- * the term first and then navigate: `writeListSearch("customers", term)`.
+ * name ("products", "customers", …), and each tab by its own key
+ * (`listSearchKey`), so a term typed in one tab never filters another. To
+ * open a list already searched, write the term first and then navigate:
+ * `writeListSearch("customers", term)`.
  */
 const PREFIX = "admin.listSearch.";
 const memory = new Map<string, string>();
@@ -33,6 +35,17 @@ export function writeListSearch(list: string, term: string): void {
     // Storage blocked: the term lives in memory only.
   }
   for (const listener of listeners) listener();
+}
+
+/**
+ * A list tab's own search key, as Shopify views each keep their query:
+ * "products", "products.draft", "products.trash". `viewParam` names the
+ * search param holding the tab (e.g. "status"); Trash always has its own.
+ */
+export function listSearchKey(list: string, search: { trashed?: boolean } & Record<string, unknown>, viewParam?: string): string {
+  if (search.trashed) return `${list}.trash`;
+  const view = viewParam ? search[viewParam] : undefined;
+  return typeof view === "string" && view ? `${list}.${view}` : list;
 }
 
 /**
