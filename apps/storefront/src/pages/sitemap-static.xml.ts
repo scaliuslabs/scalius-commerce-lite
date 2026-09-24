@@ -1,6 +1,7 @@
 /**
  * Static Pages Sitemap
- * The homepage. Internal search results are noindexed and never listed.
+ * The homepage and, once there is a post, the blog index. Internal search
+ * results are noindexed and never listed.
  */
 
 import {
@@ -11,6 +12,7 @@ import {
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import type { APIContext, APIRoute } from 'astro';
+import { getArticles } from '@/lib/api/articles';
 
 export const prerender = false;
 
@@ -23,6 +25,12 @@ export const GET: APIRoute = async (_context: APIContext) => {
         loc: `${baseUrl}/`,
       },
     ];
+    // The blog index is a real, indexable page once there is a post.
+    const articles = await getArticles({ page: 1, limit: 1 });
+    if (!articles) {
+      return xmlDataUnavailableResponse('Static sitemap is temporarily unavailable');
+    }
+    if (articles.data.length > 0) staticPages.push({ loc: `${baseUrl}/blog` });
 
     const xml = generateSitemap(staticPages, baseUrl);
 

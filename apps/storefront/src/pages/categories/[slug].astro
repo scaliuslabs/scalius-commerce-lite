@@ -26,7 +26,9 @@ import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import {
   countActiveProductListFilters,
   isIndexableProductListView,
+  isMissingProductListPage,
   productListCanonicalUrl,
+  productListMetaDescription,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
@@ -91,13 +93,14 @@ const pagination = productsResponse?.pagination || {
   totalPages: 0,
   page: 1,
 };
+if (isMissingProductListPage(pagination)) return new Response(null, { status: 404 });
 
 const pageTitle = `${category?.metaTitle || category?.name || "Category"}${
   pagination.page > 1 ? ` – Page ${pagination.page}` : ""
 }`;
 const pageDescription =
-  category?.metaDescription ||
-  `Browse products in the ${category?.name} category.`;
+  category.metaDescription ||
+  productListMetaDescription(category.name, products.map((product) => product.name));
 const productListPathname = Astro.url.pathname;
 const hasListingQuery = Object.keys(currentFilters).length > 0;
 const categoryDescription = category?.description ?? null;

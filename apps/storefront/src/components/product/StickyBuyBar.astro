@@ -1,0 +1,41 @@
+---
+// Phone buy bar: once the buy buttons scroll out of view, a bar pinned to
+// the bottom keeps the price and "Add to cart" in thumb reach. It drives the
+// real buttons, so options, stock and cart rules stay in one place.
+interface Props {
+  productName: string;
+}
+
+const { productName } = Astro.props;
+---
+
+<div
+  data-sticky-buy
+  class="invisible fixed inset-x-0 bottom-0 z-40 translate-y-full border-t border-border bg-background/95 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-16px_rgb(0_0_0/0.4)] backdrop-blur transition-transform duration-200 motion-reduce:transition-none lg:hidden"
+  inert
+>
+  <div class="mx-auto flex max-w-7xl items-center gap-3">
+    <div class="min-w-0 flex-1">
+      <p class="truncate text-sm text-muted-foreground">{productName}</p>
+      <p data-sticky-buy-price class="text-base font-semibold text-foreground"></p>
+    </div>
+    <button
+      type="button"
+      data-sticky-buy-action
+      class="flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+    >
+      Add to cart
+    </button>
+  </div>
+</div>
+
+<script>
+  import { bindStickyBuyBar } from "./scripts/sticky-buy-bar";
+
+  const bind = () => {
+    const bar = document.querySelector<HTMLElement>("[data-sticky-buy]");
+    if (bar) bindStickyBuyBar(bar, document);
+  };
+  bind();
+  document.addEventListener("astro:page-load", bind);
+</script>
