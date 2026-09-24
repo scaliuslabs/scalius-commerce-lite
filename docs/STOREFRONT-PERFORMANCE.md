@@ -53,6 +53,65 @@ check it. The release-wide evidence lives in
    `served_by_colo` in `wrangler d1 execute <db> --remote --json --command "SELECT 1"`
    and change the region to match.
 
+## Cold isolates
+
+A cache miss that lands on a fresh isolate pays module start-up on top of the
+render. Measured 2026-09-24 on the production API bundle (`wrangler deploy
+--dry-run`, 8.7 MB minified). The bundle was imported into plain Node V8 with
+the `cloudflare:*` imports pointed at stubs. Each first request ran with no
+database, so only module initialisation was timed. Figures are the median of
+three runs:
+
+| Step | Wall | CPU |
+| --- | --- | --- |
+| Isolate start: parse and compile the whole 8.7 MB script, plus top-level evaluation (zod, drizzle and the schema, the Neon/Turso drivers) | 150 ms | 170 ms |
+| First read into the `config` family (layout, storefront, shipping, checkout settings) | 52 ms | 74 ms |
+| First read into the `catalog` family (products, categories) | 9 ms | 12 ms |
+| First read into the `buyer` family (orders, customer auth, agent contexts) | 28 ms | 43 ms |
+| Any of the above again (warm) | about 1 ms | about 1 ms |
+
+These match the production `wrangler tail` figures of 110-250 ms CPU on cold
+`PublicApi` invocations. Of the eager evaluation, zod accounts for about 20 ms
+and the Neon and Turso drivers for about 5 ms. Everything else in the
+start-up cost is V8 parsing a script of that size, so it scales with the
+bundle size, not with what a request runs.
+
+What the render path does about it:
+
+- A page is one batch (the cart adds one uncached language read), so a
+  render usually pays for at most one API isolate start.
+  The batch's parts share the module promises, so each family loads once.
+- `/api/v1/checkout/config` used to sit in the `buyer` family, so every
+  home, product and cart render also loaded orders, customer auth and agent
+  contexts. It now belongs to `config` beside the layout, which saves
+  36-50 ms wall and 48-58 ms CPU on each cold render that reads checkout
+  settings. `apps/api/src/runtime/storefront-render-families.test.ts` keeps
+  every batchable public read out of the `buyer` family.
+- API placement concentrates traffic in one location, so its isolates stay
+  warm far more often than when they were spread across visitor colos.
+
+Measured locally, cold home (436 ms in a fresh storefront and API isolate on
+the local stack):
+
+- about 45 ms of storefront isolate start-up before the first read;
+- 150-270 ms for the batch in a cold API isolate (parse, config family
+  initialisation, first D1 connection), against 21-35 ms warm;
+- one extra 46-64 ms hop for fallback products, only because the local store
+  has no active collections (production home does not make it);
+- about 40 ms of render.
+
+What would remove most of the rest (not done; it is an architecture
+decision): the ~100 ms parse cost comes from shipping the dashboard,
+agent-access (MCP server, OAuth provider), Better Auth, Stripe and the
+Postgres driver in the same script as the public reads. The modules the
+public render path actually runs are about a fifth of the bundle. Two ways
+to cut the parse cost to about a quarter for public reads:
+
+- a separate public-read Worker behind the same service binding;
+- a multi-module upload that code-splits the route families so V8 compiles
+  a family only when it is imported. This needs a pre-bundle step with
+  splitting and `no_bundle` with `find_additional_modules`.
+
 ## Known platform failure: a stuck Workers Cache key
 
 Seen on 2026-09-24. In one colo (SIN), one key of the `PublicApi` Workers
