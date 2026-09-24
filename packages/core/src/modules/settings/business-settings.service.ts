@@ -38,9 +38,13 @@ type ContactIssue = { path: [keyof BusinessInfo]; message: string };
  */
 async function normalizeBusinessPhone(db: Database, value: string): Promise<string | ContactIssue> {
     if (value === "") return "";
+    // Buyer phones must be mobiles (couriers call, codes go by SMS); the store's
+    // own contact number may be a landline.
+    const landline = normalizeBdLandline(value);
+    if (landline) return landline;
     const countries = await customerCountriesDocument.read(db);
     try {
-        const e164 = validateAndFormatPhone(normalizeBdLandline(value) ?? value, {
+        const e164 = validateAndFormatPhone(value, {
             countries: countries.allowedCountries,
             mode: countries.allowedCountriesMode,
         });
