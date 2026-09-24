@@ -154,6 +154,25 @@ describe("dashboard sign-in on the API Worker", () => {
     expect(state.session.permissions.length).toBeGreaterThan(10);
   });
 
+  it("tells a browser whose session someone else ended why it was signed out, and nobody else", async () => {
+    const env = makeEnv();
+    const userId = await createSuperAdmin(env);
+    const cookie = sessionCookie(await signIn(env));
+
+    // Suspending, removing or "sign out other devices" deletes the session row.
+    await database.db.delete(sessionTable).where(eq(sessionTable.userId, userId));
+    const revoked = await (await readState(env, cookie)).json() as DashboardSessionState;
+    expect(revoked).toMatchObject({ session: null, signedOut: "access_changed" });
+
+    // A session that simply ran out, a forged cookie, or no cookie: plain sign-in.
+    const expiredCookie = sessionCookie(await signIn(env));
+    await database.db.update(sessionTable).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(sessionTable.userId, userId));
+    expect(await (await readState(env, expiredCookie)).json()).not.toHaveProperty("signedOut");
+    const forged = `${cookie.split("=")[0]}=${encodeURIComponent("made-up-token.c2lnbmF0dXJl")}`;
+    expect(await (await readState(env, forged)).json()).not.toHaveProperty("signedOut");
+    expect(await (await readState(env)).json()).not.toHaveProperty("signedOut");
+  });
+
   it("scopes the session cookie to the dashboard base path", async () => {
     const env = makeEnv({ dashboardUrl: `${STOREFRONT}/dashboard` });
     await createSuperAdmin(env);

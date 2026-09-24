@@ -7,7 +7,7 @@ import { ORDER_NOTIFICATION_TYPES } from "@scalius/core/modules/notifications/no
 import {
     TEMPLATE_LIMITS,
     findUnknownVariables,
-    renderTemplate,
+    renderSmsTemplate,
     sampleOrderEmail,
     sampleVariables,
 } from "@scalius/core/modules/notifications/notification-templates";
@@ -51,6 +51,8 @@ const previewStoreSchema = z.object({
     name: z.string().nullable(),
     logoUrl: z.string().nullable(),
     storefrontUrl: z.string().nullable(),
+    /** No business name is set, so `name` is the Store URL host. */
+    nameFromAddress: z.boolean(),
 });
 
 app.openapi(createRoute({
@@ -71,7 +73,12 @@ app.openapi(createRoute({
     const store = await readStoreIdentity(db);
     return ok(c, {
         ...await getNotificationTemplates(db, store.language),
-        store: { name: store.name, logoUrl: store.logoUrl, storefrontUrl: c.env.STOREFRONT_URL || null },
+        store: {
+            name: store.name,
+            logoUrl: store.logoUrl,
+            storefrontUrl: c.env.STOREFRONT_URL || null,
+            nameFromAddress: store.nameFromAddress,
+        },
     });
 });
 
@@ -159,15 +166,14 @@ app.openapi(createRoute({
     }
 
     const store = await readStoreIdentity(db);
-    const values = sampleVariables(store.name ?? "", store.language);
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
 
     if (input.channel === "email") {
         const email = sampleOrderEmail({
+            event: input.event,
             language: store.language,
             store,
-            subject: renderTemplate(input.subject, values),
-            body: renderTemplate(input.body, values),
+            template: { subject: input.subject, body: input.body },
             origin: c.env.STOREFRONT_URL,
         });
         const result = await sendEmail({ ...email, to: user.email, fromName: store.name ?? undefined }, {
@@ -183,7 +189,8 @@ app.openapi(createRoute({
 
     const provider = await getActiveSmsProvider(db, encryptionKey);
     if (!provider) throw new ValidationError("Set up SMS under Sending before sending a test.");
-    const result = await provider.sendSms({ to: phone!, message: renderTemplate(input.body, values) })
+    const message = renderSmsTemplate(input.event, store.language, input.body, sampleVariables(store.name ?? "", store.language));
+    const result = await provider.sendSms({ to: phone!, message })
         .catch(() => ({ success: false as const, rawStatus: "provider_error" }));
     if (!result.success) {
         // Masked: the provider status only, never the number or the message.

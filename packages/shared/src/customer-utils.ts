@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
-import { normalizeBdMobile, toLatinDigits } from "./phone-input";
+import { compactPhone, normalizeBdMobile, toLatinDigits } from "./phone-input";
 
 // Re-exported for browser code that lazy-loads full validation (customer auth,
 // the checkout phone country picker) without its own libphonenumber dependency.
@@ -73,6 +73,32 @@ export function assertPhoneCountryAllowed(input: string, policy: PhoneCountryPol
   if (!parsed) throw new Error("Could not parse phone number");
 
   assertParsedPhoneCountryAllowed(parsed, policy);
+}
+
+function parseBdLandline(raw: string): ParsedPhoneNumber | null {
+  const compact = compactPhone(raw);
+  if (!compact || normalizeBdMobile(compact)) return null;
+  try {
+    const parsed = parsePhoneNumber(compact, "BD");
+    // National numbers starting with 1 are mobiles; only normalizeBdMobile decides those.
+    return parsed?.isValid() && parsed.country === "BD" && !parsed.nationalNumber.startsWith("1") ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A Bangladesh landline or hotline (02-9876543, 031-714567, 09612-345678) in
+ * any typing, as `+880…`; null for anything else, mobiles included. Only for
+ * the store's own published phone: buyer phones stay mobile-only.
+ */
+export function normalizeBdLandline(raw: string): string | null {
+  return parseBdLandline(raw)?.number ?? null;
+}
+
+/** "02-9876543" for a Bangladesh landline stored as `+880…`; any other value unchanged. */
+export function formatBdLandline(phone: string): string {
+  return phone.startsWith("+880") ? parseBdLandline(phone)?.formatNational() ?? phone : phone;
 }
 
 /**

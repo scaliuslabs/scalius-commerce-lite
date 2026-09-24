@@ -16,6 +16,9 @@ export const NOTIFICATION_VARIABLES = [
   "cod_amount",
   "store_name",
   "tracking_id",
+  "courier_name",
+  "tracking_url",
+  "refund_amount",
   "support_request",
   "support_status",
 ] as const;
@@ -33,7 +36,10 @@ const ORDER_VARIABLES: readonly NotificationVariable[] = [
 
 /** Only what the sender knows for this event. */
 export function variablesForEvent(event: OrderNotificationType): readonly NotificationVariable[] {
-  if (event === "order_shipped") return [...ORDER_VARIABLES, "tracking_id"];
+  if (event === "order_shipped") return [...ORDER_VARIABLES, "tracking_id", "courier_name", "tracking_url"];
+  if (event === "order_refunded" || event === "order_partially_refunded" || event === "refund_processing" || event === "refund_failed") {
+    return [...ORDER_VARIABLES, "refund_amount"];
+  }
   if (event === "support_request_submitted") return [...ORDER_VARIABLES, "support_request"];
   if (event === "support_request_status_updated") {
     return [...ORDER_VARIABLES, "support_request", "support_status"];
@@ -86,8 +92,8 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
       },
       order_shipped: {
         subject: "Order {{order_number}} is on its way",
-        message: "Your order is on its way.\nTracking ID: {{tracking_id}}",
-        sms: "your order {{order_number}} is on its way!\nTracking: {{tracking_id}}",
+        message: "Your order is on its way.\nCourier: {{courier_name}}\nTracking ID: {{tracking_id}}\nTrack your parcel: {{tracking_url}}",
+        sms: "your order {{order_number}} is on its way!\nTracking: {{tracking_id}} ({{courier_name}})",
       },
       order_delivered: {
         subject: "Order {{order_number}} delivered",
@@ -111,7 +117,7 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
       },
       refund_processing: {
         subject: "Refund in progress for order {{order_number}}",
-        message: "We're processing the refund for this order and will let you know when it's done.",
+        message: "We're processing the refund for this order and will let you know when it's done.\nRefund: {{refund_amount}}",
         sms: "your refund for order {{order_number}} is being processed. We'll update you when it is complete.",
       },
       refund_failed: {
@@ -121,13 +127,13 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
       },
       order_refunded: {
         subject: "Order {{order_number}} refunded",
-        message: "The refund for this order has been processed.",
-        sms: "your order {{order_number}} has been refunded. Contact us if you have questions.",
+        message: "The refund for this order has been processed.\nRefund: {{refund_amount}}",
+        sms: "your order {{order_number}} has been refunded. Contact us if you have questions.\nRefund: {{refund_amount}}",
       },
       order_partially_refunded: {
         subject: "Order {{order_number}} partially refunded",
-        message: "A partial refund for this order has been processed.",
-        sms: "a partial refund has been processed for order {{order_number}}. Contact us if you have questions.",
+        message: "A partial refund for this order has been processed.\nRefund: {{refund_amount}}",
+        sms: "a partial refund has been processed for order {{order_number}}. Contact us if you have questions.\nRefund: {{refund_amount}}",
       },
       payment_balance_paid: {
         subject: "Payment received for order {{order_number}}",
@@ -166,8 +172,8 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
       },
       order_shipped: {
         subject: "অর্ডার {{order_number}} পাঠানো হয়েছে",
-        message: "আপনার অর্ডার পাঠানো হয়েছে।\nট্র্যাকিং আইডি: {{tracking_id}}",
-        sms: "আপনার অর্ডার {{order_number}} পাঠানো হয়েছে!\nট্র্যাকিং: {{tracking_id}}",
+        message: "আপনার অর্ডার পাঠানো হয়েছে।\nকুরিয়ার: {{courier_name}}\nট্র্যাকিং আইডি: {{tracking_id}}\nপার্সেল ট্র্যাক করুন: {{tracking_url}}",
+        sms: "আপনার অর্ডার {{order_number}} পাঠানো হয়েছে!\nট্র্যাকিং: {{tracking_id}} ({{courier_name}})",
       },
       order_delivered: {
         subject: "অর্ডার {{order_number}} ডেলিভারি হয়েছে",
@@ -191,7 +197,7 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
       },
       refund_processing: {
         subject: "অর্ডার {{order_number}}-এর রিফান্ড প্রক্রিয়াধীন",
-        message: "এই অর্ডারের রিফান্ড প্রক্রিয়াধীন। শেষ হলেই জানিয়ে দেব।",
+        message: "এই অর্ডারের রিফান্ড প্রক্রিয়াধীন। শেষ হলেই জানিয়ে দেব।\nরিফান্ড: {{refund_amount}}",
         sms: "অর্ডার {{order_number}}-এর রিফান্ড প্রক্রিয়াধীন। শেষ হলেই জানিয়ে দেব।",
       },
       refund_failed: {
@@ -201,13 +207,13 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
       },
       order_refunded: {
         subject: "অর্ডার {{order_number}}-এর রিফান্ড দেওয়া হয়েছে",
-        message: "এই অর্ডারের রিফান্ড দেওয়া হয়েছে।",
-        sms: "অর্ডার {{order_number}}-এর রিফান্ড দেওয়া হয়েছে। কোনো প্রশ্ন থাকলে যোগাযোগ করুন।",
+        message: "এই অর্ডারের রিফান্ড দেওয়া হয়েছে।\nরিফান্ড: {{refund_amount}}",
+        sms: "অর্ডার {{order_number}}-এর রিফান্ড দেওয়া হয়েছে। কোনো প্রশ্ন থাকলে যোগাযোগ করুন।\nরিফান্ড: {{refund_amount}}",
       },
       order_partially_refunded: {
         subject: "অর্ডার {{order_number}}-এর আংশিক রিফান্ড দেওয়া হয়েছে",
-        message: "এই অর্ডারের আংশিক রিফান্ড দেওয়া হয়েছে।",
-        sms: "অর্ডার {{order_number}}-এর আংশিক রিফান্ড দেওয়া হয়েছে। কোনো প্রশ্ন থাকলে যোগাযোগ করুন।",
+        message: "এই অর্ডারের আংশিক রিফান্ড দেওয়া হয়েছে।\nরিফান্ড: {{refund_amount}}",
+        sms: "অর্ডার {{order_number}}-এর আংশিক রিফান্ড দেওয়া হয়েছে। কোনো প্রশ্ন থাকলে যোগাযোগ করুন।\nরিফান্ড: {{refund_amount}}",
       },
       payment_balance_paid: {
         subject: "অর্ডার {{order_number}}-এর পেমেন্ট পেয়েছি",
@@ -267,24 +273,90 @@ export function findUnknownVariables(template: string, event: OrderNotificationT
   return [...unknown];
 }
 
+/** Where an empty variable was, while the line closes up around it. */
+const HOLE = "\uE000";
+
+/** The spaces and punctuation an empty variable leaves behind close up: "Hi {{customer_name}}, …" → "Hi, …". */
+function closeUp(line: string): string {
+  return line
+    .replace(/[([{"“‘][ \t]*\uE000[ \t]*[)\]}"”’]/g, HOLE)
+    .replace(/[ \t]*\uE000[ \t]*(?=[,.;:!?।)\]}])/g, "")
+    .replace(/[ \t]*\uE000[ \t]*/g, " ")
+    .replace(/([,;:·|–—-])(?:[ \t]*[,;:·|–—-])+/g, "$1")
+    .replace(/[ \t]*[,;:·|–—-]+[ \t]*(?=[.!?।]|$)/g, "")
+    .replace(/^[\s,.;:!?।·|–—-]+/, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 /**
- * Fills `{{variable}}`s. A line that uses a variable with no value (a tracking
- * ID that isn't known yet) is left out, so no message says "Tracking: ".
- * Values are single-line plain text; HTML escaping happens where HTML is built.
+ * Fills one line's `{{variable}}`s. Values are single-line plain text; HTML
+ * escaping happens where HTML is built. `blank` is true when the line uses
+ * variables and none of them has a value.
+ */
+function fillLine(line: string, values: NotificationVariableValues): { text: string; blank: boolean } {
+  let used = 0;
+  let empty = 0;
+  const filled = line.replace(VARIABLE, (_match, name: string) => {
+    used += 1;
+    const raw = Object.hasOwn(values, name) ? values[name as NotificationVariable] : undefined;
+    const value = raw?.replace(/[\s\uE000]+/g, " ").trim();
+    if (value) return value;
+    empty += 1;
+    return HOLE;
+  });
+  return empty ? { text: closeUp(filled), blank: empty === used } : { text: filled, blank: false };
+}
+
+/**
+ * Fills a message (an email body or an SMS). A line whose variables are all
+ * empty (a tracking ID that isn't known yet) is left out, so no message says
+ * "Tracking: "; elsewhere an empty variable is left blank.
  */
 export function renderTemplate(template: string, values: NotificationVariableValues): string {
   const lines: string[] = [];
   for (const line of template.replace(/\r\n?/g, "\n").split("\n")) {
-    let missing = false;
-    const rendered = line.replace(VARIABLE, (_match, name: string) => {
-      const raw = Object.hasOwn(values, name) ? values[name as NotificationVariable] : undefined;
-      const value = raw?.replace(/\s+/g, " ").trim();
-      if (!value) missing = true;
-      return value ?? "";
-    });
-    if (!missing) lines.push(rendered);
+    const { text, blank } = fillLine(line, values);
+    if (!blank) lines.push(text);
   }
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Fills a subject: one line that is never left out; an empty variable is left blank. */
+export function renderSubject(template: string, values: NotificationVariableValues): string {
+  return fillLine(template.replace(/[\r\n]+/g, " "), values).text.trim();
+}
+
+/**
+ * The email a customer gets for one event, as the real send, the test send and
+ * the dashboard preview show it. A subject or message that renders empty uses
+ * the event's default, so no email goes out without a subject.
+ */
+export function renderEmailTemplate(
+  event: OrderNotificationType,
+  language: MessageLanguage,
+  template: EmailTemplate,
+  values: NotificationVariableValues,
+): EmailTemplate {
+  const subject = renderSubject(template.subject, values);
+  const body = renderTemplate(template.body, values);
+  if (subject && body) return { subject, body };
+  const fallback = defaultNotificationTemplates(language).email[event];
+  return {
+    subject: subject || renderSubject(fallback.subject, values),
+    body: body || renderTemplate(fallback.body, values),
+  };
+}
+
+/** The SMS a customer gets for one event; one that renders empty uses the event's default. */
+export function renderSmsTemplate(
+  event: OrderNotificationType,
+  language: MessageLanguage,
+  body: string,
+  values: NotificationVariableValues,
+): string {
+  return renderTemplate(body, values)
+    || renderTemplate(defaultNotificationTemplates(language).sms[event].body, values);
 }
 
 // ─────────────────────────────────────────
@@ -293,7 +365,7 @@ export function renderTemplate(template: string, values: NotificationVariableVal
 
 /** The store as an email shows it. */
 export interface EmailStore {
-  /** Business `companyName`, else `legalName`; null when neither is set. */
+  /** The store's display name (`storeDisplayName`); null only while nothing names the store. */
   name: string | null;
   /** The header logo, only when it is an absolute http(s) URL. */
   logoUrl: string | null;
@@ -311,8 +383,10 @@ export interface OrderEmailFacts {
   /** Null when the saved currency can't be shown truthfully. */
   amounts: {
     subtotal: string;
-    shipping: string;
-    discount: string | null;
+    /** Each applied discount; `name` null is a discount without a saved promotion. */
+    discounts: Array<{ name: string | null; code: string | null; amount: string }>;
+    /** What the buyer pays for delivery (null: free) and, when it was waived or discounted, the fee before that. */
+    delivery: { amount: string | null; original: string | null };
     tax: { label: string | null; amount: string; included: boolean } | null;
     total: string;
   } | null;
@@ -340,10 +414,15 @@ export function storeHeaderHtml(store: EmailStore): string {
   return store.name ? `<p style="margin:0 0 24px;font-size:20px;font-weight:700;">${escapeHtml(store.name)}</p>` : "";
 }
 
+/** Plain-text web addresses in the message (a courier tracking link) become links. */
+function linkify(escaped: string): string {
+  return escaped.replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)\]]/g, (url) => `<a href="${url}" style="color:#174ea6;">${url}</a>`);
+}
+
 function bodyHtml(body: string): string {
   return body
     .split(/\n{2,}/)
-    .map((paragraph) => `<p style="margin:0 0 16px;">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
+    .map((paragraph) => `<p style="margin:0 0 16px;">${linkify(escapeHtml(paragraph)).replace(/\n/g, "<br>")}</p>`)
     .join("");
 }
 
@@ -379,14 +458,22 @@ export function renderOrderEmail(input: {
   const subject = input.subject.replace(/[\r\n]+/g, " ").trim();
   const { amounts, support } = facts;
 
-  const summary: Array<[string, string]> = [];
+  // Each discount by name and code; free or discounted delivery is the delivery
+  // line itself, with the fee it replaced struck through.
+  const summary: Array<{ label: string; value: string; was?: string | null }> = [];
   if (amounts) {
-    summary.push([copy.subtotal, amounts.subtotal], [copy.shipping, amounts.shipping]);
-    if (amounts.discount) summary.push([copy.discount, `−${amounts.discount}`]);
-    if (amounts.tax) {
-      summary.push([`${amounts.tax.label || copy.tax}${amounts.tax.included ? ` (${copy.taxIncluded})` : ""}`, amounts.tax.amount]);
+    summary.push({ label: copy.subtotal, value: amounts.subtotal });
+    for (const discount of amounts.discounts) {
+      summary.push({ label: copy.discountLine(discount.name, discount.code), value: `−${discount.amount}` });
     }
-    summary.push([copy.total, amounts.total]);
+    summary.push({ label: copy.shipping, value: amounts.delivery.amount ?? copy.free, was: amounts.delivery.original });
+    if (amounts.tax) {
+      summary.push({
+        label: `${amounts.tax.label || copy.tax}${amounts.tax.included ? ` (${copy.taxIncluded})` : ""}`,
+        value: amounts.tax.amount,
+      });
+    }
+    summary.push({ label: copy.total, value: amounts.total });
   }
   const payment = paymentLine(language, facts.payment);
   const lines = facts.items.map((item) => ({
@@ -405,7 +492,7 @@ export function renderOrderEmail(input: {
     cta ? `${cta.label}: ${cta.href}` : "",
     lines.length || summary.length ? copy.orderSummary : "",
     ...lines.map((item) => `${item.name}${item.variant ? ` (${item.variant})` : ""}\n${item.quantity}${item.subtotal ? ` — ${item.subtotal}` : ""}`),
-    summary.map(([label, value]) => `${label}: ${value}`).join("\n"),
+    summary.map(({ label, value, was }) => `${label}: ${value}${was ? ` ${copy.was(was)}` : ""}`).join("\n"),
     amounts ? "" : copy.amountsUnavailable,
     `${copy.payment}: ${payment}`,
     facts.address.length ? `${copy.deliveryAddress}\n${facts.address.join("\n")}` : "",
@@ -423,9 +510,10 @@ ${storeHeaderHtml(facts.store)}
 ${cta ? `<p style="margin:0 0 12px;"><a href="${escapeHtml(cta.href)}" style="${BUTTON}">${escapeHtml(cta.label)}</a></p>` : ""}${origin ? `<p style="margin:0 0 24px;"><a href="${escapeHtml(`${origin}/`)}" style="${LINK}">${escapeHtml(copy.visitStore)}</a></p>` : ""}
 <h2 style="${SECTION}">${escapeHtml(copy.orderSummary)}</h2>
 ${lines.length ? `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><thead><tr><th scope="col" style="text-align:left;padding:0 8px 8px 0;${RULE}">${escapeHtml(copy.items)}</th><th scope="col" style="width:34%;text-align:right;padding:0 0 8px;${RULE}">${amounts ? escapeHtml(copy.subtotal) : ""}</th></tr></thead><tbody>${lines.map((item) => `<tr><td style="padding:12px 8px 12px 0;vertical-align:top;${RULE}"><strong>${escapeHtml(item.name)}</strong>${item.variant ? `<div style="${MUTED}">${escapeHtml(item.variant)}</div>` : ""}<div style="font-size:14px;${MUTED}">${escapeHtml(item.quantity)}</div></td><td style="padding:12px 0;vertical-align:top;text-align:right;${RULE}">${escapeHtml(item.subtotal)}</td></tr>`).join("")}</tbody></table>` : ""}
-${summary.length ? `<table aria-label="${escapeHtml(copy.orderSummary)}" style="width:100%;border-collapse:collapse;margin:16px 0;">${summary.map(([label, value], index) => {
+${summary.length ? `<table aria-label="${escapeHtml(copy.orderSummary)}" style="width:100%;border-collapse:collapse;margin:16px 0;">${summary.map(({ label, value, was }, index) => {
     const weight = index === summary.length - 1 ? "700" : "400";
-    return `<tr><th scope="row" style="padding:4px 12px 4px 0;text-align:left;font-weight:${weight};">${escapeHtml(label)}</th><td style="padding:4px 0;text-align:right;font-weight:${weight};">${escapeHtml(value)}</td></tr>`;
+    const before = was ? `<s style="${MUTED}">${escapeHtml(was)}</s> ` : "";
+    return `<tr><th scope="row" style="padding:4px 12px 4px 0;text-align:left;font-weight:${weight};">${escapeHtml(label)}</th><td style="padding:4px 0;text-align:right;font-weight:${weight};">${before}${escapeHtml(value)}</td></tr>`;
   }).join("")}</table>` : `<p style="${MUTED}">${escapeHtml(copy.amountsUnavailable)}</p>`}
 <p style="margin:16px 0 0;"><strong>${escapeHtml(copy.payment)}:</strong> ${escapeHtml(payment)}</p>
 ${facts.address.length ? `<h2 style="${SECTION}">${escapeHtml(copy.deliveryAddress)}</h2><p style="margin:0;">${facts.address.map((line) => escapeHtml(line)).join("<br>")}</p>` : ""}
@@ -448,29 +536,38 @@ export function sampleVariables(storeName: string, language: MessageLanguage): N
     cod_amount: "৳1,250",
     store_name: storeName,
     tracking_id: "SF12345678",
+    courier_name: "Steadfast",
+    tracking_url: "https://steadfast.com.bd/t/SF12345678",
+    refund_amount: "৳450",
     support_request: copy.request.return,
     support_status: copy.requestStatus.approved,
   };
 }
 
-/** A sample order in the real email frame, for the dashboard preview and test emails. */
+/** A draft template on a sample order in the real email frame, for the dashboard preview and test emails. */
 export function sampleOrderEmail(options: {
+  event: OrderNotificationType;
   language: MessageLanguage;
   store: EmailStore;
-  subject: string;
-  body: string;
+  template: EmailTemplate;
   /** The storefront origin, so the preview shows the guest's order link. */
   origin?: string | null;
 }): { subject: string; html: string; text: string } {
   const origin = options.origin?.replace(/\/+$/, "") || null;
+  const values = sampleVariables(options.store.name ?? "", options.language);
   return renderOrderEmail({
     language: options.language,
-    subject: options.subject,
-    body: options.body,
+    ...renderEmailTemplate(options.event, options.language, options.template, values),
     facts: {
       store: options.store,
-      items: [{ name: "Cotton panjabi", variant: "L", quantity: 1, unitPrice: "৳1,150", subtotal: "৳1,150" }],
-      amounts: { subtotal: "৳1,150", shipping: "৳100", discount: null, tax: null, total: "৳1,250" },
+      items: [{ name: "Cotton panjabi", variant: "L", quantity: 1, unitPrice: "৳1,350", subtotal: "৳1,350" }],
+      amounts: {
+        subtotal: "৳1,350",
+        discounts: [{ name: "Eid sale", code: "EID10", amount: "৳100" }],
+        delivery: { amount: null, original: "৳60" },
+        tax: null,
+        total: "৳1,250",
+      },
       payment: { state: "cod", due: "৳1,250", partiallyPaid: false },
       address: ["Rahim Uddin", "01712-345678", "House 12, Road 5", "Dhanmondi, Dhaka"],
       method: ["Inside Dhaka"],

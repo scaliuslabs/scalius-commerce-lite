@@ -13288,7 +13288,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.delivery_locations.bulk_delete",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/settings/delivery-locations",
-    "summary": "Bulk soft-delete delivery locations",
+    "summary": "Bulk soft-delete delivery locations with their thanas and areas",
     "tags": [
       "Admin - Delivery Locations"
     ],
@@ -13517,6 +13517,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "descendants": {
+                  "type": "object",
+                  "properties": {
+                    "zones": {
+                      "type": "integer"
+                    },
+                    "areas": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "zones",
+                    "areas"
+                  ]
                 }
               },
               "required": [
@@ -13713,6 +13728,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "displayName": {
               "type": "string"
+            },
+            "descendants": {
+              "type": "object",
+              "properties": {
+                "zones": {
+                  "type": "integer"
+                },
+                "areas": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "zones",
+                "areas"
+              ]
             }
           },
           "required": [
@@ -13884,6 +13914,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "displayName": {
                     "type": "string"
+                  },
+                  "descendants": {
+                    "type": "object",
+                    "properties": {
+                      "zones": {
+                        "type": "integer"
+                      },
+                      "areas": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "zones",
+                      "areas"
+                    ]
                   }
                 },
                 "required": [
@@ -14269,7 +14314,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.delivery_locations.trash",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/settings/delivery-locations/{id}",
-    "summary": "Soft-delete a delivery location",
+    "summary": "Soft-delete a delivery location with its thanas and areas",
     "tags": [
       "Admin - Delivery Locations"
     ],
@@ -14467,6 +14512,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "displayName": {
               "type": "string"
+            },
+            "descendants": {
+              "type": "object",
+              "properties": {
+                "zones": {
+                  "type": "integer"
+                },
+                "areas": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "zones",
+                "areas"
+              ]
             }
           },
           "required": [
@@ -31068,12 +31128,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "storefrontUrl": {
                   "type": "string",
                   "nullable": true
+                },
+                "nameFromAddress": {
+                  "type": "boolean"
                 }
               },
               "required": [
                 "name",
                 "logoUrl",
-                "storefrontUrl"
+                "storefrontUrl",
+                "nameFromAddress"
               ]
             }
           },
@@ -44432,6 +44496,89 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.payments.sslcommerz_remove",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/settings/sslcommerz",
+    "summary": "Remove the saved SSLCommerz keys and turn SSLCommerz off",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "expectedRevision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "message",
+            "revision"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.payments.sslcommerz_update",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/settings/sslcommerz",
@@ -44592,6 +44739,89 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "publishableKey",
             "webhookSecret",
             "enabled"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.payments.stripe_remove",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/settings/stripe",
+    "summary": "Remove the saved Stripe keys and turn Stripe off",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "expectedRevision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "message",
+            "revision"
           ]
         }
       },
@@ -87613,6 +87843,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.payments.sslcommerz_remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.sslcommerz_remove"
+        ]
+      },
+      {
         "operationId": "dashboard.payments.sslcommerz_update",
         "surface": "dashboard",
         "mode": "curated",
@@ -87626,6 +87864,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "dashboard.stripe-settings"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.stripe_remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.stripe_remove"
         ]
       },
       {
