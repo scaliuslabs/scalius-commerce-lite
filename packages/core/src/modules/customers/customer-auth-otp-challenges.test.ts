@@ -1,326 +1,77 @@
-import { describe, expect, it, vi } from "vitest";
-import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+// Challenge storage on the real schema. Claiming, wrong attempts, locking and
+// replaced codes are exercised end to end in customer-auth.service.test.ts.
+import type { DatabaseSync } from "node:sqlite";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Database } from "@scalius/database/client";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { RateLimitError, ServiceUnavailableError } from "@scalius/core/errors";
 
 import {
   buildCustomerAuthOtpStorageKey,
-  claimCustomerAuthOtpChallenge,
   cleanupExpiredCustomerAuthOtpChallenges,
   deleteCustomerAuthOtpChallenge,
-  hashCustomerAuthOtpIdentifier,
   persistCustomerAuthOtpChallenge,
+  type PersistCustomerAuthOtpChallengeInput,
 } from "./customer-auth-otp-challenges";
-import { encodeEncryptedCredential, encryptCredentials } from "../../utils/credential-encryption";
 
-const otpSigningKey = "test-signing-key";
-const contactEncryptionKey = Buffer.alloc(32, 7).toString("base64");
+const signingKey = "test-signing-key";
+const contactKey = Buffer.alloc(32, 7).toString("base64");
 
-function createDb(options: {
-  insertRows?: unknown[];
-  updateRows?: unknown[][];
-  selectGet?: unknown;
-  selectRows?: unknown[];
-} = {}) {
-  const updateRows = [...(options.updateRows ?? [])];
-  const calls = {
-    insertValues: undefined as unknown,
-    onConflictDoUpdate: undefined as unknown,
-    updateSets: [] as unknown[],
-    deleteWhereCalls: 0,
-  };
+let sqlite: DatabaseSync;
+let db: Database;
+beforeEach(() => ({ sqlite, db } = createSqliteD1Database()));
+afterEach(() => sqlite.close());
 
+async function challenge(overrides: Partial<PersistCustomerAuthOtpChallengeInput> = {}) {
+  const otpKey = await buildCustomerAuthOtpStorageKey("email", "buyer@example.com", signingKey);
   return {
-    calls,
-    insert: vi.fn(() => ({
-      values: vi.fn((values: unknown) => {
-        calls.insertValues = values;
-        return {
-          onConflictDoUpdate: vi.fn((config: unknown) => {
-            calls.onConflictDoUpdate = config;
-            return {
-              returning: vi.fn(async () => options.insertRows ?? []),
-            };
-          }),
-        };
-      }),
-    })),
-    update: vi.fn(() => ({
-      set: vi.fn((values: unknown) => {
-        calls.updateSets.push(values);
-        return {
-          where: vi.fn(() => ({
-            returning: vi.fn(async () => updateRows.shift() ?? []),
-          })),
-        };
-      }),
-    })),
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          get: vi.fn(async () => options.selectGet ?? null),
-          limit: vi.fn(async () => options.selectRows ?? []),
-        })),
-      })),
-    })),
-    delete: vi.fn(() => ({
-      where: vi.fn(async () => {
-        calls.deleteWhereCalls += 1;
-      }),
-    })),
+    otpKey,
+    deliveryKey: "otp_delivery_1",
+    method: "email" as const,
+    channel: "email" as const,
+    identifier: "buyer@example.com",
+    deliveryTarget: "buyer@example.com",
+    code: "123456",
+    encryptionKey: signingKey,
+    contactEncryptionKey: contactKey,
+    ttlSeconds: 300,
+    resendCooldownSeconds: 60,
+    maxAttempts: 5,
+    ...overrides,
   };
 }
 
-describe("customer auth OTP D1 challenges", () => {
-  it("builds opaque channel-scoped storage keys without raw contact data", async () => {
-    const key = await buildCustomerAuthOtpStorageKey("email", "buyer@example.com", otpSigningKey);
+describe("customer auth OTP challenges", () => {
+  it("stores only hashes and the encrypted delivery target", async () => {
+    const input = await challenge();
+    expect(input.otpKey).toMatch(/^cust_otp:email:[a-f0-9]{64}$/);
+    const result = await persistCustomerAuthOtpChallenge(db, input);
+    expect(result.resendAvailableAt - Math.floor(Date.now() / 1000)).toBeGreaterThanOrEqual(59);
 
-    expect(key).toMatch(/^cust_otp:email:[a-f0-9]{64}$/);
-    expect(key).not.toContain("buyer@example.com");
+    const row = sqlite.prepare("SELECT * FROM customer_auth_otp_challenges").get()!;
+    expect(row).toMatchObject({ status: "pending", attempts: 0, identifier_masked: "b***@example.com", delivery_name_encrypted: null });
+    expect(String(row.delivery_target_encrypted)).toMatch(/^enc:/);
+    expect(JSON.stringify(row)).not.toMatch(/buyer@example\.com|123456/);
   });
 
-  it("persists hashed OTP challenge state without storing plaintext code or raw contacts", async () => {
-    const db = createDb({
-      insertRows: [{
-        otpKey: "cust_otp:email:opaque_hash",
-        deliveryKey: "otp_delivery_1",
-        expiresAt: 4_102_444_800,
-      }],
-    });
-
-    const result = await persistCustomerAuthOtpChallenge(db as never, {
-      otpKey: "cust_otp:email:opaque_hash",
-      deliveryKey: "otp_delivery_1",
-      method: "email",
-      channel: "email",
-      intent: "sign_in",
-      identifier: "buyer@example.com",
-      deliveryTarget: "buyer@example.com",
-      deliveryName: "Buyer",
-      contactEmail: "buyer@example.com",
-      phone: "+8801712345678",
-      code: "123456",
-      encryptionKey: otpSigningKey,
-      contactEncryptionKey,
-      ttlSeconds: 300,
-      resendCooldownSeconds: 120,
-      maxAttempts: 5,
-    });
-
-    expect(result).toMatchObject({
-      otpKey: "cust_otp:email:opaque_hash",
-      deliveryKey: "otp_delivery_1",
-    });
-    expect(db.calls.insertValues).toMatchObject({
-      otpKey: "cust_otp:email:opaque_hash",
-      deliveryKey: "otp_delivery_1",
-      method: "email",
-      channel: "email",
-      status: "pending",
-      attempts: 0,
-      maxAttempts: 5,
-    });
-    expect((db.calls.insertValues as { identifierHash: string }).identifierHash).toMatch(/^[a-f0-9]{64}$/);
-    expect((db.calls.insertValues as { identifierMasked: string }).identifierMasked).toBe("b***@example.com");
-    expect((db.calls.insertValues as { deliveryTargetEncrypted: string }).deliveryTargetEncrypted).toMatch(/^enc:/);
-    expect((db.calls.insertValues as { deliveryNameEncrypted: string }).deliveryNameEncrypted).toMatch(/^enc:/);
-    expect((db.calls.insertValues as { contactEmailEncrypted: string }).contactEmailEncrypted).toMatch(/^enc:/);
-    expect((db.calls.insertValues as { phoneEncrypted: string }).phoneEncrypted).toMatch(/^enc:/);
-    expect((db.calls.insertValues as { codeHash: string }).codeHash).not.toBe("123456");
-    expect((db.calls.insertValues as { codeHash: string }).codeHash).toMatch(/^[a-f0-9]{64}$/);
-    const persistedJson = JSON.stringify(db.calls.insertValues);
-    expect(persistedJson).not.toContain("buyer@example.com");
-    expect(persistedJson).not.toContain("+8801712345678");
-    expect(persistedJson).not.toContain("Buyer");
-    expect(persistedJson).not.toContain("123456");
-    expect(db.calls.onConflictDoUpdate).toBeDefined();
+  it("fails closed without a signing key and enforces the resend cooldown", async () => {
+    await expect(persistCustomerAuthOtpChallenge(db, await challenge({ encryptionKey: undefined })))
+      .rejects.toBeInstanceOf(ServiceUnavailableError);
+    await persistCustomerAuthOtpChallenge(db, await challenge());
+    await expect(persistCustomerAuthOtpChallenge(db, await challenge({ deliveryKey: "otp_delivery_2" })))
+      .rejects.toBeInstanceOf(RateLimitError);
   });
 
-  it("fails closed before persistence when the OTP signing key is missing", async () => {
-    const db = createDb();
+  it("deletes a pending challenge after a failed queue handoff and cleans expired ones", async () => {
+    const input = await challenge();
+    await persistCustomerAuthOtpChallenge(db, input);
+    await deleteCustomerAuthOtpChallenge(db, { otpKey: input.otpKey, deliveryKey: "other" });
+    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM customer_auth_otp_challenges").get()?.n).toBe(1);
+    await deleteCustomerAuthOtpChallenge(db, { otpKey: input.otpKey, deliveryKey: input.deliveryKey });
+    expect(sqlite.prepare("SELECT COUNT(*) AS n FROM customer_auth_otp_challenges").get()?.n).toBe(0);
 
-    await expect(persistCustomerAuthOtpChallenge(db as never, {
-      otpKey: "cust_otp:email:buyer@example.com",
-      deliveryKey: "otp_delivery_1",
-      method: "email",
-      channel: "email",
-      intent: "sign_in",
-      identifier: "buyer@example.com",
-      deliveryTarget: "buyer@example.com",
-      deliveryName: "Buyer",
-      code: "123456",
-      contactEncryptionKey,
-      ttlSeconds: 300,
-      resendCooldownSeconds: 120,
-      maxAttempts: 5,
-    })).rejects.toBeInstanceOf(ServiceUnavailableError);
-
-    expect(db.insert).not.toHaveBeenCalled();
-  });
-
-  it("turns a no-op cooldown upsert into a rate limit error", async () => {
-    const db = createDb({ insertRows: [] });
-
-    await expect(persistCustomerAuthOtpChallenge(db as never, {
-      otpKey: "cust_otp:email:buyer@example.com",
-      deliveryKey: "otp_delivery_1",
-      method: "email",
-      channel: "email",
-      intent: "sign_in",
-      identifier: "buyer@example.com",
-      deliveryTarget: "buyer@example.com",
-      deliveryName: "Buyer",
-      code: "123456",
-      encryptionKey: otpSigningKey,
-      contactEncryptionKey,
-      ttlSeconds: 300,
-      resendCooldownSeconds: 120,
-      maxAttempts: 5,
-    })).rejects.toBeInstanceOf(RateLimitError);
-  });
-
-  it("claims a correct OTP by consuming the challenge in one guarded update", async () => {
-    const contactEmailEncrypted = encodeEncryptedCredential(await encryptCredentials("buyer@example.com", contactEncryptionKey));
-    const phoneEncrypted = encodeEncryptedCredential(await encryptCredentials("+8801712345678", contactEncryptionKey));
-    const db = createDb({
-      updateRows: [[{
-        otpKey: "cust_otp:sms:+8801712345678",
-        method: "phone",
-        channel: "sms",
-        intent: "sign_up",
-        contactEmailEncrypted,
-        phoneEncrypted,
-        expiresAt: 4_102_444_800,
-        attempts: 1,
-        maxAttempts: 5,
-      }]],
-    });
-
-    const result = await claimCustomerAuthOtpChallenge(db as never, {
-      otpKey: "cust_otp:sms:+8801712345678",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      encryptionKey: otpSigningKey,
-      contactEncryptionKey,
-    });
-
-    expect(result).toMatchObject({
-      intent: "sign_up",
-      identifier: "+8801712345678",
-      contactEmail: "buyer@example.com",
-      phone: "+8801712345678",
-    });
-    expect(db.update).toHaveBeenCalledTimes(1);
-    expect(db.calls.updateSets[0]).toMatchObject({ status: "consumed" });
-  });
-
-  it("increments wrong OTP attempts and returns attempts left", async () => {
-    const db = createDb({
-      updateRows: [
-        [],
-        [{ attempts: 2, maxAttempts: 5, status: "pending" }],
-      ],
-    });
-
-    await expect(claimCustomerAuthOtpChallenge(db as never, {
-      otpKey: "cust_otp:sms:+8801712345678",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "000000",
-      encryptionKey: otpSigningKey,
-    })).rejects.toMatchObject({
-      message: "Incorrect code. Please try again.",
-      details: { attemptsLeft: 3 },
-    });
-
-    expect(db.update).toHaveBeenCalledTimes(2);
-  });
-
-  it("locks the challenge after the final wrong attempt", async () => {
-    const db = createDb({
-      updateRows: [
-        [],
-        [{ attempts: 5, maxAttempts: 5, status: "locked" }],
-      ],
-    });
-
-    await expect(claimCustomerAuthOtpChallenge(db as never, {
-      otpKey: "cust_otp:sms:+8801712345678",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "000000",
-      encryptionKey: otpSigningKey,
-    })).rejects.toBeInstanceOf(RateLimitError);
-  });
-
-  it("rejects already consumed challenges without touching customer state", async () => {
-    const identifierHash = await hashCustomerAuthOtpIdentifier("+8801712345678", otpSigningKey);
-    const db = createDb({
-      updateRows: [[], []],
-      selectGet: {
-        otpKey: "cust_otp:sms:+8801712345678",
-        method: "phone",
-        channel: "sms",
-        identifierHash,
-        status: "consumed",
-        attempts: 1,
-        maxAttempts: 5,
-        expiresAt: Math.floor(Date.now() / 1000) + 300,
-      },
-    });
-
-    await expect(claimCustomerAuthOtpChallenge(db as never, {
-      otpKey: "cust_otp:sms:+8801712345678",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      encryptionKey: otpSigningKey,
-    })).rejects.toBeInstanceOf(ValidationError);
-
-    await expect(claimCustomerAuthOtpChallenge(db as never, {
-      otpKey: "cust_otp:sms:+8801712345678",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      encryptionKey: otpSigningKey,
-    })).rejects.toThrow("Verification code has already been used. Please request a new code.");
-  });
-
-  it("deletes failed queue handoff challenges only by matching otp and delivery keys", async () => {
-    const db = createDb();
-
-    await deleteCustomerAuthOtpChallenge(db as never, {
-      otpKey: "cust_otp:email:buyer@example.com",
-      deliveryKey: "otp_delivery_1",
-    });
-
-    expect(db.delete).toHaveBeenCalledTimes(1);
-    expect(db.calls.deleteWhereCalls).toBe(1);
-  });
-
-  it("bounds scheduled cleanup batches and reports whether more work remains", async () => {
-    const db = createDb({
-      selectRows: [
-        { otpKey: "otp_1" },
-        { otpKey: "otp_2" },
-        { otpKey: "otp_3" },
-      ],
-    });
-
-    const result = await cleanupExpiredCustomerAuthOtpChallenges(db as never, 4_102_444_800, {
-      limit: 2,
-    });
-
-    expect(result).toEqual({
-      scanned: 2,
-      deleted: 2,
-      limit: 2,
-      hasMore: true,
-    });
-    expect(db.delete).toHaveBeenCalledTimes(1);
+    await persistCustomerAuthOtpChallenge(db, input);
+    const cleaned = await cleanupExpiredCustomerAuthOtpChallenges(db, Math.floor(Date.now() / 1000) + 301);
+    expect(cleaned).toMatchObject({ deleted: 1, hasMore: false });
   });
 });

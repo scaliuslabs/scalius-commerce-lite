@@ -10,139 +10,149 @@ const mocks = vi.hoisted(() => ({
   verifyCustomerOtp: vi.fn(),
   getCustomerSession: vi.fn(),
   logoutCustomer: vi.fn(),
-  updateCustomerProfile: vi.fn(),
 }));
 vi.mock("@/lib/api/customer-auth", () => mocks);
 vi.mock("@/lib/api/transport", () => ({ createApiUrl: (path: string) => `/api/v1${path}` }));
-vi.mock("@/lib/checkout/session-state", () => ({ readCheckoutFormDraft: vi.fn() }));
 
 import AuthModal from "./AuthModal";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const customer = {
-  customerId: "customer_test", name: "Test customer", email: "customer@example.test",
-  city: "city_dhaka", cityName: "Dhaka", zone: "zone_mirpur", zoneName: "Mirpur",
-  address: "", needsProfileCompletion: true,
-};
+const customer = { customerId: "customer_1", name: "Rahim", email: "rahim@example.test", phone: "+8801712345678" };
 let root: Root;
 let host: HTMLDivElement;
 
-const zoneSelect = () => host.querySelector<HTMLSelectElement>("#profile-zone")!;
-const zoneReads = () =>
-  vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/locations/zones"));
-
-async function changeInput(selector: string, value: string) {
+async function type(selector: string, value: string) {
   const input = host.querySelector<HTMLInputElement>(selector)!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+const submit = () => act(async () => host.querySelector("form")!.requestSubmit());
+const title = () => host.querySelector("h2")?.textContent;
+const alertText = () => host.querySelector('[role="alert"]')?.textContent ?? "";
+
+async function open(detail?: object) {
+  await act(async () => root.render(<AuthModal />));
+  await act(async () => window.dispatchEvent(new CustomEvent("open-auth-modal", { detail })));
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.useFakeTimers({ shouldAdvanceTime: true });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   window.__CHECKOUT_CONFIG__ = { authVerificationMethod: "email", allowedCountries: ["BD"] } as CheckoutConfig;
-  window.__scaliusAuthModalOpenPending = true;
-  vi.stubGlobal("fetch", vi.fn().mockImplementation(async (url: string) => ({
-    ok: true,
-    json: async () => ({
-      success: true,
-      data: url.includes("/locations/zones?cityId=city_dhaka")
-        ? [{ id: "zone_mirpur", name: "Mirpur" }]
-        : [{ id: "city_dhaka", name: "Dhaka" }],
-    }),
-  })));
 });
 
 afterEach(async () => {
   await act(async () => root.unmount());
   document.body.innerHTML = "";
-  document.cookie = "cs_auth=; Max-Age=0; path=/";
   delete window.__CHECKOUT_CONFIG__;
   delete window.__scaliusAuthModalOpenPending;
-  delete window.__scaliusAuthModalIntentPending;
-  vi.unstubAllGlobals();
+  delete window.__scaliusAuthModalPrefillPending;
+  vi.useRealTimers();
 });
 
-describe("account dialog forms", () => {
-  it("uses native POST submission for identity and OTP, deduplicating repeated submits", async () => {
-    let resolveSend!: (value: { success: boolean }) => void;
-    let resolveVerify!: (value: { success: boolean; customer: typeof customer }) => void;
-    mocks.sendCustomerOtp.mockReturnValue(new Promise((resolve) => { resolveSend = resolve; }));
-    mocks.verifyCustomerOtp.mockReturnValue(new Promise((resolve) => { resolveVerify = resolve; }));
-    await act(async () => root.render(<AuthModal />));
-    await changeInput("#auth-primary-input", "customer@example.test");
+describe("sign-in dialog", () => {
+  it("signs a returning buyer in with one flow, without putting contacts in the form's fields", async () => {
+    mocks.sendCustomerOtp.mockResolvedValue({ success: true, resendAfterSeconds: 60 });
+    mocks.verifyCustomerOtp.mockResolvedValue({ success: true, status: "signed_in", customer, isNewUser: false });
+    const onLogin = vi.fn();
+    window.addEventListener("customer-login", onLogin);
+    await open();
+
+    expect(title()).toBe("Sign in");
+    await vi.waitFor(() => expect(document.activeElement?.id).toBe("auth-contact"));
     const form = host.querySelector("form")!;
     expect(form.method).toBe("post");
-    expect(form.querySelector('input[name="email"], input[name="otp"], input[name="phone"]')).toBeNull();
-    // requestSubmit exercises the native submit event used by Enter, without a field-specific key handler.
+    expect(form.querySelector("input[name]")).toBeNull();
+
+    await type("#auth-contact", "Rahim@Example.test");
     await act(async () => { form.requestSubmit(); form.requestSubmit(); });
     expect(mocks.sendCustomerOtp).toHaveBeenCalledTimes(1);
-    expect(mocks.sendCustomerOtp).toHaveBeenCalledWith(expect.objectContaining({ identifier: "customer@example.test", intent: "sign_in" }));
-    await act(async () => resolveSend({ success: true }));
-    expect(host.querySelector("h2")?.textContent).toBe("Verify your account");
-    await changeInput("#customer-otp", "123456");
-    await act(async () => form.requestSubmit());
-    expect(mocks.verifyCustomerOtp).toHaveBeenCalledTimes(1);
-    expect(host.querySelector<HTMLInputElement>("#customer-otp")?.disabled).toBe(true);
-    await act(async () => resolveVerify({ success: true, customer }));
-    expect(host.querySelector("h2")?.textContent).toBe("Complete your profile");
-    await vi.waitFor(() => expect(zoneSelect().value).toBe("zone_mirpur"));
+    expect(mocks.sendCustomerOtp).toHaveBeenCalledWith({ method: "email", channel: "email", identifier: "rahim@example.test" });
+    expect(host.textContent).toContain("Send a new code in 1:00");
+
+    await type("#customer-otp", "123456");
+    await submit();
+    expect(mocks.verifyCustomerOtp).toHaveBeenCalledWith(expect.not.objectContaining({ account: expect.anything() }));
+    expect(title()).toBe("You're signed in");
+    expect(onLogin).toHaveBeenCalledTimes(1);
+    window.removeEventListener("customer-login", onLogin);
   });
 
-  it("resumes saved locations in native selects and submits profile fields natively", async () => {
-    document.cookie = "cs_auth=1; path=/";
-    let resolveSave!: (value: { success: boolean; error: string }) => void;
-    mocks.getCustomerSession.mockResolvedValue({ authenticated: true, customer });
-    mocks.updateCustomerProfile.mockReturnValue(new Promise((resolve) => { resolveSave = resolve; }));
-    await act(async () => root.render(<AuthModal />));
-    expect(host.querySelectorAll("h2, h3")).toHaveLength(1);
-    expect(host.querySelector("h2")?.textContent).toBe("Complete your profile");
-    const city = host.querySelector<HTMLSelectElement>("#profile-city")!;
-    expect(city.value).toBe("city_dhaka");
-    await vi.waitFor(() => expect(zoneSelect().value).toBe("zone_mirpur"));
-    expect(zoneSelect().disabled).toBe(false);
-    await act(async () => city.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-    expect(host.querySelector('[role="dialog"]')).not.toBeNull();
-    expect(host.querySelector('[role="alert"]')?.textContent).toBe("Save your delivery profile or sign out to continue.");
-    await changeInput("#profile-address", "House 10, Road 2");
-    await act(async () => host.querySelector("form")!.requestSubmit());
-    expect(mocks.updateCustomerProfile).toHaveBeenCalledWith({
-      name: "Test customer", address: "House 10, Road 2", city: "city_dhaka", zone: "zone_mirpur", cityName: "Dhaka", zoneName: "Mirpur",
+  it("asks a new buyer for their name and phone after the code, prefilled from the order", async () => {
+    mocks.sendCustomerOtp.mockResolvedValue({ success: true, resendAfterSeconds: 60 });
+    mocks.verifyCustomerOtp
+      .mockResolvedValueOnce({ success: true, status: "needs_account_details" })
+      .mockResolvedValueOnce({ success: true, status: "signed_in", customer, isNewUser: true });
+    await open({ prefill: { name: "Rahim Uddin", email: "rahim@example.test", phone: "+8801712345678" } });
+
+    expect(host.querySelector<HTMLInputElement>("#auth-contact")?.value).toBe("rahim@example.test");
+    await submit();
+    await type("#customer-otp", "123456");
+    await submit();
+
+    expect(title()).toBe("Create your account");
+    expect(host.querySelector<HTMLInputElement>("#auth-name")?.value).toBe("Rahim Uddin");
+    expect(host.querySelector<HTMLInputElement>("#auth-phone")?.value).toBe("01712-345678");
+    await type("#auth-name", "");
+    await submit();
+    expect(host.textContent).toContain("Enter your name.");
+    await type("#auth-name", "Rahim Uddin");
+    await submit();
+    expect(mocks.verifyCustomerOtp).toHaveBeenLastCalledWith(expect.objectContaining({
+      code: "123456",
+      account: { name: "Rahim Uddin", phone: "+8801712345678" },
+    }));
+    expect(title()).toBe("You're signed in");
+  });
+
+  it("shows attempts left, and after a lockout disables Continue and offers a new code at once", async () => {
+    mocks.sendCustomerOtp.mockResolvedValue({ success: true, resendAfterSeconds: 60 });
+    mocks.verifyCustomerOtp
+      .mockResolvedValueOnce({ success: false, error: "That code isn't right. Check it and try again.", attemptsLeft: 1 })
+      .mockResolvedValueOnce({ success: false, error: "Too many wrong codes. Send a new code to try again.", attemptsLeft: 0 });
+    await open();
+    await type("#auth-contact", "rahim@example.test");
+    await submit();
+    await type("#customer-otp", "111111");
+    await submit();
+    expect(alertText()).toBe("That code isn't right. Check it and try again. 1 attempt left.");
+
+    await submit();
+    const continueButton = host.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(continueButton.disabled).toBe(true);
+    const resend = [...host.querySelectorAll("button")].find((button) => button.textContent === "Send a new code")!;
+    expect(resend.disabled).toBe(false);
+  });
+
+  it("counts down an honest wait when codes are rate limited, never mentioning IP", async () => {
+    mocks.sendCustomerOtp.mockResolvedValue({
+      success: false, error: "Too many codes requested. Please wait and try again.", retryAfterSeconds: 120,
     });
-    expect(host.querySelector<HTMLFieldSetElement>("fieldset")?.disabled).toBe(true);
-    expect(host.querySelector("#profile-address")?.closest("fieldset")).toBe(city.closest("fieldset"));
-    await act(async () => resolveSave({ success: false, error: "Please try saving again." }));
-    expect(host.querySelector<HTMLFieldSetElement>("fieldset")?.disabled).toBe(false);
-    expect(host.querySelector('[role="alert"]')?.textContent).toBe("Please try saving again.");
-    expect(zoneSelect().value).toBe("zone_mirpur");
-    expect(zoneReads()).toHaveLength(1);
+    await open();
+    await type("#auth-contact", "rahim@example.test");
+    await submit();
+    expect(alertText()).toBe("Too many codes requested. Please wait and try again. Try again in 2:00.");
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(alertText()).toContain("Try again in 1:59.");
   });
 
-  it.each([
-    { ok: false, success: true, data: [] },
-    { ok: true, success: false, data: [] },
-    { ok: true, success: true, data: null },
-  ])("recovers a failed city load through Retry without losing the profile draft: %j", async (failure) => {
+  it("closes on Esc and the close button, and shows the signed-in state on reopen", async () => {
     document.cookie = "cs_auth=1; path=/";
     mocks.getCustomerSession.mockResolvedValue({ authenticated: true, customer });
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: failure.ok, json: async () => failure } as Response);
-    await act(async () => root.render(<AuthModal />));
-    expect(host.querySelector('[role="alert"]')?.textContent).toBe("Could not load delivery locations.");
-    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
-    await changeInput("#profile-address", "House 10, Road 2");
-    const retry = [...host.querySelectorAll("button")].find((button) => button.textContent === "Retry")!;
-    await act(async () => retry.click());
-    expect(
-      vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("/locations/cities")),
-    ).toHaveLength(2);
-    expect(host.querySelector('[role="alert"]')).toBeNull();
-    expect(host.querySelector<HTMLInputElement>("#profile-address")?.value).toBe("House 10, Road 2");
-    await vi.waitFor(() => expect(zoneSelect().value).toBe("zone_mirpur"));
-    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+    await open();
+    await vi.waitFor(() => expect(title()).toBe("You're signed in"));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => window.dispatchEvent(new CustomEvent("open-auth-modal")));
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+    document.cookie = "cs_auth=; Max-Age=0; path=/";
   });
 });

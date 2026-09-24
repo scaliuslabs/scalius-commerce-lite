@@ -27,32 +27,127 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     vi.unstubAllGlobals();
   });
 
-  it("recognizes an authenticated order that is already in the account", async () => {
-    document.cookie = "cs_auth=1; Path=/";
-    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+  const prefill = { name: "Rahim Uddin", email: "rahim@example.test", phone: "+8801712345678" };
 
+  async function renderReceipt(accountLinked: boolean) {
     await act(async () => {
       root.render(
         <OrderSuccessButtons
-          orderId="ord_owned"
+          orderId="ord_1"
+          accountLinked={accountLinked}
+          accountPrefill={prefill}
           copy={ENGLISH_CHECKOUT_LANGUAGE_DATA}
         />,
       );
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
+  }
+
+  function button(label: string) {
+    return [...host.querySelectorAll("button")].find((element) => element.textContent === label);
+  }
+
+  it("shows a signed-in buyer's own saved order as one line with a link to it", async () => {
+    document.cookie = "cs_auth=1; Path=/";
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderReceipt(true);
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/customer-auth/orders/ord_owned",
+      "/api/customer-auth/orders/ord_1",
       { credentials: "same-origin", cache: "no-store" },
     );
-    expect(host.textContent).toContain(
-      ENGLISH_CHECKOUT_LANGUAGE_DATA.orderReceiptSavedAccountTitleText,
+    expect(host.textContent).toContain("Saved to your account · View order");
+    expect(host.querySelector('a[href="/account/orders/ord_1"]')?.textContent).toBe("View order");
+    expect(button("Save to my account")).toBeUndefined();
+  });
+
+  it("hides the account line for an order saved to someone else's account", async () => {
+    document.cookie = "cs_auth=1; Path=/";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 404 })));
+
+    await renderReceipt(true);
+
+    expect(host.textContent).not.toContain("Saved to your account");
+    expect(button("Save to my account")).toBeUndefined();
+    expect(button("Sign in")).toBeUndefined();
+  });
+
+  it("offers one save action to a signed-in buyer and saves on click", async () => {
+    document.cookie = "cs_auth=1; Path=/";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { orderId: "ord_1" } }), { status: 200 }),
     );
-    expect(host.textContent).toContain(
-      ENGLISH_CHECKOUT_LANGUAGE_DATA.orderReceiptViewInAccountText,
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderReceipt(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(host.querySelectorAll("button")).toHaveLength(2); // print + save
+    await act(async () => {
+      button("Save to my account")!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/order-receipt/claim-account", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ orderId: "ord_1" }),
+    }));
+    expect(host.textContent).toContain("Saved to your account · View order");
+  });
+
+  it("asks a signed-out buyer of a saved order to sign in, pre-filled from the order", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const opened: unknown[] = [];
+    const listener = (event: Event) => opened.push((event as CustomEvent).detail);
+    window.addEventListener("open-auth-modal", listener);
+
+    await renderReceipt(true);
+    expect(host.textContent).toContain("Sign in to see this order in your account");
+    act(() => button("Sign in")!.click());
+    window.removeEventListener("open-auth-modal", listener);
+
+    expect(opened).toEqual([{ prefill }]);
+    expect(button("Create account")).toBeUndefined();
+  });
+
+  it("creates an account from the receipt and then saves the order to it", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { orderId: "ord_1" } }), { status: 200 }),
     );
-    expect(host.textContent).not.toContain("Save to my account");
+    vi.stubGlobal("fetch", fetchMock);
+    const opened: unknown[] = [];
+    const listener = (event: Event) => opened.push((event as CustomEvent).detail);
+    window.addEventListener("open-auth-modal", listener);
+
+    await renderReceipt(false);
+    expect(host.textContent).toContain("Create an account to track this order");
+    act(() => button("Create account")!.click());
+    window.removeEventListener("open-auth-modal", listener);
+    expect(opened).toEqual([{ prefill }]);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent("customer-login"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/order-receipt/claim-account", expect.anything());
+    expect(host.textContent).toContain("Saved to your account · View order");
+  });
+
+  it("keeps the save action and says so when saving fails", async () => {
+    document.cookie = "cs_auth=1; Path=/";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 500 })));
+
+    await renderReceipt(false);
+    await act(async () => {
+      button("Save to my account")!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(host.textContent).toContain(ENGLISH_CHECKOUT_LANGUAGE_DATA.orderReceiptSaveFailedText);
+    expect(button("Save to my account")?.disabled).toBe(false);
   });
 
   it("renders only the actions returned by eligible-only policy projection", () => {

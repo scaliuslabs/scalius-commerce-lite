@@ -52,13 +52,6 @@ if (!validContinuationId) Astro.response.status = 404;
               <h2 id="customer-auth-title" class="text-lg font-semibold">Authorize your customer account</h2>
               <form id="customerAuthRequestForm" class="space-y-4">
                 <label class="block text-sm font-medium">
-                  Account action
-                  <select id="customerIntent" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5">
-                    <option value="sign_in">Sign in</option>
-                    <option value="sign_up">Create account</option>
-                  </select>
-                </label>
-                <label class="block text-sm font-medium">
                   Verification method
                   <select id="customerMethod" class="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5">
                     <option value="phone">Phone</option>
@@ -178,6 +171,7 @@ if (!validContinuationId) Astro.response.status = 404;
   const endpoint = `/api/agent-continuations/${encodeURIComponent(continuationId)}`;
   const statusElement = document.getElementById("continuationStatus") as HTMLElement | null;
   let customerRequest: JsonRecord | null = null;
+  let customerAccount: JsonRecord | null = null;
   let recoveryChannel = "email";
   let stripe: StripeInstance | null = null;
   let stripeCard: StripeCardElement | null = null;
@@ -319,12 +313,16 @@ if (!validContinuationId) Astro.response.status = 404;
     customerRequest = {
       method,
       channel: (document.getElementById("customerChannel") as HTMLSelectElement).value,
-      intent: (document.getElementById("customerIntent") as HTMLSelectElement).value,
       identifier,
-      ...(name ? { name } : {}),
-      ...(method === "phone" || phoneInput ? { phone: method === "phone" ? identifier : phoneInput } : {}),
-      ...(method === "email" || emailInput ? { email: method === "email" ? identifier : emailInput } : {}),
     };
+    // Only used if this email/phone has no account yet.
+    customerAccount = name
+      ? {
+        name,
+        ...(method === "email" && phoneInput ? { phone: phoneInput } : {}),
+        ...(method === "phone" && emailInput ? { email: emailInput } : {}),
+      }
+      : null;
     setFormBusy(form, true);
     try {
       const result = await call("/customer/send-otp", customerRequest);
@@ -343,10 +341,15 @@ if (!validContinuationId) Astro.response.status = 404;
     if (!customerRequest) return;
     setFormBusy(form, true);
     try {
-      await call("/customer/verify-otp", {
+      const result = await call("/customer/verify-otp", {
         ...customerRequest,
         code: (document.getElementById("customerVerificationCode") as HTMLInputElement).value.trim(),
+        ...(customerAccount ? { account: customerAccount } : {}),
       });
+      if (result.needsAccountDetails === true) {
+        setStatus("This is a new account. Enter your name (and phone for email sign-in) above, send the details, then verify the same code again.", "error");
+        return;
+      }
       setStatus("Customer account authorized. You may close this tab and return to the agent.", "success");
       document.getElementById("customerAuthStep")?.classList.add("hidden");
     } catch (error) {

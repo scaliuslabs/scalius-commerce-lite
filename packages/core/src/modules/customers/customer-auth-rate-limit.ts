@@ -3,8 +3,15 @@ import type { Database } from "@scalius/database/client";
 import { and, eq, gt, inArray, lt, lte, sql } from "drizzle-orm";
 import { RateLimitError } from "@scalius/core/errors";
 
-export const CUSTOMER_AUTH_OTP_IP_RATE_LIMIT_ATTEMPTS = 5;
-export const CUSTOMER_AUTH_OTP_IP_RATE_LIMIT_WINDOW_SECONDS = 10 * 60;
+/**
+ * Codes are limited per contact (email, phone, order reference): that is what
+ * an attacker targets. The IP bucket is only a generous flood ceiling,
+ * because Bangladeshi carriers put many buyers behind one CGNAT address.
+ */
+export const OTP_IDENTIFIER_RATE_LIMIT = { attempts: 5, windowSeconds: 15 * 60 } as const;
+export const OTP_IP_RATE_LIMIT = { attempts: 30, windowSeconds: 10 * 60 } as const;
+
+export const OTP_RATE_LIMIT_MESSAGE = "Too many codes requested. Please wait and try again.";
 
 export interface CleanupExpiredCustomerAuthOtpRateLimitsResult {
     scanned: number;
@@ -13,25 +20,54 @@ export interface CleanupExpiredCustomerAuthOtpRateLimitsResult {
     hasMore: boolean;
 }
 
-export async function enforceCustomerAuthOtpIpRateLimit(
+/**
+ * Counts one code request against every contact it targets and the caller's
+ * IP. Throws RateLimitError with the honest wait (seconds until the fullest
+ * bucket's window resets) once any bucket is full.
+ */
+export async function enforceOtpSendRateLimits(
     db: Database,
     input: {
         ip: string;
+        identifiers: string[];
         hashKey?: string;
         nowSeconds?: number;
     },
 ): Promise<void> {
-    const ip = input.ip.trim() || "unknown";
-
     const nowSeconds = input.nowSeconds ?? currentUnixSeconds();
-    const key = await buildCustomerAuthOtpRateLimitKey("ip", ip, input.hashKey);
-    const windowExpiresAt = nowSeconds + CUSTOMER_AUTH_OTP_IP_RATE_LIMIT_WINDOW_SECONDS;
+    const buckets = [
+        ...[...new Set(input.identifiers.map((value) => value.trim().toLowerCase()).filter(Boolean))]
+            .map((subject) => ({ scope: "identifier" as const, subject, ...OTP_IDENTIFIER_RATE_LIMIT })),
+        { scope: "ip" as const, subject: input.ip.trim() || "unknown", ...OTP_IP_RATE_LIMIT },
+    ];
+    for (const bucket of buckets) {
+        const retryAfterSeconds = await consumeRateLimitBucket(db, { ...bucket, hashKey: input.hashKey, nowSeconds });
+        if (retryAfterSeconds !== null) {
+            throw new RateLimitError(OTP_RATE_LIMIT_MESSAGE, retryAfterSeconds);
+        }
+    }
+}
+
+async function consumeRateLimitBucket(
+    db: Database,
+    input: {
+        scope: "ip" | "identifier";
+        subject: string;
+        attempts: number;
+        windowSeconds: number;
+        hashKey?: string;
+        nowSeconds: number;
+    },
+): Promise<number | null> {
+    const { nowSeconds } = input;
+    const key = await buildCustomerAuthOtpRateLimitKey(input.scope, input.subject, input.hashKey);
+    const windowExpiresAt = nowSeconds + input.windowSeconds;
 
     const inserted = await db
         .insert(customerAuthOtpRateLimits)
         .values({
             key,
-            scope: "ip",
+            scope: input.scope,
             attempts: 1,
             windowExpiresAt,
             createdAt: nowSeconds,
@@ -39,65 +75,35 @@ export async function enforceCustomerAuthOtpIpRateLimit(
         })
         .onConflictDoNothing()
         .returning({ key: customerAuthOtpRateLimits.key });
-
-    if (inserted[0]?.key) return;
+    if (inserted[0]?.key) return null;
 
     const reset = await db
         .update(customerAuthOtpRateLimits)
-        .set({
-            attempts: 1,
-            windowExpiresAt,
-            updatedAt: nowSeconds,
-        })
-        .where(
-            and(
-                eq(customerAuthOtpRateLimits.key, key),
-                lte(customerAuthOtpRateLimits.windowExpiresAt, nowSeconds),
-            ),
-        )
+        .set({ attempts: 1, windowExpiresAt, updatedAt: nowSeconds })
+        .where(and(
+            eq(customerAuthOtpRateLimits.key, key),
+            lte(customerAuthOtpRateLimits.windowExpiresAt, nowSeconds),
+        ))
         .returning({ key: customerAuthOtpRateLimits.key });
-
-    if (reset[0]?.key) return;
+    if (reset[0]?.key) return null;
 
     const incremented = await db
         .update(customerAuthOtpRateLimits)
-        .set({
-            attempts: sql`${customerAuthOtpRateLimits.attempts} + 1`,
-            updatedAt: nowSeconds,
-        })
-        .where(
-            and(
-                eq(customerAuthOtpRateLimits.key, key),
-                gt(customerAuthOtpRateLimits.windowExpiresAt, nowSeconds),
-                lt(customerAuthOtpRateLimits.attempts, CUSTOMER_AUTH_OTP_IP_RATE_LIMIT_ATTEMPTS),
-            ),
-        )
-        .returning({
-            key: customerAuthOtpRateLimits.key,
-            attempts: customerAuthOtpRateLimits.attempts,
-        });
-
-    if (incremented[0]?.key) return;
+        .set({ attempts: sql`${customerAuthOtpRateLimits.attempts} + 1`, updatedAt: nowSeconds })
+        .where(and(
+            eq(customerAuthOtpRateLimits.key, key),
+            gt(customerAuthOtpRateLimits.windowExpiresAt, nowSeconds),
+            lt(customerAuthOtpRateLimits.attempts, input.attempts),
+        ))
+        .returning({ key: customerAuthOtpRateLimits.key });
+    if (incremented[0]?.key) return null;
 
     const row = await db
-        .select({
-            attempts: customerAuthOtpRateLimits.attempts,
-            windowExpiresAt: customerAuthOtpRateLimits.windowExpiresAt,
-        })
+        .select({ windowExpiresAt: customerAuthOtpRateLimits.windowExpiresAt })
         .from(customerAuthOtpRateLimits)
         .where(eq(customerAuthOtpRateLimits.key, key))
         .get();
-
-    if (
-        row &&
-        row.windowExpiresAt > nowSeconds &&
-        row.attempts >= CUSTOMER_AUTH_OTP_IP_RATE_LIMIT_ATTEMPTS
-    ) {
-        throw new RateLimitError(
-            "Too many requests from this IP. Please try again later.",
-            Math.max(1, row.windowExpiresAt - nowSeconds),
-        );
-    }
+    return Math.max(1, (row?.windowExpiresAt ?? windowExpiresAt) - nowSeconds);
 }
 
 export async function cleanupExpiredCustomerAuthOtpRateLimits(
@@ -127,7 +133,7 @@ export async function cleanupExpiredCustomerAuthOtpRateLimits(
 }
 
 async function buildCustomerAuthOtpRateLimitKey(
-    scope: "ip",
+    scope: "ip" | "identifier",
     identifier: string,
     hashKey: string | undefined,
 ): Promise<string> {

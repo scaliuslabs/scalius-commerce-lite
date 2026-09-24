@@ -9,7 +9,7 @@ import {
 const mocks = vi.hoisted(() => ({
   previewOrderPaymentRecoveryLink: vi.fn(),
   createOrderPaymentRecoveryLink: vi.fn(),
-  enforceCustomerAuthOtpIpRateLimit: vi.fn(),
+  enforceOtpSendRateLimits: vi.fn(),
   getEmailProviderReadiness: vi.fn(),
   getSmsProviderReadiness: vi.fn(),
   getWhatsAppCloudApiSettings: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock("./orders.admin", () => ({
 }));
 
 vi.mock("../customers/customer-auth-rate-limit", () => ({
-  enforceCustomerAuthOtpIpRateLimit: mocks.enforceCustomerAuthOtpIpRateLimit,
+  enforceOtpSendRateLimits: mocks.enforceOtpSendRateLimits,
 }));
 
 vi.mock("../../integrations/email", () => ({
@@ -140,7 +140,7 @@ describe("order payment recovery OTP service", () => {
       depositAmount: 60,
       paymentRecovery: { state: "needs_attention" },
     });
-    mocks.enforceCustomerAuthOtpIpRateLimit.mockResolvedValue(undefined);
+    mocks.enforceOtpSendRateLimits.mockResolvedValue(undefined);
     mocks.getEmailProviderReadiness.mockResolvedValue({ status: "ready", issues: [] });
     mocks.getSmsProviderReadiness.mockResolvedValue({ status: "ready", issues: [] });
     mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
@@ -173,8 +173,9 @@ describe("order payment recovery OTP service", () => {
       },
     });
     expect(mocks.previewOrderPaymentRecoveryLink).toHaveBeenCalledWith(db, "order_1");
-    expect(mocks.enforceCustomerAuthOtpIpRateLimit).toHaveBeenCalledWith(db, {
+    expect(mocks.enforceOtpSendRateLimits).toHaveBeenCalledWith(db, {
       ip: "203.0.113.20",
+      identifiers: [expect.stringMatching(/^order:/)],
       hashKey: "otp-signing-key",
     });
     expect(db.calls.insertValues).toMatchObject({

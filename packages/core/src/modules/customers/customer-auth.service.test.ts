@@ -1,1498 +1,395 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+// Buyer identity on the real migrated schema: verified identifiers own
+// accounts, guest checkout contacts never block or change them.
+import type { DatabaseSync } from "node:sqlite";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const challengeMocks = vi.hoisted(() => ({
-  buildCustomerAuthOtpStorageKey: vi.fn(),
-  persistCustomerAuthOtpChallenge: vi.fn(),
-  claimCustomerAuthOtpChallenge: vi.fn(),
-  deleteCustomerAuthOtpChallenge: vi.fn(),
-  cleanupExpiredCustomerAuthOtpChallenges: vi.fn(),
-}));
-const rateLimitMocks = vi.hoisted(() => ({
-  enforceCustomerAuthOtpIpRateLimit: vi.fn(),
-  cleanupExpiredCustomerAuthOtpRateLimits: vi.fn(),
-}));
-
-vi.mock("./customer-auth-otp-challenges", () => ({
-  buildCustomerAuthOtpStorageKey: challengeMocks.buildCustomerAuthOtpStorageKey,
-  persistCustomerAuthOtpChallenge: challengeMocks.persistCustomerAuthOtpChallenge,
-  claimCustomerAuthOtpChallenge: challengeMocks.claimCustomerAuthOtpChallenge,
-  deleteCustomerAuthOtpChallenge: challengeMocks.deleteCustomerAuthOtpChallenge,
-  cleanupExpiredCustomerAuthOtpChallenges: challengeMocks.cleanupExpiredCustomerAuthOtpChallenges,
-}));
-
-vi.mock("./customer-auth-rate-limit", () => ({
-  enforceCustomerAuthOtpIpRateLimit: rateLimitMocks.enforceCustomerAuthOtpIpRateLimit,
-  cleanupExpiredCustomerAuthOtpRateLimits: rateLimitMocks.cleanupExpiredCustomerAuthOtpRateLimits,
-}));
-
+import type { Database } from "@scalius/database/client";
+import { createMigratedSqlite, createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { RateLimitError, ValidationError } from "../../errors";
+import { createAtomicCheckoutAttempt } from "../orders/checkout-attempts";
+import { commitStorefrontOrderPayload } from "../orders/orders.ingest";
+import type { StorefrontOrderCommitPayload } from "../orders/orders.types";
+import { getCustomerOrders } from "./customers.service";
+import { linkVerifiedContactOrders } from "./order-account-claim";
+import {
+  buildCustomerAuthOtpStorageKey,
+  persistCustomerAuthOtpChallenge,
+} from "./customer-auth-otp-challenges";
 import {
   cleanupExpiredCustomerSessions,
   deleteCustomerSession,
+  deriveCustomerAuthOtpDeliveryCode,
   getCookieConfig,
   getCustomerBySession,
   normalizeCustomerAuthCookieDomain,
   sendOtp,
   updateCustomerProfile,
   verifyOtp,
+  type NewAccountDetails,
 } from "./customer-auth.service";
 
-/** The stored sign-in method summary (customer_auth document). */
-const baseAuthSettings = { authVerificationMethod: "email" };
+const KEY = btoa("0123456789abcdef0123456789abcdef");
+const SESSION_KEY = "test-session-key-0123456789abcdef";
+const BUYER_EMAIL = "buyer5@example.test";
+const BUYER_PHONE = "+8801712000005";
+const STRANGER_PHONE = "+8801712000006";
 
-describe("customer auth cookie domain", () => {
-  it("keeps customer auth cookies host-only by default for custom domains", () => {
-    expect(getCookieConfig("https://shop.example.co.uk")).toEqual({
-      sameSite: "None",
-      domainAttr: "",
+let sqlite: DatabaseSync;
+let db: Database;
+let ipCounter = 0;
+
+beforeEach(() => {
+  sqlite = createMigratedSqlite();
+  sqlite.exec(`
+    INSERT INTO settings (id, key, value, type, category)
+      VALUES ('email', 'document', '{"provider":"cloudflare","sender":"shop@example.test","resendApiKey":""}', 'json', 'email');
+    INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_1', 'Tee', 'tee', 50000, 1);
+    INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+      VALUES ('var_1', 'prod_1', 'TEE-1', 50000, 50, 1, 1);
+  `);
+  db = createSqliteD1Database({ sqlite }).db;
+});
+
+afterEach(() => sqlite.close());
+
+const emailEnv = { EMAIL: { send: vi.fn(async () => ({ messageId: "m" })) } };
+
+/** Sends a real code and returns it the way the queue consumer derives it. */
+async function sendEmailCode(email: string, ip = `203.0.113.${++ipCounter}`): Promise<string> {
+  const sent = await sendOtp(db, {
+    method: "email",
+    identifier: email,
+    ip,
+    emailEnv,
+    encryptionKey: KEY,
+    credentialEncryptionKey: KEY,
+  });
+  expect(sent.queuePayload).not.toHaveProperty("code");
+  return deriveCustomerAuthOtpDeliveryCode({ otpKey: sent.otpStorageKey, deliveryKey: sent.deliveryKey, encryptionKey: KEY });
+}
+
+/** An SMS code as the phone channel would deliver it (no SMS provider in tests). */
+async function issuePhoneCode(phone: string): Promise<string> {
+  const otpKey = await buildCustomerAuthOtpStorageKey("sms", phone, KEY);
+  const deliveryKey = `dk_${Math.random().toString(36).slice(2)}`;
+  const code = await deriveCustomerAuthOtpDeliveryCode({ otpKey, deliveryKey, encryptionKey: KEY });
+  await persistCustomerAuthOtpChallenge(db, {
+    otpKey, deliveryKey, method: "phone", channel: "sms", identifier: phone, deliveryTarget: phone,
+    code, encryptionKey: KEY, contactEncryptionKey: KEY, ttlSeconds: 300, resendCooldownSeconds: 60, maxAttempts: 5,
+  });
+  return code;
+}
+
+const verifyEmail = (email: string, code: string, account?: NewAccountDetails) =>
+  verifyOtp(db, { method: "email", identifier: email, code, account, encryptionKey: KEY, sessionHashKey: SESSION_KEY });
+const verifyPhone = (phone: string, code: string, account?: NewAccountDetails) =>
+  verifyOtp(db, { method: "phone", identifier: phone, code, account, encryptionKey: KEY, sessionHashKey: SESSION_KEY });
+
+async function createEmailAccount(email: string, phone: string, name = "Buyer Five") {
+  const code = await sendEmailCode(email);
+  await expect(verifyEmail(email, code)).resolves.toEqual({ status: "needs_account_details" });
+  const created = await verifyEmail(email, code, { name, phone });
+  if (created.status !== "signed_in") throw new Error("account was not created");
+  return created;
+}
+
+let orderCounter = 0;
+/** A guest COD order through the real storefront commit path. */
+async function placeGuestOrder(contact: { phone: string; email: string | null; name?: string }) {
+  const attempt = createAtomicCheckoutAttempt({
+    checkoutRequestId: `request-${++orderCounter}`,
+    requestKey: `checkout_submit:v1:${String(orderCounter).padEnd(64, "0")}`,
+    requestHash: "b".repeat(64),
+    statusToken: `cst_${String(orderCounter).padEnd(64, "0")}`,
+  });
+  const revision = Number(sqlite.prepare("SELECT revision FROM checkout_authority WHERE id = 'default'").get()?.revision);
+  const payload = {
+    checkoutToken: attempt.checkoutToken,
+    checkoutAuthorityRevision: revision,
+    checkoutSideEffects: { orderCreatedNotification: false, metaPurchase: false },
+    existingCustomer: null,
+    orderData: {
+      id: attempt.orderId,
+      customerName: contact.name ?? "Stranger",
+      customerPhone: contact.phone,
+      customerEmail: contact.email,
+      shippingAddress: "House 9, Road 9, Mirpur",
+      city: "city_1", zone: "zone_1", area: null, cityName: "Dhaka", zoneName: "Mirpur", areaName: null,
+      notes: null,
+      totalAmount: 500, shippingCharge: 0, discountAmount: 0,
+      currencyCode: "BDT", currencyDecimalPlaces: 2,
+      subtotalAmountMinor: 50_000, shippingAmountMinor: 0,
+      shippingMethodId: null, shippingMethodName: null, shippingMethodDescription: null,
+      shippingMethodBaseAmountMinor: null, shippingFeeWaived: null,
+      discountAmountMinor: 0, taxAmountMinor: 0, totalAmountMinor: 50_000,
+      taxLabel: "Tax", pricesIncludeTax: false,
+      status: "pending", paymentMethod: "cod", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 500,
+      fulfillmentStatus: "pending", inventoryPool: "regular", inventoryAction: "reserved",
+    },
+    items: [{
+      id: `item_${attempt.orderId}`, taxAllocationLineId: "line_1", cartKey: null, productId: "prod_1",
+      variantId: "var_1", quantity: 1, price: 500, productName: "Tee", variantLabel: null,
+      productImageMediaId: null, inventoryTracked: true, unitPriceMinor: 50_000, lineSubtotalMinor: 50_000,
+      discountAmountMinor: 0, taxableAmountMinor: 0, taxAmountMinor: 0,
+    }],
+    requestUrl: "https://shop.example.com/api/v1/orders",
+    taxQuote: {
+      schemaVersion: 1, calculationVersion: "tax-v1", enabled: false, currencyCode: "BDT",
+      decimalPlaces: 2, displayLabel: "Tax", pricesIncludeTax: false, shippingTaxed: false,
+      settingsVersion: 0, subtotalMinor: 50_000, shippingMinor: 0, discountMinor: 0,
+      taxableMinor: 0, taxMinor: 0, totalMinor: 50_000,
+      destination: { city: "city_1", zone: "zone_1", area: null },
+      lines: [{
+        lineId: "line_1", productId: "prod_1", variantId: "var_1", taxClassId: null, taxClassName: null,
+        unitPriceMinor: 50_000, quantity: 1, grossAmountMinor: 50_000, discountMinor: 0,
+        taxableAmountMinor: 0, taxMinor: 0, totalMinor: 50_000, components: [],
+      }],
+      shipping: {
+        taxClassId: null, taxClassName: null, grossAmountMinor: 0, discountMinor: 0,
+        taxableAmountMinor: 0, taxMinor: 0, totalMinor: 0, components: [],
+      },
+    },
+  } as unknown as StorefrontOrderCommitPayload;
+  await commitStorefrontOrderPayload(db, payload, {
+    attempt,
+    response: { orderId: attempt.orderId, receiptToken: attempt.checkoutToken },
+  });
+  return attempt.orderId;
+}
+
+const customerRows = () => sqlite.prepare(
+  "SELECT id, name, email, phone, address, account_claimed_at IS NOT NULL AS claimed, email_verified_at IS NOT NULL AS email_verified, phone_verified_at IS NOT NULL AS phone_verified FROM customers ORDER BY account_claimed_at IS NULL, phone",
+).all();
+const orderOwner = (orderId: string) =>
+  sqlite.prepare("SELECT account_owner_customer_id AS owner FROM orders WHERE id = ?").get(orderId)?.owner ?? null;
+
+describe("guest checkout contacts never lock a buyer out (BA-01)", () => {
+  it("signs the verified owner in after a stranger's guest order used their email", async () => {
+    // 1. The buyer creates an account with their email and phone, then signs out.
+    const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
+    await deleteCustomerSession(db, account.session.token, SESSION_KEY);
+
+    // 2. A stranger places a guest order with the buyer's email and their own phone.
+    const strangerOrder = await placeGuestOrder({ phone: STRANGER_PHONE, email: BUYER_EMAIL });
+    expect(customerRows()).toHaveLength(2);
+
+    // 3. The buyer signs in: the code is sent and the verified owner signs in.
+    const code = await sendEmailCode(BUYER_EMAIL);
+    const signedIn = await verifyEmail(BUYER_EMAIL, code);
+
+    expect(signedIn).toMatchObject({ status: "signed_in", isNewUser: false });
+    if (signedIn.status !== "signed_in") return;
+    expect(signedIn.customer).toMatchObject({
+      customerId: account.customer.customerId,
+      email: BUYER_EMAIL,
+      phone: BUYER_PHONE,
+      name: "Buyer Five",
     });
+    // The account's identity is unchanged; the stranger's CRM profile is untouched.
+    expect(customerRows()).toEqual([
+      expect.objectContaining({ id: account.customer.customerId, email: BUYER_EMAIL, phone: BUYER_PHONE, claimed: 1, email_verified: 1 }),
+      expect.objectContaining({ phone: STRANGER_PHONE, email: BUYER_EMAIL, claimed: 0 }),
+    ]);
+    // Orders placed with the verified email show in the owner's history (Shopify semantics).
+    expect(orderOwner(strangerOrder)).toBe(account.customer.customerId);
   });
 
-  it("uses an explicit cookie domain only when one is configured", () => {
-    expect(getCookieConfig("https://storefront.scalius.com", "scalius.com")).toEqual({
-      sameSite: "None",
-      domainAttr: "; Domain=.scalius.com",
+  it("does not let an unverified email saved on another account take the inbox owner's sign-in", async () => {
+    // Someone signs up by phone and types the buyer's email (never verified).
+    const phoneCode = await issuePhoneCode(STRANGER_PHONE);
+    const other = await verifyPhone(STRANGER_PHONE, phoneCode, { name: "Other", email: BUYER_EMAIL });
+    expect(other).toMatchObject({ status: "signed_in", isNewUser: true });
+
+    // The inbox owner proves the email: they are a new buyer, not "the other account".
+    const code = await sendEmailCode(BUYER_EMAIL);
+    await expect(verifyEmail(BUYER_EMAIL, code)).resolves.toEqual({ status: "needs_account_details" });
+    const own = await verifyEmail(BUYER_EMAIL, code, { name: "Buyer Five", phone: BUYER_PHONE });
+    expect(own.status).toBe("signed_in");
+    if (own.status !== "signed_in" || other.status !== "signed_in") return;
+    expect(own.customer.customerId).not.toBe(other.customer.customerId);
+
+    // Later sign-ins with the email always reach the verified owner.
+    const again = await verifyEmail(BUYER_EMAIL, await sendEmailCode(BUYER_EMAIL));
+    expect(again).toMatchObject({ status: "signed_in", customer: { customerId: own.customer.customerId } });
+  });
+});
+
+describe("one sign-in flow", () => {
+  it("sends a code for an unknown email without revealing it, then creates the account after the code", async () => {
+    const code = await sendEmailCode("new@example.test");
+    expect(customerRows()).toEqual([]);
+
+    await expect(verifyEmail("new@example.test", code)).resolves.toEqual({ status: "needs_account_details" });
+    // The proven code stays usable for the details step; details are validated.
+    await expect(verifyEmail("new@example.test", code, { name: " ", phone: BUYER_PHONE }))
+      .rejects.toThrow("Enter your name.");
+    await expect(verifyEmail("new@example.test", code, { name: "New Buyer" }))
+      .rejects.toThrow("Enter your phone number.");
+
+    const created = await verifyEmail("new@example.test", code, { name: "New Buyer", phone: "০১৭১২ ০০০-০০৫" });
+    expect(created).toMatchObject({ status: "signed_in", isNewUser: true, customer: { phone: BUYER_PHONE, profileComplete: false } });
+    expect(customerRows()).toEqual([
+      expect.objectContaining({ email: "new@example.test", phone: BUYER_PHONE, claimed: 1, email_verified: 1, phone_verified: 0 }),
+    ]);
+    // A used code cannot be replayed.
+    await expect(verifyEmail("new@example.test", code)).rejects.toThrow("That code was already used.");
+  });
+
+  it("reveals nothing about accounts to someone without the code", async () => {
+    await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
+    const code = await sendEmailCode("attacker@example.test");
+    const wrong = code === "111111" ? "222222" : "111111";
+    // Wrong code with sign-up details for a taken phone: only "wrong code".
+    await expect(verifyEmail("attacker@example.test", wrong, { name: "X", phone: BUYER_PHONE }))
+      .rejects.toThrow("That code isn't right.");
+    // With the right code, the phone conflict is explained and no account is made.
+    await expect(verifyEmail("attacker@example.test", code, { name: "X", phone: BUYER_PHONE }))
+      .rejects.toThrow("This phone number is already on another account.");
+    expect(customerRows()).toHaveLength(1);
+  });
+
+  it("takes over an unclaimed guest profile by typed phone without exposing its saved address", async () => {
+    const guestOrder = await placeGuestOrder({ phone: BUYER_PHONE, email: null, name: "Guest Name" });
+    const code = await sendEmailCode(BUYER_EMAIL);
+    const created = await verifyEmail(BUYER_EMAIL, code, { name: "Buyer Five", phone: BUYER_PHONE });
+
+    expect(created).toMatchObject({ status: "signed_in", isNewUser: true, customer: { address: null, name: "Buyer Five" } });
+    expect(customerRows()).toEqual([
+      expect.objectContaining({ phone: BUYER_PHONE, email: BUYER_EMAIL, address: null, claimed: 1, phone_verified: 0 }),
+    ]);
+    // The phone was typed, not proven, so its guest orders are not added.
+    expect(orderOwner(guestOrder)).toBeNull();
+  });
+
+  it("keeps the saved address and adds the order when the guest profile carries the email just proven", async () => {
+    const guestOrder = await placeGuestOrder({ phone: BUYER_PHONE, email: BUYER_EMAIL, name: "Guest Name" });
+    const created = await verifyEmail(BUYER_EMAIL, await sendEmailCode(BUYER_EMAIL), { name: "Buyer Five", phone: BUYER_PHONE });
+
+    expect(created).toMatchObject({
+      status: "signed_in",
+      customer: { address: "House 9, Road 9, Mirpur", zoneName: "Mirpur", cityName: "Dhaka", name: "Buyer Five" },
     });
+    if (created.status !== "signed_in") return;
+    expect(orderOwner(guestOrder)).toBe(created.customer.customerId);
+  });
+
+  it("signs a phone-proven buyer into their guest profile and adds that phone's orders", async () => {
+    const guestOrder = await placeGuestOrder({ phone: BUYER_PHONE, email: null, name: "Guest Name" });
+    const signedIn = await verifyPhone(BUYER_PHONE, await issuePhoneCode(BUYER_PHONE));
+
+    expect(signedIn).toMatchObject({ status: "signed_in", isNewUser: true, customer: { name: "Guest Name", phone: BUYER_PHONE } });
+    expect(customerRows()).toEqual([expect.objectContaining({ claimed: 1, phone_verified: 1 })]);
+    if (signedIn.status !== "signed_in") return;
+    expect(orderOwner(guestOrder)).toBe(signedIn.customer.customerId);
+  });
+
+  it("adds orders placed while signed out once the account lists its orders (BA-03)", async () => {
+    const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
+    const later = await placeGuestOrder({ phone: "+8801712000099", email: "  Buyer5@Example.test " });
+    expect(orderOwner(later)).toBeNull();
+
+    await linkVerifiedContactOrders(db, account.customer.customerId!);
+    const history = await getCustomerOrders(db, account.customer.customerId!, {});
+    expect(history.orders.map((order) => order.id)).toContain(later);
+  });
+
+  it("asks a closed account to contact the store only after the code is proven", async () => {
+    const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
+    sqlite.prepare("UPDATE customers SET deleted_at = unixepoch() WHERE id = ?").run(account.customer.customerId!);
+    const code = await sendEmailCode(BUYER_EMAIL);
+    const wrong = code === "111111" ? "222222" : "111111";
+    await expect(verifyEmail(BUYER_EMAIL, wrong)).rejects.toThrow("That code isn't right.");
+    await expect(verifyEmail(BUYER_EMAIL, code)).rejects.toThrow("This account was closed.");
+  });
+});
+
+describe("codes and limits (BA-02, BA-15)", () => {
+  it("counts wrong codes, names a replaced code, and locks after five", async () => {
+    const first = await sendEmailCode(BUYER_EMAIL);
+    sqlite.prepare("UPDATE customer_auth_otp_challenges SET resend_available_at = 0").run();
+    const second = await sendEmailCode(BUYER_EMAIL);
+    const wrong = ["000000", "999999", first, second].find((value) => value !== first && value !== second)!;
+
+    if (first !== second) {
+      await expect(verifyEmail(BUYER_EMAIL, first)).rejects.toMatchObject({
+        message: "That code was replaced by a newer one. Enter the latest code we sent.",
+        details: { attemptsLeft: 4 },
+      });
+    }
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(verifyEmail(BUYER_EMAIL, wrong)).rejects.toBeInstanceOf(ValidationError);
+    }
+    const locked = await verifyEmail(BUYER_EMAIL, wrong).catch((error: unknown) => error);
+    expect(locked).toMatchObject({ details: { attemptsLeft: 0 } });
+    // Once locked even the right code fails; a new code can be sent right away.
+    await expect(verifyEmail(BUYER_EMAIL, second)).rejects.toMatchObject({ details: { attemptsLeft: 0 } });
+    await expect(sendEmailCode(BUYER_EMAIL)).resolves.toMatch(/^\d{6}$/);
+  });
+
+  it("waits out the resend cooldown with an honest retry time", async () => {
+    await sendEmailCode(BUYER_EMAIL);
+    const error = await sendEmailCode(BUYER_EMAIL).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(RateLimitError);
+    expect((error as RateLimitError).retryAfterSeconds).toBeGreaterThan(50);
+    expect((error as RateLimitError).details).toEqual({ retryAfterSeconds: (error as RateLimitError).retryAfterSeconds });
+  });
+
+  it("limits codes per email, not per shared carrier IP", async () => {
+    const sharedIp = "198.51.100.7";
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await sendEmailCode(BUYER_EMAIL, sharedIp);
+      sqlite.prepare("UPDATE customer_auth_otp_challenges SET resend_available_at = 0").run();
+    }
+    const limited = await sendEmailCode(BUYER_EMAIL, sharedIp).catch((caught: unknown) => caught);
+    expect(limited).toBeInstanceOf(RateLimitError);
+    expect((limited as RateLimitError).message).toBe("Too many codes requested. Please wait and try again.");
+    expect((limited as RateLimitError).retryAfterSeconds).toBeGreaterThan(14 * 60);
+    // Other buyers behind the same IP still get codes.
+    for (let buyer = 0; buyer < 10; buyer += 1) {
+      await expect(sendEmailCode(`other${buyer}@example.test`, sharedIp)).resolves.toMatch(/^\d{6}$/);
+    }
+  });
+});
+
+describe("sessions and profile", () => {
+  it("reads, revokes and cleans D1 sessions", async () => {
+    const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
+    const session = await getCustomerBySession(db, account.session.token, SESSION_KEY);
+    expect(session).toMatchObject({ customerId: account.customer.customerId, email: BUYER_EMAIL, profileComplete: false });
+    expect(sqlite.prepare("SELECT token_hash FROM customer_sessions").get()?.token_hash).not.toBe(account.session.token);
+
+    await deleteCustomerSession(db, account.session.token, SESSION_KEY);
+    await expect(getCustomerBySession(db, account.session.token, SESSION_KEY)).resolves.toBeNull();
+    const cleaned = await cleanupExpiredCustomerSessions(db, Math.floor(Date.now() / 1000) + 8 * 24 * 60 * 60);
+    expect(cleaned.deleted).toBe(1);
+  });
+
+  it("rejects a blank name and an address-less location instead of saving them (BA-08)", async () => {
+    sqlite.exec(`
+      INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active) VALUES
+        ('city_dhaka', 'Dhaka', 'city', NULL, '{}', '{}', 1),
+        ('zone_mirpur', 'Mirpur', 'zone', 'city_dhaka', '{}', '{}', 1);
+    `);
+    const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
+    await expect(updateCustomerProfile(db, account.session, { name: "" })).rejects.toThrow("Enter your name.");
+    await expect(updateCustomerProfile(db, account.session, { city: "city_dhaka", zone: "zone_mirpur" }))
+      .rejects.toThrow("Enter your delivery address.");
+    const saved = await updateCustomerProfile(db, account.session, {
+      address: "House 1", city: "city_dhaka", zone: "zone_mirpur",
+    });
+    expect(saved.customer).toMatchObject({ name: "Buyer Five", cityName: "Dhaka", zoneName: "Mirpur", profileComplete: true });
+  });
+});
+
+describe("customer auth cookie domain", () => {
+  it("keeps cookies host-only by default and honours only a valid explicit domain", () => {
+    expect(getCookieConfig("https://shop.example.co.uk")).toEqual({ sameSite: "None", domainAttr: "" });
     expect(getCookieConfig("https://storefront.scalius.com", ".SCALIUS.com.")).toEqual({
       sameSite: "None",
       domainAttr: "; Domain=.scalius.com",
     });
-  });
-
-  it("ignores invalid cookie domain values", () => {
-    expect(normalizeCustomerAuthCookieDomain("localhost")).toBe("");
-    expect(normalizeCustomerAuthCookieDomain("127.0.0.1")).toBe("");
-    expect(normalizeCustomerAuthCookieDomain("shop")).toBe("");
-    expect(normalizeCustomerAuthCookieDomain("https://example.com")).toBe("");
-  });
-});
-
-type QueueEntry = { limit?: unknown[]; get?: unknown; all?: unknown[] };
-
-const LEGACY_DOCUMENT_FIELDS: Record<string, [category: string, field: string]> = {
-  email_provider: ["email", "provider"],
-  email_sender: ["email", "sender"],
-  resend_api_key: ["email", "resendApiKey"],
-  active_provider: ["sms", "activeProvider"],
-  bdbulksms_token: ["sms", "bdbulksmsToken"],
-};
-
-/** Legacy key/value fixture rows as the settings document rows they became. */
-function documentRows(rows: unknown[]): Array<{ category: string; value: string; revision: number }> {
-  const documents = new Map<string, Record<string, unknown>>();
-  for (const row of rows as Array<{ key: string; value: string }>) {
-    const [category, field] = LEGACY_DOCUMENT_FIELDS[row.key] ?? [];
-    if (!category || !field) continue;
-    documents.set(category, { ...documents.get(category), [field]: row.value });
-  }
-  return [...documents].map(([category, value]) => ({ category, value: JSON.stringify(value), revision: 1 }));
-}
-
-/**
- * Sequential fake: queued results are consumed in call order. The leading
- * sign-in method summary, saved policy and saved countries become the customer_auth
- * and customer_countries documents; a later `{ all }` of settings rows answers
- * the next settings-document read (email or SMS provider settings).
- */
-function createDb(selectResults: QueueEntry[]) {
-  const queue = [...selectResults];
-  const site = queue.shift()?.limit?.[0] as { authVerificationMethod?: string } | undefined;
-  const policy = queue[0] && "get" in queue[0] ? queue.shift()?.get as { value?: string } | null : null;
-  const countries = queue[0] && "get" in queue[0] ? queue.shift()?.get as { value?: string } | null : null;
-  let authDocuments: Array<{ category: string; value: string; revision: number }> | null = [
-    {
-      category: "customer_auth",
-      value: JSON.stringify({
-        authVerificationMethod: site?.authVerificationMethod ?? "email",
-        policy: policy?.value ? JSON.parse(policy.value) : null,
-      }),
-      revision: 1,
-    },
-    ...(countries?.value
-      ? [{
-        category: "customer_countries",
-        value: JSON.stringify({
-          allowedCountries: JSON.parse(countries.value).countries,
-          allowedCountriesMode: JSON.parse(countries.value).mode,
-        }),
-        revision: 1,
-      }]
-      : []),
-  ];
-  const settingsDocuments = () => {
-    if (authDocuments) {
-      const documents = authDocuments;
-      authDocuments = null;
-      return documents;
+    for (const invalid of ["localhost", "127.0.0.1", "shop", "https://example.com"]) {
+      expect(normalizeCustomerAuthCookieDomain(invalid)).toBe("");
     }
-    return queue[0] && "all" in queue[0] ? documentRows(queue.shift()?.all ?? []) : [];
-  };
-  const insertValues = vi.fn(async (_values: unknown) => undefined);
-  const insertCalls: Array<{ table: unknown; values: unknown }> = [];
-  const updateCalls: Array<{ table: unknown; values: unknown }> = [];
-  type FakeStatement =
-    | { type: "insert"; table: unknown; values: unknown }
-    | { type: "update"; table: unknown; values: unknown };
-  const executeStatement = async (statement: FakeStatement) => {
-    if (statement.type === "insert") {
-      insertCalls.push({ table: statement.table, values: statement.values });
-      await insertValues(statement.values);
-      return [];
-    }
-    updateCalls.push({ table: statement.table, values: statement.values });
-    return [];
-  };
-  const batch = vi.fn(async (statements: FakeStatement[]) =>
-    Promise.all(statements.map(executeStatement))
-  );
-  return {
-    select: vi.fn(() => ({
-        from: vi.fn(() => ({
-        limit: vi.fn(async () => {
-          const result = queue.shift();
-          return result?.limit ?? [];
-        }),
-        where: vi.fn(() => ({
-          get: vi.fn(async () => {
-            const result = queue[0];
-            if (!result || !("get" in result)) return null;
-            queue.shift();
-            return result.get ?? null;
-          }),
-          all: vi.fn(async () => {
-            const result = queue[0];
-            if (!result || !("all" in result)) return [];
-            queue.shift();
-            return result.all ?? [];
-          }),
-          limit: vi.fn(() => ({
-            all: vi.fn(async () => {
-              const result = queue[0];
-              if (!result || !("all" in result)) return [];
-              queue.shift();
-              return result.all ?? [];
-            }),
-          })),
-          // Awaiting the query itself is the settings-document read.
-          then: (resolve: (rows: unknown[]) => unknown, reject: (error: unknown) => unknown) =>
-            Promise.resolve().then(settingsDocuments).then(resolve, reject),
-        })),
-      })),
-    })),
-    insert: vi.fn((table: unknown) => ({
-      values: vi.fn((values: unknown) => ({ type: "insert", table, values })),
-    })),
-    update: vi.fn((table: unknown) => ({
-      set: vi.fn((values: unknown) => ({
-        where: vi.fn(() => ({ type: "update", table, values })),
-      })),
-    })),
-    batch,
-    insertValues,
-    insertCalls,
-    updateCalls,
-  };
-}
-
-const readySmsSettings = [
-  { key: "active_provider", value: "bdbulksms" },
-  { key: "bdbulksms_token", value: "scalius-local-token-789" },
-];
-const readyEmailSettings = [
-  { key: "email_provider", value: "cloudflare" },
-  { key: "email_sender", value: "orders@example.com" },
-];
-const readyEmailEnv = {
-  EMAIL: { send: vi.fn() },
-};
-const otpInputSecrets = {
-  encryptionKey: "test-otp-signing-key",
-  credentialEncryptionKey: Buffer.alloc(32, 9).toString("base64"),
-};
-
-function createCustomerRow(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "cust_1",
-    name: "Buyer",
-    email: "buyer@example.com",
-    phone: "+8801712345678",
-    address: null,
-    city: null,
-    zone: null,
-    area: null,
-    cityName: null,
-    zoneName: null,
-    areaName: null,
-    accountClaimedAt: new Date(1_700_000_000_000),
-    phoneVerifiedAt: new Date(1_700_000_000_000),
-    emailVerifiedAt: null,
-    lastAuthenticatedAt: new Date(1_700_000_000_000),
-    profileCompletionRequiredAt: null,
-    profileCompletedAt: null,
-    totalOrders: 0,
-    totalSpent: 0,
-    lastOrderAt: null,
-    createdAt: 1_700_000_000,
-    updatedAt: 1_700_000_000,
-    deletedAt: null,
-    ...overrides,
-  };
-}
-
-describe("customer auth service intent handling", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    challengeMocks.buildCustomerAuthOtpStorageKey.mockImplementation(async (channel: string) => (
-      `cust_otp:${channel}:${"a".repeat(64)}`
-    ));
-    challengeMocks.persistCustomerAuthOtpChallenge.mockImplementation(async (_db, input) => ({
-      otpKey: input.otpKey,
-      deliveryKey: input.deliveryKey,
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-    }));
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValue({
-      otpKey: "cust_otp:sms:+8801712345678",
-      method: "phone",
-      channel: "sms",
-      intent: "sign_up",
-      identifier: "+8801712345678",
-      contactEmail: "original@example.com",
-      phone: "+8801712345678",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-    rateLimitMocks.enforceCustomerAuthOtpIpRateLimit.mockResolvedValue(undefined);
-  });
-
-  it("does not reveal duplicate phone during email OTP account creation before OTP proof", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: readyEmailSettings },
-    ]);
-
-    const result = await sendOtp(db as never, {
-      intent: "sign_up",
-      method: "email",
-      channel: "email",
-      identifier: "new@example.com",
-      phone: "+8801712345678",
-      name: "New Customer",
-      ip: "unknown",
-      emailEnv: readyEmailEnv,
-      ...otpInputSecrets,
-    });
-
-    expect(result).toMatchObject({
-      success: true,
-      message: "Verification code sent. Please check your selected contact.",
-    });
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
-      db,
-      expect.objectContaining({
-        otpKey: expect.stringMatching(/^cust_otp:email:[a-f0-9]{64}$/),
-        method: "email",
-        channel: "email",
-        identifier: "new@example.com",
-        deliveryTarget: "new@example.com",
-        deliveryName: "New Customer",
-        phone: "+8801712345678",
-        intent: "sign_up",
-      }),
-    );
-    const persistedCode = challengeMocks.persistCustomerAuthOtpChallenge.mock.calls[0]?.[1]?.code;
-    expect(typeof persistedCode).toBe("string");
-    expect(result.queuePayload).toMatchObject({
-      type: "auth.send_otp",
-      challengeKey: expect.stringMatching(/^cust_otp:email:[a-f0-9]{64}$/),
-      deliveryKey: expect.stringMatching(/^otp_[a-f0-9]+$/),
-    });
-    expect(result.queuePayload).not.toHaveProperty("code");
-    expect(result.queuePayload).not.toHaveProperty("identifier");
-    expect(result.queuePayload).not.toHaveProperty("name");
-    expect(JSON.stringify(result.queuePayload)).not.toContain(persistedCode);
-    expect(JSON.stringify(result.queuePayload)).not.toContain("new@example.com");
-    expect(JSON.stringify(result.queuePayload)).not.toContain("+8801712345678");
-    expect(JSON.stringify(result.queuePayload)).not.toContain("New Customer");
-    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).toHaveBeenCalledWith(
-      db,
-      expect.objectContaining({
-        ip: "unknown",
-      }),
-    );
-    const rateLimitCallOrder = rateLimitMocks.enforceCustomerAuthOtpIpRateLimit.mock.invocationCallOrder[0];
-    const challengeCallOrder = challengeMocks.persistCustomerAuthOtpChallenge.mock.invocationCallOrder[0];
-    expect(rateLimitCallOrder).toBeDefined();
-    expect(challengeCallOrder).toBeDefined();
-    expect(rateLimitCallOrder!).toBeLessThan(challengeCallOrder!);
-  });
-
-  it("allows existing customers to sign in with email OTP without duplicate-phone account creation checks", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: [createCustomerRow()] },
-      { all: readyEmailSettings },
-    ]);
-
-    const result = await sendOtp(db as never, {
-      intent: "sign_in",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      phone: "+8801712345678",
-      name: "Buyer",
-      ip: "unknown",
-      emailEnv: readyEmailEnv,
-      ...otpInputSecrets,
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.queuePayload).toMatchObject({
-      method: "email",
-      channel: "email",
-    });
-    expect(result.queuePayload).not.toHaveProperty("identifier");
-    expect(result.queuePayload).not.toHaveProperty("name");
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
-      db,
-      expect.objectContaining({
-        otpKey: expect.stringMatching(/^cust_otp:email:[a-f0-9]{64}$/),
-        method: "email",
-        channel: "email",
-        identifier: "buyer@example.com",
-        deliveryTarget: "buyer@example.com",
-        deliveryName: "Buyer",
-        intent: "sign_in",
-      }),
-    );
-  });
-
-  it("rejects unknown email sign-in before OTP delivery state is created", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: [] },
-      { get: null },
-    ]);
-
-    await expect(sendOtp(db as never, {
-      intent: "sign_in",
-      method: "email",
-      channel: "email",
-      identifier: "missing@example.com",
-      name: "Missing Buyer",
-      ip: "203.0.113.20",
-      emailEnv: readyEmailEnv,
-      ...otpInputSecrets,
-    })).rejects.toThrow("No account was found for this email. Create an account instead.");
-
-    expect(challengeMocks.buildCustomerAuthOtpStorageKey).not.toHaveBeenCalled();
-    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).toHaveBeenCalledWith(
-      db,
-      expect.objectContaining({
-        ip: "203.0.113.20",
-        hashKey: otpInputSecrets.encryptionKey,
-      }),
-    );
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
-  });
-
-  it("rejects rate-limited OTP sends before mutating challenge state", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: [createCustomerRow()] },
-      { all: readyEmailSettings },
-    ]);
-    rateLimitMocks.enforceCustomerAuthOtpIpRateLimit.mockRejectedValueOnce(
-      new Error("Too many requests from this IP. Please try again later."),
-    );
-
-    await expect(sendOtp(db as never, {
-      intent: "sign_in",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      name: "Buyer",
-      ip: "203.0.113.20",
-      emailEnv: readyEmailEnv,
-      ...otpInputSecrets,
-    })).rejects.toThrow("Too many requests from this IP. Please try again later.");
-
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
-    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).toHaveBeenCalledWith(
-      db,
-      expect.objectContaining({
-        ip: "203.0.113.20",
-        hashKey: otpInputSecrets.encryptionKey,
-      }),
-    );
-  });
-
-  it("stores phone OTP challenges under channel-scoped keys", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      {
-        get: {
-          value: JSON.stringify({
-            otpChannels: ["sms", "whatsapp"],
-            requiredContactFields: [],
-            optionalContactFields: ["email"],
-            defaultOtpChannel: "sms",
-          }),
-        },
-      },
-      { get: null },
-      { get: createCustomerRow() },
-      { all: readySmsSettings },
-    ]);
-
-    const result = await sendOtp(db as never, {
-      intent: "sign_in",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      name: "Buyer",
-      ip: "unknown",
-      ...otpInputSecrets,
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.queuePayload).toMatchObject({
-      method: "phone",
-      channel: "sms",
-    });
-    expect(result.queuePayload).not.toHaveProperty("identifier");
-    expect(result.queuePayload).not.toHaveProperty("name");
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
-      db,
-      expect.objectContaining({
-        otpKey: expect.stringMatching(/^cust_otp:sms:[a-f0-9]{64}$/),
-        method: "phone",
-        channel: "sms",
-        identifier: "+8801712345678",
-        deliveryTarget: "+8801712345678",
-        deliveryName: "Buyer",
-      }),
-    );
-    const persistInput = challengeMocks.persistCustomerAuthOtpChallenge.mock.calls.at(-1)?.[1] as { otpKey: string };
-    expect(persistInput.otpKey).not.toContain("+8801712345678");
-  });
-
-  it("rejects disallowed primary phone OTP sends before rate limits or challenge mutation", async () => {
-    const db = createDb([
-      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
-      { get: null },
-      { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
-      { all: readySmsSettings },
-    ]);
-
-    await expect(sendOtp(db as never, {
-      intent: "sign_in",
-      method: "phone",
-      channel: "sms",
-      identifier: "+14155552671",
-      name: "Buyer",
-      ip: "unknown",
-      ...otpInputSecrets,
-    })).rejects.toThrow("Phone numbers from US are not accepted");
-
-    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
-  });
-
-  it("rejects disallowed secondary signup phones before email OTP challenge mutation", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
-      { all: readyEmailSettings },
-    ]);
-
-    await expect(sendOtp(db as never, {
-      intent: "sign_up",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      phone: "+14155552671",
-      name: "Buyer",
-      ip: "unknown",
-      emailEnv: readyEmailEnv,
-      ...otpInputSecrets,
-    })).rejects.toThrow("Phone numbers from US are not accepted");
-
-    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
-  });
-
-  it("pins the account creation contact fields accepted when the OTP is issued", async () => {
-    const db = createDb([
-      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
-      { get: null },
-      { all: readySmsSettings },
-    ]);
-
-    await sendOtp(db as never, {
-      intent: "sign_up",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      email: "Buyer@Example.COM",
-      name: "Buyer",
-      ip: "unknown",
-      ...otpInputSecrets,
-    });
-
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).toHaveBeenCalledWith(
-      db,
-      expect.objectContaining({
-        otpKey: expect.stringMatching(/^cust_otp:sms:[a-f0-9]{64}$/),
-        method: "phone",
-        identifier: "+8801712345678",
-        contactEmail: "buyer@example.com",
-        phone: undefined,
-        intent: "sign_up",
-        channel: "sms",
-        contactEncryptionKey: otpInputSecrets.credentialEncryptionKey,
-      }),
-    );
-  });
-
-  it("rejects SMS OTP when no SMS provider is configured before mutating OTP challenge state", async () => {
-    const db = createDb([
-      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
-      { get: null },
-      { get: null },
-      { get: createCustomerRow() },
-      { all: [] },
-    ]);
-
-    await expect(sendOtp(db as never, {
-      intent: "sign_in",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      name: "Buyer",
-      ip: "unknown",
-      ...otpInputSecrets,
-    })).rejects.toThrow("SMS verification is currently unavailable. Contact store support.");
-
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
-    expect(rateLimitMocks.enforceCustomerAuthOtpIpRateLimit).not.toHaveBeenCalled();
-  });
-
-  it("rejects email OTP when no email provider is ready before mutating OTP challenge or rate-limit state", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: [createCustomerRow()] },
-      { all: [] },
-    ]);
-
-    await expect(sendOtp(db as never, {
-      intent: "sign_in",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      name: "Buyer",
-      ip: "203.0.113.20",
-      ...otpInputSecrets,
-    })).rejects.toThrow("Email verification is currently unavailable. Contact store support.");
-
-    expect(challengeMocks.persistCustomerAuthOtpChallenge).not.toHaveBeenCalled();
-  });
-
-  it("rejects ambiguous email sign-in after OTP proof without creating a session", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: [
-        createCustomerRow({ id: "cust_1", phone: "+8801711111111" }),
-        createCustomerRow({ id: "cust_2", phone: "+8801722222222" }),
-      ] },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:email:buyer@example.com",
-      method: "email",
-      channel: "email",
-      intent: "sign_in",
-      identifier: "buyer@example.com",
-      contactEmail: "buyer@example.com",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_in",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      code: "123456",
-      name: "Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    })).rejects.toThrow("Multiple accounts use this email. Please use phone verification or contact store support.");
-
-    expect(db.insertValues).not.toHaveBeenCalled();
-  });
-
-  it("rejects sign-in when no active email customer matches", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: [] },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:email:deleted@example.com",
-      method: "email",
-      channel: "email",
-      intent: "sign_in",
-      identifier: "deleted@example.com",
-      contactEmail: "deleted@example.com",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_in",
-      method: "email",
-      channel: "email",
-      identifier: "deleted@example.com",
-      code: "123456",
-      name: "Deleted Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    })).rejects.toThrow("No account was found for this email. Create an account instead.");
-
-    expect(db.insertValues).not.toHaveBeenCalled();
-  });
-
-  it("returns restore-support guidance for soft-deleted email sign-in after OTP proof", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: [] },
-      { get: { id: "cust_deleted" } },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:email:deleted@example.com",
-      method: "email",
-      channel: "email",
-      intent: "sign_in",
-      identifier: "deleted@example.com",
-      contactEmail: "deleted@example.com",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_in",
-      method: "email",
-      channel: "email",
-      identifier: "deleted@example.com",
-      code: "123456",
-      name: "Deleted Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    })).rejects.toThrow("This email belongs to a deleted customer account. Contact store support to restore access.");
-
-    expect(db.insertValues).not.toHaveBeenCalled();
-  });
-
-  it("signs in the single active email customer while ignoring deleted duplicates", async () => {
-    const activeCustomer = createCustomerRow({
-      id: "cust_active",
-      email: "buyer@example.com",
-      phone: "+8801712345678",
-      address: "House 1",
-      city: "city_dhaka",
-      zone: "zone_mirpur",
-    });
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: [activeCustomer] },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:email:buyer@example.com",
-      method: "email",
-      channel: "email",
-      intent: "sign_in",
-      identifier: "buyer@example.com",
-      contactEmail: "buyer@example.com",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    const result = await verifyOtp(db as never, {
-      intent: "sign_in",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      code: "123456",
-      name: "Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.session?.customerId).toBe("cust_active");
-    expect(result.customer?.customerId).toBe("cust_active");
-    const sessionInsert = db.insertCalls.find(({ values }) => {
-      const row = values as Record<string, unknown>;
-      return typeof row.tokenHash === "string" && row.customerId === "cust_active";
-    });
-    expect(sessionInsert?.values).toMatchObject({
-      customerId: "cust_active",
-      revokedAt: null,
-    });
-    expect(db.updateCalls[0]?.values).toMatchObject({
-      accountClaimedAt: expect.anything(),
-      emailVerifiedAt: expect.anything(),
-      lastAuthenticatedAt: expect.anything(),
-    });
-    expect(db.updateCalls[0]?.values as Record<string, unknown>).not.toHaveProperty("phoneVerifiedAt");
-    expect(db.batch).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects phone sign-in when no active phone customer matches", async () => {
-    const db = createDb([
-      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
-      { get: null },
-      { get: null },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:sms:+8801712345678",
-      method: "phone",
-      channel: "sms",
-      intent: "sign_in",
-      identifier: "+8801712345678",
-      phone: "+8801712345678",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_in",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      name: "Deleted Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    })).rejects.toThrow("No account was found for this phone number. Create an account instead.");
-
-    expect(db.insertValues).not.toHaveBeenCalled();
-  });
-
-  it("returns restore-support guidance for soft-deleted phone sign-in after OTP proof", async () => {
-    const db = createDb([
-      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
-      { get: null },
-      { get: null },
-      { get: null },
-      { get: { id: "cust_deleted" } },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:sms:+8801712345678",
-      method: "phone",
-      channel: "sms",
-      intent: "sign_in",
-      identifier: "+8801712345678",
-      phone: "+8801712345678",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_in",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      name: "Deleted Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    })).rejects.toThrow("This phone number belongs to a deleted customer account. Contact store support to restore access.");
-
-    expect(db.insertValues).not.toHaveBeenCalled();
-  });
-
-  it("uses pinned OTP contact fields instead of tampered verify payload fields", async () => {
-    const db = createDb([
-      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
-      { get: null },
-      { get: null },
-      { get: null },
-      { get: null },
-    ]);
-
-    const result = await verifyOtp(db as never, {
-      intent: "sign_up",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      name: "Buyer",
-      email: "tampered@example.com",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    });
-
-    expect(result.success).toBe(true);
-    expect(db.insertValues).toHaveBeenCalledWith(expect.objectContaining({
-      email: "original@example.com",
-      phone: "+8801712345678",
-      accountClaimedAt: expect.anything(),
-      phoneVerifiedAt: expect.anything(),
-      emailVerifiedAt: null,
-      lastAuthenticatedAt: expect.anything(),
-      profileCompletionRequiredAt: expect.any(Date),
-      profileCompletedAt: null,
-    }));
-    const sessionInsert = db.insertCalls.find(({ values }) => {
-      const row = values as Record<string, unknown>;
-      return typeof row.tokenHash === "string" && row.customerId === result.session?.customerId;
-    });
-    expect(sessionInsert?.values).toMatchObject({
-      customerId: result.session?.customerId,
-      revokedAt: null,
-    });
-    expect((sessionInsert?.values as { tokenHash?: string }).tokenHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(JSON.stringify(sessionInsert?.values)).not.toContain(result.session?.token);
-    expect(db.batch).toHaveBeenCalledTimes(1);
-  });
-
-  it("claims an existing unclaimed guest CRM profile after phone sign-up proof", async () => {
-    const guestProfile = createCustomerRow({
-      id: "cust_guest",
-      accountClaimedAt: null,
-      phoneVerifiedAt: null,
-      lastAuthenticatedAt: null,
-      address: "Guest checkout address",
-    });
-    const db = createDb([
-      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
-      { get: null },
-      { get: null },
-      { get: guestProfile },
-    ]);
-
-    const result = await verifyOtp(db as never, {
-      intent: "sign_up",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      name: "Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    });
-
-    expect(result).toMatchObject({
-      success: true,
-      isNewUser: true,
-      session: { customerId: "cust_guest" },
-    });
-    expect(db.updateCalls).toHaveLength(1);
-    expect(db.updateCalls[0]?.values).toMatchObject({
-      accountClaimedAt: expect.anything(),
-      phoneVerifiedAt: expect.anything(),
-      lastAuthenticatedAt: expect.anything(),
-    });
-    expect(db.insertCalls.some(({ values }) => (
-      (values as { phone?: string }).phone === "+8801712345678"
-    ))).toBe(false);
-  });
-
-  it("claims the unique unclaimed guest CRM profile after email sign-up proof", async () => {
-    const guestProfile = createCustomerRow({
-      id: "cust_guest_email",
-      accountClaimedAt: null,
-      phoneVerifiedAt: null,
-      emailVerifiedAt: null,
-      lastAuthenticatedAt: null,
-      address: "Guest checkout address",
-    });
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: [guestProfile] },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:email:buyer@example.com",
-      method: "email",
-      channel: "email",
-      intent: "sign_up",
-      identifier: "buyer@example.com",
-      contactEmail: "buyer@example.com",
-      phone: "+8801712345678",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    const result = await verifyOtp(db as never, {
-      intent: "sign_up",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      code: "123456",
-      name: "Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    });
-
-    expect(result).toMatchObject({
-      success: true,
-      isNewUser: true,
-      session: { customerId: "cust_guest_email" },
-    });
-    expect(db.updateCalls).toHaveLength(1);
-    expect(db.updateCalls[0]?.values).toMatchObject({
-      accountClaimedAt: expect.anything(),
-      emailVerifiedAt: expect.anything(),
-      lastAuthenticatedAt: expect.anything(),
-    });
-    expect(db.updateCalls[0]?.values as Record<string, unknown>).not.toHaveProperty("phoneVerifiedAt");
-    expect(db.insertCalls.some(({ values }) => (
-      (values as { email?: string }).email === "buyer@example.com"
-    ))).toBe(false);
-  });
-
-  it("does not treat an unclaimed CRM profile as an existing sign-in account", async () => {
-    const db = createDb([
-      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
-      { get: null },
-      { get: null },
-      { get: createCustomerRow({ accountClaimedAt: null }) },
-      { get: null },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:sms:+8801712345678",
-      method: "phone",
-      channel: "sms",
-      intent: "sign_in",
-      identifier: "+8801712345678",
-      phone: "+8801712345678",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_in",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      name: "Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    })).rejects.toThrow("No account was found for this phone number. Create an account instead.");
-
-    expect(db.batch).not.toHaveBeenCalled();
-  });
-
-  it("marks only the OTP-proven email as verified when email sign-up collects phone", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { all: [] },
-      { all: [] },
-      { get: null },
-      { get: null },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:email:buyer@example.com",
-      method: "email",
-      channel: "email",
-      intent: "sign_up",
-      identifier: "buyer@example.com",
-      contactEmail: "buyer@example.com",
-      phone: "+8801712345678",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_up",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      code: "123456",
-      name: "Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    })).resolves.toMatchObject({
-      success: true,
-      isNewUser: true,
-    });
-
-    expect(db.insertValues).toHaveBeenCalledWith(expect.objectContaining({
-      email: "buyer@example.com",
-      phone: "+8801712345678",
-      accountClaimedAt: expect.anything(),
-      phoneVerifiedAt: null,
-      emailVerifiedAt: expect.anything(),
-      lastAuthenticatedAt: expect.anything(),
-    }));
-    expect(db.batch).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not persist a sign-up customer outside the account/session batch when session persistence fails", async () => {
-    const db = createDb([
-      { limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }] },
-      { get: null },
-      { get: null },
-      { get: null },
-      { get: null },
-    ]);
-    db.batch.mockRejectedValueOnce(new Error("session insert failed"));
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_up",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      name: "Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    })).rejects.toThrow("Customer session could not be created. Please try again.");
-
-    expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(db.batch.mock.calls[0]?.[0]).toHaveLength(2);
-    expect(db.insertValues).not.toHaveBeenCalled();
-  });
-
-  it("rejects a now-disallowed pinned OTP phone before customer or session creation", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-      { get: { value: JSON.stringify({ countries: ["BD"], mode: "include" }) } },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:email:buyer@example.com",
-      method: "email",
-      channel: "email",
-      intent: "sign_up",
-      identifier: "buyer@example.com",
-      contactEmail: "buyer@example.com",
-      phone: "+14155552671",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_up",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      code: "123456",
-      name: "Buyer",
-      encryptionKey: "test-key",
-      sessionHashKey: "session-test-key",
-    })).rejects.toThrow("Phone numbers from US are not accepted");
-
-    expect(challengeMocks.claimCustomerAuthOtpChallenge).toHaveBeenCalledOnce();
-    expect(db.insertValues).not.toHaveBeenCalled();
-  });
-
-  it("rejects verify payloads that try to reinterpret a phone OTP as email verification", async () => {
-    const db = createDb([]);
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_up",
-      method: "email",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      name: "Buyer",
-      phone: "+8801712345678",
-    })).rejects.toThrow("Valid email address required");
-
-    expect(db.insertValues).not.toHaveBeenCalled();
-    expect(challengeMocks.claimCustomerAuthOtpChallenge).not.toHaveBeenCalled();
-  });
-
-  it("bubbles OTP challenge destination mismatches before account mutation", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockRejectedValueOnce(
-      new Error("Verification code does not match the requested contact. Please request a new code."),
-    );
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_up",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      code: "123456",
-      name: "Buyer",
-      phone: "+8801712345678",
-    })).rejects.toThrow("Verification code does not match the requested contact. Please request a new code.");
-
-    expect(db.insertValues).not.toHaveBeenCalled();
-  });
-
-  it("does not read legacy KV OTP records during verification", async () => {
-    const db = createDb([
-      { limit: [baseAuthSettings] },
-      { get: null },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockRejectedValueOnce(
-      new Error("No verification code found. Please request a new one."),
-    );
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_up",
-      method: "email",
-      channel: "email",
-      identifier: "buyer@example.com",
-      code: "123456",
-      name: "Buyer",
-      phone: "+8801712345678",
-      encryptionKey: "test-key",
-    })).rejects.toThrow("No verification code found. Please request a new one.");
-
-    expect(db.insertValues).not.toHaveBeenCalled();
-  });
-
-  it("rechecks required email policy during phone OTP account creation verification", async () => {
-    const db = createDb([
-      {
-        limit: [{ ...baseAuthSettings, authVerificationMethod: "sms_otp" }],
-      },
-      {
-        get: {
-          value: JSON.stringify({
-            otpChannels: ["sms"],
-            requiredContactFields: ["phone", "email"],
-            optionalContactFields: [],
-            defaultOtpChannel: "sms",
-          }),
-        },
-      },
-    ]);
-    challengeMocks.claimCustomerAuthOtpChallenge.mockResolvedValueOnce({
-      otpKey: "cust_otp:sms:+8801712345678",
-      method: "phone",
-      channel: "sms",
-      intent: "sign_up",
-      identifier: "+8801712345678",
-      phone: "+8801712345678",
-      expiresAt: Math.floor(Date.now() / 1000) + 300,
-      attempts: 1,
-      maxAttempts: 5,
-    });
-
-    await expect(verifyOtp(db as never, {
-      intent: "sign_up",
-      method: "phone",
-      channel: "sms",
-      identifier: "+8801712345678",
-      code: "123456",
-      name: "Buyer",
-    })).rejects.toThrow("Email address is required to create an account.");
-
-    expect(db.insertValues).not.toHaveBeenCalled();
-  });
-});
-
-describe("customer auth D1 sessions", () => {
-  function createSessionReadDb(row: unknown) {
-    const get = vi.fn(async () => row);
-    const where = vi.fn(() => ({ get }));
-    const innerJoin = vi.fn(() => ({ where }));
-    const from = vi.fn(() => ({ innerJoin }));
-    const select = vi.fn(() => ({ from }));
-    return { db: { select }, get, where, innerJoin, from, select };
-  }
-
-  it("reads customer sessions from a live D1 customer row", async () => {
-    const { db } = createSessionReadDb({
-      tokenHash: "hash",
-      customerId: "cust_1",
-      expiresAt: 4_200,
-      createdAt: 3_000,
-      customerName: "Buyer",
-      customerEmail: "buyer@example.com",
-      customerPhone: "+8801712345678",
-      customerAddress: "House 1",
-      customerCity: "city_dhaka",
-      customerZone: "zone_mirpur",
-      customerArea: "area_1",
-      customerCityName: "Dhaka",
-      customerZoneName: "Mirpur",
-      customerAreaName: "Section 10",
-      customerProfileCompletionRequiredAt: 3_100,
-      customerProfileCompletedAt: 3_200,
-    });
-
-    const session = await getCustomerBySession(db as never, "raw-session-token", "session-key");
-
-    expect(session).toEqual({
-      token: "raw-session-token",
-      email: "buyer@example.com",
-      name: "Buyer",
-      phone: "+8801712345678",
-      customerId: "cust_1",
-      address: "House 1",
-      city: "city_dhaka",
-      zone: "zone_mirpur",
-      area: "area_1",
-      cityName: "Dhaka",
-      zoneName: "Mirpur",
-      areaName: "Section 10",
-      profileComplete: true,
-      needsProfileCompletion: false,
-      createdAt: 3_000_000,
-      expiresAt: 4_200_000,
-    });
-  });
-
-  it("updates customer profile from active delivery location IDs and returns canonical profile", async () => {
-    const existingCustomer = {
-      id: "cust_1",
-      name: "Old Name",
-      email: "buyer@example.com",
-      phone: "+8801712345678",
-      address: null,
-      city: null,
-      zone: null,
-      area: null,
-      cityName: null,
-      zoneName: null,
-      areaName: null,
-      profileCompletionRequiredAt: 3_000,
-      profileCompletedAt: null,
-      totalOrders: 0,
-      totalSpent: 0,
-      lastOrderAt: null,
-      createdAt: 2_000,
-      updatedAt: 2_000,
-      deletedAt: null,
-    };
-    const updatedCustomer = {
-      ...existingCustomer,
-      name: "Buyer",
-      address: "House 1",
-      city: "city_dhaka",
-      zone: "zone_mirpur",
-      area: "area_1",
-      cityName: "Dhaka",
-      zoneName: "Mirpur",
-      areaName: "Section 10",
-      profileCompletedAt: 3_200,
-    };
-    const customerReads = [existingCustomer, updatedCustomer];
-    const updateSet = vi.fn((_payload: Record<string, unknown>) => ({ where: vi.fn(async () => undefined) }));
-    const db = {
-      select: vi.fn(() => ({
-        from: vi.fn(() => {
-          if (db.select.mock.calls.length === 2) {
-            return {
-              where: vi.fn(() => ({
-                get: vi.fn(async () => null),
-              })),
-            };
-          }
-          if (db.select.mock.calls.length === 3) {
-            return {
-              where: vi.fn(async () => [
-                { id: "city_dhaka", name: "Dhaka", type: "city", parentId: null, isActive: true, deletedAt: null },
-                { id: "zone_mirpur", name: "Mirpur", type: "zone", parentId: "city_dhaka", isActive: true, deletedAt: null },
-                { id: "area_1", name: "Section 10", type: "area", parentId: "zone_mirpur", isActive: true, deletedAt: null },
-              ]),
-            };
-          }
-          return {
-            where: vi.fn(() => ({
-              get: vi.fn(async () => customerReads.shift() ?? null),
-            })),
-          };
-        }),
-      })),
-      update: vi.fn(() => ({ set: updateSet })),
-    };
-
-    const result = await updateCustomerProfile(
-      db as never,
-      {
-        token: "raw-session-token",
-        email: "buyer@example.com",
-        name: "Old Name",
-        phone: "+8801712345678",
-        customerId: "cust_1",
-        profileComplete: false,
-        needsProfileCompletion: true,
-        createdAt: 2_000_000,
-        expiresAt: 4_200_000,
-      },
-      {
-        name: "Buyer",
-        address: "House 1",
-        city: "city_dhaka",
-        zone: "zone_mirpur",
-        area: "area_1",
-        cityName: "Forged City",
-        zoneName: "Forged Zone",
-      },
-    );
-
-    expect(updateSet).toHaveBeenCalledWith(expect.objectContaining({
-      name: "Buyer",
-      address: "House 1",
-      city: "city_dhaka",
-      zone: "zone_mirpur",
-      area: "area_1",
-      cityName: "Dhaka",
-      zoneName: "Mirpur",
-      areaName: "Section 10",
-    }));
-    const updatePayload = updateSet.mock.calls[0]?.[0] ?? {};
-    expect(updatePayload).not.toMatchObject({
-      cityName: "Forged City",
-      zoneName: "Forged Zone",
-    });
-    expect(result.customer).toMatchObject({
-      customerId: "cust_1",
-      address: "House 1",
-      city: "city_dhaka",
-      zone: "zone_mirpur",
-      area: "area_1",
-      cityName: "Dhaka",
-      zoneName: "Mirpur",
-      areaName: "Section 10",
-      profileComplete: true,
-      needsProfileCompletion: false,
-    });
-  });
-
-  it("rejects profile completion when the existing customer phone is no longer allowed", async () => {
-    const getResults = [
-      {
-        id: "cust_us",
-        name: "Buyer",
-        email: "buyer@example.com",
-        phone: "+14155552671",
-        address: null,
-        city: null,
-        zone: null,
-        area: null,
-        cityName: null,
-        zoneName: null,
-        areaName: null,
-        profileCompletionRequiredAt: 3_000,
-        profileCompletedAt: null,
-        totalOrders: 0,
-        totalSpent: 0,
-        lastOrderAt: null,
-        createdAt: 2_000,
-        updatedAt: 2_000,
-        deletedAt: null,
-      },
-    ];
-    const countriesDocument = [{
-      category: "customer_countries",
-      value: JSON.stringify({ allowedCountries: ["BD"], allowedCountriesMode: "include" }),
-      revision: 1,
-    }];
-    const update = vi.fn();
-    const db = {
-      select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(() => ({
-            get: vi.fn(async () => getResults.shift() ?? null),
-            then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(countriesDocument).then(resolve),
-          })),
-        })),
-      })),
-      update,
-    };
-
-    await expect(updateCustomerProfile(
-      db as never,
-      {
-        token: "raw-session-token",
-        email: "buyer@example.com",
-        name: "Buyer",
-        phone: "+14155552671",
-        customerId: "cust_us",
-        profileComplete: false,
-        needsProfileCompletion: true,
-        createdAt: 2_000_000,
-        expiresAt: 4_200_000,
-      },
-      {
-        name: "Buyer",
-        address: "House 1",
-      },
-    )).rejects.toThrow("Phone numbers from US are not accepted");
-
-    expect(update).not.toHaveBeenCalled();
-  });
-
-  it("returns null when no active non-deleted D1 session row is found", async () => {
-    const { db } = createSessionReadDb(null);
-
-    await expect(getCustomerBySession(db as never, "missing-session", "session-key")).resolves.toBeNull();
-  });
-
-  it("revokes customer sessions instead of deleting raw-token KV keys", async () => {
-    const where = vi.fn(async () => undefined);
-    const set = vi.fn(() => ({ where }));
-    const update = vi.fn(() => ({ set }));
-    const db = { update };
-
-    await deleteCustomerSession(db as never, "raw-session-token", "session-key");
-
-    expect(update).toHaveBeenCalled();
-    expect(set).toHaveBeenCalledWith(expect.objectContaining({
-      revokedAt: expect.any(Number),
-      updatedAt: expect.any(Number),
-    }));
-    expect(JSON.stringify(set.mock.calls)).not.toContain("raw-session-token");
-  });
-
-  it("cleans expired and old revoked customer sessions in bounded batches", async () => {
-    const limit = vi.fn(async () => [
-      { tokenHash: "hash_1" },
-      { tokenHash: "hash_2" },
-      { tokenHash: "hash_3" },
-    ]);
-    const where = vi.fn(() => ({ limit }));
-    const from = vi.fn(() => ({ where }));
-    const select = vi.fn(() => ({ from }));
-    const deleteWhere = vi.fn(async () => undefined);
-    const deleteFrom = vi.fn(() => ({ where: deleteWhere }));
-    const db = { select, delete: deleteFrom };
-
-    const result = await cleanupExpiredCustomerSessions(db as never, 10_000, {
-      limit: 2,
-      revokedRetentionSeconds: 60,
-    });
-
-    expect(result).toEqual({
-      scanned: 2,
-      deleted: 2,
-      limit: 2,
-      hasMore: true,
-    });
-    expect(deleteFrom).toHaveBeenCalled();
-    expect(deleteWhere).toHaveBeenCalled();
   });
 });

@@ -6,6 +6,8 @@ export interface SendEmailOptions {
   subject: string;
   html: string;
   from?: string;
+  /** Display name shown before the sender address (the store name). */
+  fromName?: string;
   text?: string;
   idempotencyKey?: string;
 }
@@ -58,6 +60,26 @@ export interface EmailRuntimeContext {
 export interface EmailProvider {
   readonly name: string;
   sendEmail(options: SendEmailOptions, context?: EmailRuntimeContext): Promise<SendEmailResult>;
+}
+
+export interface SenderMailbox {
+  email: string;
+  name?: string;
+}
+
+/** The sender address plus a display name safe to place in a From header. */
+export function senderMailbox(
+  { from, fromName }: Pick<SendEmailOptions, "from" | "fromName">,
+  settings: Pick<EmailRuntimeSettings, "sender">,
+): SenderMailbox {
+  const email = from || settings.sender;
+  const name = fromName?.replace(/[\p{Cc}\s]+/gu, " ").trim().slice(0, 78);
+  return name ? { email, name } : { email };
+}
+
+/** RFC 5322 `"Name" <address>`, or the bare address without a name. */
+export function formatSenderMailbox({ email, name }: SenderMailbox): string {
+  return name ? `"${name.replace(/["\\]/g, "\\$&")}" <${email}>` : email;
 }
 
 // ── Provider Registry ───────────────────────────────────────────────

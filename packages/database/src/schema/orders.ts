@@ -130,6 +130,7 @@ export const orders = sqliteTable("orders", {
     ),
     index("orders_dashboard_agg_idx").on(table.deletedAt, table.createdAt, table.status),
     index("orders_customer_phone_idx").on(table.customerPhone),
+    index("orders_customer_email_normalized_idx").on(sql`lower(trim(${table.customerEmail}))`),
     index("orders_shipment_claim_idx")
         .on(table.shipmentClaimId, table.shipmentClaimExpiresAt)
         .where(sql`${table.shipmentClaimId} IS NOT NULL`),

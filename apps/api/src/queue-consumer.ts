@@ -42,6 +42,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
 import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/customers/customer-auth.service";
+import { composeAuthOtpMessage, readStoreIdentity } from "@scalius/core/modules/notifications/store-messages";
 import {
   getNotificationProviderBlock,
   isNotificationProviderBreakerFailure,
@@ -64,7 +65,6 @@ import {
   type AuthOtpDeliveryChannel,
   type AuthOtpDeliveryReceiptResult,
 } from "@scalius/core/modules/customers/otp-delivery-receipts";
-import { escapeHtml } from "@scalius/shared/html-escape";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { logOpsEvent } from "./utils/ops-log";
@@ -999,7 +999,7 @@ async function resolveAuthOtpQueueDeliveryPayload(
 ): Promise<{ payload: ResolvedAuthOtpQueueMessage; resolutionError?: AuthOtpDeliveryError }> {
   const legacyIdentifier = payload.identifier?.trim();
   const deliveryKey = payload.deliveryKey?.trim() || `legacy:${messageId}`;
-  const legacyName = payload.name?.trim() || "Customer";
+  const legacyName = payload.name?.trim() ?? "";
   if (legacyIdentifier) {
     return {
       payload: {
@@ -1017,7 +1017,7 @@ async function resolveAuthOtpQueueDeliveryPayload(
     ...payload,
     deliveryKey,
     identifier: `unresolved:${deliveryKey}`,
-    name: "Customer",
+    name: "",
   };
 
   if (!payload.deliveryKey?.trim() || !challengeKey) {
@@ -1097,7 +1097,8 @@ async function resolveAuthOtpQueueDeliveryPayload(
       channel: rowChannel,
       allowedMethod: authOtpAllowedMethodForChannel(rowChannel),
       identifier: target.value.trim(),
-      name: name.error ? "Customer" : name.value.trim() || "Customer",
+      // A missing or unreadable name only drops the name from the greeting.
+      name: name.error ? "" : name.value.trim(),
     },
   };
 }
@@ -1106,7 +1107,8 @@ async function selectAuthOtpDeliveryChallengeRow(
   db: ReturnType<typeof getDb>,
   input: { purpose: string; challengeKey: string; deliveryKey: string },
 ): Promise<AuthOtpDeliveryChallengeRow | null> {
-  if (input.purpose === "order_payment_recovery") {
+  // Track-order lookups share the payment-recovery challenge table.
+  if (input.purpose === "order_payment_recovery" || input.purpose === "order_lookup") {
     const row = await db.select({
       deliveryTargetEncrypted: orderPaymentRecoveryChallenges.deliveryTargetEncrypted,
       deliveryNameEncrypted: orderPaymentRecoveryChallenges.deliveryNameEncrypted,
@@ -1256,16 +1258,37 @@ async function sendAuthOtpByChannel(
   db: ReturnType<typeof getDb>,
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
-  if (payload.method === "email") {
-    return sendAuthOtpEmail(payload, code, target, db, env);
-  }
-
-  if (payload.channel === "whatsapp" || payload.allowedMethod === "whatsapp_otp") {
+  if (payload.method !== "email" && (payload.channel === "whatsapp" || payload.allowedMethod === "whatsapp_otp")) {
     return sendAuthOtpWhatsApp(payload, code, target, db, env);
   }
 
-  return sendAuthOtpSms(payload, code, target, db, env);
+  const message = composeAuthOtpMessage(await readOtpStoreIdentity(db), {
+    purpose: payload.purpose,
+    code,
+    name: payload.name,
+  });
+  return payload.method === "email"
+    ? sendAuthOtpEmail(payload, message, target, db, env)
+    : sendAuthOtpSms(payload, message, target, db, env);
 }
+
+/**
+ * The store name and language the code is sent in. A code expires in minutes,
+ * so a failed settings read sends it unbranded in English instead of waiting.
+ */
+async function readOtpStoreIdentity(db: ReturnType<typeof getDb>) {
+  try {
+    return await readStoreIdentity(db);
+  } catch (error) {
+    console.warn(
+      "[Queue] Store identity unavailable for OTP delivery; sending unbranded:",
+      error instanceof Error ? error.message : error,
+    );
+    return { name: null, logoUrl: null, language: "en" as const };
+  }
+}
+
+type AuthOtpMessage = ReturnType<typeof composeAuthOtpMessage>;
 
 async function resolveAuthOtpDeliveryCode(
   payload: AuthOtpQueueMessage,
@@ -1296,7 +1319,7 @@ async function resolveAuthOtpDeliveryCode(
 
 async function sendAuthOtpEmail(
   payload: ResolvedAuthOtpQueueMessage,
-  code: string,
+  message: AuthOtpMessage,
   target: { deliveryKey: string; identifierHash: string },
   db: ReturnType<typeof getDb>,
   env: Env,
@@ -1318,23 +1341,12 @@ async function sendAuthOtpEmail(
   }
 
   const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
-  const safeName = escapeHtml(payload.name);
-  const safeCode = escapeHtml(code);
-  const copy = getAuthOtpMessageCopy(payload);
   const result = await sendEmail({
     to: payload.identifier,
-    subject: copy.emailSubject,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
-        <h2 style="font-size: 20px; margin-bottom: 8px;">${escapeHtml(copy.emailTitle)}</h2>
-        <p style="color: #555; margin-bottom: 24px;">Hi ${safeName}, ${escapeHtml(copy.emailIntro)}</p>
-        <div style="background: #f5f5f5; border-radius: 12px; padding: 28px; text-align: center; margin-bottom: 24px;">
-          <span style="font-size: 40px; font-weight: 700; letter-spacing: 10px; font-family: monospace; color: #111;">${safeCode}</span>
-        </div>
-        <p style="color: #888; font-size: 13px;">This code expires in 5 minutes. If you didn't request this, you can ignore this email.</p>
-      </div>
-    `,
-    text: `${copy.emailTextPrefix}: ${code}\n\nExpires in 5 minutes.`,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    fromName: message.fromName,
     idempotencyKey: target.deliveryKey,
   }, {
     db,
@@ -1448,7 +1460,7 @@ async function sendAuthOtpWhatsApp(
 
 async function sendAuthOtpSms(
   payload: ResolvedAuthOtpQueueMessage,
-  code: string,
+  message: AuthOtpMessage,
   target: { deliveryKey: string; channel: AuthOtpDeliveryChannel; identifierHash: string },
   db: ReturnType<typeof getDb>,
   env: Env,
@@ -1491,7 +1503,7 @@ async function sendAuthOtpSms(
 
   const result = await smsProvider.sendSms({
     to: payload.identifier,  // Already E.164 from customers.phone
-    message: `${getAuthOtpMessageCopy(payload).smsTextPrefix}: ${code}\n\nValid for 5 minutes. Do not share.`,
+    message: message.sms,
     clientReference: createAuthOtpProviderClientReference(target),
   });
 
@@ -1520,32 +1532,6 @@ async function sendAuthOtpSms(
     `[Queue] SMS OTP sent via ${smsProvider.name} delivery=${target.deliveryKey} recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)}, ref=${result.providerRef}`,
   );
   return receiptResult;
-}
-
-function getAuthOtpMessageCopy(payload: Pick<AuthOtpQueueMessage, "purpose">): {
-  emailSubject: string;
-  emailTitle: string;
-  emailIntro: string;
-  emailTextPrefix: string;
-  smsTextPrefix: string;
-} {
-  if (payload.purpose === "order_payment_recovery") {
-    return {
-      emailSubject: "Your payment recovery code",
-      emailTitle: "Your payment recovery code",
-      emailIntro: "enter this code to recover your order payment page:",
-      emailTextPrefix: "Your payment recovery code",
-      smsTextPrefix: "Your payment recovery code",
-    };
-  }
-
-  return {
-    emailSubject: "Your login code",
-    emailTitle: "Your login code",
-    emailIntro: "enter this code to sign in:",
-    emailTextPrefix: "Your login code is",
-    smsTextPrefix: "Your login code",
-  };
 }
 
 function resolveAuthOtpDeliveryChannel(payload: AuthOtpQueueMessage): AuthOtpDeliveryChannel {

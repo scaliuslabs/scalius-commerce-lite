@@ -172,6 +172,28 @@ describe("email provider selection", () => {
     });
   });
 
+  it("names the store as the sender on every provider, quoting it for header-based APIs", async () => {
+    const storeName = 'River "&" Loom\r\nBcc: attacker@example.test';
+    const cloudflareSend = vi.fn().mockResolvedValue({ messageId: "cf_msg_1" });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const message = { to: "buyer@example.com", subject: "Order", html: "<p>Order</p>", fromName: storeName };
+    const safeName = 'River "&" Loom Bcc: attacker@example.test';
+
+    await sendEmail(message, { env: { EMAIL: { send: cloudflareSend } }, settings: baseSettings });
+    await sendEmail(message, { settings: { ...baseSettings, provider: "resend", resendApiKey: "re_key", hasResendApiKey: true } });
+    await sendEmail(message, { settings: { ...baseSettings, localMailpitUrl: "http://127.0.0.1:8025" } });
+
+    expect(cloudflareSend.mock.calls[0]![0].from).toEqual({ email: "orders@example.com", name: safeName });
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body).from)
+      .toBe('"River \\"&\\" Loom Bcc: attacker@example.test" <orders@example.com>');
+    expect(JSON.parse(fetchMock.mock.calls[1]![1].body).From).toEqual({ Email: "orders@example.com", Name: safeName });
+
+    // Without a store name every provider keeps the bare configured address.
+    await sendEmail({ ...message, fromName: "  " }, { env: { EMAIL: { send: cloudflareSend } }, settings: baseSettings });
+    expect(cloudflareSend.mock.calls[1]![0].from).toBe("orders@example.com");
+  });
+
   it("passes idempotency keys through to Resend", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

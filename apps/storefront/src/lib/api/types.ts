@@ -463,7 +463,14 @@ export interface OrderReceiptSupportRequestAction {
 
 export interface OrderReceipt {
   id: string;
+  /** Short per-store number ("#1001"); absent until every order has one. */
+  orderNumber?: number | null;
   customerName: string;
+  /** The phone the courier calls; the receipt is proof-gated to its buyer. */
+  customerPhone: string;
+  customerEmail: string | null;
+  /** True when the order is saved to a customer account. */
+  accountLinked: boolean;
   shippingAddress: string;
   totalAmount: number;
   shippingCharge: number;
