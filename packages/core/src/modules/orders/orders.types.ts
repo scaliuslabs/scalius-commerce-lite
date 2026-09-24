@@ -34,8 +34,20 @@ export type OrderShipmentRecoveryState =
     | "needs_attention"
     | "failed";
 
+/** Why a shipment needs attention, as a stable code the dashboard words in its own language. */
+export const ORDER_SHIPMENT_RECOVERY_REASONS = [
+    "none",
+    "courier_unconfirmed",
+    "reconcile_required",
+    "creating",
+    "claim_expired",
+    "failed",
+] as const;
+export type OrderShipmentRecoveryReason = (typeof ORDER_SHIPMENT_RECOVERY_REASONS)[number];
+
 export interface OrderShipmentRecoverySummary {
     state: OrderShipmentRecoveryState;
+    reason: OrderShipmentRecoveryReason;
     severity: "info" | "warning" | "danger";
     activeLock: boolean;
     label: string;

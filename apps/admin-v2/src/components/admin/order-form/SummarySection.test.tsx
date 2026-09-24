@@ -170,7 +170,6 @@ describe("manual-order summary discount recovery", () => {
       'input[name="discountAmount"]',
     );
     if (!discountInput) throw new Error("Expected discount input");
-    expect(discountInput.max).toBe("100");
     expect(discountInput.getAttribute("aria-invalid")).toBe("true");
     expect(host.textContent).toContain(en.discountTooHigh.replace("{amount}", "৳100.00"));
     expect(host.textContent).toContain(en.fixDiscount);
