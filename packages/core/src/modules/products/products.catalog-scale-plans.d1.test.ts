@@ -165,6 +165,29 @@ describe("catalogue-scale query plans", () => {
         expect(plan).not.toMatch(/SCAN product_attribute_values/);
     });
 
+    it("keeps a 100-card page from 100 categories under D1's 100 bound parameters", async () => {
+        const { db, queries } = setup();
+        const insertCategory = sqlite!.prepare("INSERT INTO categories (id, name, slug, status) VALUES (?, ?, ?, 'published')");
+        const insertProduct = sqlite!.prepare("INSERT INTO products (id, name, price_minor, slug, category_id, is_active) VALUES (?, ?, 10000, ?, ?, 1)");
+        const insertSku = sqlite!.prepare("INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory) VALUES (?, ?, ?, 10000, 1, 1, 1)");
+        const insertMedia = sqlite!.prepare("INSERT INTO media (id, filename, kind, object_key, size, mime_type, status) VALUES (?, 'x.webp', 'image', ?, 1, 'image/webp', 'ready')");
+        const insertProductMedia = sqlite!.prepare("INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order) VALUES (?, ?, ?, 1, 0)");
+        for (let index = 0; index < 100; index += 1) {
+            insertCategory.run(`cat_many_${index}`, `Many ${index}`, `many-${index}`);
+            insertProduct.run(`prod_many_${index}`, `Many ${index}`, `many-product-${index}`, `cat_many_${index}`);
+            insertSku.run(`var_many_${index}`, `prod_many_${index}`, `MANY-${index}`);
+            insertMedia.run(`med_many_${index}`, `media/many-${index}.webp`);
+            insertProductMedia.run(`pmed_many_${index}`, `prod_many_${index}`, `med_many_${index}`);
+        }
+
+        const listing = await getStorefrontProducts(db, { page: 1, limit: 100 });
+        const feed = await getStorefrontFeedProducts(db, { limit: 100 });
+
+        expect(new Set(listing.products.map((product) => product.category?.id)).size).toBeGreaterThanOrEqual(99);
+        expect(feed.products).toHaveLength(100);
+        expect(Math.max(...queries.map((query) => query.params.length))).toBeLessThanOrEqual(100);
+    });
+
     it("looks SKUs up by their identity index", async () => {
         const { db, plans } = setup();
         const result = await getStorefrontFeedProducts(db, { ids: "sku-b", limit: 10 });

@@ -1020,7 +1020,9 @@ async function readStorefrontCatalogResults(
                 .select({ id: categories.id, name: categories.name, slug: categories.slug })
                 .from(categories)
                 .where(and(
-                    inArray(categories.id, categoryIds),
+                    // One JSON parameter: a 100-card page can name 100 categories,
+                    // and 100 ids plus the status bind exceed D1's 100 limit.
+                    sql`${categories.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)}))`,
                     ...publicCategoryConditions(),
                 ))
                 .all() as Promise<Array<{ id: string; name: string; slug: string }>>
@@ -1163,7 +1165,9 @@ export async function getStorefrontFeedProducts(
                 .select({ id: categories.id, name: categories.name, slug: categories.slug })
                 .from(categories)
                 .where(and(
-                    inArray(categories.id, categoryIds),
+                    // One JSON parameter: a 100-card page can name 100 categories,
+                    // and 100 ids plus the status bind exceed D1's 100 limit.
+                    sql`${categories.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)}))`,
                     ...publicCategoryConditions(),
                 ))
                 .all() as Promise<Array<{ id: string; name: string; slug: string }>>
