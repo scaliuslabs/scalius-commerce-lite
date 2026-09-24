@@ -76,6 +76,21 @@ const TEXT_FIELDS = [
   "placeOrderText",
   "processingText",
 ] as const;
+/** The agreement line's link placeholders; the storefront links each to its policy page. */
+const TERMS_TOKENS = ["{terms}", "{privacy}"] as const;
+
+/**
+ * Whether the storefront can still link both policies in the agreement line:
+ * both `{terms}` and `{privacy}`, or (copy saved before the tokens) both link
+ * names written out, which the storefront links the same way.
+ */
+export function termsTextKeepsLinks(copy: Record<string, string>): boolean {
+  const text = copy.termsText ?? "";
+  if (TERMS_TOKENS.some((token) => text.includes(token))) return TERMS_TOKENS.every((token) => text.includes(token));
+  const names = [copy.termsLinkText, copy.privacyLinkText].map((name) => name?.trim() ?? "");
+  return names.every((name) => name !== "" && text.includes(name));
+}
+
 const FORM_FIELDS: Array<[FieldKey, "askEmail" | "orderNotes" | "area"]> = [
   ["showEmailField", "askEmail"],
   ["showOrderNotesField", "orderNotes"],
@@ -227,7 +242,7 @@ function LanguageForm({ language }: { language: Language | null }) {
   const { draft, setDraft } = useDocumentDraft({
     saved,
     fields: (path) => ({ name: "language-name", code: "language-code" } as Record<string, string>)[path],
-    invalid: (next) => !next.name.trim() || !next.code.trim(),
+    invalid: (next) => !next.name.trim() || !next.code.trim() || !termsTextKeepsLinks(next.languageData),
     reload: refresh,
     save: async (next) => {
       await (language
@@ -283,9 +298,21 @@ function LanguageForm({ language }: { language: Language | null }) {
           </SettingsField>
         ))}
       </div>
-      <SettingsField id="language-terms" label={t("termsText")}>
+      <SettingsField
+        id="language-terms"
+        label={t("termsText")}
+        help={t("termsTextHelp")}
+        error={termsTextKeepsLinks(draft.languageData) ? null : t("termsLinksMissing")}
+      >
         <Textarea id="language-terms" rows={2} value={draft.languageData.termsText ?? ""} onChange={(event) => setText("termsText", event.target.value)} />
       </SettingsField>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {(["termsLinkText", "privacyLinkText"] as const).map((key) => (
+          <SettingsField key={key} id={`language-${key}`} label={t(key)}>
+            <Input id={`language-${key}`} value={draft.languageData[key] ?? ""} onChange={(event) => setText(key, event.target.value)} />
+          </SettingsField>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
