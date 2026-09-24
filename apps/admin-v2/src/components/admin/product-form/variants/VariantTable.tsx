@@ -49,6 +49,13 @@ type Money = ReturnType<typeof useCurrency> & {
 };
 type BulkPanel = "price" | "stock" | "sku" | "photo" | null;
 
+/**
+ * Past this many variants the groups open closed, as in Shopify: a product
+ * with 150 variants opens with its 15 group rows, not 150 rows of fields (each
+ * row mounts a photo picker, a checkbox and two inputs).
+ */
+export const GROUPS_OPEN_LIMIT = 30;
+
 export type VariantTableProps = {
   options: DraftOption[];
   variants: DraftVariant[];
@@ -112,7 +119,10 @@ export function VariantTable(props: VariantTableProps) {
   const [query, setQuery] = React.useState("");
   const [view, setView] = React.useState<"all" | "notForSale">("all");
   const [groupAxis, setGroupAxis] = React.useState(0);
-  const [collapsed, setCollapsed] = React.useState<ReadonlySet<string>>(() => new Set());
+  const [groupsStartOpen] = React.useState(() => variants.length <= GROUPS_OPEN_LIMIT);
+  // Groups the merchant opened or closed against that start.
+  const [toggled, setToggled] = React.useState<ReadonlySet<string>>(() => new Set());
+  const isOpen = (valueId: string) => groupsStartOpen !== toggled.has(valueId);
   const [selected, setSelected] = React.useState<ReadonlySet<string>>(() => new Set());
   const [panel, setPanel] = React.useState<BulkPanel>(null);
   const tableRef = React.useRef<HTMLDivElement>(null);
@@ -156,9 +166,11 @@ export function VariantTable(props: VariantTableProps) {
     if (!variant) return;
     setView("all");
     setQuery("");
-    setCollapsed((current) => {
+    const valueId = variant.selectedOptionValueIds[groupAxis] ?? "";
+    setToggled((current) => {
       const next = new Set(current);
-      next.delete(variant.selectedOptionValueIds[groupAxis] ?? "");
+      if (groupsStartOpen) next.delete(valueId);
+      else next.add(valueId);
       return next;
     });
     requestAnimationFrame(() => tableRef.current
@@ -175,7 +187,7 @@ export function VariantTable(props: VariantTableProps) {
   }));
   const onToggleExpand = useStableCallback((id: string) => props.onExpandedChange(props.expandedId === id ? null : id));
   const onRemove = useStableCallback((id: string) => props.onRemove(new Set([id])));
-  const onToggleGroup = useStableCallback((valueId: string) => setCollapsed((current) => {
+  const onToggleGroup = useStableCallback((valueId: string) => setToggled((current) => {
     const next = new Set(current);
     if (next.has(valueId)) next.delete(valueId);
     else next.add(valueId);
@@ -323,7 +335,7 @@ export function VariantTable(props: VariantTableProps) {
 
           {grouped
             ? groups.map((group) => {
-                const open = !collapsed.has(group.valueId) || Boolean(query);
+                const open = isOpen(group.valueId) || Boolean(query);
                 return (
                   <React.Fragment key={group.valueId}>
                     <GroupRow
