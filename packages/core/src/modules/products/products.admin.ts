@@ -42,7 +42,7 @@ import { readStoreCurrency, toStoreMinor } from "../settings/store-money";
 import { bpsToPercent, fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
-import { loadProductOptions, loadVariantSelectedOptions } from "./products.option-model";
+import { loadProductOptions, loadProductVariantSelectedOptions } from "./products.option-model";
 import {
     buildProductAggregateRevisionGuard,
     executeProductAggregateMutationBatch,
@@ -805,7 +805,8 @@ export async function getProductDetails(
     db: Database,
     id: string,
 ): Promise<ProductWithDetails | null> {
-    const [result] = await db
+    // Every read is keyed by the product id: one wave, not three.
+    const productRead = db
         .select({
             id: products.id,
             name: products.name,
@@ -839,9 +840,8 @@ export async function getProductDetails(
         .leftJoin(categories, eq(categories.id, products.categoryId))
         .where(eq(products.id, id));
 
-    if (!result) return null;
-
-    const [variants, mediaByProduct, richContent, attributeValues, decimalPlaces] = await Promise.all([
+    const [[result], variants, mediaByProduct, richContent, attributeValues, decimalPlaces, optionsByProduct, selectedOptionsByVariant] = await Promise.all([
+        productRead,
         db
             .select()
             .from(productVariants)
@@ -861,11 +861,10 @@ export async function getProductDetails(
             .from(productAttributeValues)
             .where(eq(productAttributeValues.productId, id)),
         readStoreDecimalPlaces(db),
-    ]);
-    const [optionsByProduct, selectedOptionsByVariant] = await Promise.all([
         loadProductOptions(db, [id]),
-        loadVariantSelectedOptions(db, variants.map((variant) => variant.id)),
+        loadProductVariantSelectedOptions(db, id),
     ]);
+    if (!result) return null;
     return {
         ...presentCatalogPrice(result, decimalPlaces),
         createdAt: requireProductTimestamp(result.createdAt, "created timestamp"),

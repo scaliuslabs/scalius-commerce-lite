@@ -48,7 +48,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `cors-helper.ts` | Dynamic credentialed CORS origin validation from exact first-party runtime URLs plus the extra origins a merchant lists in Platform settings (composed into `CORS_ALLOWED_ORIGINS` at Worker entry, never a literal env var); merchant CSP/KV domains are intentionally excluded | `getCorsOriginContext()` |
 | `request-origin-guard.ts` | Same-origin guard for unsafe cookie-bearing browser requests used by admin/storefront proxy routes before forwarding or mutating session state | `shouldRejectCrossOriginCookieRequest()` |
 | `rate-limit.ts` | Client IP extraction for the native API rate limiters | `getClientIp()` |
-| `customer-utils.ts` | Phone validation (E.164), include/exclude country policy checks, customer stats | `validateAndFormatPhone()`, `assertPhoneCountryAllowed()`, `normalizePhoneCountryPolicy()`, `formatPhoneForDisplay()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
+| `customer-utils.ts` | Phone validation (E.164), include/exclude country policy checks, customer stats | `validateAndFormatPhone()`, `assertPhoneCountryAllowed()`, `normalizePhoneCountryPolicy()`, `phoneNumberSchema`, `isValidPhoneNumber`, `calculateCustomerStats()` |
 | `order-utils.ts` | Cryptographically random 16-character Crockford-base32 order identity (80 bits) | `generateOrderId()` |
 | `html-escape.ts` | HTML entity escaping for user values in templates | `escapeHtml()` -- escapes `&`, `<`, `>`, `"`, `'` |
 | `html-sanitize.ts` | Defense-in-depth XSS sanitizer for merchant-authored rich HTML | `sanitizeHtml()` -- strips executable/embedded tags, `on*` handlers, and dangerous URL schemes while preserving safe content structure |

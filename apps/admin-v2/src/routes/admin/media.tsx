@@ -2,8 +2,6 @@ import { lazy, Suspense, useCallback, useMemo } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useListSearch } from "~/lib/list-search";
-import { translate } from "~/i18n";
-import { mediaMessages } from "~/i18n/media";
 import { PageLoadingSkeleton } from "~/components/admin/shared/LoadingFallback";
 import {
   mediaRouteSearchToWorkspaceState,
@@ -14,6 +12,7 @@ import type {
   MediaWorkspaceRouteState,
   MediaWorkspaceRouteUpdateOptions,
 } from "~/components/admin/media-manager/types";
+import { pageHead } from "~/i18n/page-titles";
 
 export { validateMediaSearch } from "~/components/admin/media-manager/route-state";
 
@@ -25,7 +24,7 @@ const MediaManagerPage = lazy(() =>
 
 export const Route = createFileRoute("/admin/media")({
   validateSearch: validateMediaSearch,
-  head: () => ({ meta: [{ title: translate(mediaMessages, "title") }] }),
+  head: () => pageHead("files"),
   errorComponent: RouteErrorComponent,
   component: MediaPage,
 });

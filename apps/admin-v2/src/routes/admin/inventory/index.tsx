@@ -20,6 +20,7 @@ import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/inventory/")({
   validateSearch: validateInventorySearch,
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/admin/inventory/")({
       : filters.section === "alerts" ? alertsQuery(filters) : movementsQuery(filters);
     void queryClient.prefetchQuery(inventoryQueryOptions(query));
   },
-  head: () => ({ meta: [{ title: "Inventory | Scalius Admin" }] }),
+  head: () => pageHead("inventory"),
   errorComponent: RouteErrorComponent,
   component: InventoryPage,
 });

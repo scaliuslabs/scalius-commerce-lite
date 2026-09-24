@@ -539,8 +539,9 @@ describe("admin route graph boundaries", () => {
     );
 
     expect(routerSource).toContain("createAdminQueryClient()");
-    expect(routerSource).toContain("defaultPreload: false");
-    expect(routerSource).not.toContain('defaultPreload: "intent"');
+    // Intent preloading re-runs loaders, and React Query decides freshness.
+    expect(routerSource).toContain('defaultPreload: "intent"');
+    expect(routerSource).toContain("defaultPreloadStaleTime: 0");
     expect(queryClientSource).toContain("refetchOnWindowFocus: false");
     expect(queryClientSource).toContain("refetchOnReconnect: false");
     expect(queryClientSource).toContain("retry: ADMIN_QUERY_RETRY");

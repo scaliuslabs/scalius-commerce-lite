@@ -5,8 +5,7 @@ import { pageQueryOptions } from "~/lib/api-query-options/pages";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
 import { toPageFormValues } from "~/lib/page-form-values";
-import { translate } from "~/i18n";
-import { pageFormMessages } from "~/i18n/page-form";
+import { pageHead } from "~/i18n/page-titles";
 
 /** Pages opened from elsewhere return there: only these known places (no free-form URLs). */
 const RETURN_TO = { policies: "/admin/settings/policies" } as const;
@@ -24,9 +23,7 @@ export const Route = createFileRoute("/admin/pages/$pageId/edit")({
     if (!data || data.contentType !== "page")
       throw redirect({ to: "/admin/pages" });
   },
-  head: () => ({
-    meta: [{ title: translate(pageFormMessages, "page") }],
-  }),
+  head: () => pageHead("page"),
   errorComponent: RouteErrorComponent,
   component: EditPagePage,
 });

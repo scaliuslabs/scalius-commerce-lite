@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { FormProvider, useForm, type UseFormReturn } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CustomerFormValues } from "~/lib/form-schemas";
+import type { CustomerFormValues } from "~/lib/customer-form-schema";
 
 const getDeliveryLocations = vi.hoisted(() => vi.fn());
 

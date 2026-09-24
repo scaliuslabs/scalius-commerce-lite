@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageForm } from "~/components/admin/PageForm";
-import { translate } from "~/i18n";
-import { pageFormMessages } from "~/i18n/page-form";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/articles/new")({
-  head: () => ({ meta: [{ title: translate(pageFormMessages, "addBlogPost") }] }),
+  head: () => pageHead("addBlogPost"),
   component: NewArticlePage,
 });
 

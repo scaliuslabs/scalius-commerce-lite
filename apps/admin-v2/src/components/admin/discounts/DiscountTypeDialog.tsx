@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { ChevronRight, Gift, ShoppingBag, Tag, Truck } from "lucide-react";
 import { useRef } from "react";
 
-import { DISCOUNT_TYPES, type DiscountType } from "./discount-form";
+import { DISCOUNT_TYPES, type DiscountType } from "./discount-kinds";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { useMessages } from "~/i18n";
 import { discountsMessages } from "~/i18n/discounts";

@@ -7,14 +7,13 @@ import {
 } from "~/lib/api-query-options/collections";
 import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
 import type { Category } from "~/components/admin/collection-form/types";
-import { translate } from "~/i18n";
-import { catalogMessages } from "~/i18n/catalog";
 import { RouteErrorComponent } from "~/lib/route-error";
 import {
   collectionProductIdsForLookup,
   normalizeCollectionConfig,
 } from "@scalius/core/modules/collections/collection-config";
 import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
@@ -38,7 +37,7 @@ export const Route = createFileRoute("/admin/collections/$collectionId/edit")({
         });
     }
   },
-  head: () => ({ meta: [{ title: translate(catalogMessages, "collection") }] }),
+  head: () => pageHead("collection"),
   errorComponent: RouteErrorComponent,
   component: EditCollectionPage,
 });

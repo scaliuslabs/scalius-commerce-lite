@@ -6,9 +6,6 @@ import {
   deleteApiV1AdminSettingsSslcommerz,
   deleteApiV1AdminSettingsStripe,
   getApiV1AdminSettingsCheckoutFlow,
-  getApiV1AdminSettingsPaymentMethods,
-  getApiV1AdminSettingsSslcommerz,
-  getApiV1AdminSettingsStripe,
   postApiV1AdminSettingsPaymentMethods,
   postApiV1AdminSettingsSslcommerz,
   postApiV1AdminSettingsStripe,
@@ -26,6 +23,15 @@ import { AdminApiResponseError, readSettingsRevisionConflict } from "~/lib/admin
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
+import {
+  checkoutFlowQuery,
+  currencyQuery,
+  gatewayQuery,
+  paymentMethodsQuery,
+  platformQuery,
+  type GatewayValues,
+  type PaymentMethods,
+} from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { formatNumber, getLocale, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
@@ -40,7 +46,6 @@ import {
   getPaymentMethodFlowEligibility,
   getPaymentMethodFlowExclusionReason,
   getPaymentMethodOutcome,
-  type GatewayStatus,
   type MethodKey,
 } from "./payment-method-outcome";
 import { OfficialProviderMark } from "./provider-marks";
@@ -48,37 +53,12 @@ import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useWholeCashAmounts } from "../shared/MoneyInput";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading, useCloseSettingsDialog } from "./SettingsPage";
-import { currencyQuery, platformQuery } from "./StoreSettings";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
 const MASKED = "••••••••••••";
 const METHODS: MethodKey[] = ["cod", "sslcommerz", "stripe"];
 
 type CheckoutFlow = Omit<ApiResult<typeof getApiV1AdminSettingsCheckoutFlow>, "revision">;
-type PaymentMethods = Omit<ApiResult<typeof getApiV1AdminSettingsPaymentMethods>, "enabledMethods" | "defaultMethod" | "gatewayStatus"> & {
-  enabledMethods: MethodKey[];
-  defaultMethod: MethodKey;
-  gatewayStatus: Partial<Record<MethodKey, GatewayStatus>>;
-};
-
-export const checkoutFlowQuery = {
-  queryKey: queryKeys.settings.checkoutFlow(),
-  queryFn: () => apiData(getApiV1AdminSettingsCheckoutFlow()),
-};
-export const paymentMethodsQuery = {
-  queryKey: queryKeys.settings.paymentMethods(),
-  queryFn: async () => (await apiData(getApiV1AdminSettingsPaymentMethods())) as unknown as PaymentMethods,
-};
-/** A gateway document as read: keys, flags and its `revision` (kept apart from the form values). */
-type GatewayValues = Record<string, string | boolean | number>;
-export const gatewayQuery = (gateway: "stripe" | "sslcommerz") => ({
-  queryKey: queryKeys.settings.paymentGateway(gateway),
-  queryFn: async (): Promise<GatewayValues> =>
-    gateway === "stripe"
-      ? await apiData(getApiV1AdminSettingsStripe())
-      : await apiData(getApiV1AdminSettingsSslcommerz()),
-});
-
 type GatewayKey = "secretKey" | "publishableKey" | "webhookSecret" | "storeId" | "storePassword";
 /** Every key a gateway needs before it can be turned on, and the field showing it. */
 const GATEWAY_KEYS: Record<"stripe" | "sslcommerz", Partial<Record<GatewayKey, string>>> = {

@@ -12,8 +12,7 @@ import { ordersQueryOptions } from "~/lib/api-query-options/orders";
 import { readListSearch } from "~/lib/list-search";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { translate } from "~/i18n";
-import { orderMessages } from "~/i18n/orders";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/orders/_list/")({
   validateSearch: validateOrderSearch,
@@ -25,7 +24,7 @@ export const Route = createFileRoute("/admin/orders/_list/")({
     const term = typeof window === "undefined" ? "" : readListSearch(ORDER_SEARCH_LIST);
     await warmRouteQuery(queryClient, ordersQueryOptions(orderListQuery(deps, term)));
   },
-  head: () => ({ meta: [{ title: `${translate(orderMessages, "orders")} | Scalius` }] }),
+  head: () => pageHead("orders"),
   component: OrdersIndexPage,
   errorComponent: RouteErrorComponent,
 });

@@ -4,8 +4,6 @@ import { toast } from "sonner";
 import {
   deleteApiV1AdminSettingsCheckoutLanguagesById,
   getApiV1AdminSettingsCheckoutLanguages,
-  getApiV1AdminSettingsCheckoutReadiness,
-  getApiV1AdminSettingsCustomerRequests,
   postApiV1AdminSettingsCheckoutLanguages,
   putApiV1AdminSettingsCheckoutLanguagesById,
   putApiV1AdminSettingsCustomerRequests,
@@ -28,6 +26,11 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
+import {
+  checkoutReadinessQuery,
+  customerRequestsQuery,
+  languagesQuery,
+} from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
@@ -40,23 +43,6 @@ import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardL
 
 type Language = ApiResult<typeof getApiV1AdminSettingsCheckoutLanguages>["languages"][number];
 type FieldKey = "showEmailField" | "showOrderNotesField" | "showAreaField";
-
-const LANGUAGES_PARAMS = { page: 1, limit: 10, sort: "name", order: "asc" } as const;
-export const languagesQuery = {
-  queryKey: queryKeys.settings.checkoutLanguages(LANGUAGES_PARAMS),
-  queryFn: () => apiData(getApiV1AdminSettingsCheckoutLanguages({ query: LANGUAGES_PARAMS })),
-};
-export const checkoutReadinessQuery = {
-  queryKey: queryKeys.settings.checkoutReadiness(),
-  queryFn: () => apiData(getApiV1AdminSettingsCheckoutReadiness()),
-};
-export const customerRequestsQuery = {
-  queryKey: queryKeys.settings.customerRequests(),
-  queryFn: async () => {
-    const { policy, revision } = await apiData(getApiV1AdminSettingsCustomerRequests());
-    return { ...policy, revision };
-  },
-};
 
 const TEXT_FIELDS = [
   "pageTitle",

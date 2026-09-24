@@ -292,6 +292,9 @@ export function followProductDefaults(
   previous: { name: string; price: number },
   next: { name: string; price: number },
 ): DraftVariant[] {
+  // Saved variants never follow the title: typing it must not touch them (the
+  // same array back means React skips the variant table altogether).
+  if (!variants.some((variant) => variant.id.startsWith("draft_"))) return variants;
   const valueLabel = optionValueLabels(options);
   const indexByKey = new Map(optionCombinations(options).map((ids, index) => [combinationKey(ids), index]));
   return variants.map((variant) => {

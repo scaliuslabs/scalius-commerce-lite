@@ -3,15 +3,14 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { DiscountEditor } from "~/components/admin/discounts/DiscountEditor";
 import { discountTypeOf } from "~/components/admin/discounts/discount-form";
-import { translate } from "~/i18n";
-import { discountsMessages } from "~/i18n/discounts";
 import { discountQueryOptions } from "~/lib/api-query-options/discounts";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/discounts/$discountId")({
   loader: ({ context: { queryClient }, params }) =>
     queryClient.ensureQueryData(discountQueryOptions(params.discountId)),
-  head: () => ({ meta: [{ title: `${translate(discountsMessages, "pageTitle")} | Scalius Admin` }] }),
+  head: () => pageHead("discounts"),
   errorComponent: RouteErrorComponent,
   component: DiscountPage,
 });

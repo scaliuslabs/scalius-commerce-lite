@@ -1,17 +1,12 @@
 /**
- * Centralized Zod form schemas for all entity CRUD forms.
- *
- * Schemas that were previously defined inline in form components are extracted
- * here for reuse (e.g., server-side validation, testing). Schemas that already
- * lived in dedicated `types.ts` files are re-exported for a single import path.
- *
- * Domain-specific helper schemas (discount shared-validation, etc.) remain in
- * their original locations and are re-exported here.
+ * Zod form schemas for the category, page and analytics forms. Forms with
+ * their own `types.ts` (products, collections, orders) and the customer form
+ * (phone metadata) keep their schemas apart, so each screen downloads only its
+ * own validation.
  */
 import { z } from "zod";
 import { getActiveAnalyticsConfigError } from "@scalius/core/modules/analytics/analytics.validation";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
-import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { PAGE_PUBLICATION_MODES } from "@/lib/page-publication";
 import {
   analyticsScriptTypes,
@@ -245,29 +240,6 @@ export type PageFormInput = z.input<typeof pageFormSchema>;
 export type PageFormValues = z.output<typeof pageFormSchema>;
 
 // ═══════════════════════════════════════════════════════════════════
-//  CUSTOMERS
-// ═══════════════════════════════════════════════════════════════════
-
-export const customerFormSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(3, says("nameLength")).max(100, says("nameLength")),
-  email: z.email(says("emailInvalid")).nullable(),
-  phone: phoneNumberSchema,
-  address: z
-    .string()
-    .max(500, says("addressTooLong"))
-    .nullable(),
-  city: z.string().nullable(),
-  zone: z.string().nullable(),
-  area: z.string().nullable(),
-  cityName: z.string().optional(),
-  zoneName: z.string().optional(),
-  areaName: z.string().optional(),
-});
-
-export type CustomerFormValues = z.infer<typeof customerFormSchema>;
-
-// ═══════════════════════════════════════════════════════════════════
 //  ANALYTICS
 // ═══════════════════════════════════════════════════════════════════
 
@@ -302,33 +274,3 @@ export const analyticsFormSchema = z
 
 export type AnalyticsFormInput = z.input<typeof analyticsFormSchema>;
 export type AnalyticsFormValues = z.output<typeof analyticsFormSchema>;
-
-// ═══════════════════════════════════════════════════════════════════
-//  PRODUCTS (re-export from product-form/types.ts)
-// ═══════════════════════════════════════════════════════════════════
-
-export {
-  productFormSchema,
-  type ProductFormValues,
-} from "@/components/admin/product-form/types";
-
-// ═══════════════════════════════════════════════════════════════════
-//  COLLECTIONS (re-export from collection-form/types.ts)
-// ═══════════════════════════════════════════════════════════════════
-
-export {
-  collectionFormSchema,
-  type CollectionFormInput,
-  type CollectionFormValues,
-} from "@/components/admin/collection-form/types";
-
-// ═══════════════════════════════════════════════════════════════════
-//  ORDERS (re-export from order-form/types.ts)
-// ═══════════════════════════════════════════════════════════════════
-
-export {
-  orderFormSchema,
-  type OrderFormInput,
-  type OrderFormValues,
-} from "@/components/admin/order-form/types";
-
