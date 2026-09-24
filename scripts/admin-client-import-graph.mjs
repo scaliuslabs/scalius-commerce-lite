@@ -16,30 +16,39 @@ export function findStaticImportCycles(sources) {
     graph.set(file, new Set(staticChunkImports(file, source).filter((imported) => files.has(imported))));
   }
 
+  return stronglyConnectedComponents(graph)
+    .filter((component) => component.length > 1 || graph.get(component[0])?.has(component[0]));
+}
+
+/**
+ * Tarjan's strongly connected components of a directed graph
+ * (Map<node, Iterable<node>>). Every node is in exactly one component.
+ */
+export function stronglyConnectedComponents(graph) {
   let nextIndex = 0;
   const indexes = new Map();
   const lowLinks = new Map();
   const stack = [];
   const onStack = new Set();
-  const cycles = [];
+  const components = [];
 
-  function visit(file) {
-    indexes.set(file, nextIndex);
-    lowLinks.set(file, nextIndex);
+  function visit(node) {
+    indexes.set(node, nextIndex);
+    lowLinks.set(node, nextIndex);
     nextIndex += 1;
-    stack.push(file);
-    onStack.add(file);
+    stack.push(node);
+    onStack.add(node);
 
-    for (const importedFile of graph.get(file) ?? []) {
-      if (!indexes.has(importedFile)) {
-        visit(importedFile);
-        lowLinks.set(file, Math.min(lowLinks.get(file), lowLinks.get(importedFile)));
-      } else if (onStack.has(importedFile)) {
-        lowLinks.set(file, Math.min(lowLinks.get(file), indexes.get(importedFile)));
+    for (const next of graph.get(node) ?? []) {
+      if (!indexes.has(next)) {
+        visit(next);
+        lowLinks.set(node, Math.min(lowLinks.get(node), lowLinks.get(next)));
+      } else if (onStack.has(next)) {
+        lowLinks.set(node, Math.min(lowLinks.get(node), indexes.get(next)));
       }
     }
 
-    if (lowLinks.get(file) !== indexes.get(file)) return;
+    if (lowLinks.get(node) !== indexes.get(node)) return;
 
     const component = [];
     let member;
@@ -47,14 +56,13 @@ export function findStaticImportCycles(sources) {
       member = stack.pop();
       onStack.delete(member);
       component.push(member);
-    } while (member !== file);
-
-    if (component.length > 1 || graph.get(file)?.has(file)) cycles.push(component);
+    } while (member !== node);
+    components.push(component);
   }
 
-  for (const file of files) {
-    if (!indexes.has(file)) visit(file);
+  for (const node of graph.keys()) {
+    if (!indexes.has(node)) visit(node);
   }
 
-  return cycles;
+  return components;
 }

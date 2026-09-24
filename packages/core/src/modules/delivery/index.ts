@@ -7,3 +7,4 @@ export * from "./provider";
 export * from "./pathao-location-import";
 export * from "./zones";
 export * from "./location-validation";
+export * from "./status-mapper";
