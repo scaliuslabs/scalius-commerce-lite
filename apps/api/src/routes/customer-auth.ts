@@ -26,6 +26,10 @@ import {
   getCookieConfig,
   buildSetCookieHeader,
   deleteCustomerAuthOtpChallenge,
+  canSendPhoneProof,
+  listLinkedGuestRecords,
+  sendLinkedGuestOrdersCode,
+  verifyLinkedGuestOrdersCode,
   COOKIE_NAME,
   SESSION_TTL_SECONDS
 } from "@scalius/core/modules/customers/customer-auth.service";
@@ -509,6 +513,14 @@ const getCustomerOrdersRoute = createRoute({
               hasMore: z.boolean(),
               nextCursor: z.string().nullable(),
             }),
+            unclaimedGuestOrders: z.array(z.object({
+              id: z.string().openapi({ description: "Opaque id for the send-code / verify calls" }),
+              destination: z.string().openapi({ description: "Masked phone the orders were placed with" }),
+              orderCount: z.number().int(),
+              canVerify: z.boolean().openapi({ description: "False when the store can't send a text or WhatsApp code" }),
+            })).openapi({
+              description: "Orders on a guest record whose other orders already joined this account, placed with a phone the account hasn't proven.",
+            }),
             customer: z.object({
               id: z.string().optional(),
               name: z.string(),
@@ -560,6 +572,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
         hasMore: false,
         nextCursor: null,
       },
+      unclaimedGuestOrders: [],
     });
   }
 
@@ -567,7 +580,12 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
   // Orders placed signed out (any device) with a verified email/phone join
   // the history here, not only at sign-in.
   await linkVerifiedContactOrders(db, session.customerId);
-  const result = await getCustomerOrders(db, session.customerId, query);
+  const [result, linkedGuestRecords] = await Promise.all([
+    getCustomerOrders(db, session.customerId, query),
+    listLinkedGuestRecords(db, session.customerId),
+  ]);
+  const canVerify = linkedGuestRecords.length > 0
+    && await canSendPhoneProof(db, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>));
 
   // Merge session data into profile (DB profile wins, session fills gaps)
   const customer = result.customerProfile
@@ -584,6 +602,104 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
     customer,
     summary: result.summary,
     pagination: result.pagination,
+    unclaimedGuestOrders: linkedGuestRecords.map(({ id, destination, orderCount }) => ({ id, destination, orderCount, canVerify })),
+  });
+});
+
+// ─── Guest orders waiting for a phone proof ──────────────────────────────────
+
+const guestOrdersParams = z.object({ id: z.string().trim().min(1).max(128) });
+
+const sendGuestOrdersCodeRoute = createRoute({
+  method: "post",
+  path: "/guest-orders/{id}/send-code",
+  tags: ["Customer Auth"],
+  summary: "Send a code to the phone a waiting guest order was placed with",
+  request: { params: guestOrdersParams },
+  responses: {
+    200: {
+      description: "Code sent",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            message: z.string(),
+            destination: z.string(),
+            resendAfterSeconds: z.number().int(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+    503: serviceUnavailableResponse,
+  },
+});
+
+app.openapi(sendGuestOrdersCodeRoute, async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { session } = await requireCustomerSession(c);
+  if (!session.customerId) throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
+  const db = c.get("db");
+  const env = c.env as unknown as Record<string, unknown>;
+  const result = await sendLinkedGuestOrdersCode(db, {
+    accountId: session.customerId,
+    guestRecordId: c.req.valid("param").id,
+    ip: getTrustedClientIp(c),
+    emailEnv: env,
+    encryptionKey: getCredentialEncryptionKey(env),
+    credentialEncryptionKey: getCredentialEncryptionKey(env),
+  });
+  try {
+    await c.env.JOBS_QUEUE.send(result.queuePayload);
+  } catch (error) {
+    await deleteCustomerAuthOtpChallenge(db, { otpKey: result.otpStorageKey, deliveryKey: result.deliveryKey }).catch(() => undefined);
+    console.error("[CustomerAuth] Failed to enqueue guest-orders code:", error instanceof Error ? error.name : typeof error);
+    throw new ServiceUnavailableError("We couldn't send the code. Please try again.");
+  }
+  return ok(c, { message: result.message, destination: result.destination, resendAfterSeconds: result.resendAfterSeconds });
+});
+
+const verifyGuestOrdersCodeRoute = createRoute({
+  method: "post",
+  path: "/guest-orders/{id}/verify",
+  tags: ["Customer Auth"],
+  summary: "Prove the phone of waiting guest orders and add them to the account",
+  request: {
+    params: guestOrdersParams,
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ code: z.string().trim().min(4).max(12) }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Orders added to the account",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({ movedOrders: z.number().int(), message: z.string() })),
+        },
+      },
+    },
+    ...errorResponses,
+    409: conflictResponse,
+  },
+});
+
+app.openapi(verifyGuestOrdersCodeRoute, async (c) => {
+  setPrivateNoStoreHeaders(c);
+  const { session } = await requireCustomerSession(c);
+  if (!session.customerId) throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
+  const { movedOrders } = await verifyLinkedGuestOrdersCode(c.get("db"), {
+    accountId: session.customerId,
+    guestRecordId: c.req.valid("param").id,
+    code: c.req.valid("json").code,
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+  });
+  return ok(c, {
+    movedOrders,
+    message: movedOrders === 1 ? "1 order was added to your account." : `${movedOrders} orders were added to your account.`,
   });
 });
 

@@ -522,6 +522,8 @@ describe("agent operation contract", () => {
       "storefront.customer_auth_orders_support_requests.support_requests",
       "storefront.customer_auth_orders_payment_session.payment_session",
       "storefront.customer_auth_orders_claim_receipt.claim_receipt",
+      "storefront.customer_auth_guest_orders_send_code.send_code",
+      "storefront.customer_auth_guest_orders_verify.verify",
       "storefront.discounts_validate.validate",
       "storefront.orders_status.get",
       "storefront.orders_payment_recovery_send_otp.send_otp",

@@ -8256,6 +8256,24 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 hasMore: boolean;
                 nextCursor: string | null;
             };
+            /**
+             * Orders on a guest record whose other orders already joined this account, placed with a phone the account hasn't proven.
+             */
+            unclaimedGuestOrders: Array<{
+                /**
+                 * Opaque id for the send-code / verify calls
+                 */
+                id: string;
+                /**
+                 * Masked phone the orders were placed with
+                 */
+                destination: string;
+                orderCount: number;
+                /**
+                 * False when the store can't send a text or WhatsApp code
+                 */
+                canVerify: boolean;
+            }>;
             customer: {
                 id?: string;
                 name: string;
@@ -8274,6 +8292,221 @@ export type GetApiV1CustomerAuthOrdersResponses = {
 };
 
 export type GetApiV1CustomerAuthOrdersResponse = GetApiV1CustomerAuthOrdersResponses[keyof GetApiV1CustomerAuthOrdersResponses];
+
+export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/guest-orders/{id}/send-code';
+};
+
+export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeError = PostApiV1CustomerAuthGuestOrdersByIdSendCodeErrors[keyof PostApiV1CustomerAuthGuestOrdersByIdSendCodeErrors];
+
+export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeResponses = {
+    /**
+     * Code sent
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            destination: string;
+            resendAfterSeconds: number;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGuestOrdersByIdSendCodeResponse = PostApiV1CustomerAuthGuestOrdersByIdSendCodeResponses[keyof PostApiV1CustomerAuthGuestOrdersByIdSendCodeResponses];
+
+export type PostApiV1CustomerAuthGuestOrdersByIdVerifyData = {
+    body?: {
+        code: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/guest-orders/{id}/verify';
+};
+
+export type PostApiV1CustomerAuthGuestOrdersByIdVerifyErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGuestOrdersByIdVerifyError = PostApiV1CustomerAuthGuestOrdersByIdVerifyErrors[keyof PostApiV1CustomerAuthGuestOrdersByIdVerifyErrors];
+
+export type PostApiV1CustomerAuthGuestOrdersByIdVerifyResponses = {
+    /**
+     * Orders added to the account
+     */
+    200: {
+        success: true;
+        data: {
+            movedOrders: number;
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGuestOrdersByIdVerifyResponse = PostApiV1CustomerAuthGuestOrdersByIdVerifyResponses[keyof PostApiV1CustomerAuthGuestOrdersByIdVerifyResponses];
 
 export type PostApiV1CustomerAuthOrdersByIdClaimReceiptData = {
     body?: {
@@ -16336,6 +16569,10 @@ export type GetApiV1AdminCustomersResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 accountClaimedAt: string | null;
+                linkedAccount: {
+                    id: string;
+                    name: string;
+                } | null;
                 totalOrders: number;
                 totalSpent: number;
                 lastOrderAt: string | null;
@@ -16867,6 +17104,15 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
                 deletedAt?: NullableTimestamp;
+                linkedAccount: {
+                    id: string;
+                    name: string;
+                } | null;
+                guestRecords: Array<{
+                    id: string;
+                    name: string;
+                    orderCount: number;
+                }>;
             };
             history: Array<{
                 id: string;
@@ -16880,7 +17126,18 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 cityName: string | null;
                 zoneName: string | null;
                 areaName: string | null;
+                /**
+                 * created, updated, deleted, or order_moved_in / order_moved_out (see `order` and `relatedCustomer`)
+                 */
                 changeType: string;
+                order: {
+                    id: string;
+                    orderNumber: number | null;
+                } | null;
+                relatedCustomer: {
+                    id: string;
+                    name: string;
+                } | null;
                 createdAt: string | number;
             }>;
             orders: Array<{

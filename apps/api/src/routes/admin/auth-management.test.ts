@@ -447,6 +447,8 @@ function createAdminDeleteDbMock(options: {
             get: vi.fn(async () => targetUser),
           })),
         })),
+        // The invite's live links (none here), marked cancelled on revoke.
+        where: vi.fn(async () => []),
       })),
     })),
     selectDistinct: vi.fn(() => ({

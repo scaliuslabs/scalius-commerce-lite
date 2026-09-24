@@ -83,7 +83,7 @@ describe("LocationSelector", () => {
     ]);
     expect(
       Array.from(host.querySelectorAll("label"), (label) => label.textContent),
-    ).toEqual(["City", "Zone", "Area"]);
+    ).toEqual(["City", "Thana", "Area"]);
     expect(
       Array.from(host.querySelectorAll("button"), (button) => button.className),
     ).toEqual(expect.arrayContaining([expect.stringContaining("h-11")]));

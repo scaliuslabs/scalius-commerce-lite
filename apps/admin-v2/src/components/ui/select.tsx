@@ -3,6 +3,7 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
+import { OVERLAY_COLLISION_PADDING } from "./overlay";
 import { fieldClassName } from "./input";
 
 const Select = SelectPrimitive.Root;
@@ -35,7 +36,7 @@ SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 const SelectContent = React.forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
->(({ className, children, position = "popper", sideOffset = 4, collisionPadding = 12, ...props }, ref) => (
+>(({ className, children, position = "popper", sideOffset = 4, collisionPadding = OVERLAY_COLLISION_PADDING, ...props }, ref) => (
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}

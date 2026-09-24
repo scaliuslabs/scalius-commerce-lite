@@ -359,6 +359,16 @@ describe("sign-in error states", () => {
     expect(container.querySelector("a")?.textContent).toBe("Sign in");
   });
 
+  it("says a cancelled invite was cancelled and who can invite again", async () => {
+    window.history.replaceState(null, "", "/auth/reset-password#invite=proof-proof-proof-1234");
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ code: "TOKEN_CANCELLED" }), { status: 400 }));
+    await render(<ResetPasswordForm />);
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.textContent).toContain("This invite was cancelled");
+    expect(container.textContent).toContain("Ask the store owner to invite you again.");
+    expect(container.textContent).not.toContain("expired");
+  });
+
   it("tells staff whose access was changed why they were signed out, before they type anything", async () => {
     await render(<LoginForm signedOut="access_changed" />);
     expect(alertText()).toBe("You were signed out because your access changed. Contact the store owner.");

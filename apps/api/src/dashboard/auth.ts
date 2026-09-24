@@ -6,9 +6,10 @@
  * dashboard origin. The static SPA reads its route-guard state from
  * `GET /api/auth/dashboard-session`.
  */
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { createAuth } from "@scalius/core/auth";
 import { adminPrincipalExists } from "@scalius/core/auth/admin-setup";
+import { RESET_TOKEN_MARKER_TTL_MS, resetTokenMarkerIdentifier } from "@scalius/core/auth/reset-token-markers";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
@@ -187,30 +188,27 @@ export async function readDashboardSessionState(
 
 const RESET_TOKEN_SHAPE = /^[A-Za-z0-9_-]{16,256}$/;
 
-const USED_RESET_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
 /**
- * Better Auth deletes a reset or invite token when it is used. A hash of it is
- * kept (under the person's `reset-password:` rows, so a newer link or removing
- * the person clears it) to tell "already used" from "expired": the token is
- * the proof, so saying so reveals nothing about any email address.
+ * Why a link that no longer works stopped working: "used" (Better Auth deletes
+ * a reset or invite token when it is used; a hash of it is kept under the
+ * person's `reset-password:` rows, so a newer link or removing the person
+ * clears it) or "cancelled" (the owner revoked the invite; see
+ * `@scalius/core/auth/reset-token-markers`). The token is the proof, so saying
+ * so reveals nothing about any email address. Anything else is "expired".
  */
-async function usedResetTokenIdentifier(token: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
-  const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `reset-password:used:${hex}`;
-}
-
-async function isUsedResetToken(env: Env, token: string): Promise<boolean> {
-  const identifier = await usedResetTokenIdentifier(token);
+async function deadResetTokenReason(env: Env, token: string): Promise<"used" | "cancelled" | null> {
+  const [used, cancelled] = await Promise.all([
+    resetTokenMarkerIdentifier("used", token),
+    resetTokenMarkerIdentifier("cancelled", token),
+  ]);
   const row = await retryTransientD1(() =>
     getDb(env)
-      .select({ id: verification.id })
+      .select({ identifier: verification.identifier })
       .from(verification)
-      .where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, new Date())))
+      .where(and(inArray(verification.identifier, [used, cancelled]), gt(verification.expiresAt, new Date())))
       .get(),
   );
-  return Boolean(row);
+  return !row ? null : row.identifier === used ? "used" : "cancelled";
 }
 
 async function rememberUsedResetToken(env: Env, token: string, userId: string): Promise<void> {
@@ -218,9 +216,9 @@ async function rememberUsedResetToken(env: Env, token: string, userId: string): 
   try {
     await retryTransientD1(async () => getDb(env).insert(verification).values({
       id: crypto.randomUUID(),
-      identifier: await usedResetTokenIdentifier(token),
+      identifier: await resetTokenMarkerIdentifier("used", token),
       value: userId,
-      expiresAt: new Date(now.getTime() + USED_RESET_TOKEN_TTL_MS),
+      expiresAt: new Date(now.getTime() + RESET_TOKEN_MARKER_TTL_MS),
       createdAt: now,
       updatedAt: now,
     }));
@@ -260,9 +258,10 @@ async function createResetSession(request: Request, env: Env): Promise<Response>
   const wellFormed = typeof token === "string" && RESET_TOKEN_SHAPE.test(token);
   const live = wellFormed ? await readResetToken(env, token) : null;
   if (!live) {
-    return wellFormed && await isUsedResetToken(env, token)
-      ? json({ code: "TOKEN_USED", message: "This link was already used. Sign in instead." }, 400)
-      : json({ code: "INVALID_TOKEN", message: "This link has expired or was already used." }, 400);
+    const reason = wellFormed ? await deadResetTokenReason(env, token) : null;
+    if (reason === "used") return json({ code: "TOKEN_USED", message: "This link was already used. Sign in instead." }, 400);
+    if (reason === "cancelled") return json({ code: "TOKEN_CANCELLED", message: "This invite was cancelled." }, 400);
+    return json({ code: "INVALID_TOKEN", message: "This link has expired." }, 400);
   }
   return json({ status: true, purpose: live.invite ? "invite" : "reset" }, 200, {
     "Set-Cookie": resetSessionCookie(token as string, RESET_SESSION_MAX_AGE_SECONDS),

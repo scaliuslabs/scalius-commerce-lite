@@ -15,7 +15,9 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
     ValidationError,
+    ConflictError,
     ForbiddenError,
+    NotFoundError,
     ServiceUnavailableError,
     UnauthorizedError,
 } from "@scalius/core/errors";
@@ -34,7 +36,7 @@ import {
     enforceOtpSendRateLimits,
     OtpContactCeilingError,
 } from "./customer-auth-rate-limit";
-import { buildVerifiedContactOrderLink } from "./customer-identity";
+import { buildVerifiedContactOrderLink, maskContact } from "./customer-identity";
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
     isContactFieldRequiredForAuthChannel,
@@ -100,6 +102,12 @@ export interface SendOtpInput {
     emailEnv?: EmailRuntimeContext["env"];
     encryptionKey?: string;
     credentialEncryptionKey?: string;
+    /**
+     * A signed-in buyer proving a phone for their account, not signing in:
+     * any phone channel the store can send on will do, even when phone
+     * sign-in is off.
+     */
+    contactProof?: boolean;
 }
 
 export interface SendOtpResult {
@@ -521,7 +529,8 @@ export async function sendOtp(
 ): Promise<SendOtpResult> {
     const { settings, policy, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
     const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
-    const channel = resolveCustomerAuthChannelForRequest(policy, input.method, input.channel);
+    const channel = resolveCustomerAuthChannelForRequest(policy, input.method, input.channel)
+        ?? (input.contactProof ? contactProofChannel(input.method) : null);
     if (!channel) {
         throw new ForbiddenError(
             input.method === "email"
@@ -677,7 +686,7 @@ export async function verifyOtp(
         row = { ...markProven(owner.row, input.method, authenticatedAt), accountClaimedAt: authenticatedAt };
         isNewUser = true;
         statements.push(db.update(customers)
-            .set({ ...proofUpdate(input.method), accountClaimedAt: authenticatedAt })
+            .set({ ...proofUpdate(input.method), accountClaimedAt: authenticatedAt, linkedAccountId: null })
             .where(and(eq(customers.id, row.id), isNull(customers.accountClaimedAt))) as SQLiteBatchItem);
     } else {
         row = newAccount!.row;
@@ -687,6 +696,135 @@ export async function verifyOtp(
 
     const session = await createSessionForCustomer(db, row, input.sessionHashKey, statements);
     return { status: "signed_in", session, customer: buildCustomerAuthProfile(row), isNewUser };
+}
+
+function contactProofChannel(method: "email" | "phone"): CustomerAuthOtpChannel {
+    return method === "email" ? "email" : "sms";
+}
+
+/** The channel a signed-in buyer's phone proof goes out on. */
+function phoneProofChannel(policy: CustomerAuthPolicyConfig): CustomerAuthOtpChannel {
+    return resolveCustomerAuthChannelForRequest(policy, "phone") ?? contactProofChannel("phone");
+}
+
+export interface LinkedGuestRecord {
+    id: string;
+    phone: string;
+    /** Masked phone the orders were placed with, e.g. "01•••••011". */
+    destination: string;
+    orderCount: number;
+}
+
+/**
+ * Guest records that gave this account orders placed with a contact it proved
+ * and still hold orders placed with their own phone, which the account has
+ * not proven. The buyer may prove that phone to bring them over.
+ */
+export async function listLinkedGuestRecords(db: Database, accountId: string): Promise<LinkedGuestRecord[]> {
+    const rows = await db
+        .select({
+            id: customers.id,
+            phone: customers.phone,
+            orderCount: sql<number>`count(${orders.id})`,
+        })
+        .from(customers)
+        .innerJoin(orders, and(
+            eq(orders.customerId, customers.id),
+            isNull(orders.accountOwnerCustomerId),
+            isNull(orders.deletedAt),
+        ))
+        .where(and(
+            eq(customers.linkedAccountId, accountId),
+            isNull(customers.accountClaimedAt),
+            isNull(customers.deletedAt),
+        ))
+        .groupBy(customers.id)
+        .orderBy(customers.createdAt);
+    return rows.map((row) => ({ ...row, orderCount: Number(row.orderCount), destination: maskContact("phone", row.phone) }));
+}
+
+/** Whether a phone code can reach the buyer at all (the store can text or WhatsApp). */
+export async function canSendPhoneProof(db: Database, credentialEncryptionKey: string | undefined): Promise<boolean> {
+    const { policy } = await getCustomerAuthRuntimePolicy(db);
+    try {
+        await assertOtpChannelReady(db, phoneProofChannel(policy), { credentialEncryptionKey });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function requireLinkedGuestRecord(db: Database, accountId: string, guestRecordId: string) {
+    const record = (await listLinkedGuestRecords(db, accountId)).find((row) => row.id === guestRecordId);
+    if (!record) throw new NotFoundError("These orders are no longer waiting to be added.");
+    return record;
+}
+
+/** Sends a code to the phone a linked guest record's orders were placed with. */
+export async function sendLinkedGuestOrdersCode(
+    db: Database,
+    input: Omit<SendOtpInput, "method" | "identifier" | "channel" | "contactProof"> & { accountId: string; guestRecordId: string },
+): Promise<SendOtpResult & { destination: string }> {
+    const record = await requireLinkedGuestRecord(db, input.accountId, input.guestRecordId);
+    const sent = await sendOtp(db, { ...input, method: "phone", identifier: record.phone, contactProof: true });
+    return { ...sent, message: `We sent a code to ${record.destination}.`, destination: record.destination };
+}
+
+/**
+ * Proves a linked guest record's phone for the signed-in account: the phone
+ * becomes the account's verified phone (unless it already has another), and
+ * every unowned order placed with it joins the account, with both change logs
+ * written and the emptied guest record retired.
+ */
+export async function verifyLinkedGuestOrdersCode(
+    db: Database,
+    input: { accountId: string; guestRecordId: string; code: string; encryptionKey?: string },
+): Promise<{ movedOrders: number }> {
+    if (!input.code?.trim()) throw new ValidationError("Enter the 6-digit code.");
+    const record = await requireLinkedGuestRecord(db, input.accountId, input.guestRecordId);
+    const { policy } = await getCustomerAuthRuntimePolicy(db);
+    const channel = phoneProofChannel(policy);
+    const otpKey = await buildCustomerAuthOtpStorageKey(channel, record.phone, input.encryptionKey);
+    await claimCustomerAuthOtpChallenge(db, {
+        otpKey,
+        method: "phone",
+        channel,
+        identifier: record.phone,
+        code: input.code,
+        encryptionKey: input.encryptionKey,
+    });
+
+    const [account, otherOwner] = await Promise.all([
+        getActiveCustomerById(db, input.accountId),
+        db.select({ id: customers.id }).from(customers).where(and(
+            eq(customers.phone, record.phone),
+            isNotNull(customers.phoneVerifiedAt),
+            isNotNull(customers.accountClaimedAt),
+            isNull(customers.deletedAt),
+        )).get(),
+    ]);
+    if (!account) throw new UnauthorizedError("Please sign in again.");
+    if (otherOwner && otherOwner.id !== account.id) {
+        throw new ConflictError("This phone number is verified on another account. Sign in with it instead.");
+    }
+
+    const statements: SQLiteBatchItem[] = [];
+    // A proven phone replaces a typed one; an account keeps a phone it already proved.
+    if (!account.phoneVerifiedAt || account.phone === record.phone) {
+        statements.push(db.update(customers)
+            .set({ phone: record.phone, ...proofUpdate("phone") })
+            .where(eq(customers.id, account.id)) as SQLiteBatchItem);
+    }
+    statements.push(...buildVerifiedContactOrderLink(db, { customerId: account.id, phone: record.phone }) as SQLiteBatchItem[]);
+    try {
+        await safeBatch(db, statements as unknown as Parameters<typeof safeBatch>[1]);
+    } catch (error) {
+        if (error instanceof Error && error.message.includes("customers_verified_phone_unique")) {
+            throw new ConflictError("This phone number is verified on another account. Sign in with it instead.");
+        }
+        throw error;
+    }
+    return { movedOrders: record.orderCount };
 }
 
 function proofUpdate(method: "email" | "phone") {

@@ -3,6 +3,7 @@
 // staff email, the dashboard preview and test sends all run. Pure (no
 // database), so the dashboard bundle can import it.
 
+import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 import { ORDER_NOTIFICATION_TYPES, type OrderNotificationType } from "./notification-types";
@@ -464,7 +465,7 @@ export function renderOrderEmail(input: {
   if (amounts) {
     summary.push({ label: copy.subtotal, value: amounts.subtotal });
     for (const discount of amounts.discounts) {
-      summary.push({ label: copy.discountLine(discount.name, discount.code), value: `−${discount.amount}` });
+      summary.push({ label: formatDiscountLineLabel(copy.discount, { title: discount.name, code: discount.code }), value: `−${discount.amount}` });
     }
     summary.push({ label: copy.shipping, value: amounts.delivery.amount ?? copy.free, was: amounts.delivery.original });
     if (amounts.tax) {
