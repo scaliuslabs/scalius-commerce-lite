@@ -9,10 +9,8 @@ import {
 } from "@tanstack/react-query";
 import type { ColumnDef } from "./table-config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  INTENT_PREFETCH_MOUNT_GRACE_MS,
-  useServerTable,
-} from "./useServerTable";
+import { INTENT_PREFETCH_MOUNT_GRACE_MS } from "~/lib/route-query-warming";
+import { useServerTable } from "./useServerTable";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

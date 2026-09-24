@@ -23,6 +23,7 @@ import { getServerFnError } from "~/lib/api-helpers";
 import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { pageHead } from "~/i18n/page-titles";
+import { INTENT_PREFETCH_MOUNT_GRACE_MS } from "~/lib/route-query-warming";
 
 const OptionMatrixEditor = lazy(() =>
   import("~/components/admin/product-form/variants/OptionMatrixEditor").then((module) => ({
@@ -33,7 +34,10 @@ const OptionMatrixEditor = lazy(() =>
 export const Route = createFileRoute("/admin/products/$productId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
     const [product] = await Promise.all([
-      queryClient.fetchQuery({ ...productQueryOptions(params.productId), staleTime: 0 }).catch(nullForAdminApiNotFound),
+      // Fresh on open; a read the link's hover started a moment ago counts as
+      // fresh, so the click doesn't fetch the whole product again. A save
+      // invalidates it, and the server checks the revision on every write.
+      queryClient.fetchQuery({ ...productQueryOptions(params.productId), staleTime: INTENT_PREFETCH_MOUNT_GRACE_MS }).catch(nullForAdminApiNotFound),
       queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
       queryClient.ensureQueryData(seoSettingsQueryOptions()).catch(() => null),
     ]);
