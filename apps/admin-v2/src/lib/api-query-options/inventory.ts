@@ -10,10 +10,10 @@ import { queryKeys } from "../query-keys";
 const FAST_STALE_TIME_MS = 1000 * 30;
 
 type InventoryQuery = ApiQuery<typeof getApiV1AdminInventory>;
-type InventoryOverviewPayload = ApiResult<typeof getApiV1AdminInventory>;
-export type InventoryVariant = NonNullable<InventoryOverviewPayload["variants"]>[number];
-export type InventoryMovement = NonNullable<InventoryOverviewPayload["movements"]>[number];
-export type InventoryAlert = NonNullable<InventoryOverviewPayload["alerts"]>[number];
+export type InventoryOverview = ApiResult<typeof getApiV1AdminInventory>;
+export type InventoryVariant = NonNullable<InventoryOverview["variants"]>[number];
+export type InventoryMovement = NonNullable<InventoryOverview["movements"]>[number];
+export type InventoryAlert = NonNullable<InventoryOverview["alerts"]>[number];
 export type InventoryAdjustmentReason =
   ApiBody<typeof postApiV1AdminInventoryByVariantIdAdjust>["reason"];
 export type InventoryLabelVariant =

@@ -6,6 +6,7 @@
 // database and mirrors it to KV, so every old cache entry becomes unreachable.
 // There are no purges, tags, warm-ups, or retry queues. Stock writes bump only
 // when an availability band changes, so public stock stays band-only.
+import { effectiveLowStockThresholdSql } from "@scalius/core/modules/inventory/low-stock-policy";
 import { getDb, type Database } from "@scalius/database/client";
 import { cacheGeneration, productVariants } from "@scalius/database/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -218,7 +219,7 @@ async function loadBuyerAvailabilityRows(
         reservedStock: productVariants.reservedStock,
         trackInventory: productVariants.trackInventory,
         allowPreorder: productVariants.allowPreorder,
-        lowStockThreshold: productVariants.lowStockThreshold,
+        lowStockThreshold: effectiveLowStockThresholdSql(),
       })
       .from(productVariants)
       .where(inArray(productVariants.id, variantIds.slice(offset, offset + 90)))

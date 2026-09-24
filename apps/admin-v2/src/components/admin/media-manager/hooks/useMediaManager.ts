@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { mediaText as t } from "~/i18n/media";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { MediaApiClient } from "../api";
 import { useFolders, useMediaFiles, useMediaUpload } from ".";
 import {
+  canDeletePermanently,
   capabilityKind,
   type LibraryMediaFile,
   type MediaCapability,
@@ -30,7 +32,30 @@ interface UseMediaManagerOptions {
 }
 
 const EMPTY_FILE_IDS: string[] = [];
-const reason = (error: unknown) => (error instanceof Error ? error.message : undefined);
+const UNDO_MS = 10_000;
+
+type MediaLifecycle = "trash" | "restore" | "permanent";
+
+/** Plain catalog text for a refused change; server wording is never shown. */
+function failureText(error: unknown): string | undefined {
+  if (!(error instanceof AdminApiResponseError)) return undefined;
+  if (error.code === "MEDIA_DEPENDENCY_CONFLICT") return t("stillUsed");
+  if (error.status === 409) return t("changedElsewhere");
+  return undefined;
+}
+
+function describeFailure(file: LibraryMediaFile, error: unknown): string {
+  const text = failureText(error);
+  return text ? `${file.filename}: ${text}` : file.filename;
+}
+
+/** Trash and restore return the new version; permanent delete returns nothing. */
+async function applyLifecycle(file: LibraryMediaFile, action: MediaLifecycle): Promise<LibraryMediaFile | null> {
+  if (action === "trash") return MediaApiClient.trashFile(file);
+  if (action === "restore") return MediaApiClient.restoreFile(file);
+  await MediaApiClient.permanentlyDeleteFile(file);
+  return null;
+}
 
 function folderFilter(folderId: string | null | "all"): string | null | undefined {
   return folderId === "all" ? undefined : folderId;
@@ -312,49 +337,81 @@ export function useMediaManager({
     uploadedFiles,
   );
 
-  const mutateOne = useCallback(async (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => {
-    setIsMutating(true);
-    try {
-      if (action === "trash") await MediaApiClient.trashFile(file);
-      else if (action === "restore") await MediaApiClient.restoreFile(file);
-      else await MediaApiClient.permanentlyDeleteFile(file);
-      setSelectedFileIds((current) => current.filter((id) => id !== file.id));
-      if (selectionAnchorId.current === file.id) selectionAnchorId.current = null;
-      toast.success(t(action === "trash" ? "fileTrashed" : action === "restore" ? "fileRestored" : "fileDeleted"));
-      await load();
-    } catch (error) {
-      toast.error(t("changeFailed"), { description: reason(error) });
-    } finally {
-      setIsMutating(false);
-    }
-  }, [load]);
-
-  const mutateSelected = useCallback(async (action: "trash" | "restore" | "permanent") => {
-    if (!selectedLibraryFiles.length) return;
-    setIsMutating(true);
-    let succeeded = 0;
+  /** Restores files a moment after they were trashed (the toast's Undo). */
+  const restoreTrashed = useCallback(async (files: LibraryMediaFile[]) => {
+    let restored = 0;
     const failures: string[] = [];
-    const failedIds: string[] = [];
-    await bounded(selectedLibraryFiles, async (file) => {
+    await bounded(files, async (file) => {
       try {
-        if (action === "trash") await MediaApiClient.trashFile(file);
-        else if (action === "restore") await MediaApiClient.restoreFile(file);
-        else await MediaApiClient.permanentlyDeleteFile(file);
-        succeeded += 1;
+        await MediaApiClient.restoreFile(file);
+        restored += 1;
       } catch (error) {
-        failedIds.push(file.id);
-        failures.push(reason(error) ? `${file.filename}: ${reason(error)}` : file.filename);
+        failures.push(describeFailure(file, error));
       }
     });
-    setSelectedFileIds(failedIds);
-    selectionAnchorId.current = null;
     await load();
-    setIsMutating(false);
-    if (succeeded) toast.success(succeeded === 1 ? t("updatedOne") : t("updatedMany", { count: succeeded }));
+    if (restored) toast.success(restored === 1 ? t("fileRestored") : t("filesRestored", { count: restored }));
     if (failures.length) {
       toast.error(failures.length === 1 ? t("notChangedOne") : t("notChangedMany", { count: failures.length }), { description: failures.slice(0, 3).join("\n") });
     }
-  }, [load, selectedLibraryFiles]);
+  }, [load]);
+
+  const confirmTrashed = useCallback((trashed: LibraryMediaFile[]) => {
+    toast.success(trashed.length === 1 ? t("fileTrashed") : t("filesTrashed", { count: trashed.length }), {
+      duration: UNDO_MS,
+      action: { label: t("undo"), onClick: () => void restoreTrashed(trashed) },
+    });
+  }, [restoreTrashed]);
+
+  const mutateOne = useCallback(async (file: LibraryMediaFile, action: MediaLifecycle) => {
+    setIsMutating(true);
+    try {
+      const changed = await applyLifecycle(file, action);
+      setSelectedFileIds((current) => current.filter((id) => id !== file.id));
+      if (selectionAnchorId.current === file.id) selectionAnchorId.current = null;
+      if (action === "trash" && changed) confirmTrashed([changed]);
+      else toast.success(t(action === "restore" ? "fileRestored" : "fileDeleted"));
+      await load();
+    } catch (error) {
+      toast.error(t("changeFailed"), { description: failureText(error) });
+    } finally {
+      setIsMutating(false);
+    }
+  }, [confirmTrashed, load]);
+
+  const mutateSelected = useCallback(async (action: MediaLifecycle) => {
+    if (!selectedLibraryFiles.length) return;
+    // Files still in use never reach the permanent-delete call; they stay in Trash.
+    const kept = action === "permanent" ? selectedLibraryFiles.filter((file) => !canDeletePermanently(file)) : [];
+    const targets = action === "permanent" ? selectedLibraryFiles.filter(canDeletePermanently) : selectedLibraryFiles;
+    setIsMutating(true);
+    const changed: LibraryMediaFile[] = [];
+    const failures: string[] = [];
+    const failedIds: string[] = [];
+    await bounded(targets, async (file) => {
+      try {
+        changed.push((await applyLifecycle(file, action)) ?? file);
+      } catch (error) {
+        failedIds.push(file.id);
+        failures.push(describeFailure(file, error));
+      }
+    });
+    setSelectedFileIds([...failedIds, ...kept.map((file) => file.id)]);
+    selectionAnchorId.current = null;
+    await load();
+    setIsMutating(false);
+    if (action === "trash" && changed.length) confirmTrashed(changed);
+    else if (changed.length) {
+      const restore = action === "restore";
+      toast.success(changed.length === 1
+        ? t(restore ? "fileRestored" : "fileDeleted")
+        : t(restore ? "filesRestored" : "filesDeleted", { count: changed.length }));
+    }
+    if (kept.length) toast.info(kept.length === 1 ? t("deleteSkippedOne") : t("deleteSkipped", { count: kept.length }));
+    if (failures.length) {
+      toast.error(failures.length === 1 ? t("notChangedOne") : t("notChangedMany", { count: failures.length }), { description: failures.slice(0, 3).join("\n") });
+    }
+  }, [confirmTrashed, load, selectedLibraryFiles]);
 
   const moveSelected = useCallback(async (folderId: string | null) => {
     if (!selectedLibraryFiles.length) return;
@@ -366,7 +423,7 @@ export function useMediaManager({
       toast.success(t("filesMoved"));
       await load();
     } catch (error) {
-      toast.error(t("moveFailed"), { description: reason(error) });
+      toast.error(t("moveFailed"), { description: failureText(error) });
     } finally {
       setIsMutating(false);
     }
@@ -380,7 +437,7 @@ export function useMediaManager({
       toast.success(t("fileSaved"));
       return updated;
     } catch (error) {
-      toast.error(t("saveFailed"), { description: reason(error) });
+      toast.error(t("saveFailed"), { description: failureText(error) });
       throw error;
     }
   }, [media]);

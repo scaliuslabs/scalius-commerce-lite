@@ -1,3 +1,4 @@
+import { effectiveLowStockThresholdSql } from "../inventory/low-stock-policy";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import {
@@ -691,7 +692,7 @@ export async function getStorefrontProductSection(
                 reservedStock: productVariants.reservedStock,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
-                lowStockThreshold: productVariants.lowStockThreshold,
+                lowStockThreshold: effectiveLowStockThresholdSql(),
                 barcode: productVariants.barcode,
                 barcodeType: productVariants.barcodeType,
                 discountType: productVariants.discountType,

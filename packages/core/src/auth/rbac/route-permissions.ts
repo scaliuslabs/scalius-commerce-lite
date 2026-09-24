@@ -516,6 +516,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/media/*/original": {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
   },
+  "/api/v1/admin/media/*/usage": {
+    GET: { permission: PERMISSIONS.MEDIA_VIEW },
+  },
   "/api/v1/admin/media/folders": {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
     POST: { permission: PERMISSIONS.MEDIA_MANAGE_FOLDERS },
@@ -1043,6 +1046,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/inventory/stock-set": {
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/default-alert-level": {
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   "/api/v1/admin/inventory/*/alert-level": {
     PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
