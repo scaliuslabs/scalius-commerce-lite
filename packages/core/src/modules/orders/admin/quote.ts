@@ -4,14 +4,14 @@ import { products, productVariants } from "@scalius/database/schema";
 import { toStoreMinor } from "../../settings/store-money";
 import { sql, eq, inArray } from "drizzle-orm";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
-import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../../products/products.money";
+import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../../products/money";
 import type { QuoteManualOrderInput } from "../validation";
 import { ValidationError } from "@scalius/core/errors";
 import { createOrderCurrencySnapshot, type OrderCurrencySnapshot } from "../../payments/order-currency";
 import { getCurrencySettings } from "../../settings/site-settings.service";
 import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote, type TaxQuote } from "../../tax";
-import { variantOptionLabelSql } from "../../products/products.option-model";
-import { loadProductMediaProjections, resolveSkuImageRepresentation } from "../../products/products.media";
+import { variantOptionLabelSql } from "../../products/option-model";
+import { loadProductMediaProjections, resolveSkuImageRepresentation } from "../../products/media";
 import { resolveActiveDeliveryLocationNames } from "../../delivery/location-validation";
 
 type AdminOrderSkuItem = { productId: string; variantId: string | null };

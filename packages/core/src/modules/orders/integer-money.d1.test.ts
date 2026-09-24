@@ -13,7 +13,8 @@ import {
 import { recordCODCollection } from "../payments/cod";
 import { processPaymentConfirmed } from "../payments/process-payment";
 import { processRefund } from "../payments/refund-service";
-import { getStorefrontFeedProducts, getStorefrontProducts } from "../products/products.storefront";
+import { getStorefrontFeedProducts } from "../catalog/feed";
+import { getStorefrontProducts } from "../catalog/listing";
 import { presentStorefrontCartValidation, validateStorefrontCartItems } from "../checkout/cart-validation";
 import { createOrder } from "./admin/create";
 import { quoteManualOrder } from "./admin/quote";

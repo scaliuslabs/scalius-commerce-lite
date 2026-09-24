@@ -13,7 +13,7 @@ import { checkAndAlertLowStock } from "./alerts";
 import type {
   ProductMediaProjection,
   SkuImageRepresentation,
-} from "../products/products.media";
+} from "../products/media";
 
 vi.mock("./alerts", () => ({
   checkAndAlertLowStock: vi.fn(),
@@ -27,7 +27,7 @@ const mediaMocks = vi.hoisted(() => ({
   ) => SkuImageRepresentation>(() => null),
 }));
 
-vi.mock("../products/products.media", () => mediaMocks);
+vi.mock("../products/media", () => mediaMocks);
 
 type MockStatement = {
   kind: "insert" | "update";

@@ -3,12 +3,12 @@ import { products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import { variantOptionLabelSql } from "../products/products.option-model";
+import { variantOptionLabelSql } from "../products/option-model";
 import {
     loadProductMediaProjections,
     type ProductMediaProjection,
     resolveSkuImageRepresentation,
-} from "../products/products.media";
+} from "../products/media";
 
 export type StorefrontCartIssueCode =
     | "PRODUCT_UNAVAILABLE"

@@ -4,7 +4,7 @@ import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { getStorefrontProductBySlug } from "../products/products.storefront";
+import { getStorefrontProductBySlug } from "../catalog/product-page";
 import { acknowledgeLowStockAlert, checkAndAlertLowStock, setDefaultLowStockThreshold, setLowStockThreshold } from "./alerts";
 import { getInventoryOverview } from "./inventory.service";
 

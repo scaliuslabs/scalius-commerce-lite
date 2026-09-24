@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ValidationError } from "@scalius/core/errors";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
-import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products/products.types";
+import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products/types";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";

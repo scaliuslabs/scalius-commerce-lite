@@ -62,7 +62,7 @@ describe("collection product picker on D1", () => {
     expect(both.visibleOnline).toBeGreaterThanOrEqual(1);
     expect(both.visibleOnline).toBeLessThan(both.pagination.total);
 
-    const { getStorefrontCollectionProducts } = await import("../products/products.storefront");
+    const { getStorefrontCollectionProducts } = await import("../catalog/listing");
     const storefront = await getStorefrontCollectionProducts(db, { categoryIds: ["cat_a", "cat_b"] }, {});
     expect(storefront.products.map((product) => product.id)).toContain("prod_cap");
     expect(storefront.products.map((product) => product.id)).not.toContain("prod_skuless");

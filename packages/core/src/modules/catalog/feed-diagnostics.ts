@@ -1,0 +1,569 @@
+import { products, productVariants } from "@scalius/database/schema";
+import type { Database } from "@scalius/database/client";
+import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import {
+    calculateCatalogFeedDiscountedAmount,
+    isPositiveCatalogFeedAmount,
+} from "@scalius/shared/catalog-feed-money";
+import {
+    normalizeCatalogDiscoveryBaseUrl,
+    resolveCatalogDiscoveryImageUrl,
+} from "@scalius/shared/catalog-discovery-media";
+import { and, desc, inArray, isNull, sql } from "drizzle-orm";
+import {
+    loadProductMediaProjections,
+    resolveProductImageRepresentation,
+} from "../products/media";
+import { presentCatalogPrice, readStoreDecimalPlaces } from "../products/money";
+
+export const PRODUCT_FEED_DIAGNOSTIC_SCAN_LIMIT = 500;
+export const PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT = 500;
+export const PRODUCT_FEED_DIAGNOSTIC_SAMPLE_LIMIT = 5;
+export const PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT = 50;
+const PRODUCT_FEED_DIAGNOSTIC_ID_CHUNK_SIZE = 90;
+
+export const PRODUCT_FEED_DIAGNOSTIC_REASONS = [
+    "feed_disabled",
+    "storefront_url_unavailable",
+    "product_feed_excluded",
+    "inactive_deleted_unpublished",
+    "inconsistent_option_axes",
+    "no_buyer_sku",
+    "non_positive_price",
+    "missing_image",
+    "unavailable_excluded",
+] as const;
+
+export type ProductFeedDiagnosticReason = typeof PRODUCT_FEED_DIAGNOSTIC_REASONS[number];
+
+export interface ProductFeedDiagnosticSample {
+    id: string;
+    name: string;
+    slug: string;
+    reason: ProductFeedDiagnosticReason;
+}
+
+export interface ProductFeedDiagnosticReasonSummary {
+    reason: ProductFeedDiagnosticReason;
+    products: number;
+    rows: number;
+    samples: ProductFeedDiagnosticSample[];
+}
+
+export interface ProductFeedDiagnosticsReport {
+    policy: {
+        productCatalogEnabled: boolean;
+        includeUnavailableProducts: boolean;
+        variantStrategy: SeoDiscoverySettings["feeds"]["variantStrategy"];
+    };
+    scan: {
+        limit: number;
+        scannedProducts: number;
+        truncated: boolean;
+        sampleLimitPerReason: number;
+    };
+    totals: {
+        emittedRows: number;
+        emittedProductRows: number;
+        emittedVariantRows: number;
+        productsWithIssues: number;
+        skippedRows: number;
+    };
+    reasons: ProductFeedDiagnosticReasonSummary[];
+}
+
+export interface ProductFeedDiagnosticScanProduct {
+    id: string;
+    name: string;
+    slug: string;
+    isActive: boolean;
+    excludeFromProductFeed: boolean;
+    deletedAt: number | null;
+    price: number;
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
+}
+
+export interface ProductFeedDiagnosticScanVariant {
+    id: string;
+    productId: string;
+    optionCombinationKey: string | null;
+    stock: number;
+    reservedStock: number;
+    isDefault: boolean;
+    trackInventory: boolean;
+    price: number;
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
+}
+
+export interface ProductFeedDiagnosticScanInput {
+    products: ProductFeedDiagnosticScanProduct[];
+    primaryImageUrls: Map<string, string | null>;
+    variants: Map<string, ProductFeedDiagnosticScanVariant[]>;
+    feedsPolicy: SeoDiscoverySettings["feeds"];
+    scanLimit: number;
+    truncated: boolean;
+    sampleLimitPerReason: number;
+    storefrontBaseUrl?: string | null;
+    currencyCode?: string;
+}
+
+type MutableReasonSummary = Omit<ProductFeedDiagnosticReasonSummary, "samples"> & {
+    productIds: Set<string>;
+    samples: ProductFeedDiagnosticSample[];
+};
+
+function boundedInteger(value: number | undefined, fallback: number, max: number): number {
+    if (!Number.isFinite(value) || value === undefined) return fallback;
+    return Math.min(Math.max(Math.trunc(value), 1), max);
+}
+
+function chunkProductIds(productIds: string[]): string[][] {
+    const chunks: string[][] = [];
+    for (let index = 0; index < productIds.length; index += PRODUCT_FEED_DIAGNOSTIC_ID_CHUNK_SIZE) {
+        chunks.push(productIds.slice(index, index + PRODUCT_FEED_DIAGNOSTIC_ID_CHUNK_SIZE));
+    }
+    return chunks;
+}
+
+function createReasonSummaries(): Record<ProductFeedDiagnosticReason, MutableReasonSummary> {
+    const summaries = {} as Record<ProductFeedDiagnosticReason, MutableReasonSummary>;
+    for (const reason of PRODUCT_FEED_DIAGNOSTIC_REASONS) {
+        summaries[reason] = {
+            reason,
+            products: 0,
+            rows: 0,
+            productIds: new Set<string>(),
+            samples: [],
+        };
+    }
+    return summaries;
+}
+
+function addReason(
+    summaries: Record<ProductFeedDiagnosticReason, MutableReasonSummary>,
+    product: ProductFeedDiagnosticScanProduct,
+    reason: ProductFeedDiagnosticReason,
+    rows: number,
+    sampleLimit: number,
+) {
+    const summary = summaries[reason];
+    summary.rows += Math.max(0, rows);
+    if (!summary.productIds.has(product.id)) {
+        summary.productIds.add(product.id);
+        summary.products += 1;
+        if (summary.samples.length < sampleLimit) {
+            summary.samples.push({
+                id: product.id,
+                name: product.name,
+                slug: product.slug,
+                reason,
+            });
+        }
+    }
+}
+
+function hasCustomerOption(variant: ProductFeedDiagnosticScanVariant): boolean {
+    return Boolean(variant.optionCombinationKey?.trim());
+}
+
+function isBuyerOptionSku(variant: ProductFeedDiagnosticScanVariant): boolean {
+    return variant.id !== "default" && !variant.isDefault && hasCustomerOption(variant);
+}
+
+function getBuyerTopology(variants: ProductFeedDiagnosticScanVariant[]) {
+    const activeSkus = variants.filter((variant) => variant.id !== "default");
+    const nonDefaultSkus = activeSkus.filter((variant) => !variant.isDefault);
+    const optionSkus = nonDefaultSkus.filter(isBuyerOptionSku);
+    const simpleSku = activeSkus.length === 1 && activeSkus[0]?.isDefault ? activeSkus[0] : null;
+
+    if (optionSkus.length > 0 && nonDefaultSkus.some((variant) => !hasCustomerOption(variant))) {
+        return {
+            mode: "inconsistent" as const,
+            candidateVariantRows: optionSkus.length,
+        };
+    }
+
+    if (optionSkus.length > 0) {
+        return { mode: "optioned" as const, variants: optionSkus };
+    }
+    if (simpleSku) {
+        return { mode: "simple" as const, variant: simpleSku };
+    }
+    return { mode: "none" as const };
+}
+
+function isVariantAvailable(variant: ProductFeedDiagnosticScanVariant): boolean {
+    return !variant.trackInventory || variant.stock - variant.reservedStock > 0;
+}
+
+function hasSavedDiscount(value: {
+    discountType: string | null;
+    discountPercentage: number | null;
+    discountAmount: number | null;
+}): boolean {
+    return (
+        value.discountType === "percentage" &&
+        (value.discountPercentage ?? 0) > 0
+    ) || (
+        value.discountType === "flat" &&
+        (value.discountAmount ?? 0) > 0
+    );
+}
+
+function getProductFeedPricing(
+    product: ProductFeedDiagnosticScanProduct,
+    currencyCode: string,
+) {
+    return {
+        basePrice: product.price,
+        feedPrice: calculateCatalogFeedDiscountedAmount(
+            product.price,
+            product.discountType,
+            product.discountPercentage,
+            product.discountAmount,
+            currencyCode,
+        ),
+    };
+}
+
+function getVariantFeedPricing(
+    product: ProductFeedDiagnosticScanProduct,
+    variant: ProductFeedDiagnosticScanVariant,
+    currencyCode: string,
+): { basePrice: number; feedPrice: number } {
+    const basePrice = variant.price ?? product.price;
+    const discount = hasSavedDiscount(variant) ? variant : product;
+    return {
+        basePrice,
+        feedPrice: calculateCatalogFeedDiscountedAmount(
+            basePrice,
+            discount.discountType,
+            discount.discountPercentage,
+            discount.discountAmount,
+            currencyCode,
+        ),
+    };
+}
+
+function hasPositiveFeedPricing(
+    pricing: { basePrice: number; feedPrice: number },
+    currencyCode: string,
+): boolean {
+    return isPositiveCatalogFeedAmount(pricing.basePrice, currencyCode) &&
+        isPositiveCatalogFeedAmount(pricing.feedPrice, currencyCode);
+}
+
+function hasValidFeedImage(imageUrl: string | null | undefined, storefrontBaseUrl: string): boolean {
+    return Boolean(resolveCatalogDiscoveryImageUrl(imageUrl, storefrontBaseUrl));
+}
+
+function finalReasonSummaries(
+    summaries: Record<ProductFeedDiagnosticReason, MutableReasonSummary>,
+): ProductFeedDiagnosticReasonSummary[] {
+    return PRODUCT_FEED_DIAGNOSTIC_REASONS.map((reason) => {
+        const summary = summaries[reason];
+        return {
+            reason,
+            products: summary.products,
+            rows: summary.rows,
+            samples: summary.samples,
+        };
+    });
+}
+
+export function buildProductFeedDiagnosticsFromScan({
+    products: scannedProducts,
+    primaryImageUrls,
+    variants,
+    feedsPolicy,
+    scanLimit,
+    truncated,
+    sampleLimitPerReason,
+    storefrontBaseUrl,
+    currencyCode = "BDT",
+}: ProductFeedDiagnosticScanInput): ProductFeedDiagnosticsReport {
+    const summaries = createReasonSummaries();
+    const productsWithIssues = new Set<string>();
+    let emittedProductRows = 0;
+    let emittedVariantRows = 0;
+    let skippedRows = 0;
+    const absoluteStorefrontBaseUrl = normalizeCatalogDiscoveryBaseUrl(storefrontBaseUrl);
+
+    const recordIssue = (
+        product: ProductFeedDiagnosticScanProduct,
+        reason: ProductFeedDiagnosticReason,
+        rows: number,
+    ) => {
+        addReason(summaries, product, reason, rows, sampleLimitPerReason);
+        productsWithIssues.add(product.id);
+        skippedRows += Math.max(0, rows);
+    };
+
+    for (const product of scannedProducts) {
+        if (!feedsPolicy.productCatalogEnabled) {
+            recordIssue(product, "feed_disabled", 0);
+            continue;
+        }
+
+        if (product.excludeFromProductFeed) {
+            recordIssue(product, "product_feed_excluded", 0);
+            continue;
+        }
+
+        if (!product.isActive || product.deletedAt !== null) {
+            recordIssue(product, "inactive_deleted_unpublished", 0);
+            continue;
+        }
+
+        const topology = getBuyerTopology(variants.get(product.id) ?? []);
+        if (topology.mode === "inconsistent") {
+            recordIssue(
+                product,
+                "inconsistent_option_axes",
+                feedsPolicy.variantStrategy === "products"
+                    ? 1
+                    : topology.candidateVariantRows,
+            );
+            continue;
+        }
+        if (topology.mode === "none") {
+            recordIssue(product, "no_buyer_sku", 0);
+            continue;
+        }
+
+        const hasImage = absoluteStorefrontBaseUrl
+            ? hasValidFeedImage(primaryImageUrls.get(product.id), absoluteStorefrontBaseUrl)
+            : false;
+
+        if (feedsPolicy.variantStrategy === "products" || topology.mode === "simple") {
+            if (!hasPositiveFeedPricing(
+                getProductFeedPricing(product, currencyCode),
+                currencyCode,
+            )) {
+                recordIssue(product, "non_positive_price", 1);
+                continue;
+            }
+            const available =
+                topology.mode === "simple"
+                    ? isVariantAvailable(topology.variant)
+                    : topology.variants.some(isVariantAvailable);
+
+            if (!feedsPolicy.includeUnavailableProducts && !available) {
+                recordIssue(product, "unavailable_excluded", 1);
+                continue;
+            }
+            if (!absoluteStorefrontBaseUrl) {
+                recordIssue(product, "storefront_url_unavailable", 1);
+                continue;
+            }
+            if (!hasImage) {
+                recordIssue(product, "missing_image", 1);
+                continue;
+            }
+            emittedProductRows += 1;
+            continue;
+        }
+
+        for (const variant of topology.variants) {
+            if (!hasPositiveFeedPricing(
+                getVariantFeedPricing(product, variant, currencyCode),
+                currencyCode,
+            )) {
+                recordIssue(product, "non_positive_price", 1);
+                continue;
+            }
+            if (!feedsPolicy.includeUnavailableProducts && !isVariantAvailable(variant)) {
+                recordIssue(product, "unavailable_excluded", 1);
+                continue;
+            }
+            if (!absoluteStorefrontBaseUrl) {
+                recordIssue(product, "storefront_url_unavailable", 1);
+                continue;
+            }
+            if (!hasImage) {
+                recordIssue(product, "missing_image", 1);
+                continue;
+            }
+            emittedVariantRows += 1;
+        }
+    }
+
+    return {
+        policy: {
+            productCatalogEnabled: feedsPolicy.productCatalogEnabled,
+            includeUnavailableProducts: feedsPolicy.includeUnavailableProducts,
+            variantStrategy: feedsPolicy.variantStrategy,
+        },
+        scan: {
+            limit: scanLimit,
+            scannedProducts: scannedProducts.length,
+            truncated,
+            sampleLimitPerReason,
+        },
+        totals: {
+            emittedRows: emittedProductRows + emittedVariantRows,
+            emittedProductRows,
+            emittedVariantRows,
+            productsWithIssues: productsWithIssues.size,
+            skippedRows,
+        },
+        reasons: finalReasonSummaries(summaries),
+    };
+}
+
+export async function getProductFeedDiagnostics(
+    db: Database,
+    feedsPolicy: SeoDiscoverySettings["feeds"],
+    options: {
+        scanLimit?: number;
+        sampleLimitPerReason?: number;
+        storefrontBaseUrl?: string | null;
+        currencyCode?: string;
+    } = {},
+): Promise<ProductFeedDiagnosticsReport> {
+    const scanLimit = boundedInteger(
+        options.scanLimit,
+        PRODUCT_FEED_DIAGNOSTIC_SCAN_LIMIT,
+        PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT,
+    );
+    const sampleLimitPerReason = boundedInteger(
+        options.sampleLimitPerReason,
+        PRODUCT_FEED_DIAGNOSTIC_SAMPLE_LIMIT,
+        PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT,
+    );
+
+    const decimalPlacesRead = readStoreDecimalPlaces(db);
+    const rows = await db
+        .select({
+            id: products.id,
+            name: products.name,
+            slug: products.slug,
+            isActive: products.isActive,
+            excludeFromProductFeed: products.excludeFromProductFeed,
+            priceMinor: products.priceMinor,
+            discountType: products.discountType,
+            discountBps: products.discountBps,
+            discountAmountMinor: products.discountAmountMinor,
+            deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
+            updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`,
+        })
+        .from(products)
+        .orderBy(desc(sql<number>`CAST(${products.updatedAt} AS INTEGER)`), desc(sql<number>`CAST(${products.createdAt} AS INTEGER)`))
+        .limit(scanLimit + 1)
+        .all();
+
+    const decimalPlaces = await decimalPlacesRead;
+    const productRows = rows.slice(0, scanLimit).map((row) => {
+        const price = presentCatalogPrice(row, decimalPlaces);
+        return {
+            id: row.id,
+            name: row.name,
+            slug: row.slug,
+            isActive: Boolean(row.isActive),
+            excludeFromProductFeed: Boolean(row.excludeFromProductFeed),
+            price: price.price,
+            discountType: row.discountType,
+            discountPercentage: price.discountPercentage,
+            discountAmount: price.discountAmount,
+            deletedAt: row.deletedAt ?? null,
+        };
+    });
+    const productIds = productRows.map((product) => product.id);
+    const truncated = rows.length > scanLimit;
+
+    if (productIds.length === 0 || !feedsPolicy.productCatalogEnabled) {
+        return buildProductFeedDiagnosticsFromScan({
+            products: productRows,
+            primaryImageUrls: new Map(),
+            variants: new Map(),
+            feedsPolicy,
+            scanLimit,
+            truncated,
+            sampleLimitPerReason,
+            storefrontBaseUrl: options.storefrontBaseUrl,
+            currencyCode: options.currencyCode,
+        });
+    }
+
+    const mediaMap = await loadProductMediaProjections(db, productIds);
+    const variantRows: Array<{
+        id: string;
+        productId: string;
+        optionCombinationKey: string | null;
+        stock: number;
+        reservedStock: number;
+        isDefault: boolean;
+        trackInventory: boolean;
+        priceMinor: number;
+        discountType: string | null;
+        discountBps: number;
+        discountAmountMinor: number;
+    }> = [];
+    for (const productIdChunk of chunkProductIds(productIds)) {
+        variantRows.push(...await db
+            .select({
+                id: productVariants.id,
+                productId: productVariants.productId,
+                optionCombinationKey: productVariants.optionCombinationKey,
+                stock: productVariants.stock,
+                reservedStock: productVariants.reservedStock,
+                isDefault: productVariants.isDefault,
+                trackInventory: productVariants.trackInventory,
+                priceMinor: productVariants.priceMinor,
+                discountType: productVariants.discountType,
+                discountBps: productVariants.discountBps,
+                discountAmountMinor: productVariants.discountAmountMinor,
+            })
+            .from(productVariants)
+            .where(and(
+                inArray(productVariants.productId, productIdChunk),
+                isNull(productVariants.deletedAt),
+            ))
+            .orderBy(productVariants.productId)
+            .all());
+    }
+
+    const primaryImageUrls = new Map<string, string | null>();
+    for (const productId of productIds) {
+        primaryImageUrls.set(
+            productId,
+            resolveProductImageRepresentation(mediaMap.get(productId) ?? [])?.url ?? null,
+        );
+    }
+
+    const variantMap = new Map<string, ProductFeedDiagnosticScanVariant[]>();
+    for (const row of variantRows) {
+        const productVariantsForProduct = variantMap.get(row.productId) ?? [];
+        const price = presentCatalogPrice(row, decimalPlaces);
+        productVariantsForProduct.push({
+            id: row.id,
+            productId: row.productId,
+            optionCombinationKey: row.optionCombinationKey,
+            stock: row.stock,
+            reservedStock: row.reservedStock,
+            isDefault: Boolean(row.isDefault),
+            trackInventory: Boolean(row.trackInventory),
+            price: price.price,
+            discountType: row.discountType,
+            discountPercentage: price.discountPercentage,
+            discountAmount: price.discountAmount,
+        });
+        variantMap.set(row.productId, productVariantsForProduct);
+    }
+
+    return buildProductFeedDiagnosticsFromScan({
+        products: productRows,
+        primaryImageUrls,
+        variants: variantMap,
+        feedsPolicy,
+        scanLimit,
+        truncated,
+        sampleLimitPerReason,
+        storefrontBaseUrl: options.storefrontBaseUrl,
+        currencyCode: options.currencyCode,
+    });
+}

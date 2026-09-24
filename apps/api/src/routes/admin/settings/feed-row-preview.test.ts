@@ -8,9 +8,9 @@ const mocks = vi.hoisted(() => ({
   getMedia: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/products", async (importOriginal) => ({
+vi.mock("@scalius/core/modules/catalog", async (importOriginal) => ({
   ...(await importOriginal<
-    typeof import("@scalius/core/modules/products")
+    typeof import("@scalius/core/modules/catalog")
   >()),
   executeProductFeedRowPreview: mocks.execute,
 }));
