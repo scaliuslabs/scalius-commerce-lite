@@ -10,7 +10,7 @@ import {
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { createListSearchValidator } from "~/lib/list-helpers";
-import { adoptListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, listSearchKey, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -46,7 +46,7 @@ function listQuery(search: ReturnType<typeof validateCustomerSearch>, term: stri
 export const Route = createFileRoute("/admin/customers/")({
   validateSearch: validateCustomerSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("customers", deps.q))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("customers", deps), deps.q))),
   head: () => ({ meta: [{ title: translate(customersMessages, "customers") }] }),
   component: CustomersPage,
   errorComponent: RouteErrorComponent,
@@ -61,7 +61,7 @@ async function runEach(rows: Customer[], call: (id: string) => Promise<unknown>)
 
 function CustomersPage() {
   const search = Route.useSearch();
-  const [term] = useListSearch("customers");
+  const [term] = useListSearch(listSearchKey("customers", search));
   const t = useMessages(customersMessages);
   const { fmt } = useCurrency();
   const { hasPermission } = usePermissions();

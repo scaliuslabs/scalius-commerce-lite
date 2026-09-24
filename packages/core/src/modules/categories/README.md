@@ -22,7 +22,7 @@ revision claim. Canonical statuses are `draft | published | internal`.
 Shared content fields:
 - `name`: string, 3-100 chars
 - `description`: trimmed string | null, max 100,000 characters
-- `slug`: string, 3-100 chars, regex `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`
+- `slug`: string, 3-100 chars, regex `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`. Optional on create: omitted, it is derived from the name (`@scalius/shared/handle`, Bangla transliterated) and a taken one gets `-2`, `-3`…; a typed taken slug is still a conflict.
 - `metaTitle`: trimmed string | null, max 70 characters
 - `metaDescription`: trimmed string | null, max 200 characters
 - `image`: `{ id, url, filename, size, createdAt }` | null

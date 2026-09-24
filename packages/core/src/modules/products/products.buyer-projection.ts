@@ -2,6 +2,7 @@ import { products, productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
+import { fromMinor } from "@scalius/shared/money";
 import { effectivePriceMinorSql } from "./products.money";
 
 /**
@@ -141,6 +142,41 @@ export function buildBuyerCatalogPricingProjection(db: Database) {
 export type BuyerCatalogPricingProjection = ReturnType<
     typeof buildBuyerCatalogPricingProjection
 >;
+
+/**
+ * What buyers pay for a product, in decimal major units: the storefront's
+ * "From" price, the highest price in the same buyer pool, and the
+ * undiscounted price of the "From" SKU when it is on sale. Dashboard lists
+ * and pickers show this instead of the product-level price, which a product
+ * with options does not sell at.
+ */
+export type BuyerPriceRange = { from: number; to: number; compareAt: number | null };
+
+/** Columns to select from a joined pricing projection for {@link presentBuyerPriceRange}. */
+export function buyerPriceRangeColumns(pricing: BuyerCatalogPricingProjection) {
+    return {
+        buyerFromMinor: pricing.effectivePriceMinor,
+        buyerToMinor: pricing.maxBuyerPriceMinor,
+        // Named apart from products.price_minor, which callers select too.
+        buyerBaseMinor: sql<number | null>`${pricing.basePriceMinor}`.as("buyer_base_price"),
+    };
+}
+
+/** Null when the product has no live SKU (the projection has no row). */
+export function presentBuyerPriceRange(
+    row: { buyerFromMinor: number | null; buyerToMinor: number | null; buyerBaseMinor: number | null },
+    decimalPlaces: number,
+): BuyerPriceRange | null {
+    if (row.buyerFromMinor == null) return null;
+    const fromMinorValue = Number(row.buyerFromMinor);
+    const toMinorValue = Math.max(fromMinorValue, Number(row.buyerToMinor ?? fromMinorValue));
+    const baseMinor = Number(row.buyerBaseMinor ?? fromMinorValue);
+    return {
+        from: fromMinor(fromMinorValue, decimalPlaces),
+        to: fromMinor(toMinorValue, decimalPlaces),
+        compareAt: baseMinor > fromMinorValue ? fromMinor(baseMinor, decimalPlaces) : null,
+    };
+}
 
 /**
  * True when at least one SKU in the same buyer pool used for card pricing is

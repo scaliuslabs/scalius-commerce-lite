@@ -3,10 +3,11 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { MAX_PRODUCT_PRICE } from "@scalius/shared/product-options";
-import { bulkUpdateProducts, createProduct, duplicateProduct, listProducts } from "./products.admin";
+import { bulkUpdateProducts, createProduct, duplicateProduct, getProductsByIds, listProducts, updateProduct } from "./products.admin";
 import { saveProductOptionMatrix } from "./products.option-matrix";
-import { createProductSchema } from "./products.validation";
-import { SkuTakenError } from "./products.variants";
+import { updateVariantSchema } from "./products.types";
+import { createProductSchema, updateProductSchema } from "./products.validation";
+import { SkuTakenError, updateVariant } from "./products.variants";
 
 vi.mock("../inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));
 
@@ -152,6 +153,58 @@ describe("catalog actions on D1 storage", () => {
       ]);
     expect(sqlite.prepare("SELECT sku FROM product_variants WHERE product_id = ? ORDER BY sku").all(again.id))
       .toEqual([{ sku: "PANJABI-L-COPY-2" }, { sku: "PANJABI-M-COPY-2" }]);
+  });
+
+  it("keeps an optioned product's price at its lowest live variant price, whatever writes", async () => {
+    const product = await create({
+      name: "Panjabi", slug: "panjabi", price: 999,
+      optionMatrix: {
+        options: [{ id: "o", name: "Size", standardMapping: "size", values: [{ id: "m", value: "M" }, { id: "l", value: "L" }] }],
+        variants: [variant("s1", "m", "PANJABI-M", 2500), variant("s2", "l", "PANJABI-L", 2400)],
+      },
+    });
+    const price = () => (sqlite.prepare("SELECT price_minor FROM products WHERE id = ?").get(product.id) as { price_minor: number }).price_minor;
+    const sku = (code: string) => sqlite.prepare("SELECT id FROM product_variants WHERE sku = ?").get(code) as { id: string };
+    expect(price()).toBe(240_000);
+
+    // A product-level price from an old editor or an API client is not stored.
+    const saved = await updateProduct(db, product.id, updateProductSchema.parse({
+      ...base, id: product.id, name: "Panjabi", slug: "panjabi", price: 2600, expectedAggregateRevision: 1,
+    }));
+    expect(price()).toBe(240_000);
+
+    // Changing, then retiring, the cheapest variant moves it.
+    const values = sqlite.prepare("SELECT v.id, v.value FROM product_option_values v JOIN product_option_definitions d ON d.id = v.option_definition_id WHERE d.product_id = ? ORDER BY v.position").all(product.id) as Array<{ id: string; value: string }>;
+    const { stock: _stock, ...large } = variant("s2", values[1]!.id, "PANJABI-L", 2700);
+    const changed = await updateVariant(db, product.id, sku("PANJABI-L").id, updateVariantSchema.parse({
+      ...large, expectedAggregateRevision: saved.aggregateRevision,
+    }));
+    expect(price()).toBe(250_000);
+    const option = sqlite.prepare("SELECT id FROM product_option_definitions WHERE product_id = ?").get(product.id) as { id: string };
+    await saveProductOptionMatrix(db, product.id, {
+      expectedAggregateRevision: changed.aggregateRevision,
+      options: [{ id: option.id, name: "Size", standardMapping: "size", values: values.filter((value) => value.value === "L") }],
+      variants: [{ ...variant(sku("PANJABI-L").id, values[1]!.id, "PANJABI-L", 2700), stock: undefined }],
+    });
+    expect(price()).toBe(270_000);
+  });
+
+  it("lists and looks up the price range buyers see, not the product price", async () => {
+    const product = await create({
+      name: "Panjabi", slug: "panjabi", isActive: true,
+      optionMatrix: {
+        options: [{ id: "o", name: "Size", standardMapping: "size", values: [{ id: "m", value: "M" }, { id: "l", value: "L" }] }],
+        variants: [variant("s1", "m", "PANJABI-M", 2400), variant("s2", "l", "PANJABI-L", 2600)],
+      },
+    });
+    const mug = await create({ name: "Mug", slug: "mug", price: 500, discountPercentage: 10 });
+
+    const { products } = await listProducts(db, { sort: "name", order: "asc" });
+    expect(products.map((row) => [row.name, row.priceRange])).toEqual([
+      ["Mug", { from: 450, to: 450, compareAt: 500 }],
+      ["Panjabi", { from: 2400, to: 2600, compareAt: null }],
+    ]);
+    expect((await getProductsByIds(db, [product.id, mug.id])).map((row) => row.priceRange?.to)).toEqual([2600, 450]);
   });
 
   it("reports tracked stock, SKU discounts and trash stock history in the list", async () => {

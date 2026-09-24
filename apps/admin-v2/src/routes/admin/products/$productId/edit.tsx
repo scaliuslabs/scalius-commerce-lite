@@ -259,7 +259,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
           setMatrixDirty(false);
           setMatrixIssue(null);
         }}
-        optionManager={({ skuImages, productName, productPrice, isActive }) => (
+        optionManager={({ skuImages, productName, productPrice, isActive, onPricesChange }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
               requirePositivePrice={isActive}
@@ -268,6 +268,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
               productId={productId}
               productName={productName}
               productPrice={productPrice}
+              onPricesChange={onPricesChange}
               options={matrixSnapshot.options}
               variants={matrixSnapshot.variants}
               images={skuImages}

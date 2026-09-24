@@ -137,10 +137,10 @@ const productBaseSchema = z.object({
 });
 
 function requireCanonicalProductHandle(
-    value: { slug: string; canonicalPath?: string | null },
+    value: { slug?: string; canonicalPath?: string | null },
     context: z.RefinementCtx,
 ): void {
-    if (value.canonicalPath !== null && value.canonicalPath !== `/products/${value.slug}`) {
+    if (value.canonicalPath !== null && (value.slug === undefined || value.canonicalPath !== `/products/${value.slug}`)) {
         context.addIssue({
             code: "custom",
             path: ["canonicalPath"],
@@ -183,7 +183,8 @@ const defaultSkuInputSchema = z.object({
 /** Schema for creating a new product (POST /api/products) */
 export const createProductSchema = productBaseSchema
     .extend({
-        categoryId: z.string().min(1),
+        slug: productBaseSchema.shape.slug.optional()
+            .describe("Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."),
         productCondition: productConditionSchema,
         optionMatrix: createProductOptionMatrixSchema.optional(),
         defaultSku: defaultSkuInputSchema.optional()

@@ -27,13 +27,14 @@ import {
   collectionsByIdsQueryOptions,
 } from "~/lib/api-query-options/collections";
 import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
+import { priceRangeText, type BuyerPriceRange } from "~/lib/format-utils";
 
 const LIMIT = 90;
 
 interface Option {
   id: string;
   name: string;
-  price?: number;
+  priceRange?: BuyerPriceRange | null;
   primaryImage?: string | null;
   isActive?: boolean;
 }
@@ -54,7 +55,7 @@ function useOptions(kind: ScopeKind, search: string, enabled: boolean) {
   return { query, options };
 }
 
-/** The picked products or collections, by id (name, and price for products). */
+/** The picked products or collections, by id (name, and price range for products). */
 export function useScopeItems(scope: Scope): Map<string, Option> {
   const { kind, ids } = scope;
   const products = useQuery({ ...productsByIdsQueryOptions(ids), enabled: kind === "products" && ids.length > 0 });
@@ -214,7 +215,7 @@ export function ScopeField({
                       ) : null}
                       <span className="min-w-0 flex-1 truncate">{option.name}</span>
                       {option.isActive === false ? <Badge variant="attention">{t("statusDraft")}</Badge> : null}
-                      {option.price !== undefined ? <span className="shrink-0 tabular-nums text-muted-foreground">{fmt(option.price)}</span> : null}
+                      {option.priceRange !== undefined ? <span className="shrink-0 tabular-nums text-muted-foreground">{priceRangeText(option.priceRange, fmt) ?? t("noPrice")}</span> : null}
                     </label>
                   </li>
                 ))}

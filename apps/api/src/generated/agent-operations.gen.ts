@@ -4452,7 +4452,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 2,
                   "maxLength": 100,
-                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "description": "Omit to derive the handle from the name; a taken one gets a -2, -3… suffix."
                 },
                 "filterable": {
                   "type": "boolean",
@@ -4469,8 +4470,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 }
               },
               "required": [
-                "name",
-                "slug"
+                "name"
               ]
             }
           }
@@ -5317,7 +5317,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 3,
                   "maxLength": 100,
-                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
                 },
                 "metaTitle": {
                   "type": "string",
@@ -5397,7 +5398,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "required": [
                 "name",
                 "description",
-                "slug",
                 "metaTitle",
                 "metaDescription",
                 "image"
@@ -9526,6 +9526,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "price": {
                     "type": "number"
                   },
+                  "priceRange": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "from": {
+                        "type": "number",
+                        "description": "The storefront's \"From\" price: the lowest price buyers can pay now."
+                      },
+                      "to": {
+                        "type": "number",
+                        "description": "The highest price in the same buyer pool; equal to from for one price."
+                      },
+                      "compareAt": {
+                        "type": "number",
+                        "nullable": true,
+                        "description": "The undiscounted price of the \"From\" SKU when it is on sale."
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to",
+                      "compareAt"
+                    ],
+                    "description": "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price."
+                  },
                   "categoryId": {
                     "type": "string",
                     "nullable": true
@@ -9555,6 +9580,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "name",
                   "price",
+                  "priceRange",
                   "categoryId",
                   "categoryName",
                   "isActive",
@@ -10447,7 +10473,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 3,
                   "maxLength": 100,
-                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "description": "Omit to derive the web address from the title; a taken or reserved one gets a -2, -3… suffix."
                 },
                 "content": {
                   "type": "string"
@@ -10609,7 +10636,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "title",
-                "slug",
                 "content",
                 "metaTitle",
                 "metaDescription"
@@ -22074,6 +22100,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "orderNumber": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "The order's short number (#1073); null for movements without an order."
+                  },
                   "type": {
                     "type": "string"
                   },
@@ -22179,6 +22210,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "variantId",
                   "orderId",
+                  "orderNumber",
                   "type",
                   "quantity",
                   "previousStock",
@@ -33279,6 +33311,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "price": {
                     "type": "number"
                   },
+                  "priceRange": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "from": {
+                        "type": "number",
+                        "description": "The storefront's \"From\" price: the lowest price buyers can pay now."
+                      },
+                      "to": {
+                        "type": "number",
+                        "description": "The highest price in the same buyer pool; equal to from for one price."
+                      },
+                      "compareAt": {
+                        "type": "number",
+                        "nullable": true,
+                        "description": "The undiscounted price of the \"From\" SKU when it is on sale."
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to",
+                      "compareAt"
+                    ],
+                    "description": "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price."
+                  },
                   "description": {
                     "type": "string",
                     "nullable": true
@@ -33370,6 +33427,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "name",
                   "slug",
                   "price",
+                  "priceRange",
                   "description",
                   "isActive",
                   "discountPercentage",
@@ -47407,6 +47465,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "categoryId": {
                   "type": "string",
+                  "nullable": true,
                   "minLength": 1
                 },
                 "isActive": {
@@ -47470,7 +47529,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 3,
                   "maxLength": 100,
-                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
                 },
                 "media": {
                   "type": "array",
@@ -47797,7 +47857,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "metaTitle",
                 "metaDescription",
                 "productCondition",
-                "slug",
                 "media"
               ]
             }
@@ -48095,6 +48154,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "price": {
                     "type": "number"
                   },
+                  "priceRange": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "from": {
+                        "type": "number",
+                        "description": "The storefront's \"From\" price: the lowest price buyers can pay now."
+                      },
+                      "to": {
+                        "type": "number",
+                        "description": "The highest price in the same buyer pool; equal to from for one price."
+                      },
+                      "compareAt": {
+                        "type": "number",
+                        "nullable": true,
+                        "description": "The undiscounted price of the \"From\" SKU when it is on sale."
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to",
+                      "compareAt"
+                    ],
+                    "description": "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price."
+                  },
                   "categoryId": {
                     "type": "string",
                     "nullable": true
@@ -48112,6 +48196,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "name",
                   "price",
+                  "priceRange",
                   "categoryId",
                   "primaryImage",
                   "discountPercentage"

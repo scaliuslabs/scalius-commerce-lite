@@ -104,7 +104,9 @@ export function useProductSubmit({
           },
         }));
       }
-      return apiData(postApiV1AdminProducts({ body: { ...formattedValues, ...createComposition } }));
+      // Only an address the merchant typed is sent; otherwise the server makes one from the title.
+      const slug = values.slugEdited && values.slug ? values.slug : undefined;
+      return apiData(postApiV1AdminProducts({ body: { ...formattedValues, slug, ...createComposition } }));
     },
     onSuccess: async (result, { values }) => {
       setMediaRemovalConflict(null);

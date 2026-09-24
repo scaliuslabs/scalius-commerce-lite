@@ -282,22 +282,20 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
                   </Button>
                 ) : null}
               </div>
-              {/* One reserved line, so the dialog never changes height while typing. */}
+              {/* The line appears only with something to say: no empty gap above Reason. */}
               {errors.quantity ? (
-                <p id="inventory-adjustment-amount-error" role="alert" className="min-h-5 text-body text-destructive">
+                <p id="inventory-adjustment-amount-error" role="alert" className="text-body text-destructive">
                   {errors.quantity}
                 </p>
-              ) : (
-                <p className="min-h-5 text-body text-muted-foreground">
-                  {effectiveDelta !== 0
-                    ? t("newStockPreview", {
-                        change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
-                        stock: targetStock!,
-                        available: newAvailable,
-                      })
-                    : null}
+              ) : effectiveDelta !== 0 ? (
+                <p className="text-body text-muted-foreground">
+                  {t("newStockPreview", {
+                    change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
+                    stock: targetStock!,
+                    available: newAvailable,
+                  })}
                 </p>
-              )}
+              ) : null}
               {!errors.quantity && newAvailable < 0 ? (
                 <p className="text-body text-destructive">{t("shortForOrders", { count: Math.abs(newAvailable) })}</p>
               ) : null}

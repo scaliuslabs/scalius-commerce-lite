@@ -18,6 +18,7 @@ function movement(overrides: Record<string, unknown> = {}) {
     id: "move_1",
     variantId: "var_1",
     orderId: "ord_1",
+    orderNumber: 1073,
     type: "adjusted",
     quantity: 2,
     previousStock: 3,
@@ -73,6 +74,9 @@ describe("inventory movement CSV artifacts", () => {
     expect(artifact.body).toContain('"\'=SKU-FORMULA"');
     expect(artifact.body).toContain('"\'+warehouse note"');
     expect(artifact.body).toContain('"Admin One"');
+    // Orders by the number merchants know them by, not the internal id.
+    expect(artifact.body).toContain('"Product One","#1073"');
+    expect(artifact.body).not.toContain("ord_1");
     expect(artifact.byteLength).toBe(new TextEncoder().encode(artifact.body).byteLength);
     expect(artifact.rowCount).toBe(2);
     expect(serviceMocks.listInventoryMovements).toHaveBeenCalledTimes(2);

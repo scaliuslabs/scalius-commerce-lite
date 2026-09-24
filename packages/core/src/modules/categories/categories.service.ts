@@ -5,6 +5,7 @@
 import { categories, products, collections } from "@scalius/database/schema";
 import { sql, and, isNull, isNotNull, eq, ne, desc, asc, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
+import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import { nanoid } from "nanoid";
 import {
     CATEGORY_BATCH_LIMIT,
@@ -525,37 +526,39 @@ export async function getCategoryById(db: Database, id: string) {
 // ─────────────────────────────────────────
 
 /**
- * Creates a new category. Throws if the slug is already in use.
+ * Creates a new category. A typed slug that is already in use is refused; an
+ * omitted one is derived from the name and suffixed until it is free.
  */
 export async function createCategory(
     db: Database,
     data: CreateCategoryInput,
 ): Promise<{ id: string; revision: number; status: CreateCategoryInput["status"] }> {
-    const existing = await db
-        .select({ id: categories.id, deletedAt: categories.deletedAt })
-        .from(categories)
-        .where(eq(categories.slug, data.slug))
-        .get();
+    if (data.slug) {
+        const existing = await db
+            .select({ id: categories.id, deletedAt: categories.deletedAt })
+            .from(categories)
+            .where(eq(categories.slug, data.slug))
+            .get();
 
-    if (existing) {
-        throw new ConflictError(
-            existing.deletedAt
-                ? "A category with this slug already exists in trash. Restore it or choose another slug."
-                : "A category with this slug already exists.",
-        );
+        if (existing) {
+            throw new ConflictError(
+                existing.deletedAt
+                    ? "A category with this slug already exists in trash. Restore it or choose another slug."
+                    : "A category with this slug already exists.",
+            );
+        }
     }
 
     const categoryId = "cat_" + nanoid();
     const imageUrl = data.image?.url || null;
     const mediaGuard = noDeletingMediaReferences(`${data.content}\u0000${imageUrl ?? ""}`);
-
-    try {
+    const insertWithSlug = async (slug: string) => {
         const insert = db.insert(categories).values({
                 id: categoryId,
                 name: data.name,
                 description: data.description,
                 content: data.content,
-                slug: data.slug,
+                slug,
                 imageUrl,
                 metaTitle: data.metaTitle,
                 metaDescription: data.metaDescription,
@@ -579,6 +582,18 @@ export async function createCategory(
             ] as never);
         } else {
             await insert;
+        }
+    };
+
+    try {
+        if (data.slug) await insertWithSlug(data.slug);
+        else {
+            await insertWithDerivedHandle(
+                { db, table: categories, column: categories.slug, isHandleConflict: isCategorySlugConstraintError },
+                data.name,
+                "category",
+                insertWithSlug,
+            );
         }
     } catch (error) {
         if (isMediaReferenceDeletingGuardError(error)) {
