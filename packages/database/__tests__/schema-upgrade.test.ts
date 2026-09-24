@@ -276,6 +276,12 @@ describe("provider-neutral schema upgrades", () => {
         postgresStatements: 5,
       },
       {
+        version: 79,
+        name: "0079_guest_record_origin",
+        sqliteStatements: 10,
+        postgresStatements: 10,
+      },
+      {
         version: 80,
         name: "0080_whole_taka_amounts",
         sqliteStatements: 9,
@@ -408,6 +414,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 76, name: "0076_guest_record_links" },
           { version: 77, name: "0077_optioned_product_price" },
           { version: 78, name: "0078_theme_document_v2" },
+          { version: 79, name: "0079_guest_record_origin" },
           { version: 80, name: "0080_whole_taka_amounts" },
         ],
       });

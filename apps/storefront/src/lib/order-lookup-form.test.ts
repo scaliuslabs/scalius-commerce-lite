@@ -114,10 +114,12 @@ describe("order code form", () => {
 
   it("says the order wasn't found, or that it can't be reached and how to contact the store", async () => {
     const notFound = "We couldn't find an order with that number and phone number. Check both and try again.";
-    const noChannel = "This order has no email address, and this store can't send text messages. Contact the store to check on your order.";
+    const noChannel = "This order has no email address, and this store can't send text messages.";
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(reply({ success: false, errorCode: "NOT_FOUND", message: notFound }, 404))
-      .mockResolvedValueOnce(reply({ success: false, errorCode: "NO_CODE_CHANNEL", message: noChannel }, 409)));
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "NO_CODE_CHANNEL", message: noChannel }, 409))
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "NOT_FOUND", message: notFound }, 404))
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "SERVICE_UNAVAILABLE", message: "Unavailable." }, 503)));
     const view = renderForm();
 
     await submitWith(view.form, view.submit);
@@ -129,6 +131,15 @@ describe("order code form", () => {
     expect(view.storeContactHidden()).toBe(false);
     expect(view.codeStepHidden()).toBe(true);
     expect(view.resend.hidden).toBe(true);
+
+    await submitWith(view.form, view.submit);
+    expect(view.storeContactHidden()).toBe(true);
+
+    // Codes unavailable: the catalog line, and the store's contact under it.
+    await submitWith(view.form, view.submit);
+    expect(view.message()).toBe(copy.trackOrderUnavailableText);
+    expect(view.message()).not.toMatch(/contact the store/i);
+    expect(view.storeContactHidden()).toBe(false);
   });
 
   it("checks the fields before sending anything", async () => {
