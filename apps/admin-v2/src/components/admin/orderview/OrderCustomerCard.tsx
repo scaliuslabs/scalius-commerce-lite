@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Pencil } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -10,8 +10,11 @@ import { orderDetailMessages } from "~/i18n/order-detail";
 import { formatLocationParts } from "~/lib/location-presentation";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { customerContactLinks } from "./contact-links";
-import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import type { Order } from "./types";
+
+// The edit dialog checks phones with libphonenumber's metadata: it loads
+// just after the page, not as part of it.
+const OrderDetailsDialog = lazy(() => import("./OrderDetailsDialog").then((module) => ({ default: module.OrderDetailsDialog })));
 
 const sameName = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
 
@@ -91,7 +94,9 @@ export function OrderCustomerCard({ order }: { order: Order }) {
           </section>
         ) : null}
       </div>
-      <OrderDetailsDialog order={order} open={editing} onOpenChange={setEditing} />
+      <Suspense fallback={null}>
+        <OrderDetailsDialog order={order} open={editing} onOpenChange={setEditing} />
+      </Suspense>
     </Card>
   );
 }

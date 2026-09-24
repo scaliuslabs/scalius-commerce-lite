@@ -12,18 +12,19 @@ export type { FraudCheckerProvider, FraudCheckResult } from "./fraud-checker.ser
 export type {
   FraudCheckProvider,
   FraudCheckProviderConfig,
-  FraudCheckProviderDefinition,
-  FraudCheckProviderType,
   FraudCheckResult as ProviderFraudCheckResult,
 } from "./provider";
+export type { FraudCheckProviderDefinition, FraudCheckProviderType } from "./provider-definitions";
 export {
   ECourierFraudCheckProvider,
-  FRAUD_CHECK_PROVIDER_DEFINITIONS,
   DefaultFraudCheckProvider,
   FraudBdCheckProvider,
   FraudGuardCheckProvider,
   getFraudCheckProvider,
-  getFraudCheckProviderDefinition,
-  isFraudCheckProviderType,
   registerFraudCheckProvider,
 } from "./provider";
+export {
+  FRAUD_CHECK_PROVIDER_DEFINITIONS,
+  getFraudCheckProviderDefinition,
+  isFraudCheckProviderType,
+} from "./provider-definitions";
