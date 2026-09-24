@@ -7,7 +7,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_STOREFRONT_THEME,
-  storefrontStylePresetTheme,
+  storeShapeFromFacts,
+  storefrontTemplateTheme,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import {
@@ -58,9 +59,20 @@ afterEach(() => {
   container.remove();
 });
 
-function render(theme: StorefrontThemeDocument) {
+/** A small store: every choice fits except where a test says otherwise. */
+const SHAPE = storeShapeFromFacts({
+  productCount: 40,
+  skuCount: 60,
+  topCategoryCount: 5,
+  categoryDepth: 1,
+  menu: [{}, {}, {}, {}, {}],
+  hasCollections: true,
+  hasDeliveryMethods: true,
+});
+
+function render(theme: StorefrontThemeDocument, storeShape = SHAPE) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  queryClient.setQueryData(themeQueryOptions().queryKey, { theme, revision: 1 });
+  queryClient.setQueryData(themeQueryOptions().queryKey, { theme, revision: 1, storeShape } as never);
   queryClient.setQueryData(headerQueryOptions().queryKey, {
     config: { logo: { src: "", alt: "" }, favicon: { src: "", alt: "" }, topBar: { isEnabled: false } },
     revision: 1,
@@ -96,10 +108,10 @@ function type(input: HTMLInputElement, value: string) {
 }
 
 describe("theme page", () => {
-  it("shows one card per choice, with the saved Style selected", () => {
+  it("shows one card per choice, with the saved template selected", () => {
     render(DEFAULT_STOREFRONT_THEME);
     expect(headings()).toEqual([
-      "Style",
+      "Template",
       "Logo",
       "Colors",
       "Header",
@@ -110,46 +122,69 @@ describe("theme page", () => {
       "Product page",
       "Homepage sections",
     ]);
-    expect(radio("Classic retail").getAttribute("aria-checked")).toBe("true");
-    expect(radio("Beauty").getAttribute("aria-checked")).toBe("false");
+    expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
+    expect(radio("Fashion value").getAttribute("aria-checked")).toBe("false");
     // Previews are decorative; the radio's text names the choice.
-    expect(radio("Beauty").querySelector("[aria-hidden=true]")).not.toBeNull();
+    expect(radio("Fashion value").querySelector("[aria-hidden=true]")).not.toBeNull();
+    // All ten templates are offered.
+    const templates = container.querySelector("[role=radiogroup]")!;
+    expect(templates.querySelectorAll("[role=radio]")).toHaveLength(10);
     expect(saveBar()).toBeNull();
   });
 
-  it("selecting a Style sets and saves the whole document", async () => {
+  it("selecting a template sets and saves the whole document", async () => {
     render(DEFAULT_STOREFRONT_THEME);
-    act(() => radio("Beauty").click());
-    expect(radio("Beauty").getAttribute("aria-checked")).toBe("true");
+    act(() => radio("Fashion value").click());
+    expect(radio("Fashion value").getAttribute("aria-checked")).toBe("true");
 
     await pressSave();
     expect(api.theme).toHaveBeenCalledTimes(1);
     expect(api.theme.mock.calls[0]![0].body).toEqual({
       expectedRevision: 1,
-      theme: storefrontStylePresetTheme("beauty"),
+      theme: storefrontTemplateTheme("fashion-value"),
     });
   });
 
-  it("names the Style a fine-tuned theme started from and confirms before replacing it", () => {
-    const tuned = storefrontStylePresetTheme("beauty");
-    tuned.layout = { ...tuned.layout, header: "marketplace" };
+  it("names the template a changed theme is based on and confirms before replacing it", () => {
+    const tuned = storefrontTemplateTheme("fashion-value");
+    tuned.blocks = { ...tuned.blocks, header: { variant: "spec-two-row", settings: {} } };
     render(tuned);
-    // No Style matches exactly, so none is checked, and the page says where it started.
-    expect(radio("Beauty").getAttribute("aria-checked")).toBe("false");
-    expect(container.textContent).toContain("Custom (based on Beauty)");
+    // No template matches exactly, so none is checked, and the page says which one it is based on.
+    expect(radio("Fashion value").getAttribute("aria-checked")).toBe("false");
+    expect(container.textContent).toContain("Changed (based on Fashion value)");
 
-    act(() => radio("Classic retail").click());
+    act(() => radio("Department mall").click());
     const dialog = document.querySelector("[role=alertdialog]");
-    expect(dialog?.textContent).toContain("Replace your changes with Classic retail?");
-    // Cancelling keeps the fine-tuned theme.
+    expect(dialog?.textContent).toContain("Replace your changes with Department mall?");
+    // Cancelling keeps the changed theme.
     act(() => [...dialog!.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!.click());
-    expect(container.textContent).toContain("Custom (based on Beauty)");
+    expect(container.textContent).toContain("Changed (based on Fashion value)");
 
-    act(() => radio("Classic retail").click());
+    act(() => radio("Department mall").click());
     act(() => [...document.querySelectorAll("[role=alertdialog] button")]
       .find((button) => button.textContent === "Replace")!
       .dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    expect(radio("Classic retail").getAttribute("aria-checked")).toBe("true");
+    expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("says what buyers see when a choice does not fit the store, and why", () => {
+    const big = storeShapeFromFacts({
+      productCount: 900,
+      skuCount: 4000,
+      topCategoryCount: 14,
+      categoryDepth: 1,
+      menu: [{}, {}],
+      hasCollections: true,
+      hasDeliveryMethods: true,
+    });
+    render(storefrontTemplateTheme("boutique"), big);
+    expect(container.textContent).toContain(
+      "Your store shows Departments instead. Needs 500 or fewer products and options (you have 1,000).",
+    );
+    // Sections without a renderer yet, or without data, say so.
+    const rows = [...container.querySelectorAll("li")].map((row) => row.textContent);
+    expect(rows).toContain("Product gridNot on your store yet.");
+    expect(rows).toContain("Banners");
   });
 
   it("names unreadable text in plain words and will not save it", async () => {
@@ -161,8 +196,8 @@ describe("theme page", () => {
     expect(buttonText.getAttribute("aria-invalid")).toBe("true");
     const note = container.querySelector(`#${buttonText.getAttribute("aria-describedby")}`);
     expect(note?.textContent).toMatch(/^Button text is hard to read on the button color \(2\.\d:1, needs 4\.5:1\)\.$/);
-    // The Style no longer matches: nothing is selected.
-    expect(radio("Classic retail").getAttribute("aria-checked")).toBe("false");
+    // The template no longer matches: nothing is selected.
+    expect(radio("Department mall").getAttribute("aria-checked")).toBe("false");
 
     await pressSave();
     expect(api.theme).not.toHaveBeenCalled();
@@ -175,7 +210,7 @@ describe("theme page", () => {
   });
 
   it("the Navigation card shows both menu choices with the saved values and saves a new one", async () => {
-    const saved = storefrontStylePresetTheme("marketplace");
+    const saved = storefrontTemplateTheme("marketplace");
     render(saved);
     let card = [...container.querySelectorAll("h2")]
       .find((heading) => heading.textContent === "Navigation")!.parentElement!;
@@ -187,34 +222,35 @@ describe("theme page", () => {
     const options = (group: HTMLElement) => [...group.querySelectorAll<HTMLButtonElement>("[role=radio]")];
     const checked = (group: HTMLElement) =>
       options(group).filter((item) => item.getAttribute("aria-checked") === "true").map((item) => item.value);
-    expect(options(groups[0]!).map((item) => item.value)).toEqual(["menu", "mega", "pills", "sidebar"]);
-    expect(options(groups[1]!).map((item) => item.value)).toEqual(["drawer", "tabs"]);
-    expect(checked(groups[0]!)).toEqual(["pills"]);
-    expect(checked(groups[1]!)).toEqual(["tabs"]);
+    expect(options(groups[0]!).map((item) => item.value)).toEqual([
+      "dropdown", "cascading", "mega-panel", "drill-in-drawer", "departments-rail", "sticky-category-bar",
+    ]);
+    expect(options(groups[1]!).map((item) => item.value)).toEqual(["accordion-drawer", "drill-in-drawer", "bottom-tabs"]);
+    expect(checked(groups[0]!)).toEqual(["drill-in-drawer"]);
+    expect(checked(groups[1]!)).toEqual(["drill-in-drawer"]);
     // The help points to where the menu links are edited; sketches are decorative.
     expect(card.querySelector("a")?.getAttribute("href")).toBe("/admin/online-store/navigation");
     expect(options(groups[0]!).every((item) => item.querySelector("[aria-hidden=true]"))).toBe(true);
 
-    act(() => options(groups[0]!).find((item) => item.value === "mega")!.click());
-    act(() => options(groups[1]!).find((item) => item.value === "drawer")!.click());
-    expect(checked(groups[0]!)).toEqual(["mega"]);
-    expect(checked(groups[1]!)).toEqual(["drawer"]);
+    act(() => options(groups[0]!).find((item) => item.value === "mega-panel")!.click());
+    act(() => options(groups[1]!).find((item) => item.value === "bottom-tabs")!.click());
+    expect(checked(groups[0]!)).toEqual(["mega-panel"]);
+    expect(checked(groups[1]!)).toEqual(["bottom-tabs"]);
+    // Five flat menu links have no groups for a mega panel: the page says so.
+    expect(card.textContent).toContain("Your store shows Dropdown instead. Needs 2 or more menu groups with two or more links (you have 0).");
 
     await pressSave();
     expect(api.theme).toHaveBeenCalledTimes(1);
     expect(api.theme.mock.calls[0]![0].body).toEqual({
       expectedRevision: 1,
-      theme: { ...saved, layout: { ...saved.layout, navigation: "mega", mobileNavigation: "drawer" } },
+      theme: {
+        ...saved,
+        blocks: {
+          ...saved.blocks,
+          desktopNav: { variant: "mega-panel", settings: { promoImages: false } },
+          mobileNav: { variant: "bottom-tabs", settings: { tabs: ["home", "categories", "search", "cart", "account"], drawer: "accordion" } },
+        },
+      },
     });
-  });
-
-  it("a custom design shows the notice, hides the options and never offers to save the theme", () => {
-    render({ ...DEFAULT_STOREFRONT_THEME, mode: "custom" });
-    expect(container.querySelector("[data-slot=alert]")?.textContent).toBe(
-      "This store uses a custom design, so the theme options are turned off. You can still change your logo.",
-    );
-    expect(headings()).toEqual(["Logo"]);
-    expect(container.querySelector("[role=radio]")).toBeNull();
-    expect(saveBar()).toBeNull();
   });
 });

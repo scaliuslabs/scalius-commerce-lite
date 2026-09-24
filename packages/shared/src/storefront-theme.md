@@ -1,95 +1,152 @@
-# Storefront theme document (version 3)
+# Storefront theme document (version 4)
 
-One JSON document describes how the storefront looks. The dashboard Theme page
-writes it in `configured` mode; a future builder writes it in `custom` mode.
-The storefront renders from the same document in both modes.
+One JSON document describes how the storefront looks: the template it is
+based on, the tokens every block reads, one variant per block, and the
+homepage sections. The dashboard Theme page writes it; the storefront renders
+it; both resolve it against the store's shape with the same function.
 
-Source of truth: `storefront-theme.ts` (`storefrontThemeDocumentSchema`).
-`storefrontThemeDocumentJsonSchema()` exports the structure as JSON Schema; the
-contrast and section rules below live in the Zod schema only.
+Source of truth: `storefront-theme/*.ts`, re-exported by `storefront-theme.ts`
+(import `@scalius/shared/storefront-theme`). The layout grammar and the
+numbers come from the storefront study
+(`audit/rewrite-2026-09-23/storefront-study/SYNTHESIS.md`).
+
+| File | Holds |
+|---|---|
+| `contrast.ts` | the 19 colour keys, colour maths, the base AA pairs, header-tone surfaces |
+| `tokens.ts` | token enums and specs (density, type scale, radius…), palettes, fonts, the token schema, token CSS |
+| `fit.ts` | `StoreShape` (bounded store facts) and the fit conditions variants declare |
+| `blocks.ts` | the block-variant registry and the blocks schema |
+| `sections.ts` | the section registry (17 types, strict settings) |
+| `document.ts` | the document schema, the document's contrast pairs, strict parsing, token CSS |
+| `templates.ts` | the 10 templates as frozen data, `DEFAULT_STOREFRONT_THEME` |
+| `resolve.ts` | `resolveStorefrontTheme(document, storeShape)` |
 
 ```jsonc
 {
-  "version": 3,                        // literal; a new shape means a new version
-  "mode": "configured" | "custom",
+  "version": 4,                        // literal; a new shape means a new version
+  "template": "department-mall",       // the template it is based on (a label)
   "tokens": {
-    "colors": { "<19 keys>": "#rrggbb" }, // every key, lowercase hex
-    "typography": "<pairing>",          // curated heading/body pairing
-    "radius", "buttonShape", "containerWidth",
-    "components": { "buttons", "inputs", "cards" }
+    "colors": { "<19 keys>": "#rrggbb" },
+    "typography", "typeScale", "headingCase", "density", "radius",
+    "buttonShape", "surface", "imageRatio", "imageFit", "headerTone", "container"
   },
-  "layout": { "header", "footer", "card", "density", "productPage",
-              "navigation", "mobileNavigation" },
-  "sections": [{ "id", "type", "version", "settings" }]
+  "blocks": {                          // each block: { "variant", "settings" }
+    "topBar", "header", "desktopNav", "mobileNav", "card",
+    "listing": { "layout", "toolbar": [], "phoneLayout", "paging" },
+    "product": { "gallery", "buyBox", "below": [], "sticky": { "phoneTop", "phoneBottom", "desktop" } },
+    "footer"
+  },
+  "pages": { "home": [{ "id", "type", "version", "settings" }] }
 }
 ```
 
 ## Rules
 
-- **Strict.** Unknown keys, values outside the enums and other versions are
-  rejected. Writes (API) and reads (core, storefront) use the same schema.
-  There is no tolerant or legacy reader: a stored document that fails the
-  schema fails closed in the dashboard. The storefront then renders
-  `DEFAULT_STOREFRONT_THEME` whole, never a mix.
-- **Readable text.** Every pair in `STOREFRONT_THEME_TEXT_PAIRS` must reach
-  WCAG AA (4.5:1). A write that breaks this is rejected.
+- **Strict.** Unknown keys, values outside the enums, settings that belong to
+  another variant, and other versions are rejected. Writes (API) and reads
+  (core, storefront) use the same schema. There is no tolerant or legacy
+  reader: a stored document that fails the schema fails closed in the
+  dashboard, and the storefront renders `DEFAULT_STOREFRONT_THEME` whole.
+- **Tokens are global; blocks choose structure only.** A variant never
+  carries its own radius, font size or colour, so any mix of variants stays
+  coherent (mix rule 1). One card per store (rule 2).
+- **Readable text per combination.** Every pair in
+  `STOREFRONT_THEME_TEXT_PAIRS`, plus the `contrastPairs` of every chosen
+  variant and of every variant it can fall back to, must reach WCAG AA
+  (4.5:1). Header roles (`header-background`, `header-foreground`) follow
+  `headerTone`: `dark` takes the darker of ink and page, `brand` the action
+  colour. A write that breaks a pair is rejected.
 - **Helper text is not an error.** `muted-foreground` is near-neutral (Lab
-  chroma ≤ 25) and at least 40 ΔE away from `destructive`, so a brand accent
-  never makes a correct form look full of errors.
-- **Navigation.** `navigation` is how the header menu (Online store →
-  Navigation) is browsed on computers: `menu` (dropdowns), `mega` (full-width
-  panels with category photos), `pills` (a scrolling category row) or
-  `sidebar` (a category column beside the content). `mobileNavigation` is
-  `drawer` (accordion side sheet) or `tabs` (a bottom tab bar). Both are
-  server-rendered disclosure patterns with no layout shift.
-- **Layout.** There are seven independent choices, each a small curated set
-  that works with every other choice and every preset.
-  `resolveStorefrontThemeLayout` maps them to rendering facts: photo ratio,
-  hover photo, buy-now, badge placement, gallery and thumbnails.
-- **Fluid.** Nothing is a fixed column count. Grids auto-fill cards of at
-  least `cardMin`, which steps up with the grid's container width. Density
-  (`compact` | `comfortable`) sets that minimum, the gaps and the fluid
-  type/spacing scale. Content width is capped (`containerWidth`) for
-  ultra-wide screens.
+  chroma ≤ 25) and at least 40 ΔE away from `destructive`.
+- **Fit.** A variant declares `requires` (conditions over the `StoreShape`)
+  and a `fallback`. The resolver walks the fallback chain until a variant
+  fits; every chain ends in a variant that always fits (tested). Toolbar
+  pieces, product modules and sections without their data are left out.
+  `resolved.fallbacks` says what changed and which conditions failed, so the
+  dashboard can say why.
+- **Store shape.** The API reads it with bounded counts (`LIMIT 1000`) in the
+  storefront layout batch (no extra round trip) and serves it beside the
+  theme (`storeShape` in the layout data and in the dashboard's theme read).
+  Facts that do not exist yet (brands, key specs, EMI, digital lines,
+  reviews, questions, content blocks) read as absent until their phase lands.
 - **Sections.** Each `type` is an entry in `STOREFRONT_SECTION_REGISTRY` with
-  its own `version` and settings schema.
-  - `editor: "theme"` sections (hero, collections, categories, delivery) are
-    the homepage blocks the Theme page reorders. A `configured` document has
-    each exactly once. A `custom` document has each at most once.
-  - `editor: "builder"` sections, such as `rich_text`, are created and edited
-    only by the builder. The Theme page lists them as "Custom section (edit
-    in builder)" and keeps them in place.
-  - Ids are unique. There are at most 24 sections.
-- **Custom mode.** The Theme page shows "This store uses a custom design"
-  and hides the configured options. Only the builder edits the document.
+  its own `version` and strict settings. Sections are optional, repeatable
+  and reorderable; ids are unique; at most 24.
+- **Today's renderers.** Each variant and section also names the existing
+  storefront renderer it maps to (`renders`) until the phase that builds its
+  own. `resolved.layout` carries those facts (header, menus, card, grid,
+  gallery, footer, top bar). Sections whose renderer has not landed render
+  nothing, and the Theme page says so.
+- **The default renders today's store.** `DEFAULT_STOREFRONT_THEME` is the
+  Department mall template. It resolves to the version 3 Classic look
+  exactly (tested against values captured from the v3 code), including the
+  owner-protected product page (`gallery: classic`, `buyBox: classic`).
+
+## Templates
+
+| Id | Best for | Blocks (header / desktop menu / phone menu / card / listing / gallery / buy box / footer) | Tokens |
+|---|---|---|---|
+| `boutique` | one brand, 5–200 products | boutique-inline / dropdown / accordion-drawer / boutique / bar-drawer / stacked / boutique / minimal-columns | airy, display, square, flat, 1200 |
+| `heritage-editorial` | fashion, sarees, crafts | fashion-department / mega-panel / accordion-drawer / portrait / shelves / portrait / fashion / newsletter-grey | airy, display, uppercase, portrait photos, 1360 |
+| `fashion-value` | apparel, 200–5,000 SKUs | fashion-department / mega-panel / bottom-tabs / fashion-value / sidebar-grid / thumbs-below / fashion / newsletter-grey | compact, retail, uppercase, square, flat |
+| `spec-catalogue` | electronics, 5k–50k SKUs | spec-two-row / sticky-category-bar / bottom-tabs / spec / sidebar-grid (list rows on phones) / thumbs-below / spec / support-dark | dense, flat type, subtle, dark header, contain, 1290 |
+| `rounded-tech` | premium gadgets, 500–10k SKUs | tech-rounded / dropdown / bottom-tabs / tech-rounded / sidebar-grid / thumbs-below / tech / brand-black | comfortable, soft, pill, raised, dark header |
+| `marketplace` | very large mixed catalogues | marketplace-search / drill-in-drawer / drill-in-drawer / marketplace / sidebar-grid / thumbs-below / marketplace-3col / directory | dense, flat type, brand header, full width |
+| `mass-retail` | household, general goods | retail-pill / drill-in-drawer / drill-in-drawer / retail / bar-drawer (list rows on phones) / image-grid / retail / minimal-columns | comfortable, rounded, pill, brand header |
+| `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-departments / departments-rail / accordion-drawer / standard / sidebar-grid / classic / classic / product-widgets | compact, subtle, hairline cards, 1440 |
+| `daily-essentials` | grocery, pharmacy, repeat buys | grocery-shell / departments-rail (always open) / accordion-drawer / quick-add / quick-grid / thumbs-below / classic / minimal-columns | compact, rounded, pill, contain, full width |
+| `showcase-landing` | 1–20 hero products, launches | boutique-inline / dropdown / accordion-drawer / boutique / bar-drawer / stacked / boutique / minimal-columns | comfortable, display, rounded, pill, 1200 |
+
+Where the data departs from SYNTHESIS.md, and why:
+
+- **Department mall** keeps today's Classic tokens (radius buttons, hairline
+  cards, a 1440px container, today's homepage order and product page)
+  instead of the study's pill buttons, flat cards and Game Ghor order: it is
+  the default, and today's store and product page must stay pixel-identical.
+- **Card minimums** are grid minimums, not the measured card widths: an
+  auto-fill grid stretches cards, and two cards must fit a 360px phone.
+  `dense` shares compact's type scale (the 14px phone floor) and uses a 12px
+  desktop gap so columns never drop when the page gutter grows at 1024px.
+- **Containers** add `1440` (today's width) to the measured 1200/1290/1360/full.
+- **`pages.landing`** is left out until a route renders it: the agent
+  operation manifest inlines the whole document schema into every theme
+  operation, so each page costs about 0.9 MB of generated source.
 
 ## Changing the contract
 
-1. To add a section type, add a registry entry (a versioned schema) and a
-   storefront renderer.
+1. To add a section type or a block variant, add a registry entry (strict
+   settings, defaults, `requires`, `fallback`, `contrastPairs`, `renders`)
+   and a storefront renderer. The pairwise matrix test
+   (`storefront-theme/matrix.test.ts`) covers the new variant with every
+   other block, palette and density.
 2. To change a section's settings, bump that entry's `version`.
 3. For any other shape change, bump `STOREFRONT_THEME_DOCUMENT_VERSION` and
-   add a migration that resets stored theme rows to the defaults. There is
-   no backward compatibility.
+   add a migration that resets stored theme rows to the defaults (0082 is
+   the version 4 reset). There is no backward compatibility.
+4. Deploy order: a storefront that reads an older or newer document version
+   renders its own default whole and logs a warning. The v4 default renders
+   the v3 Classic look, and the reset migration puts every store on it, so
+   `deploy:api` then `deploy:storefront` shows no visible change in between.
 
-## Style presets: references and rationale
+## Palettes: references and rationale
 
-Every preset is a complete configured document anchored to two or three
-world-class references. Palettes are small systems. They have one ink, one
+Templates choose a palette; merchants recolour it with four roles. Each
+palette is anchored to two or three world-class references. Palettes are
+small systems. They have one ink, one
 restrained brand colour, neutrals tinted toward the palette's hue (never raw
 grey on a warm page), surfaces, and semantic tones. All of them pass every AA
 text pair and the helper-vs-error rule (tested). Card surfaces use either a
 border or a shadow, never both on the same element.
 
-| Style | References | Rationale |
+| Palette | References | Rationale |
 |---|---|---|
-| Classic retail (`retail`) | Shopify Horizon/Dawn, Allbirds | Warm white paper, charcoal ink and charcoal buttons; sand neutrals carry the warmth, and the merchant's brand colour is the only accent. |
-| Bold marketplace (`marketplace`) | Amazon, Daraz, Target | Density done cleanly: bright white, near-black ink, cool neutral panels, one saturated orange reserved for buying; compact bold grotesque. |
-| Minimal boutique (`boutique`) | COS, Aesop, Ssense | No colour at all: linen page, espresso ink, flat cards and square corners; an editorial serif over a neutral grotesque carries the hierarchy. |
-| Daily needs (`daily`, palette `fresh`) | Instacart, Chaldal, Ocado | Clean white, a leaf green for buying, green-tinted panels for categories and delivery facts; friendly rounded sans and pill buttons for thumb use. |
-| Beauty (`beauty`) | Glossier, Sephora | Black type and black pill buttons on white, a blush accent used only on surfaces; a soft display serif over a geometric sans. |
-| Heritage (`heritage`) | Aarong, Fabindia, Anthropologie | Hand-made paper, umber ink and madder terracotta; a crafted Garamond with a Bengali serif, generous leading and a narrower measure. |
-| Midnight (`midnight`) | Apple, Nothing, Linear | Layered near-blacks (page, card, panel), white ink and white pill buttons; a precise grotesque with tight tracking; soft shadows instead of borders. |
+| `retail` | Shopify Horizon/Dawn, Allbirds | Warm white paper, charcoal ink and charcoal buttons; sand neutrals carry the warmth, and the merchant's brand colour is the only accent. |
+| `marketplace` | Amazon, Daraz, Target | Density done cleanly: bright white, near-black ink, cool neutral panels, one saturated orange reserved for buying; compact bold grotesque. |
+| `boutique` | COS, Aesop, Ssense | No colour at all: linen page, espresso ink, flat cards and square corners; an editorial serif over a neutral grotesque carries the hierarchy. |
+| `fresh` | Instacart, Chaldal, Ocado | Clean white, a leaf green for buying, green-tinted panels for categories and delivery facts; friendly rounded sans and pill buttons for thumb use. |
+| `beauty` | Glossier, Sephora | Black type and black pill buttons on white, a blush accent used only on surfaces; a soft display serif over a geometric sans. |
+| `heritage` | Aarong, Fabindia, Anthropologie | Hand-made paper, umber ink and madder terracotta; a crafted Garamond with a Bengali serif, generous leading and a narrower measure. |
+| `midnight` | Apple, Nothing, Linear | Layered near-blacks (page, card, panel), white ink and white pill buttons; a precise grotesque with tight tracking; soft shadows instead of borders. |
 
 ### Palette tokens
 
@@ -128,11 +185,12 @@ Latin subset is preloaded.
 
 - **Motion:** 150–200ms ease-out for hover, press and reveal, and none under
   `prefers-reduced-motion`.
-- **Images:** a fixed aspect per card style. A subtle 1.03 zoom on hover, or
-  the second photo for portrait cards.
-- **Buttons:** radius or pill per Style, and a pressed state that scales to
-  0.98.
-- **Surfaces:** bordered, elevated or flat, never both a border and a shadow.
+- **Images:** one aspect per store (`imageRatio`). A subtle 1.03 zoom on
+  hover, or the second photo where the card shows one.
+- **Buttons:** square, the theme radius or pill (`buttonShape`), and a
+  pressed state that scales to 0.98.
+- **Surfaces:** flat, hairline or raised (`surface`), never both a border and
+  a shadow.
 - **Skeletons:** loading states mirror the final layout (the same aspect
   ratios and rows).
 

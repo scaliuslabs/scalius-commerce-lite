@@ -7,8 +7,8 @@ export type ClientOptions = {
 export type NullableTimestamp = string | number | null;
 
 export type StorefrontThemeDocument = {
-    version: 3;
-    mode: 'configured' | 'custom';
+    version: 4;
+    template: 'boutique' | 'heritage-editorial' | 'fashion-value' | 'spec-catalogue' | 'rounded-tech' | 'marketplace' | 'mass-retail' | 'department-mall' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
             background: string;
@@ -32,61 +32,565 @@ export type StorefrontThemeDocument = {
             ring: string;
         };
         typography: 'retail' | 'market' | 'editorial' | 'fresh' | 'beauty' | 'heritage' | 'tech';
-        radius: 'square' | 'subtle' | 'rounded';
-        buttonShape: 'radius' | 'pill';
-        containerWidth: 'standard' | 'wide';
-        components: {
-            buttons: 'solid' | 'outline';
-            inputs: 'outlined' | 'filled';
-            cards: 'bordered' | 'elevated' | 'flat';
+        typeScale: 'flat' | 'retail' | 'display';
+        headingCase: 'sentence' | 'uppercase';
+        density: 'dense' | 'compact' | 'comfortable' | 'airy';
+        radius: 'square' | 'subtle' | 'rounded' | 'soft';
+        buttonShape: 'square' | 'radius' | 'pill';
+        surface: 'flat' | 'hairline' | 'raised';
+        imageRatio: 'square' | 'portrait' | 'landscape';
+        imageFit: 'contain' | 'cover';
+        headerTone: 'light' | 'dark' | 'brand';
+        container: '1200' | '1290' | '1360' | '1440' | 'full';
+    };
+    blocks: {
+        topBar: {
+            variant: 'none';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'announcement';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'utility';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'app-banner';
+            settings: {
+                [key: string]: never;
+            };
+        };
+        header: {
+            variant: 'boutique-inline';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'fashion-department';
+            settings: {
+                subBrandRow: boolean;
+            };
+        } | {
+            variant: 'spec-two-row';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'tech-rounded';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'marketplace-search';
+            settings: {
+                trendingQueries: boolean;
+            };
+        } | {
+            variant: 'mall-departments';
+            settings: {
+                cartTotal: boolean;
+            };
+        } | {
+            variant: 'retail-pill';
+            settings: {
+                cartTotal: boolean;
+            };
+        } | {
+            variant: 'grocery-shell';
+            settings: {
+                [key: string]: never;
+            };
+        };
+        desktopNav: {
+            variant: 'dropdown';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'cascading';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'mega-panel';
+            settings: {
+                promoImages: boolean;
+            };
+        } | {
+            variant: 'drill-in-drawer';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'departments-rail';
+            settings: {
+                open: 'home' | 'always';
+            };
+        } | {
+            variant: 'sticky-category-bar';
+            settings: {
+                flyouts: 'dropdown' | 'cascading';
+            };
+        };
+        mobileNav: {
+            variant: 'accordion-drawer';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'drill-in-drawer';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'bottom-tabs';
+            settings: {
+                tabs: Array<'home' | 'categories' | 'offers' | 'search' | 'compare' | 'cart' | 'account'>;
+                drawer: 'accordion' | 'drill-in';
+            };
+        };
+        card: {
+            variant: 'standard';
+            settings: {
+                hoverImage: boolean;
+            };
+        } | {
+            variant: 'boutique';
+            settings: {
+                hoverImage: boolean;
+            };
+        } | {
+            variant: 'portrait';
+            settings: {
+                hoverImage: boolean;
+            };
+        } | {
+            variant: 'fashion-value';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'spec';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'tech-rounded';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'retail';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'marketplace';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'quick-add';
+            settings: {
+                [key: string]: never;
+            };
+        };
+        listing: {
+            layout: {
+                variant: 'sidebar-grid';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'bar-drawer';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'list';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'shelves';
+                settings: {
+                    maxShelves: number;
+                };
+            } | {
+                variant: 'quick-grid';
+                settings: {
+                    [key: string]: never;
+                };
+            };
+            toolbar: Array<'breadcrumb' | 'category-banner' | 'subcategory-pills' | 'popular-filter-chips' | 'aspect-chips' | 'result-count' | 'sort' | 'per-page' | 'applied-chips' | 'grid-list-toggle'>;
+            phoneLayout: 'grid' | 'list-row';
+            paging: 'numbered' | 'load-more' | 'infinite';
+        };
+        product: {
+            gallery: {
+                variant: 'classic';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'thumbs-below';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'thumbs-left';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'stacked';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'portrait';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'image-grid';
+                settings: {
+                    [key: string]: never;
+                };
+            };
+            buyBox: {
+                variant: 'classic';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'spec';
+                settings: {
+                    emi: boolean;
+                };
+            } | {
+                variant: 'tech';
+                settings: {
+                    emi: boolean;
+                    whatsapp: boolean;
+                };
+            } | {
+                variant: 'marketplace-3col';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'retail';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'boutique';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'fashion';
+                settings: {
+                    [key: string]: never;
+                };
+            } | {
+                variant: 'digital';
+                settings: {
+                    [key: string]: never;
+                };
+            };
+            below: Array<'frequently-bought-together' | 'key-attributes' | 'about-bullets' | 'spec-table' | 'description' | 'content-blocks' | 'compare-similar' | 'questions' | 'reviews' | 'policies' | 'related' | 'recently-viewed'>;
+            sticky: {
+                phoneTop: 'none' | 'anchor-bar';
+                phoneBottom: 'none' | 'buy-bar';
+                desktop: 'none' | 'anchor-bar' | 'product-bar' | 'info-column' | 'side-rail';
+            };
+        };
+        footer: {
+            variant: 'minimal-columns';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'support-dark';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'brand-black';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'newsletter-grey';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'directory';
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            variant: 'product-widgets';
+            settings: {
+                [key: string]: never;
+            };
         };
     };
-    layout: {
-        header: 'classic' | 'centered' | 'marketplace';
-        footer: 'columns' | 'compact' | 'contact';
-        card: 'standard' | 'portrait' | 'quick';
-        density: 'compact' | 'comfortable';
-        productPage: 'gallery' | 'filmstrip' | 'stacked';
-        navigation: 'menu' | 'mega' | 'pills' | 'sidebar';
-        mobileNavigation: 'drawer' | 'tabs';
+    pages: {
+        home: Array<{
+            id: string;
+            type: 'hero';
+            version: 1;
+            settings: {
+                layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen';
+            };
+        } | {
+            id: string;
+            type: 'usp-strip';
+            version: 1;
+            settings: {
+                style: 'icons' | 'ticker';
+                source: {
+                    kind: 'delivery-facts';
+                } | {
+                    kind: 'custom';
+                    items: Array<{
+                        title: string;
+                        detail: string;
+                    }>;
+                };
+            };
+        } | {
+            id: string;
+            type: 'category-tiles';
+            version: 1;
+            settings: {
+                style: 'icons' | 'round' | 'photo' | 'quad';
+            };
+        } | {
+            id: string;
+            type: 'collections';
+            version: 1;
+            settings: {
+                [key: string]: never;
+            };
+        } | {
+            id: string;
+            type: 'product-rail';
+            version: 1;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                limit: number;
+            };
+        } | {
+            id: string;
+            type: 'product-grid';
+            version: 1;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                columns: number;
+                rows: number;
+            };
+        } | {
+            id: string;
+            type: 'deal-block';
+            version: 1;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                endsAt: string | null;
+            };
+        } | {
+            id: string;
+            type: 'lookbook';
+            version: 1;
+            settings: {
+                title: string;
+                mediaId: string | null;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+            };
+        } | {
+            id: string;
+            type: 'banner';
+            version: 1;
+            settings: {
+                layout: 'full' | 'two-up' | 'four-up';
+                heading: string;
+                text: string;
+                mediaId: string | null;
+                cta: {
+                    label: string;
+                    href: string;
+                } | null;
+            };
+        } | {
+            id: string;
+            type: 'brand-wall';
+            version: 1;
+            settings: {
+                title: string;
+                style: 'grid' | 'rail';
+            };
+        } | {
+            id: string;
+            type: 'editorial';
+            version: 1;
+            settings: {
+                layout: 'rich-text';
+                heading: string;
+                body: string;
+            } | {
+                layout: 'image-with-text';
+                heading: string;
+                body: string;
+                mediaId: string | null;
+                imageSide: 'start' | 'end';
+            } | {
+                layout: 'multicolumn';
+                heading: string;
+                columns: Array<{
+                    title: string;
+                    text: string;
+                }>;
+            } | {
+                layout: 'testimonial';
+                quotes: Array<{
+                    quote: string;
+                    author: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'faq';
+            version: 1;
+            settings: {
+                heading: string;
+                items: Array<{
+                    question: string;
+                    answer: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'utility-cards';
+            version: 1;
+            settings: {
+                cards: Array<{
+                    title: string;
+                    text: string;
+                    href: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'endless-grid';
+            version: 1;
+            settings: {
+                title: string;
+                pageSize: 12 | 24 | 36;
+            };
+        } | {
+            id: string;
+            type: 'seo-text';
+            version: 1;
+            settings: {
+                heading: string;
+                body: string;
+            };
+        } | {
+            id: string;
+            type: 'recently-viewed';
+            version: 1;
+            settings: {
+                title: string;
+            };
+        } | {
+            id: string;
+            type: 'newsletter';
+            version: 1;
+            settings: {
+                heading: string;
+                text: string;
+            };
+        }>;
     };
-    sections: Array<{
-        id: string;
-        type: 'hero';
-        version: 1;
-        settings: {
-            [key: string]: never;
-        };
-    } | {
-        id: string;
-        type: 'collections';
-        version: 1;
-        settings: {
-            [key: string]: never;
-        };
-    } | {
-        id: string;
-        type: 'categories';
-        version: 1;
-        settings: {
-            [key: string]: never;
-        };
-    } | {
-        id: string;
-        type: 'delivery';
-        version: 1;
-        settings: {
-            [key: string]: never;
-        };
-    } | {
-        id: string;
-        type: 'rich_text';
-        version: 1;
-        settings: {
-            heading: string;
-            body: string;
-        };
-    }>;
+};
+
+export type StorefrontStoreShape = {
+    productCount: number;
+    skuCount: number;
+    topCategoryCount: number;
+    categoryDepth: number;
+    menuTopItems: number;
+    menuDepth: number;
+    menuGroups: number;
+    brandCount: number;
+    hasCollections: boolean;
+    hasDeliveryMethods: boolean;
+    hasKeySpecs: boolean;
+    hasEmiPlans: boolean;
+    hasDigitalLines: boolean;
+    hasReviews: boolean;
+    hasQuestions: boolean;
+    hasContentBlocks: boolean;
 };
 
 export type GetApiV1AuthTokenData = {
@@ -3000,6 +3504,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 usdExchangeRate: number;
             };
             theme: StorefrontThemeDocument;
+            storeShape: StorefrontStoreShape;
             media: {
                 canonicalCdnUrl: string;
                 canonicalHostAliases: Array<string>;
@@ -29900,6 +30405,7 @@ export type GetApiV1AdminSettingsThemeResponses = {
         data: {
             theme: StorefrontThemeDocument;
             revision: number;
+            storeShape: StorefrontStoreShape;
             [key: string]: unknown;
         };
     };

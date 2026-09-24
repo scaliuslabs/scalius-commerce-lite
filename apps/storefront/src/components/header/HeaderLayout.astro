@@ -3,8 +3,8 @@ import SearchBar from "../search/SearchBar.astro";
 import { Phone, ShoppingCart, Menu, Search } from "lucide-react";
 import type { HeaderData } from "@/lib/api";
 import type {
-  StorefrontHeaderStyle,
-  StorefrontNavigationStyle,
+  StorefrontHeaderRenderer,
+  StorefrontNavigationRenderer,
 } from "@scalius/shared/storefront-theme";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import {
@@ -24,13 +24,13 @@ interface Props {
    * below. marketplace: a wide search bar that stays put (and a search bar
    * under the header on phones), as Daraz/Chaldal shoppers expect.
    */
-  variant: StorefrontHeaderStyle;
+  variant: StorefrontHeaderRenderer;
   /**
    * menu/mega: a menu row under the bar (slot `desktop-nav-full`). pills: a
    * scrolling pill row on every screen (slot `pill-nav`). sidebar: no header
    * menu on computers (Layout renders the column).
    */
-  navigationStyle: StorefrontNavigationStyle;
+  navigationStyle: StorefrontNavigationRenderer;
   /** On scroll the menu row folds into the bar (slot `desktop-nav-compact`). */
   condensedMenu: boolean;
 }
