@@ -22,11 +22,13 @@ export function productCategoryNameMatch(db: Database, query: string): SQL | und
   );
   if (!categoryMatch) return undefined;
 
-  return sql`EXISTS (
-    SELECT 1
+  // A set of matching category ids, not a per-product EXISTS: OR-ed with the
+  // products_fts rowid set, both sides stay index lookups instead of forcing
+  // a scan of every product (1.4M rows read per search at 30k products).
+  return sql`${products.categoryId} IN (
+    SELECT "categories"."id"
     FROM "categories"
-    WHERE ${eq(categories.id, products.categoryId)}
-      AND ${and(...publicCategoryConditions())}
+    WHERE ${and(...publicCategoryConditions())}
       AND ${categoryMatch}
   )`;
 }
@@ -47,15 +49,32 @@ export function productSearchRelevanceOrder(db: Database, query: string): SQL[] 
     ELSE 2
   END`;
   const title = sql`${products.name}`;
+  if (!productSearchRankJoin(db, query)) return [tier, title];
+  return [tier, sql.raw(`COALESCE(${SEARCH_RANK_ALIAS}.rank_score, 0)`), title];
+}
+
+const SEARCH_RANK_ALIAS = "search_rank";
+
+/**
+ * The bm25 score of every product matching the query, as one set the caller
+ * LEFT JOINs to `products` whenever it orders by productSearchRelevanceOrder
+ * (which reads `search_rank.rank_score`). Undefined without FTS5.
+ *
+ * A correlated bm25 lookup per candidate row re-ran the FTS query for every
+ * product: 3 s of D1 time for a query such as "gaming" whose category match
+ * brings in thousands of products. `LIMIT -1` stops SQLite from flattening
+ * the set back into that per-row lookup, so it is materialized once.
+ */
+export function productSearchRankJoin(db: Database, query: string): { table: SQL; on: SQL } | undefined {
   const sanitized = sanitizeFtsQuery(query);
-  if (!isFts5SearchEnabled(db) || !sanitized) return [tier, title];
-  return [
-    tier,
-    sql`COALESCE((
-      SELECT bm25(products_fts, 10.0, 1.0)
+  if (!isFts5SearchEnabled(db) || !sanitized) return undefined;
+  return {
+    table: sql`(
+      SELECT rowid AS rank_rowid, bm25(products_fts, 10.0, 1.0) AS rank_score
       FROM products_fts
-      WHERE products_fts MATCH ${sanitized} AND products_fts.rowid = ${sql.raw("products.rowid")}
-    ), 0)`,
-    title,
-  ];
+      WHERE products_fts MATCH ${sanitized}
+      LIMIT -1
+    ) AS ${sql.raw(SEARCH_RANK_ALIAS)}`,
+    on: sql.raw(`${SEARCH_RANK_ALIAS}.rank_rowid = "products".rowid`),
+  };
 }

@@ -32,12 +32,13 @@ type QueryChain = {
     innerJoin: ReturnType<typeof vi.fn>;
     offset: ReturnType<typeof vi.fn>;
     get: ReturnType<typeof vi.fn>;
+    all: ReturnType<typeof vi.fn>;
     as: ReturnType<typeof vi.fn>;
     limitValue?: number;
     offsetValue?: number;
 };
 
-function createQueryChain(selection: Record<string, unknown> = {}): QueryChain {
+function createQueryChain(selection: Record<string, unknown> = {}, allResults: unknown[] = []): QueryChain {
     const chain = { selection } as QueryChain;
     Object.assign(chain, selection);
     chain.from = vi.fn(() => chain);
@@ -54,15 +55,16 @@ function createQueryChain(selection: Record<string, unknown> = {}): QueryChain {
         return chain;
     });
     chain.get = vi.fn();
+    chain.all = vi.fn(async () => allResults);
     chain.as = vi.fn(() => chain);
     return chain;
 }
 
-function createDb(batchResults: unknown[]): Database & {
+function createDb(batchResults: unknown[], allResults: unknown[] = []): Database & {
     batch: ReturnType<typeof vi.fn>;
 } {
     return {
-        select: vi.fn((selection: Record<string, unknown>) => createQueryChain(selection)),
+        select: vi.fn((selection: Record<string, unknown>) => createQueryChain(selection, allResults)),
         batch: vi.fn(async () => batchResults),
     } as unknown as Database & { batch: ReturnType<typeof vi.fn> };
 }
@@ -198,15 +200,14 @@ describe("listCollectionProductOptions", () => {
                 id: "prod_a",
                 name: "Alpha",
                 priceMinor: 10_000,
-                buyerFromMinor: 9_000,
-                buyerToMinor: 12_000,
-                buyerBaseMinor: 10_000,
                 categoryId: "cat_a",
                 categoryName: "Category A",
                 isActive: true,
             },
         ];
-        const db = createDb([[{ count: 21 }], rows, [{ count: 7 }]]);
+        // Buyer pricing is read for the page's ids only, beside its images.
+        const pagePricing = [{ productId: "prod_a", buyerFromMinor: 9_000, buyerToMinor: 12_000, buyerBaseMinor: 10_000 }];
+        const db = createDb([[{ count: 21 }], rows, [{ count: 7 }]], pagePricing);
 
         const result = await listCollectionProductOptions(db, {
             page: 2,
@@ -220,7 +221,7 @@ describe("listCollectionProductOptions", () => {
         });
 
         expect(result).toEqual({
-            products: rows.map(({ priceMinor, buyerFromMinor: _from, buyerToMinor: _to, buyerBaseMinor: _base, ...row }) => ({
+            products: rows.map(({ priceMinor, ...row }) => ({
                 ...row, variantCount: 0, available: null, price: priceMinor / 100, primaryImage: null,
                 // What buyers pay, as the storefront shows it: the "From" SKU is on sale.
                 priceRange: { from: 90, to: 120, compareAt: 100 },

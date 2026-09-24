@@ -522,14 +522,12 @@ export async function listProducts(db: Database, options: {
         .leftJoin(categories, eq(categories.id, products.categoryId))
         .where(whereClause);
 
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const productResultsQuery = db
         .select({
             id: products.id,
             name: products.name,
             slug: products.slug,
             priceMinor: products.priceMinor,
-            ...buyerPriceRangeColumns(buyerPricing),
             description: includeDescription
                 ? products.description
                 : sql<string | null>`NULL`,
@@ -546,7 +544,6 @@ export async function listProducts(db: Database, options: {
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
-        .leftJoin(buyerPricing, eq(buyerPricing.productId, products.id))
         .where(whereClause)
         .limit(limit)
         .offset(offset)
@@ -594,6 +591,11 @@ export async function listProducts(db: Database, options: {
 
     const productIds: string[] = productResults.map((p) => p.id);
     const productIdSet = JSON.stringify(productIds);
+    // Buyer pricing for this page only: joined into the page query, the
+    // projection ranked every SKU in the store to price ten rows.
+    const pagePricing = buildBuyerCatalogPricingProjection(db, {
+        productScope: sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${productIdSet}))`,
+    });
 
     const enrichmentResults = await safeBatch(db, [
         db
@@ -641,6 +643,7 @@ export async function listProducts(db: Database, options: {
             )
             .orderBy(productVariants.productId, asc(productVariants.createdAt)),
         selectProductMediaProjectionRows(db, agentSummary ? [] : productIds),
+        db.select({ productId: pagePricing.productId, ...buyerPriceRangeColumns(pagePricing) }).from(pagePricing),
     ]);
     type VariantSummaryRow = { productId: string; count: number; trackedCount: number; onHand: number; hasSkuDiscount: number };
     const variantCounts = enrichmentResults[0] as VariantSummaryRow[];
@@ -648,6 +651,8 @@ export async function listProducts(db: Database, options: {
     const mediaCounts = enrichmentResults[2] as { productId: string; count: number }[];
     const productSkus = enrichmentResults[3] as { productId: string; sku: string }[];
     const mediaProjectionRows = enrichmentResults[4] as ProductMediaProjectionRow[];
+    type PageSkuPricing = { productId: string; buyerFromMinor: number | null; buyerToMinor: number | null; buyerBaseMinor: number | null };
+    const pricingByProduct = new Map((enrichmentResults[5] as PageSkuPricing[]).map((row) => [row.productId, row]));
     const mediaByProduct = agentSummary
         ? new Map<string, ProductMediaProjection[]>()
         : resolveProductMediaProjectionRows(mediaProjectionRows);
@@ -679,7 +684,10 @@ export async function listProducts(db: Database, options: {
         name: product.name,
         slug: product.slug,
         price: price.price,
-        priceRange: presentBuyerPriceRange(product, decimalPlaces),
+        priceRange: presentBuyerPriceRange(
+            pricingByProduct.get(product.id) ?? { buyerFromMinor: null, buyerToMinor: null, buyerBaseMinor: null },
+            decimalPlaces,
+        ),
         description: product.description,
         isActive: product.isActive,
         discountPercentage: price.discountPercentage,
@@ -773,7 +781,10 @@ export async function getProductsByIds(
     if (lookupIds.length === 0) return [];
 
     const orderById = new Map(lookupIds.map((id, index) => [id, index]));
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    // One bound JSON parameter: the outer read already binds up to 90 ids.
+    const buyerPricing = buildBuyerCatalogPricingProjection(db, {
+        productScope: sql`${products.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(lookupIds)}))`,
+    });
     const [rows, decimalPlaces] = await Promise.all([db
         .select({
             id: products.id,
