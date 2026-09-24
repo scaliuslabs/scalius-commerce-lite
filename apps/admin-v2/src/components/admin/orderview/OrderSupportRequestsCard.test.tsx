@@ -64,10 +64,14 @@ describe("customer requests", () => {
 
     const dialog = document.querySelector('[role="dialog"]')!;
     expect(dialog.querySelector('[role="radio"][data-state="checked"]')).toBeNull();
+    // Save with nothing chosen says what's missing instead of doing nothing.
     const save = [...dialog.querySelectorAll("button")].find((button) => button.textContent === "Save") as HTMLButtonElement;
-    expect(save.disabled).toBe(true);
+    await act(async () => save.click());
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(dialog.querySelector("#resolution-error")?.textContent).toBe(en["requests.chooseAction"]);
 
     await act(async () => dialog.querySelector<HTMLButtonElement>("#resolution-approved")!.click());
+    expect(dialog.querySelector("#resolution-error")).toBeNull();
     expect(dialog.textContent).toContain(en["requests.cancelHelp"]);
     const accept = [...dialog.querySelectorAll("button")].find((button) => button.textContent === en["requests.acceptCancel"])!;
     await act(async () => accept.click());
@@ -75,5 +79,28 @@ describe("customer requests", () => {
       expect.objectContaining({ orderId: "ord_1", requestId: "req_1", status: "approved" }),
       expect.anything(),
     );
+  });
+
+  it("opens the cancellation request when the header asks to review it", async () => {
+    await act(async () => root.render(
+      <QueryClientProvider client={new QueryClient()}>
+        <OrderSupportRequestsCard order={order} request={{ action: "reviewCancellation", id: 1 }} />
+      </QueryClientProvider>,
+    ));
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(request.reason);
+  });
+
+  it("won't accept a cancellation while units are with the courier", async () => {
+    const partlySent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 }] } as unknown as Order;
+    await act(async () => root.render(
+      <QueryClientProvider client={new QueryClient()}>
+        <OrderSupportRequestsCard order={partlySent} request={{ action: "reviewCancellation", id: 1 }} />
+      </QueryClientProvider>,
+    ));
+    const dialog = document.querySelector('[role="dialog"]')!;
+    await act(async () => dialog.querySelector<HTMLButtonElement>("#resolution-approved")!.click());
+    expect(dialog.textContent).toContain(en["cancel.shippedOne"].replace("{count}", "1"));
+    const accept = [...dialog.querySelectorAll("button")].find((button) => button.textContent === en["requests.acceptCancel"]) as HTMLButtonElement;
+    expect(accept.disabled).toBe(true);
   });
 });

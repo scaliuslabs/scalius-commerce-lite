@@ -11,7 +11,7 @@ import {
   type CustomerAuthRequestOption,
 } from "@scalius/shared/customer-auth-policy";
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
-import { normalizeBdMobile } from "@scalius/shared/phone-input";
+import { BD_MOBILE_REQUIRED_MESSAGE, isBangladeshNumber, normalizeBdMobile } from "@scalius/shared/phone-input";
 import { validateStorefrontPhone } from "@/lib/phone-country-policy";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -71,6 +71,7 @@ export function checkPhone(value: string, policy?: PhoneCountryPolicy): ContactC
   if (!value.trim()) return { ok: false, message: "Enter your phone number." };
   const bd = normalizeBdMobile(value);
   if (bd) return { ok: true, value: bd };
+  if (isBangladeshNumber(value)) return { ok: false, message: `${BD_MOBILE_REQUIRED_MESSAGE}.` };
   const result = validateStorefrontPhone(value, policy);
   return result.ok
     ? { ok: true, value: result.value }

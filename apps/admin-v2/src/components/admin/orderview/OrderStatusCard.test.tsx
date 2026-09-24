@@ -95,6 +95,53 @@ describe("OrderStatusCard", () => {
     expect(mocks.mutate).toHaveBeenCalledWith({ orderId: "ord_1001", status: "cancelled" });
   });
 
+  it("keeps Cancelled unavailable while units are with the courier, and says why", async () => {
+    const partlySent = {
+      ...order,
+      status: "confirmed",
+      items: [
+        { id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 },
+        { id: "i2", quantity: 3, inventoryTracked: true, shippedQuantity: 2 },
+      ],
+    } as unknown as Order;
+    await act(async () => root.render(<OrderStatusCard order={partlySent} />));
+    expect(host.textContent).toContain(t["cancel.shippedMany"].replace("{count}", "3"));
+
+    const trigger = host.querySelector<HTMLButtonElement>(`[aria-label="${t["status.title"]}"]`);
+    await act(async () => {
+      trigger?.focus();
+      trigger?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    const cancelled = [...document.querySelectorAll<HTMLElement>('[role="option"]')]
+      .find((element) => element.textContent === o["status.cancelled"]);
+    expect(cancelled?.getAttribute("aria-disabled")).toBe("true");
+    await act(async () => cancelled?.click());
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it("words one unit with the courier in the singular", async () => {
+    const oneSent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 }] } as unknown as Order;
+    await act(async () => root.render(<OrderStatusCard order={oneSent} />));
+    expect(host.textContent).toContain(t["cancel.shippedOne"].replace("{count}", "1"));
+  });
+
+  it("asks before confirming an order the customer asked to cancel", async () => {
+    const requested = {
+      ...order,
+      supportRequests: [{ id: "req_1", type: "cancel_pre_shipment", active: true, status: "submitted" }],
+    } as unknown as Order;
+    await act(async () => root.render(<OrderStatusCard order={requested} />));
+    await chooseStatus(o["status.confirmed"]);
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    const dialog = document.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain(t["cancelRequest.confirm"]);
+
+    const confirm = [...dialog!.querySelectorAll("button")].find((button) => button.textContent === t["primary.confirm"]);
+    await act(async () => confirm?.click());
+    expect(mocks.mutate).toHaveBeenCalledWith({ orderId: "ord_1001", status: "confirmed" });
+  });
+
   it("shows a final status as plain text, not a menu", async () => {
     await act(async () => root.render(<OrderStatusCard order={{ ...order, status: "cancelled" }} />));
     expect(host.querySelector(`[aria-label="${t["status.title"]}"]`)).toBeNull();

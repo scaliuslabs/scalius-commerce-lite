@@ -1041,6 +1041,8 @@ export type GetApiV1HeroSlidersResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -1058,6 +1060,8 @@ export type GetApiV1HeroSlidersResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -1075,6 +1079,8 @@ export type GetApiV1HeroSlidersResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -1088,6 +1094,8 @@ export type GetApiV1HeroSlidersResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -1152,6 +1160,8 @@ export type GetApiV1HeroSlidersByIdResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -2267,7 +2277,7 @@ export type PostApiV1DiscountsValidateData = {
             variantId?: string;
         }>;
         /**
-         * Delivery charge
+         * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
          */
         shippingCost?: number;
         /**
@@ -2319,7 +2329,14 @@ export type PostApiV1DiscountsValidateResponses = {
                 promotionId: string;
                 title: string;
                 code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
                 amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
             }>;
             offers: Array<{
                 promotionId: string;
@@ -2345,7 +2362,7 @@ export type PostApiV1DiscountsValidateResponses = {
             }>;
             rejectedCodes: Array<{
                 code: string;
-                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'unavailable';
+                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
                 message: string;
                 shortfallAmount?: number;
                 shortfallQuantity?: number;
@@ -2960,6 +2977,8 @@ export type GetApiV1StorefrontLayoutResponses = {
                 quantityLimitText: string;
                 saleOfferText: string;
                 saleOfferSpendText: string;
+                saleOfferGetText: string;
+                saleOfferGetSpendText: string;
                 freeBenefitText: string;
                 percentBenefitText: string;
             };
@@ -10547,11 +10566,15 @@ export type GetApiV1ProductsBySlugResponses = {
                     content: string;
                 }>;
                 /**
-                 * Active automatic Buy X get Y discounts this product counts toward.
+                 * Active automatic Buy X get Y discounts this product counts toward or is given by.
                  */
                 offers: Array<{
                     promotionId: string;
                     title: string;
+                    /**
+                     * "buy": this product counts toward the offer and `products` are what the buyer gets; "get": this product is what the buyer gets and `products` are what to buy.
+                     */
+                    role: 'buy' | 'get';
                     buyQuantity: number | null;
                     buyAmount: number | null;
                     getQuantity: number;
@@ -11860,6 +11883,24 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 shippingMethodBaseAmountMinor: number | null;
                 shippingFeeWaived: boolean | null;
                 discountAmountMinor: number | null;
+                discounts: Array<{
+                    promotionId: string;
+                    title: string;
+                    code: string | null;
+                    /**
+                     * Off the items: shown as a discount line.
+                     */
+                    amount: number;
+                    /**
+                     * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                     */
+                    shippingAmount: number;
+                    /**
+                     * The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind.
+                     */
+                    kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
+                }>;
+                notes: string | null;
                 taxAmountMinor: number;
                 totalAmountMinor: number | null;
                 taxLabel: string | null;
@@ -12373,7 +12414,14 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 promotionId: string;
                 title: string;
                 code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
                 amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
             }>;
             /**
              * Automatic Buy X get Y discounts the buyer has earned but not claimed: the items to get are not in the cart yet.
@@ -12405,7 +12453,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
              */
             rejectedCodes: Array<{
                 code: string;
-                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'unavailable';
+                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
                 message: string;
                 shortfallAmount?: number;
                 shortfallQuantity?: number;
@@ -23319,6 +23367,7 @@ export type GetApiV1AdminNavigationMenusByMenuIdItemsResponses = {
                     updatedAt: string | null;
                 };
                 childCount: number;
+                targetTitle: string | null;
             }>;
             nextCursor: string | null;
         };
@@ -32133,6 +32182,112 @@ export type PostApiV1AdminSettingsPaymentMethodsResponses = {
 
 export type PostApiV1AdminSettingsPaymentMethodsResponse = PostApiV1AdminSettingsPaymentMethodsResponses[keyof PostApiV1AdminSettingsPaymentMethodsResponses];
 
+export type DeleteApiV1AdminSettingsStripeData = {
+    body: {
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/stripe';
+};
+
+export type DeleteApiV1AdminSettingsStripeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsStripeError = DeleteApiV1AdminSettingsStripeErrors[keyof DeleteApiV1AdminSettingsStripeErrors];
+
+export type DeleteApiV1AdminSettingsStripeResponses = {
+    /**
+     * Stripe keys removed
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revision: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsStripeResponse = DeleteApiV1AdminSettingsStripeResponses[keyof DeleteApiV1AdminSettingsStripeResponses];
+
 export type GetApiV1AdminSettingsStripeData = {
     body?: never;
     path?: never;
@@ -32349,6 +32504,112 @@ export type PostApiV1AdminSettingsStripeResponses = {
 };
 
 export type PostApiV1AdminSettingsStripeResponse = PostApiV1AdminSettingsStripeResponses[keyof PostApiV1AdminSettingsStripeResponses];
+
+export type DeleteApiV1AdminSettingsSslcommerzData = {
+    body: {
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/sslcommerz';
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzError = DeleteApiV1AdminSettingsSslcommerzErrors[keyof DeleteApiV1AdminSettingsSslcommerzErrors];
+
+export type DeleteApiV1AdminSettingsSslcommerzResponses = {
+    /**
+     * SSLCommerz keys removed
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revision: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzResponse = DeleteApiV1AdminSettingsSslcommerzResponses[keyof DeleteApiV1AdminSettingsSslcommerzResponses];
 
 export type GetApiV1AdminSettingsSslcommerzData = {
     body?: never;
@@ -35958,6 +36219,8 @@ export type GetApiV1AdminSettingsHeroSlidersResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -35983,6 +36246,8 @@ export type PostApiV1AdminSettingsHeroSlidersData = {
             id: string;
             url: string;
             title: string;
+            heading?: string;
+            buttonLabel?: string;
             link: string;
             focalPoint?: {
                 x: number;
@@ -36091,6 +36356,8 @@ export type PostApiV1AdminSettingsHeroSlidersResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -36215,6 +36482,8 @@ export type DeleteApiV1AdminSettingsHeroSlidersByIdResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -36326,6 +36595,8 @@ export type GetApiV1AdminSettingsHeroSlidersByIdResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -36351,6 +36622,8 @@ export type PutApiV1AdminSettingsHeroSlidersByIdData = {
             id: string;
             url: string;
             title: string;
+            heading?: string;
+            buttonLabel?: string;
             link: string;
             focalPoint?: {
                 x: number;
@@ -36461,6 +36734,8 @@ export type PutApiV1AdminSettingsHeroSlidersByIdResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -37234,6 +37509,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                 name: string | null;
                 logoUrl: string | null;
                 storefrontUrl: string | null;
+                nameFromAddress: boolean;
             };
         };
     };
@@ -39961,6 +40237,10 @@ export type PostApiV1AdminOrdersByIdRefundData = {
         reason?: string;
         gateway?: 'stripe' | 'sslcommerz' | 'cod';
         manualSettlementConfirmed?: boolean;
+        /**
+         * One key per refund (per dialog opening). Repeating it returns the first refund.
+         */
+        requestKey?: string;
     };
     path: {
         id: string;
@@ -40053,6 +40333,7 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             amount: number;
             isFullRefund: boolean;
             manualSettlementRecorded?: boolean;
+            replayed?: boolean;
             notificationCount: number;
             sideEffectErrors: number;
             error?: string;
@@ -40303,6 +40584,7 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                     discountAmountMinor: number | null;
                     taxableAmountMinor: number | null;
                     taxAmountMinor: number | null;
+                    returnedQuantity?: number;
                 }>;
             };
             invoiceNumber: string | null;
@@ -40515,6 +40797,7 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                     discountAmountMinor: number | null;
                     taxableAmountMinor: number | null;
                     taxAmountMinor: number | null;
+                    returnedQuantity?: number;
                 }>;
             };
             invoiceNumber: string | null;
@@ -42006,6 +42289,7 @@ export type PostApiV1AdminOrdersData = {
             quantity: number;
         }>;
         requestKey?: string;
+        shippingMethodId?: string | null;
     };
     headers?: {
         /**
@@ -43119,6 +43403,7 @@ export type PostApiV1AdminOrdersBulkShipResponse = PostApiV1AdminOrdersBulkShipR
 export type PostApiV1AdminOrdersBulkConfirmData = {
     body: {
         orderIds: Array<string>;
+        requestKey?: string;
     };
     path?: never;
     query?: never;
@@ -43186,6 +43471,7 @@ export type PostApiV1AdminOrdersBulkFulfillData = {
         orderIds: Array<string>;
         courierName?: string;
         note?: string;
+        requestKey?: string;
     };
     path?: never;
     query?: never;
@@ -43282,12 +43568,16 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
                 } | null;
                 actorName: string | null;
+                /**
+                 * The viewer wrote this comment and may delete it.
+                 */
+                own: boolean;
                 createdAt: string | number;
             }>;
         };
@@ -43299,6 +43589,10 @@ export type GetApiV1AdminOrdersByIdTimelineResponse = GetApiV1AdminOrdersByIdTim
 export type PostApiV1AdminOrdersByIdTimelineData = {
     body: {
         body: string;
+        /**
+         * One key per comment draft. Posting it again returns the first comment.
+         */
+        requestKey?: string;
     };
     path: {
         id: string;
@@ -43375,18 +43669,106 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
             body: string | null;
             data: {
                 [key: string]: unknown;
             } | null;
             actorName: string | null;
+            /**
+             * The viewer wrote this comment and may delete it.
+             */
+            own: boolean;
             createdAt: string | number;
         };
     };
 };
 
 export type PostApiV1AdminOrdersByIdTimelineResponse = PostApiV1AdminOrdersByIdTimelineResponses[keyof PostApiV1AdminOrdersByIdTimelineResponses];
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdData = {
+    body?: never;
+    path: {
+        id: string;
+        eventId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/timeline/{eventId}';
+};
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdError = DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors[keyof DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors];
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses = {
+    /**
+     * Comment deleted (or already gone)
+     */
+    200: {
+        success: true;
+        data: {
+            deleted: true;
+        };
+    };
+};
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdResponse = DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses[keyof DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses];
 
 export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkData = {
     body?: never;
@@ -43560,7 +43942,9 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 name: string;
                 code: string | null;
                 method: 'automatic' | 'code';
+                kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
                 amount: number;
+                shippingAmount: number;
             }>;
             status: string;
             paymentStatus: string | null;
@@ -54472,6 +54856,10 @@ export type GetApiV1AdminSettingsDeliveryLocationsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
+                descendants?: {
+                    zones: number;
+                    areas: number;
+                };
                 [key: string]: unknown;
             }>;
             pagination: {
@@ -54597,6 +54985,10 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
+                descendants?: {
+                    zones: number;
+                    areas: number;
+                };
                 [key: string]: unknown;
             };
         };
@@ -54893,6 +55285,10 @@ export type GetApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
+            descendants?: {
+                zones: number;
+                areas: number;
+            };
             [key: string]: unknown;
         };
     };
@@ -55011,6 +55407,10 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
+            descendants?: {
+                zones: number;
+                areas: number;
+            };
             [key: string]: unknown;
         };
     };

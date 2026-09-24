@@ -11,6 +11,8 @@ export interface OrderPrefill {
   city: string;
   zone: string;
   area: string | null;
+  shippingMethodId: string | null;
+  shippingCharge: number | null;
   items: OrderItem[];
 }
 
@@ -61,6 +63,10 @@ export function takeOrderPrefill(): OrderPrefill | null {
     city: text(value.city),
     zone: text(value.zone),
     area: text(value.area) || null,
+    shippingMethodId: text(value.shippingMethodId) || null,
+    shippingCharge: typeof value.shippingCharge === "number" && Number.isFinite(value.shippingCharge) && value.shippingCharge >= 0
+      ? value.shippingCharge
+      : null,
     items,
   };
 }

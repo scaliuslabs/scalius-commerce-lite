@@ -29,8 +29,8 @@ export async function activatePromotion(
         status: promotions.status,
     }).from(promotions).where(eq(promotions.id, promotionId)).get();
     if (!parent) throw new NotFoundError("Promotion not found");
-    if (parent.status === "archived") throw new ConflictError("Archived promotions cannot be activated.");
-    if (parent.status === "active") throw new ConflictError("Promotion is already active.");
+    if (parent.status === "archived") throw new ConflictError("Archived discounts can't be turned on.");
+    if (parent.status === "active") throw new ConflictError("This discount is already active.");
     const [activeCode, activeEffect] = await db.batch([
         db.select({ id: promotionCodes.id }).from(promotionCodes).where(and(
             eq(promotionCodes.promotionId, promotionId),
@@ -51,19 +51,19 @@ export async function activatePromotion(
     const promotion = await loadWithUsage(db, promotionId);
     if (!promotion) throw new NotFoundError("Promotion not found");
     if (promotion.endsAtEpochSeconds !== null && promotion.endsAtEpochSeconds <= evaluatedAtEpochSeconds) {
-        throw new ValidationError("A promotion whose schedule has ended cannot be activated.");
+        throw new ValidationError("Its end date has passed. Set a later end date to turn it on.");
     }
     if (
         promotion.maxRedemptions !== null
         && promotion.redemptionCount >= promotion.maxRedemptions
     ) {
-        throw new ValidationError("A promotion with an exhausted redemption limit cannot be activated.");
+        throw new ValidationError("It has reached its usage limit. Raise the limit to turn it on.");
     }
     if (
         promotion.maxDiscountSpendMinor !== null
         && promotion.discountSpendMinor >= promotion.maxDiscountSpendMinor
     ) {
-        throw new ValidationError("A promotion with an exhausted spend budget cannot be activated.");
+        throw new ValidationError("It has used up its spending limit. Raise the limit to turn it on.");
     }
 
     const result = await executePromotionRuleMutationBatch(db, promotionId, expectedRevision, [

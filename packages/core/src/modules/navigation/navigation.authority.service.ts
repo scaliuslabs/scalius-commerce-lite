@@ -32,7 +32,11 @@ import {
     NotFoundError,
     ValidationError,
 } from "@scalius/core/errors";
-import type { NavigationTargetItem } from "@scalius/shared/navigation-target";
+import {
+    NAVIGATION_RESOURCE_TYPES,
+    type NavigationResourceType,
+    type NavigationTargetItem,
+} from "@scalius/shared/navigation-target";
 import { footerDocument, headerDocument } from "../settings/documents";
 import { selectSettingsDocuments } from "../settings/settings-store";
 import {
@@ -521,8 +525,24 @@ export async function listNavigationMenuItems(
         .limit(limit + 1)
         .all();
     const hasMore = rows.length > limit;
-    const items = hasMore ? rows.slice(0, limit) : rows;
-    const last = items.at(-1)?.item;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page.at(-1)?.item;
+    // Name each linked page, product, category or collection, so the editor shows where it goes.
+    const targets: NavigationTargetItem[] = page.flatMap(({ item }) =>
+        item.targetId && (NAVIGATION_RESOURCE_TYPES as readonly string[]).includes(item.targetType)
+            ? [{
+                id: item.id,
+                labelMode: "resource" as const,
+                target: { type: "resource" as const, resourceType: item.targetType as NavigationResourceType, resourceId: item.targetId },
+            }]
+            : []);
+    const resources = targets.length
+        ? await loadNavigationResourceSnapshots(db, { navigation: targets }, {})
+        : new Map<string, { title: string }>();
+    const items = page.map((row) => ({
+        ...row,
+        targetTitle: row.item.targetId ? resources.get(`${row.item.targetType}:${row.item.targetId}`)?.title ?? null : null,
+    }));
     return {
         items,
         nextCursor: hasMore && last

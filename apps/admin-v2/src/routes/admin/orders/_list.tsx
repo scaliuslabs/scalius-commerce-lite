@@ -11,6 +11,7 @@ import {
   type OrderView,
 } from "~/components/admin/order-list/order-list-search";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { useRememberOrderListHref } from "~/components/admin/order-list/use-remember-order-list";
 import { useMessages } from "~/i18n";
 import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
@@ -33,6 +34,7 @@ function OrdersFrame() {
   const exportDialog = useMemo(() => ({ open: exportOpen, setOpen: setExportOpen }), [exportOpen]);
   const search = useMatch({ from: "/admin/orders/_list/", shouldThrow: false })?.search;
   const tab: OrdersTab = search ? (search.view ?? "all") : "abandoned";
+  useRememberOrderListHref();
 
   const selectTab = (next: OrdersTab) => {
     if (next === "abandoned") {
@@ -46,7 +48,7 @@ function OrdersFrame() {
   return (
     <OrderExportContext.Provider value={exportDialog}>
       <PageHeader
-        title={to("orders")}
+        title={tab === "abandoned" ? t("abandonedTitle") : to("orders")}
         actions={
           <>
             {search ? (

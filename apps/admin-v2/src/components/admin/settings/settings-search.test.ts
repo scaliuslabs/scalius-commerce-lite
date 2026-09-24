@@ -18,6 +18,16 @@ describe("settings search", () => {
     expect(firstCard("inside dhaka")).toEqual({ page: "shipping", card: "deliveryCharges" });
   });
 
+  it("tells shipping zones (pricing) from thanas (the address level Pathao calls a zone)", () => {
+    const cards = (query: string) => searchSettings(query).cards.map((entry) => entry.card);
+    expect(cards("shipping zone")).toEqual(["deliveryCharges"]);
+    expect(cards("শিপিং জোন")).toEqual(["deliveryCharges"]);
+    expect(cards("zone")).toEqual(["deliveryCharges", "deliveryAreas"]);
+    expect(cards("thana")).toEqual(["deliveryAreas"]);
+    expect(cards("থানা")).toEqual(["deliveryAreas"]);
+    expect(cards("pathao zone")).toEqual(["deliveryAreas"]);
+  });
+
   it("matches Bangla whatever the dashboard language", () => {
     expect(firstCard("বিকাশ")).toEqual({ page: "payments", card: "paymentMethods" });
     expect(firstCard("কুরিয়ার")?.page).toBe("shipping");

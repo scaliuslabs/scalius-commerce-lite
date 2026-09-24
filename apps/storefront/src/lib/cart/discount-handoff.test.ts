@@ -70,7 +70,7 @@ const STANDARD: DeliveryRate = {
 const deliveryRates = vi.fn(async (): Promise<DeliveryRate[] | null> => [STANDARD]);
 
 const NO_DISCOUNTS = { ok: true, totalDiscount: 0, discounts: [], offers: [], rejectedCodes: [] };
-const SAVE10_LINE = { promotionId: "p_save", title: "Save 10", code: "SAVE10", amount: 10 };
+const SAVE10_LINE = { promotionId: "p_save", title: "Save 10", code: "SAVE10", amount: 10, shippingAmount: 0 };
 
 const CART_ITEM = {
   id: "prod_1",
@@ -151,9 +151,10 @@ function renderCartDom(): void {
         <input id="checkout-zone" name="zone" value="zone_banani" />
         <p id="shippingLocationError" class="hidden"></p>
         <div data-shipping-methods data-free-text="Free" data-free-over-text="Free over {amount}"
+          data-fee-changed-text="${ENGLISH_CHECKOUT_LANGUAGE_DATA.deliveryFeeChangedText}"
           data-no-delivery-text="${ENGLISH_CHECKOUT_LANGUAGE_DATA.noDeliveryToAddressText}">
           <script type="application/json" data-shipping-rates>[]</script>
-          <fieldset id="shippingMethods"><p data-shipping-note></p><div data-shipping-options></div></fieldset>
+          <fieldset id="shippingMethods"><p data-shipping-note></p><p data-shipping-notice class="hidden"></p><div data-shipping-options></div></fieldset>
           <p id="shippingMethodError" class="hidden"></p>
         </div>
         <input id="checkoutIdInput" name="checkoutId" type="hidden" />
@@ -382,6 +383,25 @@ describe("cart discount checkout handoff", () => {
     expect(submit.defaultPrevented).toBe(true);
     const transferred = JSON.parse(sessionStorage.getItem("scalius_checkout_data")!);
     expect(transferred).toMatchObject({ shippingMethodId: "standard", shippingCharge: "60" });
+  });
+
+  it("stops Place order to say the delivery fee changed, never blaming the cart items", async () => {
+    await startCartPage();
+    await settleCheckout();
+    deliveryRates.mockResolvedValue([{ ...STANDARD, fee: 80 }]);
+
+    const submit = submitCheckout();
+    await settleCheckout();
+
+    expect(submit.defaultPrevented).toBe(true);
+    expect(document.querySelector("[data-shipping-notice]")?.textContent).toBe(
+      formatCheckoutLanguageText(ENGLISH_CHECKOUT_LANGUAGE_DATA.deliveryFeeChangedText, { old: "৳60", new: "৳80" }),
+    );
+    expect(document.getElementById("checkoutFormMessage")?.textContent).not.toContain(
+      ENGLISH_CHECKOUT_LANGUAGE_DATA.reviewCartItemsText,
+    );
+    expect(sessionStorage.getItem("scalius_checkout_data")).toBeNull();
+    deliveryRates.mockResolvedValue([STANDARD]);
   });
 
   it("asks for a delivery option when none applies to the address", async () => {

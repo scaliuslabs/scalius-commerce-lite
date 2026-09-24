@@ -42,7 +42,7 @@ function validQuote(
       baseAmountMinor: 5_000,
       feeWaived: false,
     },
-    discounts: [{ promotionId: "promo_1", title: "Eid 10%", code: "SAVE20", amount: 20 }],
+    discounts: [{ promotionId: "promo_1", title: "Eid 10%", code: "SAVE20", amount: 20, shippingAmount: 0 }],
     offers: [{
       promotionId: "promo_gift", title: "Buy 2 panjabi, get a cap free", code: null, kind: "get",
       percentOff: 100, quantity: 1, shortfallAmount: null,

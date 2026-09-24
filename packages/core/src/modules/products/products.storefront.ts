@@ -423,12 +423,13 @@ function isOptionFilter(filter: AttributeFilter): boolean {
 const OPTION_AXIS_KEY_SQL = (axis: string) => sql.raw(`replace(${axis}.normalized_name, ' ', '-')`);
 
 /**
- * Products that have a live SKU for one of the selected values of every
- * selected option axis (OR within an axis, AND across axes). `exceptAxis`
- * skips the axis whose own facet counts are being computed.
+ * The SKU carries one of the selected values on every selected option axis
+ * (OR within an axis, AND across axes). Matching one SKU, not the product,
+ * keeps "Chalk + 42" to products that sell a Chalk 42 (Shopify's variant
+ * filtering). `exceptAxis` skips the axis whose own facet counts are being
+ * computed.
  */
-function buildOptionFilterCondition(optionFilters: AttributeFilter[], exceptAxis?: SQL): SQL | undefined {
-    if (optionFilters.length === 0) return undefined;
+function skuMatchesOptionFilters(optionFilters: AttributeFilter[], skuId: SQL, exceptAxis?: SQL): SQL {
     const filtersJson = JSON.stringify(optionFilters.map((filter) => ({
         key: filter.slug.slice(OPTION_FACET_PREFIX.length),
         values: filter.values.map(normalizeProductOptionIdentity),
@@ -438,23 +439,32 @@ function buildOptionFilterCondition(optionFilters: AttributeFilter[], exceptAxis
         FROM json_each(${filtersJson}) AS selected_option
         WHERE ${exceptAxis ? sql`CAST(json_extract(selected_option.value, '$.key') AS TEXT) <> ${exceptAxis} AND ` : sql``}NOT EXISTS (
             SELECT 1
-            FROM product_variants AS option_filter_sku
-            INNER JOIN product_variant_option_values AS option_filter_assignment
-                ON option_filter_assignment.variant_id = option_filter_sku.id
+            FROM product_variant_option_values AS option_filter_assignment
             INNER JOIN product_option_definitions AS option_filter_axis
                 ON option_filter_axis.id = option_filter_assignment.option_definition_id
                AND option_filter_axis.deleted_at IS NULL
             INNER JOIN product_option_values AS option_filter_value
                 ON option_filter_value.id = option_filter_assignment.option_value_id
                AND option_filter_value.deleted_at IS NULL
-            WHERE option_filter_sku.product_id = ${products.id}
-              AND option_filter_sku.deleted_at IS NULL
+            WHERE option_filter_assignment.variant_id = ${skuId}
               AND ${OPTION_AXIS_KEY_SQL("option_filter_axis")} = CAST(json_extract(selected_option.value, '$.key') AS TEXT)
               AND option_filter_value.normalized_value IN (
                   SELECT CAST(value AS TEXT)
                   FROM json_each(json_extract(selected_option.value, '$.values'))
               )
         )
+    )`;
+}
+
+/** Products with a live SKU that matches every selected option axis. */
+function buildOptionFilterCondition(optionFilters: AttributeFilter[]): SQL | undefined {
+    if (optionFilters.length === 0) return undefined;
+    return sql`EXISTS (
+        SELECT 1
+        FROM product_variants AS option_filter_sku
+        WHERE option_filter_sku.product_id = ${products.id}
+          AND option_filter_sku.deleted_at IS NULL
+          AND ${skuMatchesOptionFilters(optionFilters, sql.raw("option_filter_sku.id"))}
     )`;
 }
 
@@ -470,7 +480,14 @@ function buildResultScopedOptionFacetQuery(
     const facetAxis = alias(productOptionDefinitions, "facet_option_axis");
     const facetValue = alias(productOptionValues, "facet_option_value");
     const axisKey = OPTION_AXIS_KEY_SQL("facet_option_axis");
-    const matchesOtherSelectedAxes = buildOptionFilterCondition(optionFilters, axisKey) ?? sql`1 = 1`;
+    // A value counts products whose SKU with that value also matches the
+    // other selected axes and attributes, so every offered value leads to a
+    // real product. Values that match nothing stay listed with a zero count.
+    const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "option_facet_filtered_products");
+    const matchesOtherSelectedAxes = and(
+        optionFilters.length > 0 ? skuMatchesOptionFilters(optionFilters, sql`${facetSku.id}`, axisKey) : undefined,
+        attributeSubquery ? sql`${attributeSubquery.productId} IS NOT NULL` : undefined,
+    ) ?? sql`1 = 1`;
     let query = db
         .select({
             id: sql<string>`${OPTION_FACET_PREFIX} || ${axisKey}`,
@@ -498,9 +515,8 @@ function buildResultScopedOptionFacetQuery(
         .where(and(...baseConditions))
         .groupBy(axisKey, facetValue.normalizedValue)
         .$dynamic();
-    const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "option_facet_filtered_products");
     if (attributeSubquery) {
-        query = query.innerJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
+        query = query.leftJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
     }
     return query;
 }
@@ -510,9 +526,10 @@ function buildResultScopedFacetQuery(
     buyerPricing: BuyerCatalogPricingProjection,
     baseConditions: SQL[],
     attributeFilters: AttributeFilter[],
+    optionCondition: SQL | undefined,
 ) {
     const filtersJson = JSON.stringify(attributeFilters);
-    const matchesOtherSelectedFacets = sql`NOT EXISTS (
+    const matchesOtherSelectedAttributes = sql`NOT EXISTS (
         SELECT 1
         FROM json_each(${filtersJson}) AS selected_filter
         WHERE CAST(json_extract(selected_filter.value, '$.slug') AS TEXT) <> ${productAttributes.slug}
@@ -531,6 +548,9 @@ function buildResultScopedFacetQuery(
                 )
           )
     )`;
+    const matchesOtherSelectedFacets = optionCondition
+        ? sql`${matchesOtherSelectedAttributes} AND ${optionCondition}`
+        : matchesOtherSelectedAttributes;
 
     return db
         .select({
@@ -819,8 +839,8 @@ async function readStorefrontCatalogResults(
     const attributeFilters = (params.attributeFilters ?? []).filter((filter) => !isOptionFilter(filter));
     const priceBounds = priceFilterBoundsMinor(params);
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
-    // Option-facet counts exclude their own axis, so they read the conditions
-    // before the option filter is applied; every other query reads both.
+    // Facet counts apply every selection except their own facet's, so they
+    // read the scope conditions before the option filter is applied.
     const unfilteredOptionConditions = buildStorefrontProductConditions(db, { ...params, ...priceBounds }, {}, buyerPricing);
     const priceRangeConditions = buildStorefrontProductConditions(db, params, {}, buyerPricing);
     if (scope.condition) {
@@ -901,8 +921,9 @@ async function readStorefrontCatalogResults(
     const facetQuery = buildResultScopedFacetQuery(
         db,
         buyerPricing,
-        conditions,
+        unfilteredOptionConditions,
         attributeFilters,
+        optionCondition,
     );
     const optionFacetQuery = buildResultScopedOptionFacetQuery(
         db,

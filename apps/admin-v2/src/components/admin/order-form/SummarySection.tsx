@@ -32,7 +32,7 @@ import { useOrderForm } from "./OrderFormContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import { apiData } from "~/lib/api";
+import { apiData, type ApiResult } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
@@ -41,26 +41,39 @@ import { resourceMessages } from "~/i18n/resource";
 const discountGuidanceId = "manual-order-discount-guidance";
 const discountErrorId = "manual-order-discount-error";
 const CUSTOM_CHARGE = "custom";
+type DeliveryZones = ApiResult<typeof getApiV1AdminSettingsShippingMethods>;
+type DeliveryAddress = { city: string; zone: string; area: string | null };
+
 /**
- * The store's active delivery charges (every zone, then everywhere else) to
- * suggest a delivery charge; hidden without access. Same key as Settings →
- * Shipping, so both share one cache entry.
+ * The delivery methods checkout offers for an address: the rates of the zone
+ * its most specific location (area, then zone, then city) belongs to, or the
+ * "Everywhere else" rates, plus local pickup. Without a city, every rate.
  */
-function useShippingRates() {
+export function deliveryRatesForAddress(data: DeliveryZones | undefined, address: DeliveryAddress) {
+  if (!data) return [];
+  const named = (zone: DeliveryZones["zones"][number]) =>
+    zone.rates.map((rate) => ({ ...rate, name: `${zone.name} · ${rate.name}` }));
+  const elsewhere = data.everywhereElse.rates;
+  const active = (rate: (typeof elsewhere)[number]) => rate.isActive;
+  if (!address.city) return [...data.zones.flatMap(named), ...elsewhere].filter(active);
+  const zoneOf = new Map(data.zones.flatMap((zone) => zone.locations.map((location) => [location.id, zone] as const)));
+  const zone = [address.area, address.zone, address.city].map((id) => (id ? zoneOf.get(id) : undefined)).find(Boolean);
+  return (zone ? [...named(zone), ...elsewhere.filter((rate) => rate.kind === "pickup")] : elsewhere).filter(active);
+}
+
+/**
+ * The store's delivery zones for the delivery method picker; none without
+ * access. Same key as Settings → Shipping, so both share one cache entry.
+ */
+function useDeliveryZones() {
   const { hasPermission } = usePermissions();
-  const query = useQuery({
+  return useQuery({
     queryKey: queryKeys.settings.shippingMethods(),
     queryFn: () => apiData(getApiV1AdminSettingsShippingMethods()),
     enabled: hasPermission(ADMIN_PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW),
     staleTime: 5 * 60 * 1000,
     retry: false,
-  });
-  const data = query.data;
-  if (!data) return [];
-  return [
-    ...data.zones.flatMap((zone) => zone.rates.map((rate) => ({ ...rate, name: `${zone.name} · ${rate.name}` }))),
-    ...data.everywhereElse.rates,
-  ].filter((rate) => rate.isActive);
+  }).data;
 }
 
 /** Payment card: delivery charge, discount and the order total from the server quote. */
@@ -69,11 +82,34 @@ export function SummarySection() {
   const { fmt } = useCurrency();
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
-  const rates = useShippingRates();
-  const shippingCharge = useWatch({ control: form.control, name: "shippingCharge" });
-  const [rateId, setRateId] = React.useState<string>(CUSTOM_CHARGE);
-  // The picked rate stays shown only while the charge still equals its fee.
-  const pickedRate = rates.find((rate) => rate.id === rateId && rate.fee === Number(shippingCharge));
+  const [city, zone, area, shippingMethodId] = useWatch({
+    control: form.control,
+    name: ["city", "zone", "area", "shippingMethodId"],
+  });
+  const zones = useDeliveryZones();
+  const rates = deliveryRatesForAddress(zones, { city, zone, area });
+  const pickedRate = rates.find((rate) => rate.id === shippingMethodId);
+  // Once the merchant sets their own charge, a new address doesn't replace it.
+  const customChosen = React.useRef(false);
+  const offeredKey = rates.map((rate) => rate.id).join();
+
+  const pickRate = React.useCallback((rate: (typeof rates)[number] | undefined) => {
+    const set = { shouldDirty: true, shouldValidate: true };
+    form.setValue("shippingMethodId", rate?.id ?? null, set);
+    if (rate) form.setValue("shippingCharge", rate.fee, set);
+  }, [form]);
+
+  // New orders: choosing the city or zone picks that zone's delivery method and charge, as checkout does.
+  React.useEffect(() => {
+    // Waits for the zones, so a method carried over from a checkout isn't dropped while they load.
+    if (isEdit || !city || !zones || customChosen.current) return;
+    const current = form.getValues("shippingMethodId");
+    if (current && rates.some((rate) => rate.id === current)) return;
+    const suggested = rates.find((rate) => rate.kind === "delivery");
+    if (suggested || current) pickRate(suggested);
+    // Rates are compared by id (offeredKey); the list itself is rebuilt every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, city, zones, offeredKey, form, pickRate]);
 
   const quote = manualQuote.isCurrent ? manualQuote.data : null;
   const subtotal = quote?.subtotalAmount ?? localTotals.subtotal;
@@ -105,13 +141,10 @@ export function SummarySection() {
               <Select
                 value={pickedRate?.id ?? CUSTOM_CHARGE}
                 onValueChange={(value) => {
-                  setRateId(value);
                   const rate = rates.find((candidate) => candidate.id === value);
-                  if (rate) {
-                    form.setValue("shippingCharge", rate.fee, { shouldDirty: true, shouldValidate: true });
-                  } else {
-                    refs.shippingChargeRef.current?.focus();
-                  }
+                  customChosen.current = !rate;
+                  pickRate(rate);
+                  if (!rate) refs.shippingChargeRef.current?.focus();
                 }}
               >
                 <SelectTrigger id="order-delivery-method" className="w-full">
@@ -146,7 +179,12 @@ export function SummarySection() {
                       field.ref(el);
                       refs.shippingChargeRef.current = el;
                     }}
-                    onValueChange={(value) => field.onChange(value ?? 0)}
+                    onValueChange={(value) => {
+                      // A typed charge is a custom charge.
+                      customChosen.current = true;
+                      form.setValue("shippingMethodId", null, { shouldDirty: true });
+                      field.onChange(value ?? 0);
+                    }}
                     onKeyDown={(e) => handleKeyDown(e, refs.discountAmountRef)}
                   />
                 </FormControl>

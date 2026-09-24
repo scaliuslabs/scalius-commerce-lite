@@ -98,7 +98,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
   } catch (error) {
     console.error("[checkout/validate-cart] Error:", error);
-    return new Response(JSON.stringify({ success: false, error: "Cart validation failed" }), {
+    return new Response(JSON.stringify({ success: false, error: "We couldn't check your cart. Try again." }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });

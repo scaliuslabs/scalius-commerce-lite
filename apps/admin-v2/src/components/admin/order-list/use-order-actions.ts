@@ -1,4 +1,4 @@
-import { useCallback, useState, type RefObject } from "react";
+import { useCallback, useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
 import { orderErrorMessage, useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
@@ -30,7 +30,12 @@ export function useOrderActions(
 
   const [updatingStatusIds, setUpdatingStatusIds] = useState<ReadonlySet<string>>(new Set());
   const [cancelOrder, setCancelOrder] = useState<OrderListItem | null>(null);
-  const [dialog, setDialog] = useState<{ action: OrderBulkAction; orders: OrderListItem[] | null } | null>(null);
+  const [dialog, setDialog] = useState<{
+    action: OrderBulkAction;
+    orders: OrderListItem[] | null;
+    requestKey: string;
+  } | null>(null);
+  const runningRef = useRef(false);
   const [outcome, setOutcome] = useState<OrderBulkOutcome | null>(null);
 
   const changeStatus = useCallback(
@@ -61,13 +66,15 @@ export function useOrderActions(
 
   /** Archives right away; the toast offers Undo instead of asking first. */
   const archive = useCallback(
-    (orders: readonly OrderListItem[], onDone?: () => void) => {
-      if (!orderActions.canDeleteOrders || archiveMutation.isPending) return;
+    (orders: readonly OrderListItem[], onDone?: () => void, onSettled?: () => void) => {
       const plan = planOrderBulkAction(orders, "archive");
-      if (plan.eligible.length === 0) return;
+      if (!orderActions.canDeleteOrders || archiveMutation.isPending || plan.eligible.length === 0) {
+        onSettled?.();
+        return;
+      }
       archiveMutation.mutate(
         { orders: plan.eligible, skipped: orders.length - plan.eligible.length },
-        { onSuccess: () => onDone?.() },
+        { onSuccess: () => onDone?.(), onSettled },
       );
     },
     [archiveMutation, orderActions.canDeleteOrders],
@@ -87,37 +94,45 @@ export function useOrderActions(
   /** Opens a bulk dialog for the selected rows, or for loaded "all matching" orders (null while loading). */
   const openBulk = useCallback((action: OrderBulkAction, orders: OrderListItem[] | null) => {
     setOutcome(null);
-    setDialog({ action, orders });
+    setDialog({ action, orders, requestKey: crypto.randomUUID() });
   }, []);
 
   const closeBulk = useCallback(() => {
-    if (!bulkRun.isPending && !archiveMutation.isPending) setDialog(null);
-  }, [archiveMutation.isPending, bulkRun.isPending]);
+    if (!runningRef.current) setDialog(null);
+  }, []);
 
   const runBulk = useCallback(
     (eligible: OrderListItem[], extras: BulkRunExtras) => {
-      if (!dialog || eligible.length === 0 || bulkRun.isPending) return;
+      // A ref, not isPending: a double click lands before React re-renders the disabled button.
+      if (!dialog || eligible.length === 0 || runningRef.current) return;
+      runningRef.current = true;
+      const settle = () => {
+        runningRef.current = false;
+      };
       if (dialog.action === "archive") {
         // Pass every loaded order so the toast can say how many were skipped.
         archive(dialog.orders ?? eligible, () => {
           selection.current.clear();
           setDialog(null);
-        });
+        }, settle);
         return;
       }
+      const { action, requestKey } = dialog;
       const orderIds = eligible.map((order) => order.id);
-      const input = dialog.action === "confirm"
-        ? { action: "confirm" as const, orderIds }
-        : dialog.action === "send"
-          ? { action: "send" as const, orderIds, courierName: extras.courierName?.trim(), note: extras.note?.trim() }
+      const input = action === "confirm"
+        ? { action: "confirm" as const, orderIds, requestKey }
+        : action === "send"
+          ? { action: "send" as const, orderIds, requestKey, courierName: extras.courierName?.trim(), note: extras.note?.trim() }
           : { action: "ship" as const, orderIds, providerId: extras.providerId ?? "" };
-      const doneToast = t(pluralKey(`bulkDone.${dialog.action}`, orderIds.length));
+      const skipped = Math.max(0, (dialog.orders?.length ?? orderIds.length) - orderIds.length);
       bulkRun.mutate(input, {
+        onSettled: settle,
         onSuccess: (result) => {
           if (result.failures.length === 0) {
             selection.current.clear();
             setDialog(null);
-            toast.success(doneToast);
+            const done = t(pluralKey(`bulkDone.${action}`, orderIds.length), { count: orderIds.length });
+            toast.success(skipped > 0 ? `${done} · ${t("bulkSkipped", { count: skipped })}` : done);
             return;
           }
           // Failed orders stay selected (and in the dialog) so the merchant can look at them or retry.

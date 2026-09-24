@@ -1,7 +1,10 @@
 ---
 // src/components/RichContent.astro
 import { processShortcodes } from "@/lib/shortcodes";
-import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import {
+  demoteRichContentH1,
+  optimizeRichContentImages,
+} from "@/lib/rich-content-media";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 
@@ -30,7 +33,7 @@ if (shouldProcessShortcodes && content) {
 
 if (processedContent) {
   processedContent = applyStorefrontPrefetchPolicyToHtml(
-    optimizeRichContentImages(processedContent),
+    optimizeRichContentImages(demoteRichContentH1(processedContent)),
     Astro.url,
   );
 }

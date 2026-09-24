@@ -96,6 +96,26 @@ describe("public search relevance and correction", () => {
     }
   });
 
+  it("answers a Bangla shopping word with the store's own category word", async () => {
+    const { sqlite, db } = createSqliteD1Database();
+    sqlite.exec(`
+      ${RELEVANCE_FIXTURE}
+      INSERT INTO categories (id, name, slug, status) VALUES ('cat_footwear', 'Footwear', 'footwear', 'published');
+      INSERT INTO products (id, name, description, price_minor, slug, category_id, is_active) VALUES
+        ('p_slipon', 'Padma Knit Slip-ons', 'Breathable knit', 1000, 'padma-knit-slip-ons', 'cat_footwear', 1);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES
+        ('v_slipon', 'p_slipon', 'SLIPON-1', 1000, 0, 0, 1, 0);
+    `);
+
+    for (const query of ["জুতা", "shoes"]) {
+      const result = await search(db, query, { correctTypos: true, searchPages: false });
+      expect(result.correctedQuery).toBe("footwear");
+      expect(result.products.map((product) => product.id)).toEqual(["p_slipon"]);
+      expect(result.categories.map((category) => category.id)).toEqual(["cat_footwear"]);
+    }
+    expect((await search(db, "ব্যাগ", { correctTypos: true, searchPages: false })).correctedQuery).toBe("bag");
+  });
+
   it("corrects only buyer searches that found nothing", async () => {
     const db = relevanceDb();
 

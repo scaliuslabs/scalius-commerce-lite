@@ -44,9 +44,11 @@ function setup(options: {
     <div data-shipping-methods data-free-text="Free" data-free-over-text="Free over {amount}"
       data-waived-text="Normally {fee}; waived." data-pickup-from-text="Pick up from {address}"
       data-choose-address-text="Choose your city and zone." data-no-delivery-text="We don't deliver here yet."
-      data-failed-text="Couldn't load." data-retry-text="Retry" data-loading-text="Loading…">
+      data-failed-text="Couldn't load." data-retry-text="Retry" data-loading-text="Loading…"
+      data-fee-changed-text="Delivery fee changed from {old} to {new}." data-replaced-text="{old} is gone, so {new} is selected."
+      data-gone-text="{old} is gone.">
       <script type="application/json" data-shipping-rates>${JSON.stringify([standard, ctg, pickup])}</script>
-      <fieldset id="shippingMethods"><p data-shipping-note></p><div data-shipping-options></div></fieldset>
+      <fieldset id="shippingMethods"><p data-shipping-note></p><p data-shipping-notice class="hidden"></p><div data-shipping-options></div></fieldset>
     </div>`;
   const events: Array<ShippingMethodDetail | null> = [];
   window.addEventListener("shippingLocationChange", (event) =>
@@ -155,6 +157,35 @@ describe("delivery options follow the address", () => {
     await methods.rejectSelected();
     expect(loadRates).toHaveBeenCalledTimes(2);
     expect(options().map(({ id, checked }) => [id, checked])).toEqual([["express", true]]);
+  });
+
+  it("says the delivery fee changed before the order is placed, and blocks that submit", async () => {
+    let offered = [rate("standard", 60)];
+    const { methods, events } = setup({ loadRates: async () => offered });
+    await methods.setAddress(DHAKA);
+    const notice = () => document.querySelector<HTMLElement>("[data-shipping-notice]")!;
+    await expect(methods.recheck()).resolves.toBe(false);
+    expect(notice().classList.contains("hidden")).toBe(true);
+
+    offered = [rate("standard", 80)];
+    await expect(methods.recheck()).resolves.toBe(true);
+    expect(notice().textContent).toBe("Delivery fee changed from ৳60 to ৳80.");
+    expect(events.at(-1)).toMatchObject({ id: "standard", fee: 80 });
+    // The buyer reviewed it: the next submit goes through.
+    await expect(methods.recheck()).resolves.toBe(false);
+  });
+
+  it("names the rate that replaced one the merchant removed", async () => {
+    let offered = [rate("zone60", 60), rate("standard", 80)];
+    const { methods, options } = setup({ loadRates: async () => offered });
+    await methods.setAddress(DHAKA);
+    offered = [rate("standard", 80)];
+    await expect(methods.recheck()).resolves.toBe(true);
+    expect(document.querySelector("[data-shipping-notice]")!.textContent).toBe("zone60 is gone, so standard ৳80 is selected.");
+    expect(options().find(({ checked }) => checked)?.id).toBe("standard");
+    // Choosing an option clears the notice.
+    document.querySelector<HTMLInputElement>('input[value="standard"]')!.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(document.querySelector("[data-shipping-notice]")!.classList.contains("hidden")).toBe(true);
   });
 
   it("ignores rates that arrive for an address the buyer already left", async () => {

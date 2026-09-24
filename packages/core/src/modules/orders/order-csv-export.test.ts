@@ -25,7 +25,7 @@ const order: OrderCsvRow = {
   cityName: "Dhaka", zoneName: "Gulshan", areaName: null, status: "shipped",
   paymentStatus: "partially_refunded", paymentMethod: "cod", fulfillmentStatus: "complete",
   subtotalAmount: 2400, shippingCharge: 80, discountAmount: 0, totalAmount: 2480, paidAmount: 1980,
-  balanceDue: 0, codStatus: "collected", courierName: "Steadfast", trackingId: "SF123",
+  refundedAmount: 500, balanceDue: 0, codStatus: "collected", courierName: "Steadfast", trackingId: "SF123",
   notes: null,
   lines: [
     { productName: "Kurta", variantLabel: "M", quantity: 2, unitPrice: 800, lineTotal: 1600 },
@@ -63,8 +63,16 @@ describe("order CSV artifacts", () => {
     builder.append(order);
     const rows = builder.finish().chunks.join("").split("\n");
     expect(rows).toHaveLength(3);
-    expect(rows[1]).toContain('"Kurta","M","2","800","1600","80","0","2480"');
-    expect(rows[2]).toContain('"Panjabi","","1","800","800","","","",""');
+    // Paid is what the rider collected; the refund is its own column.
+    expect(rows[1]).toContain('"Kurta","M","2","800","1600","80","0","2480","2480","500","0"');
+    expect(rows[2]).toContain('"Panjabi","","1","800","800","","","","","",""');
+  });
+
+  it("says nothing is due on a returned order that was never paid", () => {
+    const builder = createOrdersCsvArtifactBuilder("summary");
+    builder.append({ ...order, status: "returned", paymentStatus: "unpaid", paidAmount: 0, refundedAmount: 0, balanceDue: 2480 });
+    const csv = builder.finish().chunks.join("");
+    expect(csv).toContain('"Returned","Nothing due","Cash on delivery"');
   });
 
   it.each([

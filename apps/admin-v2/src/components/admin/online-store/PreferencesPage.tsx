@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
@@ -18,7 +18,12 @@ import {
 } from "~/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { apiData } from "~/lib/api";
-import { feedDiagnosticsQueryOptions, type FeedDiagnostics } from "~/lib/api-query-options/online-store";
+import {
+  FEED_SAMPLE_MAX,
+  countFeedGaps,
+  feedDiagnosticsQueryOptions,
+  type FeedDiagnostics,
+} from "~/lib/api-query-options/online-store";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
@@ -64,18 +69,30 @@ type FeedReason = FeedDiagnostics["reasons"][number]["reason"];
 /** Products that are off the storefront too: leaving them out of the feed is expected. */
 const EXPECTED_REASONS = new Set<FeedReason>(["feed_disabled", "inactive_deleted_unpublished"]);
 
-/** One line with the number of products the feed leaves out; reasons and examples on demand. */
+/**
+ * One line with the number of products missing from the feed (counted like
+ * Home: fixable reasons only), then every reason with its example products,
+ * including the ones left out on purpose. "Show all" lists up to 50 per reason.
+ */
 function FeedLeftOut() {
   const t = useMessages(onlineStoreMessages);
-  const { data } = useQuery(feedDiagnosticsQueryOptions());
+  const [showAll, setShowAll] = useState(false);
+  const preview = useQuery(feedDiagnosticsQueryOptions());
+  const full = useQuery({ ...feedDiagnosticsQueryOptions(FEED_SAMPLE_MAX), enabled: showAll });
+  const data = (showAll && full.data) || preview.data;
   if (!data) return null;
   const reasons = data.reasons.filter(({ reason, products }) => products > 0 && !EXPECTED_REASONS.has(reason));
   if (!reasons.length) return null;
-  const expected = data.reasons.reduce((total, { reason, products }) => total + (EXPECTED_REASONS.has(reason) ? products : 0), 0);
-  const count = data.totals.productsWithIssues - expected;
+  const count = countFeedGaps(data);
+  const leftOut = reasons.reduce((total, { products }) => total + products, 0) - count;
+  const hidden = reasons.some(({ products, samples }) => products > samples.length);
   return (
     <details className="text-body">
-      <summary className="cursor-pointer">{t(count === 1 ? "feedLeftOutOne" : "feedLeftOut", { count })}</summary>
+      <summary className="cursor-pointer">
+        {count > 0
+          ? t(count === 1 ? "feedMissingOne" : "feedMissing", { count })
+          : t(leftOut === 1 ? "feedLeftOutOne" : "feedLeftOut", { count: leftOut })}
+      </summary>
       <ul className="mt-2 space-y-2 pl-4">
         {reasons.map(({ reason, products, samples }) => (
           <li key={reason}>
@@ -97,6 +114,11 @@ function FeedLeftOut() {
           </li>
         ))}
       </ul>
+      {hidden && !showAll ? (
+        <Button type="button" variant="link" size="sm" className="mt-1" onClick={() => setShowAll(true)}>
+          {t("showAllProducts")}
+        </Button>
+      ) : null}
       {data.scan.truncated ? (
         <p className="mt-2 text-muted-foreground">{t("feedScanLimit", { count: data.scan.limit })}</p>
       ) : null}

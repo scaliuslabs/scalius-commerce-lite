@@ -1,8 +1,9 @@
 // Checkout phone field controller for the server-rendered markup in
 // components/CheckoutPhoneField.astro.
 //
-// Bangladesh mobile numbers are validated by a tiny fast path; everything
-// else (another country, a landline, the country picker) lazy-loads
+// Bangladesh numbers are decided by a tiny fast path: only mobile numbers
+// (01[3-9] + 8 digits) are accepted, landlines and 012… are refused. Numbers
+// from other countries (and the country picker) lazy-load
 // ./phone-intl, which runs the same libphonenumber validation the server
 // applies. The fast path only accepts numbers libphonenumber also accepts, and
 // the server re-validates every order, so the fast path never widens what an
@@ -21,7 +22,8 @@ export interface CheckoutPhoneResult {
   ok: boolean;
   /** Canonical E.164 value; empty unless `ok`. */
   value: string;
-  message?: "required" | "invalid" | "country";
+  /** "mobile": a Bangladesh number that is not a mobile number. */
+  message?: "required" | "invalid" | "mobile" | "country";
   /** Only the lazily loaded international validator can decide. */
   pending?: boolean;
 }
@@ -58,8 +60,8 @@ export function phoneCountryAllowed(
 }
 
 /**
- * The Bangladesh-mobile fast path. Returns null when only the international
- * validator can decide (another country, a landline, an incomplete number).
+ * The Bangladesh fast path. Returns null when only the international
+ * validator can decide (a number from another country).
  */
 export function quickValidatePhone(
   raw: string,
@@ -71,8 +73,9 @@ export function quickValidatePhone(
   const bangladesh = compact.startsWith("+")
     ? compact.startsWith("+880")
     : country === "BD";
-  const match = bangladesh ? BD_MOBILE.exec(compact) : null;
-  if (!match) return null;
+  if (!bangladesh) return null;
+  const match = BD_MOBILE.exec(compact);
+  if (!match) return { ok: false, value: "", message: "mobile" };
   return phoneCountryAllowed("BD", policy)
     ? { ok: true, value: `+880${match[1]}` }
     : { ok: false, value: "", message: "country" };
@@ -131,6 +134,7 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
   const messages = {
     required: data.requiredMessage || "Enter your phone number.",
     invalid: data.invalidMessage || "Enter a valid phone number.",
+    mobile: data.mobileMessage || "Enter a Bangladeshi mobile number (01XXXXXXXXX).",
     country:
       data.countryMessage ||
       "This store does not accept phone numbers from that country.",
@@ -152,7 +156,10 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
       errorEl.textContent = message;
       errorEl.classList.toggle("hidden", !message);
     }
-    root.querySelector("[data-phone-box]")?.classList.toggle("border-destructive", Boolean(message));
+    // Swap the border colour (both classes set it; only one may be present).
+    const box = root.querySelector("[data-phone-box]");
+    box?.classList.toggle("border-destructive", Boolean(message));
+    box?.classList.toggle("border-input", !message);
     if (message) input.setAttribute("aria-invalid", "true");
     else input.removeAttribute("aria-invalid");
   };

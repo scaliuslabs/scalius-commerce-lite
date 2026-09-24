@@ -17,7 +17,12 @@ interface MessageCopy {
   quantity: (quantity: number) => string;
   subtotal: string;
   shipping: string;
-  discount: string;
+  /** One discount line: the promotion name and its code, or just "Discount". */
+  discountLine: (name: string | null, code: string | null) => string;
+  /** Delivery that cost the buyer nothing. */
+  free: string;
+  /** The fee a waiver or free-delivery discount replaced, in the text part. */
+  was: (amount: string) => string;
   tax: string;
   taxIncluded: string;
   total: string;
@@ -75,7 +80,9 @@ const EN: MessageCopy = {
   quantity: (quantity) => `Quantity: ${quantity}`,
   subtotal: "Subtotal",
   shipping: "Delivery",
-  discount: "Discount",
+  discountLine: (name, code) => (name ? `Discount · ${name}${code ? ` (${code})` : ""}` : "Discount"),
+  free: "Free",
+  was: (amount) => `(was ${amount})`,
   tax: "Tax",
   taxIncluded: "included",
   total: "Total",
@@ -136,7 +143,9 @@ const BN: MessageCopy = {
   quantity: (quantity) => `পরিমাণ: ${quantity}`,
   subtotal: "সাবটোটাল",
   shipping: "ডেলিভারি চার্জ",
-  discount: "ছাড়",
+  discountLine: (name, code) => (name ? `ছাড় · ${name}${code ? ` (${code})` : ""}` : "ছাড়"),
+  free: "ফ্রি",
+  was: (amount) => `(আগে ছিল ${amount})`,
   tax: "ট্যাক্স",
   taxIncluded: "দামের মধ্যে ধরা",
   total: "মোট",

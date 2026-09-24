@@ -13,7 +13,7 @@ import {
   type OrderItem,
   type LayoutData,
 } from "@/lib/api";
-import { getCheckoutConfig, type CheckoutConfig } from "@/lib/api/checkout";
+import { getCheckoutConfig, isCodOnly, type CheckoutConfig } from "@/lib/api/checkout";
 import {
   createPurchaseTrackingPayload,
   formatOrderSuccessPaymentMethod,
@@ -58,6 +58,7 @@ import {
   checkoutLanguageBaseCode,
   formatCheckoutLanguageText,
 } from "@scalius/shared/checkout-language";
+import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 
 const legacyProofParams = ["token", "receipt_token", "receiptToken"];
 if (legacyProofParams.some((param) => Astro.url.searchParams.has(param))) {
@@ -281,6 +282,24 @@ const receiptMoney = savedMoneySummary
         total: order.totalAmount,
       }
     : null;
+// Discounts by name: savings on the items are discount lines; savings on
+// delivery show on the delivery line, with the fee struck through.
+const receiptDiscounts = order?.discounts ?? [];
+const receiptItemDiscounts = receiptDiscounts.filter(({ amount }) => amount > 0);
+const receiptDeliveryDiscounts = receiptDiscounts.filter(({ shippingAmount }) => shippingAmount > 0);
+const receiptDeliveryCharged = receiptMoney
+  ? Math.max(0, receiptMoney.shipping - receiptDeliveryDiscounts.reduce((total, { shippingAmount }) => total + shippingAmount, 0))
+  : 0;
+const receiptDeliveryFee = savedMoneySummary && order?.shippingMethodBaseAmountMinor != null
+  ? toMajor(order.shippingMethodBaseAmountMinor)
+  : receiptMoney?.shipping ?? 0;
+// A discount without allocations (a manual order) is one plain "Discount" line, so the summary adds up.
+const receiptUnallocatedDiscount = receiptMoney
+  ? Math.max(0, Math.round((receiptMoney.discount - receiptDiscounts.reduce(
+      (total, { amount, shippingAmount }) => total + amount + shippingAmount,
+      0,
+    )) * 100) / 100)
+  : 0;
 const receiptDeliveryLabel = order?.shippingMethodName
   ? formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: order.shippingMethodName })
   : copy.orderReceiptDeliveryText;
@@ -330,6 +349,7 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
     <>
     <CheckoutProgress
       current={order.paymentMethod !== "cod" && (orderSuccessView.kind === "payment_pending" || orderSuccessView.kind === "payment_issue") ? "payment" : "confirmation"}
+      paymentRequired={!(order.paymentMethod === "cod" && isCodOnly(checkoutConfig))}
       copy={copy}
     />
     <div class="order-success-print-header text-center mb-8 animate-fade-in">
@@ -497,12 +517,24 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
               </div>
               <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{receiptDeliveryLabel}</span>
-                <span class="font-medium">{receiptMoney.shipping === 0 ? copy.freeText : formatReceiptAmount(receiptMoney.shipping)}</span>
+                <span class="text-right font-medium">
+                  {receiptDeliveryCharged < receiptDeliveryFee && <s class="mr-1.5 font-normal text-muted-foreground">{formatReceiptAmount(receiptDeliveryFee)}</s>}
+                  {receiptDeliveryCharged === 0 ? copy.freeText : formatReceiptAmount(receiptDeliveryCharged)}
+                  {receiptDeliveryDiscounts.length > 0 && (
+                    <span class="ml-1 font-normal text-muted-foreground">({receiptDeliveryDiscounts.map((line) => line.code ?? line.title).join(", ")})</span>
+                  )}
+                </span>
               </div>
               {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-muted-foreground">{receiptDeliveryDetails}</p>}
-              {receiptMoney.discount > 0 && <div class="flex justify-between gap-4">
+              {receiptItemDiscounts.map((line) => (
+                <div class="flex justify-between gap-4">
+                  <span class="text-muted-foreground">{formatDiscountLineLabel(copy.discountText, line)}</span>
+                  <span class="shrink-0 whitespace-nowrap font-medium text-foreground">−{formatReceiptAmount(line.amount)}</span>
+                </div>
+              ))}
+              {receiptUnallocatedDiscount > 0 && <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{copy.discountText}</span>
-                <span class="font-medium text-foreground">−{formatReceiptAmount(receiptMoney.discount)}</span>
+                <span class="shrink-0 whitespace-nowrap font-medium text-foreground">−{formatReceiptAmount(receiptUnallocatedDiscount)}</span>
               </div>}
               {savedMoneySummary && receiptMoney.tax > 0 && <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span>
@@ -568,6 +600,12 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
           {order.customerPhone && <p class="text-muted-foreground">{formatBdMobile(order.customerPhone)}</p>}
           {order.customerEmail && <p class="break-all text-muted-foreground">{order.customerEmail}</p>}
         </div>
+        {order.notes && (
+          <div class="mt-3 border-t border-border pt-3 text-sm">
+            <p class="font-medium text-foreground">{copy.orderReceiptNoteText}</p>
+            <p class="whitespace-pre-line break-words text-muted-foreground">{order.notes}</p>
+          </div>
+        )}
       </div>
 
       <div

@@ -4,7 +4,9 @@ import {
   buildProductListHref,
   countActiveProductListFilters,
   isIndexableProductListView,
+  isMissingProductListPage,
   productListCanonicalUrl,
+  productListMetaDescription,
   resolveProductListQueryState,
 } from "./product-list-query";
 
@@ -262,5 +264,30 @@ describe("product list query canonicalization", () => {
       .toBe("https://store.test/categories/shoes?page=3");
     expect(productListCanonicalUrl(null, 3)).toBeNull();
     expect(countActiveProductListFilters({ page: "2", sortBy: "discount", q: "bag", color: ["Red", "Blue"] })).toBe(3);
+  });
+
+  it("describes an undescribed listing by its own products within 155 characters", () => {
+    const names = ["Press Glass Storage Set", "Loop Silicone Utensil Set", "Echo Mini Bluetooth Speaker", "Linen Throw"];
+
+    expect(productListMetaDescription("Home Refresh", names)).toBe(
+      "Shop Home Refresh: Press Glass Storage Set, Loop Silicone Utensil Set, Echo Mini Bluetooth Speaker and more.",
+    );
+    expect(productListMetaDescription("Home Refresh", names.slice(0, 2)))
+      .toBe("Shop Home Refresh: Press Glass Storage Set and Loop Silicone Utensil Set.");
+    expect(productListMetaDescription("Home Refresh", ["Linen Throw"])).toBe("Shop Home Refresh: Linen Throw.");
+    expect(productListMetaDescription("Home Refresh", [])).toBe("Shop Home Refresh.");
+    expect(productListMetaDescription("Home Refresh", ["A".repeat(150), "Linen Throw"])).toBe("Shop Home Refresh.");
+    expect(productListMetaDescription("Footwear", names, 60)).toBe("Shop Footwear: Press Glass Storage Set and more.");
+  });
+
+  it("treats pages past the last one as missing, but never page 1 of an empty listing", () => {
+    // Footwear: 10 products on one page.
+    expect(isMissingProductListPage({ page: 1, totalPages: 1 })).toBe(false);
+    expect(isMissingProductListPage({ page: 2, totalPages: 1 })).toBe(true);
+    expect(isMissingProductListPage({ page: 999, totalPages: 1 })).toBe(true);
+    expect(isMissingProductListPage({ page: 3, totalPages: 3 })).toBe(false);
+    // No products (or none matching the filters) yet: page 1 shows the empty state.
+    expect(isMissingProductListPage({ page: 1, totalPages: 0 })).toBe(false);
+    expect(isMissingProductListPage({ page: 2, totalPages: 0 })).toBe(true);
   });
 });

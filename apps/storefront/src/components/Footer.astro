@@ -117,27 +117,29 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
   <div class="relative mx-auto w-full max-w-7xl px-4 sm:px-6 py-5 lg:py-6">
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-5">
       <div class="lg:col-span-4">
-        <a
-          href="/"
-          class="group inline-block transform transition-transform hover:scale-105 duration-300"
-          aria-label="Go to homepage"
-        >
-          {
-            logo.src ? (
-              <img
-                src={mediaImageUrl(logo.src, 480)}
-                alt={logo.alt || brandName}
-                width={344}
-                height={256}
-                loading="lazy"
-                decoding="async"
-                class="h-12 sm:h-14 w-auto object-contain drop-shadow-lg"
-              />
-            ) : (
-              brandName && <span class="text-lg font-bold">{brandName}</span>
-            )
-          }
-        </a>
+        {/* No logo and no store name: no empty link to tab onto. */}
+        {(logo.src || brandName) && (
+          <a
+            href="/"
+            class="group inline-block transform transition-transform hover:scale-105 duration-300"
+          >
+            {
+              logo.src ? (
+                <img
+                  src={mediaImageUrl(logo.src, 480)}
+                  alt={brandName || "Home"}
+                  width={344}
+                  height={256}
+                  loading="lazy"
+                  decoding="async"
+                  class="h-12 sm:h-14 w-auto object-contain drop-shadow-lg"
+                />
+              ) : (
+                <span class="text-lg font-bold">{brandName}</span>
+              )
+            }
+          </a>
+        )}
         {
           tagline && (
             <p class="mt-3 text-base font-medium leading-relaxed max-w-md">
