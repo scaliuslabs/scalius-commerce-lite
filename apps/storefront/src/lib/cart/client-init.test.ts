@@ -170,6 +170,7 @@ function renderCartDom() {
       <div id="cartSummary" class="hidden">
         <span id="subtotal"></span>
         <span id="shippingCost"></span>
+        <p id="shippingProgress" class="hidden"></p>
         <div id="discountLines"></div>
         <div id="taxRow" class="hidden"><span id="taxLabel">Tax</span><span id="taxAmount">—</span></div>
         <p id="taxStatus" class="hidden"></p>
@@ -480,6 +481,7 @@ describe("initCartFunctionality", () => {
       discounts: [],
       offers: [],
       rejectedCodes: [],
+      shippingMethod: { id: "standard", name: "Standard", description: null, baseAmountMinor: 6_000, feeWaived: false },
       items: [],
     });
 
@@ -792,8 +794,8 @@ describe("initCartFunctionality", () => {
       ok: true,
       totalDiscount: 70,
       discounts: [
-        { promotionId: "p_auto", title: "Free delivery", code: null, amount: 60 },
-        { promotionId: "p_code", title: "Eid 10%", code: "SAVE10", amount: 10 },
+        { promotionId: "p_auto", title: "Free delivery", code: null, amount: 60, shippingAmount: 0 },
+        { promotionId: "p_code", title: "Eid 10%", code: "SAVE10", amount: 10, shippingAmount: 0 },
       ],
       offers: [],
       rejectedCodes: [{
@@ -812,7 +814,7 @@ describe("initCartFunctionality", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     const lines = Array.from(document.querySelectorAll("#discountLines > div")).map((row) => row.textContent);
-    expect(lines).toEqual(["Free delivery-৳60", "Eid 10% · SAVE10-৳10"]);
+    expect(lines).toEqual(["Discount · Free delivery-৳60", "Discount · Eid 10% (SAVE10)-৳10"]);
     expect(document.getElementById("total")?.textContent).toBe("৳90");
     const applied = document.getElementById("appliedCodes")!;
     expect(applied.textContent).toContain("Add Cap to get it free.");
@@ -989,7 +991,39 @@ describe("initCartFunctionality", () => {
     window.lastShippingEventDetail = { id: "ctg", fee: 150, freeOver: 100, name: "Ctg", kind: "delivery" };
     await initCartFunctionality();
     await vi.advanceTimersByTimeAsync(0);
-    expect(document.getElementById("shippingCost")?.textContent).toBe("Free");
+    // The rate's fee is struck through next to "Free".
+    expect(document.querySelector("#shippingCost s")?.textContent).toBe("৳150");
+    expect(document.getElementById("shippingCost")?.textContent).toBe("৳150Free");
+  });
+
+  it("shows a delivery discount on the delivery line, not as a discount line", async () => {
+    apiMocks.previewCartDiscounts.mockResolvedValue({
+      ok: true,
+      totalDiscount: 70,
+      discounts: [
+        { promotionId: "p_ship", title: "Free delivery", code: "SHIPFREE", amount: 0, shippingAmount: 60 },
+        { promotionId: "p_save", title: "Eid 10%", code: "SAVE10", amount: 10, shippingAmount: 0 },
+      ],
+      offers: [],
+      rejectedCodes: [],
+    });
+    await initCartFunctionality();
+    await vi.advanceTimersByTimeAsync(0);
+    const shipping = document.getElementById("shippingCost")!;
+    expect(shipping.querySelector("s")?.textContent).toBe("৳60");
+    expect(shipping.textContent).toBe("৳60Free(SHIPFREE)");
+    expect(Array.from(document.querySelectorAll("#discountLines > div")).map((row) => row.textContent))
+      .toEqual(["Discount · Eid 10% (SAVE10)-৳10"]);
+    expect(document.getElementById("total")?.textContent).toBe("৳90");
+  });
+
+  it("says how much more buys free delivery with the chosen rate", async () => {
+    window.lastShippingEventDetail = { id: "ctg", fee: 150, freeOver: 300, name: "Ctg", kind: "delivery" };
+    await initCartFunctionality();
+    await vi.advanceTimersByTimeAsync(0);
+    const progress = document.getElementById("shippingProgress")!;
+    expect(progress.classList.contains("hidden")).toBe(false);
+    expect(progress.textContent).toBe("Add ৳200 more for free delivery.");
   });
 
   it("shows shipping as not yet known before an option applies to the address", async () => {

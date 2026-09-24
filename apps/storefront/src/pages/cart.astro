@@ -74,6 +74,7 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
 const copy = lang.languageData;
 const policyPath = (kind: "terms" | "privacy") =>
   layoutData?.policies?.find((policy) => policy.kind === kind)?.path ?? null;
+const hasAgreementPolicies = Boolean(policyPath("terms") && policyPath("privacy"));
 const agreement = termsSegments(copy.termsText, {
   terms: { label: copy.termsLinkText, href: policyPath("terms") },
   privacy: { label: copy.privacyLinkText, href: policyPath("privacy") },
@@ -417,7 +418,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                     allowedCountries={checkoutConfig.allowedCountries || []}
                     allowedCountriesMode={allowedCountriesMode}
                     requiredMessage={copy.phoneRequiredText}
-                    invalidMessage={copy.phoneInvalidText}
+                    invalidMessage={copy.phoneIntlInvalidText}
+                    mobileMessage={copy.phoneInvalidText}
                     countryNotAcceptedMessage={copy.phoneCountryNotAcceptedText}
                     countrySelectLabel={copy.phoneCountryLabelText}
                     languageCode={lang.code}
@@ -500,6 +502,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 failedText={copy.deliveryOptionsFailedText}
                 retryText={copy.retryText}
                 loadingText={copy.loadingText}
+                feeChangedText={copy.deliveryFeeChangedText}
+                replacedText={copy.deliveryOptionReplacedText}
+                goneText={copy.deliveryOptionGoneText}
               />
 
               {
@@ -541,11 +546,12 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               </button>
 
               {
-                codOnly && (
+                // Buyers are only asked to agree to policies the store has published.
+                codOnly && hasAgreementPolicies && (
                   <p class="mt-3 text-center text-sm text-muted-foreground">
                     {agreement.map((segment) =>
                       segment.href ? (
-                        <a href={segment.href} class="underline underline-offset-2 hover:text-foreground">{segment.text}</a>
+                        <a href={segment.href} target="_blank" rel="noopener" class="underline underline-offset-2 hover:text-foreground">{segment.text}</a>
                       ) : (
                         segment.text
                       ),
@@ -573,7 +579,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             </h2>
             <a
               href="/"
-              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring sm:min-h-9"
+              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring group-data-[cart-state=empty]:hidden sm:min-h-9"
             >
               <span aria-hidden="true">←</span>
               {copy.continueShoppingText}
@@ -606,10 +612,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               <span>{copy.subtotalText}</span>
               <span id="subtotal" class="font-medium tabular-nums text-foreground">—</span>
             </div>
-            <div class="flex justify-between text-sm text-muted-foreground">
+            <div class="flex justify-between gap-3 text-sm text-muted-foreground">
               <span>{copy.shippingText}</span>
-              <span id="shippingCost" class="font-medium tabular-nums text-foreground">—</span>
+              <span id="shippingCost" class="text-right font-medium tabular-nums text-foreground">—</span>
             </div>
+            <p id="shippingProgress" class="hidden text-sm text-primary" role="status"></p>
             <div id="discountLines" class="space-y-1"></div>
             <div id="taxRow" class="hidden flex justify-between gap-3 text-sm text-muted-foreground">
               <span id="taxLabel">{copy.taxText}</span>
@@ -654,7 +661,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               </div>
               <p id="discountMessage" class="mt-1.5 text-sm" role="status" aria-live="polite" hidden></p>
             </form>
-            <ul id="appliedCodes" class="hidden space-y-2"></ul>
+            <ul id="appliedCodes" class="hidden flex flex-wrap gap-2 pt-1"></ul>
             <ul id="discountOffers" class="hidden space-y-2" role="status"></ul>
           </div>
         </section>
@@ -1241,6 +1248,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       checkoutInformationFields(form, checkoutCopy),
       cartPageSignal,
     );
+    // A restored draft never blurred: say now if a typed value (an email) is wrong.
+    fields.checkFilled();
 
     /**
      * Marks every problem under its field at once, then moves to the first
@@ -1255,7 +1264,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           ? checkoutCopy.phoneRequiredText
           : phone.message === "country"
             ? checkoutCopy.phoneCountryNotAcceptedText
-            : checkoutCopy.phoneInvalidText;
+            : phone.message === "invalid"
+              ? checkoutCopy.phoneIntlInvalidText
+              : checkoutCopy.phoneInvalidText;
       if (phoneMessage) {
         window.dispatchEvent(new CustomEvent("phone-validation-error", {
           detail: { name: "customerPhone", message: phoneMessage, focus: false },
@@ -1394,6 +1405,12 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           e.preventDefault();
           submitButton.disabled = true;
           setSubmitButtonText(checkoutCopy.checkingCartText);
+          // A delivery rate the merchant removed or repriced since the buyer chose
+          // it: say what changed next to the options and let the buyer review first.
+          if (await shippingMethods?.recheck()) {
+            restoreSubmitButton();
+            return;
+          }
           const cartIsValid = await (window.validateCartSnapshot?.() ??
             Promise.resolve(true));
           if (isDiscountValidationPending()) {
@@ -1402,11 +1419,12 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           }
           if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
             restoreSubmitButton();
-            showCheckoutFormError(
-              window.getCartBlockedMessage?.() ||
-                checkoutCopy.reviewCartItemsText,
-              submitButton,
-            );
+            // A refused delivery rate is explained next to the delivery options,
+            // never with the cart-items copy.
+            const blocked = window.getCartBlockedMessage?.();
+            if (blocked || !document.querySelector("[data-shipping-notice]:not(.hidden)")) {
+              showCheckoutFormError(blocked || checkoutCopy.reviewCartItemsText, submitButton);
+            }
             return;
           }
 

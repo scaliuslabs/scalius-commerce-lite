@@ -83,6 +83,10 @@ export type DiscountCodeRejectionReason =
     | "buy_items"
     | "not_combinable"
     | "lower_savings"
+    /** A delivery discount waiting for the buyer's address (kept, not refused). */
+    | "needs_delivery"
+    /** Another delivery discount already applies; only one per order. */
+    | "delivery_discount_applied"
     | "unavailable";
 
 /** A typed code that does not apply right now, and what the buyer can do about it. */
@@ -99,12 +103,19 @@ export interface RejectedDiscountCode {
     requiresCustomerPhone?: boolean;
 }
 
-/** One line per applied discount, as the buyer sees it in the summary. */
+/**
+ * One line per applied discount, split the way the buyer sees it: the part
+ * off the items is a discount line, the part off delivery shows on the
+ * delivery line ("Free" with the fee struck through).
+ */
 export interface AppliedDiscountLine {
     promotionId: string;
     title: string;
     code: string | null;
+    /** Off the items. */
     amountMinor: number;
+    /** Off delivery. */
+    shippingAmountMinor: number;
 }
 
 export interface StorefrontDiscountQuote {
@@ -123,6 +134,8 @@ export interface StorefrontDiscountInput {
     /** Codes the buyer typed. Active automatic discounts always compete. */
     codes?: readonly string[] | null;
     cart: StorefrontDiscountCart;
+    /** False before the buyer has a delivery option: delivery discounts wait instead of failing. */
+    shippingKnown?: boolean;
     /** Buyer identity for per-customer limits: a known id, else the checkout phone. */
     customerId?: string | null;
     customerPhone?: string | null;
@@ -492,7 +505,23 @@ export async function quoteStorefrontDiscount(
         }
         const reason = evaluation.rejected.find(({ promotionId }) => promotionId === candidate.id)?.reason ?? "inactive";
         const discountClass = discountClassOf(candidate.effects[0]!.target);
-        if (reason === "minimum_subtotal_not_met") {
+        const appliedDelivery = discountClass === "shipping"
+            ? applied?.discounts.find((other) => other.discountClass === "shipping")
+            : undefined;
+        if (appliedDelivery && appliedDelivery.totalDiscountMinor >= input.cart.shippingAmountMinor && input.cart.shippingAmountMinor > 0) {
+            // Delivery is already free: no minimum this code still needs can make it better.
+            rejected.push({
+                code,
+                reason: "delivery_discount_applied",
+                conflictsWith: appliedDelivery.promotionCode ?? appliedDelivery.promotionName,
+            });
+        } else if (
+            discountClass === "shipping"
+            && input.shippingKnown === false
+            && (reason === "no_savings" || reason === "lower_savings")
+        ) {
+            rejected.push({ code, reason: "needs_delivery" });
+        } else if (reason === "minimum_subtotal_not_met") {
             const shippingMinimum = discountClass === "shipping"
                 || candidate.conditions.some((condition) => condition.kind === "minimum_merchandise_subtotal" && condition.config.shippingOnly);
             const shortfalls = candidate.conditions.flatMap((condition) => {
@@ -563,6 +592,8 @@ export async function quoteStorefrontDiscount(
                 case "buy_items": return finished ? describeOffer(finished) : "Add the qualifying items to your cart to get this discount.";
                 case "not_combinable": return `${rejection.code} can't be combined with ${rejection.conflictsWith}.`;
                 case "lower_savings": return "Your cart already gets an equal or better discount.";
+                case "needs_delivery": return `Choose your delivery address to use ${rejection.code}.`;
+                case "delivery_discount_applied": return `Only one delivery discount can be used. ${rejection.conflictsWith} already applies to delivery.`;
                 default: return genericRejectionMessage("inactive");
             }
         })();
@@ -570,12 +601,18 @@ export async function quoteStorefrontDiscount(
     }).sort((left, right) => codes.indexOf(left.code) - codes.indexOf(right.code));
 
     const quote = {
-        discounts: (applied?.discounts ?? []).map((discount) => ({
-            promotionId: discount.promotionId,
-            title: discount.promotionName,
-            code: discount.promotionCode,
-            amountMinor: discount.totalDiscountMinor,
-        })),
+        discounts: (applied?.discounts ?? []).map((discount) => {
+            const shippingAmountMinor = applied!.allocations
+                .filter(({ promotionId, target }) => promotionId === discount.promotionId && target === "shipping")
+                .reduce((total, { discountAmountMinor }) => total + discountAmountMinor, 0);
+            return {
+                promotionId: discount.promotionId,
+                title: discount.promotionName,
+                code: discount.promotionCode,
+                amountMinor: discount.totalDiscountMinor - shippingAmountMinor,
+                shippingAmountMinor,
+            };
+        }),
         offers: offerDrafts.map(finishOffer),
         rejectedCodes,
     };
@@ -602,6 +639,12 @@ export async function quoteStorefrontDiscount(
 export interface ProductBuyGetOffer {
     promotionId: string;
     title: string;
+    /**
+     * "buy": this product counts toward the offer and `products` are what the
+     * buyer gets; "get": this product is what the buyer gets and `products`
+     * are what to buy.
+     */
+    role: "buy" | "get";
     /** Units of this product (or its scope) to buy per application; null when the rule is an amount. */
     buyQuantity: number | null;
     buyAmountMinor: number | null;
@@ -610,11 +653,11 @@ export interface ProductBuyGetOffer {
     basisPoints: number;
     /** The page can hide the offer after this time without waiting for a cache refresh. */
     endsAtEpochSeconds: number | null;
-    /** What the buyer gets (up to three named products). */
+    /** The other side of the offer (up to three named products). */
     products: DiscountOfferProduct[];
 }
 
-/** Active automatic Buy X get Y discounts this product counts toward. */
+/** Active automatic Buy X get Y discounts this product counts toward or is given by. */
 export async function listProductBuyGetOffers(
     db: Database,
     productId: string,
@@ -630,16 +673,20 @@ export async function listProductBuyGetOffers(
     const drafts = candidates.flatMap((candidate) => {
         const effect = buyGetEffect(candidate)!;
         const buy = effect.config.buy!;
-        if (inScope([line], buy, lineCollections).length === 0) return [];
+        const buys = inScope([line], buy, lineCollections).length > 0;
+        // The product given away names the products to buy, when the offer lists them.
+        const gets = !buys && inScope([line], effect.config, lineCollections).length > 0 && (buy.productIds?.length ?? 0) > 0;
+        if (!buys && !gets) return [];
         return [{
             promotionId: candidate.id,
             title: candidate.name,
+            role: buys ? "buy" as const : "get" as const,
             buyQuantity: buy.quantity ?? null,
             buyAmountMinor: buy.amountMinor ?? null,
             getQuantity: effect.config.getQuantity ?? 1,
             basisPoints: effect.config.basisPoints,
             endsAtEpochSeconds: candidate.endsAtEpochSeconds,
-            productIds: (effect.config.productIds ?? []).slice(0, MAX_OFFER_PRODUCTS),
+            productIds: (buys ? effect.config.productIds ?? [] : buy.productIds ?? []).slice(0, MAX_OFFER_PRODUCTS),
         }];
     }).slice(0, 3);
     const offerProducts = await loadOfferProducts(db, [...new Set(drafts.flatMap(({ productIds }) => productIds))], currencyCode);

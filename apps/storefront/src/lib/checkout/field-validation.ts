@@ -77,8 +77,10 @@ export function checkoutInformationFields(
     fields.push({
       control: methods,
       error: methodError,
+      // Without a city and thana the location message already says what to do.
       check: () =>
-        root.querySelector<HTMLInputElement>('[name="shippingLocation"]:checked')?.value
+        !value(root, "city") || !value(root, "zone")
+          || root.querySelector<HTMLInputElement>('[name="shippingLocation"]:checked')?.value
           ? ""
           : copy.deliveryRequiredText,
     });
@@ -93,7 +95,11 @@ export function checkoutInformationFields(
 export function enhanceCheckoutFields(
   fields: CheckoutField[],
   signal?: AbortSignal,
-): { validateAll(): HTMLElement | null } {
+): {
+  validateAll(): HTMLElement | null;
+  /** Checks typed fields that arrived without a blur (a restored draft), leaving empty ones quiet. */
+  checkFilled(): void;
+} {
   for (const field of fields) {
     const listenTo = field.control.matches("fieldset")
       ? field.control
@@ -111,6 +117,13 @@ export function enhanceCheckoutFields(
     listenTo.addEventListener("change", recheck, { signal });
   }
   return {
+    checkFilled() {
+      for (const field of fields) {
+        const control = field.control;
+        const typed = (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) && control.value.trim();
+        if (typed) setFieldError(field, field.check());
+      }
+    },
     validateAll() {
       let first: HTMLElement | null = null;
       for (const field of fields) {

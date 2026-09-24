@@ -5,6 +5,7 @@ import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
 import { createHostedGatewayHandler } from "./handlers/hosted";
 import { formatMoney, DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { formatBdMobile } from "@scalius/shared/phone-input";
+import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   formatCheckoutLanguageText,
@@ -183,7 +184,6 @@ function applySelectedMethodStyles(methodId: string | null): void {
     const details = el.querySelector<HTMLElement>(".payment-method-details");
     if (control) {
       control.setAttribute("aria-checked", String(isSelected));
-      control.setAttribute("aria-expanded", String(isSelected));
       if (methodId !== null) control.tabIndex = isSelected ? 0 : -1;
     }
     el.classList.toggle("border-primary", isSelected);
@@ -365,11 +365,19 @@ function appendSummaryRow(
   label: string,
   value: string,
   className = "flex justify-between",
+  /** The original amount, struck through before the value (a waived delivery fee). */
+  struck?: string,
 ): void {
   const row = document.createElement("div");
   row.className = className;
   appendTextElement(row, "span", "", label);
-  appendTextElement(row, "span", "", value);
+  const valueElement = appendTextElement(row, "span", "", value);
+  if (struck) {
+    const original = document.createElement("s");
+    original.className = "mr-1.5 text-muted-foreground";
+    original.textContent = struck;
+    valueElement.prepend(original);
+  }
   parent.appendChild(row);
 }
 
@@ -608,18 +616,28 @@ export function renderOrderSummaryDetails(
   details.replaceChildren();
   appendOrderItems(details, quote);
   appendSummaryRow(details, checkoutCopy.subtotalText, currencyFmt(quote.subtotalAmount, quote));
+  // Delivery savings show on the delivery line ("৳80 Free (CODE)"), never as a discount line.
+  const deliveryDiscounts = quote.discounts.filter(({ shippingAmount }) => shippingAmount > 0);
+  const deliveryCharged = Math.max(
+    0,
+    quote.shippingAmount - deliveryDiscounts.reduce((total, { shippingAmount }) => total + shippingAmount, 0),
+  );
+  const deliveryFee = quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces;
   appendSummaryRow(
     details,
     checkoutCopy.shippingText,
-    quote.shippingMinor === 0
-      ? checkoutCopy.freeText
-      : currencyFmt(quote.shippingAmount, quote),
+    [
+      deliveryCharged === 0 ? checkoutCopy.freeText : currencyFmt(deliveryCharged, quote),
+      deliveryDiscounts.length > 0 ? ` (${deliveryDiscounts.map(({ code, title }) => code ?? title).join(", ")})` : "",
+    ].join(""),
+    undefined,
+    deliveryCharged < deliveryFee ? currencyFmt(deliveryFee, quote) : undefined,
   );
-  // One line per discount, named as the buyer knows it.
-  for (const discount of quote.discounts) {
+  // One line per discount on the items, named as the buyer knows it.
+  for (const discount of quote.discounts.filter(({ amount }) => amount > 0)) {
     appendSummaryRow(
       details,
-      discount.code && discount.code !== discount.title ? `${discount.title} · ${discount.code}` : discount.title,
+      formatDiscountLineLabel(checkoutCopy.discountText, discount),
       `-${currencyFmt(discount.amount, quote)}`,
       "flex justify-between gap-3 text-primary",
     );
@@ -798,7 +816,7 @@ async function renderGateways(): Promise<void> {
       control.id = `payment-method-${gw.id}`;
       control.setAttribute("role", "radio");
       control.setAttribute("aria-checked", "false");
-      control.setAttribute("aria-expanded", "false");
+      // A radio may not carry aria-expanded; aria-controls names the revealed details.
       control.setAttribute("aria-controls", `payment-details-${gw.id}`);
       control.tabIndex = index === 0 ? 0 : -1;
       control.addEventListener("click", () => void selectMethod(gw.id, gw));
