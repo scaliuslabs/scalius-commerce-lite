@@ -15,8 +15,7 @@ import {
     getNotificationTemplates,
     saveNotificationTemplate,
 } from "@scalius/core/modules/notifications/notification-templates.service";
-import { storeDisplayName } from "@scalius/core/modules/notifications/order-email";
-import { getBusinessSettings } from "@scalius/core/modules/settings/business-settings.service";
+import { readStoreIdentity } from "@scalius/core/modules/notifications/store-messages";
 import { sendEmail } from "@scalius/core/integrations/email";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { normalizeBdMobile } from "@scalius/shared/phone-input";
@@ -43,6 +42,15 @@ const perEvent = <T extends z.ZodTypeAny>(template: T) =>
 const templatesSchema = z.object({
     templates: z.object({ email: perEvent(emailTemplateSchema), sms: perEvent(smsTemplateSchema) }),
     revision: z.number().int().nonnegative(),
+    /** The checkout language: the defaults' language and the email frame's. */
+    language: z.enum(["en", "bn"]),
+});
+
+/** The store as its emails show it, so the dashboard previews the real frame. */
+const previewStoreSchema = z.object({
+    name: z.string().nullable(),
+    logoUrl: z.string().nullable(),
+    storefrontUrl: z.string().nullable(),
 });
 
 app.openapi(createRoute({
@@ -52,10 +60,20 @@ app.openapi(createRoute({
     tags: ["Admin - Settings"],
     summary: "Get customer notification templates",
     responses: {
-        200: { description: "Templates", content: { "application/json": { schema: successEnvelope(templatesSchema) } } },
+        200: {
+            description: "Templates",
+            content: { "application/json": { schema: successEnvelope(templatesSchema.extend({ store: previewStoreSchema })) } },
+        },
         ...errorResponses,
     },
-}), async (c) => ok(c, await getNotificationTemplates(c.get("db"))));
+}), async (c) => {
+    const db = c.get("db");
+    const store = await readStoreIdentity(db);
+    return ok(c, {
+        ...await getNotificationTemplates(db, store.language),
+        store: { name: store.name, logoUrl: store.logoUrl, storefrontUrl: c.env.STOREFRONT_URL || null },
+    });
+});
 
 app.openapi(createRoute({
     method: "put",
@@ -140,18 +158,19 @@ app.openapi(createRoute({
         throw new RateLimitError("Too many test messages. Wait a minute and try again.");
     }
 
-    const storeName = storeDisplayName(await getBusinessSettings(db));
-    const values = sampleVariables(storeName);
+    const store = await readStoreIdentity(db);
+    const values = sampleVariables(store.name ?? "", store.language);
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
 
     if (input.channel === "email") {
         const email = sampleOrderEmail({
-            storeName,
+            language: store.language,
+            store,
             subject: renderTemplate(input.subject, values),
             body: renderTemplate(input.body, values),
             origin: c.env.STOREFRONT_URL,
         });
-        const result = await sendEmail({ ...email, to: user.email }, {
+        const result = await sendEmail({ ...email, to: user.email, fromName: store.name ?? undefined }, {
             db,
             env: c.env as unknown as Record<string, unknown>,
             encryptionKey,

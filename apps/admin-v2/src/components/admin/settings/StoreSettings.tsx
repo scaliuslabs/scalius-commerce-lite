@@ -446,7 +446,7 @@ function CurrencyFields() {
           expectedRevision,
         }),
       })),
-    defaultValues: { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "1", currencyCodeLocked: false },
+    defaultValues: { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "1", currencyCodeLocked: false, revision: 0 },
     errorMessage: common("saveFailed"),
     canEdit: useCanEditStore(),
     isValid: (draft) => isValidUsdExchangeRate(draft.usdExchangeRate),

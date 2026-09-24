@@ -2,16 +2,17 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Braces } from "lucide-react";
 import { toast } from "sonner";
-import { getApiV1AdminSettingsBusiness } from "@scalius/api-client/sdk";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
+import type { MessageLanguage } from "@scalius/core/modules/notifications/message-copy";
 import {
-  DEFAULT_NOTIFICATION_TEMPLATES,
   TEMPLATE_LIMITS,
+  defaultNotificationTemplates,
   findUnknownVariables,
   renderTemplate,
   sampleOrderEmail,
   sampleVariables,
   variablesForEvent,
+  type EmailStore,
   type EmailTemplate,
   type NotificationTemplates,
 } from "@scalius/core/modules/notifications/notification-templates";
@@ -56,6 +57,10 @@ import { SettingsLoadFailure } from "./SettingsLoadFailure";
 interface TemplatesData {
   templates: NotificationTemplates;
   revision: number;
+  /** The checkout language: the defaults' and the email frame's. */
+  language: MessageLanguage;
+  /** The store as its emails show it. */
+  store: EmailStore & { storefrontUrl: string | null };
 }
 
 // Stopgap until `pnpm generate:sdk` adds the notification template operations.
@@ -224,10 +229,7 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
   const [smsTestOpen, setSmsTestOpen] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const rules = useQuery(customerRulesQuery);
-  const business = useQuery({
-    queryKey: queryKeys.settings.business(),
-    queryFn: () => apiData(getApiV1AdminSettingsBusiness()),
-  });
+  const preview = useQuery({ ...templatesQuery, select: ({ language, store }) => ({ language, store }) });
   const { values, setValues, isLoadError, refetch } = useSettingsForm<{ templates: NotificationTemplates }>({
     label: events(event),
     queryKey: templatesQuery.queryKey,
@@ -259,13 +261,18 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
 
   const email = values.templates.email[event];
   const sms = values.templates.sms[event];
-  const defaults = { email: DEFAULT_NOTIFICATION_TEMPLATES.email[event], sms: DEFAULT_NOTIFICATION_TEMPLATES.sms[event] };
-  const storeName = business.data?.companyName?.trim() || business.data?.legalName?.trim() || "";
-  const sample = sampleVariables(storeName);
+  // The same frame, language and store identity the real email uses, with a sample order.
+  const language = preview.data?.language ?? "en";
+  const store = preview.data?.store ?? { name: null, logoUrl: null, storefrontUrl: null };
+  const defaultTemplates = defaultNotificationTemplates(language);
+  const defaults = { email: defaultTemplates.email[event], sms: defaultTemplates.sms[event] };
+  const sample = sampleVariables(store.name ?? "", language);
   const emailPreview = sampleOrderEmail({
-    storeName,
+    language,
+    store,
     subject: renderTemplate(email.subject, sample),
     body: renderTemplate(email.body, sample),
+    origin: store.storefrontUrl,
   });
   const smsPreview = renderTemplate(sms.body, sample);
   const saved = rules.data?.channels[event];

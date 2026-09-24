@@ -67,9 +67,11 @@ export const paymentMethodsQuery = {
   queryKey: queryKeys.settings.paymentMethods(),
   queryFn: async () => (await apiData(getApiV1AdminSettingsPaymentMethods())) as unknown as PaymentMethods,
 };
+/** A gateway document as read: keys, flags and its `revision` (kept apart from the form values). */
+type GatewayValues = Record<string, string | boolean | number>;
 export const gatewayQuery = (gateway: "stripe" | "sslcommerz") => ({
   queryKey: queryKeys.settings.paymentGateway(gateway),
-  queryFn: async (): Promise<Record<string, string | boolean>> =>
+  queryFn: async (): Promise<GatewayValues> =>
     gateway === "stripe"
       ? await apiData(getApiV1AdminSettingsStripe())
       : await apiData(getApiV1AdminSettingsSslcommerz()),
@@ -194,10 +196,10 @@ function GatewayFields({
   const saved = useQuery(query).data;
   const platform = useQuery(platformQuery);
   // An empty secret keeps the saved one; an empty publishable key clears it.
-  const missingKeys = (draft: Record<string, string | boolean>) =>
+  const missingKeys = (draft: GatewayValues) =>
     (Object.keys(GATEWAY_KEYS[gateway]) as GatewayKey[]).filter((key) =>
       !String(draft[key] ?? "").trim() && (key === "publishableKey" || !String(saved?.[key] ?? "").trim()));
-  const { values, setValue } = useSettingsForm<Record<string, string | boolean>>({
+  const { values, setValue } = useSettingsForm<GatewayValues>({
     queryKey: query.queryKey,
     fetchFn: query.queryFn,
     saveFn: async (draft, expectedRevision) => {

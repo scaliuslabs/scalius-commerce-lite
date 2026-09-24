@@ -24,6 +24,18 @@ const mocks = vi.hoisted(() => ({
     isNotificationProviderBreakerFailure: vi.fn(),
 }));
 
+// The store as a real read would find it: English checkout, no logo or contacts.
+// Email composition from the real database is covered in order-email.test.ts.
+vi.mock("./store-messages", () => ({
+    readStoreLanguage: vi.fn(async () => "en"),
+    readStoreIdentity: vi.fn(async () => ({
+        name: "River & Loom",
+        logoUrl: null,
+        language: "en",
+        business: { email: "", phone: "" },
+    })),
+}));
+
 vi.mock("../settings/settings.service", () => ({
     getNotificationChannels: mocks.getNotificationChannels,
     getOrderWhatsAppTemplateSettings: mocks.getOrderWhatsAppTemplateSettings,
@@ -220,14 +232,14 @@ describe("order notification dispatch", () => {
             "Support Buyer",
             "order_support",
             "support_request_submitted",
-            { supportRequestTypeLabel: "refund request" },
+            { supportRequestType: "refund" },
             db,
             { encryptionKey: "credential-key" },
         );
 
         expect(result.hasRetryableFailure).toBe(false);
         expect(mocks.sendEmail).toHaveBeenCalledWith(
-            expect.objectContaining({ to: "buyer@example.com", subject: "Order #order_support support request received" }),
+            expect.objectContaining({ to: "buyer@example.com", subject: "We received your refund request for order #order_support" }),
             expect.anything(),
         );
         expect(mocks.getActiveSmsProvider).not.toHaveBeenCalled();
@@ -352,7 +364,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenNthCalledWith(
             1,
             expect.objectContaining({
-                subject: "Order #order_refund_state refund processing",
+                subject: "Refund in progress for order #order_refund_state",
                 html: expect.stringContaining("refund for this order"),
             }),
             {
@@ -364,7 +376,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenNthCalledWith(
             2,
             expect.objectContaining({
-                subject: "Order #order_refund_state refund failed",
+                subject: "We couldn't refund order #order_refund_state",
                 html: expect.stringContaining("couldn&#39;t complete the refund"),
             }),
             {
@@ -417,7 +429,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenCalledWith(
             expect.objectContaining({
                 to: "buyer@example.com",
-                subject: "Order #order_balance balance paid",
+                subject: "Payment received for order #order_balance",
                 html: expect.stringContaining("remaining payment"),
             }),
             {
@@ -461,7 +473,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenCalledWith(
             expect.objectContaining({
                 to: "buyer@example.com",
-                subject: "Order #order_2 received",
+                subject: "We've received your order #order_2",
             }),
             {
                 db,

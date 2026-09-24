@@ -1,4 +1,4 @@
-// Store identity for buyer messages (sender name, logo, language) and the
+// Store identity for buyer messages (name, logo, language) and the
 // one-time-code message built from it.
 import type { Database } from "@scalius/database/client";
 import { checkoutLanguages } from "@scalius/database/schema";
@@ -9,30 +9,33 @@ import { and, eq, isNull } from "drizzle-orm";
 import { businessDocument, headerDocument, type BusinessInfo } from "../settings/documents";
 import { selectSettingsDocuments } from "../settings/settings-store";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
+import { storeHeaderHtml, type EmailStore } from "./notification-templates";
 
-export interface StoreIdentity {
-  /** Business `companyName`, else `legalName`; null when neither is set. */
-  name: string | null;
-  /** The header logo, only when it is an absolute http(s) URL. */
-  logoUrl: string | null;
+export interface StoreIdentity extends EmailStore {
   /** Bangla when the active checkout language is Bangla, else English. */
   language: MessageLanguage;
   business: BusinessInfo;
 }
 
+/** Bangla when the active checkout language is Bangla, else English. */
+export async function readStoreLanguage(db: Database): Promise<MessageLanguage> {
+  const [activeLanguage] = await db.select({ code: checkoutLanguages.code }).from(checkoutLanguages)
+    .where(and(eq(checkoutLanguages.isActive, true), isNull(checkoutLanguages.deletedAt)))
+    .limit(1);
+  return checkoutLanguageBaseCode(activeLanguage?.code) === "bn" ? "bn" : "en";
+}
+
 export async function readStoreIdentity(db: Database): Promise<StoreIdentity> {
-  const [rows, [activeLanguage]] = await Promise.all([
+  const [rows, language] = await Promise.all([
     selectSettingsDocuments(db, [businessDocument, headerDocument]),
-    db.select({ code: checkoutLanguages.code }).from(checkoutLanguages)
-      .where(and(eq(checkoutLanguages.isActive, true), isNull(checkoutLanguages.deletedAt)))
-      .limit(1),
+    readStoreLanguage(db),
   ]);
   const [business, header] = await Promise.all([businessDocument.fromRows(rows), headerDocument.fromRows(rows)]);
   const logo = header.value.logo as { src?: unknown } | undefined;
   return {
     name: business.value.companyName.trim() || business.value.legalName.trim() || null,
     logoUrl: typeof logo?.src === "string" ? absoluteHttpUrl(mediaOriginalUrl(logo.src.trim())) : null,
-    language: checkoutLanguageBaseCode(activeLanguage?.code) === "bn" ? "bn" : "en",
+    language,
     business: business.value,
   };
 }
@@ -44,14 +47,6 @@ function absoluteHttpUrl(value: string): string | null {
   } catch {
     return null;
   }
-}
-
-/** The branded top of every buyer email: the logo, else the store name. */
-export function storeHeaderHtml(store: Pick<StoreIdentity, "name" | "logoUrl">): string {
-  if (store.logoUrl) {
-    return `<p style="margin:0 0 24px;"><img src="${escapeHtml(store.logoUrl)}" alt="${escapeHtml(store.name ?? "")}" height="48" style="display:block;height:48px;width:auto;max-width:200px;border:0;"></p>`;
-  }
-  return store.name ? `<p style="margin:0 0 24px;font-size:20px;font-weight:700;">${escapeHtml(store.name)}</p>` : "";
 }
 
 /**
