@@ -1,7 +1,11 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConflictError } from "@scalius/core/errors";
-import { DEFAULT_STOREFRONT_THEME, storefrontStylePresetTheme } from "@scalius/shared/storefront-theme";
+import {
+  DEFAULT_STOREFRONT_THEME,
+  storefrontTemplateTheme,
+  type StorefrontThemeDocument,
+} from "@scalius/shared/storefront-theme";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
@@ -157,7 +161,7 @@ function createTestApp() {
     revision: 1,
   });
   mocks.saveThemeSettings.mockResolvedValue({
-    theme: storefrontStylePresetTheme("midnight"),
+    theme: storefrontTemplateTheme("rounded-tech"),
     revision: 2,
   });
   const themeDraft = {
@@ -989,7 +993,7 @@ describe("site settings cache invalidation", () => {
       method: "POST" as const,
       body: {
         expectedRevision: 1,
-        theme: storefrontStylePresetTheme("midnight"),
+        theme: storefrontTemplateTheme("rounded-tech"),
       },
     },
     {
@@ -1143,9 +1147,9 @@ describe("site settings cache invalidation", () => {
     ).not.toHaveBeenCalled();
   });
 
-  it("rejects invalid version 2 theme documents before saving or invalidating cache", async () => {
+  it("rejects invalid version 4 theme documents before saving or invalidating cache", async () => {
     const { app, env } = createTestApp();
-    const lowContrast = structuredClone(DEFAULT_STOREFRONT_THEME);
+    const lowContrast = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
     lowContrast.tokens.colors.foreground = "#f5f5f5";
     const unsafeColor = structuredClone(DEFAULT_STOREFRONT_THEME) as unknown as {
       tokens: { colors: Record<string, string> };
@@ -1154,20 +1158,20 @@ describe("site settings cache invalidation", () => {
     const invalidThemes: unknown[] = [
       lowContrast,
       unsafeColor,
-      { ...DEFAULT_STOREFRONT_THEME, version: 1 },
-      { ...DEFAULT_STOREFRONT_THEME, version: 2 },
-      { ...DEFAULT_STOREFRONT_THEME, layout: { ...DEFAULT_STOREFRONT_THEME.layout, navigation: "tabs" } },
-      { ...DEFAULT_STOREFRONT_THEME, layout: { ...DEFAULT_STOREFRONT_THEME.layout, header: "floating" } },
-      { ...DEFAULT_STOREFRONT_THEME, layout: { ...DEFAULT_STOREFRONT_THEME.layout, sidebar: "left" } },
+      { ...DEFAULT_STOREFRONT_THEME, version: 3 },
+      { ...DEFAULT_STOREFRONT_THEME, template: "classic" },
+      { ...DEFAULT_STOREFRONT_THEME, layout: { header: "classic" } },
+      { ...DEFAULT_STOREFRONT_THEME, blocks: { ...DEFAULT_STOREFRONT_THEME.blocks, header: { variant: "floating", settings: {} } } },
+      { ...DEFAULT_STOREFRONT_THEME, blocks: { ...DEFAULT_STOREFRONT_THEME.blocks, header: { variant: "spec-two-row", settings: { cartTotal: true } } } },
       {
         ...DEFAULT_STOREFRONT_THEME,
-        sections: [...DEFAULT_STOREFRONT_THEME.sections, { id: "promo", type: "banner", version: 1, settings: {} }],
+        pages: { home: [...DEFAULT_STOREFRONT_THEME.pages.home, { id: "promo", type: "video", version: 1, settings: {} }] },
       },
       {
         ...DEFAULT_STOREFRONT_THEME,
-        sections: DEFAULT_STOREFRONT_THEME.sections.map((section) => ({ ...section, version: 2 })),
+        pages: { home: DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, version: 2 })) },
       },
-      { ...DEFAULT_STOREFRONT_THEME, sections: DEFAULT_STOREFRONT_THEME.sections.slice(1) },
+      { ...DEFAULT_STOREFRONT_THEME, pages: { home: DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, id: "same" })) } },
     ];
 
     for (const theme of invalidThemes) {
@@ -1198,13 +1202,13 @@ describe("site settings cache invalidation", () => {
 
     const response = await requestJson(app, env, "POST", "/theme", {
       expectedRevision: 1,
-      theme: storefrontStylePresetTheme("marketplace"),
+      theme: storefrontTemplateTheme("marketplace"),
     });
 
     expect(response.status).toBe(409);
     expect(mocks.saveThemeSettings).toHaveBeenCalledWith(
       { id: "db" },
-      storefrontStylePresetTheme("marketplace"),
+      storefrontTemplateTheme("marketplace"),
       1,
       null,
     );

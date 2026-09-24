@@ -170,29 +170,15 @@ body {
   max-width: var(--theme-container-width, 80rem);
 }
 
-/* Compact density tightens controls only for a mouse; touch keeps 44px
-   targets (WCAG 2.5.5). */
+/* Dense and compact densities tighten controls only for a mouse; touch
+   keeps 44px targets (WCAG 2.5.5). */
 @media (hover: hover) and (pointer: fine) {
-  .site-root[data-theme-density="compact"]
+  .site-root:is([data-theme-density="compact"], [data-theme-density="dense"])
     [data-theme-component="button"]:not([data-theme-size="icon"]),
-  .site-root[data-theme-density="compact"] [data-theme-component="input"] {
+  .site-root:is([data-theme-density="compact"], [data-theme-density="dense"])
+    [data-theme-component="input"] {
     height: 2.25rem;
   }
-}
-
-.site-root[data-theme-button-style="outline"]
-  [data-theme-component="button"][data-theme-variant="default"] {
-  background: transparent !important;
-  border-color: var(--primary) !important;
-  color: var(--primary) !important;
-  box-shadow: none !important;
-}
-
-.site-root[data-theme-input-style="filled"]
-  :where([data-theme-component="input"], [data-theme-component="textarea"]) {
-  background: var(--muted) !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
 }
 
 html.dark {

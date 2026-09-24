@@ -82,7 +82,7 @@ if (productResult.state === "unavailable" || !layoutData) {
 }
 
 // Theme -> Layout -> Product page: gallery beside or stacked, thumbnails.
-const { layout: themeLayout } = await resolveRequestTheme(Astro, layoutData.theme);
+const { layout: themeLayout } = await resolveRequestTheme(Astro, layoutData);
 const productPageLayout = themeLayout.productPage;
 
 const productData = productResult.data;

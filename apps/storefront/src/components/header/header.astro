@@ -8,9 +8,9 @@ import MobileTabBar from "./MobileTabBar.astro";
 import PillNav from "./PillNav.astro";
 import { HEADER_LOGO_WIDTH_DEFAULT } from "@scalius/shared/brand-presentation";
 import type {
-  StorefrontHeaderStyle,
-  StorefrontMobileNavigationStyle,
-  StorefrontNavigationStyle,
+  StorefrontHeaderRenderer,
+  StorefrontMobileNavigationRenderer,
+  StorefrontNavigationRenderer,
 } from "@scalius/shared/storefront-theme";
 
 interface Props {
@@ -20,10 +20,12 @@ interface Props {
   storeName: string | null;
   storePhone: string | null;
   social: SocialLink[];
-  variant: StorefrontHeaderStyle;
+  variant: StorefrontHeaderRenderer;
+  /** The theme's top bar block shows the announcement bar (its text lives in Header settings). */
+  showTopBar: boolean;
   /** How the menu is browsed on computers (the sidebar itself is Layout's). */
-  navigationStyle: StorefrontNavigationStyle;
-  mobileNavigation: StorefrontMobileNavigationStyle;
+  navigationStyle: StorefrontNavigationRenderer;
+  mobileNavigation: StorefrontMobileNavigationRenderer;
 }
 
 const {
@@ -33,6 +35,7 @@ const {
   storePhone,
   social,
   variant,
+  showTopBar,
   navigationStyle,
   mobileNavigation,
 } = Astro.props;
@@ -44,7 +47,7 @@ const condensedMenu = hasNavigation && variant === "classic" && navigationStyle 
 const headerData: HeaderData = {
   topBar: {
     text: apiHeaderData?.topBar?.text || "",
-    isEnabled: apiHeaderData?.topBar?.isEnabled ?? true,
+    isEnabled: showTopBar && (apiHeaderData?.topBar?.isEnabled ?? true),
   },
   logo: apiHeaderData?.logo?.src
     ? { ...apiHeaderData.logo, alt: storeName || apiHeaderData.logo.alt || "Store" }

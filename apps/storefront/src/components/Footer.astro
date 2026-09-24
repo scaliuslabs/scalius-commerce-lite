@@ -18,7 +18,7 @@ import {
 import { telHref, whatsappHref } from "@/lib/store-identity";
 import { TRACK_ORDER_PATH, placeTrackOrderLink } from "@/lib/footer-links";
 import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
-import type { StorefrontFooterStyle } from "@scalius/shared/storefront-theme";
+import type { StorefrontFooterRenderer } from "@scalius/shared/storefront-theme";
 
 interface Props {
   footerData: FooterData;
@@ -32,7 +32,7 @@ interface Props {
    * columns: logo, text and menu columns. compact: one band of links.
    * contact: menus plus a help block (call, WhatsApp, email, address).
    */
-  variant: StorefrontFooterStyle;
+  variant: StorefrontFooterRenderer;
   business: StorefrontBusinessInfo | null | undefined;
 }
 

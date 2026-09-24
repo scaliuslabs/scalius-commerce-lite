@@ -29,6 +29,7 @@ import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-
 import { mediaImageUrl } from "@/lib/media-url";
 import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { storefrontSectionRenderer } from "@scalius/shared/storefront-theme";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 
 // One batch: layout, homepage, and the delivery facts the trust strip shows
@@ -98,15 +99,16 @@ const deliveryFacts = presentation.trustStrip.enabled
   : [];
 
 // Theme -> Homepage: the theme document's sections, in order.
-const { theme } = await resolveRequestTheme(Astro, layoutData.theme);
-const leadSection = homepageLeadSection(theme.sections, {
+const { resolved: resolvedTheme } = await resolveRequestTheme(Astro, layoutData);
+const homeSections = resolvedTheme.pages.home;
+const leadSection = homepageLeadSection(homeSections, {
   hero: hero.desktop.length > 0 || hero.mobile.length > 0,
   collections: activeCollections.some(collectionShowsProducts) || fallbackProducts.length > 0,
   categories: presentation.categoryRail.enabled && presentation.categoryRail.categories.length > 0,
   delivery: deliveryFacts.length > 0,
 });
 // Preload the banner only when it is the first thing buyers see.
-const heroFirst = leadSection?.type === "hero";
+const heroFirst = leadSection !== null && storefrontSectionRenderer(leadSection) === "hero";
 
 // --- SEO: canonical URL for homepage ---
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
@@ -145,7 +147,7 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
   <h1 class="sr-only">{homepageHeading}</h1>
 
   <HomepageSections
-    sections={theme.sections}
+    sections={homeSections}
     leadSectionId={leadSection?.id ?? null}
     hero={hero}
     collections={activeCollections}

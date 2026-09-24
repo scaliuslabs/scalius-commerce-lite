@@ -1,20 +1,24 @@
 import {
-  STOREFRONT_SECTION_REGISTRY,
-  STOREFRONT_STYLE_PRESETS,
+  STOREFRONT_TEMPLATES,
   STOREFRONT_THEME_COLOR_KEYS,
   isStorefrontThemeHexColor,
-  listStorefrontThemeContrastProblems,
-  storefrontStylePresetTheme,
-  type StorefrontSection,
-  type StorefrontStylePresetKey,
+  listStorefrontThemeDocumentContrastProblems,
+  resolveStorefrontTheme,
+  storefrontBlockDefault,
+  storefrontTemplateTheme,
+  type ResolvedStorefrontTheme,
+  type StoreShape,
+  type StorefrontBlockSlot,
+  type StorefrontTemplateId,
   type StorefrontThemeColorKey,
   type StorefrontThemeDocument,
+  type StorefrontThemeFallback,
 } from "@scalius/shared/storefront-theme";
 
 /**
  * The four colours a merchant picks; each writes every token that shares its
  * role. Background also moves the card and popover surfaces, keeping the
- * Style's own card-to-page relationship (see setThemeColor).
+ * template's own card-to-page relationship (see setThemeColor).
  */
 export const COLOR_ROLES = {
   background: ["background", "card", "popover"],
@@ -51,15 +55,15 @@ function channelsHex(channels: readonly number[]): string {
 }
 
 /**
- * The card surface for a new page background: the Style the theme started
- * from keeps its card a set step lighter or darker than its page (retail's
- * white cards on warm paper, midnight's raised panels), so a new background
- * moves the card by the same step instead of flattening it.
+ * The card surface for a new page background: the template the theme is
+ * based on keeps its card a set step lighter or darker than its page
+ * (retail's white cards on warm paper, midnight's raised panels), so a new
+ * background moves the card by the same step instead of flattening it.
  */
 export function cardForBackground(theme: StorefrontThemeDocument, background: string): string {
-  const style = storefrontStylePresetTheme(closestStylePreset(theme)).tokens.colors;
+  const palette = storefrontTemplateTheme(theme.template).tokens.colors;
   if (!isStorefrontThemeHexColor(background)) return background;
-  const [page, card] = [hexChannels(style.background), hexChannels(style.card)];
+  const [page, card] = [hexChannels(palette.background), hexChannels(palette.card)];
   const next = hexChannels(background);
   return channelsHex(next.map((channel, index) => channel + (card[index]! - page[index]!)));
 }
@@ -91,12 +95,6 @@ export function colorFieldForPath(path: string): string | undefined {
   return COLOR_FIELD_IDS[role ?? "background"];
 }
 
-/** A section the Theme page owns (hero, collections…); anything else belongs to the builder. */
-export function isThemeSection(section: { type: string }): boolean {
-  const entry = (STOREFRONT_SECTION_REGISTRY as Record<string, { editor: string } | undefined>)[section.type];
-  return entry?.editor === "theme";
-}
-
 /** The sections with the one whose id is `id` moved one place up (-1) or down (+1); unchanged at either end. */
 export function moveSection<Section extends { id: string }>(
   sections: readonly Section[],
@@ -111,6 +109,37 @@ export function moveSection<Section extends { id: string }>(
   return next;
 }
 
+/** A single-variant block slot the Theme page offers as a picker. */
+export type ThemeBlockSlot = Exclude<StorefrontBlockSlot, "listing" | "buyBox">;
+
+/** The variant a slot is set to in the document. */
+export function blockVariant(theme: StorefrontThemeDocument, slot: ThemeBlockSlot): string {
+  return slot === "gallery" ? theme.blocks.product.gallery.variant : theme.blocks[slot].variant;
+}
+
+/** The document with a block switched to another variant (at that variant's default settings). */
+export function setBlockVariant(theme: StorefrontThemeDocument, slot: ThemeBlockSlot, variant: string): StorefrontThemeDocument {
+  const block = storefrontBlockDefault(slot, variant) as never;
+  const blocks = slot === "gallery"
+    ? { ...theme.blocks, product: { ...theme.blocks.product, gallery: block } }
+    : { ...theme.blocks, [slot]: block };
+  return { ...theme, blocks };
+}
+
+/**
+ * The document resolved against the store's shape: the same resolver and
+ * the same facts the storefront renders with, so what the Theme page says
+ * about a choice is what buyers see.
+ */
+export function resolveThemeForStore(theme: StorefrontThemeDocument, shape: StoreShape): ResolvedStorefrontTheme {
+  return resolveStorefrontTheme(theme, shape);
+}
+
+/** Why a block renders another variant on this store, if it does. */
+export function blockFallback(resolved: ResolvedStorefrontTheme, slot: ThemeBlockSlot): StorefrontThemeFallback | null {
+  return resolved.fallbacks.find((fallback) => fallback.kind === "block" && fallback.key === slot) ?? null;
+}
+
 export type ContrastMessage =
   | "contrastText"
   | "contrastButtonText"
@@ -123,15 +152,18 @@ export type ContrastMessage =
 /**
  * Plain-words names for the text pairs the storefront must keep readable,
  * and the colour field that can fix each. Pairs the colour roles always move
- * together (text on cards, on popovers) share one message, so the merchant
- * reads each problem once.
+ * together (text on cards, on popovers, on the header) share one message, so
+ * the merchant reads each problem once.
  */
 const CONTRAST_MESSAGES: Record<string, { message: ContrastMessage; role: ColorRole }> = {
   "foreground/background": { message: "contrastText", role: "text" },
   "card-foreground/card": { message: "contrastText", role: "text" },
   "popover-foreground/popover": { message: "contrastText", role: "text" },
+  "header-foreground/header-background": { message: "contrastText", role: "text" },
+  "foreground/muted": { message: "contrastText", role: "text" },
   "primary-foreground/primary": { message: "contrastButtonText", role: "buttonText" },
   "primary/background": { message: "contrastLinks", role: "buttons" },
+  "primary/card": { message: "contrastLinks", role: "buttons" },
   "muted-foreground/background": { message: "contrastMuted", role: "background" },
   "muted-foreground/muted": { message: "contrastMuted", role: "background" },
   "muted-foreground/card": { message: "contrastMuted", role: "background" },
@@ -139,6 +171,7 @@ const CONTRAST_MESSAGES: Record<string, { message: ContrastMessage; role: ColorR
   "accent-foreground/accent": { message: "contrastAccent", role: "background" },
   "destructive-foreground/destructive": { message: "contrastError", role: "background" },
   "destructive/background": { message: "contrastError", role: "background" },
+  "destructive/card": { message: "contrastError", role: "background" },
 };
 
 export interface ContrastProblem {
@@ -153,11 +186,14 @@ export function allThemeColorsValid(colors: Record<StorefrontThemeColorKey, stri
   return STOREFRONT_THEME_COLOR_KEYS.every((key) => isStorefrontThemeHexColor(colors[key] ?? ""));
 }
 
-/** AA problems in plain words, one per message (empty while any colour is not yet a valid #rrggbb). */
-export function themeContrastProblems(colors: Record<StorefrontThemeColorKey, string>): ContrastProblem[] {
-  if (!allThemeColorsValid(colors)) return [];
+/**
+ * AA problems in plain words, one per message, over every pair the chosen
+ * blocks paint (empty while any colour is not yet a valid #rrggbb).
+ */
+export function themeContrastProblems(theme: StorefrontThemeDocument): ContrastProblem[] {
+  if (!allThemeColorsValid(theme.tokens.colors)) return [];
   const byMessage = new Map<ContrastMessage, ContrastProblem>();
-  for (const { text, surface, ratio } of listStorefrontThemeContrastProblems(colors)) {
+  for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(theme)) {
     const { message, role } = CONTRAST_MESSAGES[`${text}/${surface}`] ?? { message: "contrastText", role: "text" };
     const known = byMessage.get(message);
     if (known) known.ratio = Math.min(known.ratio, ratio);
@@ -168,8 +204,7 @@ export function themeContrastProblems(colors: Record<StorefrontThemeColorKey, st
 
 /** True while the document cannot be saved: a colour that is not #rrggbb, or text below AA. */
 export function themeDraftInvalid(theme: StorefrontThemeDocument): boolean {
-  const { colors } = theme.tokens;
-  return !allThemeColorsValid(colors) || themeContrastProblems(colors).length > 0;
+  return !allThemeColorsValid(theme.tokens.colors) || themeContrastProblems(theme).length > 0;
 }
 
 function canonical(value: unknown): unknown {
@@ -186,65 +221,21 @@ function same(left: unknown, right: unknown): boolean {
   return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 }
 
-const themeSectionOrder = (theme: StorefrontThemeDocument) =>
-  theme.sections.filter(isThemeSection).map((section) => section.type);
-
-/** Same look: tokens, layout and homepage order match, whatever order the saved document lists its keys in. */
+/** Same look: tokens, blocks and pages match, whatever order the saved document lists its keys in. */
 export function sameThemeLook(left: StorefrontThemeDocument, right: StorefrontThemeDocument): boolean {
-  return same(left.tokens, right.tokens)
-    && same(left.layout, right.layout)
-    && same(themeSectionOrder(left), themeSectionOrder(right));
+  return same(left.tokens, right.tokens) && same(left.blocks, right.blocks) && same(left.pages, right.pages);
 }
 
-/** Each Style's complete document, for previews and matching. */
-export const STYLE_PRESET_THEMES: ReadonlyArray<{ key: StorefrontStylePresetKey; theme: StorefrontThemeDocument }> =
-  STOREFRONT_STYLE_PRESETS.map(({ key }) => ({ key, theme: storefrontStylePresetTheme(key) }));
+/** Each template's complete document, for previews and matching. */
+export const TEMPLATE_THEMES: ReadonlyArray<{ id: StorefrontTemplateId; theme: StorefrontThemeDocument }> =
+  STOREFRONT_TEMPLATES.map(({ id }) => ({ id, theme: storefrontTemplateTheme(id) }));
 
-/** The Style whose every choice the theme still matches, if any. */
-export function selectedStylePreset(theme: StorefrontThemeDocument): StorefrontStylePresetKey | null {
-  return STYLE_PRESET_THEMES.find((preset) => sameThemeLook(preset.theme, theme))?.key ?? null;
+/** The template whose every choice the theme still matches, if any. */
+export function selectedTemplate(theme: StorefrontThemeDocument): StorefrontTemplateId | null {
+  return TEMPLATE_THEMES.find((template) => sameThemeLook(template.theme, theme))?.id ?? null;
 }
 
-/**
- * The Style a fine-tuned theme started from: the one sharing the most
- * choices (fonts, corners, button shape, colours, layout including the
- * menus, and section order). Ties go to the earlier Style, so the answer is
- * stable.
- */
-export function closestStylePreset(theme: StorefrontThemeDocument): StorefrontStylePresetKey {
-  let best = STYLE_PRESET_THEMES[0]!;
-  let bestScore = -1;
-  for (const preset of STYLE_PRESET_THEMES) {
-    const { tokens, layout } = preset.theme;
-    const colors = Object.keys(tokens.colors) as Array<keyof typeof tokens.colors>;
-    const matchingColors = colors.filter((key) => tokens.colors[key] === theme.tokens.colors[key]).length;
-    const score = [
-      same(tokens.typography, theme.tokens.typography),
-      tokens.radius === theme.tokens.radius,
-      tokens.buttonShape === theme.tokens.buttonShape,
-      tokens.containerWidth === theme.tokens.containerWidth,
-      same(tokens.components, theme.tokens.components),
-      ...(Object.keys(layout) as Array<keyof typeof layout>).map((key) => layout[key] === theme.layout[key]),
-      same(themeSectionOrder(preset.theme), themeSectionOrder(theme)),
-    ].filter(Boolean).length + (4 * matchingColors) / colors.length;
-    if (score > bestScore) {
-      best = preset;
-      bestScore = score;
-    }
-  }
-  return best.key;
-}
-
-/**
- * The Style's complete document. Builder sections are not the Theme page's
- * to drop, so they keep their places and the Style's own sections fill the
- * rest in the Style's order.
- */
-export function applyStylePreset(theme: StorefrontThemeDocument, key: StorefrontStylePresetKey): StorefrontThemeDocument {
-  const preset = storefrontStylePresetTheme(key);
-  if (theme.sections.every(isThemeSection)) return preset;
-  const queue = [...preset.sections];
-  const sections: StorefrontSection[] = theme.sections.map((section) =>
-    isThemeSection(section) ? queue.shift() ?? section : section);
-  return { ...preset, sections: [...sections, ...queue] };
+/** A template's complete document: blocks, tokens, colours and homepage sections. */
+export function applyTemplate(id: StorefrontTemplateId): StorefrontThemeDocument {
+  return storefrontTemplateTheme(id);
 }
