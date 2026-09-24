@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   lookupByBarcodeOrSku: vi.fn(),
   acknowledgeLowStockAlert: vi.fn(),
   setLowStockThreshold: vi.fn(),
+  setDefaultLowStockThreshold: vi.fn(),
   findStockMutationAvailabilityTransitions: vi.fn(),
   bumpCacheGeneration: vi.fn(),
 }));
@@ -59,6 +60,7 @@ vi.mock("@scalius/core/modules/inventory", async () => {
 vi.mock("@scalius/core/modules/inventory/alerts", () => ({
   acknowledgeLowStockAlert: mocks.acknowledgeLowStockAlert,
   setLowStockThreshold: mocks.setLowStockThreshold,
+  setDefaultLowStockThreshold: mocks.setDefaultLowStockThreshold,
 }));
 
 vi.mock("@scalius/core/modules/settings/settings.service", () => ({
@@ -114,6 +116,7 @@ function createTestApp() {
   });
   mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", symbol: "৳" });
   mocks.setLowStockThreshold.mockImplementation(async (_db, variantId, lowStockThreshold) => ({ variantId, lowStockThreshold }));
+  mocks.setDefaultLowStockThreshold.mockImplementation(async (_db, defaultLowStockThreshold) => ({ defaultLowStockThreshold }));
   mocks.buildInventoryLabelArtifact.mockReturnValue({
     body: "artifact-body",
     contentType: "text/csv; charset=utf-8",
@@ -179,6 +182,33 @@ describe("admin inventory cache invalidation", () => {
     expect(await response.json()).toMatchObject({ success: true, data: { variantId: "var_1", lowStockThreshold } });
     expect(mocks.setLowStockThreshold).toHaveBeenCalledWith(db, "var_1", lowStockThreshold);
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+  });
+
+  it.each([5, null])("saves store alert level %s and bumps the public cache generation", async (defaultLowStockThreshold) => {
+    const { app, db, env } = createTestApp();
+    const response = await app.request("/api/v1/admin/inventory/default-alert-level", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ defaultLowStockThreshold }),
+    }, env);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, data: { defaultLowStockThreshold } });
+    expect(mocks.setDefaultLowStockThreshold).toHaveBeenCalledWith(db, defaultLowStockThreshold);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }));
+  });
+
+  it("rejects a store alert level that is not a whole number before writing", async () => {
+    const { app, env } = createTestApp();
+    const response = await app.request("/api/v1/admin/inventory/default-alert-level", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ defaultLowStockThreshold: 2.5 }),
+    }, env);
+
+    expect(response.status).toBe(400);
+    expect(mocks.setDefaultLowStockThreshold).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
   it.each([-1, 2.5, 1_000_001, "5"])("rejects alert level %s with a field error before writing", async (lowStockThreshold) => {

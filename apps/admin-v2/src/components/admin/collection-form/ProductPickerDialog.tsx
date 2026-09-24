@@ -63,7 +63,7 @@ export function ProductOptionMeta({ product }: { product: Product }) {
   const t = useMessages(collectionFormMessages);
   const { fmt } = useCurrency();
   const parts = [
-    product.price === undefined ? null : fmt(product.price),
+    product.price === undefined ? null : product.price > 0 ? fmt(product.price) : t("noPrice"),
     product.variantCount ? (product.variantCount === 1 ? t("variantOne") : t("variantCount", { count: product.variantCount })) : null,
     product.available === undefined ? null : product.available === null ? t("stockNotTracked") : product.available === 0 ? t("outOfStock") : t("inStock", { count: product.available }),
   ].filter(Boolean);

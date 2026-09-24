@@ -14,6 +14,7 @@ function item(overrides: Partial<ProductMediaProjection> = {}): ProductMediaProj
         posterMediaId: null,
         posterUrl: null,
         altText: "Product image",
+        filename: "image-1.webp",
         caption: null,
         width: 800,
         height: 800,

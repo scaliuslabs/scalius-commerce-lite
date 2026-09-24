@@ -20,6 +20,8 @@ import {
     initiateMediaUploadSchema,
     listMediaFiles,
     listMediaFolders,
+    loadMediaUsage,
+    MEDIA_USAGE_KINDS,
     mediaVersionCommandSchema,
     moveMediaFiles,
     moveMediaSchema,
@@ -92,7 +94,12 @@ const listRoute = createRoute({
     }) },
     responses: {
         200: { description: "Media page", content: { "application/json": { schema: successEnvelope(z.object({
-            files: z.array(mediaSchema),
+            files: z.array(mediaSchema.extend({
+                usageCount: z.number().int().nonnegative().openapi({
+                    description: "Distinct places that show the file: products, categories, collections, pages, banners, theme, navigation, invoice, social image, video covers and staff photos.",
+                }),
+                keptForOrders: z.boolean().openapi({ description: "Past orders show this picture, so it can never be deleted permanently." }),
+            })),
             pagination: cursorPaginationSchema,
         })) } } },
         ...mediaErrorResponses,
@@ -360,11 +367,36 @@ app.openapi(originalRoute, async (c) => {
     });
 });
 
+const usageRoute = createRoute({
+    method: "get",
+    path: "/{id}/usage",
+    tags: ["Admin - Media"],
+    summary: "List where a file is used",
+    description: "Distinct places that show the file (up to 50, products first) and how many past order lines keep it. A file in use can be moved to trash (it keeps showing) but not deleted permanently.",
+    operationId: "dashboard.media.usage",
+    request: { params: idParam },
+    responses: {
+        200: { description: "Where the file is used", content: { "application/json": { schema: successEnvelope(z.object({
+            count: z.number().int().nonnegative(),
+            references: z.array(z.object({
+                kind: z.enum(MEDIA_USAGE_KINDS),
+                id: z.string().nullable(),
+                name: z.string().nullable(),
+                trashed: z.boolean(),
+            })),
+            orderCount: z.number().int().nonnegative(),
+        })) } } },
+        ...mediaErrorResponses,
+    },
+});
+app.openapi(usageRoute, async (c) => ok(c, await loadMediaUsage(c.get("db"), c.req.valid("param").id)));
+
 const permanentDeleteRoute = createRoute({
     method: "delete",
     path: "/{id}/permanent",
     tags: ["Admin - Media"],
     summary: "Permanently delete unreferenced trashed media",
+    description: "Refused with 409 MEDIA_DEPENDENCY_CONFLICT while the file is used anywhere (see dashboard.media.usage) or kept by past orders.",
     operationId: "dashboard.media.permanently_delete",
     request: { params: idParam, query: z.object({ expectedVersion: z.coerce.number().int().min(1) }) },
     responses: { 204: noContentResponse, ...mediaErrorResponses, 503: serviceUnavailableResponse },

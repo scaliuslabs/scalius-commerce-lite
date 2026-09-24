@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
 import { resourceMessages } from "~/i18n/resource";
-import type { LibraryMediaFile, MediaLibraryView } from "../types";
+import { canDeletePermanently, type LibraryMediaFile, type MediaLibraryView } from "../types";
 import { formatDuration, formatFileSize, formatFileType } from "../utils";
 
 interface MediaCardProps {
@@ -33,6 +33,11 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
   const isImage = file.kind === "image";
   const extra = formatDuration(file.durationMs) ?? (file.width && file.height ? `${file.width} × ${file.height}` : null);
   const previewUrl = isImage ? mediaImageUrl(file.url, 480) : posterUrl ? mediaImageUrl(posterUrl, 480) : null;
+  const deletable = canDeletePermanently(file);
+  // Ready files say where they're used; in Trash a file still in use says why it can't be deleted.
+  const usage = view === "trash"
+    ? file.usageCount > 0 ? t("inUseKept") : file.keptForOrders ? t("keptForOrders") : null
+    : file.usageCount === 1 ? t("usedInOne") : file.usageCount > 1 ? t("usedInMany", { count: file.usageCount }) : null;
   const label = unavailable
     ? t("alreadyAdded", { name: file.filename })
     : selectionMode
@@ -98,6 +103,7 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
           <span className="truncate text-body text-muted-foreground">
             {[formatFileType(file.mimeType).replace(/ (Image|Video)$/, ""), formatFileSize(file.size), extra].filter(Boolean).join(" · ")}
           </span>
+          {usage ? <span className="text-body text-muted-foreground">{usage}</span> : null}
         </div>
       </button>
 
@@ -125,10 +131,12 @@ export function MediaCard({ file, posterUrl, selected, unavailable = false, sele
                       <RotateCcw aria-hidden="true" />
                       {r("restore")}
                     </DropdownMenuItem>
-                    <DropdownMenuItem variant="destructive" onSelect={() => onLifecycle("permanent")}>
-                      <Trash2 aria-hidden="true" />
-                      {r("deletePermanently")}
-                    </DropdownMenuItem>
+                    {deletable ? (
+                      <DropdownMenuItem variant="destructive" onSelect={() => onLifecycle("permanent")}>
+                        <Trash2 aria-hidden="true" />
+                        {r("deletePermanently")}
+                      </DropdownMenuItem>
+                    ) : null}
                   </>
                 )}
               </DropdownMenuContent>
