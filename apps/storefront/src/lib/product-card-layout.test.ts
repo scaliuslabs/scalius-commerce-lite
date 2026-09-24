@@ -8,7 +8,9 @@ import {
   buildStorefrontThemeTokens,
 } from "@scalius/shared/storefront-theme";
 import {
+  LIST_ROW_MEDIA_PX,
   PRODUCT_GRID_STEPS_REM,
+  productGridSpec,
   productCardImageLoading,
   productCardImageSizes,
   productGridCardMin,
@@ -19,6 +21,7 @@ import {
 } from "./product-card-layout";
 
 const css = readFileSync(new URL("../styles/theme-foundation.css", import.meta.url), "utf8");
+const cardCss = readFileSync(new URL("../styles/theme-cards.css", import.meta.url), "utf8");
 const DENSITIES = Object.entries(STOREFRONT_DENSITY_SPECS);
 const CONTAINER_WIDTHS = STOREFRONT_CONTAINERS.map((container) =>
   buildStorefrontThemeTokens({ tokens: { ...DEFAULT_STOREFRONT_THEME.tokens, container } })["theme-container-width"]!);
@@ -30,6 +33,38 @@ describe("fluid product grid", () => {
     expect(css).toContain(`@container product-grid (min-width: ${PRODUCT_GRID_STEPS_REM.desktop}rem)`);
     expect(css).toContain("repeat(auto-fill, minmax(min(var(--card-min), 100%), 1fr))");
     expect(css).toContain("container: product-grid / inline-size");
+    // List rows switch at the same step, with the photo column sizes use.
+    expect(cardCss).toContain(`@container product-grid (width < ${PRODUCT_GRID_STEPS_REM.tablet}rem)`);
+    expect(cardCss).toContain(`--card-row-media: ${LIST_ROW_MEDIA_PX / 16}rem`);
+  });
+
+  it("keeps card styles out of the shared foundation (and the product page's critical CSS)", () => {
+    expect(css).not.toMatch(/\.product-card-|card-row-media|\[data-theme-card-style/);
+    const critical = readFileSync(new URL("../styles/product-critical.css", import.meta.url), "utf8");
+    expect(critical).not.toContain("theme-cards");
+    const card = readFileSync(new URL("../components/cards/ProductCard.astro", import.meta.url), "utf8");
+    expect(card).toContain('import "@/styles/theme-cards.css";');
+  });
+
+  it("keeps cards stable and touchable from CSS alone", () => {
+    // The photo box has the token ratio before any photo loads (CLS 0), and
+    // a missing photo fills that same box.
+    expect(cardCss).toMatch(/\.product-card-media \{\s*aspect-ratio: var\(--theme-image-ratio, 1 \/ 1\);/);
+    expect(cardCss).toMatch(/\.product-card-placeholder \{\s*position: absolute;\s*inset: 0;/);
+    // Actions keep 44px touch targets; only a mouse gets the density's height.
+    expect(cardCss).toMatch(/\.product-card-action \{\s*min-height: 2\.75rem;/);
+    expect(cardCss).toMatch(/\.product-card-round-action \{\s*width: 2\.75rem;\s*height: 2\.75rem;/);
+    expect(cardCss).toMatch(/@media \(hover: hover\) and \(pointer: fine\) \{\s*\.site-root \.product-card-action \{\s*min-height: var\(--theme-control-height/);
+    // Card corners follow the radius token; soft corners stop at 20px.
+    expect(cardCss).toMatch(/\[data-theme-component="product-card"\] \{\s*min-width: 0;\s*border-radius: calc\(var\(--radius\) \* 1\.5\);/);
+    expect(cardCss).toMatch(/\.site-root\[data-theme-radius="soft"\] \[data-theme-component="product-card"\] \{\s*border-radius: 1\.25rem;/);
+    // Card titles never drop below 14px, and long words break inside the card.
+    expect(cardCss).toContain("--card-title-size: 0.875rem;");
+    expect(cardCss).not.toMatch(/--card-title-size: 0\.(?:[0-7]\d*|8[0-6]\d*)rem/);
+    expect(cardCss).toMatch(/\.product-card-name \{[^}]*overflow-wrap: anywhere;/);
+    // Every card's name link, the standard card's included (found in Chrome:
+    // a name without spaces was cut at the card edge).
+    expect(cardCss).toMatch(/\.site-root \.product-card-link \{\s*overflow-wrap: anywhere;/);
   });
 
   it.each(DENSITIES)("%s: reaches each density step value at its container width", (_density, grid) => {
@@ -56,6 +91,25 @@ describe("fluid product grid", () => {
           if (viewport >= 360 && viewport <= 430) expect(columns, `${viewport}px`).toBe(2);
           previous = columns;
         }
+      }
+    }
+  });
+
+  it.each(DENSITIES)("%s: portrait photos widen cards, never beyond the density on phones", (_density, grid) => {
+    const portrait = productGridSpec(grid, "portrait");
+    expect(productGridSpec(grid, "square")).toBe(grid);
+    expect(productGridSpec(grid, "landscape")).toBe(grid);
+    expect(portrait.cardMin.phone).toBe(grid.cardMin.phone);
+    expect(px(portrait.cardMin.desktop)).toBeGreaterThanOrEqual(Math.max(px(grid.cardMin.desktop), 240));
+    for (const containerWidth of CONTAINER_WIDTHS) {
+      let previous = 0;
+      for (let viewport = 320; viewport <= 2560; viewport += 1) {
+        const columns = productGridColumnCount(portrait, productGridWidth(viewport, px(containerWidth), "grid"));
+        expect(columns, `${viewport}px ${containerWidth}`).toBeGreaterThanOrEqual(previous);
+        if (viewport >= 360 && viewport <= 430) expect(columns, `${viewport}px`).toBe(2);
+        // No six portrait cards across a laptop or a 1440px container.
+        if (viewport <= 1440) expect(columns, `${viewport}px ${containerWidth}`).toBeLessThanOrEqual(5);
+        previous = columns;
       }
     }
   });
@@ -94,6 +148,22 @@ describe("productCardImageSizes", () => {
           expect(declared, `${viewport}px ${containerWidth} ${context}`).toBeGreaterThanOrEqual(card - 0.5);
           // ...and never asks for much more than the card needs.
           expect(declared, `${viewport}px ${containerWidth} ${context}`).toBeLessThanOrEqual(card * 1.35 + 1);
+        }
+      }
+    }
+  });
+
+  it.each(DENSITIES)("%s: list rows ask for the row photo on phones and the grid card above", (_density, grid) => {
+    for (const containerWidth of CONTAINER_WIDTHS) {
+      const sizes = productCardImageSizes(grid, containerWidth, "beside-filters", "list-row");
+      expect(sizes).toMatch(new RegExp(`^\\(max-width: \\d+px\\) ${LIST_ROW_MEDIA_PX}px, `));
+      for (let viewport = 320; viewport <= 1920; viewport += 7) {
+        const width = productGridWidth(viewport, px(containerWidth), "beside-filters");
+        const declared = evaluateSizes(sizes, viewport);
+        if (width < PRODUCT_GRID_STEPS_REM.tablet * 16) {
+          expect(declared, `${viewport}px`).toBe(LIST_ROW_MEDIA_PX);
+        } else {
+          expect(declared, `${viewport}px`).toBe(evaluateSizes(productCardImageSizes(grid, containerWidth, "beside-filters"), viewport));
         }
       }
     }

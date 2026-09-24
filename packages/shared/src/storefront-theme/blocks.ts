@@ -69,10 +69,63 @@ export type StorefrontHeaderRenderer = (typeof STOREFRONT_HEADER_RENDERERS)[numb
 export type StorefrontNavigationRenderer = (typeof STOREFRONT_NAVIGATION_RENDERERS)[number];
 export type StorefrontMobileNavigationRenderer = (typeof STOREFRONT_MOBILE_NAVIGATION_RENDERERS)[number];
 export type StorefrontFooterRenderer = (typeof STOREFRONT_FOOTER_RENDERERS)[number];
+/**
+ * Optional card facts. Each renders only when its data exists (a real
+ * brand, key specs, reviews, 10+ sold, EMI plans...): no zero states.
+ */
+export const STOREFRONT_CARD_SLOTS = [
+  "brand",
+  "key-specs",
+  "rating",
+  "sold",
+  "savings",
+  "pack-size",
+  "delivery",
+  "emi",
+] as const;
+export type StorefrontCardSlot = (typeof STOREFRONT_CARD_SLOTS)[number];
+/** What a card body shows, top to bottom: the title, the price and optional facts. */
+export type StorefrontCardPart = "title" | "price" | StorefrontCardSlot;
+
+/**
+ * A card's measured anatomy as data (SYNTHESIS.md section 2.4). Sizes,
+ * weights of the price, radius, surface, photo ratio and fit come from the
+ * tokens, so any card works in any template.
+ */
 export interface StorefrontCardRenderer {
+  /** A buy action on the card (products without options, in stock). */
   quickBuy: boolean;
+  /** The discount sits on the photo or beside the price. */
   badge: "image" | "price";
   hoverImage: boolean;
+  /** How a discount reads: "-20%", "Sale", "Save ৳600" or "৳600 OFF". */
+  discount: "percent" | "sale" | "save" | "off";
+  /** Title lines before it is clamped. */
+  titleLines: 1 | 2;
+  titleWeight: "regular" | "medium" | "strong";
+  /** The price's colour role: ink, the action colour, or the sale colour while discounted. */
+  priceTone: "ink" | "primary" | "sale";
+  /** The body, top to bottom. */
+  body: readonly StorefrontCardPart[];
+  /** Where the buy action sits: a full-width button, an outline button, or a round button on the photo. */
+  action: "block" | "outline" | "round";
+  actionLabel: "buy-now" | "add-to-cart";
+}
+
+function card(anatomy: Partial<StorefrontCardRenderer>): StorefrontCardRenderer {
+  return {
+    quickBuy: false,
+    badge: "image",
+    hoverImage: false,
+    discount: "percent",
+    titleLines: 2,
+    titleWeight: "medium",
+    priceTone: "ink",
+    body: ["title", "price"],
+    action: "block",
+    actionLabel: "add-to-cart",
+    ...anatomy,
+  };
 }
 export interface StorefrontGalleryRenderer {
   gallery: "beside" | "stacked";
@@ -181,49 +234,94 @@ export const STOREFRONT_MOBILE_NAV_VARIANTS = {
 
 /** One card per store: listing, rails, related and search share it (mix rule 2). */
 export const STOREFRONT_CARD_VARIANTS = {
+  // Today's classic card (department-mall, pixel-identical): badge on the
+  // photo, title 2 lines, price below.
   standard: variant({
     settings: hoverImage,
     defaults: { hoverImage: false },
-    renders: (settings) => ({ quickBuy: false, badge: "image" as const, hoverImage: settings.hoverImage }),
+    renders: (settings) => card({ hoverImage: settings.hoverImage }),
   }),
   // Dawn: title 13/400, price 16/400, Sale / Sold out badge.
   boutique: variant({
     settings: hoverImage,
     defaults: { hoverImage: true },
-    renders: (settings) => ({ quickBuy: false, badge: "image" as const, hoverImage: settings.hoverImage }),
+    renders: (settings) => card({ hoverImage: settings.hoverImage, discount: "sale", titleWeight: "regular" }),
   }),
-  // Aarong: heart, quick view, name 16/700 in two lines.
+  // Aarong: portrait photo, name 16/700 in two lines, price 16/400.
   portrait: variant({
     settings: hoverImage,
     defaults: { hoverImage: true },
-    renders: (settings) => ({ quickBuy: false, badge: "image" as const, hoverImage: settings.hoverImage }),
+    renders: (settings) => card({ hoverImage: settings.hoverImage, titleWeight: "strong" }),
   }),
-  // Fabrilife: -40% badge, round add over the photo, "Save" line.
+  // Fabrilife: -40% badge, round add over the photo, title on one line,
+  // "Save ৳600", price 20/700.
   "fashion-value": variant({
     contrastPairs: [["destructive", "card"]],
-    renders: { quickBuy: true, badge: "image" as const, hoverImage: false },
+    renders: card({ quickBuy: true, titleLines: 1, body: ["title", "savings", "price"], action: "round" }),
   }),
-  // Star Tech: four key-spec bullets, full-width Buy Now, Add to Compare.
+  // Star Tech: "Save ৳" pill, title 14/600, four key-spec bullets, price in
+  // the action colour, full-width Buy Now.
   spec: variant({
     contrastPairs: [["primary", "card"]],
-    renders: { quickBuy: true, badge: "image" as const, hoverImage: false },
+    renders: card({
+      quickBuy: true,
+      discount: "save",
+      titleWeight: "strong",
+      priceTone: "primary",
+      body: ["title", "key-specs", "price", "emi"],
+      actionLabel: "buy-now",
+    }),
   }),
-  // Apple Gadgets: outline pill CTA plus cart icon, OFF chip.
-  "tech-rounded": variant({ renders: { quickBuy: true, badge: "price" as const, hoverImage: false } }),
-  // Target: brand line, sale price, full-width Add to cart pill.
+  // Apple Gadgets: title 18/600, price 18/600 with a "৳500 OFF" chip, outline
+  // pill CTA.
+  "tech-rounded": variant({
+    contrastPairs: [["primary", "card"]],
+    renders: card({
+      quickBuy: true,
+      badge: "price",
+      discount: "off",
+      titleWeight: "strong",
+      body: ["title", "price", "emi"],
+      action: "outline",
+      actionLabel: "buy-now",
+    }),
+  }),
+  // Target: price first (22/700, "Sale" in the sale colour), brand 14/700,
+  // title 14/400, rating, delivery, full-width Add to cart pill.
   retail: variant({
     contrastPairs: [["destructive", "card"]],
-    renders: { quickBuy: true, badge: "price" as const, hoverImage: false },
+    renders: card({
+      quickBuy: true,
+      badge: "price",
+      discount: "sale",
+      titleWeight: "regular",
+      priceTone: "sale",
+      body: ["price", "brand", "title", "rating", "delivery"],
+    }),
   }),
-  // Daraz: orange price, -%, sold count and rating only when real.
+  // Daraz: title 13/400, price 18 in the action colour, -%, then rating and
+  // "129 sold" (only when real).
   marketplace: variant({
-    contrastPairs: [["primary", "card"]],
-    renders: { quickBuy: false, badge: "price" as const, hoverImage: false },
+    contrastPairs: [["primary", "card"], ["destructive", "card"]],
+    renders: card({
+      badge: "price",
+      titleWeight: "regular",
+      priceTone: "primary",
+      body: ["title", "price", "rating", "sold"],
+    }),
   }),
-  // Chaldal: round + over the photo, pack size, delivery-time chip.
+  // Chaldal: round + over the photo, price first (red on sale), name 16/400,
+  // pack size, delivery chip.
   "quick-add": variant({
     contrastPairs: [["destructive", "card"]],
-    renders: { quickBuy: true, badge: "price" as const, hoverImage: false },
+    renders: card({
+      quickBuy: true,
+      badge: "price",
+      titleWeight: "regular",
+      priceTone: "sale",
+      body: ["price", "title", "pack-size", "delivery"],
+      action: "round",
+    }),
   }),
 };
 

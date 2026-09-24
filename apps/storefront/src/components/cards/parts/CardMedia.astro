@@ -1,0 +1,78 @@
+---
+// The card photo box every card variant shares. Its ratio and fit are the
+// theme's image tokens (theme-foundation.css), so the box has its final size
+// before any photo loads (CLS 0). A product without a photo shows its
+// initial on the muted surface in the same box, never a collapsed tile.
+import type { StorefrontImageRatio } from "@scalius/shared/storefront-theme";
+import type { ProductCardImageLoading } from "@/lib/product-card-layout";
+import { CARD_IMAGE_DIMENSIONS, type ProductCardModel } from "../card-model";
+
+interface Props {
+  model: ProductCardModel;
+  ratio: StorefrontImageRatio;
+  sizes: string;
+  loading: ProductCardImageLoading;
+  /** The discount pill on the photo, when the card puts it there. */
+  badge: string | null;
+}
+
+const { model, ratio, sizes, loading, badge } = Astro.props;
+const { width, height } = CARD_IMAGE_DIMENSIONS[ratio];
+---
+
+<div class="product-card-media relative overflow-hidden bg-muted">
+  {
+    model.image ? (
+      <img
+        src={model.image.src}
+        srcset={model.image.srcset}
+        sizes={sizes}
+        alt={model.image.alt}
+        width={width}
+        height={height}
+        loading={loading.loading}
+        fetchpriority={loading.fetchpriority}
+        decoding={loading.decoding}
+        class="product-card-photo w-full h-full object-center"
+      />
+    ) : (
+      <div class="product-card-placeholder" aria-hidden="true" data-card-placeholder>
+        <span>{model.monogram}</span>
+      </div>
+    )
+  }
+  {
+    model.hoverImage && (
+      <img
+        src={model.hoverImage.src}
+        srcset={model.hoverImage.srcset}
+        sizes={sizes}
+        alt=""
+        aria-hidden="true"
+        width={width}
+        height={height}
+        loading="lazy"
+        decoding="async"
+        class="product-card-photo product-card-hover-image absolute inset-0 hidden h-full w-full object-center opacity-0 group-hover:opacity-100"
+      />
+    )
+  }
+
+  <div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
+    {
+      badge && (
+        <span data-card-discount class="px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm">
+          {badge}
+        </span>
+      )
+    }
+    {
+      model.soldOut && (
+        <span class="px-2.5 py-1 text-xs font-bold text-foreground bg-background/90 rounded-full shadow-sm border border-border">
+          Sold out
+        </span>
+      )
+    }
+  </div>
+  <slot />
+</div>

@@ -81,6 +81,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* The header's surface and ink follow the header tone token (light, dark
+     or the brand colour): `bg-header text-header-foreground`. */
+  --color-header: var(--theme-header-background, var(--background));
+  --color-header-foreground: var(--theme-header-foreground, var(--foreground));
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: calc(var(--radius) + 1px);
@@ -162,6 +166,47 @@ body {
   /* Uppercase labels (badges, eyebrows) open up a little. */
   .site-root :where(.uppercase) {
     letter-spacing: var(--theme-label-tracking, 0.06em);
+  }
+
+  /* Heading case (Theme -> Style): uppercase page and section titles, never
+     product names. */
+  .site-root[data-theme-heading-case="uppercase"]
+    :where(h1, h2, .section-heading):not([data-theme-component="product-card"] *) {
+    text-transform: uppercase;
+    letter-spacing: var(--theme-label-tracking, 0.06em);
+  }
+
+  /* Type scale (Theme -> Style). Titles relative to body text: h1 and
+     section titles at the scale's ratio on computers and half the step on
+     phones. `retail` is today's scale, so its headings keep their own sizes;
+     flat (Star Tech 22/15) and display (Dawn 40/16) resize section titles.
+     Page titles opt in with `--theme-h1-size` / `--theme-h1-weight`. */
+  .site-root {
+    --theme-h1-size: calc(var(--text-base) * (1 + (var(--theme-h1-ratio, 1.8) - 1) * 0.5));
+    --theme-section-size: min(calc(var(--text-base) * (1 + (var(--theme-section-ratio, 2) - 1) * 0.5)), 1.75rem);
+  }
+
+  @media (min-width: 64rem) {
+    .site-root {
+      --theme-h1-size: calc(var(--text-base) * var(--theme-h1-ratio, 1.8));
+      --theme-section-size: min(calc(var(--text-base) * var(--theme-section-ratio, 2)), 2.5rem);
+    }
+  }
+
+  .site-root:is([data-theme-type-scale="flat"], [data-theme-type-scale="display"]) .section-heading {
+    font-size: var(--theme-section-size);
+    font-weight: var(--theme-section-weight, 700);
+  }
+}
+
+/* Space between homepage sections follows the density. */
+.site-root {
+  --theme-section-gap: var(--theme-section-gap-phone, 2rem);
+}
+
+@media (min-width: 64rem) {
+  .site-root {
+    --theme-section-gap: var(--theme-section-gap-desktop, 3rem);
   }
 }
 
@@ -283,84 +328,17 @@ html {
   transform: scale(0.98);
 }
 
-/* Product cards: the surface language per Style. */
-.site-root [data-theme-component="product-card"] {
-  border-radius: calc(var(--radius) * 1.5);
-  transition:
-    border-color var(--theme-duration) var(--theme-ease),
-    box-shadow var(--theme-duration) var(--theme-ease);
-}
-
-.site-root[data-theme-card-style="bordered"] [data-theme-component="product-card"] {
-  border: 1px solid var(--border);
-  box-shadow: none;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .site-root[data-theme-card-style="bordered"] [data-theme-component="product-card"]:hover {
-    border-color: color-mix(in oklab, var(--foreground) 28%, var(--border));
-  }
-}
-
-.site-root[data-theme-card-style="elevated"] [data-theme-component="product-card"] {
-  border: 0;
-  box-shadow:
-    0 1px 2px color-mix(in oklab, var(--foreground) 6%, transparent),
-    0 8px 24px -12px color-mix(in oklab, var(--foreground) 18%, transparent);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .site-root[data-theme-card-style="elevated"] [data-theme-component="product-card"]:hover {
-    box-shadow:
-      0 1px 2px color-mix(in oklab, var(--foreground) 8%, transparent),
-      0 16px 36px -14px color-mix(in oklab, var(--foreground) 26%, transparent);
-  }
-}
-
-/* Flat (editorial) cards: no chrome at all; the photo carries the card and
-   the text sits flush under it. */
-.site-root[data-theme-card-style="flat"] [data-theme-component="product-card"] {
-  border: 0;
-  box-shadow: none;
-  background: transparent;
-  border-radius: 0;
-  overflow: visible;
-}
-
-.site-root[data-theme-card-style="flat"] [data-theme-component="product-card"] .product-card-media {
-  border-radius: var(--radius);
-}
-
-.site-root[data-theme-card-style="flat"] [data-theme-component="product-card"] .product-card-body {
-  padding-inline: 0;
-  padding-bottom: 0;
-}
-
-/* Photos: a restrained 1.03 zoom on hover (portrait cards cross-fade to the
-   second photo instead). */
-.site-root .product-card-media > img {
-  transition:
-    transform 200ms var(--theme-ease),
-    opacity 200ms var(--theme-ease);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .site-root [data-theme-component="product-card"]:hover .product-card-media > img:first-child {
-    transform: scale(1.03);
-  }
-}
+/* Product cards style themselves in theme-cards.css, which only pages that
+   render cards load (ProductCard.astro imports it). */
 
 @media (prefers-reduced-motion: reduce) {
   .site-root :where(button, a, input[type="submit"]):where(.bg-primary),
-  .site-root [data-theme-component="button"],
-  .site-root [data-theme-component="product-card"],
-  .site-root .product-card-media > img {
+  .site-root [data-theme-component="button"] {
     transition: none;
   }
 
   .site-root :where(button, a, input[type="submit"]):where(.bg-primary):active,
-  .site-root [data-theme-component="button"]:active,
-  .site-root [data-theme-component="product-card"]:hover .product-card-media > img:first-child {
+  .site-root [data-theme-component="button"]:active {
     transform: none;
   }
 }

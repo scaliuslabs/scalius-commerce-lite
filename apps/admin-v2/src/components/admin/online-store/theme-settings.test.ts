@@ -157,7 +157,7 @@ describe("theme colors", () => {
 
   it("checks the pairs the chosen blocks paint, such as a coloured price on cards", () => {
     // A grey that passes on the dark page fails on the lighter cards, only once a card paints it.
-    const base = setThemeColor(storefrontTemplateTheme("rounded-tech"), "buttons", "#7a7a7a");
+    const base = setBlockVariant(setThemeColor(storefrontTemplateTheme("rounded-tech"), "buttons", "#7a7a7a"), "card", "standard");
     const onCards = setBlockVariant(base, "card", "spec");
     expect(themeContrastProblems(base).map((problem) => problem.message)).toEqual([]);
     expect(themeContrastProblems(onCards)).toEqual([
