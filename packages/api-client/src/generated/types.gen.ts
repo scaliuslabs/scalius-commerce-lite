@@ -6,6 +6,89 @@ export type ClientOptions = {
 
 export type NullableTimestamp = string | number | null;
 
+export type StorefrontThemeDocument = {
+    version: 2;
+    mode: 'configured' | 'custom';
+    tokens: {
+        colors: {
+            background: string;
+            foreground: string;
+            card: string;
+            'card-foreground': string;
+            popover: string;
+            'popover-foreground': string;
+            primary: string;
+            'primary-foreground': string;
+            secondary: string;
+            'secondary-foreground': string;
+            muted: string;
+            'muted-foreground': string;
+            accent: string;
+            'accent-foreground': string;
+            destructive: string;
+            'destructive-foreground': string;
+            border: string;
+            input: string;
+            ring: string;
+        };
+        typography: {
+            heading: 'system' | 'modern' | 'editorial';
+            body: 'system' | 'modern' | 'humanist';
+        };
+        radius: 'square' | 'subtle' | 'rounded';
+        containerWidth: 'standard' | 'wide';
+        components: {
+            buttons: 'solid' | 'outline';
+            inputs: 'outlined' | 'filled';
+            cards: 'bordered' | 'elevated' | 'flat';
+        };
+    };
+    layout: {
+        header: 'classic' | 'centered' | 'marketplace';
+        footer: 'columns' | 'compact' | 'contact';
+        card: 'standard' | 'portrait' | 'quick';
+        density: 'compact' | 'comfortable';
+        productPage: 'gallery' | 'filmstrip' | 'stacked';
+    };
+    sections: Array<{
+        id: string;
+        type: 'hero';
+        version: 1;
+        settings: {
+            [key: string]: never;
+        };
+    } | {
+        id: string;
+        type: 'collections';
+        version: 1;
+        settings: {
+            [key: string]: never;
+        };
+    } | {
+        id: string;
+        type: 'categories';
+        version: 1;
+        settings: {
+            [key: string]: never;
+        };
+    } | {
+        id: string;
+        type: 'delivery';
+        version: 1;
+        settings: {
+            [key: string]: never;
+        };
+    } | {
+        id: string;
+        type: 'rich_text';
+        version: 1;
+        settings: {
+            heading: string;
+            body: string;
+        };
+    }>;
+};
+
 export type GetApiV1AuthTokenData = {
     body?: never;
     path?: never;
@@ -2903,43 +2986,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 symbol: string;
                 usdExchangeRate: number;
             };
-            theme: {
-                colors: {
-                    [key: string]: string;
-                };
-                typography: {
-                    heading: 'system' | 'modern' | 'editorial';
-                    body: 'system' | 'modern' | 'humanist';
-                    scale: 'compact' | 'standard' | 'generous';
-                };
-                cornerStyle: 'square' | 'subtle' | 'rounded';
-                density: 'compact' | 'comfortable' | 'airy';
-                containerWidth: 'focused' | 'standard' | 'wide';
-                components: {
-                    buttons: 'solid' | 'soft' | 'outline';
-                    inputs: 'outlined' | 'filled';
-                    cards: 'bordered' | 'elevated' | 'flat';
-                };
-                layout: {
-                    header: 'classic' | 'centered' | 'marketplace';
-                    footer: 'columns' | 'compact' | 'contact';
-                    productCard: {
-                        imageRatio: 'square' | 'portrait';
-                        hoverImage: boolean;
-                        quickBuy: boolean;
-                        badge: 'image' | 'price';
-                    };
-                    grid: {
-                        desktop: number;
-                        mobile: number;
-                    };
-                    productPage: {
-                        gallery: 'beside' | 'stacked';
-                        thumbnails: 'beside' | 'below';
-                    };
-                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                };
-            };
+            theme: StorefrontThemeDocument;
             media: {
                 canonicalCdnUrl: string;
                 canonicalHostAliases: Array<string>;
@@ -3058,9 +3105,7 @@ export type PostApiV1StorefrontThemePreviewResolveResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                [key: string]: unknown;
-            };
+            theme: StorefrontThemeDocument;
             draftRevision: number;
             basePublishedRevision: number;
             expiresAt?: unknown;
@@ -13321,7 +13366,10 @@ export type PostApiV1AdminCategoriesData = {
         name: string;
         description: string | null;
         content?: string | null;
-        slug: string;
+        /**
+         * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
+         */
+        slug?: string;
         metaTitle: string | null;
         metaDescription: string | null;
         canonicalPath?: string | null;
@@ -14949,6 +14997,23 @@ export type GetApiV1AdminCollectionsProductOptionsResponses = {
                 id: string;
                 name: string;
                 price: number;
+                /**
+                 * Null when the product has no live SKU. Products with options sell at their variant prices, not the product price.
+                 */
+                priceRange: {
+                    /**
+                     * The storefront's "From" price: the lowest price buyers can pay now.
+                     */
+                    from: number;
+                    /**
+                     * The highest price in the same buyer pool; equal to from for one price.
+                     */
+                    to: number;
+                    /**
+                     * The undiscounted price of the "From" SKU when it is on sale.
+                     */
+                    compareAt: number | null;
+                } | null;
                 categoryId: string | null;
                 categoryName: string | null;
                 isActive: boolean;
@@ -17349,7 +17414,10 @@ export type GetApiV1AdminPagesResponse = GetApiV1AdminPagesResponses[keyof GetAp
 export type PostApiV1AdminPagesData = {
     body: {
         title: string;
-        slug: string;
+        /**
+         * Omit to derive the web address from the title; a taken or reserved one gets a -2, -3… suffix.
+         */
+        slug?: string;
         content: string;
         excerpt?: string | null;
         author?: string | null;
@@ -22123,6 +22191,10 @@ export type GetApiV1AdminInventoryResponses = {
                 id: string;
                 variantId: string;
                 orderId: string | null;
+                /**
+                 * The order's short number (#1073); null for movements without an order.
+                 */
+                orderNumber: number | null;
                 type: string;
                 quantity: number;
                 previousStock: number;
@@ -29737,43 +29809,7 @@ export type GetApiV1AdminSettingsThemeResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                colors: {
-                    [key: string]: string;
-                };
-                typography: {
-                    heading: 'system' | 'modern' | 'editorial';
-                    body: 'system' | 'modern' | 'humanist';
-                    scale: 'compact' | 'standard' | 'generous';
-                };
-                cornerStyle: 'square' | 'subtle' | 'rounded';
-                density: 'compact' | 'comfortable' | 'airy';
-                containerWidth: 'focused' | 'standard' | 'wide';
-                components: {
-                    buttons: 'solid' | 'soft' | 'outline';
-                    inputs: 'outlined' | 'filled';
-                    cards: 'bordered' | 'elevated' | 'flat';
-                };
-                layout: {
-                    header: 'classic' | 'centered' | 'marketplace';
-                    footer: 'columns' | 'compact' | 'contact';
-                    productCard: {
-                        imageRatio: 'square' | 'portrait';
-                        hoverImage: boolean;
-                        quickBuy: boolean;
-                        badge: 'image' | 'price';
-                    };
-                    grid: {
-                        desktop: 2 | 3 | 4;
-                        mobile: 1 | 2;
-                    };
-                    productPage: {
-                        gallery: 'beside' | 'stacked';
-                        thumbnails: 'beside' | 'below';
-                    };
-                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                };
-            };
+            theme: StorefrontThemeDocument;
             revision: number;
             [key: string]: unknown;
         };
@@ -29785,43 +29821,7 @@ export type GetApiV1AdminSettingsThemeResponse = GetApiV1AdminSettingsThemeRespo
 export type PostApiV1AdminSettingsThemeData = {
     body?: {
         expectedRevision: number;
-        theme: {
-            colors: {
-                [key: string]: string;
-            };
-            typography: {
-                heading: 'system' | 'modern' | 'editorial';
-                body: 'system' | 'modern' | 'humanist';
-                scale: 'compact' | 'standard' | 'generous';
-            };
-            cornerStyle: 'square' | 'subtle' | 'rounded';
-            density: 'compact' | 'comfortable' | 'airy';
-            containerWidth: 'focused' | 'standard' | 'wide';
-            components: {
-                buttons: 'solid' | 'soft' | 'outline';
-                inputs: 'outlined' | 'filled';
-                cards: 'bordered' | 'elevated' | 'flat';
-            };
-            layout: {
-                header: 'classic' | 'centered' | 'marketplace';
-                footer: 'columns' | 'compact' | 'contact';
-                productCard: {
-                    imageRatio: 'square' | 'portrait';
-                    hoverImage: boolean;
-                    quickBuy: boolean;
-                    badge: 'image' | 'price';
-                };
-                grid: {
-                    desktop: 2 | 3 | 4;
-                    mobile: 1 | 2;
-                };
-                productPage: {
-                    gallery: 'beside' | 'stacked';
-                    thumbnails: 'beside' | 'below';
-                };
-                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-            };
-        };
+        theme: StorefrontThemeDocument;
     };
     path?: never;
     query?: never;
@@ -29906,43 +29906,7 @@ export type PostApiV1AdminSettingsThemeResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                colors: {
-                    [key: string]: string;
-                };
-                typography: {
-                    heading: 'system' | 'modern' | 'editorial';
-                    body: 'system' | 'modern' | 'humanist';
-                    scale: 'compact' | 'standard' | 'generous';
-                };
-                cornerStyle: 'square' | 'subtle' | 'rounded';
-                density: 'compact' | 'comfortable' | 'airy';
-                containerWidth: 'focused' | 'standard' | 'wide';
-                components: {
-                    buttons: 'solid' | 'soft' | 'outline';
-                    inputs: 'outlined' | 'filled';
-                    cards: 'bordered' | 'elevated' | 'flat';
-                };
-                layout: {
-                    header: 'classic' | 'centered' | 'marketplace';
-                    footer: 'columns' | 'compact' | 'contact';
-                    productCard: {
-                        imageRatio: 'square' | 'portrait';
-                        hoverImage: boolean;
-                        quickBuy: boolean;
-                        badge: 'image' | 'price';
-                    };
-                    grid: {
-                        desktop: 2 | 3 | 4;
-                        mobile: 1 | 2;
-                    };
-                    productPage: {
-                        gallery: 'beside' | 'stacked';
-                        thumbnails: 'beside' | 'below';
-                    };
-                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                };
-            };
+            theme: StorefrontThemeDocument;
             revision: number;
             message: string;
         };
@@ -30037,83 +30001,11 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
         success: true;
         data: {
             published: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
             };
             draft: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
                 basePublishedRevision: number;
                 updatedAt?: unknown;
@@ -30126,43 +30018,7 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponse = GetApiV1AdminSettingsT
 
 export type PostApiV1AdminSettingsThemeDraftData = {
     body: {
-        theme: {
-            colors: {
-                [key: string]: string;
-            };
-            typography: {
-                heading: 'system' | 'modern' | 'editorial';
-                body: 'system' | 'modern' | 'humanist';
-                scale: 'compact' | 'standard' | 'generous';
-            };
-            cornerStyle: 'square' | 'subtle' | 'rounded';
-            density: 'compact' | 'comfortable' | 'airy';
-            containerWidth: 'focused' | 'standard' | 'wide';
-            components: {
-                buttons: 'solid' | 'soft' | 'outline';
-                inputs: 'outlined' | 'filled';
-                cards: 'bordered' | 'elevated' | 'flat';
-            };
-            layout: {
-                header: 'classic' | 'centered' | 'marketplace';
-                footer: 'columns' | 'compact' | 'contact';
-                productCard: {
-                    imageRatio: 'square' | 'portrait';
-                    hoverImage: boolean;
-                    quickBuy: boolean;
-                    badge: 'image' | 'price';
-                };
-                grid: {
-                    desktop: 2 | 3 | 4;
-                    mobile: 1 | 2;
-                };
-                productPage: {
-                    gallery: 'beside' | 'stacked';
-                    thumbnails: 'beside' | 'below';
-                };
-                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-            };
-        };
+        theme: StorefrontThemeDocument;
         expectedDraftRevision: number;
         basePublishedRevision: number;
     };
@@ -30249,43 +30105,7 @@ export type PostApiV1AdminSettingsThemeDraftResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                colors: {
-                    [key: string]: string;
-                };
-                typography: {
-                    heading: 'system' | 'modern' | 'editorial';
-                    body: 'system' | 'modern' | 'humanist';
-                    scale: 'compact' | 'standard' | 'generous';
-                };
-                cornerStyle: 'square' | 'subtle' | 'rounded';
-                density: 'compact' | 'comfortable' | 'airy';
-                containerWidth: 'focused' | 'standard' | 'wide';
-                components: {
-                    buttons: 'solid' | 'soft' | 'outline';
-                    inputs: 'outlined' | 'filled';
-                    cards: 'bordered' | 'elevated' | 'flat';
-                };
-                layout: {
-                    header: 'classic' | 'centered' | 'marketplace';
-                    footer: 'columns' | 'compact' | 'contact';
-                    productCard: {
-                        imageRatio: 'square' | 'portrait';
-                        hoverImage: boolean;
-                        quickBuy: boolean;
-                        badge: 'image' | 'price';
-                    };
-                    grid: {
-                        desktop: 2 | 3 | 4;
-                        mobile: 1 | 2;
-                    };
-                    productPage: {
-                        gallery: 'beside' | 'stacked';
-                        thumbnails: 'beside' | 'below';
-                    };
-                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                };
-            };
+            theme: StorefrontThemeDocument;
             revision: number;
             basePublishedRevision: number;
             updatedAt?: unknown;
@@ -30297,43 +30117,7 @@ export type PostApiV1AdminSettingsThemeDraftResponse = PostApiV1AdminSettingsThe
 
 export type PostApiV1AdminSettingsThemeDraftRebaseData = {
     body: {
-        theme: {
-            colors: {
-                [key: string]: string;
-            };
-            typography: {
-                heading: 'system' | 'modern' | 'editorial';
-                body: 'system' | 'modern' | 'humanist';
-                scale: 'compact' | 'standard' | 'generous';
-            };
-            cornerStyle: 'square' | 'subtle' | 'rounded';
-            density: 'compact' | 'comfortable' | 'airy';
-            containerWidth: 'focused' | 'standard' | 'wide';
-            components: {
-                buttons: 'solid' | 'soft' | 'outline';
-                inputs: 'outlined' | 'filled';
-                cards: 'bordered' | 'elevated' | 'flat';
-            };
-            layout: {
-                header: 'classic' | 'centered' | 'marketplace';
-                footer: 'columns' | 'compact' | 'contact';
-                productCard: {
-                    imageRatio: 'square' | 'portrait';
-                    hoverImage: boolean;
-                    quickBuy: boolean;
-                    badge: 'image' | 'price';
-                };
-                grid: {
-                    desktop: 2 | 3 | 4;
-                    mobile: 1 | 2;
-                };
-                productPage: {
-                    gallery: 'beside' | 'stacked';
-                    thumbnails: 'beside' | 'below';
-                };
-                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-            };
-        };
+        theme: StorefrontThemeDocument;
         expectedDraftRevision: number;
         basePublishedRevision: number;
     };
@@ -30420,43 +30204,7 @@ export type PostApiV1AdminSettingsThemeDraftRebaseResponses = {
     200: {
         success: true;
         data: {
-            theme: {
-                colors: {
-                    [key: string]: string;
-                };
-                typography: {
-                    heading: 'system' | 'modern' | 'editorial';
-                    body: 'system' | 'modern' | 'humanist';
-                    scale: 'compact' | 'standard' | 'generous';
-                };
-                cornerStyle: 'square' | 'subtle' | 'rounded';
-                density: 'compact' | 'comfortable' | 'airy';
-                containerWidth: 'focused' | 'standard' | 'wide';
-                components: {
-                    buttons: 'solid' | 'soft' | 'outline';
-                    inputs: 'outlined' | 'filled';
-                    cards: 'bordered' | 'elevated' | 'flat';
-                };
-                layout: {
-                    header: 'classic' | 'centered' | 'marketplace';
-                    footer: 'columns' | 'compact' | 'contact';
-                    productCard: {
-                        imageRatio: 'square' | 'portrait';
-                        hoverImage: boolean;
-                        quickBuy: boolean;
-                        badge: 'image' | 'price';
-                    };
-                    grid: {
-                        desktop: 2 | 3 | 4;
-                        mobile: 1 | 2;
-                    };
-                    productPage: {
-                        gallery: 'beside' | 'stacked';
-                        thumbnails: 'beside' | 'below';
-                    };
-                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                };
-            };
+            theme: StorefrontThemeDocument;
             revision: number;
             basePublishedRevision: number;
             updatedAt?: unknown;
@@ -30555,83 +30303,11 @@ export type PostApiV1AdminSettingsThemePublishResponses = {
         success: true;
         data: {
             published: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
             };
             draft: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
                 basePublishedRevision: number;
                 updatedAt?: unknown;
@@ -30731,43 +30407,7 @@ export type GetApiV1AdminSettingsThemeVersionsResponses = {
         data: {
             versions: Array<{
                 id: string;
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
                 source: 'publish' | 'rollback' | 'migration';
                 sourceRevision: number | null;
@@ -30870,83 +30510,11 @@ export type PostApiV1AdminSettingsThemeRollbackResponses = {
         success: true;
         data: {
             published: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
             };
             draft: {
-                theme: {
-                    colors: {
-                        [key: string]: string;
-                    };
-                    typography: {
-                        heading: 'system' | 'modern' | 'editorial';
-                        body: 'system' | 'modern' | 'humanist';
-                        scale: 'compact' | 'standard' | 'generous';
-                    };
-                    cornerStyle: 'square' | 'subtle' | 'rounded';
-                    density: 'compact' | 'comfortable' | 'airy';
-                    containerWidth: 'focused' | 'standard' | 'wide';
-                    components: {
-                        buttons: 'solid' | 'soft' | 'outline';
-                        inputs: 'outlined' | 'filled';
-                        cards: 'bordered' | 'elevated' | 'flat';
-                    };
-                    layout: {
-                        header: 'classic' | 'centered' | 'marketplace';
-                        footer: 'columns' | 'compact' | 'contact';
-                        productCard: {
-                            imageRatio: 'square' | 'portrait';
-                            hoverImage: boolean;
-                            quickBuy: boolean;
-                            badge: 'image' | 'price';
-                        };
-                        grid: {
-                            desktop: 2 | 3 | 4;
-                            mobile: 1 | 2;
-                        };
-                        productPage: {
-                            gallery: 'beside' | 'stacked';
-                            thumbnails: 'beside' | 'below';
-                        };
-                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
-                    };
-                };
+                theme: StorefrontThemeDocument;
                 revision: number;
                 basePublishedRevision: number;
                 updatedAt?: unknown;
@@ -39978,6 +39546,176 @@ export type PutApiV1AdminOrdersByIdStatusResponses = {
 
 export type PutApiV1AdminOrdersByIdStatusResponse = PutApiV1AdminOrdersByIdStatusResponses[keyof PutApiV1AdminOrdersByIdStatusResponses];
 
+export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/mark-delivered';
+};
+
+export type PostApiV1AdminOrdersByIdMarkDeliveredErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdMarkDeliveredError = PostApiV1AdminOrdersByIdMarkDeliveredErrors[keyof PostApiV1AdminOrdersByIdMarkDeliveredErrors];
+
+export type PostApiV1AdminOrdersByIdMarkDeliveredResponses = {
+    /**
+     * Order delivered
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdMarkDeliveredResponse = PostApiV1AdminOrdersByIdMarkDeliveredResponses[keyof PostApiV1AdminOrdersByIdMarkDeliveredResponses];
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedData = {
+    body?: never;
+    path: {
+        id: string;
+        shipmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/returned';
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedError = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedErrors[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedErrors];
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponses = {
+    /**
+     * Parcel back; its items can be sent again or the order cancelled
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            shipmentId: string;
+            quantity: number;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponses];
+
 export type GetApiV1AdminOrdersByIdCodData = {
     body?: never;
     path: {
@@ -41491,6 +41229,7 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
             contentHash: string | null;
             renderVersion: 'invoice-v1';
             orderVersion: number;
+            refundedSinceIssue?: number;
         };
     };
 };
@@ -41706,6 +41445,7 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
             contentHash: string | null;
             renderVersion: 'invoice-v1';
             orderVersion: number;
+            refundedSinceIssue?: number;
         };
     };
 };
@@ -42924,6 +42664,23 @@ export type GetApiV1AdminOrdersCatalogProductsResponses = {
                 name: string;
                 slug: string;
                 price: number;
+                /**
+                 * Null when the product has no live SKU. Products with options sell at their variant prices, not the product price.
+                 */
+                priceRange: {
+                    /**
+                     * The storefront's "From" price: the lowest price buyers can pay now.
+                     */
+                    from: number;
+                    /**
+                     * The highest price in the same buyer pool; equal to from for one price.
+                     */
+                    to: number;
+                    /**
+                     * The undiscounted price of the "From" SKU when it is on sale.
+                     */
+                    compareAt: number | null;
+                } | null;
                 description: string | null;
                 isActive: boolean;
                 discountPercentage: number;
@@ -44452,7 +44209,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -44553,7 +44310,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
             body: string | null;
             data: {
                 [key: string]: unknown;
@@ -45948,6 +45705,23 @@ export type GetApiV1AdminProductsResponses = {
                 name: string;
                 slug: string;
                 price: number;
+                /**
+                 * Null when the product has no live SKU. Products with options sell at their variant prices, not the product price.
+                 */
+                priceRange: {
+                    /**
+                     * The storefront's "From" price: the lowest price buyers can pay now.
+                     */
+                    from: number;
+                    /**
+                     * The highest price in the same buyer pool; equal to from for one price.
+                     */
+                    to: number;
+                    /**
+                     * The undiscounted price of the "From" SKU when it is on sale.
+                     */
+                    compareAt: number | null;
+                } | null;
                 description: string | null;
                 isActive: boolean;
                 discountPercentage: number;
@@ -45994,7 +45768,7 @@ export type PostApiV1AdminProductsData = {
         name: string;
         description: string | null;
         price: number;
-        categoryId: string;
+        categoryId: string | null;
         isActive: boolean;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
@@ -46007,7 +45781,10 @@ export type PostApiV1AdminProductsData = {
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
         productCondition: 'new' | 'refurbished' | 'used';
-        slug: string;
+        /**
+         * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
+         */
+        slug?: string;
         media: Array<{
             id: string;
             mediaId: string;
@@ -46387,6 +46164,23 @@ export type GetApiV1AdminProductsByIdsResponses = {
                 id: string;
                 name: string;
                 price: number;
+                /**
+                 * Null when the product has no live SKU. Products with options sell at their variant prices, not the product price.
+                 */
+                priceRange: {
+                    /**
+                     * The storefront's "From" price: the lowest price buyers can pay now.
+                     */
+                    from: number;
+                    /**
+                     * The highest price in the same buyer pool; equal to from for one price.
+                     */
+                    to: number;
+                    /**
+                     * The undiscounted price of the "From" SKU when it is on sale.
+                     */
+                    compareAt: number | null;
+                } | null;
                 categoryId: string | null;
                 primaryImage: string | null;
                 discountPercentage: number | null;
@@ -50697,7 +50491,10 @@ export type GetApiV1AdminAttributesResponse = GetApiV1AdminAttributesResponses[k
 export type PostApiV1AdminAttributesData = {
     body: {
         name: string;
-        slug: string;
+        /**
+         * Omit to derive the handle from the name; a taken one gets a -2, -3… suffix.
+         */
+        slug?: string;
         filterable?: boolean;
         options?: Array<string>;
     };

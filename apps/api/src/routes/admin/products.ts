@@ -18,7 +18,7 @@ import {
     productSemanticSectionSchema,
     updateProductSemanticSection,
 } from "@scalius/core/modules/products/products.semantic-sections";
-import { NotFoundError, ValidationError } from "../../utils/api-error";
+import { ConflictError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
     successEnvelope,
@@ -27,6 +27,7 @@ import {
     noContentResponse,
 } from "../../schemas/responses";
 import {
+    buyerPriceRangeSchema,
     productSummarySchema,
     productDetailSchema,
     productStatsSchema,
@@ -42,6 +43,7 @@ const productPickerSummarySchema = z.object({
     id: z.string(),
     name: z.string(),
     price: z.number(),
+    priceRange: buyerPriceRangeSchema,
     categoryId: z.string().nullable(),
     primaryImage: z.string().nullable(),
     discountPercentage: z.number().nullable(),
@@ -495,17 +497,9 @@ const createProductRoute = createRoute({
 
 app.openapi(createProductRoute, async (c) => {
     const db = c.get("db");
-    const data = c.req.valid("json");
-    try {
-        const result = await ProductsAdmin.createProduct(db, data);
-        await bumpCacheGeneration(c);
-        return created(c, result);
-    } catch (error: unknown) {
-        if (error instanceof Error && error.message?.includes("slug")) {
-            throw new ValidationError(error.message);
-        }
-        throw error;
-    }
+    const result = await ProductsAdmin.createProduct(db, c.req.valid("json"));
+    await bumpCacheGeneration(c);
+    return created(c, result);
 });
 
 // ── Bulk Delete Products ──
@@ -797,7 +791,8 @@ app.openapi(updateProductRoute, async (c) => {
     } catch (error: unknown) {
         if (error instanceof Error) {
             if (error.message === "Product not found") throw new NotFoundError(error.message);
-            if (error.message?.includes("slug")) throw new ValidationError(error.message);
+            // A taken web address stays a 409 so the editor can name the field.
+            if (error.message?.includes("slug") && !(error instanceof ConflictError)) throw new ValidationError(error.message);
         }
         throw error;
     }

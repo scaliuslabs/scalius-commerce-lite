@@ -5,6 +5,7 @@ import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { productGridFluidCss } from "@/lib/product-card-layout";
 import type { AnalyticsConfig } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
 import {
@@ -91,6 +92,7 @@ setRuntimeImageCdnPolicy(layoutData?.media);
 
 const {
   theme: storefrontTheme,
+  layout: themeLayout,
   previewToken: themePreviewToken,
   preview: themePreview,
 } = await resolveRequestTheme(Astro, layoutData?.theme);
@@ -223,11 +225,14 @@ const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const currencyDecimalPlaces =
   layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
 
-// Build CSS only from shared enum constants and sanitized color overrides.
-const themeLayout = storefrontTheme.layout;
-const themeTokenEntries = Object.entries(
-  buildStorefrontThemeTokens(storefrontTheme),
-);
+// CSS comes only from shared enum constants and schema-validated hex colours
+// (plus the fluid grid steps derived from the density constants).
+const fluidGrid = productGridFluidCss(themeLayout.grid);
+const themeTokenEntries = Object.entries({
+  ...buildStorefrontThemeTokens(storefrontTheme),
+  "grid-card-min-fluid": fluidGrid.cardMin,
+  "grid-gap-fluid": fluidGrid.gap,
+});
 const themeStyleBlock = `:root, .site-root { ${themeTokenEntries
   .map(([key, value]) => `--${key}: ${value}`)
   .join("; ")}; }`;
@@ -392,12 +397,10 @@ if (!window.$RefreshReg$) {
   </head>
   <body
     class="flex flex-col min-h-screen site-root"
-    data-theme-density={storefrontTheme.density}
-    data-theme-button-style={storefrontTheme.components.buttons}
-    data-theme-input-style={storefrontTheme.components.inputs}
-    data-theme-card-style={storefrontTheme.components.cards}
-    data-theme-grid-desktop={themeLayout.grid.desktop}
-    data-theme-grid-mobile={themeLayout.grid.mobile}
+    data-theme-density={themeLayout.density}
+    data-theme-button-style={storefrontTheme.tokens.components.buttons}
+    data-theme-input-style={storefrontTheme.tokens.components.inputs}
+    data-theme-card-style={storefrontTheme.tokens.components.cards}
     data-storefront-route={storefrontRouteKind}
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}

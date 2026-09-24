@@ -40,7 +40,9 @@ export const createAttributeSchema = z.object({
         .trim()
         .min(2, "Slug must be at least 2 characters long")
         .max(100, "Slug must be at most 100 characters long")
-        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format"),
+        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Invalid slug format")
+        .optional()
+        .describe("Omit to derive the handle from the name; a taken one gets a -2, -3… suffix."),
     filterable: z.boolean().default(true),
     options: attributeOptionsSchema.optional()
 });

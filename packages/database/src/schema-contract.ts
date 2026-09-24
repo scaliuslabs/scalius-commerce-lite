@@ -163,6 +163,16 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "728ad7d908c014099cbc7bc8a70441867568585ddc9e9ba2dae46776106bbbe6",
   },
   {
+    version: 77,
+    name: "0077_optioned_product_price",
+    sourceSha256: "4e6fe06299dfaa5c0c4980454b308b76e158202a73327b375a31c1fdc83a33d0",
+  },
+  {
+    version: 78,
+    name: "0078_theme_document_v2",
+    sourceSha256: "f9097a979abd80378e94d9afec34363da94b31584f55bd71af717f2bdaafae1a",
+  },
+  {
     ...CURRENT_DATABASE_SCHEMA,
     sourceSha256: "a88163d1389ab6e37e1812c5d11a35bfdb01e692be58fbdf2c328bc6c5ee631c",
   },

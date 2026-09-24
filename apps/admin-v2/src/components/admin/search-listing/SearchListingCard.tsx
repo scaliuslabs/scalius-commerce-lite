@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { Pencil } from "lucide-react";
+import { handleFromText, type HandleResource } from "@scalius/shared/handle";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -47,9 +48,20 @@ export interface SearchListingCardProps {
   fallbackDescription?: string;
   /** Storefront path when the resource has no handle, e.g. `/collections/<id>`; null until it is saved. */
   path?: string | null;
+  /**
+   * New items whose handle the merchant hasn't typed: the handle the server
+   * makes from the name (`@scalius/shared/handle`), shown while the field is
+   * empty. The server adds a number when it is taken.
+   */
+  autoHandle?: string;
   /** Inline field errors from the form (already translated). */
   errors?: Partial<Record<"title" | "description" | "handle", string>>;
   disabled?: boolean;
+}
+
+/** The handle the server makes from a new item's name; empty until there is a name. */
+export function autoHandleFor(name: string, resource: HandleResource): string {
+  return name.trim() ? handleFromText(name, resource) : "";
 }
 
 /** Google-style result: address, title, description. */
@@ -84,6 +96,7 @@ export function SearchListingCard({
   fallbackTitle,
   fallbackDescription = "",
   path,
+  autoHandle,
   errors = {},
   disabled = false,
 }: SearchListingCardProps) {
@@ -93,7 +106,8 @@ export function SearchListingCard({
   const { storefrontUrl } = useStorefrontUrl();
   const origin = (storefrontUrl ?? "").replace(/\/+$/, "");
   const prefix = PATH_PREFIX[resource];
-  const shownUrl = path === null ? t("addressOnSave") : `${origin}${path ?? `${prefix}${value.handle ?? ""}`}`;
+  const handle = value.handle || autoHandle || "";
+  const shownUrl = path === null ? t("addressOnSave") : `${origin}${path ?? `${prefix}${handle}`}`;
   const title = value.title.trim() || fallbackTitle.trim();
   const description = (value.description.trim() || fallbackDescription.trim()).slice(0, 320);
   const open = editing || Object.values(errors).some(Boolean);
@@ -159,6 +173,7 @@ export function SearchListingCard({
                 <Input
                   id={`${id}-handle`}
                   value={value.handle}
+                  placeholder={autoHandle}
                   disabled={disabled}
                   inputMode="url"
                   autoCapitalize="none"
@@ -166,9 +181,14 @@ export function SearchListingCard({
                   aria-describedby={`${id}-handle-help`}
                   onChange={(event) => onChange({ handle: event.target.value })}
                 />
-                <p id={`${id}-handle-help`} className={errors.handle ? "text-body text-destructive" : "truncate text-body text-muted-foreground"}>
-                  {errors.handle ?? `${origin}${prefix}${value.handle ?? ""}`}
-                </p>
+                <div id={`${id}-handle-help`}>
+                  <p className={errors.handle ? "text-body text-destructive" : "truncate text-body text-muted-foreground"}>
+                    {errors.handle ?? `${origin}${prefix}${handle}`}
+                  </p>
+                  {autoHandle !== undefined && !errors.handle ? (
+                    <p className="text-body text-muted-foreground">{t("autoHandleHint")}</p>
+                  ) : null}
+                </div>
               </div>
             ) : null}
             <label className="flex items-start gap-3 text-body">

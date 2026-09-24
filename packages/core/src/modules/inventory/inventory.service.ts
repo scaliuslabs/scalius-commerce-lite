@@ -1,4 +1,4 @@
-import { productVariants, products, inventoryMovements, productLowStockAlerts, user as adminUsers } from "@scalius/database/schema";
+import { productVariants, products, inventoryMovements, orders, productLowStockAlerts, user as adminUsers } from "@scalius/database/schema";
 import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
@@ -168,6 +168,8 @@ export async function listInventoryMovements(db: Database, params: {
             id: inventoryMovements.id,
             variantId: inventoryMovements.variantId,
             orderId: inventoryMovements.orderId,
+            /** The short number merchants know the order by (#1073). */
+            orderNumber: orders.orderNumber,
             type: inventoryMovements.type,
             quantity: inventoryMovements.quantity,
             previousStock: inventoryMovements.previousStock,
@@ -196,6 +198,7 @@ export async function listInventoryMovements(db: Database, params: {
         .leftJoin(productVariants, eq(productVariants.id, inventoryMovements.variantId))
         .leftJoin(products, eq(products.id, productVariants.productId))
         .leftJoin(adminUsers, eq(adminUsers.id, inventoryMovements.createdBy))
+        .leftJoin(orders, eq(orders.id, inventoryMovements.orderId))
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(inventoryMovements.createdAt), desc(inventoryMovements.id))
         .limit(params.limit + 1)

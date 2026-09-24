@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Alert } from "~/components/ui/alert";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -144,7 +144,7 @@ function ResolveDialog({
           <DialogDescription>{request.reason}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
+          {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <RadioGroup
             value={selected ?? ""}
             aria-invalid={choiceMissing || undefined}

@@ -137,6 +137,7 @@ describe("lookup query options", () => {
         id: "prod_1",
         name: "Blue shirt",
         price: 1200,
+        priceRange: { from: 1200, to: 1200, compareAt: null },
         categoryId: "cat_2",
         categoryName: "Shirts",
         isActive: true,

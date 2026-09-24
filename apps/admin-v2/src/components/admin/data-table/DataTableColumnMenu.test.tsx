@@ -80,8 +80,11 @@ describe("column menu and width-aware columns", () => {
     await openMenu();
 
     // The title column is always shown: no eye to hide it.
-    expect(button("Hide Product")).toBeUndefined();
-    await act(async () => button("Hide Vendor")!.click());
+    expect(button("Show Product")).toBeUndefined();
+    // One name per column; aria-pressed says whether it is shown.
+    expect(button("Show Vendor")!.getAttribute("aria-pressed")).toBe("true");
+    await act(async () => button("Show Vendor")!.click());
+    expect(button("Show Vendor")!.getAttribute("aria-pressed")).toBe("false");
     expect(shown()).toBe("select,name,sku,stock,actions");
     expect(JSON.parse(localStorage.getItem("scalius.table.inventory")!)).toMatchObject({ hidden: ["vendor"] });
 
@@ -156,8 +159,31 @@ describe("column menu and width-aware columns", () => {
     await render(420);
     expect(shown()).toBe("select,name,stock,actions");
     await openMenu();
-    expect(document.body.textContent).toContain("2 columns hidden to fit this width");
-    // Hidden by width is not hidden by choice: the eye still says "Hide".
-    expect(button("Hide Vendor")).toBeDefined();
+    // Each column stepped aside says so in its own row; it is still shown by choice.
+    const row = (name: string) => button(`Show ${name}`)!.closest("div")!;
+    expect(row("SKU").textContent).toContain("Hidden to fit this width");
+    expect(row("Vendor").textContent).toContain("Hidden to fit this width");
+    expect(row("Available").textContent).not.toContain("Hidden to fit");
+    expect(button("Show Vendor")!.getAttribute("aria-pressed")).toBe("true");
+    expect(button("Show Vendor")!.getAttribute("aria-describedby")).toBe("column-squeezed-vendor");
+  });
+
+  it("lists the list's default order as a sort choice, selected while no sort is chosen", async () => {
+    await render(1440);
+    await openMenu();
+    const choice = document.querySelector<HTMLElement>("#table-sort-default")!;
+    expect(choice.getAttribute("aria-checked")).toBe("true");
+    await act(async () => document.querySelector<HTMLElement>("#table-sort-stock")!.click());
+    expect(choice.getAttribute("aria-checked")).toBe("false");
+    await act(async () => choice.click());
+    expect(document.querySelector("[data-testid=sorting]")!.textContent).toBe("");
+  });
+
+  it("grows to the height the screen allows instead of the popover's 24rem", async () => {
+    await render(1440);
+    await openMenu();
+    const panel = document.querySelector<HTMLElement>("[data-slot=column-menu-body]")!.parentElement!;
+    expect(panel.className).toContain("max-h-(--radix-popover-content-available-height)");
+    expect(panel.className).not.toContain("24rem");
   });
 });

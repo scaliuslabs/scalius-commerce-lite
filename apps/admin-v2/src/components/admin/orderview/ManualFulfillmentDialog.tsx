@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Alert } from "~/components/ui/alert";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -125,7 +125,7 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
           <DialogDescription>{t("fulfill.help")}</DialogDescription>
         </DialogHeader>
         <form id="manual-fulfillment" method="post" className="space-y-4" onSubmit={handleSubmit} noValidate>
-          {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
+          {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <div role="group" aria-labelledby="fulfill-items-label" className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <p id="fulfill-items-label" className="text-body font-medium">{t("fulfill.items")}</p>

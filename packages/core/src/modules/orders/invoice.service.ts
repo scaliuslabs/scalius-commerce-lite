@@ -15,7 +15,7 @@ import {
   ValidationError,
 } from "@scalius/core/errors";
 import { getBusinessSettings } from "../settings/business-settings.service";
-import { readInvoiceOrderSource } from "./invoice-order-reader";
+import { readInvoiceOrderSource, readOrderRefundedAmount } from "./invoice-order-reader";
 import {
   INVOICE_RENDER_VERSION,
   formatInvoiceNumber,
@@ -148,7 +148,13 @@ export async function getInvoiceDocument(
   orderId: string,
 ): Promise<InvoiceDocument | null> {
   const issued = await readIssuedByOrder(db, orderId);
-  if (issued) return parseStoredInvoice(issued);
+  if (issued) {
+    // The issued document is fixed; later refunds print under it (R3-ORD-07).
+    const document = await parseStoredInvoice(issued);
+    const refunded = await readOrderRefundedAmount(db, orderId);
+    const later = Math.round((refunded - (document.order.refundedAmount ?? 0)) * 100) / 100;
+    return later > 0 ? { ...document, refundedSinceIssue: later } : document;
+  }
 
   const [order, businessInfo] = await Promise.all([
     readInvoiceOrderSource(db, orderId),

@@ -1,5 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { listInventoryMovements } from "./inventory.service";
 
 export const INVENTORY_MOVEMENT_EXPORT_MAX_ROWS = 5_000;
@@ -38,7 +39,7 @@ export function inventoryMovementCsvRow(movement: InventoryMovement): string {
     movement.type,
     movement.variantSku,
     movement.productName,
-    movement.orderId,
+    movement.orderId ? formatOrderNumber(movement.orderNumber, movement.orderId) : null,
     movement.actorName,
     movement.pool,
     movement.reservationGeneration,
@@ -56,7 +57,7 @@ export function inventoryMovementCsvRow(movement: InventoryMovement): string {
 }
 
 const HEADER = [
-  "Timestamp", "Movement ID", "Type", "SKU", "Product", "Order ID", "Actor",
+  "Timestamp", "Movement ID", "Type", "SKU", "Product", "Order", "Actor",
   "Pool", "Generation", "Stock delta", "Stock before", "Stock after",
   "Reserved delta", "Reserved before", "Reserved after", "Preorder delta",
   "Preorder before", "Preorder after", "Notes",

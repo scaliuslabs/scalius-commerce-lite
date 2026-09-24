@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Alert } from "~/components/ui/alert";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -36,6 +36,7 @@ import {
   type OrderPaymentsPayload,
 } from "~/lib/api-query-options/orders";
 import {
+  isOrderConflict,
   orderErrorMessage,
   useIssueOrderPaymentRecoveryLink,
   useReconcileRefundAttempt,
@@ -56,7 +57,7 @@ import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
-import type { OrderActionRequest } from "./primary-action";
+import { isPartSent, type OrderActionRequest } from "./primary-action";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
 
 type CodAction = "collected" | "failed" | "returned";
@@ -183,7 +184,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
 
   // Cash changes hands at the door: collection opens once the order is out.
   const canRecordCodCollection = canUpdateCod && canProcessOrderCodAction(order.status, "collected");
-  const canRecordCodFailure = canUpdateCod && canProcessOrderCodAction(order.status, "failed");
+  // A rider can also fail to deliver the first parcel of a part-sent order (R3-ORD-04).
+  const canRecordCodFailure = canUpdateCod && (canProcessOrderCodAction(order.status, "failed") || isPartSent(order));
   const canRecordCodReturn = canUpdateCod && canProcessOrderCodAction(order.status, "returned");
 
   const codQuery = useQuery({
@@ -211,7 +213,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
 
   const openCod = (action: CodAction) => {
     codMutation.reset();
-    setCollectedBy("");
+    // Usually the rider who took the parcel collected the cash (R3-ORD-08); still editable.
+    setCollectedBy(latestCourierName(order));
     setCollectorError(null);
     setFailReason("not_home");
     setFailNotes("");
@@ -258,7 +261,11 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     } else {
       body = { orderId: order.id, action: "returned" };
     }
-    codMutation.mutate(body, { onSuccess: () => setCodAction(null) });
+    // Already recorded in another tab: close; the page banner says by whom and shows the latest.
+    codMutation.mutate(body, {
+      onSuccess: () => setCodAction(null),
+      onError: (error) => { if (isOrderConflict(error)) setCodAction(null); },
+    });
   }
 
   const refundValue = refundAmount ?? Number.NaN;
@@ -304,8 +311,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     toast.success(t("recovery.copied"), { description: link.note || undefined });
   }
 
-  // Confirm buttons echo the live amount, e.g. "Record ৳500 cash refund".
-  const refundConfirmLabel = Number.isFinite(refundValue) && refundValue > 0
+  // Confirm buttons echo the live amount, e.g. "Record ৳500 cash refund", only while it is valid.
+  const refundConfirmLabel = Number.isFinite(refundValue) && refundValue > 0 && refundValue <= paid
     ? t(requiresManualSettlementConfirmation ? "refund.recordCashAmount" : "refund.issueAmount", { amount: money(refundValue) })
     : t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue");
   const collectTitle = t(hasCashBalanceDueOnDelivery ? "cod.recordBalance" : "cod.markCollected");
@@ -581,7 +588,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             <DialogDescription>{t(hasCashBalanceDueOnDelivery ? "cod.balanceHelp" : "cod.collectHelp")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {codMutation.isError ? <Alert variant="destructive">{orderErrorMessage(codMutation.error)}</Alert> : null}
+            {codMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(codMutation.error)}</AlertDescription></Alert> : null}
             <div className="flex items-baseline justify-between gap-4">
               <p className="text-muted-foreground">{t("cod.amountToCollect")}</p>
               <p className="text-heading-md font-semibold tabular-nums">{money(cashCollectionAmount)}</p>
@@ -618,7 +625,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             <DialogDescription>{t("cod.failureHelp")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {codMutation.isError ? <Alert variant="destructive">{orderErrorMessage(codMutation.error)}</Alert> : null}
+            {codMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(codMutation.error)}</AlertDescription></Alert> : null}
             <div className="space-y-2">
               <Label htmlFor="failReason">{t("cod.failureReason")}</Label>
               <NativeSelect id="failReason" value={failReason} onValueChange={(value) => setFailReason(value as CodFailureReason)}>
@@ -652,7 +659,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               ].filter(Boolean).join(" ")}
             </DialogDescription>
           </DialogHeader>
-          {codMutation.isError ? <Alert variant="destructive">{orderErrorMessage(codMutation.error)}</Alert> : null}
+          {codMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(codMutation.error)}</AlertDescription></Alert> : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setCodAction(null)} disabled={codMutation.isPending}>{r("cancel")}</Button>
             <Button variant="destructive" onClick={submitCodAction} loading={codMutation.isPending} disabled={!canRecordCodReturn}>
@@ -669,7 +676,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             <DialogDescription>{t(requiresManualSettlementConfirmation ? "refund.manualHelp" : "refund.help")}</DialogDescription>
           </DialogHeader>
           <form id="order-refund" method="post" className="space-y-4" onSubmit={handleIssueRefund} noValidate>
-            {refundMutation.isError ? <Alert variant="destructive">{orderErrorMessage(refundMutation.error)}</Alert> : null}
+            {refundMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(refundMutation.error)}</AlertDescription></Alert> : null}
             <div className="space-y-2">
               <Label htmlFor="refundAmount">{t("refund.amount", { symbol })}</Label>
               <MoneyInput
@@ -729,6 +736,17 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       </Dialog>
     </Card>
   );
+}
+
+/** Who took the most recent parcel: your rider's name, or the courier service. */
+export function latestCourierName(order: Pick<Order, "shipments">): string {
+  const when = (value: OrderTimestamp) => (value instanceof Date ? value.getTime() : typeof value === "number" ? value : Date.parse(value));
+  const latest = [...(order.shipments ?? [])]
+    .filter((shipment) => shipment.status.toLowerCase() !== "cancelled")
+    .sort((a, b) => when(b.createdAt) - when(a.createdAt))[0];
+  if (!latest) return "";
+  const name = latest.providerType === "manual" ? latest.courierName : latest.providerName ?? latest.courierName;
+  return name?.trim() ?? "";
 }
 
 /** Only what came back is owed; the rest of a refund is the merchant's call. */

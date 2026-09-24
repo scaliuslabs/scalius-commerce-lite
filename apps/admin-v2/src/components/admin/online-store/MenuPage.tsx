@@ -270,10 +270,11 @@ function DeletedMenu({ menuId }: { menuId: string }) {
 }
 
 export function MenuPage({ menuId }: { menuId: string }) {
+  const t = useMessages(onlineStoreMessages);
   const { data: menu } = useSuspenseQuery(navigationMenuQueryOptions(menuId));
   if (menu.deletedAt) return <DeletedMenu menuId={menuId} />;
   return (
-    <SaveBarProvider>
+    <SaveBarProvider savedMessage={t("menuSaved")}>
       <MenuEditor menuId={menuId} />
     </SaveBarProvider>
   );

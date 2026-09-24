@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "@tanstack/react-router";
+import { useLocation } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
 import {
   Sidebar,
@@ -19,6 +19,7 @@ import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 import { SETTINGS_ITEM, isSectionActive, matchesPath, type VisibleNavItem } from "./AdminNav";
+import { ShellLink } from "./ShellLink";
 
 /**
  * The store sidebar (Shopify's): sections with their sub-pages shown only
@@ -45,19 +46,19 @@ export function AppSidebar({ nav, showSettings }: { nav: VisibleNavItem[]; showS
     return (
       <SidebarMenuItem key={item.key}>
         <SidebarMenuButton asChild isOpen={open} isActive={open && !activeChild}>
-          <Link to={item.to} preload="intent" activeOptions={{ exact: true }} onClick={close}>
+          <ShellLink to={item.to} preload="intent" current={open && !activeChild} onClick={close}>
             <item.icon aria-hidden />
             <span>{t(item.key)}</span>
-          </Link>
+          </ShellLink>
         </SidebarMenuButton>
         {open && item.children.length > 0 ? (
           <SidebarMenuSub>
             {item.children.map((child) => (
               <SidebarMenuSubItem key={child.key}>
                 <SidebarMenuSubButton asChild isActive={child === activeChild}>
-                  <Link to={child.to} preload="intent" activeOptions={{ exact: true }} onClick={close}>
+                  <ShellLink to={child.to} preload="intent" current={child === activeChild} onClick={close}>
                     <span>{t(child.key)}</span>
-                  </Link>
+                  </ShellLink>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
             ))}
@@ -113,10 +114,10 @@ export function AppSidebar({ nav, showSettings }: { nav: VisibleNavItem[]; showS
           {showSettings ? (
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <Link to={SETTINGS_ITEM.to} onClick={close}>
+                <ShellLink to={SETTINGS_ITEM.to} current={false} onClick={close}>
                   <SETTINGS_ITEM.icon aria-hidden />
                   <span>{t("settings")}</span>
-                </Link>
+                </ShellLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}

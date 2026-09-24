@@ -1172,6 +1172,7 @@ export async function bulkShipOrders(
 export async function processCodAction(db: Database, orderId: string, body: Record<string, unknown>) {
     const order = await db.select({
         status: orders.status,
+        fulfillmentStatus: orders.fulfillmentStatus,
         version: orders.version,
         totalAmountMinor: orders.totalAmountMinor,
         paidAmountMinor: orders.paidAmountMinor,
@@ -1204,6 +1205,12 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     collectedAmountMinor: requestedAmountMinor,
                 });
 
+            if (existingCodCollection && (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED)) {
+                // Another tab (or person) already did this: say so, record nothing (R3-ORD-10).
+                throw new ConflictError(
+                    `Cash for this order was already recorded as collected by ${existingCodCollection.collectedBy}.`,
+                );
+            }
             if (existingCodCollection) {
                 if (existingCodCollection.amountMinor !== requestedAmountMinor) {
                     throw new ValidationError("COD collection was already recorded with a different amount.", {
@@ -1283,7 +1290,9 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             }
         }
         case "failed": {
-            assertOrderCodActionAllowed(order.status, "failed");
+            // A part-sent order has a parcel out too: its failed attempt is recorded the same way.
+            const partSent = order.status === OrderStatus.CONFIRMED && order.fulfillmentStatus === FulfillmentStatus.PARTIAL;
+            if (!partSent) assertOrderCodActionAllowed(order.status, "failed");
             const failResult = await recordCODFailure(db, { orderId, reason: body.reason as "other" | "not_home" | "refused" | "no_cash" | "wrong_address", notes: body.notes as string | undefined });
             if (!failResult.success) throw new ValidationError(failResult.error || "COD failure recording failed");
             await setOpenOwnCourierParcels(db, orderId, ShipmentStatus.DELIVERY_FAILED);
@@ -1677,7 +1686,22 @@ const NOTIFICATION_STATUSES: Record<string, OrderNotificationType> = {
     refunded: "order_refunded",
 };
 
+/**
+ * The dashboard's and agents' status change: only changes without side
+ * effects (see admin-status-policy). Shipped, delivered and returned come from
+ * the fulfilment actions, which call `applyOrderStatusChange` directly.
+ */
 export async function updateOrderStatus(db: Database, orderId: string, status: string, data?: { trackingId?: string }): Promise<StatusUpdateResult> {
+    return applyOrderStatusChange(db, orderId, status, data, { generic: true });
+}
+
+async function applyOrderStatusChange(
+    db: Database,
+    orderId: string,
+    status: string,
+    data: { trackingId?: string } | undefined,
+    options: { generic: boolean },
+): Promise<StatusUpdateResult> {
     const nextStatus = normalizeOrderStatus(status);
     if (!nextStatus) {
         throw new ValidationError("Unknown order status.");
@@ -1703,6 +1727,9 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     const currentStatus = normalizeOrderStatus(existingOrder.status);
     if (!currentStatus) {
         throw new ValidationError("Order has an unknown current status.");
+    }
+    if (options.generic && currentStatus !== nextStatus) {
+        assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
     }
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, orderId);
@@ -1748,8 +1775,6 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
             availabilityTransitionVariantIds,
         };
     }
-
-    assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
 
     // Validate the status transition before applying any side effects
     validateTransition("order", currentStatus, nextStatus);
@@ -1855,6 +1880,138 @@ async function assertNothingWithTheCourier(db: Database, orderId: string): Promi
 
 function nothingSentCondition(orderId: string) {
     return sql`NOT EXISTS (SELECT 1 FROM ${orderItems} WHERE ${orderItems.orderId} = ${orderId} AND ${orderItems.shippedQuantity} > 0)`;
+}
+
+/**
+ * Delivered for an order paid online and sent in full by the merchant's own
+ * rider. (Cash-on-delivery orders are delivered by recording the cash.)
+ */
+export async function markOrderDelivered(db: Database, orderId: string): Promise<StatusUpdateResult> {
+    const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new NotFoundError("Order not found");
+    if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED) {
+        return { message: "Already delivered", availabilityTransitionVariantIds: [] };
+    }
+    const left = await db.select({
+        unsent: sql<number>`coalesce(sum(${orderItems.quantity} - ${orderItems.shippedQuantity}), 0)`,
+    }).from(orderItems).where(eq(orderItems.orderId, orderId)).get();
+    const unsent = Number(left?.unsent ?? 0);
+    if (order.status !== OrderStatus.SHIPPED || unsent > 0) {
+        throw new ValidationError(unsent === 1
+            ? "1 item hasn't been sent yet. Send it first."
+            : unsent > 1
+                ? `${unsent} items haven't been sent yet. Send them first.`
+                : "Send the order first.");
+    }
+    return applyOrderStatusChange(db, orderId, OrderStatus.DELIVERED, undefined, { generic: false });
+}
+
+/**
+ * One own-courier parcel of a part-sent order came back undelivered: its
+ * units go back on the unsent list, to send again or cancel (R3-ORD-04). A
+ * part-sent order's stock is still reserved, so no stock moves.
+ */
+export async function markParcelReturned(db: Database, orderId: string, shipmentId: string) {
+    const order = await db.select({
+        status: orders.status,
+        version: orders.version,
+        shipmentClaimId: orders.shipmentClaimId,
+        shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+    }).from(orders).where(eq(orders.id, orderId)).get();
+    if (!order) throw new NotFoundError("Order not found");
+    assertNoActiveShipmentClaim(order);
+    const shipment = await db.select({
+        id: deliveryShipments.id,
+        status: deliveryShipments.status,
+        providerType: deliveryShipments.providerType,
+        providerId: deliveryShipments.providerId,
+        shipmentItems: deliveryShipments.shipmentItems,
+    }).from(deliveryShipments).where(and(
+        eq(deliveryShipments.id, shipmentId),
+        eq(deliveryShipments.orderId, orderId),
+    )).get();
+    if (!shipment) throw new NotFoundError("Parcel not found");
+    if (shipment.status === ShipmentStatus.RETURNED) {
+        return { orderId, shipmentId, quantity: 0, replayed: true };
+    }
+    if (shipment.providerType !== "manual" || shipment.providerId) {
+        throw new ValidationError("The courier reports this parcel's status. Check it with the courier.");
+    }
+    if (order.status !== OrderStatus.CONFIRMED) {
+        throw new ValidationError(order.status === OrderStatus.SHIPPED
+            ? "Everything was sent: use Mark returned for the whole order."
+            : "This parcel can't be taken back now. Reload to see the latest.");
+    }
+    if (shipment.status === ShipmentStatus.DELIVERED || shipment.status === ShipmentStatus.CANCELLED) {
+        throw new ValidationError("This parcel was already delivered or cancelled.");
+    }
+    const lines = parseShipmentLines(shipment.shipmentItems);
+    if (lines.length === 0) throw new ValidationError("This parcel lists no items.");
+    const items = await db.select({ id: orderItems.id, shippedQuantity: orderItems.shippedQuantity })
+        .from(orderItems).where(eq(orderItems.orderId, orderId)).all();
+    const remaining = new Map(items.map((item) => [item.id, item.shippedQuantity]));
+    for (const line of lines) {
+        const sent = remaining.get(line.itemId);
+        if (sent === undefined || sent < line.quantity) {
+            throw new ConflictError("This order changed. Reload to see the latest.");
+        }
+        remaining.set(line.itemId, sent - line.quantity);
+    }
+    const stillSent = [...remaining.values()].some((quantity) => quantity > 0);
+    const writes: unknown[] = [
+        db.update(orders).set({
+            fulfillmentStatus: stillSent ? FulfillmentStatus.PARTIAL : FulfillmentStatus.PENDING,
+            version: order.version + 1,
+            updatedAt: sql`unixepoch()`,
+        }).where(and(
+            eq(orders.id, orderId),
+            eq(orders.version, order.version),
+            eq(orders.status, OrderStatus.CONFIRMED),
+        )).returning({ id: orders.id }),
+        ...lines.map((line) => db.update(orderItems).set({
+            shippedQuantity: sql`${orderItems.shippedQuantity} - ${line.quantity}`,
+            fulfillmentStatus: ItemFulfillmentStatus.PENDING,
+        }).where(and(
+            eq(orderItems.id, line.itemId),
+            eq(orderItems.orderId, orderId),
+            sql`${orderItems.shippedQuantity} >= ${line.quantity}`,
+            // Only while the order claim above still holds.
+            sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${order.version + 1})`,
+        ))),
+        db.update(deliveryShipments).set({
+            status: ShipmentStatus.RETURNED,
+            rawStatus: ShipmentStatus.RETURNED,
+            updatedAt: new Date(),
+        }).where(and(
+            eq(deliveryShipments.id, shipmentId),
+            sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.id} = ${orderId} AND ${orders.version} = ${order.version + 1})`,
+        )),
+    ];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
+    const results = await db.batch(writes as any) as unknown[];
+    if (!(results[0] as unknown[] | undefined)?.length) {
+        throw new ConflictError("This order changed. Reload to see the latest.");
+    }
+    return {
+        orderId,
+        shipmentId,
+        quantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+        replayed: false,
+    };
+}
+
+function parseShipmentLines(value: string | null): ShipmentLine[] {
+    if (!value) return [];
+    try {
+        const parsed = JSON.parse(value) as unknown;
+        return Array.isArray(parsed)
+            ? parsed.filter((line): line is ShipmentLine =>
+                Boolean(line) && typeof (line as ShipmentLine).itemId === "string"
+                && Number.isInteger((line as ShipmentLine).quantity) && (line as ShipmentLine).quantity > 0)
+            : [];
+    } catch {
+        return [];
+    }
 }
 
 export interface BulkOrderActionResult {

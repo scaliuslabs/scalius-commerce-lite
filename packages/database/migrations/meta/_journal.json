@@ -542,6 +542,20 @@
       "breakpoints": true
     },
     {
+      "idx": 77,
+      "version": "6",
+      "when": 1790300008000,
+      "tag": "0077_optioned_product_price",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1790300009000,
+      "tag": "0078_theme_document_v2",
+      "breakpoints": true
+    },
+    {
       "idx": 79,
       "version": "6",
       "when": 1790300010000,

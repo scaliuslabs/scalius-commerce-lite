@@ -36,6 +36,7 @@ import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib
 import { queryKeys } from "@/lib/query-keys";
 import { useCurrency } from "@/hooks/use-currency";
 import { SaveNotCompleted } from "../../shared/SaveBar";
+import { IdText } from "~/components/admin/data-table/cells";
 import { ConfirmDialog } from "../../shared/ConfirmDialog";
 import { readSkuTaken } from "../hooks/useProductSubmit";
 import { formatNumber, useMessages } from "~/i18n";
@@ -71,6 +72,7 @@ import {
   type OptionMatrixEditorHandle,
   type ProductCreateComposition,
   type SimpleSkuDraft,
+  type VariantPriceRange,
 } from "./option-matrix-editor-model";
 
 const MAX_AXES = MAX_PRODUCT_OPTION_AXES;
@@ -110,6 +112,8 @@ type OptionMatrixEditorProps = {
   /** The draft's problem as one banner line ("M / White: …"), or null. */
   onDraftIssueChange?: (issue: string | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  /** The variants' price range while the product has options (they carry the prices), else null. */
+  onPricesChange?: (range: VariantPriceRange | null) => void;
   onSavingChange?: (saving: boolean) => void;
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
 };
@@ -128,6 +132,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   onDraftChange,
   onDraftIssueChange,
   onDirtyChange,
+  onPricesChange,
   onSavingChange,
   onRevisionConflict,
 }, ref) {
@@ -226,6 +231,13 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
 
   React.useEffect(() => onDraftIssueChange?.(draftLine), [draftLine, onDraftIssueChange]);
   React.useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
+  const prices = options.length > 0 ? variants.map((variant) => variant.price).filter(Number.isFinite) : [];
+  const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+  const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
+  React.useEffect(
+    () => onPricesChange?.(minPrice === null || maxPrice === null ? null : { min: minPrice, max: maxPrice }),
+    [minPrice, maxPrice, onPricesChange],
+  );
 
   const reveal = React.useCallback(() => {
     setRevealed(true);
@@ -957,7 +969,7 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
             variant="outline"
             size="sm"
             disabled={selected.size >= variants.length}
-            title={selected.size >= variants.length ? t("keepOneVariant") : undefined}
+            aria-describedby={selected.size >= variants.length ? "variant-bulk-keep-one" : undefined}
             onClick={() => {
               onRemove(selected);
               setSelected(new Set());
@@ -978,6 +990,10 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
               </Button>
             )
           ) : null}
+          {/* Visible on touch and to keyboard users, not only as a hover title. */}
+          {selected.size >= variants.length ? (
+            <p id="variant-bulk-keep-one" className="w-full text-body text-muted-foreground">{t("keepOneVariant")}</p>
+          ) : null}
         </div>
       ) : null}
       <div className="hidden md:block">
@@ -995,9 +1011,10 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
               </th>
               <th className="w-14 p-2"><span className="sr-only">{t("photo")}</span></th>
               <th className="p-2 font-medium">{t("variant")}</th>
-              <th className="w-32 p-2 text-right font-medium">{t("price")}</th>
-              <th className="w-28 p-2 text-right font-medium">{t("quantity")}</th>
-              <th className="w-24 p-2"><span className="sr-only">{r("actions")}</span></th>
+              <th className="w-28 p-2 text-right font-medium">{t("price")}</th>
+              <th className="w-24 p-2 text-right font-medium">{t("quantity")}</th>
+              {/* Two icon buttons (print, stop selling) and nothing more, so the variant column keeps the room. */}
+              <th className="w-22 p-2"><span className="sr-only">{r("actions")}</span></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -1013,11 +1030,10 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
                     <td className="p-2">
                       <button type="button" onClick={() => onExpandedChange(expanded ? null : variant.id)} className="flex min-h-10 w-full items-center gap-1.5 rounded-sm text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-expanded={expanded}>
                         {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                        <span className="min-w-0">
-                          <span className="block break-words">{nameOf(variant)}</span>
-                          <span className="block break-all font-mono font-normal text-muted-foreground">{variant.sku}</span>
-                        </span>
+                        <span className="min-w-0 break-words">{nameOf(variant)}</span>
                       </button>
+                      {/* Identifiers never split mid-word: one line, full value on hover and in the copy button. */}
+                      <IdText value={variant.sku} copy className="text-muted-foreground" />
                       {issueFor(variant.id, "photo") ? <p className="text-body text-destructive">{issueFor(variant.id, "photo")}</p> : null}
                     </td>
                     <td className="p-2">{priceCell(variant)}</td>

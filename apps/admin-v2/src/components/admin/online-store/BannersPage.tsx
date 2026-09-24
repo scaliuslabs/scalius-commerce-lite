@@ -173,7 +173,7 @@ function BannerCard({ viewport }: { viewport: HeroSlideViewport }) {
 export function BannersPage() {
   const t = useMessages(onlineStoreMessages);
   return (
-    <SaveBarProvider>
+    <SaveBarProvider savedMessage={t("bannersSaved")}>
       <OnlineStorePage title={t("bannersTitle")}>
         <BannerCard viewport="desktop" />
         <BannerCard viewport="mobile" />

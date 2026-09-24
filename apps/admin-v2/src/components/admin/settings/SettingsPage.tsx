@@ -195,7 +195,7 @@ export function SettingsRow({
     <button
       type="button"
       {...props}
-      className="flex min-h-14 w-full items-center gap-3 border-t border-border px-4 py-3 text-left first:border-t-0 hover:bg-muted disabled:cursor-default disabled:hover:bg-transparent"
+      className="flex min-h-14 w-full items-center gap-3 border-t border-border px-4 py-3 text-left outline-none first:border-t-0 hover:bg-muted focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
     >
       <span className="min-w-0 flex-1">
         <span className="block text-body font-medium">{label}</span>

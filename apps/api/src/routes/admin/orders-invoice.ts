@@ -115,6 +115,8 @@ const invoiceDataSchema = z.object({
   contentHash: z.string().length(64).nullable(),
   renderVersion: z.literal("invoice-v1"),
   orderVersion: z.number().int().positive(),
+  /** Refunds made after the invoice was issued; the issued invoice itself never changes. */
+  refundedSinceIssue: z.number().optional(),
 });
 
 const paramsSchema = z.object({

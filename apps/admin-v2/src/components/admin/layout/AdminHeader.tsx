@@ -1,5 +1,4 @@
 import { lazy, Suspense } from "react";
-import { Link } from "@tanstack/react-router";
 import { Menu } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { UserMenu, type UserMenuUser } from "@/components/auth/UserMenu";
@@ -10,6 +9,7 @@ import { shellMessages } from "~/i18n/shell";
 import { GlobalSearch } from "./GlobalSearch";
 import type { VisibleNavItem } from "./AdminNav";
 import { TOP_BAR_BUTTON } from "./top-bar";
+import { ShellLink } from "./ShellLink";
 import { cn } from "@scalius/shared/utils";
 
 // Push notifications pull in Firebase; keep them out of the shell chunk.
@@ -34,17 +34,18 @@ interface AdminHeaderProps {
  */
 export function AdminHeader({ user, nav, canOpen, showMenu }: AdminHeaderProps) {
   const t = useMessages(shellMessages);
-  const { toggleSidebar } = useSidebar();
+  const { toggleSidebar, openMobile } = useSidebar();
   return (
     <header data-slot="topbar" className="relative z-20 flex h-14 shrink-0 items-center gap-2 bg-topbar px-2 text-topbar-foreground">
       {showMenu ? (
-        <button type="button" onClick={toggleSidebar} aria-label={t("toggleSidebar")} className={cn(TOP_BAR_BUTTON, "md:hidden")}>
+        <button type="button" onClick={toggleSidebar} aria-label={t("toggleSidebar")} aria-expanded={openMobile} className={cn(TOP_BAR_BUTTON, "md:hidden")}>
           <Menu className="size-5" aria-hidden />
         </button>
       ) : null}
-      <Link to="/admin" className={cn(TOP_BAR_BUTTON, "hidden w-56 shrink-0 justify-start px-2 md:flex")}>
+      {/* The logo goes home; it is never "the current page". */}
+      <ShellLink to="/admin" current={false} className={cn(TOP_BAR_BUTTON, "hidden w-56 shrink-0 justify-start px-2 md:flex")}>
         <img src={withDashboardBasePath(logoDarkImg)} alt="Scalius" className="h-6 w-auto" />
-      </Link>
+      </ShellLink>
       <div id="admin-top-bar-center" className="flex min-w-0 flex-1 justify-center">
         <GlobalSearch nav={nav} canOpen={canOpen} />
       </div>

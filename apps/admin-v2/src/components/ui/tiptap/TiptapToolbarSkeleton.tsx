@@ -52,11 +52,12 @@ export function TiptapToolbarSkeleton({
     >
       <div
         className={cn(
-          "min-w-0 overflow-x-auto overscroll-x-contain scrollbar-hide",
+          // Phones scroll the buttons sideways; wider screens wrap them, so none hide past the edge.
+          "min-w-0 overflow-x-auto overscroll-x-contain scrollbar-hide sm:overflow-visible",
           isFullscreen ? "mx-auto w-fit max-w-full" : "flex-1",
         )}
       >
-        <div className="flex min-w-max items-center gap-0.5">
+        <div className="flex min-w-max items-center gap-0.5 sm:min-w-0 sm:flex-wrap">
           {TOOLBAR_GROUPS.map((group, groupIndex) => (
             <div key={groupIndex} className="flex items-center gap-0.5">
               {groupIndex > 0 ? <div className="mx-1 h-6 w-px bg-border" /> : null}

@@ -1,32 +1,34 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import "../styles/global.css";
-import Collection2 from "@/components/collection2.astro";
-import Collection1 from "../components/collection1.astro";
-import Hero from "@/components/hero.astro";
-import ProductCard from "@/components/cards/ProductCard.astro";
-import HomepageCategoryRail from "@/components/homepage/HomepageCategoryRail.astro";
-import DeliveryFacts from "@/components/DeliveryFacts.astro";
+import HomepageSections from "@/components/homepage/HomepageSections.astro";
 import {
   getAllProducts,
   getCheckoutConfig,
   getHomepageData,
   getShippingMethods,
-  type CollectionWithProducts,
 } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { buildDeliveryFacts } from "@/lib/delivery-facts";
 import { formatMoney } from "@/lib/currency";
 import { resolveStoreDisplayName } from "@/lib/store-identity";
-import { resolveHomepageHero } from "@/lib/homepage-hero";
+import {
+  heroImageCandidate,
+  resolveHomepageHero,
+  type HeroImageCandidate,
+} from "@/lib/homepage-hero";
+import {
+  collectionShowsProducts,
+  homepageLeadSection,
+} from "@/lib/homepage-sections";
 import {
   buildAbsoluteStorefrontSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
 } from "@/lib/seo-base-url";
 import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
 import { mediaImageUrl } from "@/lib/media-url";
-import { HERO_SLIDE_PRESENTATION } from "@scalius/shared/hero-slider";
 import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 
 // Parallel fetch: layout data + homepage data
@@ -50,12 +52,13 @@ const seo = homepageData?.seo ?? {
 const hero = resolveHomepageHero(homepageData.hero);
 const firstDesktopHero = hero.desktop[0] ?? null;
 const firstMobileHero = hero.mobile[0] ?? null;
-const desktopHeroPreload = firstDesktopHero
-  ? mediaImageUrl(firstDesktopHero.url, HERO_SLIDE_PRESENTATION.desktop.width)
-  : "";
-const mobileHeroPreload = firstMobileHero
-  ? mediaImageUrl(firstMobileHero.url, HERO_SLIDE_PRESENTATION.mobile.width)
-  : "";
+// The same candidate the first slide's <source> offers (CustomCarousel), so
+// the preload is the file the banner paints: a phone-sized rendition on
+// phones instead of the full-size original.
+const heroPreloads = [
+  firstMobileHero ? heroImageCandidate(firstMobileHero.url, "mobile") : null,
+  firstDesktopHero ? heroImageCandidate(firstDesktopHero.url, "desktop") : null,
+].filter((candidate): candidate is HeroImageCandidate => Boolean(candidate?.src));
 const activeCollections = homepageData?.collections || [];
 const presentation = homepageData.presentation;
 
@@ -68,7 +71,6 @@ const homepageTitle = seo.homepageTitle || storeName || "Home";
 const homepageMetaDescription = seo.homepageMetaDescription || undefined;
 const homepageHeading = storeName || homepageTitle || "Shop";
 
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 
@@ -92,26 +94,19 @@ const deliveryFacts = presentation.trustStrip.enabled
     })
   : [];
 
-// Theme → Homepage sections: the merchant's order of the four sections.
+// Theme -> Homepage: the theme document's sections, in order.
 const { theme } = await resolveRequestTheme(Astro, layoutData.theme);
-const sectionOrder = theme.layout.homepage;
+const leadSection = homepageLeadSection(theme.sections, {
+  hero: hero.desktop.length > 0 || hero.mobile.length > 0,
+  collections: activeCollections.some(collectionShowsProducts) || fallbackProducts.length > 0,
+  categories: presentation.categoryRail.enabled && presentation.categoryRail.categories.length > 0,
+  delivery: deliveryFacts.length > 0,
+});
 // Preload the banner only when it is the first thing buyers see.
-const heroFirst = sectionOrder[0] === "hero";
+const heroFirst = leadSection?.type === "hero";
 
 // --- SEO: canonical URL for homepage ---
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
-
-function isCollection1(
-  collection: CollectionWithProducts,
-): collection is CollectionWithProducts & { presentation: "grid" } {
-  return collection.presentation === "grid";
-}
-
-function isCollection2(
-  collection: CollectionWithProducts,
-): collection is CollectionWithProducts & { presentation: "carousel" } {
-  return collection.presentation === "carousel";
-}
 ---
 
 <Layout
@@ -128,92 +123,33 @@ function isCollection2(
 >
   <Fragment slot="preload">
     {
-      heroFirst && mobileHeroPreload && (
+      heroFirst && heroPreloads.map((candidate) => (
+        // With renditions, href is left out so a browser without
+        // imagesrcset support can't fetch a second, different file.
         <link
           rel="preload"
           as="image"
-          href={mobileHeroPreload}
-          media="(max-width: 767px)"
+          href={candidate.srcset ? undefined : candidate.src}
+          imagesrcset={candidate.srcset}
+          imagesizes={candidate.srcset ? candidate.sizes : undefined}
+          media={candidate.media}
           fetchpriority="high"
         />
-      )
-    }
-    {
-      heroFirst && desktopHeroPreload && (
-        <link
-          rel="preload"
-          as="image"
-          href={desktopHeroPreload}
-          media="(min-width: 768px)"
-          fetchpriority="high"
-        />
-      )
+      ))
     }
   </Fragment>
 
   <h1 class="sr-only">{homepageHeading}</h1>
 
-  <div class="flex flex-col">
-    {sectionOrder.map((section) => (
-      <Fragment key={section}>
-        {section === "hero" && (
-          <section class="w-full">
-            <Hero hero={hero} />
-          </section>
-        )}
-
-        {section === "categories" && <HomepageCategoryRail rail={presentation.categoryRail} />}
-
-        {section === "delivery" && <DeliveryFacts facts={deliveryFacts} />}
-
-        {section === "collections" && (
-          <>
-            {activeCollections.map((collection) => (
-              <Fragment key={collection.id}>
-                {isCollection1(collection) && (
-                  <Collection1
-                    collection={collection}
-                    currencySymbol={currencySymbol}
-                    currencyCode={currencyCode}
-                  />
-                )}
-                {isCollection2(collection) && (
-                  <Collection2
-                    collection={collection}
-                    currencySymbol={currencySymbol}
-                    currencyCode={currencyCode}
-                  />
-                )}
-              </Fragment>
-            ))}
-
-            {fallbackProducts.length > 0 && (
-              <section class="w-full py-2 md:py-6" aria-labelledby="home-products-title">
-                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                  <div class="mb-3 flex items-baseline justify-between gap-2 md:mb-5">
-                    <h2 id="home-products-title" class="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-                      New arrivals
-                    </h2>
-                    <a href="/search" class="-my-3 py-3 text-sm font-semibold text-primary hover:underline">
-                      View all products
-                    </a>
-                  </div>
-                  <div class="product-grid">
-                    {fallbackProducts.map((product, index) => (
-                      <ProductCard
-                        product={product}
-                        currencySymbol={currencySymbol}
-                        currencyCode={currencyCode}
-                        priority={index < 2 && !(heroFirst && firstMobileHero)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </section>
-            )}
-          </>
-        )}
-      </Fragment>
-    ))}
-  </div>
+  <HomepageSections
+    sections={theme.sections}
+    leadSectionId={leadSection?.id ?? null}
+    hero={hero}
+    collections={activeCollections}
+    fallbackProducts={fallbackProducts}
+    categoryRail={presentation.categoryRail}
+    deliveryFacts={deliveryFacts}
+    currencySymbol={currencySymbol}
+    currencyCode={currencyCode}
+  />
 </Layout>

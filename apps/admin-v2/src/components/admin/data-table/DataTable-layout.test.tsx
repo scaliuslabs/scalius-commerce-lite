@@ -4,7 +4,7 @@ import { act, useMemo } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serverTableFeatures, useTable, type ColumnDef } from "./table-config";
-import { DataTable } from "./DataTable";
+import { CARD_LAYOUT_BELOW, DataTable } from "./DataTable";
 import { DataTableToolbar } from "./DataTableToolbar";
 import { IdText } from "./cells";
 
@@ -93,10 +93,18 @@ describe("DataTable column layout", () => {
     await act(async () => root.render(<Harness />));
     await resize(1440);
     expect(headers()).toEqual(["", "Product", "SKU", "Available", "Vendor", ""]);
-    await resize(560);
+    await resize(660);
     expect(headers()).toEqual(["", "Product", "SKU", "Available", ""]);
-    await resize(400);
-    expect(headers()).toEqual(["", "Product", "Available", ""]);
+  });
+
+  it("turns rows into cards by the table's own width, not the window's", async () => {
+    await act(async () => root.render(<Harness />));
+    // A wide window, but a narrow container (a tablet with the sidebar open).
+    await resize(CARD_LAYOUT_BELOW - 1);
+    expect(host.querySelector("table")).toBeNull();
+    expect(host.querySelector("[data-data-table-results] .divide-y")).not.toBeNull();
+    await resize(CARD_LAYOUT_BELOW);
+    expect(host.querySelector("table")).not.toBeNull();
   });
 
   it("puts the column menu in the toolbar and marks the columns that pin and align", async () => {

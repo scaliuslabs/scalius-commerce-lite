@@ -96,9 +96,23 @@ export function DataTableToolbar({
   const clearSearchRef = useRef(clearSearch);
   clearSearchRef.current = clearSearch;
 
+  // Shopify's index table: while rows are selected the bulk bar takes the
+  // search row's place at the same height, so the table under it never moves.
+  const bulk = selectedCount > 0 && bulkActions;
+
   return (
     <div className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+      {bulk ? (
+        <div
+          data-slot="bulk-bar"
+          role="toolbar"
+          aria-label={t("bulkActions")}
+          className="scrollbar-hide flex min-h-11 min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap sm:min-h-9"
+        >
+          {bulkActions}
+        </div>
+      ) : null}
+      <div data-bulk-hidden={bulk ? "" : undefined} className="flex min-w-0 flex-1 flex-wrap items-center gap-2 data-[bulk-hidden]:hidden">
         <div className="relative min-w-[220px] max-w-sm flex-1">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -124,10 +138,7 @@ export function DataTableToolbar({
         {filters}
         {columnMenu}
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        {selectedCount > 0 && bulkActions}
-        {actions}
-      </div>
+      {actions ? <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }

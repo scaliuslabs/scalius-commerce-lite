@@ -151,7 +151,7 @@ import {
     sha256Hex,
     stableStringify,
 } from "./admin-order-create-attempts";
-import { getOrderArchiveStatusBlockedReason } from "./order-archive-policy";
+import { ARCHIVABLE_ORDER_STATUSES, getOrderArchiveStatusBlockedReason } from "./order-archive-policy";
 
 // ─────────────────────────────────────────
 // Service functions
@@ -946,10 +946,15 @@ function buildShipmentRecoverySummary(
         };
     }
 
+    // An own rider who couldn't deliver is a delivery attempt (shown with the
+    // cash-on-delivery state), not a courier booking to fix (R3-ORD-05).
+    const ownRiderAttempt = status === ShipmentStatus.DELIVERY_FAILED && providerType === "manual";
     if (
-        status === ShipmentStatus.FAILED ||
-        status === ShipmentStatus.PICKUP_FAILED ||
-        status === ShipmentStatus.DELIVERY_FAILED
+        !ownRiderAttempt && (
+            status === ShipmentStatus.FAILED ||
+            status === ShipmentStatus.PICKUP_FAILED ||
+            status === ShipmentStatus.DELIVERY_FAILED
+        )
     ) {
         return {
             state: "failed",
@@ -3283,7 +3288,7 @@ export async function archiveOrders(
                 eq(orders.version, expectedVersion),
                 isNull(orders.deletedAt),
                 isNull(orders.archivedAt),
-                sql`${orders.status} IN ('cancelled', 'completed', 'returned', 'refunded')`,
+                inArray(orders.status, [...ARCHIVABLE_ORDER_STATUSES]),
                 sql`(${orders.shipmentClaimId} IS NULL OR ${orders.shipmentClaimExpiresAt} IS NULL OR ${orders.shipmentClaimExpiresAt} <= ${nowSeconds})`,
                 noActiveRefundAttemptForOrderIdCondition(id),
                 noActivePaymentSessionAttemptForOrderIdCondition(id),

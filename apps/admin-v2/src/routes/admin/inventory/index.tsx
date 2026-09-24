@@ -28,7 +28,7 @@ export const Route = createFileRoute("/admin/inventory/")({
   loader: ({ context: { queryClient }, deps }) => {
     if (typeof window === "undefined") return;
     // A `?q=` link wins once and becomes the session term (the page then drops it).
-    const filters = { ...deps, q: adoptListSearch("inventory", deps.q) };
+    const filters = { ...deps, q: adoptListSearch(`inventory.${deps.section}`, deps.q) };
     const query = filters.section === "variants"
       ? variantsQuery(filters)
       : filters.section === "alerts" ? alertsQuery(filters) : movementsQuery(filters);
@@ -42,7 +42,8 @@ export const Route = createFileRoute("/admin/inventory/")({
 function InventoryPage() {
   const t = useMessages(inventoryMessages);
   const search = Route.useSearch();
-  const [term, setTerm] = useListSearch("inventory");
+  // Each tab keeps its own search: a term typed in All variants never filters Low stock.
+  const [term, setTerm] = useListSearch(`inventory.${search.section}`);
   const filters = { ...search, q: term };
   const navigate = useNavigate();
 
@@ -61,7 +62,7 @@ function InventoryPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const printIds = search.section === "variants" ? selectedIds : [];
 
-  // Switching tabs keeps the search term and starts that tab with its default filters.
+  // Switching tabs starts that tab with its default filters and its own search.
   const openTab = useCallback(
     (section: InventoryWorkspaceSection) => {
       void navigate({ to: "/admin/inventory", resetScroll: false, search: { ...INVENTORY_SEARCH_DEFAULTS, section } });

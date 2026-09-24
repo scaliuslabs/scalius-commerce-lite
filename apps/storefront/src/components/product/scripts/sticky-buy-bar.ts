@@ -5,6 +5,10 @@ type BoundBar = HTMLElement & { __stickyBuyCleanup?: () => void };
  * `#product-actions` has scrolled above the viewport, mirrors the live price
  * and the Add to cart label/disabled state, and its button presses the real
  * Add to cart, so options, stock and cart rules stay in one place.
+ *
+ * While the bar shows, `data-sticky-buy-visible` on the root element lets the
+ * bar's stylesheet reserve room below the page and keep focused elements
+ * clear of it (WCAG 2.4.11), so the footer stays reachable.
  */
 export function bindStickyBuyBar(bar: BoundBar, root: Document): void {
   bar.__stickyBuyCleanup?.();
@@ -26,6 +30,7 @@ export function bindStickyBuyBar(bar: BoundBar, root: Document): void {
     bar.classList.toggle("invisible", !visible);
     bar.classList.toggle("translate-y-full", !visible);
     bar.inert = !visible;
+    root.documentElement.toggleAttribute("data-sticky-buy-visible", visible);
   };
 
   const onPress = () => main.click();

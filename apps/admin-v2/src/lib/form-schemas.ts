@@ -33,11 +33,21 @@ const says = (key: FormMessage) => ({
 });
 
 const ADDRESS_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/**
+ * The web address the merchant typed. Empty means "make it from the name",
+ * which the server does for a new item; `requireSavedAddress` keeps a saved
+ * item's address.
+ */
 const addressSchema = z
   .string()
-  .min(3, says("addressLength"))
-  .max(100, says("addressLength"))
-  .regex(ADDRESS_PATTERN, says("addressFormat"));
+  .refine((value) => value === "" || (value.length >= 3 && value.length <= 100), says("addressLength"))
+  .refine((value) => value === "" || ADDRESS_PATTERN.test(value), says("addressFormat"));
+
+function requireSavedAddress(value: { id?: string; slug: string }, context: z.RefinementCtx): void {
+  if (value.id && value.slug === "") {
+    context.addIssue({ code: "custom", path: ["slug"], message: translate(formMessages, "addressLength") });
+  }
+}
 
 /**
  * Until address aliases exist, a canonical address may only repeat the
@@ -107,9 +117,9 @@ export const categoryFormSchema = z
     noIndex: z.boolean(),
     excludeFromSitemap: z.boolean(),
     image: mediaFileFormSchema.nullable(),
-    slugEdited: z.boolean().optional(),
   })
   .superRefine((value, context) => {
+    requireSavedAddress(value, context);
     if (
       value.canonicalPath !== null &&
       value.canonicalPath !== `/categories/${value.slug}`
@@ -186,12 +196,13 @@ export const pageFormSchema = z
     featuredImage: mediaFileFormSchema.nullable(),
   })
   .superRefine((value, context) => {
+    requireSavedAddress(value, context);
     const resourceKind = value.contentType === "article" ? "article" : "page";
     const publicPath =
       value.contentType === "article"
         ? `/blog/${value.slug}`
         : `/${value.slug}`;
-    if (!isValidResourceCanonicalPath(resourceKind, publicPath)) {
+    if (value.slug !== "" && !isValidResourceCanonicalPath(resourceKind, publicPath)) {
       context.addIssue({
         code: "custom",
         path: ["slug"],

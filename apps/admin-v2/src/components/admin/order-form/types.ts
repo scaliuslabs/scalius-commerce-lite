@@ -2,6 +2,7 @@ import { z } from "zod";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { translate } from "~/i18n";
 import { orderFormMessages, type OrderFormMessageKey } from "~/i18n/order-form";
+import type { BuyerPriceRange } from "~/lib/format-utils";
 
 export interface Product {
   id: string;
@@ -11,8 +12,9 @@ export interface Product {
   discountType?: string | null;
   discountAmount?: number | null;
   variantCount?: number | null;
-  /** Catalog search rows only: thumbnail and stock before a variant is chosen. */
+  /** Catalog search rows only: thumbnail, what buyers pay and stock before a variant is chosen. */
   primaryImage?: string | null;
+  priceRange?: BuyerPriceRange | null;
   availableStock?: number | null;
   variants: {
     id: string;
@@ -57,6 +59,8 @@ export interface OrderFormProps {
   /** Amend only: "#1001" and the cash still to collect before the change. */
   orderLabel?: string;
   cashToCollect?: number | null;
+  /** Amend only: the order's saved delivery method. */
+  savedShippingMethod?: { id: string; name: string } | null;
 }
 
 /** Validation messages are read when validation runs, so they follow the dashboard language. */
