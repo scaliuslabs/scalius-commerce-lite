@@ -1,0 +1,15 @@
+---
+// A fluid product grid (theme-foundation.css): the frame is the container
+// the grid's columns respond to, so the grid fits whatever room it has.
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<div class:list={["product-grid-frame", className]}>
+  <div class="product-grid">
+    <slot />
+  </div>
+</div>

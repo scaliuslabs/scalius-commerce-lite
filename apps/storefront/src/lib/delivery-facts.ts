@@ -9,7 +9,7 @@ import type { ShippingMethod } from "./api/types";
 import type { StorefrontReturnPolicySettings } from "./commerce-structured-data";
 
 export interface DeliveryFact {
-  kind: "delivery" | "cod" | "returns";
+  kind: "delivery" | "pickup" | "cod" | "returns";
   title: string;
   detail: string;
   href?: string;
@@ -54,29 +54,28 @@ export function splitDeliveryRates(
  * States only what holds for every buyer before an address is known. With
  * delivery zones the fee depends on the address, so the line gives the
  * lowest fee and says the price depends on the area instead of one range
- * that overstates or understates what a given buyer pays.
+ * that overstates or understates what a given buyer pays. Pickup is never a
+ * delivery rate: it is stated on its own line (`pickupFact`).
  */
 function deliveryFact(
   rates: DeliveryRateSplit,
   formatMoney: (amount: number) => string,
   freeDelivery: boolean,
 ): DeliveryFact | null {
-  const { delivery, pickup, zoned } = rates;
-  const fee = (amount: number) => (amount === 0 ? "free" : formatMoney(amount));
-  const pickupNote = pickup.length > 0 ? ["Pickup available"] : [];
-
-  if (delivery.length === 0) {
-    if (pickup.length === 0) return null;
-    const first = pickup[0]!;
+  const { delivery, zoned } = rates;
+  if (delivery.length === 0) return null;
+  // Checkout waives the delivery fee for any order holding a free-delivery
+  // product, whatever the rate or zone. The product page has no other place
+  // that says so, so the fact is stated here rather than dropped.
+  if (freeDelivery) {
     return {
       kind: "delivery",
-      title: "Pickup available",
-      detail: first.pickupAddress?.trim() || first.name,
+      title: "Free delivery",
+      detail: "Delivery is free on any order with this item.",
     };
   }
-  // The product's "Free Delivery" badge already says it; don't repeat it here.
-  if (freeDelivery) return null;
 
+  const fee = (amount: number) => (amount === 0 ? "free" : formatMoney(amount));
   const fees = delivery.map((method) => method.fee);
   const min = Math.min(...fees);
   const max = Math.max(...fees);
@@ -88,7 +87,7 @@ function deliveryFact(
     return {
       kind: "delivery",
       title: min === 0 ? "Free delivery in some areas" : `Delivery from ${formatMoney(min)}`,
-      detail: ["Price depends on your area", ...freeOverAll, ...pickupNote].join(" · "),
+      detail: ["Price depends on your area", ...freeOverAll].join(" · "),
     };
   }
 
@@ -102,7 +101,32 @@ function deliveryFact(
   return {
     kind: "delivery",
     title: min === max ? `Delivery ${fee(min)}` : `Delivery ${formatMoney(min)}–${formatMoney(max)}`,
-    detail: [...detail, ...pickupNote].join(" · ").replace(/^free/, "Free"),
+    detail: detail.join(" · ").replace(/^free/, "Free"),
+  };
+}
+
+/**
+ * Local pickup on its own line, with its fee when it has one. A
+ * free-delivery product waives the pickup fee too, so none is shown then.
+ */
+function pickupFact(
+  rates: DeliveryRateSplit,
+  formatMoney: (amount: number) => string,
+  freeDelivery: boolean,
+): DeliveryFact | null {
+  const { pickup } = rates;
+  if (pickup.length === 0) return null;
+  const fees = pickup.map((method) => (freeDelivery ? 0 : method.fee));
+  const min = Math.min(...fees);
+  const max = Math.max(...fees);
+  const price = min === 0 ? "" : min === max ? formatMoney(min) : `from ${formatMoney(min)}`;
+  const first = pickup[0]!;
+  return {
+    kind: "pickup",
+    title: ["Pickup available", price].filter(Boolean).join(" · "),
+    detail: pickup.length === 1
+      ? first.pickupAddress?.trim() || first.name
+      : `${pickup.length} pickup points`,
   };
 }
 
@@ -141,8 +165,11 @@ function returnsFact(policy: StorefrontReturnPolicySettings | null | undefined):
 }
 
 export function buildDeliveryFacts(input: DeliveryFactsInput): DeliveryFact[] {
+  const rates = splitDeliveryRates(input.shippingMethods);
+  const freeDelivery = input.freeDelivery === true;
   return [
-    deliveryFact(splitDeliveryRates(input.shippingMethods), input.formatMoney, input.freeDelivery === true),
+    deliveryFact(rates, input.formatMoney, freeDelivery),
+    pickupFact(rates, input.formatMoney, freeDelivery),
     codFact(input.checkoutConfig),
     returnsFact(input.returnPolicy),
   ].filter((fact): fact is DeliveryFact => fact !== null);

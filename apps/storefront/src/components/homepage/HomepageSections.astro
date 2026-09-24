@@ -1,0 +1,139 @@
+---
+// The homepage body: the theme document's sections, in order. Theme blocks
+// (hero, collections, categories, delivery) and builder sections (rich_text)
+// render server-side; a section with nothing to show renders nothing.
+import type { StorefrontSection } from "@scalius/shared/storefront-theme";
+import type { CollectionWithProducts, Product } from "@/lib/api";
+import type { HomepageData } from "@/lib/api/storefront";
+import type { DeliveryFact } from "@/lib/delivery-facts";
+import type { ResolvedHomepageHero } from "@/lib/homepage-hero";
+import { collectionShowsProducts } from "@/lib/homepage-sections";
+import Hero from "@/components/hero.astro";
+import Collection1 from "@/components/collection1.astro";
+import Collection2 from "@/components/collection2.astro";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
+import DeliveryFacts from "@/components/DeliveryFacts.astro";
+import HomepageCategoryRail from "./HomepageCategoryRail.astro";
+import RichTextSection from "./RichTextSection.astro";
+
+interface Props {
+  sections: StorefrontSection[];
+  /** `homepageLeadSection(...)`: the first section that renders. */
+  leadSectionId: string | null;
+  hero: ResolvedHomepageHero;
+  collections: CollectionWithProducts[];
+  /** Newest products, shown when the store has no homepage collections. */
+  fallbackProducts: Product[];
+  categoryRail: HomepageData["presentation"]["categoryRail"];
+  deliveryFacts: DeliveryFact[];
+  currencySymbol: string;
+  currencyCode: string;
+}
+
+const {
+  sections,
+  leadSectionId,
+  hero,
+  collections,
+  fallbackProducts,
+  categoryRail,
+  deliveryFacts,
+  currencySymbol,
+  currencyCode,
+} = Astro.props;
+
+const collectionsLead = sections.some(
+  (section) => section.type === "collections" && section.id === leadSectionId,
+);
+// The banner's first slide is fetched at high priority wherever it sits:
+// it is one of at most two photo sections, so even after a product row it
+// is at or just below the fold and usually the largest paint. Only a
+// leading banner is also preloaded (index.astro).
+
+// Only the first collection that shows products can sit above the fold.
+const firstShownCollectionId = collections.find(collectionShowsProducts)?.id;
+
+function isCollection1(
+  collection: CollectionWithProducts,
+): collection is CollectionWithProducts & { presentation: "grid" } {
+  return collection.presentation === "grid";
+}
+
+function isCollection2(
+  collection: CollectionWithProducts,
+): collection is CollectionWithProducts & { presentation: "carousel" } {
+  return collection.presentation === "carousel";
+}
+---
+
+<div class="flex flex-col">
+  {sections.map((section) => (
+    <div class="contents" data-home-section={section.type} data-section-id={section.id}>
+      {section.type === "hero" && (
+        <section class="w-full">
+          <Hero hero={hero} priority />
+        </section>
+      )}
+
+      {section.type === "categories" && <HomepageCategoryRail rail={categoryRail} />}
+
+      {section.type === "delivery" && <DeliveryFacts facts={deliveryFacts} />}
+
+      {section.type === "rich_text" && (
+        <RichTextSection id={section.id} heading={section.settings.heading} body={section.settings.body} />
+      )}
+
+      {section.type === "collections" && (
+        <>
+          {collections.map((collection) => (
+            <Fragment>
+              {isCollection1(collection) && (
+                <Collection1
+                  collection={collection}
+                  currencySymbol={currencySymbol}
+                  currencyCode={currencyCode}
+                  aboveFold={collectionsLead && collection.id === firstShownCollectionId}
+                />
+              )}
+              {isCollection2(collection) && (
+                <Collection2
+                  collection={collection}
+                  currencySymbol={currencySymbol}
+                  currencyCode={currencyCode}
+                  aboveFold={collectionsLead && collection.id === firstShownCollectionId}
+                />
+              )}
+            </Fragment>
+          ))}
+
+          {fallbackProducts.length > 0 && (
+            <section class="w-full py-2 md:py-6" aria-labelledby="home-products-title">
+              <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="mb-3 flex items-baseline justify-between gap-2 md:mb-5">
+                  <h2 id="home-products-title" class="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+                    New arrivals
+                  </h2>
+                  <a href="/search" class="-my-3 py-3 text-sm font-semibold text-primary hover:underline">
+                    View all products
+                  </a>
+                </div>
+                <ProductGrid>
+                  {fallbackProducts.map((product, index) => (
+                    <ProductCard
+                      product={product}
+                      currencySymbol={currencySymbol}
+                      currencyCode={currencyCode}
+                      index={index}
+                      aboveFold={collectionsLead && !firstShownCollectionId}
+                    />
+                  ))}
+                </ProductGrid>
+              </div>
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  ))}
+</div>

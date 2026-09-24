@@ -1,23 +1,4 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import {
-  STOREFRONT_THEME_BODY_FONTS,
-  STOREFRONT_THEME_BUTTON_STYLES,
-  STOREFRONT_THEME_CARD_STYLES,
-  STOREFRONT_THEME_CONTAINER_WIDTHS,
-  STOREFRONT_THEME_CORNER_STYLES,
-  STOREFRONT_THEME_DENSITIES,
-  STOREFRONT_THEME_HEADING_FONTS,
-  STOREFRONT_THEME_INPUT_STYLES,
-  STOREFRONT_THEME_TYPE_SCALES,
-  STOREFRONT_CARD_BADGE_PLACEMENTS,
-  STOREFRONT_CARD_IMAGE_RATIOS,
-  STOREFRONT_FOOTER_STYLES,
-  STOREFRONT_HEADER_STYLES,
-  STOREFRONT_HOMEPAGE_SECTIONS,
-  STOREFRONT_PRODUCT_GALLERY_LAYOUTS,
-  STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS,
-  listInvalidStorefrontThemeSettingsEntries,
-} from "@scalius/shared/storefront-theme";
 import { SUPPORTED_CURRENCY_CODES } from "@scalius/shared/currency";
 import {
   SEO_RETURN_POLICY_CATEGORIES,
@@ -91,6 +72,7 @@ import {
   serviceUnavailableResponse,
 } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
+import { storefrontThemeDocumentApiSchema } from "../../../schemas/storefront-theme";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const revisionSchema = z.number().int().nonnegative();
@@ -529,67 +511,6 @@ app.openapi(saveFooterRoute, async (c) => {
 // THEME
 // ─────────────────────────────────────────
 
-/** Curated layout variants (shared vocabulary; the storefront renders each). */
-const themeLayoutSchema = z
-  .object({
-    header: z.enum(STOREFRONT_HEADER_STYLES),
-    footer: z.enum(STOREFRONT_FOOTER_STYLES),
-    productCard: z
-      .object({
-        imageRatio: z.enum(STOREFRONT_CARD_IMAGE_RATIOS),
-        hoverImage: z.boolean(),
-        quickBuy: z.boolean(),
-        badge: z.enum(STOREFRONT_CARD_BADGE_PLACEMENTS),
-      })
-      .strict(),
-    grid: z
-      .object({
-        desktop: z.union([z.literal(2), z.literal(3), z.literal(4)]),
-        mobile: z.union([z.literal(1), z.literal(2)]),
-      })
-      .strict(),
-    productPage: z
-      .object({
-        gallery: z.enum(STOREFRONT_PRODUCT_GALLERY_LAYOUTS),
-        thumbnails: z.enum(STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS),
-      })
-      .strict(),
-    homepage: z.array(z.enum(STOREFRONT_HOMEPAGE_SECTIONS)).length(STOREFRONT_HOMEPAGE_SECTIONS.length),
-  })
-  .strict();
-
-const themeDocumentSchema = z
-  .object({
-    colors: z.record(z.string(), z.string()),
-    typography: z
-      .object({
-        heading: z.enum(STOREFRONT_THEME_HEADING_FONTS),
-        body: z.enum(STOREFRONT_THEME_BODY_FONTS),
-        scale: z.enum(STOREFRONT_THEME_TYPE_SCALES),
-      })
-      .strict(),
-    cornerStyle: z.enum(STOREFRONT_THEME_CORNER_STYLES),
-    density: z.enum(STOREFRONT_THEME_DENSITIES),
-    containerWidth: z.enum(STOREFRONT_THEME_CONTAINER_WIDTHS),
-    components: z
-      .object({
-        buttons: z.enum(STOREFRONT_THEME_BUTTON_STYLES),
-        inputs: z.enum(STOREFRONT_THEME_INPUT_STYLES),
-        cards: z.enum(STOREFRONT_THEME_CARD_STYLES),
-      })
-      .strict(),
-    layout: themeLayoutSchema,
-  })
-  .strict()
-  .superRefine((theme, ctx) => {
-    const invalidEntries = listInvalidStorefrontThemeSettingsEntries(theme);
-    if (invalidEntries.length === 0) return;
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Invalid theme settings: ${invalidEntries.join(", ")}`,
-    });
-  });
-
 const getThemeRoute = createRoute({
   method: "get",
   path: "/theme",
@@ -604,7 +525,7 @@ const getThemeRoute = createRoute({
           schema: successEnvelope(
             z
               .object({
-                theme: themeDocumentSchema,
+                theme: storefrontThemeDocumentApiSchema,
                 revision: z.number().int().nonnegative(),
               })
               .passthrough(),
@@ -624,7 +545,7 @@ app.openapi(getThemeRoute, async (c) => {
 
 const saveThemeSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
-  theme: themeDocumentSchema,
+  theme: storefrontThemeDocumentApiSchema,
 });
 
 const saveThemeRoute = createRoute({
@@ -643,7 +564,7 @@ const saveThemeRoute = createRoute({
         "application/json": {
           schema: successEnvelope(
             z.object({
-              theme: themeDocumentSchema,
+              theme: storefrontThemeDocumentApiSchema,
               revision: z.number().int().positive(),
               message: z.string(),
             }),
@@ -673,7 +594,7 @@ app.openapi(saveThemeRoute, async (c) => {
 });
 
 const themeDraftSchema = z.object({
-  theme: themeDocumentSchema,
+  theme: storefrontThemeDocumentApiSchema,
   revision: z.number().int().nonnegative(),
   basePublishedRevision: z.number().int().nonnegative(),
   updatedAt: z.any().nullable(),
@@ -681,7 +602,7 @@ const themeDraftSchema = z.object({
 
 const themeWorkspaceSchema = z.object({
   published: z.object({
-    theme: themeDocumentSchema,
+    theme: storefrontThemeDocumentApiSchema,
     revision: z.number().int().nonnegative(),
   }),
   draft: themeDraftSchema,
@@ -709,7 +630,7 @@ app.openapi(getThemeWorkspaceRoute, async (c) => {
 });
 
 const saveThemeDraftSchema = z.object({
-  theme: themeDocumentSchema,
+  theme: storefrontThemeDocumentApiSchema,
   expectedDraftRevision: z.number().int().nonnegative(),
   basePublishedRevision: z.number().int().nonnegative(),
 });
@@ -827,7 +748,7 @@ app.openapi(publishThemeDraftRoute, async (c) => {
 
 const themeVersionSchema = z.object({
   id: z.string(),
-  theme: themeDocumentSchema,
+  theme: storefrontThemeDocumentApiSchema,
   revision: z.number().int().positive(),
   source: z.enum(["publish", "rollback", "migration"]),
   sourceRevision: z.number().int().positive().nullable(),

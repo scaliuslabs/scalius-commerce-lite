@@ -13,8 +13,9 @@ import {
   themeSettings,
   categories,
   checkoutLanguages,
+  media,
 } from "@scalius/database/schema";
-import { eq, isNull, and, or, sql } from "drizzle-orm";
+import { eq, isNull, isNotNull, inArray, and, or, sql } from "drizzle-orm";
 import {
   checkoutLanguageBaseCode,
   resolveCheckoutLanguageData,
@@ -46,8 +47,13 @@ import {
   SETTINGS_DOCUMENT_ROW_KEY,
   type SettingsDocumentRow,
 } from "../settings/settings-store";
-import { parseStorefrontThemeSettings } from "@scalius/shared/storefront-theme";
-import { parseStoredHeroSlides } from "@scalius/shared/hero-slider";
+import {
+  DEFAULT_STOREFRONT_THEME,
+  parseStoredStorefrontThemeDocument,
+} from "@scalius/shared/storefront-theme";
+import { parseStoredHeroSlides, type HeroSlide } from "@scalius/shared/hero-slider";
+import { mediaImageSrcSet } from "@scalius/shared/media-variants";
+import { extractKeyFromUrl } from "../../integrations/storage";
 import {
   HEADER_LOGO_WIDTH_DEFAULT,
   normalizeHeaderLogoWidth,
@@ -99,6 +105,55 @@ function normalizeSocialLink(value: unknown): SocialLink {
 }
 
 // ── Homepage data ─────────────────────────────────────────────────────────────
+
+/** D1 binds at most 100 parameters per query; hero slide sets are far smaller. */
+const HERO_RENDITION_LOOKUP_LIMIT = 90;
+
+/**
+ * Hero slides store an image URL, not a media id. A slide saved before its
+ * image had renditions keeps pointing at the original upload, and nothing in
+ * that URL says renditions now exist, so the storefront could only preload
+ * and paint the full-size original. Such slides are pointed at the image's
+ * published (largest) rendition, from which the storefront derives its
+ * srcset and a phone-sized preload (@scalius/shared/media-variants). The
+ * lookup runs only when a slide still uses an original media URL.
+ */
+export async function withPublishedHeroRenditions(
+  db: Database,
+  slides: HeroSlide[],
+): Promise<HeroSlide[]> {
+  const keyByUrl = new Map<string, string>();
+  for (const slide of slides) {
+    if (keyByUrl.has(slide.url) || mediaImageSrcSet(slide.url)) continue;
+    const key = extractKeyFromUrl(slide.url);
+    if (key?.startsWith("media/")) keyByUrl.set(slide.url, key);
+  }
+  const keys = [...new Set(keyByUrl.values())].slice(0, HERO_RENDITION_LOOKUP_LIMIT);
+  if (keys.length === 0) return slides;
+
+  const rows = await db
+    .select({ objectKey: media.objectKey, variantWidth: media.variantWidth })
+    .from(media)
+    .where(and(
+      inArray(media.objectKey, keys),
+      isNotNull(media.variantWidth),
+      inArray(media.status, ["ready", "trashed"]),
+    ));
+  const widthByKey = new Map(rows.map((row) => [row.objectKey, row.variantWidth]));
+
+  return slides.map((slide) => {
+    const key = keyByUrl.get(slide.url);
+    const width = key ? widthByKey.get(key) : null;
+    if (!width) return slide;
+    try {
+      const url = new URL(slide.url);
+      url.pathname = `${url.pathname}/${width}.webp`;
+      return { ...slide, url: url.toString() };
+    } catch {
+      return slide;
+    }
+  });
+}
 
 /**
  * Fetch and shape all homepage data in two batched D1 round-trips.
@@ -199,9 +254,16 @@ export async function getHomepageData(db: Database) {
       images: parseStoredHeroSlides(slider.images),
     };
   };
+  const desktopHero = formatSlider(desktopSlider);
+  const mobileHero = formatSlider(mobileSlider);
+  const heroSlides = await withPublishedHeroRenditions(db, [
+    ...(desktopHero?.images ?? []),
+    ...(mobileHero?.images ?? []),
+  ]);
+  const desktopSlideCount = desktopHero?.images.length ?? 0;
   const hero = {
-    desktop: formatSlider(desktopSlider),
-    mobile: formatSlider(mobileSlider),
+    desktop: desktopHero && { ...desktopHero, images: heroSlides.slice(0, desktopSlideCount) },
+    mobile: mobileHero && { ...mobileHero, images: heroSlides.slice(desktopSlideCount) },
   };
 
   // === BATCH 2: Products for collections ===
@@ -514,9 +576,13 @@ export async function getLayoutData(
     symbol: currency.value.currencySymbol,
     usdExchangeRate: Number.isFinite(currencyRate) && currencyRate > 0 ? currencyRate : 1,
   };
-  const storefrontTheme = parseStorefrontThemeSettings(
-    (themeResults as { value?: string }[])[0]?.value,
-  );
+  // The storefront renders a stored theme whole or the default whole, never a mix.
+  const themeRow = (themeResults as { value?: string }[])[0];
+  const publishedTheme = parseStoredStorefrontThemeDocument(themeRow?.value);
+  if (themeRow && !publishedTheme) {
+    console.warn("[Storefront] Published theme is unreadable; rendering the default theme.");
+  }
+  const storefrontTheme = publishedTheme ?? DEFAULT_STOREFRONT_THEME;
   const metaCapi = {
     browserEventsEnabled: Boolean(
       metaCapiSettings.value.isEnabled &&

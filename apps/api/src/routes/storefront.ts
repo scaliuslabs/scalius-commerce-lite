@@ -4,15 +4,6 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
-  STOREFRONT_CARD_BADGE_PLACEMENTS,
-  STOREFRONT_CARD_IMAGE_RATIOS,
-  STOREFRONT_FOOTER_STYLES,
-  STOREFRONT_HEADER_STYLES,
-  STOREFRONT_HOMEPAGE_SECTIONS,
-  STOREFRONT_PRODUCT_GALLERY_LAYOUTS,
-  STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS,
-} from "@scalius/shared/storefront-theme";
-import {
   getHomepageData,
   getLayoutData,
   getPageRenderData,
@@ -24,9 +15,9 @@ import { NotFoundError } from "../utils/api-error";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { pageSchema } from "../schemas/entities";
+import { storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const flexibleObjectSchema = z.record(z.string(), z.any());
 const storefrontProductCardSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -180,38 +171,7 @@ const layoutDataSchema = z.object({
     symbol: z.string(),
     usdExchangeRate: z.number().positive(),
   }),
-  theme: z.object({
-    colors: z.record(z.string(), z.string()),
-    typography: z.object({
-      heading: z.enum(["system", "modern", "editorial"]),
-      body: z.enum(["system", "modern", "humanist"]),
-      scale: z.enum(["compact", "standard", "generous"]),
-    }),
-    cornerStyle: z.enum(["square", "subtle", "rounded"]),
-    density: z.enum(["compact", "comfortable", "airy"]),
-    containerWidth: z.enum(["focused", "standard", "wide"]),
-    components: z.object({
-      buttons: z.enum(["solid", "soft", "outline"]),
-      inputs: z.enum(["outlined", "filled"]),
-      cards: z.enum(["bordered", "elevated", "flat"]),
-    }),
-    layout: z.object({
-      header: z.enum(STOREFRONT_HEADER_STYLES),
-      footer: z.enum(STOREFRONT_FOOTER_STYLES),
-      productCard: z.object({
-        imageRatio: z.enum(STOREFRONT_CARD_IMAGE_RATIOS),
-        hoverImage: z.boolean(),
-        quickBuy: z.boolean(),
-        badge: z.enum(STOREFRONT_CARD_BADGE_PLACEMENTS),
-      }),
-      grid: z.object({ desktop: z.number().int(), mobile: z.number().int() }),
-      productPage: z.object({
-        gallery: z.enum(STOREFRONT_PRODUCT_GALLERY_LAYOUTS),
-        thumbnails: z.enum(STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS),
-      }),
-      homepage: z.array(z.enum(STOREFRONT_HOMEPAGE_SECTIONS)),
-    }),
-  }),
+  theme: storefrontThemeDocumentApiSchema,
   media: z.object({
     canonicalCdnUrl: z.string(),
     canonicalHostAliases: z.array(z.string()),
@@ -383,7 +343,7 @@ const resolveThemePreviewRoute = createRoute({
     200: {
       description: "Preview theme snapshot",
       content: { "application/json": { schema: successEnvelope(z.object({
-        theme: flexibleObjectSchema,
+        theme: storefrontThemeDocumentApiSchema,
         draftRevision: z.number().int().positive(),
         basePublishedRevision: z.number().int().nonnegative(),
         expiresAt: z.any(),

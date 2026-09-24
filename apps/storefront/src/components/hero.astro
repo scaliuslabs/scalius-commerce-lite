@@ -7,9 +7,11 @@ import type { ResolvedHomepageHero } from "@/lib/homepage-hero";
 
 interface Props {
   hero: ResolvedHomepageHero;
+  /** The banner leads the page (the LCP): its first slide gets high priority. */
+  priority?: boolean;
 }
 
-const { hero } = Astro.props;
+const { hero, priority = true } = Astro.props;
 ---
 
 {
@@ -22,6 +24,7 @@ const { hero } = Astro.props;
               images={hero.desktop}
               height={HERO_SLIDE_PRESENTATION.desktop.height}
               type="desktop"
+              priority={priority}
             />
           </div>
         )}
@@ -31,6 +34,7 @@ const { hero } = Astro.props;
               images={hero.mobile}
               height={HERO_SLIDE_PRESENTATION.mobile.height}
               type="mobile"
+              priority={priority}
             />
           </div>
         )}
