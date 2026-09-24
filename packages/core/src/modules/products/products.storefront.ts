@@ -19,6 +19,7 @@ import { suggestSearchCorrection } from "../../search/correct";
 import { productCategoryNameMatch, productSearchRelevanceOrder } from "../../search/relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
+import { listProductBuyGetOffers } from "../promotions/promotions.checkout";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type {
     StorefrontFeedProduct,
@@ -48,6 +49,7 @@ import {
     presentBuyerPricing,
     presentCatalogPrice,
     storeCurrencyCodeSql,
+    storeCurrencyFromCode,
     storeDecimalPlacesFromCode,
     storeDecimalToMinorSql,
 } from "./products.money";
@@ -1080,7 +1082,7 @@ export async function getStorefrontFeedProducts(
     const imageMap = productImageMapFromMedia(mediaMap);
     const categoryMap = new Map(categoriesData.map((cat) => [cat.id, cat]));
 
-    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode: _storeCurrencyCode, ...product }) => {
+    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, ...product }) => {
         const imgData = imageMap.get(product.id);
         const category = product.categoryId ? categoryMap.get(product.categoryId) ?? null : null;
         const price = presentCatalogPrice(product, decimalPlaces);
@@ -1095,7 +1097,7 @@ export async function getStorefrontFeedProducts(
             discountType: product.discountType,
             discountPercentage: price.discountPercentage,
             discountAmount: price.discountAmount,
-            discountedPrice: catalogDiscountedPrice(product, decimalPlaces),
+            discountedPrice: catalogDiscountedPrice(product, storeCurrencyFromCode(storeCurrencyCode)),
             freeDelivery: product.freeDelivery,
             categoryId: category?.id ?? null,
             excludeFromProductFeed: Boolean(product.excludeFromProductFeed),
@@ -1398,6 +1400,16 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         }).from(productRichContent).where(eq(productRichContent.productId, product.id))
             .orderBy(productRichContent.sortOrder).then((res: Array<{ id: string; title: string; content: string }>) => ({ type: "additionalInfo", data: res })),
 
+        listProductBuyGetOffers(db, product.id, storeCurrencyFromCode(storeCurrencyCode))
+            .then((offers) => ({
+                type: "offers",
+                data: offers.map(({ buyAmountMinor, basisPoints, ...offer }) => ({
+                    ...offer,
+                    buyAmount: buyAmountMinor === null ? null : fromMinor(buyAmountMinor, decimalPlaces),
+                    percentOff: basisPoints / 100,
+                })),
+            })),
+
         db.select({
             name: productAttributes.name,
             value: productAttributeValues.value,
@@ -1461,6 +1473,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const additionalInfo = (results.find((r) => r.type === "additionalInfo")?.data as unknown[]) || [];
     const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as unknown[]) || [];
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
+    const offers = (results.find((r) => r.type === "offers")?.data as unknown[]) || [];
 
     interface VariantResult { id: string; productId: string; optionCombinationKey: string | null; imageId: string | null; weight: number | null; sku: string; priceMinor: number; stock: number; reservedStock: number; isDefault: boolean; trackInventory: boolean; lowStockThreshold: number | null; barcode: string | null; barcodeType: string | null; discountType: string | null; discountBps: number; discountAmountMinor: number; createdAt: number; updatedAt: number; deletedAt: number | null; }
     const typedVariants = variants as VariantResult[];
@@ -1520,9 +1533,10 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             discountType: product.discountType || "percentage",
             freeDelivery: product.freeDelivery || false,
             features: extractFeatures(product.description),
-            discountedPrice: catalogDiscountedPrice(product, decimalPlaces),
+            discountedPrice: catalogDiscountedPrice(product, storeCurrencyFromCode(storeCurrencyCode)),
             attributes,
             additionalInfo,
+            offers,
         },
         category,
         media: publicMedia,

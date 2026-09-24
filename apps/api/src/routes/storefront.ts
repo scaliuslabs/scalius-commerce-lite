@@ -224,8 +224,15 @@ const layoutDataSchema = z.object({
     languageCode: z.string(),
     addToCartText: z.string(),
     buyNowText: z.string(),
-    selectOptionsText: z.string(),
     unavailableText: z.string(),
+    chooseOptionText: z.string(),
+    fromPriceText: z.string(),
+    quantityLabelText: z.string(),
+    quantityLimitText: z.string(),
+    saleOfferText: z.string(),
+    saleOfferSpendText: z.string(),
+    freeBenefitText: z.string(),
+    percentBenefitText: z.string(),
   }),
 });
 type LayoutData = z.infer<typeof layoutDataSchema>;

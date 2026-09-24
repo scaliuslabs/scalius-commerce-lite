@@ -334,7 +334,7 @@ function normalizeCheckoutRequestId(value: string): string {
 
 function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<string, unknown> {
   return {
-    version: 2,
+    version: 3,
     expectedQuoteFingerprint: input.expectedQuoteFingerprint,
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone.trim(),
@@ -355,8 +355,7 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
       productName: item.productName ?? null,
       variantLabel: item.variantLabel ?? null,
     })),
-    discountAmount: input.discountAmount == null ? null : normalizeAmount(input.discountAmount),
-    discountCode: input.discountCode?.trim().toUpperCase() ?? null,
+    discountCodes: [...new Set(input.discountCodes.map((code) => code.trim().toUpperCase()))].sort(),
     shippingCharge: normalizeAmount(input.shippingCharge),
     shippingMethodId: input.shippingMethodId ?? null,
     paymentMethod: input.paymentMethod,

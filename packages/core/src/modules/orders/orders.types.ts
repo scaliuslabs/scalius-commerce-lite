@@ -245,8 +245,8 @@ export interface CreateStorefrontOrderInput {
     areaName?: string | null;
     notes: string | null;
     items: StorefrontOrderItem[];
-    discountAmount: number | null;
-    discountCode?: string | null;
+    /** Discount codes the buyer applied; each must still apply at commit. */
+    discountCodes: string[];
     shippingCharge: number;
     shippingMethodId?: string | null;
     paymentMethod: string;

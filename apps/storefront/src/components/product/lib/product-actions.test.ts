@@ -1,59 +1,44 @@
 import { describe, expect, it } from "vitest";
-import { BANGLA_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
+import {
+  BANGLA_CHECKOUT_LANGUAGE_DATA,
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+} from "@scalius/shared/checkout-language";
 import { getProductActionsPresentation } from "./product-actions";
 
-const product = { productName: "Rider Court Trainers" };
+const product = { productName: "Rider Court Trainers", copy: ENGLISH_CHECKOUT_LANGUAGE_DATA };
 
 describe("product action presentation", () => {
-  it("requires an exact option combination before either purchase action", () => {
+  it("keeps both purchase actions enabled while options are still being chosen", () => {
     expect(
-      getProductActionsPresentation({
-        ...product,
-        exactVariantAvailable: false,
-        anyVariantAvailable: true,
-      }),
+      getProductActionsPresentation({ ...product, anyVariantAvailable: true }),
     ).toEqual({
       addToCart: {
-        disabled: true,
-        label: "Select Options",
-        ariaLabel: "Select Options — Rider Court Trainers",
+        disabled: false,
+        label: "Add to cart",
+        ariaLabel: "Add to cart — Rider Court Trainers",
       },
       buyNow: {
-        disabled: true,
-        label: "Buy Now",
-        ariaLabel: "Buy Now — Rider Court Trainers",
+        disabled: false,
+        label: "Buy now",
+        ariaLabel: "Buy now — Rider Court Trainers",
       },
     });
   });
 
-  it("enables both actions for an available exact SKU", () => {
-    const actions = getProductActionsPresentation({
-      ...product,
-      exactVariantAvailable: true,
-      anyVariantAvailable: true,
-    });
-    expect(actions.addToCart).toEqual({
-      disabled: false,
-      label: "Add to Cart",
-      ariaLabel: "Add to Cart — Rider Court Trainers",
-    });
-    expect(actions.buyNow.disabled).toBe(false);
-  });
-
-  it("keeps sold-out actions disabled and explicit", () => {
-    const actions = getProductActionsPresentation({
-      ...product,
-      exactVariantAvailable: false,
-      anyVariantAvailable: false,
-    });
-    expect(actions.addToCart).toMatchObject({ disabled: true, label: "Unavailable" });
-    expect(actions.buyNow).toMatchObject({ disabled: true, label: "Unavailable" });
+  it("disables both actions when nothing, or the chosen combination, can be bought", () => {
+    for (const input of [
+      { anyVariantAvailable: false },
+      { anyVariantAvailable: true, chosenVariantSoldOut: true },
+    ]) {
+      const actions = getProductActionsPresentation({ ...product, ...input });
+      expect(actions.addToCart).toMatchObject({ disabled: true, label: "Sold out" });
+      expect(actions.buyNow).toMatchObject({ disabled: true, label: "Sold out" });
+    }
   });
 
   it("uses the store's checkout language copy", () => {
     const actions = getProductActionsPresentation({
       ...product,
-      exactVariantAvailable: true,
       anyVariantAvailable: true,
       copy: BANGLA_CHECKOUT_LANGUAGE_DATA,
     });
@@ -62,10 +47,9 @@ describe("product action presentation", () => {
     expect(
       getProductActionsPresentation({
         ...product,
-        exactVariantAvailable: false,
         anyVariantAvailable: false,
         copy: BANGLA_CHECKOUT_LANGUAGE_DATA,
       }).addToCart.label,
-    ).toBe("পাওয়া যাচ্ছে না");
+    ).toBe("স্টক শেষ");
   });
 });

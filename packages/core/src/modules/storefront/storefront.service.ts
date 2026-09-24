@@ -566,7 +566,14 @@ function resolveStorefrontCopy(
     languageCode: checkoutLanguageBaseCode(code),
     addToCartText: copy.addToCartText,
     buyNowText: copy.buyNowText,
-    selectOptionsText: copy.selectOptionsText,
     unavailableText: copy.unavailableText,
+    chooseOptionText: copy.chooseOptionText,
+    fromPriceText: copy.fromPriceText,
+    quantityLabelText: copy.quantityLabelText,
+    quantityLimitText: copy.quantityLimitText,
+    saleOfferText: copy.saleOfferText,
+    saleOfferSpendText: copy.saleOfferSpendText,
+    freeBenefitText: copy.freeBenefitText,
+    percentBenefitText: copy.percentBenefitText,
   };
 }

@@ -308,7 +308,8 @@ export const orderDiscountAllocations = sqliteTable("order_discount_allocations"
 ]);
 
 /**
- * One immutable redemption claim per committed order. Checkout inserts the
+ * One immutable redemption claim per code discount on a committed order (an
+ * order may combine codes of different discount classes). Checkout inserts the
  * claim in the same D1 batch as the order and allocation snapshots. Database
  * triggers enforce lifecycle and count/spend limits at the serialization
  * point; advisory preview counts never become the authority.
@@ -330,7 +331,7 @@ export const promotionRedemptions = sqliteTable("promotion_redemptions", {
     discountAmountMinor: integer("discount_amount_minor").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
 }, (table) => [
-    uniqueIndex("promotion_redemptions_order_unique").on(table.orderId),
+    uniqueIndex("promotion_redemptions_order_promotion_unique").on(table.orderId, table.promotionId),
     index("promotion_redemptions_promotion_idx").on(table.promotionId, table.createdAt),
     index("promotion_redemptions_customer_idx").on(table.promotionId, table.customerId, table.createdAt),
     check("promotion_redemptions_revision_positive", sql`${table.promotionRevision} >= 1`),

@@ -4,7 +4,8 @@ import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
-import { readStoreDecimalPlaces, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../products/products.money";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../products/products.money";
+import { getCurrencyConfig } from "../settings/settings.service";
 import { buildInventoryLowStockCondition } from "./low-stock-policy";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 
@@ -48,6 +49,7 @@ type InventoryLabelPricingFacts = {
  */
 export function calculateInventoryLabelEffectivePriceMinor(
     facts: InventoryLabelPricingFacts,
+    currencyCode: string,
 ): number {
     const hasVariantDiscount =
         (facts.variantDiscountType === "percentage" && facts.variantDiscountBps > 0)
@@ -58,6 +60,7 @@ export function calculateInventoryLabelEffectivePriceMinor(
         hasVariantDiscount ? facts.variantDiscountType : facts.productDiscountType,
         hasVariantDiscount ? facts.variantDiscountBps : facts.productDiscountBps,
         hasVariantDiscount ? facts.variantDiscountAmountMinor : facts.productDiscountAmountMinor,
+        currencyCode,
     );
 }
 
@@ -267,7 +270,7 @@ export async function getInventoryLabelVariants(
     }
 
     const variantIdSet = JSON.stringify(variantIds);
-    const decimalPlacesRead = readStoreDecimalPlaces(db);
+    const currencyRead = getCurrencyConfig(db);
     const rows = await db
         .select({
             id: productVariants.id,
@@ -302,7 +305,7 @@ export async function getInventoryLabelVariants(
         .all();
 
     const rowById = new Map(rows.map((row) => [row.id, row]));
-    const decimalPlaces = await decimalPlacesRead;
+    const { code: currencyCode, decimalPlaces } = await currencyRead;
     return {
         variants: variantIds.flatMap((id) => {
             const row = rowById.get(id);
@@ -320,7 +323,7 @@ export async function getInventoryLabelVariants(
             return [{
                 ...variant,
                 price: fromMinor(priceMinor, decimalPlaces),
-                effectivePrice: fromMinor(calculateInventoryLabelEffectivePriceMinor(row), decimalPlaces),
+                effectivePrice: fromMinor(calculateInventoryLabelEffectivePriceMinor(row, currencyCode), decimalPlaces),
             }];
         }),
         missingVariantIds: variantIds.filter((id) => !rowById.has(id)),

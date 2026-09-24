@@ -3,7 +3,8 @@ import { registerGateway, getGateway } from "./registry";
 import { codHandler } from "./handlers/cod";
 import { resetStripePaymentElement, stripeHandler } from "./handlers/stripe";
 import { createHostedGatewayHandler } from "./handlers/hosted";
-import { formatPrice, DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { formatMoney, DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { formatBdMobile } from "@scalius/shared/phone-input";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   formatCheckoutLanguageText,
@@ -42,6 +43,7 @@ import {
   type GatewayPresentation,
 } from "./gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "./gateway-amount-eligibility";
+import { readLastPlacedOrderId, rememberSubmittedCart } from "./receipt-finalization";
 
 // COD and the card flow have their own handlers; every hosted gateway shares one.
 registerGateway(codHandler);
@@ -342,15 +344,7 @@ function localizedGatewayPresentation(
 }
 
 function currencyFmt(amount: number | string, quote: CheckoutTaxQuote): string {
-  const currentCode = window.__CURRENCY_CODE__;
-  const symbol = currentCode === quote.currencyCode
-    ? window.__CURRENCY_SYMBOL__
-    : `${quote.currencyCode} `;
-  return formatPrice(amount, {
-    code: quote.currencyCode,
-    precision: quote.decimalPlaces,
-    ...(symbol ? { symbol } : {}),
-  });
+  return formatMoney(amount, { code: quote.currencyCode });
 }
 
 function appendTextElement(
@@ -429,61 +423,60 @@ function appendOrderItems(
   parent.appendChild(list);
 }
 
-function appendDeliverySummary(
+/** One review row (Contact / Ship to / Delivery) with a way back to change it. */
+function appendReviewRow(parent: HTMLElement, label: string, lines: string[]): void {
+  const values = lines.filter(Boolean);
+  if (values.length === 0) return;
+  const row = document.createElement("div");
+  row.className = "flex items-start justify-between gap-3 py-2";
+  const body = document.createElement("div");
+  body.className = "min-w-0";
+  appendTextElement(body, "p", "text-sm text-muted-foreground", label);
+  for (const value of values) appendTextElement(body, "p", "break-words text-sm text-foreground", value);
+  row.appendChild(body);
+  const change = document.createElement("a");
+  change.href = "/cart";
+  change.className = "shrink-0 text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary";
+  change.textContent = checkoutCopy.changeText;
+  change.setAttribute("aria-label", `${checkoutCopy.changeText}: ${label}`);
+  row.appendChild(change);
+  parent.appendChild(row);
+}
+
+/** Contact, ship-to and delivery, each with "Change", like Shopify's review block. */
+function appendCheckoutReview(
   parent: HTMLElement,
   data: Record<string, unknown>,
   quote: CheckoutTaxQuote,
 ): void {
-  const delivery = document.createElement("div");
-  delivery.className = "border-t border-border pt-3 text-xs leading-5 text-muted-foreground";
-
-  appendTextElement(
-    delivery,
-    "p",
-    "font-semibold text-foreground",
-    quote.shippingMethod.name,
-  );
-  if (quote.shippingMethod.description) {
-    appendTextElement(
-      delivery,
-      "p",
-      "",
-      quote.shippingMethod.description,
-    );
-  }
-  if (quote.shippingMethod.feeWaived) {
-    const baseFee = currencyFmt(
-      quote.shippingMethod.baseAmountMinor / (10 ** quote.decimalPlaces),
-      quote,
-    );
-    appendTextElement(
-      delivery,
-      "p",
-      "",
-      formatCheckoutLanguageText(checkoutCopy.waivedShippingFeeText, {
-        fee: baseFee,
-      }),
-    );
-  }
-
-  const recipient = [
-    displayString(data.customerName),
-    displayString(data.customerPhone),
-  ].filter((value): value is string => Boolean(value)).join(" · ");
-  if (recipient) appendTextElement(delivery, "p", "", recipient);
-
-  const address = displayString(data.shippingAddress);
-  if (address) appendTextElement(delivery, "p", "", address);
-
-  const location = [
+  const review = document.createElement("div");
+  review.className = "divide-y divide-border border-t border-border pt-1";
+  const phone = displayString(data.customerPhone);
+  appendReviewRow(review, checkoutCopy.contactReviewText, [
+    displayString(data.customerName) ?? "",
+    phone ? formatBdMobile(phone) : "",
+    displayString(data.customerEmail) ?? "",
+  ]);
+  const location = [...new Set([
     displayString(data.areaName),
     displayString(data.zoneName),
     displayString(data.cityName),
-  ].filter((value): value is string => Boolean(value));
-  const uniqueLocation = [...new Set(location)].join(", ");
-  if (uniqueLocation) appendTextElement(delivery, "p", "", uniqueLocation);
-
-  if (delivery.childElementCount > 0) parent.appendChild(delivery);
+  ].filter((value): value is string => Boolean(value)))].join(", ");
+  appendReviewRow(review, checkoutCopy.shipToReviewText, [
+    displayString(data.shippingAddress) ?? "",
+    location,
+  ]);
+  const method = quote.shippingMethod;
+  appendReviewRow(review, checkoutCopy.deliveryReviewText, [
+    method.name,
+    method.description ?? "",
+    method.feeWaived
+      ? formatCheckoutLanguageText(checkoutCopy.waivedShippingFeeText, {
+          fee: currencyFmt(method.baseAmountMinor / (10 ** quote.decimalPlaces), quote),
+        })
+      : "",
+  ]);
+  if (review.childElementCount > 0) parent.appendChild(review);
 }
 
 type CheckoutCartFreshnessResult = {
@@ -560,6 +553,19 @@ function loadCheckoutData(): boolean {
   }
 
   if (!raw) {
+    // Back or reload after the order: point to it instead of a dead end.
+    const placedOrderId = readLastPlacedOrderId();
+    if (placedOrderId) {
+      clearCheckoutPresentation();
+      showError(checkoutCopy.orderAlreadyPlacedText);
+      const action = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement | null;
+      if (action) {
+        action.href = `/order-success?${new URLSearchParams({ orderId: placedOrderId })}`;
+        action.textContent = checkoutCopy.viewOrderText;
+        action.hidden = false;
+      }
+      return false;
+    }
     return fail(
       checkoutCopy.checkoutDetailsMissingText,
     );
@@ -609,12 +615,13 @@ export function renderOrderSummaryDetails(
       ? checkoutCopy.freeText
       : currencyFmt(quote.shippingAmount, quote),
   );
-  if (quote.discountMinor > 0) {
+  // One line per discount, named as the buyer knows it.
+  for (const discount of quote.discounts) {
     appendSummaryRow(
       details,
-      checkoutCopy.discountText,
-      `-${currencyFmt(quote.discountAmount, quote)}`,
-      "flex justify-between text-primary",
+      discount.code && discount.code !== discount.title ? `${discount.title} · ${discount.code}` : discount.title,
+      `-${currencyFmt(discount.amount, quote)}`,
+      "flex justify-between gap-3 text-primary",
     );
   }
   if (quote.taxMinor > 0) {
@@ -648,7 +655,7 @@ export function renderOrderSummaryDetails(
     );
   }
 
-  appendDeliverySummary(details, data, quote);
+  appendCheckoutReview(details, data, quote);
 }
 
 function renderSummary(): void {
@@ -940,6 +947,7 @@ async function processPayment(): Promise<void> {
   setPaymentControlsDisabled(true);
   hideError();
   setPayButton(checkoutCopy.processingText, true);
+  if (typeof checkoutData.cartItems === "string") rememberSubmittedCart(checkoutData.cartItems);
   trackAddPaymentInfoForSelection(processingMethod);
 
   showCheckoutLoadingOverlay(

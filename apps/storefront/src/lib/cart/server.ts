@@ -4,12 +4,12 @@ import {
   createOrder,
   type CreateOrderPayload,
   getCities as getCitiesFromApi,
-  validateDiscount,
   type LocationData,
   deleteAbandonedCheckout,
 } from "@/lib/api";
 import { validateCartItems as validateCartItemsWithApi, type CartValidationIssue } from "@/lib/api/orders";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
+import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
 import {
   cartItemVariantLabel,
   normalizeCartItemOptions,
@@ -177,7 +177,7 @@ export async function processOrder(
     const notes = (formData.get("notes") as string) || null;
     const cartItemsJson = formData.get("cartItems") as string;
     const shippingLocationId = formData.get("shippingLocation") as string;
-    const discountJson = formData.get("discountCodeHidden") as string;
+    const discountCodes = readDiscountCodes({ discountCodes: formData.get("discountCodes") });
     const checkoutId = formData.get("checkoutId") as string | null;
     const checkoutRequestId = checkoutId?.trim();
     const expectedQuoteFingerprint = (
@@ -257,43 +257,6 @@ export async function processOrder(
     const cityName = cartValidation.data.delivery.cityName;
     const zoneName = cartValidation.data.delivery.zoneName;
     const areaName = cartValidation.data.delivery.areaName;
-    const discountValidationItems = cartValidation.data.items.map((item) => ({
-      id: item.productId,
-      name: item.productName,
-      price: item.unitPrice,
-      quantity: item.quantity,
-      variantId: item.variantId,
-      freeDelivery: item.freeDelivery,
-    }));
-
-    let discountAmount: number | null = null;
-    let discountCode: string | null = null;
-    let finalNotes = notes || "";
-
-    if (discountJson) {
-      const discountData = JSON.parse(discountJson);
-      const validationResult = await validateDiscount(
-        discountData.code,
-        discountValidationItems,
-        shippingCharge,
-        customerPhone,
-      );
-
-      if (!validationResult?.valid) {
-        throw new Error(
-          validationResult?.error || "The applied discount is no longer valid.",
-        );
-      }
-
-      discountAmount = validationResult.discountAmount || null;
-      discountCode = validationResult.discount?.code || null;
-
-      if (discountAmount && discountCode) {
-        const note = `[Discount Applied: ${discountCode} (-${discountAmount})]`;
-        finalNotes = finalNotes ? `${finalNotes}\n${note}` : note;
-      }
-    }
-
     const payload: CreateOrderPayload = {
       checkoutRequestId,
       expectedQuoteFingerprint,
@@ -307,12 +270,11 @@ export async function processOrder(
       cityName,
       zoneName,
       areaName,
-      notes: finalNotes,
+      notes,
       items: processedItems,
       shippingCharge,
       shippingMethodId: shippingLocationId,
-      discountAmount,
-      discountCode: discountCode || undefined,
+      discountCodes,
       paymentMethod: "cod",
     };
 

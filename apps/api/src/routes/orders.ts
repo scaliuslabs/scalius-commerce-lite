@@ -9,7 +9,14 @@ import {
   PaymentMethod,
   InventoryPool
 } from "@scalius/database/schema";
-import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
+import { quoteStorefrontDiscount, type StorefrontDiscountQuote } from "@scalius/core/modules/promotions";
+import {
+  appliedDiscountLineSchema,
+  discountCodesSchema,
+  discountOfferSchema,
+  presentStorefrontDiscountQuote,
+  rejectedDiscountCodeSchema,
+} from "../schemas/storefront-discounts";
 import {
   getCheckoutGatewayPrecommitIssue,
   getPaymentMethodCurrencyIssue,
@@ -1174,8 +1181,14 @@ const taxQuoteResponseSchema = z.object({
   totalMinor: z.number().int(),
   totalAmount: z.number(),
   shippingMethod: storefrontShippingMethodSnapshotSchema,
-  discountOffers: z.array(z.string().max(160)).max(3).openapi({
-    description: "Automatic Buy X get Y discounts the buyer has earned but not claimed: the free item is not in the cart yet.",
+  discounts: z.array(appliedDiscountLineSchema).openapi({
+    description: "One line per applied discount (automatic and code), with its own amount.",
+  }),
+  offers: z.array(discountOfferSchema).max(3).openapi({
+    description: "Automatic Buy X get Y discounts the buyer has earned but not claimed: the items to get are not in the cart yet.",
+  }),
+  rejectedCodes: z.array(rejectedDiscountCodeSchema).openapi({
+    description: "Submitted codes that do not apply right now, with the reason. They add nothing to the totals.",
   }),
   items: z.array(z.object({
     cartKey: z.string().nullable().optional(),
@@ -1209,7 +1222,7 @@ const taxQuoteRoute = createRoute({
             zone: z.string().min(1).max(180),
             area: z.string().max(180).optional().nullable(),
             shippingMethodId: z.string().min(1).max(180),
-            discountCode: z.string().trim().max(100).optional().nullable(),
+            discountCodes: discountCodesSchema,
             customerPhone: phoneNumberSchema.optional().nullable(),
           }).strict(),
         },
@@ -1324,7 +1337,7 @@ type TaxQuoteDeliveryResult = Awaited<ReturnType<typeof validateStorefrontDelive
 async function resolveAuthoritativeTaxQuote(
   db: Database,
   input: {
-    discountCode?: string | null;
+    discountCodes: string[];
     customerPhone?: string | null;
     customerId?: string | null;
   },
@@ -1332,14 +1345,10 @@ async function resolveAuthoritativeTaxQuote(
   delivery: TaxQuoteDeliveryResult,
   destination: { city: string; zone: string; area?: string | null },
   currencyCode: string,
-): Promise<{ quote: TaxQuote; offers: string[] }> {
-  const discountCode = input.discountCode?.trim() || null;
-  if (discountCode && !input.customerPhone) {
-    throw new ValidationError("A customer phone number is required to quote this discount.");
-  }
+): Promise<{ quote: TaxQuote; discount: StorefrontDiscountQuote }> {
   const decimalPlaces = getDecimalPlaces(currencyCode);
   const discount = await quoteStorefrontDiscount(db, {
-    code: discountCode,
+    codes: input.discountCodes,
     customerId: input.customerId,
     customerPhone: input.customerPhone,
     cart: {
@@ -1376,14 +1385,14 @@ async function resolveAuthoritativeTaxQuote(
     promotionDiscountAllocation: discount.taxAllocation,
     currency: { code: currencyCode, decimalPlaces },
   });
-  return { quote, offers: discount.offers };
+  return { quote, discount };
 }
 
 app.openapi(taxQuoteRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
   const customerSessionToken = getCustomerSessionTokenFromRequest(c);
-  const sessionCustomer = customerSessionToken && data.discountCode?.trim()
+  const sessionCustomer = customerSessionToken && data.discountCodes.length > 0
     ? await getCustomerBySession(
         db,
         customerSessionToken,
@@ -1406,10 +1415,10 @@ app.openapi(taxQuoteRoute, async (c) => {
     area: data.area,
     shippingMethodId: data.shippingMethodId,
   }, cartValidation);
-  const { quote, offers } = await resolveAuthoritativeTaxQuote(
+  const { quote, discount } = await resolveAuthoritativeTaxQuote(
     db,
     {
-      discountCode: data.discountCode,
+      discountCodes: data.discountCodes,
       customerPhone: data.customerPhone,
       customerId: sessionCustomer?.customerId ?? null,
     },
@@ -1442,7 +1451,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     totalMinor: quote.totalMinor,
     totalAmount: toAmount(quote.totalMinor),
     shippingMethod: delivery.shippingMethod,
-    discountOffers: offers,
+    ...presentStorefrontDiscountQuote(discount, quote.decimalPlaces),
     items: cartValidation.items.map((item) => ({
       cartKey: item.cartKey ?? null,
       productId: item.productId,
@@ -1499,11 +1508,7 @@ const createOrderSchema = z.object({
       variantLabel: z.string().optional().nullable()
     }),
   ).min(1, "At least one item is required"),
-  discountAmount: z
-    .number()
-    .min(0, "Discount must be greater than or equal to 0")
-    .nullable(),
-  discountCode: z.string().optional().nullable(),
+  discountCodes: discountCodesSchema,
   shippingCharge: z
     .number()
     .min(0, "Shipping charge must be greater than or equal to 0"),

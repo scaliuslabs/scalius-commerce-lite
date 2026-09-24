@@ -10,6 +10,8 @@ import {
 
 interface Props {
   label: string;
+  /** Why the number is needed and its format, shown under the field. */
+  help?: string;
   placeholder?: string;
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
@@ -22,6 +24,7 @@ interface Props {
 
 const {
   label,
+  help,
   placeholder,
   allowedCountries = [],
   allowedCountriesMode = "include",
@@ -64,12 +67,12 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
     class="mb-1 block text-sm font-medium text-foreground"
   >
     {label}
-    <span class="text-destructive ml-0.5">*</span>
+    <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
   </label>
   <input type="hidden" name="customerPhone" value="" data-e164-value="" />
   <div
     data-phone-box
-    class="flex h-11 w-full items-center overflow-hidden rounded-lg border border-input bg-muted text-base text-foreground shadow-sm transition-all focus-within:border-primary focus-within:bg-background focus-within:ring-1 focus-within:ring-primary/20 sm:h-9"
+    class="flex h-11 w-full items-center overflow-hidden rounded-lg border border-input bg-background text-base text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30"
   >
     <span class="relative flex h-full shrink-0 items-center border-r border-input">
       {
@@ -93,15 +96,17 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
       type="tel"
       inputmode="tel"
       autocomplete="tel"
-      required
+      aria-required="true"
+      aria-describedby={help ? "customerPhone-help customerPhone-error" : "customerPhone-error"}
       placeholder={placeholder || "Phone number"}
       class="h-full min-w-0 flex-1 border-none bg-transparent px-3 text-base text-foreground outline-none"
     />
   </div>
+  {help && <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">{help}</p>}
   <p
     id="customerPhone-error"
     role="alert"
-    class="mt-1 hidden text-xs font-medium text-destructive"
+    class="mt-1 hidden text-sm font-medium text-destructive"
   >
   </p>
 </div>

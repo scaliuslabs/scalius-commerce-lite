@@ -601,6 +601,7 @@ function variantPrices(
     product.discountPercentage,
     product.discountAmount,
     context.currency.decimalPlaces,
+    context.currency.code,
   );
 
   return {

@@ -46,16 +46,16 @@ describe("inventory barcode label projection", () => {
       productDiscountBps: 1_000,
       productDiscountAmountMinor: 0,
     };
-    expect(calculateInventoryLabelEffectivePriceMinor(base)).toBe(90_000);
+    expect(calculateInventoryLabelEffectivePriceMinor(base, "BDT")).toBe(90_000);
     expect(calculateInventoryLabelEffectivePriceMinor({
       ...base,
       variantDiscountType: "flat",
       variantDiscountAmountMinor: 25_000,
-    })).toBe(75_000);
+    }, "BDT")).toBe(75_000);
     expect(calculateInventoryLabelEffectivePriceMinor({
       ...base,
       variantDiscountType: "percentage",
       variantDiscountBps: 0,
-    })).toBe(90_000);
+    }, "BDT")).toBe(90_000);
   });
 });
