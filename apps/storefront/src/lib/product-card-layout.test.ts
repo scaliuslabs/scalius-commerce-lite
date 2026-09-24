@@ -2,10 +2,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_STOREFRONT_THEME,
+  STOREFRONT_CONTAINERS,
   STOREFRONT_DENSITY_SPECS,
-  STOREFRONT_THEME_CONTAINER_WIDTHS,
   buildStorefrontThemeTokens,
-  storefrontStylePresetTheme,
 } from "@scalius/shared/storefront-theme";
 import {
   PRODUCT_GRID_STEPS_REM,
@@ -20,12 +20,8 @@ import {
 
 const css = readFileSync(new URL("../styles/theme-foundation.css", import.meta.url), "utf8");
 const DENSITIES = Object.entries(STOREFRONT_DENSITY_SPECS);
-const CONTAINER_WIDTHS = STOREFRONT_THEME_CONTAINER_WIDTHS.map((width) => {
-  const document = storefrontStylePresetTheme("classic");
-  return buildStorefrontThemeTokens({ ...document, tokens: { ...document.tokens, containerWidth: width } })[
-    "theme-container-width"
-  ]!;
-});
+const CONTAINER_WIDTHS = STOREFRONT_CONTAINERS.map((container) =>
+  buildStorefrontThemeTokens({ tokens: { ...DEFAULT_STOREFRONT_THEME.tokens, container } })["theme-container-width"]!);
 const px = (rem: string) => Number.parseFloat(rem) * 16;
 
 describe("fluid product grid", () => {

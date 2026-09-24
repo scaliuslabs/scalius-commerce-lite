@@ -21,7 +21,7 @@ import {
 } from "./site-settings.service";
 import {
   DEFAULT_STOREFRONT_THEME,
-  storefrontStylePresetTheme,
+  storefrontTemplateTheme,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 
@@ -43,21 +43,8 @@ const V1_THEME = JSON.stringify({
   },
 });
 
-/**
- * A version 2 document: separate heading/body fonts, no button shape and no
- * navigation styles.
- */
-const V2_THEME = (() => {
-  const { navigation: _navigation, mobileNavigation: _mobileNavigation, ...layout } =
-    DEFAULT_STOREFRONT_THEME.layout;
-  const { buttonShape: _buttonShape, ...tokens } = DEFAULT_STOREFRONT_THEME.tokens;
-  return JSON.stringify({
-    ...DEFAULT_STOREFRONT_THEME,
-    version: 2,
-    tokens: { ...tokens, typography: { heading: "system", body: "system" } },
-    layout,
-  });
-})();
+/** A version 3 document (layout choices and fixed homepage blocks, no template or blocks). */
+const V3_THEME = JSON.stringify({"version": 3, "mode": "configured", "tokens": {"typography": "retail", "radius": "subtle", "buttonShape": "radius", "containerWidth": "wide", "components": {"buttons": "solid", "inputs": "outlined", "cards": "bordered"}, "colors": {"popover": "#ffffff", "popover-foreground": "#1d1c1a", "ring": "#1d1c1a", "background": "#fbfaf7", "foreground": "#1d1c1a", "card": "#ffffff", "card-foreground": "#1d1c1a", "primary": "#1d1c1a", "primary-foreground": "#fbfaf7", "secondary": "#f1eee8", "secondary-foreground": "#1d1c1a", "muted": "#f1eee8", "muted-foreground": "#5d5850", "accent": "#e9e3d8", "accent-foreground": "#1d1c1a", "destructive": "#b42318", "destructive-foreground": "#ffffff", "border": "#e5e0d6", "input": "#d3ccbf"}}, "layout": {"header": "classic", "footer": "columns", "card": "standard", "density": "compact", "productPage": "gallery", "navigation": "menu", "mobileNavigation": "drawer"}, "sections": [{"id": "hero", "type": "hero", "version": 1, "settings": {}}, {"id": "collections", "type": "collections", "version": 1, "settings": {}}, {"id": "categories", "type": "categories", "version": 1, "settings": {}}, {"id": "delivery", "type": "delivery", "version": 1, "settings": {}}]});
 
 describe("versioned storefront theme settings", () => {
   let sqlite: DatabaseSync;
@@ -114,7 +101,7 @@ describe("versioned storefront theme settings", () => {
     expect(batchCalls).toBe(1);
   });
 
-  it("fails closed on dashboard reads when the published row is not a valid version 3 document", async () => {
+  it("fails closed on dashboard reads when the published row is not a valid version 4 document", async () => {
     const unknownFont = structuredClone(DEFAULT_STOREFRONT_THEME) as unknown as {
       tokens: { typography: string };
     };
@@ -122,7 +109,7 @@ describe("versioned storefront theme settings", () => {
     const lowContrast = structuredClone(DEFAULT_STOREFRONT_THEME);
     lowContrast.tokens.colors.foreground = "#f5f5f5";
 
-    for (const stored of [V1_THEME, V2_THEME, JSON.stringify(unknownFont), JSON.stringify(lowContrast), "{not json"]) {
+    for (const stored of [V1_THEME, V3_THEME, JSON.stringify(unknownFont), JSON.stringify(lowContrast), "{not json"]) {
       sqlite.exec("DELETE FROM theme_settings");
       sqlite.prepare(`
         INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
@@ -138,9 +125,9 @@ describe("versioned storefront theme settings", () => {
     }
   });
 
-  it("fails closed when a stored draft or history row is not a valid version 3 document", async () => {
+  it("fails closed when a stored draft or history row is not a valid version 4 document", async () => {
     seedPublishedWorkspace();
-    sqlite.prepare("UPDATE theme_settings_drafts SET theme = ?").run(V2_THEME);
+    sqlite.prepare("UPDATE theme_settings_drafts SET theme = ?").run(V3_THEME);
     await expect(getThemeWorkspace(db)).rejects.toMatchObject({ status: 503 });
     await expect(publishThemeDraft(db, 1, 1)).rejects.toMatchObject({ status: 503 });
 
@@ -158,27 +145,28 @@ describe("versioned storefront theme settings", () => {
         message: /^foreground on background has contrast .* it needs at least 4\.5:1\.$/,
       },
       { theme: JSON.parse(V1_THEME), message: /./ },
-      { theme: { ...DEFAULT_STOREFRONT_THEME, version: 1 }, message: /./ },
+      { theme: { ...DEFAULT_STOREFRONT_THEME, version: 3 }, message: /./ },
+      { theme: JSON.parse(V3_THEME), message: /./ },
       {
         theme: {
           ...DEFAULT_STOREFRONT_THEME,
-          sections: [...DEFAULT_STOREFRONT_THEME.sections, { id: "promo", type: "banner", version: 1, settings: {} }],
+          pages: { home: [...DEFAULT_STOREFRONT_THEME.pages.home, { id: "promo", type: "video", version: 1, settings: {} }] },
         },
         message: /./,
       },
       {
         theme: {
           ...DEFAULT_STOREFRONT_THEME,
-          sections: DEFAULT_STOREFRONT_THEME.sections.map((section) => ({ ...section, version: 2 })),
+          pages: { home: DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, version: 2 })) },
         },
         message: /./,
       },
       {
         theme: {
           ...DEFAULT_STOREFRONT_THEME,
-          sections: DEFAULT_STOREFRONT_THEME.sections.filter((section) => section.type !== "hero"),
+          pages: { home: DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, id: "same" })) },
         },
-        message: /^A configured theme has the hero section exactly once\.$/,
+        message: /^Section ids must be unique\.$/,
       },
     ];
 
@@ -201,30 +189,30 @@ describe("versioned storefront theme settings", () => {
   });
 
   it("claims revision one exactly once when publishing without a draft", async () => {
-    const firstTheme = storefrontStylePresetTheme("marketplace");
+    const firstTheme = storefrontTemplateTheme("marketplace");
     const first = await saveThemeSettings(db, firstTheme, 0);
     expect(first).toEqual({ theme: firstTheme, revision: 1 });
 
     await expect(
-      saveThemeSettings(db, storefrontStylePresetTheme("boutique"), 0),
+      saveThemeSettings(db, storefrontTemplateTheme("boutique"), 0),
     ).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
     await expect(getThemeSettings(db)).resolves.toEqual(first);
   });
 
   it("rejects a stale publish without replacing the current storefront style", async () => {
-    await saveThemeSettings(db, storefrontStylePresetTheme("marketplace"), 0);
-    const current = await saveThemeSettings(db, storefrontStylePresetTheme("daily"), 1);
+    await saveThemeSettings(db, storefrontTemplateTheme("marketplace"), 0);
+    const current = await saveThemeSettings(db, storefrontTemplateTheme("daily-essentials"), 1);
     expect(current.revision).toBe(2);
 
     await expect(
-      saveThemeSettings(db, storefrontStylePresetTheme("boutique"), 1),
+      saveThemeSettings(db, storefrontTemplateTheme("boutique"), 1),
     ).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
     await expect(getThemeSettings(db)).resolves.toEqual(current);
   });
 
   it("saves a durable draft with its own CAS authority", async () => {
     seedPublishedWorkspace();
-    const draftTheme = storefrontStylePresetTheme("daily");
+    const draftTheme = storefrontTemplateTheme("daily-essentials");
 
     const saved = await saveThemeDraft(db, draftTheme, 1, 1, "admin_1");
     expect(saved).toMatchObject({
@@ -234,7 +222,7 @@ describe("versioned storefront theme settings", () => {
     });
 
     await expect(
-      saveThemeDraft(db, storefrontStylePresetTheme("boutique"), 1, 1, "admin_2"),
+      saveThemeDraft(db, storefrontTemplateTheme("boutique"), 1, 1, "admin_2"),
     ).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
 
     await expect(getThemeWorkspace(db)).resolves.toMatchObject({
@@ -245,7 +233,7 @@ describe("versioned storefront theme settings", () => {
 
   it("publishes the exact saved draft and advances both authorities atomically", async () => {
     seedPublishedWorkspace();
-    const draftTheme = storefrontStylePresetTheme("heritage");
+    const draftTheme = storefrontTemplateTheme("heritage-editorial");
     await saveThemeDraft(db, draftTheme, 1, 1, "admin_1");
 
     const published = await publishThemeDraft(db, 1, 2, "admin_1");
@@ -273,9 +261,9 @@ describe("versioned storefront theme settings", () => {
   });
 
   it("restores history as a new immutable revision and synchronizes the draft", async () => {
-    const originalTheme = storefrontStylePresetTheme("midnight");
+    const originalTheme = storefrontTemplateTheme("rounded-tech");
     seedPublishedWorkspace({ theme: originalTheme });
-    await saveThemeDraft(db, storefrontStylePresetTheme("beauty"), 1, 1, "admin_1");
+    await saveThemeDraft(db, storefrontTemplateTheme("fashion-value"), 1, 1, "admin_1");
     await publishThemeDraft(db, 1, 2, "admin_1");
 
     const restored = await rollbackThemeSettings(db, 1, 2, 3, "admin_2");
@@ -294,8 +282,8 @@ describe("versioned storefront theme settings", () => {
 
   it("stores only a continuation hash, exchanges it once, and resolves the immutable preview", async () => {
     seedPublishedWorkspace();
-    const firstDraft = storefrontStylePresetTheme("marketplace");
-    const secondDraft = storefrontStylePresetTheme("boutique");
+    const firstDraft = storefrontTemplateTheme("marketplace");
+    const secondDraft = storefrontTemplateTheme("boutique");
     await saveThemeDraft(db, firstDraft, 1, 1, "admin_1");
     const preview = await createThemePreviewSession(db, 2, "admin_1");
 
@@ -326,9 +314,9 @@ describe("versioned storefront theme settings", () => {
   });
 });
 
-describe("migration 0081 resets theme documents that are not version 3", () => {
-  function seedBefore0081(published: string, draft: string, history: string) {
-    const sqlite = createMigratedSqlite({ beforeMigration: "0081_" });
+describe("migration 0082 resets theme documents that are not version 4", () => {
+  function seedBefore0082(published: string, draft: string, history: string) {
+    const sqlite = createMigratedSqlite({ beforeMigration: "0082_" });
     sqlite.prepare(`
       INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
       VALUES ('default', ?, 3, 1, 1)
@@ -348,7 +336,7 @@ describe("migration 0081 resets theme documents that are not version 3", () => {
         token_hash, theme, draft_revision, base_published_revision, expires_at, created_by, created_at
       ) VALUES ('hash_old', ?, 4, 3, 4102444800, NULL, 1)
     `).run(history);
-    sqlite.exec(compiledMigrationSql("d1", undefined, "0081_"));
+    sqlite.exec(compiledMigrationSql("d1", undefined, "0082_"));
     return createSqliteD1Database({ sqlite });
   }
 
@@ -358,9 +346,9 @@ describe("migration 0081 resets theme documents that are not version 3", () => {
 
   it.each([
     ["version 1", V1_THEME, V1_THEME],
-    ["version 2", V2_THEME, V1_THEME],
+    ["version 3", V3_THEME, V1_THEME],
   ])("lets the Theme page read the defaults at revision zero after migrating a %s theme", async (_label, published, history) => {
-    const { sqlite, db } = seedBefore0081(published, published, history);
+    const { sqlite, db } = seedBefore0082(published, published, history);
     try {
       await expect(getThemeSettings(db)).resolves.toEqual({
         theme: DEFAULT_STOREFRONT_THEME,
@@ -381,10 +369,10 @@ describe("migration 0081 resets theme documents that are not version 3", () => {
     }
   });
 
-  it("keeps a version 3 published theme and drops only its older history", async () => {
-    const currentTheme = storefrontStylePresetTheme("boutique");
+  it("keeps a version 4 published theme and drops only its older history", async () => {
+    const currentTheme = storefrontTemplateTheme("boutique");
     const serialized = JSON.stringify(currentTheme);
-    const { sqlite, db } = seedBefore0081(serialized, serialized, V2_THEME);
+    const { sqlite, db } = seedBefore0082(serialized, serialized, V3_THEME);
     try {
       await expect(getThemeSettings(db)).resolves.toEqual({
         theme: currentTheme,

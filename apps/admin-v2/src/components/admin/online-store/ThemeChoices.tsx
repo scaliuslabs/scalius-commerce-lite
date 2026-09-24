@@ -1,23 +1,22 @@
 import { useId, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
 import { ArrowDown, ArrowUp, Check } from "lucide-react";
-import {
-  STOREFRONT_CARD_STYLE_SPECS,
-  STOREFRONT_PRODUCT_PAGE_SPECS,
-  type StorefrontCardStyle,
-  type StorefrontDensity,
-  type StorefrontFooterStyle,
-  type StorefrontHeaderStyle,
-  type StorefrontMobileNavigationStyle,
-  type StorefrontNavigationStyle,
-  type StorefrontProductPageLayout,
-  type StorefrontThemeTokens,
+import type {
+  ResolvedStorefrontThemeLayout,
+  StorefrontDensity,
+  StorefrontFooterRenderer,
+  StorefrontGalleryRenderer,
+  StorefrontHeaderRenderer,
+  StorefrontMobileNavigationRenderer,
+  StorefrontNavigationRenderer,
+  StorefrontSectionType,
+  StorefrontThemeTokens,
 } from "@scalius/shared/storefront-theme";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { isThemeSection, moveSection } from "./theme-settings";
+import { moveSection } from "./theme-settings";
 
 /**
  * Visual radio options: a schematic of each choice with its name under it.
@@ -75,15 +74,17 @@ export function VisualChoice<Value extends string>({
 }
 
 /**
- * Homepage sections in order, each with Move up / Move down (no drag).
- * Builder sections are listed as custom sections: they move, but are never
- * edited or removed here.
+ * Homepage sections in order, each with Move up / Move down (no drag). A
+ * section the store does not show says why under its name.
  */
-export function HomepageOrder<Section extends { id: string; type: string }>({
+export function HomepageOrder<Section extends { id: string; type: StorefrontSectionType }>({
   sections,
+  notes = {},
   onChange,
 }: {
   sections: readonly Section[];
+  /** Why a section does not show on the store, by section id. */
+  notes?: Readonly<Record<string, string>>;
   onChange: (sections: Section[]) => void;
 }) {
   const t = useMessages(onlineStoreMessages);
@@ -110,12 +111,14 @@ export function HomepageOrder<Section extends { id: string; type: string }>({
   return (
     <ol>
       {sections.map((section, index) => {
-        const name = isThemeSection(section)
-          ? t(`section_${section.type as "hero" | "collections" | "categories" | "delivery"}`)
-          : t("customSection");
+        const name = t(`section_${section.type}`);
+        const note = notes[section.id];
         return (
           <li key={section.id} className="flex min-h-12 items-center gap-1 border-t border-border py-1 pr-2 pl-4 first:border-t-0">
-            <span className={cn("min-w-0 flex-1 text-body", !isThemeSection(section) && "text-muted-foreground")}>{name}</span>
+            <span className="min-w-0 flex-1 text-body">
+              {name}
+              {note ? <span className="block text-muted-foreground">{note}</span> : null}
+            </span>
             <Button
               ref={buttonRef(`${section.id}:-1`)}
               type="button"
@@ -215,7 +218,7 @@ const Filler = ({ className }: { className?: string }) => (
   </span>
 );
 
-export function HeaderRows({ kind }: { kind: StorefrontHeaderStyle }) {
+export function HeaderRows({ kind }: { kind: StorefrontHeaderRenderer }) {
   if (kind === "centered") {
     return (
       <>
@@ -269,7 +272,7 @@ export function HeaderRows({ kind }: { kind: StorefrontHeaderStyle }) {
   );
 }
 
-export function HeaderSketch({ kind }: { kind: StorefrontHeaderStyle }) {
+export function HeaderSketch({ kind }: { kind: StorefrontHeaderRenderer }) {
   return (
     <Sketch>
       <HeaderRows kind={kind} />
@@ -279,7 +282,7 @@ export function HeaderSketch({ kind }: { kind: StorefrontHeaderStyle }) {
 }
 
 /** The page under the header: a menu open over it, a category row, or a side column. */
-export function NavigationSketch({ kind }: { kind: StorefrontNavigationStyle }) {
+export function NavigationSketch({ kind }: { kind: StorefrontNavigationRenderer }) {
   const header = (
     <span className="flex items-center gap-1">
       <Logo />
@@ -351,7 +354,7 @@ export function NavigationSketch({ kind }: { kind: StorefrontNavigationStyle }) 
 }
 
 /** A phone: the menu drawer open from the side, or a tab bar along the bottom. */
-export function MobileNavigationSketch({ kind }: { kind: StorefrontMobileNavigationStyle }) {
+export function MobileNavigationSketch({ kind }: { kind: StorefrontMobileNavigationRenderer }) {
   return (
     <Sketch className="items-center">
       <span className="relative flex h-full w-12 flex-col gap-1 overflow-clip rounded-sm border border-(--sk-edge) p-1">
@@ -397,7 +400,7 @@ const LineStack = () => (
   </span>
 );
 
-export function FooterSketch({ kind }: { kind: StorefrontFooterStyle }) {
+export function FooterSketch({ kind }: { kind: StorefrontFooterRenderer }) {
   return (
     <Sketch>
       <Filler className="mb-1" />
@@ -442,23 +445,27 @@ const CORNERS: Record<StorefrontThemeTokens["radius"], string> = {
   square: "rounded-none",
   subtle: "rounded-xs",
   rounded: "rounded-sm",
+  soft: "rounded-md",
 };
 
-/** One product card as its style draws it: photo shape, badge, buy-now button, second photo. */
+/** What a card renders: its photo shape, badge, buy button and second photo. */
+export type CardFacts = ResolvedStorefrontThemeLayout["productCard"];
+
+/** One product card as its variant draws it: photo shape, badge, buy-now button, second photo. */
 export function ProductTile({
   card,
   radius = "subtle",
   badge = false,
   className,
 }: {
-  card: StorefrontCardStyle;
+  card: CardFacts;
   radius?: StorefrontThemeTokens["radius"];
   /** Draw the discount badge on this tile. */
   badge?: boolean;
   /** Width cap, so a tall photo still fits the sketch. */
   className: string;
 }) {
-  const spec = STOREFRONT_CARD_STYLE_SPECS[card];
+  const spec = card;
   return (
     <span className={cn("flex w-full min-w-0 flex-col gap-1", className)}>
       <span
@@ -482,7 +489,7 @@ export function ProductTile({
   );
 }
 
-export function CardStyleSketch({ card }: { card: StorefrontCardStyle }) {
+export function CardStyleSketch({ card }: { card: CardFacts }) {
   return (
     <Sketch className="flex-row items-start justify-center gap-2">
       <ProductTile card={card} badge className="max-w-9" />
@@ -492,12 +499,12 @@ export function CardStyleSketch({ card }: { card: StorefrontCardStyle }) {
 }
 
 /**
- * A computer screen and a phone filled with products: compact fits more,
- * smaller cards with tighter gaps; comfortable shows fewer, larger ones.
- * Both keep two products across on phones.
+ * A computer screen and a phone filled with products: dense and compact fit
+ * more, smaller cards with tighter gaps; comfortable and airy show fewer,
+ * larger ones. All keep two products across on phones.
  */
 export function DensitySketch({ density }: { density: StorefrontDensity }) {
-  const compact = density === "compact";
+  const compact = density === "compact" || density === "dense";
   const tiles = (count: number) => Array.from({ length: count }, (_, index) => (
     <Block key={index} className="aspect-square" />
   ));
@@ -535,8 +542,8 @@ const Thumbs = ({ className }: { className?: string }) => (
   </span>
 );
 
-export function ProductPageSketch({ layout }: { layout: StorefrontProductPageLayout }) {
-  const spec = STOREFRONT_PRODUCT_PAGE_SPECS[layout];
+export function ProductPageSketch({ layout }: { layout: StorefrontGalleryRenderer }) {
+  const spec = layout;
   const photo = (
     <span className={cn("flex min-w-0 gap-0.5", spec.thumbnails === "beside" ? "flex-row" : "flex-col")}>
       {spec.thumbnails === "beside" ? <Thumbs className="flex-col" /> : null}

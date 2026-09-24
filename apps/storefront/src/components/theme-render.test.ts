@@ -2,8 +2,9 @@
 /**
  * Render-only theme coverage (no browser): renders the real storefront Astro
  * components with Astro's container API, through a Vite dev server in
- * middleware mode, for every Style preset with every layout choice, and checks
- * the markup invariants each choice promises. Layout, overlap, contrast and
+ * middleware mode, for every template with every block variant (deduplicated by
+ * the renderer each maps to today), and checks the markup invariants each
+ * choice promises. Layout, overlap, contrast and
  * LCP timing need a browser; this catches wrong markup cheaply in CI.
  */
 import { fileURLToPath } from "node:url";
@@ -11,21 +12,24 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import {
-  STOREFRONT_CARD_STYLES,
-  STOREFRONT_FOOTER_STYLES,
+  DEFAULT_STOREFRONT_THEME,
   STOREFRONT_DENSITIES,
+  STOREFRONT_HEADER_RENDERERS,
+  STOREFRONT_MOBILE_NAVIGATION_RENDERERS,
+  STOREFRONT_NAVIGATION_RENDERERS,
+  STOREFRONT_TEMPLATE_IDS,
   buildStorefrontThemeTokens,
-  STOREFRONT_HEADER_STYLES,
-  STOREFRONT_MOBILE_NAVIGATION_STYLES,
-  STOREFRONT_NAVIGATION_STYLES,
-  STOREFRONT_PRODUCT_PAGE_LAYOUTS,
-  STOREFRONT_STYLE_PRESET_KEYS,
-  resolveStorefrontThemeLayout,
-  storefrontStylePresetTheme,
+  storeShapeFromFacts,
+  storefrontBlockDefault,
+  storefrontBlockVariants,
+  storefrontSectionRenderer,
+  storefrontTemplateTheme,
   storefrontThemeDocumentSchema,
+  storefrontVariantSpec,
+  type StorefrontBlockSlot,
   type StorefrontThemeDocument,
-  type StorefrontThemeLayout,
 } from "@scalius/shared/storefront-theme";
+import { requestThemeFor } from "@/lib/storefront-theme-context";
 import {
   productCardImageSizes,
   productGridFirstRow,
@@ -105,12 +109,7 @@ async function render(
   slots?: Record<string, string>,
   url = "https://shop.test/",
 ): Promise<string> {
-  const requestTheme = {
-    theme,
-    layout: resolveStorefrontThemeLayout(theme.layout),
-    previewToken: null,
-    preview: null,
-  };
+  const requestTheme = requestThemeFor(theme, STORE_SHAPE);
   return container.renderToString(await component(path), {
     props,
     slots,
@@ -138,6 +137,22 @@ function duplicateIds(document: Document): string[] {
 // ─── Fixtures ─────────────────────────────────────────────────────────────
 
 const image = (name: string) => `https://cdn.shop.test/products/${name}.jpg`;
+
+/**
+ * A store every block variant fits (a small catalogue with a two-level
+ * menu), so each variant renders as itself; fallbacks are tested in
+ * packages/shared.
+ */
+const STORE_SHAPE = storeShapeFromFacts({
+  productCount: 120,
+  skuCount: 300,
+  topCategoryCount: 8,
+  categoryDepth: 1,
+  menu: Array.from({ length: 6 }, () => ({ subMenu: [{ subMenu: [{}, {}] }, { subMenu: [{}, {}] }] })),
+  hasCollections: true,
+  hasDeliveryMethods: true,
+});
+const resolveLayout = (theme: StorefrontThemeDocument) => requestThemeFor(theme, STORE_SHAPE).layout;
 
 function product(id: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -303,57 +318,77 @@ const GALLERY_MEDIA = ["front", "back", "detail"].map((name, index) => ({
   status: "ready",
 }));
 
-// ─── The matrix: every Style preset with every layout choice ─────────────
+// ─── The matrix: every template with every block variant ─────────────────
 
-// Navigation has its own matrix below (every style with every header style),
-// which renders only the Layout, so this one stays fast.
-type MatrixAxis = Exclude<keyof StorefrontThemeLayout, "navigation" | "mobileNavigation">;
-const LAYOUT_CHOICES: { [Axis in MatrixAxis]: readonly StorefrontThemeLayout[Axis][] } = {
-  header: STOREFRONT_HEADER_STYLES,
-  footer: STOREFRONT_FOOTER_STYLES,
-  card: STOREFRONT_CARD_STYLES,
+/** A document with one block (or the density token) changed. */
+function withChoice(base: StorefrontThemeDocument, axis: MatrixAxis, value: string): StorefrontThemeDocument {
+  const theme = structuredClone(base) as StorefrontThemeDocument;
+  if (axis === "density") theme.tokens.density = value as never;
+  else if (axis === "gallery") theme.blocks.product.gallery = storefrontBlockDefault("gallery", value) as never;
+  else theme.blocks[axis] = storefrontBlockDefault(axis, value) as never;
+  return storefrontThemeDocumentSchema.parse(theme);
+}
+
+// Navigation has its own matrix below (every menu with every phone menu and
+// header), which renders only the Layout, so this one stays fast.
+type MatrixAxis = Extract<StorefrontBlockSlot, "topBar" | "header" | "footer" | "card" | "gallery"> | "density";
+const MATRIX_AXES: Record<MatrixAxis, readonly string[]> = {
+  topBar: storefrontBlockVariants("topBar"),
+  header: storefrontBlockVariants("header"),
+  footer: storefrontBlockVariants("footer"),
+  card: storefrontBlockVariants("card"),
+  gallery: storefrontBlockVariants("gallery"),
   density: STOREFRONT_DENSITIES,
-  productPage: STOREFRONT_PRODUCT_PAGE_LAYOUTS,
 };
+
+/** Today's renderer facts a choice on an axis maps to. */
+function axisFacts(axis: MatrixAxis, theme: StorefrontThemeDocument): unknown {
+  const layout = resolveLayout(theme);
+  if (axis === "topBar") return layout.topBar;
+  if (axis === "header") return layout.header;
+  if (axis === "footer") return layout.footer;
+  if (axis === "card") return layout.productCard;
+  if (axis === "gallery") return layout.productPage;
+  return layout.density;
+}
 
 const MATRIX = (() => {
   const seen = new Set<string>();
-  return STOREFRONT_STYLE_PRESET_KEYS.flatMap((preset) =>
-    Object.entries(LAYOUT_CHOICES).flatMap(([axis, values]) =>
+  return STOREFRONT_TEMPLATE_IDS.flatMap((template) =>
+    (Object.entries(MATRIX_AXES) as Array<[MatrixAxis, readonly string[]]>).flatMap(([axis, values]) =>
       values.map((value) => {
-        const base = storefrontStylePresetTheme(preset);
-        const theme = storefrontThemeDocumentSchema.parse({ ...base, layout: { ...base.layout, [axis]: value } });
-        const key = `${preset} ${JSON.stringify(theme.layout)}`;
+        const theme = withChoice(storefrontTemplateTheme(template), axis, value);
+        const key = `${template} ${JSON.stringify(resolveLayout(theme))}`;
         if (seen.has(key)) return null;
         seen.add(key);
-        return { name: `${preset}: ${Object.values(theme.layout).join(" / ")}`, theme };
+        return { name: `${template}: ${axis}=${value}`, template, axis, theme };
       }),
-    ).filter((entry): entry is { name: string; theme: StorefrontThemeDocument } => entry !== null),
+    ).filter((entry): entry is NonNullable<typeof entry> => entry !== null),
   );
 })();
 
 describe("storefront theme render matrix", () => {
-  it("covers every preset with every layout choice", () => {
-    for (const [axis, values] of Object.entries(LAYOUT_CHOICES)) {
-      for (const preset of STOREFRONT_STYLE_PRESET_KEYS) {
+  it("covers every template with every renderer each axis can reach", () => {
+    for (const [axis, values] of Object.entries(MATRIX_AXES) as Array<[MatrixAxis, readonly string[]]>) {
+      for (const template of STOREFRONT_TEMPLATE_IDS) {
+        const reachable = new Set(values.map((value) => JSON.stringify(axisFacts(axis, withChoice(storefrontTemplateTheme(template), axis, value)))));
         const rendered = new Set(
-          MATRIX.filter((entry) => entry.name.startsWith(`${preset}:`)).map(
-            (entry) => entry.theme.layout[axis as keyof StorefrontThemeLayout],
-          ),
+          MATRIX.filter((entry) => entry.template === template).map((entry) => JSON.stringify(axisFacts(axis, entry.theme))),
         );
-        expect([...rendered].sort()).toEqual([...values].sort());
+        for (const facts of reachable) expect(rendered.has(facts), `${template} ${axis} ${facts}`).toBe(true);
       }
     }
   });
 
   it.each(MATRIX)("$name", async ({ theme }) => {
-    const layout = resolveStorefrontThemeLayout(theme.layout);
-    const leadSectionId = homepageLeadSection(theme.sections, HOMEPAGE_CONTENT)?.id ?? null;
+    const { layout, resolved } = requestThemeFor(theme, STORE_SHAPE);
+    const sections = resolved.pages.home;
+    const leadSectionId = homepageLeadSection(sections, HOMEPAGE_CONTENT)?.id ?? null;
 
     // Homepage inside the full Layout (header, footer, mobile menu).
     const homepage = await render("/src/components/homepage/HomepageSections.astro", theme, {
       ...HOMEPAGE_PROPS,
-      sections: theme.sections,
+      sections,
       leadSectionId,
     });
     const page = parse(
@@ -367,11 +402,11 @@ describe("storefront theme render matrix", () => {
     expect(duplicateIds(page)).toEqual([]);
     // Body attributes the CSS reads.
     const body = page.body;
-    expect(body.dataset.themeDensity).toBe(layout.density);
-    expect(body.dataset.themeCardStyle).toBe(theme.tokens.components.cards);
+    expect(body.dataset.themeDensity).toBe(theme.tokens.density);
+    expect(body.dataset.themeCardStyle).toBe(layout.cardSurface);
     // The type pairing (editorial section headings step up on computers).
     expect(body.dataset.themeTypography).toBe(theme.tokens.typography);
-    expect(body.hasAttribute("data-theme-grid-desktop")).toBe(false);
+    expect(body.hasAttribute("data-theme-button-style")).toBe(false);
     // The density's grid tokens and fluid steps reach :root.
     const themeCss = Array.from(page.querySelectorAll("style"))
       .map((style) => style.textContent ?? "")
@@ -382,8 +417,12 @@ describe("storefront theme render matrix", () => {
     expect(themeCss).toContain(`--grid-gap-fluid: ${fluid.gap}`);
     // Every product grid sits in its container frame.
     const grids = Array.from(page.querySelectorAll(".product-grid"));
-    expect(grids.length).toBeGreaterThan(0);
+    const renderers = sections.map(storefrontSectionRenderer);
+    if (renderers.includes("collections")) expect(grids.length).toBeGreaterThan(0);
     for (const grid of grids) expect(grid.parentElement!.classList.contains("product-grid-frame")).toBe(true);
+
+    // The top bar block shows the announcement bar only when it maps to it.
+    expect(page.body.textContent?.includes("Free delivery in Dhaka over")).toBe(layout.topBar);
 
     // Header style; the marketplace search row replaces the phone search icon.
     const header = page.querySelector("#main-header")!;
@@ -395,11 +434,10 @@ describe("storefront theme render matrix", () => {
     expect(header.querySelector(".header-row")).not.toBeNull();
     expect(Boolean(header.querySelector(".header-mobile-search #mobile-search-trigger"))).toBe(marketplace);
 
-    // Homepage sections in document order; the hero leads when it is the
-    // first photo section (text strips and category thumbnails above it don't count).
+    // Homepage sections in document order: those with a renderer today.
     expect(
       Array.from(page.querySelectorAll("[data-home-section]")).map((node) => node.getAttribute("data-home-section")),
-    ).toEqual(theme.sections.map((section) => section.type));
+    ).toEqual(sections.filter((section) => storefrontSectionRenderer(section) !== null).map((section) => section.type));
     // The banner's first slide is high priority wherever it sits (one of at
     // most two photo sections, so it is at or just below the fold).
     const heroImage = page.querySelector(".desktop-carousel img")!;
@@ -477,6 +515,22 @@ describe("storefront theme render matrix", () => {
     }
     expect(duplicateIds(productPage)).toEqual([]);
   });
+
+  it("renders the default theme's product page and homepage as the classic store", () => {
+    const { layout, resolved } = requestThemeFor(DEFAULT_STOREFRONT_THEME, STORE_SHAPE);
+    expect(layout).toMatchObject({
+      header: "classic",
+      navigation: "menu",
+      mobileNavigation: "drawer",
+      footer: "columns",
+      productPage: { gallery: "beside", thumbnails: "beside" },
+      productCard: { imageRatio: "square", hoverImage: false, quickBuy: false, badge: "image" },
+      density: "compact",
+      cardSurface: "bordered",
+      topBar: true,
+    });
+    expect(resolved.pages.home.map(storefrontSectionRenderer)).toEqual(["hero", "collections", "categories", "delivery"]);
+  });
 });
 
 function assertFooter(page: Document, style: string, options: { business: boolean }) {
@@ -520,7 +574,7 @@ function assertFooter(page: Document, style: string, options: { business: boolea
 }
 
 function assertCards(document: Document, theme: StorefrontThemeDocument) {
-  const layout = resolveStorefrontThemeLayout(theme.layout);
+  const layout = resolveLayout(theme);
   const containerWidth = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
   const firstRow = productGridFirstRow(layout.grid, containerWidth);
   const card = layout.productCard;
@@ -605,15 +659,39 @@ const NAVIGATION = [
 ];
 const CURRENT_PAGE = "https://shop.test/categories/silk-sarees";
 
-const NAVIGATION_MATRIX = STOREFRONT_NAVIGATION_STYLES.flatMap((navigation) =>
-  STOREFRONT_MOBILE_NAVIGATION_STYLES.flatMap((mobileNavigation) =>
-    STOREFRONT_HEADER_STYLES.map((header) => ({ navigation, mobileNavigation, header })),
+/** Renderer facts for the navigation matrix, and a variant that maps to each. */
+type NavigationFacts = {
+  navigation: (typeof STOREFRONT_NAVIGATION_RENDERERS)[number];
+  mobileNavigation: (typeof STOREFRONT_MOBILE_NAVIGATION_RENDERERS)[number];
+  header: (typeof STOREFRONT_HEADER_RENDERERS)[number];
+};
+
+function variantRendering<Slot extends StorefrontBlockSlot>(slot: Slot, renderer: string): { variant: string; settings: Record<string, unknown> } {
+  for (const variant of storefrontBlockVariants(slot)) {
+    const spec = storefrontVariantSpec(slot, variant);
+    // departments-rail maps to the sidebar only when it stays open.
+    const settings = slot === "desktopNav" && variant === "departments-rail" && renderer === "sidebar"
+      ? { open: "always" }
+      : structuredClone(spec.defaults) as Record<string, unknown>;
+    if ((spec.renders as (value: unknown) => unknown)(settings) === renderer) return { variant, settings };
+  }
+  throw new Error(`No ${slot} variant renders ${renderer}`);
+}
+
+const NAVIGATION_MATRIX: NavigationFacts[] = STOREFRONT_NAVIGATION_RENDERERS.flatMap((navigation) =>
+  STOREFRONT_MOBILE_NAVIGATION_RENDERERS.flatMap((mobileNavigation) =>
+    STOREFRONT_HEADER_RENDERERS.map((header) => ({ navigation, mobileNavigation, header })),
   ),
 );
 
-function navigationTheme(layout: Partial<StorefrontThemeLayout>): StorefrontThemeDocument {
-  const base = storefrontStylePresetTheme("classic");
-  return storefrontThemeDocumentSchema.parse({ ...base, layout: { ...base.layout, ...layout } });
+function navigationTheme(facts: Partial<NavigationFacts>): StorefrontThemeDocument {
+  const theme = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
+  if (facts.navigation) theme.blocks.desktopNav = variantRendering("desktopNav", facts.navigation) as never;
+  if (facts.mobileNavigation) theme.blocks.mobileNav = variantRendering("mobileNav", facts.mobileNavigation) as never;
+  if (facts.header) theme.blocks.header = variantRendering("header", facts.header) as never;
+  const parsed = storefrontThemeDocumentSchema.parse(theme);
+  expect(resolveLayout(parsed)).toMatchObject(facts);
+  return parsed;
 }
 
 async function renderNavigationPage(
@@ -792,37 +870,41 @@ describe("navigation styles", () => {
   });
 });
 
-// ─── Custom mode: builder sections ────────────────────────────────────────
+// ─── Sections in any order, repeated rich text ────────────────────────────
 
-describe("custom theme sections", () => {
-  const base = storefrontStylePresetTheme("heritage");
+describe("theme sections", () => {
+  const base = storefrontTemplateTheme("heritage-editorial");
   const custom = storefrontThemeDocumentSchema.parse({
     ...base,
-    mode: "custom",
-    sections: [
-      {
-        id: "story",
-        type: "rich_text",
-        version: 1,
-        settings: {
-          heading: "Our story",
-          body: "Woven by hand in Tangail.\n\nEvery saree takes <b>two weeks</b>.\nAsk us anything.",
+    pages: {
+      home: [
+        {
+          id: "story",
+          type: "editorial",
+          version: 1,
+          settings: {
+            layout: "rich-text",
+            heading: "Our story",
+            body: "Woven by hand in Tangail.\n\nEvery saree takes <b>two weeks</b>.\nAsk us anything.",
+          },
         },
-      },
-      { id: "hero", type: "hero", version: 1, settings: {} },
-      { id: "collections", type: "collections", version: 1, settings: {} },
-      { id: "care", type: "rich_text", version: 1, settings: { heading: "", body: "Dry clean only." } },
-      { id: "delivery", type: "delivery", version: 1, settings: {} },
-    ],
+        { id: "hero", type: "hero", version: 1, settings: { layout: "full-screen" } },
+        { id: "collections", type: "collections", version: 1, settings: {} },
+        { id: "care", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "", body: "Dry clean only." } },
+        // No renderer until the homepage section library lands: renders nothing.
+        { id: "brands", type: "newsletter", version: 1, settings: { heading: "Join", text: "" } },
+        { id: "delivery", type: "usp-strip", version: 1, settings: { style: "icons", source: { kind: "delivery-facts" } } },
+      ],
+    },
   });
 
   it("renders sections in document order with rich text as escaped plain text", async () => {
     // Rich text above the hero is a short strip: the hero photo still leads.
-    const leadSectionId = homepageLeadSection(custom.sections, HOMEPAGE_CONTENT)?.id ?? null;
+    const leadSectionId = homepageLeadSection(custom.pages.home, HOMEPAGE_CONTENT)?.id ?? null;
     expect(leadSectionId).toBe("hero");
     const html = await render("/src/components/homepage/HomepageSections.astro", custom, {
       ...HOMEPAGE_PROPS,
-      sections: custom.sections,
+      sections: custom.pages.home,
       leadSectionId,
     });
     const page = parse(html);
@@ -853,11 +935,11 @@ describe("custom theme sections", () => {
 
   it("skips empty sections and text strips when choosing what leads", () => {
     expect(
-      homepageLeadSection(custom.sections, { ...HOMEPAGE_CONTENT, hero: false })?.id,
+      homepageLeadSection(custom.pages.home, { ...HOMEPAGE_CONTENT, hero: false })?.id,
     ).toBe("collections");
-    expect(homepageLeadSection(custom.sections, { ...HOMEPAGE_CONTENT, hero: false, collections: false })).toBeNull();
-    const emptyStory = custom.sections.map((section) =>
-      section.type === "rich_text" ? { ...section, settings: { heading: " ", body: "\n\n" } } : section,
+    expect(homepageLeadSection(custom.pages.home, { ...HOMEPAGE_CONTENT, hero: false, collections: false })).toBeNull();
+    const emptyStory = custom.pages.home.map((section) =>
+      section.type === "editorial" ? { ...section, settings: { layout: "rich-text" as const, heading: " ", body: "\n\n" } } : section,
     );
     expect(homepageLeadSection(emptyStory, HOMEPAGE_CONTENT)?.id).toBe("hero");
     expect(homepageLeadSection(emptyStory, { ...HOMEPAGE_CONTENT, hero: false })?.id).toBe("collections");

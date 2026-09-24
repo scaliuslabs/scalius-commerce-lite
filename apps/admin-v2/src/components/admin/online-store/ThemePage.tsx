@@ -1,7 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Info } from "lucide-react";
 import {
   postApiV1AdminSettingsFooter,
   postApiV1AdminSettingsHeader,
@@ -14,19 +13,19 @@ import {
   HEADER_LOGO_WIDTH_STEP,
 } from "@scalius/shared/brand-presentation";
 import {
-  STOREFRONT_CARD_STYLES,
   STOREFRONT_DENSITIES,
-  STOREFRONT_FOOTER_STYLES,
-  STOREFRONT_HEADER_STYLES,
-  STOREFRONT_MOBILE_NAVIGATION_STYLES,
-  STOREFRONT_NAVIGATION_STYLES,
-  STOREFRONT_PRODUCT_PAGE_LAYOUTS,
   STOREFRONT_THEME_MIN_CONTRAST,
   isStorefrontThemeHexColor,
-  type StorefrontStylePresetKey,
+  storefrontBlockVariants,
+  storefrontSectionRenderer,
+  storefrontVariantSpec,
+  type FitCondition,
+  type ResolvedStorefrontThemeLayout,
+  type StoreShape,
+  type StorefrontTemplateId,
   type StorefrontThemeDocument,
+  type StorefrontThemeFallback,
 } from "@scalius/shared/storefront-theme";
-import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
@@ -59,24 +58,33 @@ import {
 import {
   COLOR_FIELD_IDS,
   COLOR_ROLE_TOKEN,
-  STYLE_PRESET_THEMES,
-  applyStylePreset,
-  closestStylePreset,
+  TEMPLATE_THEMES,
+  applyTemplate,
+  blockFallback,
+  blockVariant,
   colorFieldForPath,
-  selectedStylePreset,
+  resolveThemeForStore,
+  selectedTemplate,
+  setBlockVariant,
   setThemeColor,
   themeContrastProblems,
   themeDraftInvalid,
   type ColorRole,
   type ContrastProblem,
+  type ThemeBlockSlot,
 } from "./theme-settings";
 
 type Theme = StorefrontThemeDocument;
-type Layout = Theme["layout"];
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 
-/** A Style's whole look in its own colours: header shape and product cards. */
-function StylePreview({ theme }: { theme: Theme }) {
+/** What a block variant renders today, for its picker sketch. */
+function variantRenders<Render>(slot: ThemeBlockSlot, variant: string): Render {
+  const spec = storefrontVariantSpec(slot, variant);
+  return (spec.renders as (settings: unknown) => Render)(spec.defaults);
+}
+
+/** A template's whole look in its own colours: header shape and product cards, as this store renders them. */
+function TemplatePreview({ theme, layout }: { theme: Theme; layout: ResolvedStorefrontThemeLayout }) {
   const { colors, radius } = theme.tokens;
   return (
     <Sketch
@@ -90,10 +98,10 @@ function StylePreview({ theme }: { theme: Theme }) {
       }}
       className="h-28"
     >
-      <HeaderRows kind={theme.layout.header} />
+      <HeaderRows kind={layout.header} />
       <span className="mt-1 flex justify-center gap-1.5">
         {[0, 1, 2].map((index) => (
-          <ProductTile key={index} card={theme.layout.card} radius={radius} badge={index === 0} className="max-w-11" />
+          <ProductTile key={index} card={layout.productCard} radius={radius} badge={index === 0} className="max-w-11" />
         ))}
       </span>
     </Sketch>
@@ -297,13 +305,49 @@ const COLOR_FIELDS: ReadonlyArray<{ role: ColorRole; label: MessageKey }> = [
   { role: "buttonText", label: "colorButtonText" },
 ];
 
+/** A fit condition in plain words: what the store needs for a choice to show as chosen. */
+function useFitReason(shape: StoreShape) {
+  const t = useMessages(onlineStoreMessages);
+  const option = (key: string) => t(key as MessageKey);
+  const reason = (condition: FitCondition): string => {
+    if ("anyOf" in condition) return condition.anyOf.map(reason).join(" ");
+    if ("block" in condition) return t("fitNeedsCard", { name: option(`cardStyle_${condition.variants[0]}`) });
+    const what = option(`fact_${condition.fact}`);
+    if ("equals" in condition) return t("fitNeeds", { what });
+    const value = formatNumber(shape[condition.fact]);
+    if (condition.min !== undefined && condition.max !== undefined) {
+      return t("fitBetween", { what, min: formatNumber(condition.min), max: formatNumber(condition.max), value });
+    }
+    if (condition.max !== undefined) return t("fitAtMost", { what, max: formatNumber(condition.max), value });
+    return t("fitAtLeast", { what, min: formatNumber(condition.min ?? 0), value });
+  };
+  return (fallback: Pick<StorefrontThemeFallback, "failed">) => fallback.failed.map(reason).join(" ");
+}
+
+/** Under a picker: the choice does not fit this store, what shows instead and why. */
+function FitNote({ fallback, name, reason }: {
+  fallback: StorefrontThemeFallback | null;
+  name: (variant: string) => string;
+  reason: (fallback: StorefrontThemeFallback) => string;
+}) {
+  const t = useMessages(onlineStoreMessages);
+  if (!fallback?.resolved) return null;
+  return (
+    <p role="status" className="text-body text-muted-foreground">
+      {t("fitShowsInstead", { name: name(fallback.resolved), reason: reason(fallback) })}
+    </p>
+  );
+}
+
 /**
- * The configured theme, card by card. Only this component registers the theme
- * document with the save bar, so a custom design is never offered for saving.
+ * The theme, card by card. Choices are resolved against the store's shape
+ * with the storefront's own resolver, so a choice that does not fit the
+ * store says what buyers see instead.
  */
-function ConfiguredThemeCards({ saved, revision, refetch, site }: {
+function ThemeCards({ saved, revision, storeShape, refetch, site }: {
   saved: Theme;
   revision: number;
+  storeShape: StoreShape;
   refetch: () => unknown;
   site: SiteDrafts;
 }) {
@@ -319,7 +363,8 @@ function ConfiguredThemeCards({ saved, revision, refetch, site }: {
         const result = await apiData(postApiV1AdminSettingsTheme({
           body: { expectedRevision: revision, theme: next },
         }));
-        queryClient.setQueryData(themeQueryOptions().queryKey, {
+        queryClient.setQueryData(themeQueryOptions().queryKey, (previous) => previous && {
+          ...previous,
           theme: result.theme,
           revision: result.revision,
         });
@@ -329,52 +374,71 @@ function ConfiguredThemeCards({ saved, revision, refetch, site }: {
     },
   });
   const option = (key: string) => t(key as MessageKey);
-  const setLayout = (layout: Partial<Layout>) =>
-    setDraft((current) => ({ ...current, layout: { ...current.layout, ...layout } }));
-  const { layout } = theme;
-  const problems = themeContrastProblems(theme.tokens.colors);
+  const fitReason = useFitReason(storeShape);
+  const resolved = resolveThemeForStore(theme, storeShape);
+  const problems = themeContrastProblems(theme);
   const { headerDraft } = site;
-  // A fine-tuned theme matches no Style: say which one it started from, and
-  // confirm before another Style replaces the merchant's changes.
-  const selectedPreset = selectedStylePreset(theme);
-  const basePreset = selectedPreset ?? closestStylePreset(theme);
-  const [pendingPreset, setPendingPreset] = useState<StorefrontStylePresetKey | null>(null);
-  const choosePreset = (key: StorefrontStylePresetKey) => {
-    if (selectedPreset === null) setPendingPreset(key);
-    else setDraft((current) => applyStylePreset(current, key));
+  // A changed theme matches no template: say which one it is based on, and
+  // confirm before another template replaces the merchant's changes.
+  const selected = selectedTemplate(theme);
+  const [pendingTemplate, setPendingTemplate] = useState<StorefrontTemplateId | null>(null);
+  const chooseTemplate = (id: StorefrontTemplateId) => {
+    if (selected === null) setPendingTemplate(id);
+    else setDraft(applyTemplate(id));
   };
+  const setBlock = (slot: ThemeBlockSlot) => (variant: string) =>
+    setDraft((current) => setBlockVariant(current, slot, variant));
+  const blockOptions = <Render,>(slot: ThemeBlockSlot, prefix: string, sketch: (render: Render) => ReactNode, help = false) =>
+    storefrontBlockVariants(slot).map((value) => ({
+      value,
+      label: option(`${prefix}_${value}`),
+      help: help ? option(`${prefix}_${value}Help`) : undefined,
+      sketch: sketch(variantRenders<Render>(slot, value)),
+    }));
+  const fitNote = (slot: ThemeBlockSlot, prefix: string) => (
+    <FitNote
+      fallback={blockFallback(resolved, slot)}
+      name={(variant) => option(`${prefix}_${variant}`)}
+      reason={fitReason}
+    />
+  );
+  const sectionNotes = Object.fromEntries(theme.pages.home.flatMap((section) => {
+    if (storefrontSectionRenderer(section) === null) return [[section.id, t("sectionNotYet")]];
+    const fallback = resolved.fallbacks.find((each) => each.kind === "section" && each.key === section.id);
+    return fallback ? [[section.id, t("sectionHidden", { reason: fitReason(fallback) })]] : [];
+  }));
 
   return (
     <>
-      <SectionCard title={t("themeStyles")} description={t("themeStylesHelp")}>
-        {selectedPreset === null ? (
+      <SectionCard title={t("themeTemplates")} description={t("themeTemplatesHelp")}>
+        {selected === null ? (
           <p className="text-body text-muted-foreground" role="status">
-            {t("styleCustomBasedOn", { name: option(`preset_${basePreset}`) })}
+            {t("templateCustomBasedOn", { name: option(`template_${theme.template}`) })}
           </p>
         ) : null}
         <VisualChoice
-          label={t("themeStyles")}
-          value={selectedPreset}
+          label={t("themeTemplates")}
+          value={selected}
           className="grid-cols-2 sm:grid-cols-3"
-          options={STYLE_PRESET_THEMES.map((preset) => ({
-            value: preset.key,
-            label: option(`preset_${preset.key}`),
-            help: option(`preset_${preset.key}Help`),
-            sketch: <StylePreview theme={preset.theme} />,
+          options={TEMPLATE_THEMES.map((template) => ({
+            value: template.id,
+            label: option(`template_${template.id}`),
+            help: option(`template_${template.id}Help`),
+            sketch: <TemplatePreview theme={template.theme} layout={resolveThemeForStore(template.theme, storeShape).layout} />,
           }))}
-          onChange={choosePreset}
+          onChange={chooseTemplate}
         />
         <ConfirmDialog
-          open={pendingPreset !== null}
-          onOpenChange={(open) => { if (!open) setPendingPreset(null); }}
-          title={t("styleReplaceTitle", { name: pendingPreset ? option(`preset_${pendingPreset}`) : "" })}
-          description={t("styleReplaceBody")}
-          confirmLabel={t("styleReplaceConfirm")}
+          open={pendingTemplate !== null}
+          onOpenChange={(open) => { if (!open) setPendingTemplate(null); }}
+          title={t("templateReplaceTitle", { name: pendingTemplate ? option(`template_${pendingTemplate}`) : "" })}
+          description={t("templateReplaceBody")}
+          confirmLabel={t("templateReplaceConfirm")}
           variant="default"
           onConfirm={() => {
-            const key = pendingPreset;
-            setPendingPreset(null);
-            if (key) setDraft((current) => applyStylePreset(current, key));
+            const id = pendingTemplate;
+            setPendingTemplate(null);
+            if (id) setDraft(applyTemplate(id));
           }}
         />
       </SectionCard>
@@ -399,14 +463,12 @@ function ConfiguredThemeCards({ saved, revision, refetch, site }: {
       <SectionCard title={t("header")}>
         <VisualChoice
           label={t("header")}
-          value={layout.header}
-          options={STOREFRONT_HEADER_STYLES.map((value) => ({
-            value,
-            label: option(`header_${value}`),
-            sketch: <HeaderSketch kind={value} />,
-          }))}
-          onChange={(header) => setLayout({ header })}
+          value={blockVariant(theme, "header")}
+          className="grid-cols-2 sm:grid-cols-4"
+          options={blockOptions<ResolvedStorefrontThemeLayout["header"]>("header", "header", (kind) => <HeaderSketch kind={kind} />)}
+          onChange={setBlock("header")}
         />
+        {fitNote("header", "header")}
         <SwitchField
           id="theme-announcement-bar"
           label={t("announcementBar")}
@@ -438,63 +500,48 @@ function ConfiguredThemeCards({ saved, revision, refetch, site }: {
         <VisualChoice
           label={t("menuStyleDesktop")}
           showLabel
-          value={layout.navigation}
-          className="grid-cols-2"
-          options={STOREFRONT_NAVIGATION_STYLES.map((value) => ({
-            value,
-            label: option(`navigation_${value}`),
-            help: option(`navigation_${value}Help`),
-            sketch: <NavigationSketch kind={value} />,
-          }))}
-          onChange={(navigation) => setLayout({ navigation })}
+          value={blockVariant(theme, "desktopNav")}
+          className="grid-cols-2 sm:grid-cols-3"
+          options={blockOptions<ResolvedStorefrontThemeLayout["navigation"]>("desktopNav", "navigation", (kind) => <NavigationSketch kind={kind} />, true)}
+          onChange={setBlock("desktopNav")}
         />
+        {fitNote("desktopNav", "navigation")}
         <VisualChoice
           label={t("menuStylePhone")}
           showLabel
-          value={layout.mobileNavigation}
-          className="grid-cols-2"
-          options={STOREFRONT_MOBILE_NAVIGATION_STYLES.map((value) => ({
-            value,
-            label: option(`mobileNavigation_${value}`),
-            help: option(`mobileNavigation_${value}Help`),
-            sketch: <MobileNavigationSketch kind={value} />,
-          }))}
-          onChange={(mobileNavigation) => setLayout({ mobileNavigation })}
+          value={blockVariant(theme, "mobileNav")}
+          className="grid-cols-2 sm:grid-cols-3"
+          options={blockOptions<ResolvedStorefrontThemeLayout["mobileNavigation"]>("mobileNav", "mobileNavigation", (kind) => <MobileNavigationSketch kind={kind} />, true)}
+          onChange={setBlock("mobileNav")}
         />
       </SectionCard>
 
       <SectionCard title={t("footer")} description={t("footerLayoutHelp")}>
         <VisualChoice
           label={t("footer")}
-          value={layout.footer}
-          options={STOREFRONT_FOOTER_STYLES.map((value) => ({
-            value,
-            label: option(`footer_${value}`),
-            sketch: <FooterSketch kind={value} />,
-          }))}
-          onChange={(footer) => setLayout({ footer })}
+          value={blockVariant(theme, "footer")}
+          options={blockOptions<ResolvedStorefrontThemeLayout["footer"]>("footer", "footer", (kind) => <FooterSketch kind={kind} />)}
+          onChange={setBlock("footer")}
         />
+        {fitNote("footer", "footer")}
       </SectionCard>
 
       <SectionCard title={t("productCards")}>
         <VisualChoice
           label={t("productCards")}
-          value={layout.card}
+          value={blockVariant(theme, "card")}
           className="sm:grid-cols-3"
-          options={STOREFRONT_CARD_STYLES.map((value) => ({
-            value,
-            label: option(`cardStyle_${value}`),
-            help: option(`cardStyle_${value}Help`),
-            sketch: <CardStyleSketch card={value} />,
-          }))}
-          onChange={(card) => setLayout({ card })}
+          options={blockOptions<Omit<ResolvedStorefrontThemeLayout["productCard"], "imageRatio">>("card", "cardStyle", (card) => (
+            <CardStyleSketch card={{ ...card, imageRatio: resolved.layout.productCard.imageRatio }} />
+          ), true)}
+          onChange={setBlock("card")}
         />
       </SectionCard>
 
       <SectionCard title={t("density")} description={t("densityHelp")}>
         <VisualChoice
           label={t("density")}
-          value={layout.density}
+          value={theme.tokens.density}
           className="grid-cols-2"
           options={STOREFRONT_DENSITIES.map((value) => ({
             value,
@@ -502,20 +549,16 @@ function ConfiguredThemeCards({ saved, revision, refetch, site }: {
             help: option(`density_${value}Help`),
             sketch: <DensitySketch density={value} />,
           }))}
-          onChange={(density) => setLayout({ density })}
+          onChange={(density) => setDraft((current) => ({ ...current, tokens: { ...current.tokens, density } }))}
         />
       </SectionCard>
 
       <SectionCard title={t("productPage")}>
         <VisualChoice
           label={t("productPage")}
-          value={layout.productPage}
-          options={STOREFRONT_PRODUCT_PAGE_LAYOUTS.map((value) => ({
-            value,
-            label: option(`productPage_${value}`),
-            sketch: <ProductPageSketch layout={value} />,
-          }))}
-          onChange={(productPage) => setLayout({ productPage })}
+          value={blockVariant(theme, "gallery")}
+          options={blockOptions<ResolvedStorefrontThemeLayout["productPage"]>("gallery", "productPage", (layout) => <ProductPageSketch layout={layout} />)}
+          onChange={setBlock("gallery")}
         />
       </SectionCard>
 
@@ -524,8 +567,9 @@ function ConfiguredThemeCards({ saved, revision, refetch, site }: {
         description={t("homepageSectionsHelp")}
         rows={
           <HomepageOrder
-            sections={theme.sections}
-            onChange={(sections) => setDraft((current) => ({ ...current, sections }))}
+            sections={theme.pages.home}
+            notes={sectionNotes}
+            onChange={(home) => setDraft((current) => ({ ...current, pages: { ...current.pages, home } }))}
           />
         }
       />
@@ -533,22 +577,18 @@ function ConfiguredThemeCards({ saved, revision, refetch, site }: {
   );
 }
 
-function ThemeCards() {
-  const t = useMessages(onlineStoreMessages);
+function ThemeSettings() {
   const { data, refetch } = useSuspenseQuery(themeQueryOptions());
   const site = useSiteDrafts();
-  if (data.theme.mode === "custom") {
-    return (
-      <>
-        <Alert variant="info">
-          <Info aria-hidden="true" />
-          <AlertDescription>{t("customDesign")}</AlertDescription>
-        </Alert>
-        <LogoCard {...site} />
-      </>
-    );
-  }
-  return <ConfiguredThemeCards saved={data.theme} revision={data.revision} refetch={refetch} site={site} />;
+  return (
+    <ThemeCards
+      saved={data.theme as Theme}
+      revision={data.revision}
+      storeShape={data.storeShape as StoreShape}
+      refetch={refetch}
+      site={site}
+    />
+  );
 }
 
 export function ThemePage() {
@@ -556,7 +596,7 @@ export function ThemePage() {
   return (
     <SaveBarProvider>
       <OnlineStorePage title={t("themeTitle")}>
-        <ThemeCards />
+        <ThemeSettings />
       </OnlineStorePage>
     </SaveBarProvider>
   );

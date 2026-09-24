@@ -1,8 +1,12 @@
 ---
-// The homepage body: the theme document's sections, in order. Theme blocks
-// (hero, collections, categories, delivery) and builder sections (rich_text)
-// render server-side; a section with nothing to show renders nothing.
-import type { StorefrontSection } from "@scalius/shared/storefront-theme";
+// The homepage body: the resolved theme's sections, in order, each through
+// the existing renderer its registry entry maps to (hero, collections,
+// category rail, delivery facts, rich text). Sections whose own renderer has
+// not landed yet, and sections with nothing to show, render nothing.
+import {
+  storefrontSectionRenderer,
+  type StorefrontSection,
+} from "@scalius/shared/storefront-theme";
 import type { CollectionWithProducts, Product } from "@/lib/api";
 import type { HomepageData } from "@/lib/api/storefront";
 import type { DeliveryFact } from "@/lib/delivery-facts";
@@ -43,8 +47,11 @@ const {
   currencyCode,
 } = Astro.props;
 
-const collectionsLead = sections.some(
-  (section) => section.type === "collections" && section.id === leadSectionId,
+const rendered = sections
+  .map((section) => ({ section, renderer: storefrontSectionRenderer(section) }))
+  .filter((entry) => entry.renderer !== null);
+const collectionsLead = rendered.some(
+  ({ section, renderer }) => renderer === "collections" && section.id === leadSectionId,
 );
 // The banner's first slide is fetched at high priority wherever it sits:
 // it is one of at most two photo sections, so even after a product row it
@@ -68,23 +75,23 @@ function isCollection2(
 ---
 
 <div class="flex flex-col">
-  {sections.map((section) => (
+  {rendered.map(({ section, renderer }) => (
     <div class="contents" data-home-section={section.type} data-section-id={section.id}>
-      {section.type === "hero" && (
+      {renderer === "hero" && (
         <section class="w-full">
           <Hero hero={hero} priority />
         </section>
       )}
 
-      {section.type === "categories" && <HomepageCategoryRail rail={categoryRail} />}
+      {renderer === "categories" && <HomepageCategoryRail rail={categoryRail} />}
 
-      {section.type === "delivery" && <DeliveryFacts facts={deliveryFacts} />}
+      {renderer === "delivery" && <DeliveryFacts facts={deliveryFacts} />}
 
-      {section.type === "rich_text" && (
+      {renderer === "rich_text" && section.type === "editorial" && section.settings.layout === "rich-text" && (
         <RichTextSection id={section.id} heading={section.settings.heading} body={section.settings.body} />
       )}
 
-      {section.type === "collections" && (
+      {renderer === "collections" && (
         <>
           {collections.map((collection) => (
             <Fragment>

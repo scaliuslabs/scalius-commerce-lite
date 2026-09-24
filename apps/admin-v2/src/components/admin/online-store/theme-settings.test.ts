@@ -1,19 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_STOREFRONT_THEME,
-  STOREFRONT_STYLE_PRESETS,
-  storefrontStylePresetTheme,
+  EMPTY_STORE_SHAPE,
+  STOREFRONT_TEMPLATES,
+  resolveStorefrontTheme,
+  storeShapeFromFacts,
+  storefrontSectionDefault,
+  storefrontTemplateTheme,
   storefrontThemeDocumentSchema,
   type StorefrontSection,
 } from "@scalius/shared/storefront-theme";
 import {
-  applyStylePreset,
-  closestStylePreset,
+  applyTemplate,
+  blockFallback,
+  blockVariant,
+  cardForBackground,
   colorFieldForPath,
   moveSection,
+  resolveThemeForStore,
   sameThemeLook,
-  selectedStylePreset,
-  cardForBackground,
+  selectedTemplate,
+  setBlockVariant,
   setThemeColor,
   themeContrastProblems,
   themeDraftInvalid,
@@ -21,19 +28,19 @@ import {
 
 const richText: StorefrontSection = {
   id: "story",
-  type: "rich_text",
+  type: "editorial",
   version: 1,
-  settings: { heading: "Our story", body: "Handmade in Dhaka." },
+  settings: { layout: "rich-text", heading: "Our story", body: "Handmade in Dhaka." },
 };
 
 describe("homepage section order", () => {
-  const sections = storefrontStylePresetTheme("classic").sections;
-  const types = (list: readonly StorefrontSection[]) => list.map((section) => section.type);
+  const sections = DEFAULT_STOREFRONT_THEME.pages.home;
+  const ids = (list: readonly StorefrontSection[]) => list.map((section) => section.id);
 
   it("moves a section one place up or down without touching the saved list", () => {
-    expect(types(moveSection(sections, "categories", -1))).toEqual(["hero", "categories", "collections", "delivery"]);
-    expect(types(moveSection(sections, "hero", 1))).toEqual(["collections", "hero", "categories", "delivery"]);
-    expect(types(sections)).toEqual(["hero", "collections", "categories", "delivery"]);
+    expect(ids(moveSection(sections, "categories", -1))).toEqual(["hero", "categories", "collections", "delivery"]);
+    expect(ids(moveSection(sections, "hero", 1))).toEqual(["collections", "hero", "categories", "delivery"]);
+    expect(ids(sections)).toEqual(["hero", "collections", "categories", "delivery"]);
   });
 
   it("keeps the order at either end", () => {
@@ -41,73 +48,78 @@ describe("homepage section order", () => {
     expect(moveSection(sections, "delivery", 1)).toEqual(sections);
   });
 
-  it("moves a builder section like any other", () => {
+  it("moves a rich text section like any other", () => {
     const withStory = [...sections, richText];
-    expect(types(moveSection(withStory, "story", -1))).toEqual(["hero", "collections", "categories", "rich_text", "delivery"]);
+    expect(ids(moveSection(withStory, "story", -1))).toEqual(["hero", "collections", "categories", "story", "delivery"]);
   });
 });
 
-describe("theme styles", () => {
-  it("a new store starts on Classic retail", () => {
-    expect(selectedStylePreset(DEFAULT_STOREFRONT_THEME)).toBe("classic");
+describe("templates", () => {
+  it("a new store starts on Department mall", () => {
+    expect(selectedTemplate(DEFAULT_STOREFRONT_THEME)).toBe("department-mall");
   });
 
-  it("recognises every style it applies, and each style is a distinct look", () => {
-    for (const { key } of STOREFRONT_STYLE_PRESETS) {
-      expect(selectedStylePreset(storefrontStylePresetTheme(key))).toBe(key);
+  it("recognises every template it applies, and each template is a distinct look", () => {
+    for (const { id } of STOREFRONT_TEMPLATES) {
+      expect(selectedTemplate(storefrontTemplateTheme(id))).toBe(id);
     }
   });
 
-  it("selecting a style sets the whole document, a valid configured one", () => {
-    const tuned = setThemeColor(storefrontStylePresetTheme("classic"), "buttons", "#1d4ed8");
-    const applied = applyStylePreset({ ...tuned, layout: { ...tuned.layout, footer: "compact" } }, "heritage");
-    expect(applied).toEqual(storefrontStylePresetTheme("heritage"));
+  it("selecting a template sets the whole document, a valid one", () => {
+    const applied = applyTemplate("heritage-editorial");
+    expect(applied).toEqual(storefrontTemplateTheme("heritage-editorial"));
     expect(storefrontThemeDocumentSchema.safeParse(applied).success).toBe(true);
   });
 
-  it("keeps builder sections in place when a style is selected", () => {
-    const classic = storefrontStylePresetTheme("classic");
-    const theme = { ...classic, sections: [classic.sections[0]!, richText, ...classic.sections.slice(1)] };
-    const applied = applyStylePreset(theme, "daily");
-    expect(applied.sections.map((section) => section.id)).toEqual(["categories", "story", "hero", "delivery", "collections"]);
-    expect(selectedStylePreset(applied)).toBe("daily");
-  });
-
-  it("still recognises a style when the saved document lists its keys in another order", () => {
-    const applied = storefrontStylePresetTheme("marketplace");
+  it("still recognises a template when the saved document lists its keys in another order", () => {
+    const applied = storefrontTemplateTheme("marketplace");
     const reloaded = JSON.parse(JSON.stringify({
-      sections: applied.sections,
-      layout: Object.fromEntries(Object.entries(applied.layout).reverse()),
+      pages: applied.pages,
+      blocks: Object.fromEntries(Object.entries(applied.blocks).reverse()),
       tokens: { ...applied.tokens, colors: Object.fromEntries(Object.entries(applied.tokens.colors).reverse()) },
-      mode: applied.mode,
+      template: applied.template,
       version: applied.version,
     }));
     expect(sameThemeLook(reloaded, applied)).toBe(true);
-    expect(selectedStylePreset(reloaded)).toBe("marketplace");
+    expect(selectedTemplate(reloaded)).toBe("marketplace");
   });
 
-  it("drops the selection once the merchant changes any choice", () => {
-    const applied = storefrontStylePresetTheme("boutique");
-    expect(selectedStylePreset({ ...applied, layout: { ...applied.layout, density: "compact" } })).toBeNull();
-    expect(selectedStylePreset({ ...applied, sections: moveSection(applied.sections, "delivery", -1) })).toBeNull();
-    expect(selectedStylePreset(setThemeColor(applied, "background", "#fafafa"))).toBeNull();
-    expect(selectedStylePreset({ ...applied, layout: { ...applied.layout, navigation: "sidebar" } })).toBeNull();
-    expect(selectedStylePreset({ ...applied, layout: { ...applied.layout, mobileNavigation: "tabs" } })).toBeNull();
+  it("drops the selection once the merchant changes any choice, and keeps the template it is based on", () => {
+    const applied = storefrontTemplateTheme("boutique");
+    const changed = [
+      { ...applied, tokens: { ...applied.tokens, density: "compact" as const } },
+      { ...applied, pages: { home: moveSection(applied.pages.home, "newsletter", -1) } },
+      setThemeColor(applied, "background", "#fafafa"),
+      setBlockVariant(applied, "desktopNav", "mega-panel"),
+      setBlockVariant(applied, "gallery", "classic"),
+    ];
+    for (const theme of changed) {
+      expect(selectedTemplate(theme)).toBeNull();
+      expect(theme.template).toBe("boutique");
+      expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(true);
+    }
   });
 
-  it("tells apart Styles that differ only in navigation, and names the one a tuned theme started from", () => {
-    const marketplace = storefrontStylePresetTheme("marketplace");
-    const daily = storefrontStylePresetTheme("daily");
-    // Same header, footer, cards, density and product page; the menu differs.
-    const { navigation: _m, ...marketplaceLayout } = marketplace.layout;
-    const { navigation: _d, ...dailyLayout } = daily.layout;
-    expect(marketplaceLayout).toEqual(dailyLayout);
-    expect(sameThemeLook(marketplace, { ...marketplace, layout: daily.layout })).toBe(false);
+  it("switches a block to another variant at its default settings", () => {
+    const theme = setBlockVariant(DEFAULT_STOREFRONT_THEME, "mobileNav", "bottom-tabs");
+    expect(theme.blocks.mobileNav).toEqual({
+      variant: "bottom-tabs",
+      settings: { tabs: ["home", "categories", "search", "cart", "account"], drawer: "accordion" },
+    });
+    expect(blockVariant(setBlockVariant(theme, "gallery", "stacked"), "gallery")).toBe("stacked");
+  });
 
-    // Daily's colours and order with Marketplace's menu still started from Daily.
-    const tuned = { ...daily, layout: { ...daily.layout, navigation: marketplace.layout.navigation } };
-    expect(selectedStylePreset(tuned)).toBeNull();
-    expect(closestStylePreset(tuned)).toBe("daily");
+  it("resolves the draft with the storefront's resolver, and says what a choice falls back to", () => {
+    const shape = storeShapeFromFacts({
+      productCount: 800, skuCount: 2000, topCategoryCount: 12, categoryDepth: 1,
+      menu: [{}, {}, {}], hasCollections: true, hasDeliveryMethods: true,
+    });
+    const boutique = storefrontTemplateTheme("boutique");
+    const resolved = resolveThemeForStore(boutique, shape);
+    expect(resolved).toEqual(resolveStorefrontTheme(boutique, shape));
+    expect(blockFallback(resolved, "header")).toMatchObject({ requested: "boutique-inline", resolved: "fashion-department" });
+    expect(blockFallback(resolved, "desktopNav")).toBeNull();
+    expect(blockFallback(resolveThemeForStore(boutique, EMPTY_STORE_SHAPE), "header")).toBeNull();
   });
 });
 
@@ -118,24 +130,24 @@ describe("theme colors", () => {
       .toEqual(["#111827", "#111827", "#111827"]);
   });
 
-  it("moves the card by the Style's own card-to-page step instead of flattening it", () => {
+  it("moves the card by the template's own card-to-page step instead of flattening it", () => {
     // Retail: white cards (#ffffff) on warm paper (#fbfaf7), a step of (+4, +5, +8).
-    const retail = setThemeColor(storefrontStylePresetTheme("classic"), "background", "#f0ebe3");
+    const retail = setThemeColor(storefrontTemplateTheme("department-mall"), "background", "#f0ebe3");
     expect(retail.tokens.colors.background).toBe("#f0ebe3");
     expect(retail.tokens.colors.card).toBe("#f4f0eb");
     expect(retail.tokens.colors.popover).toBe("#f4f0eb");
     // Midnight: raised panels (#141416) over the page (#0a0a0b) keep their lift.
-    const midnight = setThemeColor(storefrontStylePresetTheme("midnight"), "background", "#101014");
+    const midnight = setThemeColor(storefrontTemplateTheme("rounded-tech"), "background", "#101014");
     expect(midnight.tokens.colors.card).toBe("#1a1a1f");
-    // A Style whose card is its page keeps them equal.
-    const fresh = setThemeColor(storefrontStylePresetTheme("daily"), "background", "#fdfdf8");
+    // A template whose card is its page keeps them equal.
+    const fresh = setThemeColor(storefrontTemplateTheme("daily-essentials"), "background", "#fdfdf8");
     expect(fresh.tokens.colors.card).toBe("#fdfdf8");
-    expect(cardForBackground(storefrontStylePresetTheme("classic"), "#ffffff")).toBe("#ffffff");
+    expect(cardForBackground(storefrontTemplateTheme("department-mall"), "#ffffff")).toBe("#ffffff");
   });
 
   it("names unreadable text in plain words on the field that can fix it, and blocks saving", () => {
     const theme = setThemeColor(DEFAULT_STOREFRONT_THEME, "buttonText", "#5a5a5a");
-    const problems = themeContrastProblems(theme.tokens.colors);
+    const problems = themeContrastProblems(theme);
     expect(problems.map(({ message, role }) => ({ message, role })))
       .toEqual([{ message: "contrastButtonText", role: "buttonText" }]);
     expect(problems[0]!.ratio).toBeLessThan(4.5);
@@ -143,14 +155,24 @@ describe("theme colors", () => {
     expect(themeDraftInvalid(DEFAULT_STOREFRONT_THEME)).toBe(false);
   });
 
+  it("checks the pairs the chosen blocks paint, such as a coloured price on cards", () => {
+    // A grey that passes on the dark page fails on the lighter cards, only once a card paints it.
+    const base = setThemeColor(storefrontTemplateTheme("rounded-tech"), "buttons", "#7a7a7a");
+    const onCards = setBlockVariant(base, "card", "spec");
+    expect(themeContrastProblems(base).map((problem) => problem.message)).toEqual([]);
+    expect(themeContrastProblems(onCards)).toEqual([
+      expect.objectContaining({ message: "contrastLinks", role: "buttons" }),
+    ]);
+  });
+
   it("one message per problem, even when cards and popovers share it", () => {
     const theme = setThemeColor(DEFAULT_STOREFRONT_THEME, "text", "#d4d4d8");
-    expect(themeContrastProblems(theme.tokens.colors).map((problem) => problem.message)).toEqual(["contrastText"]);
+    expect(themeContrastProblems(theme).map((problem) => problem.message)).toEqual(["contrastText"]);
   });
 
   it("blocks saving a colour that is not #rrggbb, without contrast noise while typing", () => {
     const theme = setThemeColor(DEFAULT_STOREFRONT_THEME, "buttons", "#11");
-    expect(themeContrastProblems(theme.tokens.colors)).toEqual([]);
+    expect(themeContrastProblems(theme)).toEqual([]);
     expect(themeDraftInvalid(theme)).toBe(true);
   });
 
@@ -158,6 +180,10 @@ describe("theme colors", () => {
     expect(colorFieldForPath("theme.tokens.colors.primary-foreground")).toBe("theme-color-button-text");
     expect(colorFieldForPath("theme.tokens.colors.card")).toBe("theme-color-background");
     expect(colorFieldForPath("theme.tokens.colors.muted-foreground")).toBe("theme-color-background");
-    expect(colorFieldForPath("theme.layout.header")).toBeUndefined();
+    expect(colorFieldForPath("theme.blocks.header")).toBeUndefined();
+  });
+
+  it("adds sections with their default settings", () => {
+    expect(storefrontSectionDefault("faq", "faq")).toEqual({ id: "faq", type: "faq", version: 1, settings: { heading: "", items: [] } });
   });
 });

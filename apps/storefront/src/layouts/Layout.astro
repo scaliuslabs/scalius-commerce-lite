@@ -104,7 +104,7 @@ const {
   layout: themeLayout,
   previewToken: themePreviewToken,
   preview: themePreview,
-} = await resolveRequestTheme(Astro, layoutData?.theme);
+} = await resolveRequestTheme(Astro, layoutData);
 const isThemePreview = themePreview !== null;
 if (themePreviewToken) {
   Astro.response.headers.set(
@@ -424,9 +424,7 @@ if (!window.$RefreshReg$) {
   <body
     class="flex flex-col min-h-screen site-root"
     data-theme-density={themeLayout.density}
-    data-theme-button-style={storefrontTheme.tokens.components.buttons}
-    data-theme-input-style={storefrontTheme.tokens.components.inputs}
-    data-theme-card-style={storefrontTheme.tokens.components.cards}
+    data-theme-card-style={themeLayout.cardSurface}
     data-theme-typography={storefrontTheme.tokens.typography}
     data-storefront-route={storefrontRouteKind}
   >
@@ -449,6 +447,7 @@ if (!window.$RefreshReg$) {
             storePhone={storePhone}
             social={storeSocial}
             variant={themeLayout.header}
+            showTopBar={themeLayout.topBar}
             navigationStyle={themeLayout.navigation}
             mobileNavigation={showMobileTabs ? "tabs" : "drawer"}
           />
