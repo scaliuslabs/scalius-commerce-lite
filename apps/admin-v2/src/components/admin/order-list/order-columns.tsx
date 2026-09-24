@@ -197,7 +197,10 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
 }
 
 export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderListItem, unknown>[] {
-  // Column menu names, and what gives way first on a narrow screen.
+  // Column menu names, and what gives way first on a narrow screen: Items, then
+  // Fulfillment, then Total, Status and Customer; the order number never does.
+  // Minimums are what the cells really need (date line, status pill, amount
+  // over its payment badge), so columns step aside by priority, not by overflow.
   const meta = (key: OrderListMessageKey, layout: { priority?: number; minWidth: number; numeric?: boolean; primary?: boolean }) => ({
     label: handlers.label?.(key),
     ...layout,
@@ -205,7 +208,7 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
   const columns: ColumnDef<OrderListItem, unknown>[] = [
     {
       id: "order",
-      meta: meta("order", { primary: true, minWidth: 110 }),
+      meta: meta("order", { primary: true, minWidth: 130 }),
       header: () => <Title k="order" />,
       cell: ({ row }) => (
         <div className="flex flex-col">
@@ -230,19 +233,19 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     },
     {
       id: "total",
-      meta: meta("total", { priority: 95, minWidth: 100, numeric: true }),
+      meta: meta("total", { priority: 94, minWidth: 110, numeric: true }),
       header: () => <Title k="total" />,
       cell: ({ row }) => <TotalCell order={row.original} />,
     },
     {
       id: "fulfillment",
-      meta: meta("fulfillment", { priority: 60, minWidth: 140 }),
+      meta: meta("fulfillment", { priority: 60, minWidth: 150 }),
       header: () => <Title k="fulfillment" />,
       cell: ({ row }) => <FulfillmentCell order={row.original} handlers={handlers} />,
     },
     {
       id: "items",
-      meta: meta("items", { priority: 30, minWidth: 80, numeric: true }),
+      meta: meta("items", { priority: 30, minWidth: 100, numeric: true }),
       header: () => <Title k="items" />,
       cell: ({ row }) => (
         <div className="flex justify-end tabular-nums">
@@ -252,7 +255,7 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     },
     {
       id: "status",
-      meta: meta("status", { priority: 80, minWidth: 140 }),
+      meta: meta("status", { priority: 95, minWidth: 150 }),
       header: () => <Title k="status" />,
       cell: ({ row }) => <StatusCell order={row.original} handlers={handlers} />,
     },

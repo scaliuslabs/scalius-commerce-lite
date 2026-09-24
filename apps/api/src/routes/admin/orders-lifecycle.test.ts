@@ -171,6 +171,18 @@ describe("admin order lifecycle routes", () => {
         expect(sqlite.prepare("SELECT count(*) AS n FROM order_notification_outbox WHERE order_id = 'order_b'").get()).toEqual({ n: 1 });
     });
 
+    it("refuses Shipped as a status change, for any client (R3-ORD-01)", async () => {
+        sqlite.exec("UPDATE orders SET status = 'confirmed' WHERE id = 'order_b'");
+        const response = await app.request("/api/v1/admin/orders/order_b/status", json("PUT", { status: "shipped" }), env);
+        expect(response.status).toBe(400);
+        const body = await response.json() as { error?: { message?: string } } & { message?: string };
+        expect(JSON.stringify(body)).toContain("Use Mark as sent or Book courier");
+        expect(sqlite.prepare("SELECT status FROM orders WHERE id = 'order_b'").get()).toEqual({ status: "confirmed" });
+
+        const delivered = await app.request("/api/v1/admin/orders/order_b/mark-delivered", { method: "POST" }, env);
+        expect(delivered.status).toBe(400);
+    });
+
     it("finds an order by its number", async () => {
         const response = await app.request(`/api/v1/admin/orders?search=${encodeURIComponent("#1002")}`, {}, env);
         const body = await response.json() as { data: { orders: Array<{ id: string }> } };
