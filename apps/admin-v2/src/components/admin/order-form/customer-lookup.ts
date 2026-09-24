@@ -9,6 +9,15 @@ export interface SavedCustomer {
   zone: string | null;
   area: string | null;
   totalOrders: number;
+  /** "guest": a checkout record keyed by phone that can hold several people's orders. */
+  kind?: "account" | "guest" | "merchant";
+  /** The name on the record's most recent order. */
+  latestOrderName?: string | null;
+}
+
+/** A phone's guest record groups orders, not one person: its saved details are only hints. */
+export function isGuestRecord(customer: SavedCustomer): boolean {
+  return customer.kind === "guest";
 }
 
 export interface CustomerFormFields {
@@ -44,6 +53,11 @@ export function findCustomerByPhone<T extends SavedCustomer>(
  * Values to fill from a returning customer: only fields the merchant left
  * empty, and the saved address only when no city was picked yet and the
  * saved city is still a delivery city.
+ *
+ * A phone's guest record can hold different people's orders (a shared or
+ * family phone), so for it only the latest order's name is suggested, as an
+ * editable starting point; its stored name, email and address may be someone
+ * else's and are not filled. The order still files under that phone's record.
  */
 export function customerFill(
   customer: SavedCustomer,
@@ -51,6 +65,11 @@ export function customerFill(
   knownCityIds: ReadonlySet<string>,
 ): Partial<CustomerFormFields> {
   const fill: Partial<CustomerFormFields> = {};
+  if (isGuestRecord(customer)) {
+    const suggested = customer.latestOrderName?.trim();
+    if (!current.customerName.trim() && suggested) fill.customerName = suggested;
+    return fill;
+  }
   if (!current.customerName.trim() && customer.name.trim()) fill.customerName = customer.name.trim();
   if (!current.customerEmail && customer.email) fill.customerEmail = customer.email;
   if (!current.shippingAddress.trim() && customer.address?.trim()) {

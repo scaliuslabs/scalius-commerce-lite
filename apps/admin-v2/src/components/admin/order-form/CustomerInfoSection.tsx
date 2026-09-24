@@ -22,7 +22,7 @@ import { customersQueryOptions } from "@/lib/api-query-options/customers";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
-import { customerFill, customerLookupTerm, findCustomerByPhone } from "./customer-lookup";
+import { customerFill, customerLookupTerm, findCustomerByPhone, isGuestRecord } from "./customer-lookup";
 
 /** Element ids of the address pickers (focus on a validation error). */
 export const ORDER_LOCATION_IDS = { city: "order-city", zone: "order-zone", area: "order-area" } as const;
@@ -150,12 +150,19 @@ export function CustomerInfoSection() {
                 </FormControl>
                 <FormDescription>
                   {returning
-                    ? [
-                        returning.customer.totalOrders === 1
-                          ? t("returningCustomerOne")
-                          : t("returningCustomer", { count: returning.customer.totalOrders }),
-                        returning.filled ? t("filledFromCustomer") : null,
-                      ].filter(Boolean).join(" ")
+                    ? isGuestRecord(returning.customer)
+                      ? [
+                          returning.customer.totalOrders === 1
+                            ? t("phoneOrdersOne")
+                            : t("phoneOrders", { count: returning.customer.totalOrders }),
+                          returning.filled ? t("nameFromLatestOrder") : null,
+                        ].filter(Boolean).join(" ")
+                      : [
+                          returning.customer.totalOrders === 1
+                            ? t("returningCustomerOne")
+                            : t("returningCustomer", { count: returning.customer.totalOrders }),
+                          returning.filled ? t("filledFromCustomer") : null,
+                        ].filter(Boolean).join(" ")
                     : t("phoneHelp")}
                 </FormDescription>
                 <FormMessage />
