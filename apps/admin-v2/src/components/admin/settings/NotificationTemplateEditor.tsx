@@ -3,8 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Braces } from "lucide-react";
 import { toast } from "sonner";
-import type { OrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
 import {
+  type OrderNotificationType,
   TEMPLATE_LIMITS,
   defaultNotificationTemplates,
   findUnknownVariables,
@@ -14,7 +14,7 @@ import {
   variablesForEvent,
   type EmailTemplate,
   type NotificationTemplates,
-} from "@scalius/core/modules/notifications/notification-templates";
+} from "@scalius/core/modules/notifications/browser";
 import { normalizeBdMobile } from "@scalius/shared/phone-input";
 import { isReady } from "@scalius/shared/readiness";
 import { countSmsSegments } from "@scalius/shared/sms-segments";

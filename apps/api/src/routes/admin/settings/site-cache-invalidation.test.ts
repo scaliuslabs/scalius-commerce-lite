@@ -47,7 +47,8 @@ vi.mock("../../../utils/cache-generation", () => ({
     mocks.bumpCacheGeneration,
 }));
 
-vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
   getCurrencySettings: mocks.getCurrencySettings,
   isCurrencyCodeLocked: mocks.isCurrencyCodeLocked,
   saveCurrencySettings: mocks.saveCurrencySettings,
@@ -68,13 +69,17 @@ vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
   saveMediaOptimizationSettings: mocks.saveMediaOptimizationSettings,
   getSeoSettings: mocks.getSeoSettings,
   saveSeoSettings: mocks.saveSeoSettings,
-  getStorefrontUrlSetting: mocks.getStorefrontUrlSetting,
-  saveStorefrontUrl: mocks.saveStorefrontUrl,
   getHomepagePresentationSettings: mocks.getHomepagePresentationSettings,
   saveHomepagePresentationSettings: mocks.saveHomepagePresentationSettings,
   getAllowedCountries: mocks.getAllowedCountries,
   saveAllowedCountries: mocks.saveAllowedCountries,
   readSettingsForEdit: mocks.readSettingsForEdit,
+}));
+
+vi.mock("@scalius/core/modules/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/platform")>()),
+  getStorefrontUrlSetting: mocks.getStorefrontUrlSetting,
+  saveStorefrontUrl: mocks.saveStorefrontUrl,
 }));
 
 vi.mock("@scalius/core/modules/catalog", () => ({

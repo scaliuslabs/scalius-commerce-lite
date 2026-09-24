@@ -1,11 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { getCheckoutFlowValidationIssues } from "@scalius/core/modules/settings/checkout-flow";
 
 import {
     getCheckoutFlowPreviewIssues,
     type CheckoutFlowIssue,
     type CheckoutFlowPreviewOptions,
 } from "./checkout-flow-policy";
+
+// The preview must agree with the server rule. The dashboard compiles only
+// against browser entries, so the server settings entry (which carries Worker
+// ambient types) is loaded at test time, not imported for the compiler.
+const SERVER_SETTINGS_ENTRY = "@scalius/core/modules/settings";
+const { getCheckoutFlowValidationIssues } = (await import(/* @vite-ignore */ SERVER_SETTINGS_ENTRY)) as {
+    getCheckoutFlowValidationIssues: (options: {
+        checkoutMode: string | null | undefined;
+        partialPaymentEnabled: boolean;
+        partialPaymentAmount: unknown;
+        availablePaymentMethods?: readonly string[];
+    }) => string[];
+};
 
 const baseOptions: CheckoutFlowPreviewOptions = {
     checkoutMode: "all",

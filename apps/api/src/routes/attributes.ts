@@ -9,7 +9,7 @@ import {
   getPublicFilterableAttributes,
   getPublicAttributesByCategory,
   getPublicAttributesForSearch,
-} from "@scalius/core/modules/attributes/attributes.public";
+} from "@scalius/core/modules/attributes";
 import { NotFoundError } from "../utils/api-error";
 
 import { ok } from "../utils/api-response";

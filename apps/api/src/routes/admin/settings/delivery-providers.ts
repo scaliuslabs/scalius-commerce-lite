@@ -1,12 +1,16 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
-import { getDeliveryProviders, getDeliveryProvider, saveDeliveryProvider, testDeliveryProvider } from "@scalius/core/modules/delivery/delivery.service";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import {
+    getDeliveryProviders,
+    getDeliveryProvider,
+    saveDeliveryProvider,
+    testDeliveryProvider,
+    createProvider,
+} from "@scalius/core/modules/delivery";
 import {
     assertDeliveryProviderReadyForActivation,
     getDeliveryProviderReadinessSummary,
     getDeliveryProviderSetupFingerprint,
-} from "@scalius/core/modules/delivery/provider-readiness";
-import { createProvider } from "@scalius/core/modules/delivery/factory";
+} from "@scalius/core/modules/delivery/browser";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";

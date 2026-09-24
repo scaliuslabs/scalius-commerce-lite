@@ -14,10 +14,13 @@ import {
     updateOrderDetails,
     type OrderPaymentRecoveryPreview,
 } from "@scalius/core/modules/orders";
-import { loadVariantSelectedOptions } from "@scalius/core/modules/products";
-import { presentCatalogPrice, readStoreDecimalPlaces } from "@scalius/core/modules/products/money";
+import {
+    loadVariantSelectedOptions,
+    presentCatalogPrice,
+    readStoreDecimalPlaces,
+} from "@scalius/core/modules/products";
 import { fromMinor } from "@scalius/shared/money";
-import { updateOrderDetailsSchema, restoreOrderSchema } from "@scalius/core/modules/orders/validation";
+import { updateOrderDetailsSchema, restoreOrderSchema } from "@scalius/core/modules/orders/browser";
 import {
     orderPayments,
     paymentPlans,
@@ -37,7 +40,7 @@ import {
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
-import { publishedMediaObjectKey } from "@scalius/core/modules/media/media.presentation";
+import { publishedMediaObjectKey } from "@scalius/core/modules/media";
 import {
     activeRefundOperationSchema,
     orderDetailSchema,

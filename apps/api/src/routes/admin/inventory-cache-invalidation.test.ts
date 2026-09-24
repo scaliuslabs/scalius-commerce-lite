@@ -33,6 +33,9 @@ vi.mock("@scalius/core/modules/inventory", async () => {
     adjustStock: mocks.adjustStock,
     setStock: mocks.setStock,
     lookupByBarcodeOrSku: mocks.lookupByBarcodeOrSku,
+    acknowledgeLowStockAlert: mocks.acknowledgeLowStockAlert,
+    setLowStockThreshold: mocks.setLowStockThreshold,
+    setDefaultLowStockThreshold: mocks.setDefaultLowStockThreshold,
     inventoryOperationKeySchema: z.string().min(16).max(128),
     lowStockThresholdSchema: z.number().int().min(0).max(1_000_000).nullable(),
     INVENTORY_LABEL_VARIANT_LIMIT: 150,
@@ -57,19 +60,17 @@ vi.mock("@scalius/core/modules/inventory", async () => {
   };
 });
 
-vi.mock("@scalius/core/modules/inventory/alerts", () => ({
-  acknowledgeLowStockAlert: mocks.acknowledgeLowStockAlert,
-  setLowStockThreshold: mocks.setLowStockThreshold,
-  setDefaultLowStockThreshold: mocks.setDefaultLowStockThreshold,
-}));
-
-vi.mock("@scalius/core/modules/settings/settings.service", () => ({
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
   getCurrencyConfig: mocks.getCurrencyConfig,
 }));
 
-vi.mock("../../utils/cache-generation", () => ({
+vi.mock("../../utils/availability-transitions", () => ({
   findStockMutationAvailabilityTransitions:
     mocks.findStockMutationAvailabilityTransitions,
+}));
+
+vi.mock("../../utils/cache-generation", () => ({
   bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 

@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { ORDER_CSV_ARTIFACT_MAX_BYTES } from "@scalius/core/modules/orders/csv-export";
+import { ORDER_CSV_ARTIFACT_MAX_BYTES } from "@scalius/core/modules/orders/browser";
 import { adminOrdersRoutes } from "./orders";
 
 describe("order CSV export pagination", () => {

@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { OrderListItem } from "@scalius/core/modules/orders/types";
+import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const statusMutate = vi.hoisted(() => vi.fn());

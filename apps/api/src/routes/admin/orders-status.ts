@@ -11,8 +11,14 @@ import {
     resolveUnknownOrderShipment,
 } from "@scalius/core/modules/fulfilment";
 import { recordOrderEvent, updateOrderStatus } from "@scalius/core/modules/orders";
-import type { OrderNotificationType } from "@scalius/core/modules/notifications";
-import { getShipments, getDeliveryProvider, getShipment, deleteShipmentRecord, getLatestShipment } from "@scalius/core/modules/delivery/delivery.service";
+import type { OrderNotificationType } from "@scalius/core/modules/notifications/browser";
+import {
+    getShipments,
+    getDeliveryProvider,
+    getShipment,
+    deleteShipmentRecord,
+    getLatestShipment,
+} from "@scalius/core/modules/delivery";
 import { deliveryShipments, codTracking, orders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
@@ -32,7 +38,7 @@ import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 import {
     shipmentCreationOptionsSchema,
     unknownShipmentResolutionSchema,
-} from "@scalius/core/modules/orders/validation";
+} from "@scalius/core/modules/orders/browser";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();

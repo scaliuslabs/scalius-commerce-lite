@@ -42,7 +42,8 @@ vi.mock("cloudflare:workers", () => ({
 }));
 
 // Platform origins normally come from KV/D1; keep the boundary tests hermetic.
-vi.mock("@scalius/core/modules/settings/platform-settings.service", () => ({
+vi.mock("@scalius/core/modules/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/platform")>()),
   resolvePlatformConfig: vi.fn(async () => ({
     storefrontUrl: "https://storefront.example.test",
     apiUrl: "https://api.example.test",

@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   bumpCacheGeneration: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/settings/platform-settings.service", () => ({
+vi.mock("@scalius/core/modules/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/platform")>()),
   getPlatformSettingsDocument: mocks.getPlatformSettingsDocument,
   savePlatformSettings: mocks.savePlatformSettings,
 }));

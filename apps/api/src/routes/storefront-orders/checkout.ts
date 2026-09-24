@@ -8,15 +8,17 @@ import {
     getPaymentMethodCurrencyIssue,
     isOnlinePaymentMethod,
     listPaymentMethodIds,
-} from "@scalius/core/modules/payments/gateways/registry";
+} from "@scalius/core/modules/payments";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { getCustomerBySession } from "@scalius/core/modules/customers/customer-auth.service";
+import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
-import type { CheckoutPaymentMethodId } from "@scalius/core/modules/settings/checkout-flow";
+import type { CheckoutPaymentMethodId } from "@scalius/core/modules/settings";
 import {
     assertStorefrontCheckoutQuoteFingerprint,
     buildStorefrontCheckoutQuoteFingerprint,
+} from "@scalius/core/modules/checkout/browser";
+import {
     buildCheckoutAttemptIdentity,
     commitStorefrontOrderPayload,
     createAtomicCheckoutAttempt,

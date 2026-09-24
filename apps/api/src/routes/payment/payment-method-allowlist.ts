@@ -1,9 +1,11 @@
 import type { Database } from "@scalius/database/client";
-import { checkoutDocument } from "@scalius/core/modules/settings/documents";
-import { getPaymentMethodPreferences } from "@scalius/core/modules/payments/gateway-settings";
-import { paymentMethodLabel } from "@scalius/core/modules/payments/gateways/registry";
-import type { GatewaySettings, PaymentGateway } from "@scalius/core/modules/payments/gateways/port";
-import { isCheckoutGatewayUsableForFlow } from "@scalius/core/modules/settings/checkout-flow";
+import { checkoutDocument, isCheckoutGatewayUsableForFlow } from "@scalius/core/modules/settings";
+import {
+  getPaymentMethodPreferences,
+  paymentMethodLabel,
+  type GatewaySettings,
+  type PaymentGateway,
+} from "@scalius/core/modules/payments";
 import { ServiceUnavailableError } from "../../utils/api-error";
 
 export interface CheckoutFlowSettings {

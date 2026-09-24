@@ -11,7 +11,7 @@ import {
     quoteManualOrderSchema,
     previewManualOrderAmendmentSchema,
     confirmManualOrderAmendmentSchema,
-} from "@scalius/core/modules/orders/validation";
+} from "@scalius/core/modules/orders/browser";
 import { ok, created } from "../../../utils/api-response";
 import {
     successEnvelope,
@@ -19,10 +19,8 @@ import {
     errorResponses,
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
-import {
-    bumpCacheGeneration,
-    findCheckoutReservationAvailabilityTransitions,
-} from "../../../utils/cache-generation";
+import { bumpCacheGeneration } from "../../../utils/cache-generation";
+import { findCheckoutReservationAvailabilityTransitions } from "../../../utils/availability-transitions";
 import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
 import { adminOrderResourceMutationErrorResponses, adminWriteErrorResponses } from "./shared";
 

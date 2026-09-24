@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
-import type { OrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
+import type { OrderNotificationType } from "@scalius/core/modules/notifications/browser";
 import {
   getApiV1AdminSettingsAuth,
   getApiV1AdminSettingsEmail,

@@ -1,4 +1,4 @@
-// src/modules/notifications/index.ts
+export * from "./browser";
 export { sendOrderNotification, sendOrderNotificationEmail } from "./notifications.service";
 export {
   ORDER_NOTIFICATION_LABELS,
@@ -62,3 +62,7 @@ export type {
   OrderNotificationQueueMessage,
   RecordAndEnqueueOrderNotificationResult,
 } from "./order-notification-outbox";
+export { sendStaffOrderEmails } from "./notifications.service";
+export { composeAuthOtpMessage, readStoreIdentity, readStoreName, storeDisplayName } from "./store-messages";
+export { describeNotificationProviderBlock } from "./notification-provider-health";
+export { getNotificationTemplates, saveNotificationTemplate } from "./notification-templates.service";

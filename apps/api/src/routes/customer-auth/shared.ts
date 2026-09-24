@@ -1,10 +1,7 @@
 // Helpers and schemas shared by the customer account routes.
 import { z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import {
-  getCustomerBySession,
-  getSessionCookie,
-} from "@scalius/core/modules/customers/customer-auth.service";
+import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers";
 import { UnauthorizedError } from "../../utils/api-error";
 import { getCustomerSessionHashKey } from "../../utils/encryption-key";
 

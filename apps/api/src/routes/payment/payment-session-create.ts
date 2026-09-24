@@ -13,18 +13,14 @@ import {
   PaymentRecordStatus,
   PaymentStatus,
 } from "@scalius/database/schema";
-import { currencyDocument } from "@scalius/core/modules/settings/documents";
-import { getPaymentMethodPreferences } from "@scalius/core/modules/payments/gateway-settings";
-import { buildPaymentCorrelationId } from "@scalius/core/modules/payments/gateways/correlation";
-import { PaymentProviderError, type PaymentGateway } from "@scalius/core/modules/payments/gateways/port";
+import { currencyDocument } from "@scalius/core/modules/settings";
 import {
+  getPaymentMethodPreferences,
   getGatewayAmountIssue,
   getPaymentGateway,
   getPaymentMethodCurrencyIssue,
   isOnlinePaymentMethod,
   requirePaymentGateway,
-} from "@scalius/core/modules/payments/gateways/registry";
-import {
   buildPaymentSessionAttemptIdentity,
   assertNoActivePaymentSessionAttempt,
   claimPaymentSessionAttempt,
@@ -32,15 +28,22 @@ import {
   markPaymentSessionAttemptFailed,
   noActivePaymentSessionAttemptForOrderSqlCondition,
   type PaymentSessionAttemptProcessingResult,
-} from "@scalius/core/modules/payments/payment-session-attempts";
-import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders/shipment-claim";
+  buildPaymentCorrelationId,
+  PaymentProviderError,
+  type PaymentGateway,
+} from "@scalius/core/modules/payments";
 import {
   resolveOrderCurrencySnapshot,
   type OrderCurrencySnapshot,
-} from "@scalius/core/modules/payments/order-currency";
+} from "@scalius/core/modules/payments/browser";
+import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
-import { assertPaymentSessionOrderPayable, resolvePaymentSessionPolicy } from "./payment-session-policy";
-import type { PaymentSessionPolicy, PaymentSessionType } from "./payment-session-policy";
+import {
+  assertPaymentSessionOrderPayable,
+  resolvePaymentSessionPolicy,
+  type PaymentSessionPolicy,
+  type PaymentSessionType,
+} from "./payment-session-policy";
 import { assertGatewaySelectedForCheckout, loadCheckoutGatewaySettings } from "./payment-method-allowlist";
 import { ensurePendingPaymentPlanForSession } from "./payment-plan-session";
 import {

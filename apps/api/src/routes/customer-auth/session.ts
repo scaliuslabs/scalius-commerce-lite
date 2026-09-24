@@ -11,7 +11,7 @@ import {
   deleteCustomerAuthOtpChallenge,
   COOKIE_NAME,
   SESSION_TTL_SECONDS,
-} from "@scalius/core/modules/customers/customer-auth.service";
+} from "@scalius/core/modules/customers";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import { ServiceUnavailableError } from "../../utils/api-error";
 import {

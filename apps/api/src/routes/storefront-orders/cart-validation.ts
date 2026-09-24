@@ -2,7 +2,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { InventoryPool } from "@scalius/database/schema";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
+import { getCurrencySettings } from "@scalius/core/modules/settings";
 import {
   presentStorefrontCartValidation,
   presentStorefrontDeliveryPreflight,

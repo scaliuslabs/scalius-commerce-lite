@@ -42,20 +42,17 @@ import {
   saveMediaOptimizationSettings,
   getSeoSettings,
   saveSeoSettings,
-  getStorefrontUrlSetting,
-  saveStorefrontUrl,
   getHomepagePresentationSettings,
   saveHomepagePresentationSettings,
   saveAllowedCountries,
   readSettingsForEdit,
-} from "@scalius/core/modules/settings/site-settings.service";
-import {
   currencyDocument,
   customerCountriesDocument,
   mediaDocument,
   platformDocument,
   seoDocument,
-} from "@scalius/core/modules/settings/documents";
+} from "@scalius/core/modules/settings";
+import { getStorefrontUrlSetting, saveStorefrontUrl } from "@scalius/core/modules/platform";
 import {
   PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT,
   PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT,

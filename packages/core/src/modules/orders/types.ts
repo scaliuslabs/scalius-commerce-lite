@@ -2,13 +2,29 @@
 // Shared TypeScript interfaces for the orders module.
 
 import type { OrderNotificationType } from "../notifications/notification-types";
-import type {
-    ActiveRefundOperationView,
-    OrderRefundAttemptView,
-} from "../payments/refund-attempt-visibility";
-import type { OrderSupportRequestView } from "./order-support-requests";
-import type { TaxQuote } from "../tax";
-import type { PromotionCheckoutSnapshot } from "../promotions";
+import type { ActiveRefundOperationView, OrderRefundAttemptView } from "../payments/refund-attempt-views";
+import type { TaxQuote } from "../tax/types";
+import type { PromotionCheckoutSnapshot } from "../promotions/checkout-snapshot";
+import type { CustomerRequestType } from "../settings/customer-request-policy.shared";
+
+export interface OrderSupportRequestView {
+    id: string;
+    orderId: string;
+    customerId: string | null;
+    type: CustomerRequestType;
+    status: string;
+    active: boolean;
+    severity: "info" | "success" | "warning" | "danger";
+    label: string;
+    actionLabel: string;
+    reason: string;
+    message: string | null;
+    returnId: string | null;
+    submittedAt: string | null;
+    resolvedAt: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+}
 
 // ─────────────────────────────────────────
 // Admin types

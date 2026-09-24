@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
-import type { OrderListItem } from "@scalius/core/modules/orders/types";
+import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { orderErrorMessage, useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
 import { isAdminOrderStatus } from "~/lib/admin-order-status-policy";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";

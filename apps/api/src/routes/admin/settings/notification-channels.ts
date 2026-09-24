@@ -10,8 +10,8 @@ import {
     updateNotificationChannels,
     updateAdminNotificationChannels,
     isWhatsAppCloudApiConfigured,
-} from "@scalius/core/modules/settings/settings.service";
-import { STAFF_EMAIL_RECIPIENTS_MAX } from "@scalius/core/modules/settings/documents";
+    STAFF_EMAIL_RECIPIENTS_MAX,
+} from "@scalius/core/modules/settings";
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import { getEmailProviderReadiness } from "@scalius/core/integrations/email";
 import { getFirebaseServiceAccountReadiness } from "@scalius/core/integrations/firebase/settings";
@@ -19,7 +19,7 @@ import {
     clearNotificationProviderBlocks,
     describeNotificationProviderBlock,
     getNotificationProviderBlock,
-} from "@scalius/core/modules/notifications/notification-provider-health";
+} from "@scalius/core/modules/notifications";
 import type { Database } from "@scalius/database/client";
 import {
     isReady,

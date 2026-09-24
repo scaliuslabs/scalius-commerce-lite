@@ -37,7 +37,7 @@ import {
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { bumpCacheGeneration, getOptionalExecutionContext } from "../utils/cache-generation";
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
-import { listPaymentMethodIds } from "@scalius/core/modules/payments/gateways/registry";
+import { listPaymentMethodIds } from "@scalius/core/modules/payments";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 

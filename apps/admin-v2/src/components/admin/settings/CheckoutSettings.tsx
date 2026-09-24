@@ -11,7 +11,7 @@ import {
 import {
   CUSTOMER_REQUEST_INTRO_MAX_LENGTH,
   type CustomerRequestPolicy,
-} from "@scalius/core/modules/settings/customer-request-policy.shared";
+} from "@scalius/core/modules/settings/browser";
 import {
   getCheckoutLanguagePreset,
   resolveCheckoutLanguageData,

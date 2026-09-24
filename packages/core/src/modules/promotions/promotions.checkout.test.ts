@@ -18,8 +18,8 @@ import {
     listProductBuyGetOffers,
     quoteStorefrontDiscount,
     verifyPromotionCheckoutSnapshot,
-    type StorefrontDiscountCart,
 } from "./promotions.checkout";
+import type { StorefrontDiscountCart } from "./checkout-snapshot";
 import { activatePromotion, pausePromotion } from "./promotions.lifecycle";
 import { archivePromotionDraft, createPromotionDraft } from "./promotions.service";
 import type { CreatePromotionDraftInput } from "./promotions.validation";
