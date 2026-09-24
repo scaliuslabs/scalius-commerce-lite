@@ -39,6 +39,8 @@ export interface OrderRowHandlers {
   onRestore: (order: OrderListItem) => void;
   onStatusUpdate: (order: OrderListItem, status: string) => void;
   onShipmentRefreshed: () => void;
+  /** Column names for the column menu. */
+  label?: (key: OrderListMessageKey) => string;
 }
 
 type OrderName = Pick<OrderListItem, "id" | "orderNumber">;
@@ -196,23 +198,30 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
 }
 
 export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderListItem, unknown>[] {
+  // Column menu names, and what gives way first on a narrow screen.
+  const meta = (key: OrderListMessageKey, layout: { priority?: number; minWidth: number; numeric?: boolean; primary?: boolean }) => ({
+    label: handlers.label?.(key),
+    ...layout,
+  });
   const columns: ColumnDef<OrderListItem, unknown>[] = [
     {
       id: "order",
+      meta: meta("order", { primary: true, minWidth: 140 }),
       header: () => <Title k="order" />,
       cell: ({ row }) => (
         <div className="flex flex-col">
-          <OrderNumberLink order={row.original} />
-          <ListDate value={row.original[handlers.dateField]} className="text-body text-muted-foreground" />
+          <span className="whitespace-nowrap"><OrderNumberLink order={row.original} /></span>
+          <ListDate value={row.original[handlers.dateField]} className="whitespace-nowrap text-body text-muted-foreground" />
         </div>
       ),
     },
     {
       id: "customer",
+      meta: meta("customer", { priority: 90, minWidth: 180 }),
       header: () => <Title k="customer" />,
       cell: ({ row }) => (
         <div className="min-w-0">
-          <p className="truncate font-medium">{row.original.customerName}</p>
+          <p className="line-clamp-2 break-words font-medium">{row.original.customerName}</p>
           <div className="flex items-center gap-1 text-body text-muted-foreground">
             <span className="whitespace-nowrap font-mono">{formatPhoneForDisplay(row.original.customerPhone)}</span>
             <LazyFraudCheckIndicator phone={row.original.customerPhone} customerName={row.original.customerName} />
@@ -222,17 +231,20 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     },
     {
       id: "total",
-      header: () => <div className="text-right"><Title k="total" /></div>,
+      meta: meta("total", { priority: 95, minWidth: 120, numeric: true }),
+      header: () => <Title k="total" />,
       cell: ({ row }) => <TotalCell order={row.original} />,
     },
     {
       id: "fulfillment",
+      meta: meta("fulfillment", { priority: 60, minWidth: 150 }),
       header: () => <Title k="fulfillment" />,
       cell: ({ row }) => <FulfillmentCell order={row.original} handlers={handlers} />,
     },
     {
       id: "items",
-      header: () => <div className="text-right"><Title k="items" /></div>,
+      meta: meta("items", { priority: 30, minWidth: 80, numeric: true }),
+      header: () => <Title k="items" />,
       cell: ({ row }) => (
         <div className="flex justify-end tabular-nums">
           <LazyOrderItemsPopover orderId={row.original.id} itemCount={row.original.itemCount} />
@@ -241,6 +253,7 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     },
     {
       id: "status",
+      meta: meta("status", { priority: 80, minWidth: 160 }),
       header: () => <Title k="status" />,
       cell: ({ row }) => <StatusCell order={row.original} handlers={handlers} />,
     },

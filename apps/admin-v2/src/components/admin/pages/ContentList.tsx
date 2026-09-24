@@ -67,13 +67,13 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
     {
       accessorKey: "title",
       header: sortHeader(isBlog ? t("blogPost") : t("page")),
-      meta: { mobile: "primary" },
+      meta: { mobile: "primary", minWidth: 220 },
       cell: ({ row }) => <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.title}</ResourceRowLink>,
     },
     {
       id: "status",
       header: t("status"),
-      meta: { mobile: "status" },
+      meta: { mobile: "status", priority: 80, minWidth: 110 },
       cell: ({ row }) => {
         const mode = getPagePublicationMode(row.original);
         return <StatusBadge tone={mode === "published" ? "success" : "neutral"}>{t(mode === "published" ? "live" : mode)}</StatusBadge>;
@@ -82,11 +82,11 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
     {
       accessorKey: "updatedAt",
       header: sortHeader(t("updated")),
-      meta: { mobile: "secondary" },
+      meta: { mobile: "secondary", priority: 50, minWidth: 140 },
       cell: ({ row }) => {
         const publishAt = unixToDate(row.original.publishedAt);
         return getPagePublicationMode(row.original) === "scheduled" && publishAt ? (
-          <span className="text-muted-foreground">{t("publishesOn", { date: formatDateTime(publishAt, { dateStyle: "medium", timeStyle: "short" }) })}</span>
+          <span className="whitespace-nowrap text-muted-foreground">{t("publishesOn", { date: formatDateTime(publishAt, { dateStyle: "medium", timeStyle: "short" }) })}</span>
         ) : (
           <DateText value={row.original.updatedAt} />
         );
