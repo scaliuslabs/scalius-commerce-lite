@@ -97,15 +97,17 @@ async function render(
 }
 
 /**
- * The rendered markup as it paints: Astro's per-build ids, scripts, styles
- * and stylesheet links removed, and one element per line with its
- * attributes and class tokens sorted (their order never changes a pixel).
+ * The rendered markup as it paints with JavaScript on: Astro's per-build
+ * ids, scripts, `<noscript>` fallbacks, styles and stylesheet links removed,
+ * and one element per line with its attributes and class tokens sorted
+ * (their order never changes a pixel).
  */
 function normalize(html: string): string {
   const document = new Window().document;
   const body = document.createElement("body");
   body.innerHTML = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "")
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/g, "")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/g, "")
     .replace(/<link\b[^>]*>/g, "");
   const lines: string[] = [];
@@ -183,7 +185,8 @@ const FACETS = [
     id: "attr-fabric",
     name: "Fabric",
     slug: "fabric",
-    values: Array.from({ length: 14 }, (_, index) => ({ value: `Fabric ${index + 1}`, count: index + 1 })),
+    // Eleven values: ten shown and one folded, below the search-list threshold.
+    values: Array.from({ length: 11 }, (_, index) => ({ value: `Fabric ${index + 1}`, count: index + 1 })),
   },
   { id: "attr-single", name: "Origin", slug: "origin", values: [{ value: "Bangladesh", count: 50 }] },
 ];
@@ -212,7 +215,7 @@ const EMPTY_SLOT = { empty: '<section data-catalog-empty-state>Nothing here</sec
 const BASELINES: Record<string, () => Record<string, unknown>> = {
   plain: () => listingProps("https://shop.test/categories/sarees"),
   filtered: () =>
-    listingProps("https://shop.test/categories/sarees?size=M&fabric=Fabric+12&minPrice=600&hasDiscount=true&page=2&sortBy=price-asc"),
+    listingProps("https://shop.test/categories/sarees?size=M&fabric=Fabric+11&minPrice=600&hasDiscount=true&page=2&sortBy=price-asc"),
   search: () =>
     listingProps("https://shop.test/search?q=linen", { pathname: "/search", resetPath: "/search?q=linen", searchLabel: "Search products", countEndpoint: "/products" }),
   empty: () =>
