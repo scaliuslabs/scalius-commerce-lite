@@ -9,6 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "../popover";
 import { Switch } from "../switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../tooltip";
 import { insertRichTextTable } from "./tiptap-insertions";
+import { useMessages } from "~/i18n";
+import { richTextMessages } from "~/i18n/rich-text";
 
 interface TiptapTablePopoverProps {
   editor: Editor;
@@ -36,19 +38,19 @@ type TableCommand =
   | "toggleHeaderRow"
   | "toggleHeaderCell";
 
-const TABLE_ACTIONS: ReadonlyArray<{ command: TableCommand; label: string; icon: LucideIcon }> = [
-  { command: "addColumnBefore", label: "Add column before", icon: ChevronsLeftRight },
-  { command: "addColumnAfter", label: "Add column after", icon: ChevronsLeftRight },
-  { command: "deleteColumn", label: "Delete column", icon: Columns },
-  { command: "addRowBefore", label: "Add row before", icon: Rows },
-  { command: "addRowAfter", label: "Add row after", icon: Rows },
-  { command: "deleteRow", label: "Delete row", icon: Rows },
-  { command: "deleteTable", label: "Delete table", icon: Eraser },
-  { command: "mergeCells", label: "Merge cells", icon: Merge },
-  { command: "splitCell", label: "Split cell", icon: Split },
-  { command: "toggleHeaderColumn", label: "Header column", icon: Columns },
-  { command: "toggleHeaderRow", label: "Header row", icon: Rows },
-  { command: "toggleHeaderCell", label: "Header cell", icon: TableIcon },
+const TABLE_ACTIONS: ReadonlyArray<{ command: TableCommand; icon: LucideIcon }> = [
+  { command: "addColumnBefore", icon: ChevronsLeftRight },
+  { command: "addColumnAfter", icon: ChevronsLeftRight },
+  { command: "deleteColumn", icon: Columns },
+  { command: "addRowBefore", icon: Rows },
+  { command: "addRowAfter", icon: Rows },
+  { command: "deleteRow", icon: Rows },
+  { command: "deleteTable", icon: Eraser },
+  { command: "mergeCells", icon: Merge },
+  { command: "splitCell", icon: Split },
+  { command: "toggleHeaderColumn", icon: Columns },
+  { command: "toggleHeaderRow", icon: Rows },
+  { command: "toggleHeaderCell", icon: TableIcon },
 ];
 
 export function TiptapTablePopover({
@@ -62,6 +64,7 @@ export function TiptapTablePopover({
   onTableWithHeaderChange,
   isFullscreen = false,
 }: TiptapTablePopoverProps) {
+  const t = useMessages(richTextMessages);
   const fieldId = useId();
   const rowsId = `${fieldId}-table-rows`;
   const columnsId = `${fieldId}-table-columns`;
@@ -81,6 +84,7 @@ export function TiptapTablePopover({
     }),
   });
   const isInTable = tableState.isInTable;
+  const triggerLabel = t(isInTable ? "editTable" : "insertTable");
 
   const addTable = () => {
     if (!rowsValid || !colsValid) return;
@@ -101,7 +105,7 @@ export function TiptapTablePopover({
               type="button"
               variant="ghost"
               size={compact ? "icon-sm" : "icon"}
-              aria-label={isInTable ? "Edit table" : "Insert table"}
+              aria-label={triggerLabel}
               aria-pressed={isInTable || undefined}
               onMouseDown={(event) => event.preventDefault()}
             >
@@ -109,7 +113,7 @@ export function TiptapTablePopover({
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent side="bottom">{isInTable ? "Edit table" : "Insert table"}</TooltipContent>
+        <TooltipContent side="bottom">{triggerLabel}</TooltipContent>
       </Tooltip>
 
       <PopoverContent className={isFullscreen ? "z-[10001] w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3" : "w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3"}>
@@ -117,7 +121,7 @@ export function TiptapTablePopover({
           <>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor={rowsId}>Rows</Label>
+                <Label htmlFor={rowsId}>{t("rows")}</Label>
                 <Input
                   id={rowsId}
                   type="number"
@@ -130,7 +134,7 @@ export function TiptapTablePopover({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={columnsId}>Columns</Label>
+                <Label htmlFor={columnsId}>{t("columns")}</Label>
                 <Input
                   id={columnsId}
                   type="number"
@@ -145,16 +149,16 @@ export function TiptapTablePopover({
             </div>
             <label htmlFor={headerId} className="flex min-h-11 cursor-pointer items-center gap-2 text-body sm:min-h-8">
               <Switch id={headerId} checked={tableWithHeader} onCheckedChange={onTableWithHeaderChange} />
-              Include a header row
+              {t("includeHeaderRow")}
             </label>
             <Button type="button" onClick={addTable} disabled={!rowsValid || !colsValid} className="w-full">
-              <TableIcon /> Insert table
+              <TableIcon /> {t("insertTable")}
             </Button>
-            <p className="text-body text-muted-foreground">Up to 20 rows and 10 columns.</p>
+            <p className="text-body text-muted-foreground">{t("tableLimit", { rows: 20, cols: 10 })}</p>
           </>
         ) : (
           <div className="grid gap-0.5 sm:grid-cols-2">
-            {TABLE_ACTIONS.map(({ command, label, icon: Icon }) => (
+            {TABLE_ACTIONS.map(({ command, icon: Icon }) => (
               <button
                 key={command}
                 type="button"
@@ -163,7 +167,7 @@ export function TiptapTablePopover({
                 className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-left text-body hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:min-h-8"
               >
                 <Icon className="size-4 shrink-0 text-muted-foreground" />
-                {label}
+                {t(command)}
               </button>
             ))}
           </div>

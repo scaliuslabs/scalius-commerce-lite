@@ -673,13 +673,14 @@ describe("admin route graph boundaries", () => {
     );
     expect(toolbarButtonSource).toContain("aria-label={tooltip}");
     expect(menuBarSource).toContain('aria-label={');
-    expect(menuBarSource).toContain('"Select text to add a link"');
-    expect(menuBarSource).toContain('"Edit link"');
-    expect(menuBarSource).toContain('aria-label="Insert image URL"');
-    expect(menuBarSource).toContain('aria-label="Embed video"');
-    expect(menuBarSource).toContain('triggerLabel="Media Library"');
+    // Labels come from the dashboard's catalog, in its language (A11Y-03).
+    expect(menuBarSource).toContain('"selectTextForLink"');
+    expect(menuBarSource).toContain('"editLink"');
+    expect(menuBarSource).toContain('aria-label={t("insertImageUrl")}');
+    expect(menuBarSource).toContain('aria-label={t("embedVideo")}');
+    expect(menuBarSource).toContain('triggerLabel={t("mediaLibrary")}');
     expect(menuBarSource).toContain("trigger={");
-    expect(menuBarSource).toContain('tooltip="Media Library"');
+    expect(menuBarSource).toContain('tooltip={t("mediaLibrary")}');
     expect(menuBarSource).not.toContain("document.getElementById");
     expect(menuBarSource).not.toContain("tiptap-media-manager-wrapper");
     expect(menuBarSource).not.toContain('querySelector("button")?.click()');

@@ -41,7 +41,7 @@ function RulePreview({ categoryIds }: { categoryIds: string[] }) {
   const t = useMessages(collectionFormMessages);
   const tr = useMessages(resourceMessages);
   const options = useProductOptions({ open: categoryIds.length > 0, categoryIds, limit: 10 });
-  const { query, products, total } = options;
+  const { query, products, total, visibleOnline } = options;
   if (categoryIds.length === 0) return null;
   return (
     <section className="space-y-2 border-t pt-4" aria-label={t("matchingProducts")}>
@@ -50,6 +50,8 @@ function RulePreview({ categoryIds }: { categoryIds: string[] }) {
         {options.isLoading || query.isError ? null : (
           <span className="text-body tabular-nums text-muted-foreground">
             {total === 1 ? t("productOne") : t("productCount", { count: total })}
+            {/* Drafts belong to the collection, but buyers don't see them (CAT-01). */}
+            {visibleOnline === null ? null : ` · ${t("visibleOnline", { count: visibleOnline })}`}
           </span>
         )}
       </h3>

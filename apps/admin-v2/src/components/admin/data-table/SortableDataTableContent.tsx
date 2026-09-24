@@ -35,6 +35,8 @@ import {
 import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
 import { DataTableHeadCell } from "./DataTableBodyRow";
 import { getSortableStyle } from "../shared/sortable-style";
+import { useMessages } from "~/i18n";
+import { dataTableMessages } from "~/i18n/data-table";
 
 export interface SortableDataTableContentProps<TData extends TableRowData> {
   table: Table<TData>;
@@ -45,13 +47,17 @@ export interface SortableDataTableContentProps<TData extends TableRowData> {
   showInitialLoading: boolean;
   emptyState?: EmptyStateConfig;
   onReorder?: (oldIndex: number, newIndex: number) => void;
+  /** Names a row for its reorder handle; rows are numbered without it. */
+  getRowLabel?: (row: TData) => string;
 }
 
 function SortableTableRow<TData extends TableRowData>({
   row,
+  label,
   children,
 }: {
   row: Row<TData>;
+  label: string;
   children: ReactNode;
 }) {
   const {
@@ -76,9 +82,10 @@ function SortableTableRow<TData extends TableRowData>({
         <div
           {...attributes}
           {...listeners}
+          aria-label={label}
           className="flex h-7 w-7 cursor-grab items-center justify-center rounded hover:bg-muted"
         >
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
+          <GripVertical aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
         </div>
       </TableCell>
       {children}
@@ -94,7 +101,9 @@ export function SortableDataTableContent<TData extends TableRowData>({
   showInitialLoading,
   emptyState,
   onReorder,
+  getRowLabel,
 }: SortableDataTableContentProps<TData>) {
+  const t = useMessages(dataTableMessages);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
@@ -143,8 +152,14 @@ export function SortableDataTableContent<TData extends TableRowData>({
           </TableHeader>
           <TableBody>
             {hasRows ? (
-              rows.map((row) => (
-                <SortableTableRow key={row.id} row={row}>
+              rows.map((row, index) => (
+                <SortableTableRow
+                  key={row.id}
+                  row={row}
+                  label={getRowLabel
+                    ? t("reorderRow", { name: getRowLabel(row.original) })
+                    : t("reorderRowNumber", { number: index + 1 })}
+                >
                   {columns.map((column) => {
                     const cell = row.getAllCells().find((candidate) => candidate.column.id === column.id);
                     return cell ? (

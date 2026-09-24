@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import type { Editor } from "@tiptap/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { setLocale } from "~/i18n";
 import { TiptapMenuBar } from "./TiptapMenuBar";
 
 vi.mock("@tiptap/react", async (importOriginal) => {
@@ -141,6 +142,7 @@ describe("TiptapMenuBar", () => {
       root.unmount();
     });
     vi.unstubAllGlobals();
+    setLocale("en");
   });
 
   it("keeps media-library insertion scoped to the clicked editor", () => {
@@ -157,7 +159,7 @@ describe("TiptapMenuBar", () => {
     });
 
     const mediaButtons = host.querySelectorAll<HTMLButtonElement>(
-      'button[aria-label="Media Library"]',
+      'button[aria-label="Media library"]',
     );
     expect(mediaButtons).toHaveLength(2);
 
@@ -190,7 +192,7 @@ describe("TiptapMenuBar", () => {
     });
     act(() => {
       host
-        .querySelector<HTMLButtonElement>('button[aria-label="Media Library"]')
+        .querySelector<HTMLButtonElement>('button[aria-label="Media library"]')
         ?.click();
     });
 
@@ -256,5 +258,28 @@ describe("TiptapMenuBar", () => {
       });
       expect(command).toHaveBeenCalled();
     }
+  });
+
+  it("names the toolbar and its buttons in Bangla when the dashboard is in Bangla", () => {
+    const { editor } = makeEditor();
+    act(() => setLocale("bn"));
+    act(() => {
+      root.render(<TiptapMenuBar editor={editor} toggleModal={vi.fn()} />);
+    });
+
+    expect(host.querySelector('[role="toolbar"]')?.getAttribute("aria-label")).toBe(
+      "লেখার ফরম্যাটিং",
+    );
+    for (const label of [
+      "বোল্ড (Ctrl+B)",
+      "লিংক যোগ করুন",
+      "মিডিয়া লাইব্রেরি",
+      "বাঁয়ে সাজান",
+      "হেডিং ২",
+      "পূর্ণ স্ক্রিন",
+    ]) {
+      expect(host.querySelector(`button[aria-label="${label}"]`)).not.toBeNull();
+    }
+    expect(host.querySelector('button[aria-label="Bold (Ctrl+B)"]')).toBeNull();
   });
 });

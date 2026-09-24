@@ -7,6 +7,7 @@ import { Skeleton } from "../skeleton";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
+import { richTextMessages } from "~/i18n/rich-text";
 
 let tiptapEditorModulePromise: Promise<{
   default: typeof import("./TiptapEditor").TiptapEditor;
@@ -58,10 +59,11 @@ function EditorLoadingShell({
   failed?: boolean;
   onRetry?: () => void;
 }) {
+  const t = useMessages(richTextMessages);
   return (
     <div
       aria-busy={failed ? undefined : "true"}
-      aria-label={failed ? undefined : `Loading ${ariaLabel}`}
+      aria-label={failed ? undefined : t("loading", { name: ariaLabel })}
       className={cn(
         "w-full min-w-0 overflow-hidden rounded-xl border border-input bg-card",
         getDeferredEditorMinHeightClass(Boolean(compact)),
@@ -73,9 +75,9 @@ function EditorLoadingShell({
           role="alert"
           className="flex min-h-[inherit] flex-col items-center justify-center gap-3 p-4 text-center"
         >
-          <p className="text-body text-muted-foreground">Editor couldn&apos;t load.</p>
+          <p className="text-body text-muted-foreground">{t("loadFailed")}</p>
           <Button type="button" variant="outline" onClick={onRetry}>
-            Retry
+            {t("retry")}
           </Button>
         </div>
       ) : (
@@ -103,6 +105,7 @@ export function DeferredTiptapEditor({
 }: DeferredTiptapEditorProps) {
   // Defaults follow the dashboard language.
   const r = useMessages(resourceMessages);
+  const t = useMessages(richTextMessages);
   const placeholder = placeholderProp ?? r("writeSomething");
   const ariaLabel = ariaLabelProp ?? r("richText");
   const isAliveRef = useRef(true);
@@ -187,7 +190,7 @@ export function DeferredTiptapEditor({
       ) : (
         <div
           aria-busy="true"
-          aria-label={`Loading ${ariaLabel}`}
+          aria-label={t("loading", { name: ariaLabel })}
           className={cn(
             "w-full min-w-0 overflow-hidden rounded-xl border border-input bg-card",
             className,

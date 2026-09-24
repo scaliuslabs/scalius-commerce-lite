@@ -32,7 +32,10 @@ import {
     storeDecimalPlacesFromCode,
     type BuyerPricingMinor,
 } from "../products/products.money";
-import { getStorefrontCollectionProducts } from "../products/products.storefront";
+import {
+    getStorefrontCollectionProducts,
+    storefrontCollectionVisibleCountQuery,
+} from "../products/products.storefront";
 import type { StorefrontProductFilterInput } from "../products/products.types";
 import {
     publicCategoryConditions,
@@ -357,6 +360,9 @@ export interface CollectionProductOptionsInput {
 
 /**
  * Lightweight, paginated product lookup for the collection builder.
+ * With categories, `visibleOnline` is how many of their products buyers see
+ * (the storefront collection's own count, whatever the search); `total`
+ * also counts drafts.
  *
  * Category IDs are deliberately capped below D1's 100-bound-parameter limit.
  * Selected product IDs use one bound json_each() set so the query can sort
@@ -437,9 +443,10 @@ export async function listCollectionProductOptions(
         .limit(limit)
         .offset(offset);
 
-    const [countRows = [], productOptions = []] = await (safeBatch(db, [
+    const [countRows = [], productOptions = [], visibleRows = []] = await (safeBatch(db, [
         countQuery,
         optionsQuery,
+        ...(categoryIds.length > 0 ? [storefrontCollectionVisibleCountQuery(db, { categoryIds })] : []),
     ]) as unknown as Promise<[
         Array<{ count: number; storeCurrencyCode: string | null }>,
         Array<{
@@ -455,6 +462,7 @@ export async function listCollectionProductOptions(
             variantCount: number;
             available: number | null;
         }>,
+        Array<{ count: number }>?,
     ]>);
     const total = Number(countRows[0]?.count ?? 0);
     const decimalPlaces = storeDecimalPlacesFromCode(countRows[0]?.storeCurrencyCode);
@@ -478,6 +486,7 @@ export async function listCollectionProductOptions(
             total,
             totalPages: Math.ceil(total / limit),
         },
+        visibleOnline: categoryIds.length > 0 ? Number(visibleRows[0]?.count ?? 0) : null,
     };
 }
 

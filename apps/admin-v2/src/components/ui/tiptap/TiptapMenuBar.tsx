@@ -49,6 +49,8 @@ import {
   toggleRichTextBulletList,
   toggleRichTextOrderedList,
 } from "./tiptap-formatting";
+import { useMessages } from "~/i18n";
+import { richTextMessages } from "~/i18n/rich-text";
 
 interface MenuBarProps {
   editor: Editor | null;
@@ -63,8 +65,9 @@ export const TiptapMenuBar = ({
   toggleModal,
   compact = false,
   isFullscreen = false,
-  ariaLabel = "Rich text formatting",
+  ariaLabel,
 }: MenuBarProps) => {
+  const t = useMessages(richTextMessages);
   const fieldId = useId();
   const linkUrlId = `${fieldId}-link-url`;
   const linkErrorId = `${fieldId}-link-error`;
@@ -73,15 +76,15 @@ export const TiptapMenuBar = ({
   const imageErrorId = `${fieldId}-image-error`;
   const videoErrorId = `${fieldId}-video-error`;
   const [linkUrl, setLinkUrl] = useState<string>("");
-  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState(false);
   const [imageUrl, setImageUrl] = useState<string>("");
   const [imageAlt, setImageAlt] = useState<string>("");
-  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string>("");
   const [linkOpen, setLinkOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
-  const [videoError, setVideoError] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState(false);
   const [tableRows, setTableRows] = useState<string>("3");
   const [tableCols, setTableCols] = useState<string>("3");
   const [tableWithHeader, setTableWithHeader] = useState<boolean>(true);
@@ -120,7 +123,7 @@ export const TiptapMenuBar = ({
   const setLink = () => {
     const normalized = normalizeRichTextLinkUrl(linkUrl);
     if (!normalized) {
-      setLinkError("Enter a complete web, email, phone, page, or anchor link.");
+      setLinkError(true);
       return;
     }
 
@@ -145,13 +148,13 @@ export const TiptapMenuBar = ({
   const addImage = () => {
     const url = normalizeRichTextImageUrl(imageUrl);
     if (!url) {
-      setImageError("Enter a secure image URL beginning with https://.");
+      setImageError(true);
       return;
     }
 
     setImageUrl("");
     setImageAlt("");
-    setImageError(null);
+    setImageError(false);
     setImageOpen(false);
     insertRichTextImage(editor, {
       src: url,
@@ -175,11 +178,11 @@ export const TiptapMenuBar = ({
   const addVideo = () => {
     const normalized = normalizeVideoEmbed(videoUrl);
     if (!normalized) {
-      setVideoError("Enter a valid YouTube or Vimeo video URL.");
+      setVideoError(true);
       return;
     }
     setVideoUrl("");
-    setVideoError(null);
+    setVideoError(false);
     setVideoOpen(false);
     insertRichTextVideo(editor, {
       src: normalized.src,
@@ -192,13 +195,14 @@ export const TiptapMenuBar = ({
 
   const hasLinkSelection = toolbarState.link;
   const canOpenLink = toolbarState.hasSelection || hasLinkSelection;
+  const linkLabel = t(canOpenLink ? (hasLinkSelection ? "editLink" : "addLink") : "selectTextForLink");
 
   const iconButtonSize = compact ? "icon-sm" : "icon";
 
   return (
     <div
       role="toolbar"
-      aria-label={ariaLabel}
+      aria-label={ariaLabel ?? t("toolbar")}
       className="flex items-center gap-0.5 overflow-hidden bg-card p-1"
     >
       <div
@@ -213,7 +217,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           isActive={toolbarState.bold}
-          tooltip="Bold (Ctrl+B)"
+          tooltip={t("bold")}
           compact={compact}
         >
           <Bold />
@@ -221,7 +225,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
           isActive={toolbarState.italic}
-          tooltip="Italic (Ctrl+I)"
+          tooltip={t("italic")}
           compact={compact}
         >
           <Italic />
@@ -229,7 +233,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
           isActive={toolbarState.underline}
-          tooltip="Underline (Ctrl+U)"
+          tooltip={t("underline")}
           compact={compact}
         >
           <UnderlineIcon />
@@ -242,7 +246,7 @@ export const TiptapMenuBar = ({
           open={linkOpen}
           onOpenChange={(open) => {
             setLinkOpen(open);
-            setLinkError(null);
+            setLinkError(false);
             if (open) {
               setLinkUrl(editor.getAttributes("link").href || "");
             }
@@ -256,13 +260,7 @@ export const TiptapMenuBar = ({
                   variant="ghost"
                   size={iconButtonSize}
                   aria-pressed={toolbarState.link || undefined}
-                  aria-label={
-                    canOpenLink
-                      ? hasLinkSelection
-                        ? "Edit link"
-                        : "Add link"
-                      : "Select text to add a link"
-                  }
+                  aria-label={linkLabel}
                   disabled={!canOpenLink}
                 >
                   <LinkIcon />
@@ -270,32 +268,24 @@ export const TiptapMenuBar = ({
               </PopoverTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p>
-                {canOpenLink
-                  ? hasLinkSelection
-                    ? "Edit link"
-                    : "Add link"
-                  : "Select text to add a link"}
-              </p>
+              <p>{linkLabel}</p>
             </TooltipContent>
           </Tooltip>
           <PopoverContent className="z-[10001] w-[calc(100vw-2rem)] max-w-sm space-y-2 p-3">
-            <Label htmlFor={linkUrlId}>
-              Link
-            </Label>
+            <Label htmlFor={linkUrlId}>{t("link")}</Label>
             <div className="flex gap-2">
               <Input
                 id={linkUrlId}
                 type="url"
-                aria-label="Link URL"
+                aria-label={t("linkUrl")}
                 placeholder="https://example.com"
                 value={linkUrl}
                 onChange={(e) => {
                   setLinkUrl(e.target.value);
-                  if (linkError) setLinkError(null);
+                  if (linkError) setLinkError(false);
                 }}
                 className="flex-1"
-                aria-invalid={Boolean(linkError)}
+                aria-invalid={linkError}
                 aria-describedby={linkError ? linkErrorId : undefined}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter") return;
@@ -304,17 +294,17 @@ export const TiptapMenuBar = ({
                 }}
               />
               <Button type="button" onClick={setLink}>
-                Apply
+                {t("apply")}
               </Button>
             </div>
             {linkError ? (
               <p id={linkErrorId} role="alert" className="text-body text-destructive">
-                {linkError}
+                {t("linkInvalid")}
               </p>
             ) : null}
             {hasLinkSelection ? (
               <Button type="button" variant="ghost" onClick={removeLink} className="w-full">
-                Remove link
+                {t("removeLink")}
               </Button>
             ) : null}
           </PopoverContent>
@@ -325,7 +315,7 @@ export const TiptapMenuBar = ({
           open={imageOpen}
           onOpenChange={(open) => {
             setImageOpen(open);
-            if (!open) setImageError(null);
+            if (!open) setImageError(false);
           }}
         >
           <Tooltip open={imageOpen ? false : undefined}>
@@ -335,32 +325,30 @@ export const TiptapMenuBar = ({
                   type="button"
                   variant="ghost"
                   size={iconButtonSize}
-                  aria-label="Insert image URL"
+                  aria-label={t("insertImageUrl")}
                 >
                   <ImageIcon />
                 </Button>
               </PopoverTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p>Insert image URL</p>
+              <p>{t("insertImageUrl")}</p>
             </TooltipContent>
           </Tooltip>
           <PopoverContent className="z-[10001] w-[calc(100vw-2rem)] max-w-sm space-y-3 p-3">
             <div className="space-y-1.5">
-              <Label htmlFor={imageUrlId}>
-                Image URL
-              </Label>
+              <Label htmlFor={imageUrlId}>{t("imageUrl")}</Label>
               <Input
                 id={imageUrlId}
                 type="url"
-                aria-label="Image URL"
+                aria-label={t("imageUrl")}
                 placeholder="https://example.com/image.jpg"
                 value={imageUrl}
                 onChange={(e) => {
                   setImageUrl(e.target.value);
-                  if (imageError) setImageError(null);
+                  if (imageError) setImageError(false);
                 }}
-                aria-invalid={Boolean(imageError)}
+                aria-invalid={imageError}
                 aria-describedby={imageError ? imageErrorId : undefined}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter") return;
@@ -370,27 +358,25 @@ export const TiptapMenuBar = ({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor={imageAltId}>
-                Alternative text
-              </Label>
+              <Label htmlFor={imageAltId}>{t("altText")}</Label>
               <Input
                 id={imageAltId}
                 value={imageAlt}
                 maxLength={512}
                 onChange={(event) => setImageAlt(event.target.value)}
-                placeholder="Describe the image"
+                placeholder={t("altPlaceholder")}
               />
               <p className="text-body text-muted-foreground">
-                Leave empty only when the image is decorative.
+                {t("altHelp")}
               </p>
             </div>
             {imageError ? (
               <p id={imageErrorId} role="alert" className="text-body text-destructive">
-                {imageError}
+                {t("imageUrlInvalid")}
               </p>
             ) : null}
             <Button type="button" onClick={addImage} className="w-full">
-              Insert image
+              {t("insertImage")}
             </Button>
           </PopoverContent>
         </Popover>
@@ -398,12 +384,12 @@ export const TiptapMenuBar = ({
         <MediaManager
           capability="image"
           onSelect={handleMediaSelect}
-          triggerLabel="Media Library"
+          triggerLabel={t("mediaLibrary")}
           dialogClassName={isFullscreen ? "z-[10001]" : undefined}
           trigger={
             <ToolbarButton
               onClick={() => undefined}
-              tooltip="Media Library"
+              tooltip={t("mediaLibrary")}
               compact={compact}
             >
               <FolderOpen />
@@ -416,7 +402,7 @@ export const TiptapMenuBar = ({
           open={videoOpen}
           onOpenChange={(open) => {
             setVideoOpen(open);
-            if (!open) setVideoError(null);
+            if (!open) setVideoError(false);
           }}
         >
           <Tooltip open={videoOpen ? false : undefined}>
@@ -426,29 +412,29 @@ export const TiptapMenuBar = ({
                   type="button"
                   variant="ghost"
                   size={iconButtonSize}
-                  aria-label="Embed video"
+                  aria-label={t("embedVideo")}
                 >
                   <VideoIcon />
                 </Button>
               </PopoverTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              <p>Embed video</p>
+              <p>{t("embedVideo")}</p>
             </TooltipContent>
           </Tooltip>
           <PopoverContent className="z-[10001] w-[calc(100vw-2rem)] max-w-sm p-3">
             <div className="flex gap-2">
               <Input
                 type="url"
-                aria-label="Video URL"
-                placeholder="YouTube or Vimeo URL"
+                aria-label={t("videoUrl")}
+                placeholder={t("videoPlaceholder")}
                 value={videoUrl}
                 onChange={(event) => {
                   setVideoUrl(event.target.value);
-                  if (videoError) setVideoError(null);
+                  if (videoError) setVideoError(false);
                 }}
                 className="flex-1"
-                aria-invalid={Boolean(videoError)}
+                aria-invalid={videoError}
                 aria-describedby={videoError ? videoErrorId : undefined}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter") return;
@@ -457,12 +443,12 @@ export const TiptapMenuBar = ({
                 }}
               />
               <Button type="button" onClick={addVideo}>
-                Embed
+                {t("embed")}
               </Button>
             </div>
             {videoError ? (
               <p id={videoErrorId} role="alert" className="mt-1.5 text-body text-destructive">
-                {videoError}
+                {t("videoInvalid")}
               </p>
             ) : null}
           </PopoverContent>
@@ -474,7 +460,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("left").run()}
           isActive={toolbarState.alignLeft}
-          tooltip="Align left"
+          tooltip={t("alignLeft")}
           compact={compact}
         >
           <AlignLeft />
@@ -482,7 +468,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("center").run()}
           isActive={toolbarState.alignCenter}
-          tooltip="Align center"
+          tooltip={t("alignCenter")}
           compact={compact}
         >
           <AlignCenter />
@@ -490,7 +476,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("right").run()}
           isActive={toolbarState.alignRight}
-          tooltip="Align right"
+          tooltip={t("alignRight")}
           compact={compact}
         >
           <AlignRight />
@@ -498,7 +484,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign("justify").run()}
           isActive={toolbarState.justify}
-          tooltip="Justify"
+          tooltip={t("justify")}
           compact={compact}
         >
           <AlignJustify />
@@ -510,7 +496,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
           isActive={toolbarState.heading1}
-          tooltip="Heading 1"
+          tooltip={t("heading", { level: 1 })}
           compact={compact}
         >
           <Heading1 />
@@ -518,7 +504,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
           isActive={toolbarState.heading2}
-          tooltip="Heading 2"
+          tooltip={t("heading", { level: 2 })}
           compact={compact}
         >
           <Heading2 />
@@ -526,7 +512,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
           isActive={toolbarState.heading3}
-          tooltip="Heading 3"
+          tooltip={t("heading", { level: 3 })}
           compact={compact}
         >
           <Heading3 />
@@ -539,7 +525,7 @@ export const TiptapMenuBar = ({
           onClick={() => toggleRichTextBulletList(editor)}
           isActive={toolbarState.bulletList}
           disabled={!toolbarState.canToggleList}
-          tooltip="Bullet list"
+          tooltip={t("bulletList")}
           compact={compact}
         >
           <List />
@@ -548,7 +534,7 @@ export const TiptapMenuBar = ({
           onClick={() => toggleRichTextOrderedList(editor)}
           isActive={toolbarState.orderedList}
           disabled={!toolbarState.canToggleList}
-          tooltip="Numbered list"
+          tooltip={t("numberedList")}
           compact={compact}
         >
           <ListOrdered />
@@ -557,7 +543,7 @@ export const TiptapMenuBar = ({
           onClick={() => toggleRichTextBlockquote(editor)}
           isActive={toolbarState.blockquote}
           disabled={!toolbarState.canToggleBlockquote}
-          tooltip="Blockquote"
+          tooltip={t("blockquote")}
           compact={compact}
         >
           <TextQuote />
@@ -584,7 +570,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!toolbarState.canUndo}
-          tooltip="Undo (Ctrl+Z)"
+          tooltip={t("undo")}
           compact={compact}
         >
           <Undo />
@@ -592,7 +578,7 @@ export const TiptapMenuBar = ({
         <ToolbarButton
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!toolbarState.canRedo}
-          tooltip="Redo (Ctrl+Shift+Z)"
+          tooltip={t("redo")}
           compact={compact}
         >
           <Redo />
@@ -602,10 +588,10 @@ export const TiptapMenuBar = ({
 
       {/* Fullscreen toggle */}
       {!isFullscreen ? (
-        <div className="shrink-0 border-l pl-1">
+        <div className="shrink-0 border-l pl-1" data-rich-text-fullscreen-toggle>
           <ToolbarButton
             onClick={toggleModal}
-            tooltip="Fullscreen"
+            tooltip={t("fullscreen")}
             compact={compact}
           >
             <Maximize />
