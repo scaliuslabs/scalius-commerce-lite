@@ -408,6 +408,11 @@ describe("storefront theme render matrix", () => {
     expect(body.dataset.themeCardStyle).toBe(layout.cardSurface);
     // The type pairing (editorial section headings step up on computers).
     expect(body.dataset.themeTypography).toBe(theme.tokens.typography);
+    // Tokens the card and heading CSS select on.
+    expect(body.dataset.themeTypeScale).toBe(theme.tokens.typeScale);
+    expect(body.dataset.themeHeadingCase).toBe(theme.tokens.headingCase);
+    expect(body.dataset.themeImageFit).toBe(theme.tokens.imageFit);
+    expect(body.dataset.themeRadius).toBe(theme.tokens.radius);
     expect(body.hasAttribute("data-theme-button-style")).toBe(false);
     // The density's grid tokens and fluid steps reach :root.
     const themeCss = Array.from(page.querySelectorAll("style"))

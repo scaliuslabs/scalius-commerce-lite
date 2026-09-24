@@ -55,6 +55,9 @@ describe("fluid product grid", () => {
     expect(cardCss).toMatch(/\.product-card-action \{\s*min-height: 2\.75rem;/);
     expect(cardCss).toMatch(/\.product-card-round-action \{\s*width: 2\.75rem;\s*height: 2\.75rem;/);
     expect(cardCss).toMatch(/@media \(hover: hover\) and \(pointer: fine\) \{\s*\.site-root \.product-card-action \{\s*min-height: var\(--theme-control-height/);
+    // Card corners follow the radius token; soft corners stop at 20px.
+    expect(cardCss).toMatch(/\[data-theme-component="product-card"\] \{\s*min-width: 0;\s*border-radius: calc\(var\(--radius\) \* 1\.5\);/);
+    expect(cardCss).toMatch(/\.site-root\[data-theme-radius="soft"\] \[data-theme-component="product-card"\] \{\s*border-radius: 1\.25rem;/);
     // Card titles never drop below 14px, and long words break inside the card.
     expect(cardCss).toContain("--card-title-size: 0.875rem;");
     expect(cardCss).not.toMatch(/--card-title-size: 0\.(?:[0-7]\d*|8[0-6]\d*)rem/);
