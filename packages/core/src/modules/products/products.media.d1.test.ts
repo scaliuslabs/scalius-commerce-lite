@@ -1,3 +1,4 @@
+import type { SQLInputValue } from "node:sqlite";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
 
@@ -6,6 +7,7 @@ import {
     resolveProductMediaProjectionRows,
     resolveSkuImageRepresentation,
     selectCheckoutProductMediaProjectionRows,
+    selectProductMediaProjectionRows,
 } from "./products.media";
 
 it("preserves joined media fields through object-shaped D1 batch results", async () => {
@@ -114,5 +116,27 @@ describe("product media section commands", () => {
             { id: "pmed_ccccc", isPrimary: 0 },
         ]);
         expect(skuImage()).toEqual({ imageId: null });
+    });
+});
+
+describe("product media projection query plan", () => {
+    type Db = ReturnType<typeof createSqliteD1Database>["db"];
+    // D1 has no ANALYZE statistics, so the planner picks indexes by query
+    // shape alone. A retained-status equality used to drive the join from
+    // media_status_newest_idx: every ready media row in the store was read to
+    // answer a 20-card list (1.5-6.8M rows on a 30k-product catalogue).
+    it.each([
+        ["gallery", (db: Db) => selectProductMediaProjectionRows(db, ["product_1", "product_2"])],
+        ["checkout", (db: Db) => selectCheckoutProductMediaProjectionRows(db, ["product_1"], ["variant_1"])],
+    ])("drives the %s projection from the requested products, not from media status", (_name, build) => {
+        const { sqlite, db } = createSqliteD1Database();
+        const query = build(db).toSQL();
+        const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${query.sql}`)
+            .all(...query.params as SQLInputValue[])
+            .map((step) => String(step.detail));
+
+        expect(plan.join("\n")).not.toContain("media_status_newest_idx");
+        expect(plan.find((detail) => /^(SCAN|SEARCH) /.test(detail))).toMatch(/^SEARCH product_media USING INDEX/);
+        sqlite.close();
     });
 });

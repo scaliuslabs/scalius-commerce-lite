@@ -1,12 +1,27 @@
 import { media, productMedia, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { getCurrentMediaUrl } from "../../integrations/storage";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
 export const MAX_PRODUCT_MEDIA_ASSOCIATIONS = 250;
 export const PRODUCT_MEDIA_REORDER_OFFSET = 1_000;
 export const PRODUCT_MEDIA_QUERY_CHUNK = 90;
+
+/**
+ * Retained media (ready or trashed), written as the complement of the two
+ * other lifecycle states that the media_status_valid CHECK allows.
+ *
+ * `status IN ('ready', 'trashed')` is an index equality, and without ANALYZE
+ * statistics (D1 has none unless someone runs them) SQLite prefers it over
+ * the requested product-id set: it walked every retained media row and
+ * probed product_media for each. On a 30k-product catalogue that read
+ * 1.5-6.8M rows (0.3-1 s) per call, for any list of 20 cards. NOT IN cannot
+ * drive an index, so the product-id set drives the join instead.
+ */
+export function retainedMediaCondition(column: typeof media.status = media.status) {
+    return notInArray(column, ["deleting", "deleted"]);
+}
 
 export type ProductMediaProjection = {
     id: string;
@@ -232,7 +247,7 @@ export function selectProductMediaProjectionRows(
             sql`${productMedia.productId} IN (
                 SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
             )`,
-            inArray(media.status, ["ready", "trashed"]),
+            retainedMediaCondition(),
         ))
         .orderBy(asc(productMedia.productId), asc(productMedia.sortOrder), asc(productMedia.id));
 }
@@ -292,7 +307,7 @@ export function selectCheckoutProductMediaProjectionRows(
             sql`${productMedia.productId} IN (
                 SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
             )`,
-            inArray(media.status, ["ready", "trashed"]),
+            retainedMediaCondition(),
             sql`(
                 ${productMedia.id} IN (
                     SELECT pv.image_id
