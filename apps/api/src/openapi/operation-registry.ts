@@ -1487,6 +1487,15 @@ export const OPERATIONS = {
       "Service-authenticated storefront proxy accepts a raw OTP and returns a private receipt bearer for Track your order.",
   },
 
+  "storefront.orders_receipt_owner_proof.owner_proof": {
+    exposure: "excluded",
+    principals: ["internal"],
+    risk: "security",
+    sensitive: true,
+    reason:
+      "Service-authenticated storefront proxy trades a signed-in buyer's session for a private receipt bearer on their own order.",
+  },
+
   "storefront.orders_receipt_support_requests.support_requests": {
     exposure: "excluded",
     openWorld: true,

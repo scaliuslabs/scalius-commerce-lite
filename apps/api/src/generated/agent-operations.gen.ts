@@ -74388,6 +74388,39 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
+    "operationId": "storefront.orders_receipt_owner_proof.owner_proof",
+    "method": "POST",
+    "pathTemplate": "/api/v1/orders/receipt/{id}/owner-proof",
+    "summary": "Issue a private receipt proof to the signed-in account that owns the order",
+    "tags": [
+      "Orders"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "internal"
+    ],
+    "risk": "security",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": true,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Service-authenticated storefront proxy trades a signed-in buyer's session for a private receipt bearer on their own order.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
     "operationId": "storefront.orders_receipt_support_requests.support_requests",
     "method": "POST",
     "pathTemplate": "/api/v1/orders/receipt/{id}/support-requests",
