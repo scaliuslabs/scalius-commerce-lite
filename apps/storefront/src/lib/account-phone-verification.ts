@@ -1,35 +1,29 @@
-// /account: orders placed with a phone the signed-in buyer hasn't verified yet.
-// The buyer proves the phone with a texted code and the orders move to the
-// account. Only the opaque guest-record id and the code go to the server, in
-// request bodies and paths, never in page URLs; the page only ever sees the
-// masked phone.
+// /account: the signed-in buyer's own phone, not yet verified. The buyer proves
+// it with a texted code; the server then moves the orders placed with that
+// phone onto the account. The page never says anything about orders or other
+// people until the phone is proven. The server reads the phone from the
+// session: only the code is sent, in a request body, never in a URL.
 
 import {
-  sendGuestOrdersCode,
-  verifyGuestOrders,
-  type UnclaimedGuestOrders,
+  sendPhoneVerificationCode,
+  verifyPhone,
+  type PhoneVerificationPrompt,
 } from "@/lib/api/customer-auth";
 import { formatWait } from "@/lib/customer-auth-ui";
+import { formatBdMobile } from "@scalius/shared/phone-input";
 
 const field = "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 aria-[invalid=true]:border-destructive disabled:opacity-50";
 const linkButton = "inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline";
-const VERIFY_LABEL = "Verify this phone";
+const VERIFY_LABEL = "Verify phone";
 const RESEND_LABEL = "Send a new code";
-const SUBMIT_LABEL = "Add orders";
+const SUBMIT_LABEL = "Verify";
 
-/** "1 more order was placed with 01•••••011. Verify this phone to add it." */
-export function guestOrdersNotice(entry: Pick<UnclaimedGuestOrders, "destination" | "orderCount" | "canVerify">): string {
-  const one = entry.orderCount === 1;
-  const placed = one
-    ? `1 more order was placed with ${entry.destination}.`
-    : `${entry.orderCount} more orders were placed with ${entry.destination}.`;
-  const next = entry.canVerify
-    ? `Verify this phone to add ${one ? "it" : "them"}.`
-    : `Contact the store to add ${one ? "it" : "them"} to your account.`;
-  return `${placed} ${next}`;
+/** "Verify your phone number 01712-345678 to add orders you placed with it." */
+export function phoneVerificationNotice(phone: string): string {
+  return `Verify your phone number ${formatBdMobile(phone)} to add orders you placed with it.`;
 }
 
-/** Countdowns of the notices on screen; a re-render stops the old ones. */
+/** Countdowns of the notice on screen; a re-render stops the old ones. */
 const timers = new Set<number>();
 
 function stopTimers(): void {
@@ -66,20 +60,23 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className: strin
   return node;
 }
 
-export interface GuestOrderNoticeOptions {
-  /** Runs after a phone is verified with the server's message; reloads the orders. */
-  onClaimed: (message: string) => void | Promise<void>;
+export interface PhoneVerificationOptions {
+  /** Runs with the server's message once the phone is verified; reloads the orders. */
+  onVerified: (message: string) => void | Promise<void>;
+  /**
+   * The page's hidden "Contact the store: …" line (StoreContact), or null when
+   * the store has no contact. A copy is shown when codes can't be sent.
+   */
+  storeContact?: HTMLElement | null;
 }
 
-function renderNotice(entry: UnclaimedGuestOrders, index: number, options: GuestOrderNoticeOptions): HTMLElement {
+function renderNotice(prompt: PhoneVerificationPrompt, options: PhoneVerificationOptions): HTMLElement {
   const notice = element("section", "rounded-xl border border-border bg-card p-4");
-  notice.dataset.guestOrders = "";
-  const text = element("p", "text-sm text-foreground", guestOrdersNotice(entry));
-  notice.append(text);
-  if (!entry.canVerify) return notice;
+  notice.dataset.phoneVerification = "";
+  notice.append(element("p", "text-sm text-foreground", phoneVerificationNotice(prompt.phone)));
 
-  const statusId = `guestOrdersStatus-${index}`;
-  const codeId = `guestOrdersCode-${index}`;
+  const statusId = "phoneVerificationCodeStatus";
+  const codeId = "phoneVerificationCode";
   const verify = element("button", `${linkButton} mt-1`, VERIFY_LABEL);
   verify.type = "button";
 
@@ -113,9 +110,18 @@ function renderNotice(entry: UnclaimedGuestOrders, index: number, options: Guest
   status.setAttribute("aria-live", "polite");
   notice.append(verify, form, status);
 
+  const contact = options.storeContact ? (options.storeContact.cloneNode(true) as HTMLElement) : null;
+  if (contact) {
+    contact.removeAttribute("id");
+    contact.hidden = true;
+    contact.classList.add("mt-1");
+    notice.append(contact);
+  }
+
   const say = (message: string, tone: "info" | "error" = "info") => {
     status.textContent = message;
     status.className = `mt-2 text-sm empty:hidden ${tone === "error" ? "text-destructive" : "text-muted-foreground"}`;
+    if (contact) contact.hidden = true;
   };
   /** Stops a running "Try again in" wait. */
   let stopWait: () => void = () => undefined;
@@ -135,7 +141,7 @@ function renderNotice(entry: UnclaimedGuestOrders, index: number, options: Guest
     trigger.disabled = true;
     trigger.textContent = "Sending…";
     say("");
-    const result = await sendGuestOrdersCode(entry.id);
+    const result = await sendPhoneVerificationCode();
     trigger.textContent = idleLabel;
     if (result.success) {
       say(result.message);
@@ -157,6 +163,8 @@ function renderNotice(entry: UnclaimedGuestOrders, index: number, options: Guest
     }
     trigger.disabled = false;
     say(result.error, "error");
+    // Codes can't be sent right now: the buyer can still reach the store.
+    if (contact && result.status === 503) contact.hidden = false;
   };
 
   verify.addEventListener("click", () => void send(verify, VERIFY_LABEL));
@@ -174,12 +182,12 @@ function renderNotice(entry: UnclaimedGuestOrders, index: number, options: Guest
       return;
     }
     submit.disabled = true;
-    submit.textContent = "Adding…";
+    submit.textContent = "Verifying…";
     say("");
-    const result = await verifyGuestOrders(entry.id, code);
+    const result = await verifyPhone(code);
     if (result.success) {
       stopWait();
-      await options.onClaimed(result.message);
+      await options.onVerified(result.message);
       return;
     }
     submit.disabled = false;
@@ -193,13 +201,13 @@ function renderNotice(entry: UnclaimedGuestOrders, index: number, options: Guest
   return notice;
 }
 
-/** One notice per guest record, above the order list; an empty list clears them. */
-export function renderGuestOrderNotices(
+/** The notice above the order list when the API asks for it; null clears it. */
+export function renderPhoneVerification(
   container: HTMLElement,
-  entries: UnclaimedGuestOrders[],
-  options: GuestOrderNoticeOptions,
+  prompt: PhoneVerificationPrompt | null | undefined,
+  options: PhoneVerificationOptions,
 ): void {
   stopTimers();
-  container.replaceChildren(...entries.map((entry, index) => renderNotice(entry, index, options)));
-  container.classList.toggle("hidden", entries.length === 0);
+  container.replaceChildren(...(prompt ? [renderNotice(prompt, options)] : []));
+  container.classList.toggle("hidden", !prompt);
 }

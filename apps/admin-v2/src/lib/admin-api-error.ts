@@ -424,6 +424,25 @@ export function readCategoryRevisionConflict(
   };
 }
 
+export interface CustomerPhoneConflict {
+  id: string;
+  name: string;
+  phone: string;
+  kind: "account" | "guest" | "merchant";
+}
+
+/** The other active customer that already uses a phone (a 400 VALIDATION_ERROR on customer create/update). */
+export function readCustomerPhoneConflict(error: unknown): CustomerPhoneConflict | null {
+  const parsed = readAdminApiError(error);
+  if (parsed?.status !== 400 || parsed.code !== "VALIDATION_ERROR") return null;
+  const customer = (parsed.details as { customer?: Record<string, unknown> } | null | undefined)?.customer;
+  if (!customer || typeof customer !== "object") return null;
+  const { id, name, phone, kind } = customer;
+  if (typeof id !== "string" || typeof name !== "string" || typeof phone !== "string") return null;
+  if (kind !== "account" && kind !== "guest" && kind !== "merchant") return null;
+  return { id, name, phone, kind };
+}
+
 /**
  * Converts only an authoritative API 404 to the detail-loader absence sentinel.
  * Every other failure must reach the route error boundary.

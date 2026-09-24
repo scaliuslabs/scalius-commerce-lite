@@ -8,8 +8,8 @@ import {
   postApiV1AdminCustomersByIdRestore,
 } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { createListSearchValidator } from "~/lib/list-helpers";
+import { customerTitle } from "~/lib/customer-title";
 import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
@@ -20,10 +20,11 @@ import { useCurrency } from "~/hooks/use-currency";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
-import { ResourceListPage, ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
+import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
 import { DateText, sortHeader } from "~/components/admin/resource/columns";
 import { translate, useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
+import { CustomerCell } from "~/components/admin/CustomerCell";
 
 type Customer = CustomersListPayload["customers"][number];
 
@@ -73,14 +74,7 @@ function CustomersPage() {
       accessorKey: "name",
       header: sortHeader(t("customer")),
       meta: { mobile: "primary", minWidth: 200 },
-      cell: ({ row }) => (
-        <div className="min-w-0">
-          <ResourceRowLink to={search.trashed ? undefined : openTo(row.original)}>{row.original.name || t("unnamed")}</ResourceRowLink>
-          <span className="block truncate whitespace-nowrap font-mono text-muted-foreground">{formatPhoneForDisplay(row.original.phone)}</span>
-          {/* A guest record whose contact an account hasn't verified: never mistaken for that account. */}
-          {row.original.linkedAccount ? <span className="block truncate text-muted-foreground">{t("guestOrders")}</span> : null}
-        </div>
-      ),
+      cell: ({ row }) => <CustomerCell customer={row.original} to={search.trashed ? undefined : openTo(row.original)} />,
     },
     {
       accessorKey: "totalOrders",
@@ -118,13 +112,14 @@ function CustomersPage() {
       invalidate={[queryKeys.customers.all, queryKeys.dashboard.all]}
       empty={{ icon: UserRound, title: t("emptyTitle"), description: t("emptyBody") }}
       rowTo={openTo}
-      rowLabel={(row) => row.name || t("unnamed")}
+      rowLabel={(row) => customerTitle(row, t).title}
       canSelectRow={search.trashed ? deletable : undefined}
       lifecycle={{
         canTrash: canDelete,
         canRestore: canDelete,
         canDelete,
         canDeleteRow: deletable,
+        undoTrash: true,
         run: (action, rows) => {
           const customerIds = rows.map((row) => row.id);
           if (action === "restore") return runEach(rows, (id) => apiData(postApiV1AdminCustomersByIdRestore({ path: { id } })));

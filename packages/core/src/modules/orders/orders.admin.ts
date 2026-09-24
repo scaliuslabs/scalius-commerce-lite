@@ -54,7 +54,7 @@ import { getPaymentGateway, isOnlinePaymentMethod, listPaymentGateways } from ".
 import { listOrderDiscountLines } from "../promotions/order-discount-lines";
 
 import { sql, desc, eq, inArray, isNotNull, isNull, notInArray, and, type SQL } from "drizzle-orm";
-import { guestRecordForPhone } from "../customers/customer-identity";
+import { customerKind, guestRecordForPhone } from "../customers/customer-identity";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
     ftsMatch,
@@ -1987,7 +1987,7 @@ async function getOrderDetailsOnce(
 
     if (!order) return null;
 
-    const [items, latestShipments, refundAttemptViews, supportRequests, promotionRows, paymentAttempts] = await Promise.all([
+    const [items, latestShipments, refundAttemptViews, supportRequests, promotionRows, paymentAttempts, customerRecord] = await Promise.all([
         db
             .select({
                 id: orderItems.id,
@@ -2037,6 +2037,16 @@ async function getOrderDetailsOnce(
         listOrderSupportRequests(db, id),
         listOrderDiscountLines(db, id),
         listOrderPaymentSessionAttempts(db, id),
+        // The record the order is filed under: its title can differ from the order's own name.
+        order.customerId
+            ? db.select({
+                id: customers.id,
+                name: customers.name,
+                phone: customers.phone,
+                accountClaimedAt: customers.accountClaimedAt,
+                origin: customers.origin,
+            }).from(customers).where(eq(customers.id, order.customerId)).get()
+            : Promise.resolve(undefined),
     ]);
 
     const formattedItems = items.map((item) => ({
@@ -2113,6 +2123,9 @@ async function getOrderDetailsOnce(
         supportRequests,
         paymentRecovery: buildPaymentRecoverySummary(order, paymentAttempts, nowSeconds),
         editReadiness: buildOrderEditReadiness(order),
+        customerRecord: customerRecord
+            ? { id: customerRecord.id, name: customerRecord.name, phone: customerRecord.phone, kind: customerKind(customerRecord) }
+            : null,
     };
 }
 
@@ -2282,6 +2295,7 @@ export async function createOrder(
                 zone: data.zone,
                 area: data.area,
                 changeType: "created",
+                actor: "staff",
                 createdAt: sql`unixepoch()`,
             }),
         );
@@ -2830,6 +2844,7 @@ export async function confirmManualOrderAmendment(
             zoneName: prepared.locationNames.zoneName,
             areaName: prepared.locationNames.areaName,
             changeType: "created",
+                actor: "staff",
             createdAt: sql`unixepoch()`,
         }));
     }

@@ -4,6 +4,7 @@ import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
 import ProductCard from "@/components/cards/ProductCard.astro";
 import { recommendationTitle } from "@/lib/recommendations";
+import { storeContactLinks } from "@/lib/store-contact";
 import {
   getProductRecommendations,
   getAccountOwnerReceiptProof,
@@ -756,6 +757,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       supportRequests={order.supportRequests}
       supportRequestActions={order.supportRequestActions}
       statusView={statusView}
+      storeContact={storeContactLinks(layoutData?.business)}
       copy={copy}
       client:load
     />

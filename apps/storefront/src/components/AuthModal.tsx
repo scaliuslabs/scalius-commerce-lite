@@ -469,6 +469,11 @@ export default function AuthModal() {
                     className={inputClass}
                   />
                   {errorFor("contact") && <p id="auth-contact-error" className="text-sm text-destructive">{errorFor("contact")}</p>}
+                  {settings.ready && !ui.phoneSignIn && (
+                    <p data-phone-sign-in-note className="text-sm text-muted-foreground">
+                      Phone sign-in isn't available yet. Use your email.
+                    </p>
+                  )}
                 </div>
               </>
             )}

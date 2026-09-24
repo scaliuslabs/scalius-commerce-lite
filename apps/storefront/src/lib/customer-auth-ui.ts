@@ -25,6 +25,8 @@ export interface CustomerAuthUiModel {
   requestOptions: CustomerAuthRequestOption[];
   currentOption: CustomerAuthRequestOption;
   showMethodSwitcher: boolean;
+  /** False when the store can't text or WhatsApp a code: sign-in is by email only. */
+  phoneSignIn: boolean;
   /**
    * What a new buyer adds after proving this email/phone. The proven
    * contact itself is never asked again.
@@ -60,6 +62,7 @@ export function resolveCustomerAuthUi(
     requestOptions,
     currentOption,
     showMethodSwitcher: requestOptions.length > 1,
+    phoneSignIn: requestOptions.some((option) => option.method === "phone"),
     newAccount: { phone: need("phone"), email: need("email") },
   };
 }

@@ -1310,22 +1310,22 @@ export const OPERATIONS = {
       "Legacy customer-cookie PII projection; use the live delegated-authority storefront.customer_profile.get operation.",
   },
 
-  "storefront.customer_auth_guest_orders_send_code.send_code": {
+  "storefront.customer_auth_phone_send_code.send_code": {
     exposure: "excluded",
     principals: ["customer"],
     risk: "security",
     openWorld: true,
     reason:
-      "Browser-only phone proof for guest orders waiting on the customer-cookie account; it dispatches an SMS code, so identifiers and OTPs stay outside agent I/O.",
+      "Browser-only proof of the customer-cookie account's own phone; it dispatches an SMS code, so identifiers and OTPs stay outside agent I/O.",
   },
 
-  "storefront.customer_auth_guest_orders_verify.verify": {
+  "storefront.customer_auth_phone_verify.verify": {
     exposure: "excluded",
     principals: ["customer"],
     risk: "security",
     sensitive: true,
     reason:
-      "Accepts a raw OTP and moves guest orders into the customer-cookie account; proof must be entered by the buyer in the hosted account page.",
+      "Accepts a raw OTP, verifies the customer-cookie account's phone and moves orders placed with it; proof must be entered by the buyer in the hosted account page.",
   },
 
   "storefront.customer_auth_orders_claim_receipt.claim_receipt": {

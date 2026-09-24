@@ -30,12 +30,18 @@ export const customers = sqliteTable("customers", {
     totalOrders: integer("total_orders").notNull().default(0),
     lastOrderAt: integer("last_order_at", { mode: "timestamp" }),
     /**
-     * On a guest record: the account that proved one of its contacts and took
-     * those orders. The rest wait until the account proves their contact too;
-     * a guest record left with no orders is retired (deleted_at) and stays
-     * linked, so lists hide it and its page points at the account.
+     * Who made this record: "order" (checkout or a dashboard order filed by
+     * phone, so it can hold different people's orders and is titled by its
+     * phone), "merchant" (created or named in the dashboard), or "account"
+     * (a buyer who signed up by code).
      */
-    linkedAccountId: text("linked_account_id"),
+    origin: text("origin", { enum: ["order", "merchant", "account"] }).notNull().default("order"),
+    /**
+     * Set when every order on a guest record joined an account that proved
+     * their contact: the record is retired (deleted_at) and merged, so lists
+     * and trash hide it and its page points at the account.
+     */
+    mergedIntoCustomerId: text("merged_into_customer_id"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -45,7 +51,7 @@ export const customers = sqliteTable("customers", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("customers_email_idx").on(table.email),
-    index("customers_linked_account_idx").on(table.linkedAccountId),
+    index("customers_merged_into_idx").on(table.mergedIntoCustomerId),
     index("customers_phone_idx").on(table.phone),
     uniqueIndex("customers_verified_phone_unique")
         .on(table.phone)
@@ -74,10 +80,21 @@ export const customerHistory = sqliteTable("customer_history", {
     cityName: text("city_name"),
     zoneName: text("zone_name"),
     areaName: text("area_name"),
-    /** order_moved_in / order_moved_out: `orderId` moved between this record and `relatedCustomerId`. */
-    changeType: text("change_type", { enum: ["created", "updated", "deleted", "order_moved_in", "order_moved_out"] }).notNull(),
+    /**
+     * signed_up: an account was created (or a guest record claimed) by a code.
+     * order_linked: `orderId` was filed to this account at checkout by a verified contact.
+     * order_moved_in / order_moved_out: `orderId` moved between this record and `relatedCustomerId`.
+     */
+    changeType: text("change_type", {
+        enum: ["created", "updated", "deleted", "restored", "signed_up", "order_linked", "order_moved_in", "order_moved_out"],
+    }).notNull(),
     orderId: text("order_id"),
     relatedCustomerId: text("related_customer_id"),
+    /** The proven contact behind signed_up / order_linked / order_moved_*. */
+    verifiedContact: text("verified_contact", { enum: ["email", "phone"] }),
+    /** Who made the change: a staff member (actor_id is their user id), the buyer, or the system. */
+    actor: text("actor", { enum: ["staff", "buyer", "system"] }),
+    actorId: text("actor_id"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),

@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { postApiV1AdminCustomers, putApiV1AdminCustomersById } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "../ui/form";
+import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -18,10 +19,30 @@ import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
+import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
+import { readCustomerPhoneConflict, type CustomerPhoneConflict } from "~/lib/admin-api-error";
+import { CustomerTrashNotice, type TrashedCustomer } from "./CustomerTrashNotice";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
   isEdit?: boolean;
+  /** The saved record being edited: titles the page (a guest record by its phone) and says if it's in Trash. */
+  record?: CustomerTitleInput & TrashedCustomer & { deletedAt: unknown };
+}
+
+/** Under the phone field after a save: links the customer that already uses the number. */
+export function PhoneUsedBy({ customer }: { customer: CustomerPhoneConflict }) {
+  const t = useMessages(customersMessages);
+  const [before, after] = t("phoneUsedBy").split("{name}");
+  return (
+    <p className="text-body">
+      {before}
+      <Link to="/admin/customers/$customerId/edit" params={{ customerId: customer.id }} className="text-link hover:underline">
+        {customerTitle(customer, t).title}
+      </Link>
+      {after}
+    </p>
+  );
 }
 
 function toCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV1AdminCustomers> {
@@ -41,13 +62,16 @@ function toCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV1Ad
  * change log in the main column. Viewing needs customers.view; saving needs
  * customers.edit (or .create for a new customer); orders need view_history.
  */
-export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProps) {
+export function CustomerForm({ defaultValues, isEdit = false, record }: CustomerFormProps) {
   const t = useMessages(customersMessages);
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission(PERMISSIONS.CUSTOMERS_CREATE);
-  const canSave = isEdit ? hasPermission(PERMISSIONS.CUSTOMERS_EDIT) : canCreate;
+  // A deleted record (in Trash, or merged into an account) opens read-only.
+  const trashed = isEdit && Boolean(record?.deletedAt);
+  const canSave = !trashed && (isEdit ? hasPermission(PERMISSIONS.CUSTOMERS_EDIT) : canCreate);
   const canViewHistory = isEdit && hasPermission(PERMISSIONS.CUSTOMERS_VIEW_HISTORY);
+  const [phoneConflict, setPhoneConflict] = useState<CustomerPhoneConflict | null>(null);
   const form = useForm<CustomerFormValues>({
     resolver: zodResolver(customerFormSchema),
     mode: "onChange",
@@ -79,8 +103,10 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
         void navigate({ to: "/admin/customers/$customerId/edit", params: { customerId: id }, replace: true });
       }
     },
-    onError: (_error, message) => {
-      if (!message.toLowerCase().includes("phone number already exists")) return undefined;
+    onError: (error) => {
+      const conflict = readCustomerPhoneConflict(error);
+      if (!conflict) return undefined;
+      setPhoneConflict(conflict);
       form.setError("phone", { type: "server", message: t("phoneTaken") });
       return t("phoneTaken");
     },
@@ -102,6 +128,7 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
                 <FormControl>
                   <Input required autoComplete="off" {...field} />
                 </FormControl>
+                {record?.kind === "guest" ? <FormDescription>{t("guestNameHint")}</FormDescription> : null}
                 <FormMessage />
               </FormItem>
             )}
@@ -115,11 +142,15 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
                 <FormControl>
                   <AdminPhoneInput
                     value={field.value}
-                    onChange={field.onChange}
+                    onChange={(value) => {
+                      setPhoneConflict(null);
+                      field.onChange(value);
+                    }}
                     required
                   />
                 </FormControl>
                 <FormMessage />
+                {phoneConflict ? <PhoneUsedBy customer={phoneConflict} /> : null}
               </FormItem>
             )}
           />
@@ -173,7 +204,7 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
 
   return (
     <FormContainer
-      heading={isEdit ? defaultValues?.name || t("customer") : t("newCustomer")}
+      heading={isEdit ? (record ? customerTitle(record, t).title : t("customer")) : t("newCustomer")}
       unsavedLabel={isEdit ? undefined : t("unsavedCustomer")}
       savedMessage={isEdit ? undefined : t("customerCreated")}
       isSubmitting={isSubmitting}
@@ -181,6 +212,9 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
       canSave={canSave}
       form={form}
       onSave={submitEntity}
+      readOnlyNotice={trashed && record ? (
+        <CustomerTrashNotice customer={record} canRestore={hasPermission(PERMISSIONS.CUSTOMERS_DELETE)} />
+      ) : undefined}
     >
       {canViewHistory && defaultValues?.id ? (
         <div className="grid gap-4 lg:grid-cols-3">

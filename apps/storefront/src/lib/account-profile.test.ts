@@ -9,8 +9,8 @@ const api = vi.hoisted(() => ({
   getCustomerOrders: vi.fn(),
   updateCustomerProfile: vi.fn(),
   logoutCustomer: vi.fn(),
-  sendGuestOrdersCode: vi.fn(),
-  verifyGuestOrders: vi.fn(),
+  sendPhoneVerificationCode: vi.fn(),
+  verifyPhone: vi.fn(),
   getCities: vi.fn(),
   getZones: vi.fn(),
   getAreas: vi.fn(),
@@ -20,8 +20,8 @@ vi.mock("./api/customer-auth", () => ({
   getCustomerOrders: api.getCustomerOrders,
   updateCustomerProfile: api.updateCustomerProfile,
   logoutCustomer: api.logoutCustomer,
-  sendGuestOrdersCode: api.sendGuestOrdersCode,
-  verifyGuestOrders: api.verifyGuestOrders,
+  sendPhoneVerificationCode: api.sendPhoneVerificationCode,
+  verifyPhone: api.verifyPhone,
 }));
 vi.mock("./api/shipping", () => ({ getCities: api.getCities, getZones: api.getZones, getAreas: api.getAreas }));
 vi.mock("./product-media", () => ({ getProductImageUrl: () => "/placeholder-product.svg" }));
@@ -106,7 +106,8 @@ beforeEach(() => {
         <button id="saveProfileBtn" type="submit" disabled>Save address</button>
       </form>
       <h2 id="ordersHeading" tabindex="-1">Orders</h2><span id="orderCount"></span>
-      <p id="guestOrdersStatus" role="status"></p><div id="guestOrderNotices" class="hidden"></div>
+      <p id="phoneVerificationStatus" role="status"></p><div id="phoneVerification" class="hidden"></div>
+      <p id="phoneVerificationContact" data-store-contact hidden>Contact the store: <a href="tel:+8801711000000">01711-000000</a></p>
       <div id="ordersList"></div><div id="emptyOrders" class="hidden"></div>
       <div id="ordersError" class="hidden"><span id="ordersErrorMessage"></span><button id="ordersRetryBtn">Retry</button></div>
       <div id="showMoreContainer" class="hidden"><button id="showMoreBtn">Show more orders</button><p id="showMoreError"></p></div>
@@ -187,30 +188,57 @@ describe("account order history", () => {
     expect(field("fieldName").value).toBe("Unsaved name");
   });
 
-  it("offers to verify the phone behind guest orders and reloads the orders once they move", async () => {
-    const guest = { id: "cust_guest_1", destination: "01•••••011", orderCount: 1, canVerify: true };
+  it("never mentions orders tied to a contact the buyer hasn't proven", async () => {
+    getCustomerOrders.mockResolvedValue({
+      success: true, orders: [], customer,
+      unclaimedGuestOrders: [{ id: "cust_guest_1", destination: "01•••••002", orderCount: 1, canVerify: false }],
+    } as unknown as OrdersResult);
+    await initializeAccountPage();
+    await vi.waitFor(() => expect(element("emptyOrders").classList.contains("hidden")).toBe(false));
+
+    expect(element("phoneVerification").classList.contains("hidden")).toBe(true);
+    expect(element("phoneVerification").textContent).toBe("");
+    expect(document.body.textContent).not.toMatch(/01•••••002|placed with|contact the store to add/i);
+  });
+
+  it("offers to verify the account's own phone and reloads the orders once it is verified", async () => {
     getCustomerOrders
-      .mockResolvedValueOnce({ success: true, orders: [], customer, unclaimedGuestOrders: [guest] })
-      .mockResolvedValueOnce({ success: true, orders: [oldOrder], customer, unclaimedGuestOrders: [] });
-    api.sendGuestOrdersCode.mockResolvedValue({ success: true, message: "We sent a code to 01•••••011.", destination: "01•••••011", resendAfterSeconds: 60 });
-    api.verifyGuestOrders.mockResolvedValue({ success: true, movedOrders: 1, message: "1 order was added to your account." });
+      .mockResolvedValueOnce({ success: true, orders: [], customer, phoneVerification: { phone: "+8801712345678" } })
+      .mockResolvedValueOnce({ success: true, orders: [oldOrder], customer, phoneVerification: null });
+    api.sendPhoneVerificationCode.mockResolvedValue({ success: true, message: "We sent a code to 01•••••678.", resendAfterSeconds: 60 });
+    api.verifyPhone.mockResolvedValue({ success: true, movedOrders: 1, message: "Your phone number is verified. 1 order was added to your account." });
     await initializeAccountPage();
 
-    const notices = element("guestOrderNotices");
-    expect(notices.classList.contains("hidden")).toBe(false);
-    expect(notices.textContent).toContain("1 more order was placed with 01•••••011. Verify this phone to add it.");
-    [...notices.querySelectorAll("button")].find((button) => button.textContent === "Verify this phone")!.click();
-    await vi.waitFor(() => expect(notices.querySelector("form")?.classList.contains("hidden")).toBe(false));
-    notices.querySelector<HTMLInputElement>("input[name=code]")!.value = "123456";
-    notices.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
+    const notice = element("phoneVerification");
+    await vi.waitFor(() => expect(notice.classList.contains("hidden")).toBe(false));
+    expect(notice.textContent).toContain("Verify your phone number 01712-345678 to add orders you placed with it.");
+    [...notice.querySelectorAll("button")].find((button) => button.textContent === "Verify phone")!.click();
+    await vi.waitFor(() => expect(notice.querySelector("form")?.classList.contains("hidden")).toBe(false));
+    notice.querySelector<HTMLInputElement>("input[name=code]")!.value = "123456";
+    notice.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
 
     await vi.waitFor(() => expect(element("orderCount").textContent).toBe("1 order"));
+    expect(api.verifyPhone).toHaveBeenCalledWith("123456");
     expect(getCustomerOrders).toHaveBeenCalledTimes(2);
-    expect(notices.classList.contains("hidden")).toBe(true);
-    expect(notices.textContent).toBe("");
-    expect(element("guestOrdersStatus").textContent).toBe("1 order was added to your account.");
+    expect(notice.classList.contains("hidden")).toBe(true);
+    expect(notice.textContent).toBe("");
+    expect(element("phoneVerificationStatus").textContent).toBe("Your phone number is verified. 1 order was added to your account.");
     expect(document.activeElement).toBe(element("ordersHeading"));
     expect(getCustomerSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the store's contact next to the message when phone codes can't be sent", async () => {
+    getCustomerOrders.mockResolvedValue({ success: true, orders: [], customer, phoneVerification: { phone: "+8801712345678" } });
+    api.sendPhoneVerificationCode.mockResolvedValue({ success: false, status: 503, error: "Text message codes aren't available right now." });
+    await initializeAccountPage();
+
+    const notice = element("phoneVerification");
+    await vi.waitFor(() => expect(notice.classList.contains("hidden")).toBe(false));
+    [...notice.querySelectorAll("button")].find((button) => button.textContent === "Verify phone")!.click();
+
+    await vi.waitFor(() => expect(notice.querySelector("[role=status]")?.textContent).toBe("Text message codes aren't available right now."));
+    expect(notice.querySelector<HTMLElement>("[data-store-contact]")?.hidden).toBe(false);
+    expect(notice.querySelector("a[href='tel:+8801711000000']")).not.toBeNull();
   });
 
   it("signs out through the logout route and tells the page to drop the checkout draft", async () => {
