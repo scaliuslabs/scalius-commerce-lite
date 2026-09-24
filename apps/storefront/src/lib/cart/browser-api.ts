@@ -68,17 +68,34 @@ function errorMessage(json: unknown): string | null {
  * The cart's discounts before a delivery destination is chosen: every applied
  * code (with why it does or does not apply) plus active automatic discounts.
  */
-export async function previewCartDiscounts(
+let lastPreview: { key: string; result: Promise<DiscountPreview> } | null = null;
+
+/**
+ * One request per cart state: the page asks again on every render (load,
+ * address, delivery option), but the same codes, items, delivery charge and
+ * phone reuse the answer already received or in flight.
+ */
+export function previewCartDiscounts(
   codes: string[],
   items: CartItem[],
   shippingCost?: number,
   customerPhone?: string,
 ): Promise<DiscountPreview> {
+  const body = buildDiscountPreviewBody(codes, items, shippingCost, customerPhone);
+  const key = JSON.stringify(body);
+  if (lastPreview?.key === key) return lastPreview.result;
+  const result = requestDiscountPreview(body);
+  lastPreview = { key, result };
+  // A failed answer is not reused: the next render asks again.
+  void result.then((preview) => {
+    if (!preview.ok && lastPreview?.result === result) lastPreview = null;
+  });
+  return result;
+}
+
+async function requestDiscountPreview(body: DiscountPreviewBody): Promise<DiscountPreview> {
   try {
-    const response = await postJson(
-      "/discounts/validate",
-      buildDiscountPreviewBody(codes, items, shippingCost, customerPhone),
-    );
+    const response = await postJson("/discounts/validate", body);
     const json = (await response.json().catch(() => null)) as
       | { data?: Record<string, unknown> }
       | null;

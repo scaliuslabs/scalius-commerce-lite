@@ -362,6 +362,7 @@ function showDiscountMessage(message: string, type: "success" | "error") {
   const messageElement = document.getElementById("discountMessage");
   const input = document.getElementById("discountCodeInput");
   if (!messageElement) return;
+  messageElement.dataset.tone = type;
   messageElement.textContent = message;
   messageElement.className = `mt-1.5 text-sm ${type === "error" ? "text-destructive" : "text-primary"}`;
   messageElement.hidden = !message;
@@ -371,6 +372,14 @@ function showDiscountMessage(message: string, type: "success" | "error") {
 
 function clearDiscountMessage() {
   showDiscountMessage("", "success");
+}
+
+/**
+ * "SAVE10 applied" is true only for the cart it was applied to; after a cart
+ * change each code's own status (under the code) says whether it still applies.
+ */
+function clearDiscountSuccessMessage() {
+  if (document.getElementById("discountMessage")?.dataset.tone === "success") clearDiscountMessage();
 }
 
 function setApplyButtonPending(pending: boolean) {
@@ -504,16 +513,67 @@ type TotalsElements = {
   taxRow: HTMLElement | null;
 };
 
+/**
+ * The delivery line: what the buyer pays, with the rate's fee struck through
+ * when a free-delivery item, the rate's free-over threshold or a delivery
+ * discount lowers it, and the code(s) that did. Never a separate discount line.
+ */
+function renderShippingLine(
+  element: HTMLElement,
+  shipping: { baseFee: number; charged: number; discounts: CheckoutDiscountFacts["discounts"] } | null,
+): void {
+  const copy = activeCheckoutCopy();
+  if (!shipping) {
+    element.textContent = "—";
+    return;
+  }
+  const delivery = shipping.discounts.filter(({ shippingAmount }) => shippingAmount > 0);
+  const discount = delivery.reduce((total, { shippingAmount }) => total + shippingAmount, 0);
+  const net = Math.max(0, Math.round((shipping.charged - discount) * 100) / 100);
+  const parts: Array<Node | string> = [];
+  if (net < shipping.baseFee) {
+    const struck = document.createElement("s");
+    struck.className = "mr-1.5 font-normal text-muted-foreground";
+    struck.textContent = formatMoney(shipping.baseFee);
+    parts.push(struck);
+  }
+  parts.push(net === 0 ? copy.freeText : formatMoney(net));
+  if (delivery.length > 0) {
+    const codes = document.createElement("span");
+    codes.className = "ml-1 font-normal text-muted-foreground";
+    codes.textContent = `(${delivery.map(({ code, title }) => code ?? title).join(", ")})`;
+    parts.push(codes);
+  }
+  element.replaceChildren(...parts);
+}
+
+/** "Add ৳500 more for free delivery." while the chosen rate's threshold is not reached. */
+function renderFreeDeliveryProgress(chargedFee: number): void {
+  const progress = document.getElementById("shippingProgress");
+  if (!progress) return;
+  const method = window.lastShippingEventDetail;
+  const { totalAmount } = cartStore.get();
+  const shortfall = method && method.freeOver !== null && chargedFee > 0
+    ? Math.round((method.freeOver - totalAmount) * 100) / 100
+    : 0;
+  progress.textContent = shortfall > 0
+    ? formatCheckoutLanguageText(activeCheckoutCopy().freeDeliveryProgressText, { amount: formatMoney(shortfall) })
+    : "";
+  progress.classList.toggle("hidden", shortfall <= 0);
+}
+
 function renderAuthoritativeCartQuote(
   quote: CheckoutTaxQuote,
   elements: TotalsElements,
 ): void {
   elements.taxRow?.classList.toggle("hidden", quote.taxMinor === 0);
   elements.subtotal.textContent = formatMoney(quote.subtotalAmount);
-  elements.shipping.textContent =
-    quote.shippingAmount === 0
-      ? activeCheckoutCopy().freeText
-      : formatMoney(quote.shippingAmount);
+  renderShippingLine(elements.shipping, {
+    baseFee: quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces,
+    charged: quote.shippingAmount,
+    discounts: quote.discounts,
+  });
+  renderFreeDeliveryProgress(quote.shippingAmount);
   elements.total.textContent = formatMoney(quote.totalAmount);
   if (elements.totalLabel) {
     elements.totalLabel.textContent =
@@ -731,11 +791,11 @@ export async function validateCartSnapshot(): Promise<boolean> {
       window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
     }
     if (!response.ok || !json?.success) {
+      // A refusal with a reason (4xx) is said as is; an outage gets the store's own wording.
       cartValidationGlobalError =
         issues.length > 0 || deliveryRateRefused
           ? ""
-          : json?.error ||
-            json?.details?.message ||
+          : (response.status < 500 ? json?.error || json?.details?.message : "") ||
             activeCheckoutCopy().cartAvailabilityFailedText;
       if (issues.length === 0) clearCartValidationSummary();
       updateCartValidationMessage();
@@ -831,9 +891,12 @@ export async function updateTotals() {
 
   subtotalEl.textContent = formatMoney(totalAmount);
   // Before a delivery option applies to the address, shipping isn't known yet.
-  shippingEl.textContent = !selectedMethod
-    ? "—"
-    : shippingFee === 0 ? activeCheckoutCopy().freeText : formatMoney(shippingFee);
+  const estimateShipping = (discounts: CheckoutDiscountFacts["discounts"]) =>
+    renderShippingLine(shippingEl, selectedMethod
+      ? { baseFee: selectedMethod.fee, charged: shippingFee, discounts }
+      : null);
+  estimateShipping(latestDiscountFacts?.discounts ?? []);
+  renderFreeDeliveryProgress(selectedMethod ? shippingFee : 0);
   elements.taxRow?.classList.add("hidden");
   if (Object.keys(items).length === 0) return;
 
@@ -841,11 +904,13 @@ export async function updateTotals() {
     const preview = await previewCartDiscounts(
       discountCodes,
       Object.values(items),
-      shippingFee,
+      // No delivery option yet: delivery discounts wait for the address instead of failing.
+      selectedMethod ? shippingFee : undefined,
       formCanonicalPhoneValue() || undefined,
     );
     if (quoteSequence !== cartTaxQuoteSequence) return;
     const discount = preview.ok ? preview.totalDiscount : 0;
+    if (preview.ok) estimateShipping(preview.discounts);
     totalEl.textContent = formatMoney(Math.max(0, totalAmount + shippingFee - discount));
     if (elements.totalLabel) elements.totalLabel.textContent = activeCheckoutCopy().estimatedTotalText;
     setTaxStatus(elements, failure || (preview.ok ? "" : activeCheckoutCopy().taxVerificationFailedText));
@@ -1072,11 +1137,13 @@ async function handleApplyDiscount() {
     const preview = await previewCartDiscounts(
       [...discountCodes, code],
       Object.values(items),
-      getEffectiveCartShippingFee(
-        items,
-        window.lastShippingEventDetail?.fee ?? 0,
-        window.lastShippingEventDetail?.freeOver ?? null,
-      ),
+      window.lastShippingEventDetail
+        ? getEffectiveCartShippingFee(
+            items,
+            window.lastShippingEventDetail.fee,
+            window.lastShippingEventDetail.freeOver,
+          )
+        : undefined,
       formCanonicalPhoneValue() || undefined,
     );
     if (pendingDiscountValidation !== requestSequence) return;
@@ -1260,7 +1327,10 @@ export async function initCartFunctionality() {
     updateCheckoutButtonState();
     handleAbandonedCheckout();
     // A code change only needs a new quote; stock needs checking only when lines change.
-    if (itemsChanged) scheduleCartValidation();
+    if (itemsChanged) {
+      clearDiscountSuccessMessage();
+      scheduleCartValidation();
+    }
   });
 
   window.addEventListener(
