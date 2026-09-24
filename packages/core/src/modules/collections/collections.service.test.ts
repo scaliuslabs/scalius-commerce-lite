@@ -11,7 +11,7 @@ import {
     updateCollection,
 } from "./collections.service";
 
-vi.mock("../products/products.media", () => ({
+vi.mock("../products/media", () => ({
     loadProductMediaProjections: vi.fn(async () => new Map()),
     // The card media of each product statement, planned into the same batch.
     selectProductMediaProjectionRows: vi.fn(() => ({ selection: { media: true }, orderBy: { mock: { calls: [] } } })),

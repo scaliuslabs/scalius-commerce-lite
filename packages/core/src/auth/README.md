@@ -18,7 +18,7 @@ API Worker Auth Flow (dashboard, CLI/agents, scanner):
   Request --> Hono admin-auth middleware --> Better Auth Cookie OR Scanner Cookie
                                              |
                                              v
-                                       2FA gate + RBAC Permission Check via route-permissions.ts
+                                       2FA gate + RBAC Permission Check via rbac/route-permissions/
 
 Customer Auth Flow (storefront):
   Browser --> storefront /api/customer-auth/* proxy --> API /customer-auth/send-otp --> D1 OTP challenge
@@ -44,7 +44,7 @@ Customer Auth Flow (storefront):
 | `rbac/permissions.ts` | `PERMISSIONS` constant (78 permissions across 13 categories), `PERMISSION_METADATA` record, helper functions (`getPermissionsByCategory`, `getAllPermissions`, `getAllPermissionNames`, `isSensitivePermission`) |
 | `rbac/helpers.ts` | Core RBAC engine: `getUserPermissions()` (KV + authoritative database batch query), `hasPermission()`, `hasAnyPermission()`, `hasAllPermissions()`, `checkPermissionDetailed()`, `getUserPermissionContext()`, `isSuperAdmin()`, `hasAdminAccess()`, role/permission CRUD (`assignRoleToUser`, `removeRoleFromUser`, `setUserPermissionOverride`, `removeUserPermissionOverride`, `getAllRolesWithPermissions`, `getRolePermissions`), and `clearPermissionCache()` |
 | `rbac/page-permissions.ts` | Maps admin page routes to required permissions. Static map for exact routes, regex array for dynamic routes (e.g., `/admin/products/[id]/edit`). `getPagePermission()` and `hasPageAccess()` functions. |
-| `rbac/route-permissions.ts` | Maps API route patterns to required permissions per HTTP method. Glob-style wildcard matching. `getRoutePermission()` function. `ROUTE_PERMISSIONS` record. |
+| `rbac/route-permissions/` | Maps API route patterns to required permissions per HTTP method, one file per domain (`orders.ts`, `products.ts`, `conversations.ts`, ...) merged by `index.ts`. Glob-style wildcard matching. `getRoutePermission()` function. `ROUTE_PERMISSIONS` record. A path pattern belongs to exactly one domain file. |
 | `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds permissions and five system roles during first-admin setup, and reconciles changed code-owned definitions in idempotent database batches. API middleware schedules reconciliation outside the request critical path and uses a versioned six-hour Cloudflare KV marker; it never shares database I/O across Worker requests. |
 
 ### Database Schema

@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Archive, CircleCheck, Download, MoreHorizontal, Printer, Send, ShoppingBag, Truck } from "lucide-react";
 import { getApiV1AdminOrders } from "@scalius/api-client/sdk";
-import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
+import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,

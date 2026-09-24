@@ -9,8 +9,6 @@ import {
     ADMIN_ORDER_SUPPORT_REQUEST_STATUSES,
     getOrderSupportRequestStatusLabel,
     updateAdminOrderSupportRequestStatus,
-} from "@scalius/core/modules/orders/order-support-requests";
-import {
     createOrderReturn,
     createOrderReturnSchema,
     listOrderReturns,

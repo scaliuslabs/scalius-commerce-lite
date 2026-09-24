@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
     bumpCacheGeneration: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/settings/business-settings.service", () => ({
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
     getBusinessSettingsDocument: mocks.getBusinessSettingsDocument,
     saveBusinessSettings: mocks.saveBusinessSettings,
 }));

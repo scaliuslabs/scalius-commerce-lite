@@ -1,24 +1,29 @@
-// src/modules/orders/index.ts
-// Queue consumers live in the API worker; checkout order commits are synchronous.
-export * from "./orders.types";
-export * from "./orders.admin";
-export * from "./orders.fulfillment";
-export * from "./orders.storefront";
-export * from "./orders.ingest";
-export * from "./orders.validation";
-export * from "./order-state-machine";
-export * from "./checkout-attempts";
-export * from "./checkout-quote-fingerprint";
-export * from "./order-receipts";
-export * from "./order-payment-recovery";
-export * from "./cart-validation";
-export * from "./checkout-authority";
-export * from "./checkout-policy";
+// Orders domain: the order record, staff editing, the status lifecycle,
+// returns, receipts and payment recovery. Checkout commits orders
+// (modules/checkout) and fulfilment hands them over (modules/fulfilment).
+export * from "./browser";
+export * from "./validation";
+export * from "./admin/list";
+export * from "./admin/detail";
+export * from "./admin/quote";
+export * from "./admin/create";
+export * from "./admin/amend";
+export * from "./admin/edit";
+export * from "./admin/readiness";
+export * from "./admin/archive";
+export * from "./admin/recovery-link";
+export * from "./status/lifecycle";
+export * from "./receipts";
+export * from "./payment-recovery";
 export * from "./order-support-requests";
-export * from "./order-returns";
-export * from "./order-returns.validation";
-export * from "./admin-status-policy";
-export * from "./order-archive-policy";
-export * from "./abandoned-checkout-snapshot";
-export * from "./order-number";
-export * from "./order-timeline";
+export * from "./returns/returns";
+export * from "./returns/validation";
+export * from "./status/policy";
+export * from "./number";
+export * from "./timeline";
+export * from "./invoices/service";
+export * from "./shipment-claim";
+export * from "./lookup";
+export * from "./stale-incomplete";
+export * from "./status/claim";
+export * from "./invoices/printable-artifact";

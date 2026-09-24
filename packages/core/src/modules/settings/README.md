@@ -9,7 +9,7 @@ wrappers over the documents.
 
 - `settings-store.ts` -- `defineSettingsDocument()` and `selectSettingsDocuments()`: the only code that reads or writes document rows
 - `documents.ts` -- every document definition (key, zod schema, defaults, secret fields, optional KV mirror)
-- `platform-settings.service.ts` -- deployment public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins) and their KV-first Worker-entry resolution
+- `../platform/platform-settings.service.ts` (the platform domain) -- deployment public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins) and their KV-first Worker-entry resolution
 - `site-settings.service.ts` -- currency, header/footer/homepage presentation (CAS), published theme/draft workflow, media delivery, SEO, storefront URL, allowed countries
 - `settings.service.ts` -- `getCurrencyConfig()` and notification channel preferences
 - `business-settings.service.ts`, `customer-request-policy.ts`, `checkout-flow-admin.service.ts` -- one document each

@@ -17,22 +17,21 @@ vi.mock("../../../utils/cache-generation", () => ({
   bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
-vi.mock("@scalius/core/modules/delivery/locations", () => ({
+vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/delivery")>()),
   countLocationDescendants: vi.fn(async () => new Map()),
   createLocation: mocks.createLocation,
   deleteLocations: mocks.deleteLocations,
   getLocationById: mocks.getLocationById,
   updateLocation: mocks.updateLocation,
-}));
-
-vi.mock("@scalius/core/modules/settings/checkout-readiness", () => ({
-  getCheckoutDeliveryReadiness: mocks.getCheckoutDeliveryReadiness,
-}));
-
-vi.mock("@scalius/core/modules/delivery/pathao-location-import", () => ({
   getPathaoImportStatus: vi.fn(),
   processPathaoImportChunk: vi.fn(),
   resetPathaoImportProgress: mocks.resetPathaoImportProgress,
+}));
+
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
+  getCheckoutDeliveryReadiness: mocks.getCheckoutDeliveryReadiness,
 }));
 
 import { adminLocationRoutes } from "./delivery-locations";

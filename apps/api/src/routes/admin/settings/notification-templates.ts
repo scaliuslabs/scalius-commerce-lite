@@ -3,19 +3,19 @@
 // body), and test sends of a draft rendered with sample order data.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { ORDER_NOTIFICATION_TYPES } from "@scalius/core/modules/notifications/notification-types";
 import {
+    ORDER_NOTIFICATION_TYPES,
     TEMPLATE_LIMITS,
     findUnknownVariables,
     renderSmsTemplate,
     sampleOrderEmail,
     sampleVariables,
-} from "@scalius/core/modules/notifications/notification-templates";
+} from "@scalius/core/modules/notifications/browser";
 import {
     getNotificationTemplates,
     saveNotificationTemplate,
-} from "@scalius/core/modules/notifications/notification-templates.service";
-import { readStoreIdentity } from "@scalius/core/modules/notifications/store-messages";
+    readStoreIdentity,
+} from "@scalius/core/modules/notifications";
 import { sendEmail } from "@scalius/core/integrations/email";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
 import { normalizeBdMobile } from "@scalius/shared/phone-input";

@@ -8,6 +8,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { collectCoreBoundaryViolations } from "./core-boundaries.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const ts = createRequire(import.meta.url)("typescript");
@@ -47,6 +48,20 @@ export const policies = [
     paths: ["apps/api/src", storefront, "apps/admin-v2/src", "packages/core/src", "packages/cli/src"],
     forbid: [/from\s+["']@scalius\/(?:database|shared)["']/],
     sample: 'import { schema } from "@scalius/database";',
+  },
+  {
+    rule: "@scalius/core domains are imported only through their entries (@scalius/core/modules/<domain> or /browser)",
+    why: "a domain's index.ts and browser.ts are its public API; deeper paths couple callers to internals (packages/core/package.json exports nothing else)",
+    paths: ["apps/api/src", "apps/admin-v2/src", "packages/core/src", "packages/cli/src"],
+    forbid: [/["']@scalius\/core\/modules\/[^/"']+\/(?!browser["'])[^"']*["']/],
+    sample: 'import { listOrders } from "@scalius/core/modules/orders/admin/list";',
+  },
+  {
+    rule: "the dashboard imports @scalius/core domains only through their browser entries",
+    why: "a domain index carries database, provider SDK and Worker code; browser.ts is the pure, closed subset the dashboard may compile and bundle",
+    paths: ["apps/admin-v2/src"],
+    forbid: [/from\s+["']@scalius\/core\/modules\/[^/"']+["']/],
+    sample: 'import type { OrderListItem } from "@scalius/core/modules/orders";',
   },
   {
     rule: "storefront never puts receipt proof or bearer tokens in URLs or DOM attributes",
@@ -200,7 +215,11 @@ export function collectSourcePolicyViolations() {
       text: readFileSync(file, "utf8"),
     })),
   ).map((violation) => `${policy.rule}\n    ${violation}`));
-  return [...violations, ...mutableModuleVariables().map((v) => `no mutable module state\n    ${v}`)];
+  return [
+    ...violations,
+    ...mutableModuleVariables().map((v) => `no mutable module state\n    ${v}`),
+    ...collectCoreBoundaryViolations().map((v) => `core domain boundaries (scripts/core-boundaries.mjs)\n    ${v}`),
+  ];
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
@@ -210,6 +229,6 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     for (const violation of violations) console.error(`- ${violation}`);
     process.exitCode = 1;
   } else {
-    console.log(`Source policy check: OK (${policies.length + 1} policies)`);
+    console.log(`Source policy check: OK (${policies.length + 2} policies)`);
   }
 }

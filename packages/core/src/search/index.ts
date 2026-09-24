@@ -6,17 +6,17 @@ import {
   isFts5SearchEnabled,
   sanitizeFtsQuery,
 } from "./fts5";
-import { publicProductBaseConditions } from "../modules/products/products.public-eligibility";
+import { publicProductBaseConditions } from "../modules/products/public-eligibility";
 import {
   buildBuyerCatalogPricingProjection,
   buyerCatalogHasSkuInPriceRange,
-} from "../modules/products/products.buyer-projection";
+} from "../modules/products/buyer-projection";
 import { publicCategoryConditions } from "../modules/categories/categories.publication";
 import {
   storeCurrencyCodeSql,
   storeDecimalPlacesFromCode,
   storeDecimalToMinorSql,
-} from "../modules/products/products.money";
+} from "../modules/products/money";
 import { fromMinor } from "@scalius/shared/money";
 import { getCurrentMediaUrl } from "../integrations/storage";
 import { suggestSearchCorrection } from "./correct";

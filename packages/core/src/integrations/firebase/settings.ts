@@ -7,7 +7,7 @@ import {
   type Readiness,
   type ReadinessIssue,
 } from "@scalius/shared/readiness";
-import { firebaseDocument } from "@scalius/core/modules/settings/documents";
+import { firebaseDocument } from "../../modules/settings/documents";
 
 interface FirebaseServiceAccount {
   client_email?: unknown;

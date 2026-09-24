@@ -3,7 +3,7 @@ import { orders } from "@scalius/database/schema";
 import { and, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 
 import { ConflictError, ForbiddenError, NotFoundError } from "@scalius/core/errors";
-import { createOrderReceiptToken, recordOrderReceipt } from "../orders/order-receipts";
+import { createOrderReceiptToken, recordOrderReceipt } from "../orders/receipts";
 import { customerAccountOrderVisibilityCondition } from "./customers.service";
 
 /**

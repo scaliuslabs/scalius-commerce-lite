@@ -5,7 +5,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { hashCustomerSessionToken } from "@scalius/core/modules/customers/customer-auth.service";
+import { hashCustomerSessionToken } from "@scalius/core/modules/customers";
 import { generateToken } from "../utils/jwt";
 import publicBuyerApp from "../runtime/public-buyer-app";
 

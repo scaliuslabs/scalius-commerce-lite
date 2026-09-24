@@ -151,7 +151,7 @@ Upsert logic: match by Pathao external ID first, then by `name+parentId`. Progre
 - `@scalius/database` -- `deliveryProviders`, `deliveryShipments`, `deliveryLocations`, `orders`, `orderItems`, `products`
 - `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ServiceUnavailableError`
 - `@scalius/core/utils/credential-encryption` -- `encryptCredentials`, `readStoredCredentialStrict`
-- `@scalius/core/modules/inventory/inventory-transitions` -- `applyInventoryForStatusChange`
+- `../inventory/inventory-transitions` -- `applyInventoryForStatusChange`
 - `@scalius/shared/customer-utils` -- `formatPhoneForProvider` (used by fraud-checker provider, not delivery directly)
 - `@paralleldrive/cuid2` -- ID generation for locations
 - `nanoid` -- ID generation for shipments

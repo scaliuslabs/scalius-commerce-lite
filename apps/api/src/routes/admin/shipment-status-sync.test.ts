@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ShipmentView } from "@scalius/core/modules/delivery/delivery.service";
+import type { ShipmentView } from "@scalius/core/modules/delivery";
 
 const mocks = vi.hoisted(() => ({
   checkShipmentStatus: vi.fn(),
@@ -12,13 +12,11 @@ const mocks = vi.hoisted(() => ({
   enqueueOrderStatusChangeNotification: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/delivery/delivery.service", () => ({
+vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/delivery")>()),
   checkShipmentStatus: mocks.checkShipmentStatus,
   getDeliveryProvider: mocks.getDeliveryProvider,
   getShipment: mocks.getShipment,
-}));
-
-vi.mock("@scalius/core/modules/delivery/tracking", () => ({
   updateOrderStatusFromShipment: mocks.updateOrderStatusFromShipment,
 }));
 

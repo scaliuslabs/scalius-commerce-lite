@@ -10,13 +10,13 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { getResourceCanonicalPathSegment } from "@scalius/shared/seo-canonical";
 import {
     publicCollectionProductConditions,
-} from "../products/products.public-eligibility";
+} from "../products/public-eligibility";
 import {
     buildBuyerCatalogPricingProjection,
     buyerPriceRangeColumns,
     presentBuyerPriceRange,
     type BuyerCatalogPricingProjection,
-} from "../products/products.buyer-projection";
+} from "../products/buyer-projection";
 import {
     COLLECTION_CONFIG_ID_LIMIT,
     collectionMembershipForConfig,
@@ -26,31 +26,28 @@ import {
 import { ftsMatch } from "../../search/fts5";
 import { fromMinor } from "@scalius/shared/money";
 import {
-    buyerPricingSelection,
-    presentBuyerPricing,
     storeCurrencyCodeSql,
     storeDecimalPlacesFromCode,
-    type BuyerPricingMinor,
-} from "../products/products.money";
+} from "../products/money";
+import { getStorefrontCollectionProducts, storefrontCollectionVisibleCountQuery } from "../catalog/listing";
 import {
-    getStorefrontCollectionProducts,
-    storefrontCollectionVisibleCountQuery,
-} from "../products/products.storefront";
-import type { StorefrontProductFilterInput } from "../products/products.types";
+    buildCollectionProductSelect,
+    resolveProductCards,
+    type RawProduct,
+    type ResolvedProduct,
+} from "../catalog/cards";
+import type { StorefrontProductFilterInput } from "../products/types";
 import {
     publicCategoryConditions,
     publishedCategoryIdExists,
 } from "../categories/categories.publication";
 import {
     loadProductMediaProjections,
-    resolveProductCardImages,
     resolveProductImageRepresentation,
     resolveProductMediaProjectionRows,
     selectProductMediaProjectionRows,
-    type ProductCardImages,
-    type ProductMediaProjection,
     type ProductMediaProjectionRow,
-} from "../products/products.media";
+} from "../products/media";
 
 // ─────────────────────────────────────────
 // Admin queries
@@ -941,72 +938,6 @@ export async function getPublicCollectionCatalog(
             ? featuredProducts.get(featuredRows[0].id) ?? null
             : null,
     };
-}
-
-/** Product select shape used for collection product resolution (and every homepage product list). */
-export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjection) => ({
-    id: products.id,
-    name: products.name,
-    slug: products.slug,
-    ...buyerPricingSelection(buyerPricing),
-    availableForSale: buyerPricing.availableForSale,
-    freeDelivery: products.freeDelivery,
-    categoryId: products.categoryId,
-    hasVariants: buyerPricing.hasCustomerOptions,
-    storeCurrencyCode: storeCurrencyCodeSql().as("collection_store_currency_code"),
-});
-
-export type RawProduct = BuyerPricingMinor & {
-    id: string;
-    name: string;
-    slug: string;
-    availableForSale: number;
-    freeDelivery: boolean;
-    categoryId: string | null;
-    hasVariants: number;
-    storeCurrencyCode?: string | null;
-};
-
-export type ResolvedProduct = {
-    id: string;
-    name: string;
-    slug: string;
-    price: number;
-    discountType: string | null;
-    discountPercentage: number;
-    discountAmount: number;
-    discountedPrice: number;
-    freeDelivery: boolean;
-    categoryId: string | null;
-    hasVariants: boolean;
-    availableForSale: boolean;
-    priceVaries: boolean;
-} & ProductCardImages;
-
-function enrichProduct(
-    p: RawProduct,
-    images: ProductCardImages,
-    decimalPlaces: number,
-): ResolvedProduct {
-    const { hasVariants, availableForSale, storeCurrencyCode: _storeCurrencyCode, ...product } = p;
-    return {
-        ...presentBuyerPricing(product, decimalPlaces),
-        hasVariants: Boolean(hasVariants),
-        availableForSale: Boolean(availableForSale),
-        ...images,
-    };
-}
-
-/** Buyer cards for product rows, with the card images from their gallery rows. */
-export function resolveProductCards(
-    rows: readonly RawProduct[],
-    mediaByProductId: ReadonlyMap<string, ProductMediaProjection[]>,
-): Map<string, ResolvedProduct> {
-    const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
-    return new Map(rows.map((row) => [
-        row.id,
-        enrichProduct(row, resolveProductCardImages(mediaByProductId.get(row.id) ?? []), decimalPlaces),
-    ]));
 }
 
 async function enrichProductsWithMedia(

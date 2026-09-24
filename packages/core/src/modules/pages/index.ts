@@ -1,4 +1,3 @@
-// src/modules/pages/index.ts
+export * from "./browser";
 export * from "./pages.service";
-export * from "./pages.validation";
 export * from "./pages.revision";
