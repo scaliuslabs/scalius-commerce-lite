@@ -28,7 +28,10 @@ export interface PromotionRevisionConflict {
   currentRevision: number | null;
 }
 
-export interface CheckoutFlowRevisionConflict {
+/** A settings save refused because the document changed since it was loaded. */
+export interface SettingsRevisionConflict {
+  /** The settings document key, e.g. "business". */
+  document: string;
   expectedRevision: number;
   currentRevision: number | null;
 }
@@ -305,38 +308,34 @@ export function readPromotionRevisionConflict(
   };
 }
 
-export function readCheckoutFlowRevisionConflict(
+export function readSettingsRevisionConflict(
   error: unknown,
-): CheckoutFlowRevisionConflict | null {
+): SettingsRevisionConflict | null {
   const parsed = readAdminApiError(error);
   if (
     parsed?.status !== 409 ||
-    parsed.code !== "CHECKOUT_FLOW_REVISION_CONFLICT" ||
+    parsed.code !== "SETTINGS_REVISION_CONFLICT" ||
     !parsed.details ||
     typeof parsed.details !== "object"
   ) {
     return null;
   }
-
   const details = parsed.details as {
+    document?: unknown;
     expectedRevision?: unknown;
     currentRevision?: unknown;
   };
+  const isRevision = (value: unknown): value is number =>
+    typeof value === "number" && Number.isInteger(value) && value >= 0;
   if (
-    typeof details.expectedRevision !== "number" ||
-    !Number.isInteger(details.expectedRevision) ||
-    details.expectedRevision < 1 ||
-    !(
-      details.currentRevision === null ||
-      (typeof details.currentRevision === "number" &&
-        Number.isInteger(details.currentRevision) &&
-        details.currentRevision >= 1)
-    )
+    typeof details.document !== "string" ||
+    !isRevision(details.expectedRevision) ||
+    !(details.currentRevision === null || isRevision(details.currentRevision))
   ) {
     return null;
   }
-
   return {
+    document: details.document,
     expectedRevision: details.expectedRevision,
     currentRevision: details.currentRevision,
   };

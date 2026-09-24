@@ -59,7 +59,8 @@ function PasswordLoginForm() {
     const fail = (error: unknown) => {
       const message = authFailureMessage(
         error,
-        ({ status }) => (status === 400 || status === 401 ? "invalidCredentials" : null),
+        ({ status, code }) =>
+          code === "BANNED_USER" ? "suspended" : status === 400 || status === 401 ? "invalidCredentials" : null,
         retryAfter,
       );
       setFailure(message);

@@ -25,6 +25,14 @@ describe("notification channel policy", () => {
     expect(serializeAdminNotificationConfig(config).order_created).toEqual(["push"]);
   });
 
+  it("defaults every customer event to email, including the support request acknowledgement", () => {
+    const config = buildCustomerNotificationConfig(undefined);
+
+    expect(config.support_request_submitted).toEqual({ email: true, sms: false, whatsapp: false });
+    expect(Object.values(config).every((channels) => channels.email)).toBe(true);
+    expect(serializeCustomerNotificationConfig(config).support_request_submitted).toEqual(["email"]);
+  });
+
   it("serializes channels in a stable order whatever order they were toggled in", () => {
     const config = buildCustomerNotificationConfig({ order_shipped: ["whatsapp", "email"] });
     expect(serializeCustomerNotificationConfig(config).order_shipped).toEqual(["email", "whatsapp"]);

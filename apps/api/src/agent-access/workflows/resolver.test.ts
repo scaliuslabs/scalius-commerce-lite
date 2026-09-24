@@ -1993,7 +1993,7 @@ describe("reviewed agent workflow resolver", () => {
       expect(serialized).toContain("explicit symbol");
       expect(serialized).toContain("{enabled:true}");
       expect(serialized).toContain("keep/disable intent");
-      expect(serialized).toContain("near/duplicate/trashed");
+      expect(serialized).toContain("near/duplicate: ask");
       expect(serialized).toContain("revision-merge guest only");
       expect(serialized).toContain("active shipping/delivery hierarchy");
       expect(serialized).toContain("no charge proof");
@@ -2114,29 +2114,7 @@ describe("reviewed agent workflow resolver", () => {
     })).toMatchObject({ kind: "choices", disposition: "ask" });
   });
 
-  it("keeps positive-threshold Bangladesh requests on the read-only ask control", () => {
-    for (const caseId of [
-      "dashboard.shipping-threshold-unsupported",
-      "dashboard.shipping-threshold-unsupported-paraphrase",
-    ]) {
-      const testCase = AGENT_INTENT_EVAL_CASES.find((candidate) => candidate.id === caseId)!;
-      expect(resolveWorkflow({ prompt: testCase.prompt, surface: testCase.surface })).toMatchObject({
-        kind: "control",
-        disposition: "ask",
-        classification: { controlId: "dashboard.shipping-threshold-unsupported" },
-      });
-    }
-  });
-
   it.each([
-    [
-      "dashboard.shipping-threshold-unsupported",
-      "dashboard.guest-checkout-conditional-enable",
-    ],
-    [
-      "dashboard.shipping-threshold-unsupported-paraphrase",
-      "dashboard.guest-checkout-conditional-enable",
-    ],
     [
       "dashboard.campaign-layout-needs-review",
       "dashboard.complex-product-create",
@@ -2746,7 +2724,7 @@ describe("reviewed agent workflow resolver", () => {
       {
         namespace: "readiness.delivery",
         operationId: "dashboard.shipping_methods.list",
-        input: { query: { page: 1, limit: 100, sort: "sortOrder", order: "asc" } },
+        input: {},
       },
     ]);
     expect(compiled.phases[0]!.steps[2]!.output.selectors).toEqual(
@@ -3126,8 +3104,9 @@ describe("reviewed agent workflow resolver", () => {
       surface: "dashboard",
     });
     expect(Buffer.byteLength(JSON.stringify({ ok: true, result: daily }))).toBeLessThanOrEqual(12 * 1024);
+    // The store-wide discovery save carries its settings revision (+~110 bytes).
     expect(Buffer.byteLength(JSON.stringify({ ok: true, result: product }))).toBeLessThanOrEqual(
-      15_872,
+      16_000,
     );
     expect(Buffer.byteLength(JSON.stringify({ ok: true, result: ordinary }))).toBeLessThanOrEqual(
       4 * 1024,

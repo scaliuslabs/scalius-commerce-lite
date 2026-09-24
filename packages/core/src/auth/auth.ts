@@ -2,10 +2,9 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, admin } from "better-auth/plugins";
-import { eq } from "drizzle-orm";
+import { and, eq, like, ne } from "drizzle-orm";
 import { getDb, safeBatch } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
-import { escapeHtml } from "@scalius/shared/html-escape";
 import {
   EMPTY_IDENTITY_HANDOFF_CONFIG,
   dashboardBasePathFromUrl,
@@ -13,7 +12,16 @@ import {
   type PlatformConfig,
 } from "@scalius/shared/platform-config";
 import { identityHandoff } from "./identity-handoff";
-import { createTwoFactorRecoveryCodeStorage } from "./two-factor-method-challenge";
+import { createTwoFactorRecoveryCodeStorage, generateRecoveryCodes } from "./two-factor-method-challenge";
+import {
+  PASSWORD_RESET_TTL_SECONDS,
+  STAFF_INVITE_TTL_SECONDS,
+  readStoreName,
+  sendStaffPasswordChangedEmail,
+  staffInviteEmail,
+  staffPasswordResetEmail,
+  staffSignInCodeEmail,
+} from "./staff-emails";
 import {
   AUTH_PASSWORD_MAX_LENGTH,
   AUTH_PASSWORD_MIN_LENGTH,
@@ -92,34 +100,6 @@ export function createAuth(env: Env) {
     // The API Worker serves these routes on the dashboard host, below its base path.
     basePath: `${dashboardBasePath}/api/auth`,
     appName,
-    emailVerification: {
-      sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
-        const { sendEmail } = await import("../integrations/email");
-        await sendEmail({
-          to: user.email,
-          subject: `Verify your email for ${appName}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>Verify your email</h2>
-              <p>Hi ${escapeHtml(user.name)},</p>
-              <p>Please click the button below to verify your email address:</p>
-              <p style="margin: 30px 0;">
-                <a href="${url}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                  Verify Email
-                </a>
-              </p>
-              <p>Or copy and paste this link in your browser:</p>
-              <p style="color: #666; word-break: break-all;">${url}</p>
-              <p>This link expires in 24 hours.</p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-              <p style="color: #999; font-size: 12px;">
-                If you didn't request this email, you can safely ignore it.
-              </p>
-            </div>
-          `,
-        }, emailRuntimeContext);
-      },
-    },
     emailAndPassword: {
       // An operator-managed identity provider may switch password sign-in
       // off; the Platform settings only allow that while the handoff is on.
@@ -127,9 +107,9 @@ export function createAuth(env: Env) {
       requireEmailVerification: false,
       minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
       maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
-      resetPasswordTokenExpiresIn: 60 * 60,
+      // Staff invites reuse this token; sendResetPassword extends theirs to 7 days.
+      resetPasswordTokenExpiresIn: PASSWORD_RESET_TTL_SECONDS,
       revokeSessionsOnPasswordReset: true,
-      // Password reset callback
       sendResetPassword: async ({ user, token }: {
         user: { id: string; email: string; name: string };
         token: string;
@@ -144,6 +124,7 @@ export function createAuth(env: Env) {
             mustChangePassword: schema.user.mustChangePassword,
             invitationId: schema.adminInvitations.id,
             invitationStatus: schema.adminInvitations.status,
+            invitedByUserId: schema.adminInvitations.invitedByUserId,
           })
           .from(schema.user)
           .leftJoin(
@@ -156,42 +137,34 @@ export function createAuth(env: Env) {
         const isAdminInviteSetup = inviteState?.role === "admin"
           && inviteState.mustChangePassword === true
           && inviteState.invitationStatus === "pending";
-        const subject = isAdminInviteSetup
-          ? `Set up your ${appName} admin account`
-          : `Reset your password for ${appName}`;
-        const heading = isAdminInviteSetup ? "Set up your admin account" : "Reset your password";
-        const intro = isAdminInviteSetup
-          ? "You have been invited to Scalius Commerce admin. Click the button below to choose your password."
-          : "We received a request to reset your password. Click the button below to create a new password.";
-        const buttonLabel = isAdminInviteSetup ? "Set Password" : "Reset Password";
-        const resetLink = new URL(joinPlatformUrl(dashboardUrl, "/auth/reset-password"));
+        const identifier = `reset-password:${token}`;
+        const sentAt = new Date();
+        const expiresAt = new Date(sentAt.getTime() + (isAdminInviteSetup ? STAFF_INVITE_TTL_SECONDS : PASSWORD_RESET_TTL_SECONDS) * 1000);
+        // One live link per person: a new invite or reset link replaces the older ones.
+        await safeBatch(db, [
+          db.delete(schema.verification).where(and(
+            like(schema.verification.identifier, "reset-password:%"),
+            eq(schema.verification.value, user.id),
+            ne(schema.verification.identifier, identifier),
+          )),
+          db.update(schema.verification)
+            .set({ expiresAt, updatedAt: sentAt })
+            .where(eq(schema.verification.identifier, identifier)),
+        ]);
+
+        const link = new URL(joinPlatformUrl(dashboardUrl, "/auth/reset-password"));
         // Fragments are not sent to Cloudflare or included in Referer. The
         // dashboard exchanges and removes this one-time value immediately.
-        resetLink.hash = `token=${encodeURIComponent(token)}`;
-        const delivery = await sendEmail({
-          to: user.email,
-          subject,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>${heading}</h2>
-              <p>Hi ${escapeHtml(user.name)},</p>
-              <p>${intro}</p>
-              <p style="margin: 30px 0;">
-                <a href="${resetLink.href}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                  ${buttonLabel}
-                </a>
-              </p>
-              <p>Or copy and paste this link in your browser:</p>
-              <p style="color: #666; word-break: break-all;">${resetLink.href}</p>
-              ${isAdminInviteSetup ? "<p>After choosing a password, you will need to enable two-factor authentication before admin access is allowed.</p>" : ""}
-              <p>This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email.</p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-              <p style="color: #999; font-size: 12px;">
-                For security reasons, this link can only be used once.
-              </p>
-            </div>
-          `,
-        }, emailRuntimeContext);
+        link.hash = `${isAdminInviteSetup ? "invite" : "token"}=${encodeURIComponent(token)}`;
+        const store = await readStoreName(db);
+        const inviter = isAdminInviteSetup && inviteState?.invitedByUserId
+          ? await db.select({ name: schema.user.name }).from(schema.user)
+            .where(eq(schema.user.id, inviteState.invitedByUserId)).get()
+          : undefined;
+        const message = isAdminInviteSetup
+          ? staffInviteEmail({ store, inviterName: inviter?.name.trim() || null, name: user.name, link: link.href })
+          : staffPasswordResetEmail({ store, name: user.name, link: link.href });
+        const delivery = await sendEmail({ to: user.email, ...message }, emailRuntimeContext);
 
         if (!delivery.success) {
           if (invitationId) {
@@ -208,21 +181,27 @@ export function createAuth(env: Env) {
         }
 
         if (invitationId && isAdminInviteSetup) {
-          const sentAt = new Date();
           await db
             .update(schema.adminInvitations)
             .set({
               deliveryStatus: "sent",
               lastSentAt: sentAt,
-              expiresAt: new Date(sentAt.getTime() + 60 * 60 * 1000),
+              expiresAt,
               updatedAt: sentAt,
             })
             .where(eq(schema.adminInvitations.id, invitationId));
         }
       },
-      onPasswordReset: async ({ user }: { user: { id: string } }) => {
+      onPasswordReset: async ({ user }: { user: { id: string; name: string; email: string } }) => {
         const acceptedAt = new Date();
+        let wasInvite = false;
         try {
+          const before = await db
+            .select({ mustChangePassword: schema.user.mustChangePassword })
+            .from(schema.user)
+            .where(eq(schema.user.id, user.id))
+            .get();
+          wasInvite = before?.mustChangePassword === true;
           await retryTransientD1(
             () => safeBatch(db, [
               db.update(schema.user)
@@ -242,6 +221,10 @@ export function createAuth(env: Env) {
           // Better Auth revokes existing sessions after this callback returns.
           // Never let ancillary invitation bookkeeping prevent that revocation.
           console.error("Password-reset onboarding reconciliation failed");
+        }
+        // Accepting an invite sets a first password; only a real reset gets the notice.
+        if (!wasInvite) {
+          await sendStaffPasswordChangedEmail({ db, env: emailRuntimeContext.env, dashboardUrl, user });
         }
       },
     },
@@ -316,31 +299,13 @@ export function createAuth(env: Env) {
           length: 10,
           amount: 10,
           storeBackupCodes: createTwoFactorRecoveryCodeStorage(secret),
+          customBackupCodesGenerate: generateRecoveryCodes,
         },
-        // Email OTP configuration for 2FA verification
         otpOptions: {
           async sendOTP({ user, otp }) {
             const { sendEmail } = await import("../integrations/email");
-            await sendEmail({
-              to: user.email,
-              subject: `Your ${appName} verification code`,
-              html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                  <h2>Two-Factor Authentication</h2>
-                  <p>Hi ${escapeHtml(user.name)},</p>
-                  <p>Your verification code is:</p>
-                  <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; padding: 20px; background-color: #f5f5f5; border-radius: 8px; margin: 20px 0;">
-                    ${otp}
-                  </p>
-                  <p>This code expires in 5 minutes.</p>
-                  <p style="color: #666;">If you didn't request this code, please ignore this email and ensure your account is secure.</p>
-                  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-                  <p style="color: #999; font-size: 12px;">
-                    This is an automated security email from ${appName}.
-                  </p>
-                </div>
-              `,
-            }, emailRuntimeContext);
+            const message = staffSignInCodeEmail({ store: await readStoreName(db), name: user.name, code: otp });
+            await sendEmail({ to: user.email, ...message }, emailRuntimeContext);
           },
           // OTP expires in 5 minutes
           period: 5,
@@ -349,6 +314,8 @@ export function createAuth(env: Env) {
       admin({
         defaultRole: "user",
         adminRoles: ["admin"],
+        // Sign-in answers a suspended staff member with this and the stable code BANNED_USER.
+        bannedUserMessage: "Your access to this store is suspended. Contact the store owner.",
       }),
       identityHandoff({
         db,

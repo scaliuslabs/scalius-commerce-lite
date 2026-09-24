@@ -4,6 +4,8 @@ export interface GatewayStatus {
   configured: boolean;
   enabled: boolean;
   usable?: boolean;
+  /** Keys still to add before the gateway can be turned on. */
+  missingFields?: string[];
   blockedReason?: string;
   providerEnabled?: boolean;
   environment?: "test" | "live" | "mixed" | "unknown" | "not_applicable";

@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link, useRouteContext } from "@tanstack/react-router";
+import { Link, useNavigate, useRouteContext } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Search } from "lucide-react";
+import { ChevronRight, Search, Store } from "lucide-react";
 import { getApiV1AdminSettingsBusiness } from "@scalius/api-client/sdk";
+import { cn } from "@scalius/shared/utils";
 import { Input } from "~/components/ui/input";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -18,27 +19,41 @@ import {
   settingsSummaryMessages,
 } from "~/i18n/settings";
 import { settingsSearchMessages } from "~/i18n/settings-search";
+import { storeSettingsMessages } from "~/i18n/settings-store";
 import { SETTINGS_GROUPS, SETTINGS_NAV } from "./settings-nav";
 import { searchSettings } from "./settings-search";
 
+/** The store's name and address; an unnamed store is asked for its name, never shown as "Scalius". */
 function StoreIdentity() {
+  const t = useMessages(storeSettingsMessages);
   const { hasPermission } = usePermissions();
   const enabled = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW);
+  const canEdit = hasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const business = useQuery({
     queryKey: queryKeys.settings.business(),
     queryFn: () => apiData(getApiV1AdminSettingsBusiness()),
     enabled,
   });
   const storefront = useQuery({ ...storefrontUrlQueryOptions(), enabled });
-  const name = business.data?.companyName?.trim() || "Scalius";
+  if (!enabled) return null;
+  const name = business.data?.companyName?.trim() ?? "";
   const url = (storefront.data as { storefrontUrl?: string } | undefined)?.storefrontUrl ?? "";
   return (
-    <div className="flex min-w-0 items-center gap-3 px-2">
+    <div className="flex min-h-9 min-w-0 items-center gap-3 px-2">
       <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-heading-sm text-primary-foreground">
-        {name.charAt(0).toUpperCase()}
+        {/* The first character, whole (an emoji or conjunct is never split). */}
+        {name ? Array.from(name)[0]!.toUpperCase() : <Store className="size-4" aria-hidden="true" />}
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-heading-sm">{name}</span>
+        {name ? (
+          <span className="block truncate text-heading-sm">{name}</span>
+        ) : !business.data ? null : canEdit ? (
+          <Link to="/admin/settings/store" hash="business" className="block truncate text-heading-sm text-link hover:underline">
+            {t("addStoreName")}
+          </Link>
+        ) : (
+          <span className="block truncate text-heading-sm text-muted-foreground">{t("noName")}</span>
+        )}
         {url ? (
           <span className="block truncate text-body text-muted-foreground">{url.replace(/^https?:\/\//, "")}</span>
         ) : null}
@@ -58,6 +73,7 @@ const SIDEBAR_LINK =
  */
 export function SettingsNav({ variant }: { variant: "sidebar" | "rows" }) {
   const context = useRouteContext({ from: "/admin" });
+  const navigate = useNavigate();
   const t = useMessages(settingsNavMessages);
   const common = useMessages(settingsMessages);
   const groups = useMessages(settingsGroupMessages);
@@ -72,6 +88,13 @@ export function SettingsNav({ variant }: { variant: "sidebar" | "rows" }) {
     const page = allowed.find((item) => item.key === entry.page);
     return page ? [{ ...entry, to: page.to }] : [];
   });
+  const shortcuts = found.shortcuts.filter((entry) => !("to" in entry) || canAccessAdminPath(entry.to, context));
+  // Enter opens the first result, in the order shown.
+  const first = pages[0]
+    ? { to: pages[0].to }
+    : cards[0]
+      ? { to: cards[0].to, hash: cards[0].card }
+      : shortcuts.flatMap((entry) => ("to" in entry ? [{ to: entry.to, hash: "hash" in entry ? entry.hash : undefined }] : []))[0];
   const sections = searching
     ? [{ key: "pages", label: null, items: pages }]
     : SETTINGS_GROUPS.map((group) => ({
@@ -89,13 +112,18 @@ export function SettingsNav({ variant }: { variant: "sidebar" | "rows" }) {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !searching || !first) return;
+            event.preventDefault();
+            void navigate(first);
+          }}
           placeholder={common("search")}
           aria-label={common("search")}
           // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
           className="pl-9"
         />
       </div>
-      {searching && pages.length === 0 && cards.length === 0 ? (
+      {searching && pages.length === 0 && cards.length === 0 && shortcuts.length === 0 ? (
         <p role="status" className="px-2.5 text-body text-muted-foreground">{search("noResults")}</p>
       ) : null}
       {sections.map((section) =>
@@ -105,7 +133,8 @@ export function SettingsNav({ variant }: { variant: "sidebar" | "rows" }) {
             <ul className="space-y-0.5">
               {section.items.map(({ key, to, icon: Icon }) => (
                 <li key={key}>
-                  <Link to={to} className={SIDEBAR_LINK} activeProps={{ "aria-current": "page" }}>
+                  {/* Prefix match: a page's own sub-routes (a message editor, a staff member) keep it highlighted. */}
+                  <Link to={to} className={SIDEBAR_LINK} activeOptions={{ exact: false, includeSearch: false }} activeProps={{ "aria-current": "page" }}>
                     <Icon className="size-4 shrink-0" aria-hidden="true" />
                     {t(key)}
                   </Link>
@@ -133,7 +162,7 @@ export function SettingsNav({ variant }: { variant: "sidebar" | "rows" }) {
           </div>
         ),
       )}
-      {cards.length > 0 ? (
+      {cards.length > 0 || shortcuts.length > 0 ? (
         <div className="space-y-1">
           <h2 className="px-2.5 text-body text-muted-foreground">{search("results")}</h2>
           <ul className={variant === "sidebar" ? "space-y-0.5" : "divide-y divide-border overflow-hidden rounded-xl bg-card shadow-card"}>
@@ -156,6 +185,29 @@ export function SettingsNav({ variant }: { variant: "sidebar" | "rows" }) {
                 </Link>
               </li>
             ))}
+            {shortcuts.map((entry) => {
+              const label = (
+                <span className="min-w-0 flex-1">
+                  <span className="block text-body font-medium">{search(entry.card)}</span>
+                  <span className="block text-body text-muted-foreground">{search(entry.section)}</span>
+                </span>
+              );
+              const row = variant === "sidebar" ? "block rounded-lg px-2.5 py-1.5" : "flex min-h-14 items-center gap-3 px-4 py-3";
+              const hover = variant === "sidebar" ? "hover:bg-muted" : "hover:bg-muted/50";
+              return (
+                <li key={entry.card}>
+                  {"to" in entry ? (
+                    <Link to={entry.to} hash={"hash" in entry ? entry.hash : undefined} className={cn(row, hover)}>
+                      {label}
+                      {variant === "rows" ? <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
+                    </Link>
+                  ) : (
+                    // Language and light/dark mode live in the account menu; say where.
+                    <div className={row}>{label}</div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : null}

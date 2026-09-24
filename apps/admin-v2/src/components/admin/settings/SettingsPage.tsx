@@ -13,8 +13,10 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import { Label } from "~/components/ui/label";
-import { SaveErrorBanner, SaveScope, useServerFieldError } from "../shared/SaveBar";
+import { ConfirmDialog } from "../shared/ConfirmDialog";
+import { SaveErrorBanner, SaveScope, useServerFieldError, type SaveScopeState } from "../shared/SaveBar";
 import { useMessages } from "~/i18n";
+import { saveBarMessages } from "~/i18n/save-bar";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { cn } from "@scalius/shared/utils";
 import { SETTINGS_NAV, type SettingsNavKey } from "./settings-nav";
@@ -196,66 +198,87 @@ export function SettingsRow({
 
 /**
  * A multi-field edit in a dialog. Editors inside register with its save scope
- * (`useSaveBar` / `useSettingsForm`); Save saves them and closes, Cancel or
- * closing discards. A failed save keeps the dialog open with the problems listed.
+ * (`useSaveBar` / `useSettingsForm`); Save saves them and closes. Cancel, Esc,
+ * ✕ or a click outside closes a clean dialog, and asks before discarding
+ * edits. A failed save keeps the dialog open with the problems listed.
  */
 export function SettingsDialog({
   title,
   description,
   trigger,
+  savedMessage,
   children,
 }: {
   title: ReactNode;
   description?: ReactNode;
   trigger: ReactElement;
+  /** The success toast instead of "Changes saved", e.g. "Invite sent". */
+  savedMessage?: string;
   children: ReactNode;
 }) {
   const t = useMessages(settingsMessages);
+  const bar = useMessages(saveBarMessages);
   const [open, setOpen] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const close = (state: SaveScopeState) => {
+    state.discardAll();
+    setConfirmDiscard(false);
+    setOpen(false);
+  };
+  const requestClose = (state: SaveScopeState) => {
+    if (state.busy) return;
+    if (state.dirty) setConfirmDiscard(true);
+    else close(state);
+  };
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description ? <DialogDescription>{description}</DialogDescription> : null}
-        </DialogHeader>
-        <SaveScope
-          render={(state) => (
-            // Long forms scroll; the actions stay in reach, separated by a border.
-            <div className="sticky -bottom-5 -mx-5 -mb-5 border-t border-border bg-card px-5 py-4">
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={state.busy}
-                  onClick={() => {
-                    state.discardAll();
-                    setOpen(false);
-                  }}
-                >
-                  {t("cancel")}
-                </Button>
-                <Button
-                  type="button"
-                  loading={state.busy}
-                  disabled={!state.dirty}
-                  onClick={async () => {
-                    if (await state.saveAll()) setOpen(false);
-                  }}
-                >
-                  {t("save")}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        >
-          <div className="space-y-4">
-            <SaveErrorBanner />
-            {children}
-          </div>
-        </SaveScope>
-      </DialogContent>
-    </Dialog>
+    <SaveScope
+      savedMessage={savedMessage}
+      render={(state) => (
+        <>
+          <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : requestClose(state))}>
+            <DialogTrigger asChild>{trigger}</DialogTrigger>
+            <DialogContent className="sm:max-w-xl">
+              <DialogHeader>
+                <DialogTitle>{title}</DialogTitle>
+                {description ? <DialogDescription>{description}</DialogDescription> : null}
+              </DialogHeader>
+              <div className="space-y-4">
+                <SaveErrorBanner />
+                {children}
+              </div>
+              {/* Long forms scroll; the actions stay in reach, separated by a border. */}
+              <div className="sticky -bottom-5 -mx-5 -mb-5 border-t border-border bg-card px-5 py-4">
+                <DialogFooter>
+                  <Button type="button" variant="outline" disabled={state.busy} onClick={() => requestClose(state)}>
+                    {t("cancel")}
+                  </Button>
+                  <Button
+                    type="button"
+                    loading={state.busy}
+                    disabled={!state.dirty}
+                    onClick={async () => {
+                      if (await state.saveAll()) setOpen(false);
+                    }}
+                  >
+                    {t("save")}
+                  </Button>
+                </DialogFooter>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <ConfirmDialog
+            open={confirmDiscard && state.dirty}
+            onOpenChange={setConfirmDiscard}
+            title={bar("discardTitle")}
+            description={bar("discardDescription")}
+            cancelLabel={bar("continueEditing")}
+            confirmLabel={bar("discardChanges")}
+            onConfirm={() => close(state)}
+          />
+        </>
+      )}
+    >
+      {null}
+    </SaveScope>
   );
 }

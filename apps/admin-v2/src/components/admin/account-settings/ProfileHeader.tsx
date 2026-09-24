@@ -88,7 +88,7 @@ export function ProfileHeader({ user }: { user: User }) {
   useSaveBar({ dirty: hasChanges, saving, invalid: nameTooShort, label: t("profile"), save, discard });
 
   return (
-    <Card>
+    <Card id="profile" className="scroll-mt-4">
       <CardHeader>
         <CardTitle>{t("profile")}</CardTitle>
       </CardHeader>

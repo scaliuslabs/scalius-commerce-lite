@@ -243,6 +243,7 @@ async function createTestApp(setup?: (database: TestDatabase) => Promise<void> |
     return c.json(body, status);
   });
   const database = createTestDatabase();
+  currentDatabase = database;
   await setup?.(database);
   app.use("*", async (c, next) => {
     c.set("db", database.db);
@@ -269,6 +270,24 @@ function requestGet(
   );
 }
 
+let currentDatabase: TestDatabase;
+
+function revisionOf(category: string): number {
+  const row = currentDatabase.sqlite.prepare("SELECT revision FROM settings WHERE category = ? AND key = 'document'")
+    .get(category) as { revision: number } | undefined;
+  return row?.revision ?? 0;
+}
+
+/** What the dashboard sends: the revision it loaded, unless a test sets one. */
+function withLoadedRevision(path: string, body: unknown): unknown {
+  if (!body || typeof body !== "object" || "expectedRevision" in body) return body;
+  const expectedRevision = path === "/auth"
+    ? { customerAuth: revisionOf("customer_auth"), whatsapp: revisionOf("whatsapp") }
+    : ({ "/security": "security", "/email": "email", "/firebase": "firebase" } as Record<string, string>)[path];
+  if (expectedRevision === undefined) return body;
+  return { ...body, expectedRevision: typeof expectedRevision === "string" ? revisionOf(expectedRevision) : expectedRevision };
+}
+
 function requestJson(
   app: OpenAPIHono<{ Bindings: Env }>,
   env: Env,
@@ -284,7 +303,7 @@ function requestJson(
     {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(withLoadedRevision(path, body)),
     },
     env,
     executionCtx as never,
@@ -347,8 +366,8 @@ describe("system settings cache invalidation", () => {
     await expect(response.json()).resolves.toMatchObject({
       success: false,
       error: {
-        code: "CHECKOUT_FLOW_REVISION_CONFLICT",
-        details: { expectedRevision: 1, currentRevision: 2 },
+        code: "SETTINGS_REVISION_CONFLICT",
+        details: { document: "checkout", expectedRevision: 1, currentRevision: 2 },
       },
     });
     expect(mocks.getCustomerSignInReadiness).not.toHaveBeenCalled();
@@ -477,11 +496,12 @@ describe("system settings cache invalidation", () => {
       env,
       encryptionKey: CREDENTIAL_KEY,
     });
+    // Codes by email only: the server makes email required even though the request left it out.
     expect(stored(database, "customer_auth")).toEqual({
       authVerificationMethod: "email",
       policy: {
         otpChannels: ["email"],
-        requiredContactFields: ["phone"],
+        requiredContactFields: ["phone", "email"],
         optionalContactFields: [],
         defaultOtpChannel: "email",
       },
@@ -774,6 +794,24 @@ describe("system settings cache invalidation", () => {
     );
   });
 
+  it("refuses, rather than drops, trusted websites it can't use and says what to fix", async () => {
+    const { app, env, executionCtx, database } = await createTestApp();
+
+    const response = await requestJson(app, env, executionCtx, "/security", {
+      cspAllowedDomains: "https://payments.example.com,not a url,http://chat.example.com,chat.example.com/widget",
+    });
+    const body = await response.json() as { error: { details: { issues: Array<{ path: string[]; message: string }> } } };
+
+    expect(response.status).toBe(400);
+    expect(body.error.details.issues).toEqual([
+      { path: ["cspAllowedDomains"], message: "not a url: Enter a full address like https://chat.example.com." },
+      { path: ["cspAllowedDomains"], message: "http://chat.example.com: Use https." },
+      { path: ["cspAllowedDomains"], message: "chat.example.com/widget: Enter just the site address, without a path." },
+    ]);
+    expect(stored(database, "security")).toBeNull();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+  });
+
   it("bounds legacy CSP reads to normalized origins below the agent response ceiling", async () => {
     const storedSources = Array.from(
       { length: 150 },
@@ -889,6 +927,7 @@ describe("system settings cache invalidation", () => {
         cloudflareBindingConfigured: true,
         resendConfigured: false,
         readiness: { status: "ready", issues: [] },
+        revision: 1,
       },
     });
   });

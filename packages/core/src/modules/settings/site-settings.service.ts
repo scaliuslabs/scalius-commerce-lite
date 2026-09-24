@@ -21,7 +21,6 @@ import {
   type Database,
 } from "@scalius/database/client";
 import {
-  AppError,
   ConflictError,
   ServiceUnavailableError,
   ValidationError,
@@ -61,8 +60,23 @@ import {
   type SitePresentationSection,
 } from "./documents";
 import { getPlatformSettings, savePlatformSettings } from "./platform-settings.service";
+import type { SettingsDocument, SettingsDocumentWriteResult } from "./settings-store";
 
 const THEME_SETTINGS_ID = "default";
+
+/** The revision the merchant's editor loaded; a stale one is a 409 conflict. */
+export interface SettingsSaveOptions {
+  expectedRevision?: number;
+}
+
+/** A document as an editor loads it: its value and the revision a save must send back. */
+export async function readSettingsForEdit<T extends object>(
+  db: Database,
+  document: SettingsDocument<T>,
+): Promise<SettingsDocumentWriteResult<T>> {
+  const { value, revision } = await document.readDetailed(db, {}, { skipCache: true });
+  return { value, revision };
+}
 
 export interface ThemeSettingsDocument {
   theme: StorefrontThemeSettings;
@@ -103,44 +117,11 @@ export interface ThemePreviewContinuationDocument {
   expiresAt: Date;
 }
 
-export const SITE_PRESENTATION_REVISION_CONFLICT =
-  "SITE_PRESENTATION_REVISION_CONFLICT";
-export const HOMEPAGE_PRESENTATION_REVISION_CONFLICT =
-  "HOMEPAGE_PRESENTATION_REVISION_CONFLICT";
-
-export class SitePresentationRevisionConflictError extends AppError {
-  constructor(
-    section: SitePresentationSection,
-    expectedRevision: number,
-    currentRevision: number | null,
-  ) {
-    super(
-      409,
-      SITE_PRESENTATION_REVISION_CONFLICT,
-      `${section === "header" ? "Header" : "Footer"} settings changed in another session. Your draft was not saved.`,
-      { section, expectedRevision, currentRevision },
-    );
-    this.name = "SitePresentationRevisionConflictError";
-  }
-}
-
 function assertPresentationRevision(expectedRevision: number): void {
   if (!Number.isInteger(expectedRevision) || expectedRevision < 0) {
     throw new ValidationError(
       "A non-negative presentation settings revision is required.",
     );
-  }
-}
-
-export class HomepagePresentationRevisionConflictError extends AppError {
-  constructor(expectedRevision: number, currentRevision: number | null) {
-    super(
-      409,
-      HOMEPAGE_PRESENTATION_REVISION_CONFLICT,
-      "Homepage presentation changed in another session. Your changes were not saved.",
-      { expectedRevision, currentRevision },
-    );
-    this.name = "HomepagePresentationRevisionConflictError";
   }
 }
 
@@ -263,6 +244,7 @@ export async function saveCurrencySettings(
     currencySymbol?: string;
     usdExchangeRate?: string;
   },
+  options: SettingsSaveOptions = {},
 ) {
   const current = await getCurrencySettings(db);
   const currencyCode = data.currencyCode === undefined
@@ -282,7 +264,7 @@ export async function saveCurrencySettings(
     throw new ConflictError(CURRENCY_CHANGE_CONFLICT_MESSAGE);
   }
 
-  await currencyDocument.write(db, { currencyCode, currencySymbol, usdExchangeRate });
+  return currencyDocument.write(db, { currencyCode, currencySymbol, usdExchangeRate }, {}, options);
 }
 
 // ─────────────────────────────────────────
@@ -324,7 +306,6 @@ async function savePresentationDocument<T extends object>(
   db: Database,
   config: T,
   expectedRevision: number,
-  conflict: (currentRevision: number | null) => Error,
 ): Promise<{ value: T; revision: number }> {
   assertPresentationRevision(expectedRevision);
   const mediaGuard = noDeletingMediaReferences(JSON.stringify(config));
@@ -335,7 +316,6 @@ async function savePresentationDocument<T extends object>(
       {},
       {
         expectedRevision,
-        conflict,
         replace: true,
         before: mediaGuard ? [buildBatchGuard(db, mediaGuard, "MEDIA_REFERENCE_DELETING")] : [],
       },
@@ -360,11 +340,6 @@ function sitePresentationWriter(section: SitePresentationSection) {
       db,
       stripEmbeddedNavigation(section, config),
       expectedRevision,
-      (currentRevision) => new SitePresentationRevisionConflictError(
-        section,
-        expectedRevision,
-        currentRevision,
-      ),
     );
     return { revision };
   };
@@ -390,10 +365,6 @@ export async function saveHomepagePresentationSettings(
     db,
     sanitizeHomepagePresentationConfig(config),
     expectedRevision,
-    (currentRevision) => new HomepagePresentationRevisionConflictError(
-      expectedRevision,
-      currentRevision,
-    ),
   );
   return { config: value, revision };
 }
@@ -1054,8 +1025,9 @@ export async function getMediaOptimizationSettings(
 export async function saveMediaOptimizationSettings(
   db: Database,
   data: Partial<MediaOptimizationSettings>,
-): Promise<MediaOptimizationSettings> {
-  return (await mediaDocument.write(db, data)).value;
+  options: SettingsSaveOptions = {},
+) {
+  return mediaDocument.write(db, data, {}, options);
 }
 
 // ─────────────────────────────────────────
@@ -1075,11 +1047,12 @@ export async function saveSeoSettings(
     discovery?: PartialSeoDiscoverySettings;
     returnPolicy?: PartialSeoReturnPolicySettings;
   },
+  options: SettingsSaveOptions = {},
 ) {
   const current = data.discovery !== undefined || data.returnPolicy !== undefined
     ? await getSeoSettings(db)
     : null;
-  await seoDocument.write(db, {
+  return seoDocument.write(db, {
     homepageTitle: data.homepageTitle,
     homepageMetaDescription: data.homepageMetaDescription,
     socialImage: data.socialImage,
@@ -1089,7 +1062,7 @@ export async function saveSeoSettings(
     returnPolicy: current && data.returnPolicy !== undefined
       ? mergeSeoReturnPolicySettings(current.returnPolicy, data.returnPolicy)
       : undefined,
-  });
+  }, {}, options);
 }
 
 // ─────────────────────────────────────────
@@ -1104,8 +1077,9 @@ export async function saveStorefrontUrl(
   db: Database,
   url: string,
   kv?: Parameters<typeof savePlatformSettings>[2],
+  options: SettingsSaveOptions = {},
 ) {
-  await savePlatformSettings(db, { storefrontUrl: url }, kv);
+  return savePlatformSettings(db, { storefrontUrl: url }, kv, options);
 }
 
 // ─────────────────────────────────────────
@@ -1120,9 +1094,10 @@ export async function saveAllowedCountries(
   db: Database,
   allowedCountries: string[],
   mode: "include" | "exclude" = "include",
-): Promise<CustomerCountries> {
-  return (await customerCountriesDocument.write(db, {
+  options: SettingsSaveOptions = {},
+) {
+  return customerCountriesDocument.write(db, {
     allowedCountries,
     allowedCountriesMode: mode,
-  })).value;
+  }, {}, options);
 }

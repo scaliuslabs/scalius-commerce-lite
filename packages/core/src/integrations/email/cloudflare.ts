@@ -2,7 +2,8 @@
 // Cloudflare Email Service provider using the Workers send_email binding.
 
 import { ServiceUnavailableError } from "@scalius/core/errors";
-import { senderMailbox, type EmailProvider, type EmailRuntimeContext, type SendEmailOptions, type SendEmailResult } from "./provider";
+import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
+import { resolveSender } from "./provider";
 import { getEmailRuntimeSettings } from "./settings";
 
 function maskEmailForLog(value: string): string {
@@ -27,10 +28,9 @@ export class CloudflareEmailProvider implements EmailProvider {
     }
 
     const settings = await getEmailRuntimeSettings(context);
-    const sender = senderMailbox({ from, fromName }, settings);
     const result = await binding.send({
       to,
-      from: sender.name ? { email: sender.email, name: sender.name } : sender.email,
+      from: resolveSender({ from, fromName }, settings),
       subject,
       html,
       text,

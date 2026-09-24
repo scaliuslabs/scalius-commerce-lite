@@ -72,6 +72,16 @@ export function SignOutButton({ label = "signOut" }: { label?: AuthMessageKey })
 }
 
 /** ARIA wiring for a control inside `Field`: the message below it describes it. */
+/** Saves the recovery codes as a text file made in the browser; they never leave the page. */
+export function downloadRecoveryCodes(codes: readonly string[], intro: string) {
+  const url = URL.createObjectURL(new Blob([`${intro}\n\n${codes.join("\n")}\n`], { type: "text/plain" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "recovery-codes.txt";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export function describedBy(id: string, error?: string | null, hint?: string) {
   return {
     "aria-invalid": error ? true : undefined,

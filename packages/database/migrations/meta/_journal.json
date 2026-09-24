@@ -505,6 +505,20 @@
       "when": 1790300002000,
       "tag": "0071_buyer_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1790300003000,
+      "tag": "0072_delivery_zones",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1790300004000,
+      "tag": "0073_combinable_discount_codes",
+      "breakpoints": true
     }
   ]
 }

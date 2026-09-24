@@ -16,6 +16,8 @@ import { AlertCircle, CircleAlert, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { getServerFnError } from "~/lib/api-helpers";
+import { Button } from "~/components/ui/button";
+import { readSettingsRevisionConflict } from "~/lib/admin-api-error";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
@@ -45,24 +47,30 @@ export interface SaveBarEntry {
   /**
    * Where the API's body paths are shown: a map or function from path to the
    * control's DOM id (e.g. `(path) => \`business-${path}\``). A rejected field
-   * that is on screen is marked in place (`SettingsField`) and named by its
-   * label in the banner. A nested path (`sources.2`) falls back to its first
-   * segment.
+   * that is on screen is marked in place (`SettingsField`) instead of listed
+   * in the banner. A nested path (`sources.2`) falls back to its first segment.
    */
   fields?: Record<string, string> | ((path: string) => string | undefined);
   /** Rejects when the save failed; the error's message is listed in the banner. */
   save: () => Promise<unknown>;
   discard: () => void;
+  /**
+   * After a settings revision conflict (someone else saved first): loads the
+   * latest saved values and keeps this card's edits. The banner offers it.
+   */
+  reload?: () => Promise<unknown>;
 }
 
 export interface SaveScopeState {
   dirty: boolean;
   busy: boolean;
   invalid: boolean;
-  /** Problems from the last save, one line each; empty after a clean save. */
+  /** Problems from the last save that no field shows, one line each. */
   errors: string[];
   /** Control id → what's wrong with it, from the last save. */
   fieldErrors: Record<string, string>;
+  /** The last save failed (listed problems or marked fields). */
+  failed: boolean;
   /** Save was pressed while fields were invalid; their messages are showing. */
   revealed: boolean;
   /** Saves every dirty entry; false when any failed (their edits are kept). */
@@ -79,8 +87,11 @@ const SaveBarContext = createContext<SaveRegistry | null>(null);
 /** The scope's live state, for a page's own Save button or submit-on-Enter. */
 const SaveStateContext = createContext<SaveScopeState | null>(null);
 interface SaveFailure {
+  /** Problems that can't be shown next to a field. */
   errors: string[];
   fieldErrors: Record<string, string>;
+  /** Cards refused because someone else saved first, and their banner lines. */
+  conflicts: Array<{ line: string; reload: () => Promise<unknown> }>;
   attempt: number;
   /**
    * Inline validation shows once a field is left (blur). Pressing Save with
@@ -88,12 +99,22 @@ interface SaveFailure {
    */
   reveal: number;
 }
-const NO_FAILURE: SaveFailure = { errors: [], fieldErrors: {}, attempt: 0, reveal: 0 };
+const NO_FAILURE: SaveFailure = { errors: [], fieldErrors: {}, conflicts: [], attempt: 0, reveal: 0 };
 /** Kept apart from the registry so a failed save re-renders only the banner and marked fields. */
-const SaveErrorsContext = createContext<SaveFailure & { clearField: (id: string) => void }>({
+const SaveErrorsContext = createContext<SaveFailure & {
+  clearField: (id: string) => void;
+  reloadConflicts: () => Promise<void>;
+}>({
   ...NO_FAILURE,
   clearField: () => {},
+  reloadConflicts: async () => {},
 });
+
+/** What went wrong, in words a merchant can act on. */
+function describeSaveError(error: unknown): string {
+  if (readSettingsRevisionConflict(error)) return translate(saveBarMessages, "conflict");
+  return getServerFnError(error);
+}
 
 /** The on-screen control (and its label) that shows an API body path. */
 function findField(entry: SaveBarEntry, path: string): { id: string; label: string } | null {
@@ -109,17 +130,20 @@ function findField(entry: SaveBarEntry, path: string): { id: string; label: stri
   return null;
 }
 
-/** Banner lines for one failed entry; marks the fields it can place. */
+/**
+ * Banner lines for one failed entry. A problem shown next to its field is
+ * marked there only (one indicator per field); the rest are listed.
+ */
 function readFailure(entry: SaveBarEntry, error: unknown, fieldErrors: Record<string, string>): string[] {
   const prefix = entry.label ? `${entry.label}: ` : "";
   if (error instanceof SaveNotCompleted) return error.lines.map((line) => prefix + line);
   const issues = readApiFieldIssues(error);
-  if (!issues) return [prefix + getServerFnError(error)];
-  return issues.map((issue) => {
+  if (!issues) return [prefix + describeSaveError(error)];
+  return issues.flatMap((issue) => {
     const field = findField(entry, issue.path);
-    if (!field) return prefix + issue.message;
+    if (!field) return [prefix + issue.message];
     fieldErrors[field.id] ??= issue.message;
-    return field.label ? `${field.label}: ${issue.message}` : prefix + issue.message;
+    return [];
   });
 }
 
@@ -134,7 +158,7 @@ export function SaveScope({
 }: {
   children: ReactNode;
   render: (state: SaveScopeState) => ReactNode;
-  /** Success toast, e.g. "Category saved"; "Changes saved" by default. */
+  /** The success toast, e.g. "Category saved" or "Invite sent"; "Changes saved" by default. */
   savedMessage?: string;
 }) {
   const t = useMessages(saveBarMessages);
@@ -149,7 +173,20 @@ export function SaveScope({
       return { ...previous, fieldErrors: rest };
     });
   }, []);
-  const errorsValue = useMemo(() => ({ ...failure, clearField }), [failure, clearField]);
+  const reloadConflicts = useCallback(async () => {
+    const reloaded = failure.conflicts;
+    await Promise.all(reloaded.map((conflict) => conflict.reload()));
+    // The edits now sit on the latest version: Save again applies them.
+    setFailure((previous) => ({
+      ...previous,
+      errors: previous.errors.filter((line) => !reloaded.some((conflict) => conflict.line === line)),
+      conflicts: previous.conflicts.filter((conflict) => !reloaded.includes(conflict)),
+    }));
+  }, [failure.conflicts]);
+  const errorsValue = useMemo(
+    () => ({ ...failure, clearField, reloadConflicts }),
+    [failure, clearField, reloadConflicts],
+  );
 
   const registry = useMemo<SaveRegistry>(() => ({
     set(id, entry) {
@@ -176,6 +213,7 @@ export function SaveScope({
     invalid: list.some((entry) => entry.dirty && entry.invalid),
     errors: failure.errors,
     fieldErrors: failure.fieldErrors,
+    failed: failure.errors.length > 0 || Object.keys(failure.fieldErrors).length > 0,
     revealed: failure.reveal > 0,
     async saveAll() {
       if (list.some((entry) => entry.dirty && entry.invalid)) {
@@ -186,6 +224,8 @@ export function SaveScope({
       setSaving(true);
       const errors: string[] = [];
       const fieldErrors: Record<string, string> = {};
+      const conflicts: SaveFailure["conflicts"] = [];
+      let failed = false;
       try {
         // Cards are separate documents: save each, keep the edits of any that fail.
         for (const entry of [...entries.current.values()]) {
@@ -193,15 +233,26 @@ export function SaveScope({
           try {
             await entry.save();
           } catch (error) {
-            errors.push(...readFailure(entry, error, fieldErrors));
+            failed = true;
+            const lines = readFailure(entry, error, fieldErrors);
+            errors.push(...lines);
+            if (entry.reload && readSettingsRevisionConflict(error)) {
+              conflicts.push({ line: lines[0]!, reload: entry.reload });
+            }
           }
         }
       } finally {
         setSaving(false);
       }
-      setFailure((previous) => ({ errors, fieldErrors, attempt: previous.attempt + 1, reveal: errors.length ? previous.reveal : 0 }));
-      if (errors.length === 0) toast.success(savedMessage ?? t("saved"));
-      return errors.length === 0;
+      setFailure((previous) => ({
+        errors,
+        fieldErrors,
+        conflicts,
+        attempt: previous.attempt + 1,
+        reveal: failed ? previous.reveal : 0,
+      }));
+      if (!failed) toast.success(savedMessage ?? t("saved"));
+      return !failed;
     },
     discardAll() {
       for (const entry of entries.current.values()) {
@@ -239,41 +290,82 @@ export function useServerFieldError(id: string): { error: string | undefined; cl
  */
 export function SaveErrorBanner() {
   const t = useMessages(saveBarMessages);
-  const { errors, attempt, reveal } = useContext(SaveErrorsContext);
+  const { errors, fieldErrors, conflicts, attempt, reveal, reloadConflicts } = useContext(SaveErrorsContext);
   const ref = useRef<HTMLDivElement>(null);
   const anchor = useRef<HTMLSpanElement>(null);
+  const [inDialog, setInDialog] = useState(false);
+  const [reloading, setReloading] = useState(false);
+  useLayoutEffect(() => {
+    setInDialog(Boolean(anchor.current?.closest("[role=dialog]")));
+  }, []);
+  // Marked fields carry their own message. A page adds one count of them
+  // (Polaris: "To save, fix 2 problems"); a dialog's fields are all in view.
+  const marked = inDialog ? 0 : Object.keys(fieldErrors).length;
   useEffect(() => {
     if (reveal === 0) return;
     const container = anchor.current?.closest("[role=dialog]") ?? document;
     container.querySelector<HTMLElement>('[aria-invalid="true"]:not([disabled])')?.focus();
   }, [reveal]);
+  // Once per failed save (not when a dialog reopens): the first marked field,
+  // else the banner, takes focus.
+  const seenAttempt = useRef(attempt);
   useEffect(() => {
-    const banner = ref.current;
-    if (!banner || errors.length === 0) return;
-    const container = banner.closest("[role=dialog]") ?? document;
+    if (attempt === seenAttempt.current) return;
+    seenAttempt.current = attempt;
+    if (errors.length === 0 && Object.keys(fieldErrors).length === 0) return;
+    const container = anchor.current?.closest("[role=dialog]") ?? document;
     const field = container.querySelector<HTMLElement>('[aria-invalid="true"]:not([disabled])');
+    const banner = ref.current;
     if (field) {
       field.focus();
-    } else {
+    } else if (banner) {
       banner.focus();
       banner.scrollIntoView({ block: "nearest" });
     }
-  }, [errors, attempt]);
-  if (errors.length === 0) return <span ref={anchor} hidden />;
+  }, [attempt, errors, fieldErrors]);
+  const count = errors.length + marked;
   return (
-    <Alert ref={ref} tabIndex={-1} variant="destructive" className="scroll-mt-4">
-      <CircleAlert aria-hidden="true" />
-      <AlertTitle>{errors.length === 1 ? t("notSavedOne") : t("notSavedMany", { count: errors.length })}</AlertTitle>
-      <AlertDescription>
-        {errors.length === 1 ? (
-          <p>{errors[0]}</p>
-        ) : (
-          <ul className="list-disc space-y-1 pl-4">
-            {errors.map((error) => <li key={error}>{error}</li>)}
-          </ul>
-        )}
-      </AlertDescription>
-    </Alert>
+    <>
+      <span ref={anchor} hidden />
+      {count === 0 ? null : (
+        <Alert ref={ref} tabIndex={-1} variant="destructive" className="scroll-mt-4">
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>
+            {count === 1 ? (errors.length ? t("notSavedOne") : t("fixOne")) : t("notSavedMany", { count })}
+          </AlertTitle>
+          {errors.length === 0 ? null : (
+            <AlertDescription>
+              {errors.length === 1 ? (
+                <p>{errors[0]}</p>
+              ) : (
+                <ul className="list-disc space-y-1 pl-4">
+                  {errors.map((error) => <li key={error}>{error}</li>)}
+                </ul>
+              )}
+              {conflicts.length === 0 ? null : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  loading={reloading}
+                  onClick={async () => {
+                    setReloading(true);
+                    try {
+                      await reloadConflicts();
+                    } finally {
+                      setReloading(false);
+                    }
+                  }}
+                >
+                  {t("reloadKeepEdits")}
+                </Button>
+              )}
+            </AlertDescription>
+          )}
+        </Alert>
+      )}
+    </>
   );
 }
 
@@ -307,7 +399,7 @@ const SAVE_BUTTON =
 
 function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?: string }) {
   const t = useMessages(saveBarMessages);
-  const { dirty, busy, invalid, errors, revealed } = state;
+  const { dirty, busy, invalid, failed, revealed } = state;
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const saveRef = useRef(state.saveAll);
   saveRef.current = state.saveAll;
@@ -348,7 +440,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
               <p className="flex min-w-0 items-center gap-2 text-body font-medium" aria-live="polite">
                 <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                 <span className="truncate">
-                  {errors.length > 0 ? t("notSavedBar") : invalid && revealed ? t("fixErrors") : unsavedLabel ?? t("unsavedChanges")}
+                  {failed ? t("notSavedBar") : invalid && revealed ? t("fixErrors") : unsavedLabel ?? t("unsavedChanges")}
                 </span>
               </p>
               <div className="flex shrink-0 gap-1.5">

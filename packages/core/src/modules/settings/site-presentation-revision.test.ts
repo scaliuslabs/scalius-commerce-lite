@@ -27,8 +27,8 @@ describe("header, footer and homepage revision authority", () => {
     await expect(saveHeaderConfig(db, { topBar: { text: "Other tab", isEnabled: true } }, 0))
       .rejects.toMatchObject({
         status: 409,
-        code: "SITE_PRESENTATION_REVISION_CONFLICT",
-        details: { section: "header", expectedRevision: 0, currentRevision: 1 },
+        code: "SETTINGS_REVISION_CONFLICT",
+        details: { document: "header", expectedRevision: 0, currentRevision: 1 },
       });
     // The footer is its own document.
     await expect(saveFooterConfig(db, { tagline: "" }, 0)).resolves.toEqual({ revision: 1 });
@@ -43,7 +43,7 @@ describe("header, footer and homepage revision authority", () => {
     await expect(saveHeaderConfig(db, { topBar: { text: "Stale", isEnabled: true } }, 1))
       .rejects.toMatchObject({
         status: 409,
-        details: { section: "header", expectedRevision: 1, currentRevision: 2 },
+        details: { document: "header", expectedRevision: 1, currentRevision: 2 },
       });
 
     const general = await getGeneralSettings(db);
@@ -91,8 +91,8 @@ describe("header, footer and homepage revision authority", () => {
       trustStrip: { enabled: false },
     }, 1)).rejects.toMatchObject({
       status: 409,
-      code: "HOMEPAGE_PRESENTATION_REVISION_CONFLICT",
-      details: { expectedRevision: 1, currentRevision: 2 },
+      code: "SETTINGS_REVISION_CONFLICT",
+      details: { document: "homepage", expectedRevision: 1, currentRevision: 2 },
     });
 
     await expect(getHomepagePresentationSettings(db)).resolves.toEqual({

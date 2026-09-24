@@ -36,6 +36,10 @@ import {
 } from "@scalius/shared/homepage-presentation";
 import { ORDER_NOTIFICATION_TYPES } from "../notifications/notification-types";
 import {
+  TEMPLATE_LIMITS,
+  type NotificationTemplateOverrides,
+} from "../notifications/notification-templates";
+import {
   normalizeCustomerRequestPolicy,
   type CustomerRequestPolicy,
 } from "./customer-request-policy.shared";
@@ -329,6 +333,26 @@ export const customerRequestsDocument = defineSettingsDocument<CustomerRequestPo
 });
 
 // ─────────────────────────────────────────
+// Store policies (Settings -> Policies): each policy is one of the store's
+// own content pages, by page id. Unknown or trashed pages read as unset.
+// ─────────────────────────────────────────
+
+export const STORE_POLICY_KINDS = ["refund", "privacy", "terms", "shipping", "contact"] as const;
+export type StorePolicyKind = (typeof STORE_POLICY_KINDS)[number];
+export type StorePolicies = Record<StorePolicyKind, string | null>;
+
+const policyPageId = z.string().trim().min(1).max(64).nullable().catch(null);
+
+export const policiesDocument = defineSettingsDocument<StorePolicies>({
+  key: "policies",
+  schema: z.object(Object.fromEntries(STORE_POLICY_KINDS.map((kind) => [kind, policyPageId])) as Record<
+    StorePolicyKind,
+    typeof policyPageId
+  >) as unknown as z.ZodType<StorePolicies>,
+  defaults: { refund: null, privacy: null, terms: null, shipping: null, contact: null },
+});
+
+// ─────────────────────────────────────────
 // Online store presentation: header, footer and homepage are JSON documents
 // edited with optimistic revisions; SEO/discovery policy.
 // ─────────────────────────────────────────
@@ -446,9 +470,13 @@ export function normalizeNotificationChannelRules(
   return result;
 }
 
+export const STAFF_EMAIL_RECIPIENTS_MAX = 10;
+
 export interface NotificationSettings {
   orderChannels: NotificationChannelRules;
   adminChannels: NotificationChannelRules;
+  /** Staff who get an email for every new order. */
+  staffEmailRecipients: string[];
   whatsappOrderTemplateName: string;
   whatsappOrderTemplateLanguage: string;
 }
@@ -466,15 +494,32 @@ export const notificationsDocument = defineSettingsDocument<NotificationSettings
       DEFAULT_ADMIN_NOTIFICATION_CHANNELS,
       ADMIN_NOTIFICATION_CHANNELS,
     )),
+    staffEmailRecipients: z.array(z.string().max(254)).max(STAFF_EMAIL_RECIPIENTS_MAX),
     whatsappOrderTemplateName: z.string(),
     whatsappOrderTemplateLanguage: z.string(),
   }),
   defaults: {
     orderChannels: DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS,
     adminChannels: DEFAULT_ADMIN_NOTIFICATION_CHANNELS,
+    staffEmailRecipients: [],
     whatsappOrderTemplateName: "order_status_update",
     whatsappOrderTemplateLanguage: "en_US",
   },
+});
+
+/** Customer message copy the merchant changed; a missing event uses the default. */
+export const notificationTemplatesDocument = defineSettingsDocument<NotificationTemplateOverrides>({
+  key: "notification_templates",
+  schema: z.object({
+    email: z.partialRecord(z.enum(ORDER_NOTIFICATION_TYPES), z.object({
+      subject: z.string().max(TEMPLATE_LIMITS.subject),
+      body: z.string().max(TEMPLATE_LIMITS.emailBody),
+    })),
+    sms: z.partialRecord(z.enum(ORDER_NOTIFICATION_TYPES), z.object({
+      body: z.string().max(TEMPLATE_LIMITS.smsBody),
+    })),
+  }),
+  defaults: { email: {}, sms: {} },
 });
 
 export interface EmailSettings {
@@ -668,11 +713,13 @@ export const SETTINGS_DOCUMENTS = [
   checkoutDocument,
   customerAuthDocument,
   customerRequestsDocument,
+  policiesDocument,
   headerDocument,
   footerDocument,
   homepageDocument,
   seoDocument,
   notificationsDocument,
+  notificationTemplatesDocument,
   emailDocument,
   firebaseDocument,
   whatsappDocument,

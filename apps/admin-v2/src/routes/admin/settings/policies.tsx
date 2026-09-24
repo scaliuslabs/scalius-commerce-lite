@@ -7,6 +7,7 @@ import {
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
 import { Input } from "~/components/ui/input";
+import { PoliciesCard, StorePagePicker, policiesQuery, storePagesQuery } from "~/components/admin/settings/PoliciesCard";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import {
   Select,
@@ -31,12 +32,19 @@ import { policiesMessages } from "~/i18n/settings-policies";
 // `returnPolicy` part is read and written here (the POST is partial).
 const returnPolicyQuery = {
   queryKey: [...queryKeys.settings.seo(), "return-policy"],
-  queryFn: async () =>
-    normalizeSeoReturnPolicySettings((await apiData(getApiV1AdminSettingsSeo()) as { returnPolicy?: unknown }).returnPolicy),
+  queryFn: async () => {
+    const seo = await apiData(getApiV1AdminSettingsSeo()) as { returnPolicy?: unknown; revision: number };
+    return { ...normalizeSeoReturnPolicySettings(seo.returnPolicy), revision: seo.revision };
+  },
 };
 
 export const Route = createFileRoute("/admin/settings/policies")({
-  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(returnPolicyQuery).catch(() => undefined),
+  loader: ({ context: { queryClient } }) =>
+    Promise.allSettled([
+      queryClient.ensureQueryData(returnPolicyQuery),
+      queryClient.ensureQueryData(policiesQuery),
+      queryClient.ensureQueryData(storePagesQuery),
+    ]),
   head: () => settingsHead("policies"),
   errorComponent: RouteErrorComponent,
   component: PoliciesPage,
@@ -55,8 +63,10 @@ function ReturnPolicyCard({ canEdit }: { canEdit: boolean }) {
     label: t("returnsTitle"),
     queryKey: returnPolicyQuery.queryKey,
     fetchFn: returnPolicyQuery.queryFn,
-    saveFn: (draft) =>
-      apiData(postApiV1AdminSettingsSeo({ body: { returnPolicy: { ...draft, policyUrl: draft.policyUrl.trim() } } })),
+    saveFn: (draft, expectedRevision) =>
+      apiData(postApiV1AdminSettingsSeo({
+        body: { returnPolicy: { ...draft, policyUrl: draft.policyUrl.trim() }, expectedRevision },
+      })),
     invalidateQueryKeys: [queryKeys.settings.seo()],
     defaultValues: {} as SeoReturnPolicySettings,
     errorMessage: common("saveFailed"),
@@ -143,14 +153,12 @@ function ReturnPolicyCard({ canEdit }: { canEdit: boolean }) {
       ) : null}
       {values.enabled ? (
         <SettingsField id="return-url" label={t("policyUrl")} help={t("policyUrlHelp")} error={urlValid ? null : t("policyUrlInvalid")}>
-          <Input
+          <StorePagePicker
             id="return-url"
-            disabled={!canEdit}
             value={values.policyUrl}
-            placeholder="/returns"
-            aria-invalid={!urlValid}
-            aria-describedby="return-url-note"
-            onChange={(event) => setValue("policyUrl", event.target.value)}
+            valueOf={(page) => `/${page.slug}`}
+            disabled={!canEdit}
+            onChange={(path) => setValue("policyUrl", path)}
           />
         </SettingsField>
       ) : null}
@@ -162,6 +170,7 @@ function PoliciesPage() {
   const canEdit = useHasPermission(PERMISSIONS.SETTINGS_SEO_EDIT);
   return (
     <SettingsPage page="policies" readOnly={!canEdit}>
+      <PoliciesCard canEdit={canEdit} />
       <ReturnPolicyCard canEdit={canEdit} />
     </SettingsPage>
   );

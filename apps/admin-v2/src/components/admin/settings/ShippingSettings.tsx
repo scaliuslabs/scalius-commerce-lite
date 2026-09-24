@@ -4,13 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   deleteApiV1AdminSettingsDeliveryProvidersById,
-  deleteApiV1AdminSettingsShippingMethodsById,
   getApiV1AdminSettingsDeliveryLocations,
-  getApiV1AdminSettingsShippingMethods,
   postApiV1AdminSettingsDeliveryProvidersById,
-  postApiV1AdminSettingsShippingMethods,
+  postApiV1AdminSettingsDeliveryProvidersCreateTest,
   putApiV1AdminSettingsDeliveryProviders,
-  putApiV1AdminSettingsShippingMethodsById,
 } from "@scalius/api-client/sdk";
 import { getDeliveryProviderActivationBlockers } from "@scalius/core/modules/delivery/provider-readiness";
 import { Button } from "~/components/ui/button";
@@ -23,13 +20,12 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
-import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
-import { apiData, type ApiBody, type ApiResult } from "~/lib/api";
+import { apiData, type ApiBody } from "~/lib/api";
 import { deliveryProvidersQueryOptions, type DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
 import { queryKeys } from "~/lib/query-keys";
-import { formatNumber, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { shippingMessages } from "~/i18n/settings-shipping";
 import { ProviderIcon, resolveProviderReadiness } from "../delivery-providers/ProviderIcon";
@@ -37,18 +33,11 @@ import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
-import { currencyQuery, platformQuery } from "./StoreSettings";
+import { platformQuery } from "./StoreSettings";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
 const MASKED = "••••••••••••";
 
-type ShippingMethod = ApiResult<typeof getApiV1AdminSettingsShippingMethods>["shippingMethods"][number];
-
-const RATES_PARAMS = { page: 1, limit: 100, sort: "sortOrder", order: "asc" } as const;
-export const shippingRatesQuery = {
-  queryKey: queryKeys.settings.shippingMethods(RATES_PARAMS),
-  queryFn: () => apiData(getApiV1AdminSettingsShippingMethods({ query: RATES_PARAMS })),
-};
 export const areaCountsQuery = {
   queryKey: [...queryKeys.settings.deliveryLocations(), "counts"],
   queryFn: async () => {
@@ -67,191 +56,6 @@ function refreshCheckout(queryClient: ReturnType<typeof useQueryClient>, key: re
     queryClient.invalidateQueries({ queryKey: key }),
     queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutReadiness() }),
   ]);
-}
-
-// ── Delivery charges (shipping methods) ────────────────────────────────
-
-function RateForm({ rate }: { rate: ShippingMethod | null }) {
-  const t = useMessages(shippingMessages);
-  const common = useMessages(settingsMessages);
-  const queryClient = useQueryClient();
-  const [saved] = useState(() => ({
-    name: rate?.name ?? "",
-    fee: rate ? String(rate.fee) : "",
-    description: rate?.description ?? "",
-    isActive: rate?.isActive ?? true,
-  }));
-  const [draft, setDraft] = useState(saved);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const fee = Number(draft.fee);
-  const feeValid = draft.fee.trim() !== "" && Number.isFinite(fee) && fee >= 0;
-  const refresh = () => refreshCheckout(queryClient, queryKeys.settings.shippingMethods());
-  const save = useMutation({
-    mutationFn: () => {
-      const body = { name: draft.name.trim(), fee, description: draft.description.trim(), isActive: draft.isActive };
-      return rate
-        ? apiData(putApiV1AdminSettingsShippingMethodsById({ path: { id: rate.id }, body }))
-        : apiData(postApiV1AdminSettingsShippingMethods({ body }));
-    },
-    onSuccess: refresh,
-  });
-  const remove = useMutation({
-    mutationFn: () => apiData(deleteApiV1AdminSettingsShippingMethodsById({ path: { id: rate!.id } })),
-    onSuccess: async () => {
-      toast.success(t("rateDeleted"));
-      await refresh();
-    },
-    onError: () => toast.error(common("saveFailed")),
-  });
-  useSaveBar({
-    fields: { name: "rate-name", fee: "rate-fee", description: "rate-description" },
-    dirty: JSON.stringify(draft) !== JSON.stringify(saved),
-    saving: save.isPending,
-    invalid: !draft.name.trim() || !feeValid,
-    save: () => save.mutateAsync(),
-    discard: () => setDraft(saved),
-  });
-  const symbol = useQuery(currencyQuery).data?.currencySymbol ?? "";
-  return (
-    <>
-      <SettingsField id="rate-name" label={t("rateName")}>
-        <Input id="rate-name" value={draft.name} placeholder={t("rateNamePlaceholder")} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
-      </SettingsField>
-      <SettingsField id="rate-fee" label={`${t("fee")} (${symbol})`} error={draft.fee && !feeValid ? t("feeInvalid") : null}>
-        <Input
-          id="rate-fee"
-          type="number"
-          inputMode="decimal"
-          min="0"
-          step="0.01"
-          className="max-w-40"
-          value={draft.fee}
-          aria-invalid={Boolean(draft.fee) && !feeValid}
-          aria-describedby="rate-fee-note"
-          onChange={(event) => setDraft({ ...draft, fee: event.target.value })}
-        />
-      </SettingsField>
-      <SettingsField id="rate-description" label={t("rateDescription")}>
-        <Textarea id="rate-description" rows={2} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
-      </SettingsField>
-      <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
-        {t("showAtCheckout")}
-        <Switch checked={draft.isActive} onCheckedChange={(isActive) => setDraft({ ...draft, isActive })} />
-      </label>
-      {rate ? (
-        <>
-          <Button type="button" variant="ghost" className="self-start" onClick={() => setConfirmDelete(true)}>
-            {t("deleteRate")}
-          </Button>
-          <ConfirmDialog
-            open={confirmDelete}
-            onOpenChange={setConfirmDelete}
-            title={common("deleteNamed", { name: rate.name })}
-            description={t("deleteRateConfirm", { name: rate.name })}
-            confirmLabel={common("delete")}
-            cancelLabel={common("cancel")}
-            isLoading={remove.isPending}
-            onConfirm={() => remove.mutate()}
-          />
-        </>
-      ) : null}
-    </>
-  );
-}
-
-const DHAKA_ZONES = [
-  { name: "insideDhaka", note: "insideDhakaNote", fee: "70" },
-  { name: "nearDhaka", note: "nearDhakaNote", fee: "90" },
-  { name: "outsideDhaka", note: "outsideDhakaNote", fee: "120" },
-] as const;
-
-/** Bangladesh's usual three zones as a starting point; nothing is added until Save. */
-function DhakaZonesForm() {
-  const t = useMessages(shippingMessages);
-  const queryClient = useQueryClient();
-  const symbol = useQuery(currencyQuery).data?.currencySymbol ?? "";
-  const [saved] = useState(() => DHAKA_ZONES.map((zone) => ({ name: t(zone.name), fee: zone.fee, description: t(zone.note) })));
-  const [draft, setDraft] = useState(saved);
-  const valid = draft.every((zone) => zone.name.trim() && zone.fee.trim() !== "" && Number(zone.fee) >= 0);
-  const save = useMutation({
-    mutationFn: async () => {
-      for (const [sortOrder, zone] of draft.entries()) {
-        await apiData(postApiV1AdminSettingsShippingMethods({
-          body: { name: zone.name.trim(), fee: Number(zone.fee), description: zone.description, isActive: true, sortOrder },
-        }));
-      }
-    },
-    onSettled: () => refreshCheckout(queryClient, queryKeys.settings.shippingMethods()),
-  });
-  // Always savable: opening the dialog is the choice to add the zones.
-  useSaveBar({ dirty: true, saving: save.isPending, invalid: !valid, save: () => save.mutateAsync(), discard: () => setDraft(saved) });
-  const update = (index: number, field: "name" | "fee", value: string) =>
-    setDraft(draft.map((zone, i) => (i === index ? { ...zone, [field]: value } : zone)));
-  return (
-    <>
-      <p className="text-body text-muted-foreground">{t("dhakaHelp")}</p>
-      {draft.map((zone, index) => (
-        <div key={DHAKA_ZONES[index]!.name} className="grid grid-cols-3 gap-3">
-          <div className="col-span-2">
-            <SettingsField id={`dhaka-${index}-name`} label={t("rateName")} help={zone.description}>
-              <Input id={`dhaka-${index}-name`} value={zone.name} aria-describedby={`dhaka-${index}-name-note`} onChange={(event) => update(index, "name", event.target.value)} />
-            </SettingsField>
-          </div>
-          <SettingsField id={`dhaka-${index}-fee`} label={`${t("fee")} (${symbol})`}>
-            <Input
-              id={`dhaka-${index}-fee`}
-              type="number"
-              inputMode="decimal"
-              min="0"
-              value={zone.fee}
-              aria-invalid={zone.fee.trim() === "" || Number(zone.fee) < 0}
-              onChange={(event) => update(index, "fee", event.target.value)}
-            />
-          </SettingsField>
-        </div>
-      ))}
-    </>
-  );
-}
-
-export function DeliveryChargesCard() {
-  const t = useMessages(shippingMessages);
-  const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT);
-  const canView = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW);
-  const { data, isError, refetch } = useQuery({ ...shippingRatesQuery, enabled: canView });
-  const currency = useQuery(currencyQuery).data;
-  const symbol = currency?.currencySymbol ?? "";
-  if (!canView) return null;
-  if (isError) return <SettingsLoadFailure title={t("loadRates")} onRetry={refetch} />;
-  if (!data) return <SettingsCardLoading />;
-  const offerDhaka = canEdit && data.shippingMethods.length === 0 && currency?.currencyCode === "BDT";
-  return (
-    <SettingsCard
-      id="deliveryCharges"
-      title={t("ratesTitle")}
-      description={data.shippingMethods.length ? t("ratesDescription") : t("noRates")}
-      action={
-        <SettingsDialog title={t("addRate")} trigger={<Button type="button" variant="outline" size="sm" disabled={!canEdit}>{t("addRate")}</Button>}>
-          <RateForm rate={null} />
-        </SettingsDialog>
-      }
-      rows={offerDhaka ? (
-        <SettingsDialog title={t("dhakaAdd")} trigger={<SettingsRow label={t("dhakaTitle")} value={t("dhakaDescription")} />}>
-          <DhakaZonesForm />
-        </SettingsDialog>
-      ) : data.shippingMethods.length === 0 ? undefined : data.shippingMethods.map((rate) => (
-        <SettingsDialog key={rate.id} title={t("editRate", { name: rate.name })} trigger={
-          <SettingsRow
-            disabled={!canEdit}
-            label={rate.name}
-            value={`${symbol}${formatNumber(rate.fee)}${rate.isActive ? "" : ` · ${t("off")}`}`}
-          />
-        }>
-          <RateForm rate={rate} />
-        </SettingsDialog>
-      ))}
-    />
-  );
 }
 
 // ── Delivery areas summary ─────────────────────────────────────────────
@@ -288,7 +92,8 @@ const ENDPOINTS = {
 } as const;
 const DEFAULTS: Record<CourierType, { credentials: Record<string, string>; config: Record<string, string | number> }> = {
   pathao: {
-    credentials: { baseUrl: ENDPOINTS.pathao.production, clientId: "", clientSecret: "", username: "", password: "", webhookSecret: "" },
+    // New couriers start on the test account; switch to Live once a test works.
+    credentials: { baseUrl: ENDPOINTS.pathao.sandbox, clientId: "", clientSecret: "", username: "", password: "", webhookSecret: "" },
     config: { storeId: "", defaultDeliveryType: 48, defaultItemType: 2, defaultItemWeight: 0.5 },
   },
   steadfast: {
@@ -404,12 +209,22 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
       })),
     onSuccess: refresh,
   });
+  // A saved courier tests its saved keys; a new one tests the keys typed so far.
   const test = useMutation({
-    mutationFn: () => apiData(postApiV1AdminSettingsDeliveryProvidersById({ path: { id: draft.id } })),
+    mutationFn: () => courier
+      ? apiData(postApiV1AdminSettingsDeliveryProvidersById({ path: { id: draft.id } }))
+      : apiData(postApiV1AdminSettingsDeliveryProvidersCreateTest({
+          body: {
+            type: draft.type,
+            name: draft.name.trim() || undefined,
+            credentials: JSON.stringify(draft.credentials),
+            config: JSON.stringify(draft.config),
+          } as ApiBody<typeof postApiV1AdminSettingsDeliveryProvidersCreateTest>,
+        })),
     onSuccess: async (result) => {
       if (result.success) toast.success(t("testOk"));
       else toast.error(t("testFailed"));
-      await refresh();
+      if (courier) await refresh();
     },
     onError: () => toast.error(t("testFailed")),
   });
@@ -541,26 +356,35 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
           {t("newKey")}
         </Button>
       </div>
-      {courier ? (
-        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-          <Button type="button" variant="outline" disabled={test.isPending} onClick={() => test.mutate()}>
-            {t("test")}
-          </Button>
-          <Button type="button" variant="ghost" onClick={() => setConfirmDelete(true)}>
-            {t("deleteCourier")}
-          </Button>
-          <ConfirmDialog
-            open={confirmDelete}
-            onOpenChange={setConfirmDelete}
-            title={common("deleteNamed", { name: courier.name })}
-            description={t("deleteCourierConfirm", { name: courier.name })}
-            confirmLabel={common("delete")}
-            cancelLabel={common("cancel")}
-            isLoading={remove.isPending}
-            onConfirm={() => remove.mutate()}
-          />
-        </div>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          loading={test.isPending}
+          disabled={!courier && blockers.length > 0}
+          onClick={() => test.mutate()}
+        >
+          {t("test")}
+        </Button>
+        {!courier && blockers.length > 0 ? <p className="text-body text-muted-foreground">{t("testNeedsKeys")}</p> : null}
+        {courier ? (
+          <>
+            <Button type="button" variant="ghost" onClick={() => setConfirmDelete(true)}>
+              {t("deleteCourier")}
+            </Button>
+            <ConfirmDialog
+              open={confirmDelete}
+              onOpenChange={setConfirmDelete}
+              title={common("deleteNamed", { name: courier.name })}
+              description={t("deleteCourierConfirm", { name: courier.name })}
+              confirmLabel={common("delete")}
+              cancelLabel={common("cancel")}
+              isLoading={remove.isPending}
+              onConfirm={() => remove.mutate()}
+            />
+          </>
+        ) : null}
+      </div>
     </>
   );
 }

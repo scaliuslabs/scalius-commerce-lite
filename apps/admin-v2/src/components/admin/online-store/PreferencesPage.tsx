@@ -137,6 +137,7 @@ function PreferencesCards() {
                 includeUnavailableProducts: next.includeUnavailableProducts,
               },
             },
+            expectedRevision: data.revision,
           },
         }));
         await queryClient.invalidateQueries({ queryKey: seoSettingsQueryOptions().queryKey });
