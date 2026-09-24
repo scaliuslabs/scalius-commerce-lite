@@ -76,6 +76,8 @@ function PriceText({ product, fmt, salePrice }: {
   salePrice: (price: number, discount: ProductListItem) => number | null;
 }) {
   const sale = salePrice(product.price, product);
+  // A draft without a price says so instead of looking free.
+  if (product.price <= 0) return <div className="text-muted-foreground md:text-right">{t("noPrice")}</div>;
   return (
     <div className="tabular-nums md:text-right">
       {sale === null ? fmt(product.price) : (

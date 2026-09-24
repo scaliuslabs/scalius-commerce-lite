@@ -27,8 +27,8 @@ describe("previewCartDiscounts", () => {
       data: {
         totalDiscount: 70,
         discounts: [
-          { promotionId: "p1", title: "Eid 10%", code: "SAVE10", amount: 20 },
-          { promotionId: "p2", title: "Free delivery", code: null, amount: 50 },
+          { promotionId: "p1", title: "Eid 10%", code: "SAVE10", amount: 20, shippingAmount: 0 },
+          { promotionId: "p2", title: "Free delivery", code: null, amount: 0, shippingAmount: 50 },
         ],
         offers: [],
         rejectedCodes: [],
@@ -45,7 +45,7 @@ describe("previewCartDiscounts", () => {
     expect(result).toMatchObject({
       ok: true,
       totalDiscount: 70,
-      discounts: [{ title: "Eid 10%", code: "SAVE10", amount: 20 }, { title: "Free delivery", code: null, amount: 50 }],
+      discounts: [{ title: "Eid 10%", code: "SAVE10", amount: 20 }, { title: "Free delivery", code: null, amount: 0, shippingAmount: 50 }],
     });
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.example.test/api/v1/discounts/validate");

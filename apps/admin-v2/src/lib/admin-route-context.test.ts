@@ -1,3 +1,4 @@
+import { redirect } from "@tanstack/react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adminRouteGuard, type AdminRouteContext } from "~/lib/auth-guards";
 import {
@@ -138,6 +139,34 @@ describe("admin route context cache", () => {
     await flushMicrotasks();
 
     await expect(getAdminRouteContext()).resolves.toBe(refreshedContext);
+  });
+
+  it("drops the cached context once a background refresh finds the session gone", async () => {
+    const lost = redirect({ to: "/auth/login" });
+    guard.mockRejectedValueOnce(lost);
+    primeAdminRouteContextCache(makeContext("suspended"));
+    vi.advanceTimersByTime(ADMIN_ROUTE_CONTEXT_FRESH_MS + 1);
+
+    await getAdminRouteContext();
+    await flushMicrotasks();
+
+    // The next navigation asks the server again, which sends it to sign-in.
+    guard.mockRejectedValueOnce(lost);
+    await expect(getAdminRouteContext()).rejects.toBe(lost);
+    expect(guard).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the cached context when a background refresh just can't reach the server", async () => {
+    const cached = makeContext("offline");
+    guard.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    primeAdminRouteContextCache(cached);
+    vi.advanceTimersByTime(ADMIN_ROUTE_CONTEXT_FRESH_MS + 1);
+
+    await getAdminRouteContext();
+    await flushMicrotasks();
+
+    guard.mockResolvedValue(cached);
+    await expect(getAdminRouteContext()).resolves.toBe(cached);
   });
 
   it("blocks on the server guard once cached context hard-expires", async () => {

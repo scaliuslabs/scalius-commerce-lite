@@ -11,7 +11,9 @@ import {
   getOrderReceiptSupportStatusMessage,
 } from "@/lib/order-success-localization";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
-import type { AuthModalPrefill } from "@/components/AuthModal";
+import { normalizeBdMobile } from "@scalius/shared/phone-input";
+import type { AuthModalOpenDetail, AuthModalPrefill } from "@/components/AuthModal";
+import { getCustomerSession, type CustomerInfo } from "@/lib/api/customer-auth";
 import { AlertCircle, CheckCircle2, HelpCircle, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -23,6 +25,8 @@ type OrderSuccessButtonsProps = {
   accountPrefill?: AuthModalPrefill;
   supportRequests?: OrderReceiptSupportRequest[];
   supportRequestActions?: OrderReceiptSupportRequestAction[];
+  /** Opened by tracking or later: no "Continue shopping" and no sign-in-to-track upsell. */
+  statusView?: boolean;
   copy: CheckoutLanguageData;
 };
 
@@ -32,8 +36,23 @@ type SubmitState =
   | { status: "success"; message: string }
   | { status: "error"; message: string };
 
-/** One line per state; "hidden" is an order saved to someone else's account. */
-type AccountCardState = "checking" | "saved" | "save" | "saving" | "sign_in" | "create" | "hidden";
+/**
+ * One line per state. "hidden": saved to someone else's account, or placed
+ * with contacts the signed-in account doesn't have. "refused": the store said
+ * why it can't be saved.
+ */
+type AccountCardState = "checking" | "saved" | "save" | "saving" | "sign_in" | "refused" | "hidden";
+
+const samePhone = (a?: string | null, b?: string | null) =>
+  Boolean(a && b && (normalizeBdMobile(a) ?? a.trim()) === (normalizeBdMobile(b) ?? b.trim()));
+const sameEmail = (a?: string | null, b?: string | null) =>
+  Boolean(a?.trim() && a.trim().toLowerCase() === b?.trim().toLowerCase());
+
+/** The account can hold this order only if it shares the order's phone or email. */
+function accountSharesOrderContact(account: CustomerInfo, order: AuthModalPrefill | undefined): boolean {
+  if (!order?.phone && !order?.email) return true;
+  return samePhone(account.phone, order.phone) || sameEmail(account.email, order.email);
+}
 
 const EMPTY_SUPPORT_REQUESTS: OrderReceiptSupportRequest[] = [];
 const EMPTY_SUPPORT_REQUEST_ACTIONS: OrderReceiptSupportRequestAction[] = [];
@@ -57,10 +76,11 @@ export default function OrderSuccessButtons({
   accountPrefill,
   supportRequests: initialSupportRequests = EMPTY_SUPPORT_REQUESTS,
   supportRequestActions: initialSupportRequestActions = EMPTY_SUPPORT_REQUEST_ACTIONS,
+  statusView = false,
   copy,
 }: OrderSuccessButtonsProps) {
   const [accountCard, setAccountCard] = useState<AccountCardState>("checking");
-  const [accountSaveFailed, setAccountSaveFailed] = useState(false);
+  const [accountMessage, setAccountMessage] = useState("");
   const claimAfterAuthRef = useRef(false);
   const [supportRequests, setSupportRequests] = useState(initialSupportRequests);
   const [supportRequestActions, setSupportRequestActions] = useState(initialSupportRequestActions);
@@ -71,7 +91,7 @@ export default function OrderSuccessButtons({
   const claimOrderToAccount = useCallback(async () => {
     if (!orderId) return;
     setAccountCard("saving");
-    setAccountSaveFailed(false);
+    setAccountMessage("");
     try {
       const response = await fetch("/api/order-receipt/claim-account", {
         method: "POST",
@@ -79,18 +99,35 @@ export default function OrderSuccessButtons({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId }),
       });
-      const payload = await response.json().catch(() => null) as { success?: boolean } | null;
-      if (!response.ok || payload?.success === false) throw new Error("account_claim_failed");
-      setAccountCard("saved");
+      const payload = await response.json().catch(() => null) as {
+        success?: boolean;
+        error?: string | { message?: string };
+      } | null;
+      if (response.ok && payload?.success !== false) {
+        setAccountCard("saved");
+        return;
+      }
+      // A refusal is final (another person's order): say why, offer nothing.
+      const reason = typeof payload?.error === "string" ? payload.error : payload?.error?.message;
+      if (response.status === 403 && reason) {
+        setAccountCard("refused");
+        setAccountMessage(reason);
+        return;
+      }
+      throw new Error("account_claim_failed");
     } catch {
       setAccountCard("save");
-      setAccountSaveFailed(true);
+      setAccountMessage(copy.orderReceiptSaveFailedText);
     }
-  }, [orderId]);
+  }, [copy.orderReceiptSaveFailedText, orderId]);
 
   /** A signed-in viewer sees "Saved" only for their own account's order. */
   const resolveSignedInCard = useCallback(async (): Promise<AccountCardState> => {
-    if (!accountLinked) return "save";
+    if (!accountLinked) {
+      const session = await getCustomerSession();
+      if (!session.authenticated || !session.customer) return session.unavailable ? "save" : "sign_in";
+      return accountSharesOrderContact(session.customer, accountPrefill) ? "save" : "hidden";
+    }
     if (!orderId) return "hidden";
     try {
       const response = await fetch(
@@ -101,7 +138,7 @@ export default function OrderSuccessButtons({
     } catch {
       return "hidden";
     }
-  }, [accountLinked, orderId]);
+  }, [accountLinked, accountPrefill, orderId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,7 +146,7 @@ export default function OrderSuccessButtons({
       if (!cancelled) setAccountCard(state);
     };
     if (document.cookie.includes("cs_auth=1")) void resolveSignedInCard().then(settle);
-    else settle(accountLinked ? "sign_in" : "create");
+    else settle("sign_in");
 
     const handleCustomerLogin = () => {
       if (claimAfterAuthRef.current && !accountLinked) {
@@ -128,7 +165,8 @@ export default function OrderSuccessButtons({
 
   const openAuthForOrder = () => {
     claimAfterAuthRef.current = true;
-    window.dispatchEvent(new CustomEvent("open-auth-modal", { detail: { prefill: accountPrefill ?? {} } }));
+    const detail: AuthModalOpenDetail = { prefill: accountPrefill ?? {}, source: "receipt" };
+    window.dispatchEvent(new CustomEvent("open-auth-modal", { detail }));
   };
 
   useEffect(() => {
@@ -223,7 +261,7 @@ export default function OrderSuccessButtons({
   return (
     <div className="no-print flex flex-col items-center space-y-6">
       <div className="mt-6 flex w-full max-w-md flex-col justify-center gap-2 sm:flex-row">
-        <a
+        {!statusView && <a
           href="/"
           data-astro-prefetch="false"
           className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-black px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800"
@@ -243,7 +281,7 @@ export default function OrderSuccessButtons({
             />
           </svg>
           {copy.continueShoppingText}
-        </a>
+        </a>}
         <Button
           variant="outline"
           className="flex-1 rounded-xl border-border px-6 py-3 font-medium transition-colors hover:bg-muted"
@@ -267,7 +305,7 @@ export default function OrderSuccessButtons({
         </Button>
       </div>
 
-      {accountCard !== "checking" && accountCard !== "hidden" && (
+      {accountCard !== "checking" && accountCard !== "hidden" && !(statusView && accountCard === "sign_in") && (
         <div className="flex w-full max-w-xl flex-col gap-3 rounded-xl border border-border p-4 text-left sm:flex-row sm:items-center sm:justify-between">
           {accountCard === "saved" ? (
             <p className="text-sm text-foreground">
@@ -290,35 +328,39 @@ export default function OrderSuccessButtons({
             >
               {accountCard === "saving" ? copy.orderReceiptSavingText : copy.orderReceiptSaveToAccountText}
             </Button>
-          ) : (
+          ) : accountCard === "sign_in" ? (
             <>
-              <p className="text-sm text-foreground">
-                {accountCard === "sign_in" ? copy.orderReceiptAccountSignInText : copy.orderReceiptAccountCreateText}
-              </p>
+              <p className="text-sm text-foreground">{copy.orderReceiptAccountSignInText}</p>
               <Button
                 type="button"
                 variant="outline"
                 className="min-h-11 shrink-0 border-border font-medium"
                 onClick={openAuthForOrder}
               >
-                {accountCard === "sign_in" ? copy.orderReceiptSignInText : copy.orderReceiptCreateAccountText}
+                {copy.orderReceiptSignInText}
               </Button>
             </>
-          )}
-          <p aria-live="polite" className="text-sm text-destructive empty:hidden">
-            {accountSaveFailed ? copy.orderReceiptSaveFailedText : ""}
+          ) : null}
+          <p aria-live="polite" className={`text-sm empty:hidden ${accountCard === "refused" ? "text-foreground" : "text-destructive"}`}>
+            {accountMessage}
           </p>
         </div>
       )}
 
-      {(latestSupportRequest || supportRequestActions.length > 0) && (
-        <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-left">
+      <div className="w-full max-w-xl rounded-xl border border-border bg-background p-4 text-left">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
             {activeSupportRequest ? <CheckCircle2 className="h-5 w-5" /> : <HelpCircle className="h-5 w-5" />}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-foreground">{copy.orderReceiptHelpText}</p>
+            <a
+              href="/track-order"
+              data-astro-prefetch="false"
+              className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              {copy.trackOrderText}
+            </a>
           </div>
         </div>
 
@@ -408,7 +450,7 @@ export default function OrderSuccessButtons({
               </div>
             )}
           </div>
-        ) : !latestSupportRequest ? (
+        ) : !latestSupportRequest && supportRequestActions.length > 0 ? (
           <p className="mt-4 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
             {copy.orderReceiptSupportUnavailableText}
           </p>
@@ -420,8 +462,7 @@ export default function OrderSuccessButtons({
             {supportSubmitState.message}
           </p>
         )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

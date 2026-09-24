@@ -11,6 +11,7 @@ import {
   unwrapPaymentSessionPayload,
   type PaymentSessionRetryOptions,
 } from "../checkout/payment-session-retry";
+import type { OrderReceiptDiscount } from "./types";
 
 // ---------------------------------------------------------------------------
 // Response shapes for customer auth API endpoints
@@ -31,6 +32,7 @@ interface VerifyOtpData {
   status?: "signed_in" | "needs_account_details";
   customer?: CustomerInfo;
   isNewUser?: boolean;
+  suggestion?: unknown;
 }
 
 interface ProfileData {
@@ -96,6 +98,17 @@ export interface NewCustomerAccountDetails {
   name: string;
   phone?: string;
   email?: string;
+  /** Copy the suggested order's delivery address; the server reads it itself. */
+  saveOrderAddress?: boolean;
+}
+
+/** What the store knows from the latest order placed with the proven contact. */
+export interface NewCustomerSuggestion {
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  /** One line to show ("House 1, Road 2, Mirpur, Dhaka"); never sent back. */
+  address: { orderNumber: number | null; text: string } | null;
 }
 
 export interface VerifyCustomerOtpInput extends SendCustomerOtpInput {
@@ -110,8 +123,28 @@ export type SendCustomerOtpResult =
 
 export type VerifyCustomerOtpResult =
   | { success: true; status: "signed_in"; customer: CustomerInfo; isNewUser: boolean }
-  | { success: true; status: "needs_account_details" }
+  | { success: true; status: "needs_account_details"; suggestion: NewCustomerSuggestion | null }
   | { success: false; error: string; attemptsLeft?: number };
+
+function optionalText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readSuggestion(value: unknown): NewCustomerSuggestion | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const address = raw.address && typeof raw.address === "object" ? raw.address as Record<string, unknown> : null;
+  const addressText = optionalText(address?.text);
+  const orderNumber = address?.orderNumber;
+  return {
+    name: optionalText(raw.name),
+    phone: optionalText(raw.phone),
+    email: optionalText(raw.email),
+    address: addressText
+      ? { orderNumber: typeof orderNumber === "number" && Number.isSafeInteger(orderNumber) ? orderNumber : null, text: addressText }
+      : null,
+  };
+}
 
 /**
  * Build a same-origin customer auth URL.
@@ -264,7 +297,9 @@ export async function verifyCustomerOtp(input: VerifyCustomerOtpInput): Promise<
     if (!res.ok || isFailedEnvelope(raw) || !data?.status) {
       return { success: false, error: failureMessage(res, raw), attemptsLeft: errorDetails(raw).attemptsLeft };
     }
-    if (data.status === "needs_account_details") return { success: true, status: data.status };
+    if (data.status === "needs_account_details") {
+      return { success: true, status: data.status, suggestion: readSuggestion(data.suggestion) };
+    }
     if (!data.customer) return { success: false, error: "Something went wrong. Please try again." };
     clearInFlightCustomerSessionRead();
     return { success: true, status: "signed_in", customer: data.customer, isNewUser: data.isNewUser === true };
@@ -623,6 +658,8 @@ export interface CustomerOrderDetail {
   progress: CustomerOrderProgress;
   paymentRecovery: CustomerPaymentRecovery;
   timeline: CustomerOrderTimelineEvent[];
+  /** Each discount used, as on the receipt: `amount` off the items, `shippingAmount` off delivery. */
+  discounts?: OrderReceiptDiscount[];
 }
 
 export interface ProfileUpdateData {

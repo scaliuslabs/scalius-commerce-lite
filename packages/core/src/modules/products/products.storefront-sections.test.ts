@@ -165,6 +165,7 @@ function detailFixture(): StorefrontProductDetail {
             posterMediaId: null,
             posterUrl: null,
             altText: `Image ${index}`,
+            filename: `image-${index}.jpg`,
             caption: null,
             width: 800,
             height: 800,

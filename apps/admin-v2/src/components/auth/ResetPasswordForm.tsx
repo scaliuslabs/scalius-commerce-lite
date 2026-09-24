@@ -8,12 +8,13 @@ import { useMessages } from "~/i18n";
 import { authMessages, type AuthMessageKey } from "~/i18n/auth";
 import { authFailureMessage, newPasswordError, readAuthFailure, type AuthMessage } from "./auth-error";
 import { AuthAlert, AuthHeader, Field, PasswordInput, describedBy, linkClassName } from "./auth-ui";
+import { handOffTwoFactorSetup } from "./two-factor-setup-handoff";
 
-type Step = "checking" | "form" | "expired" | "done";
+type Step = "checking" | "form" | "expired" | "used" | "done";
 type Purpose = "invite" | "reset";
 
 interface LinkCheck {
-  ready: boolean;
+  step: "form" | "expired" | "used";
   purpose: Purpose;
 }
 
@@ -28,7 +29,7 @@ function exchangeLinkProof(): Promise<LinkCheck> {
   const fragment = new URLSearchParams(window.location.hash.slice(1));
   const invite = fragment.get("invite");
   const token = invite ?? fragment.get("token");
-  const fallback: LinkCheck = { ready: false, purpose: invite ? "invite" : "reset" };
+  const fallback: LinkCheck = { step: "expired", purpose: invite ? "invite" : "reset" };
   window.history.replaceState(null, "", window.location.pathname);
   if (!token) return Promise.resolve(fallback);
   return fetch(withDashboardBasePath("/api/auth/reset-session"), {
@@ -37,9 +38,10 @@ function exchangeLinkProof(): Promise<LinkCheck> {
     body: JSON.stringify({ token }),
   })
     .then(async (response) => {
-      if (!response.ok) return fallback;
-      const body = (await response.json().catch(() => null)) as { purpose?: unknown } | null;
-      return { ready: true, purpose: body?.purpose === "invite" ? "invite" : "reset" } satisfies LinkCheck;
+      const body = (await response.json().catch(() => null)) as { purpose?: unknown; code?: unknown } | null;
+      // A used link: the person already has a password and only needs to sign in.
+      if (!response.ok) return body?.code === "TOKEN_USED" ? { ...fallback, step: "used" as const } : fallback;
+      return { step: "form", purpose: body?.purpose === "invite" ? "invite" : "reset" } satisfies LinkCheck;
     })
     .catch(() => fallback);
 }
@@ -70,7 +72,7 @@ export function ResetPasswordForm() {
       void exchange.current.then((result) => {
         if (!active) return;
         setPurpose(result.purpose);
-        setStep(result.ready ? "form" : "expired");
+        setStep(result.step);
       });
     };
     // A new link opened in this same tab only changes the fragment.
@@ -107,10 +109,20 @@ export function ResetPasswordForm() {
       if (response.ok) {
         // The server signed the person in with the new password: go on to two-step
         // verification (or its first-time setup, which the dashboard guard opens).
-        const result = body as { signedIn?: boolean; twoFactorRedirect?: boolean; twoFactorMethods?: readonly unknown[] } | null;
+        const result = body as {
+          signedIn?: boolean;
+          twoFactorRedirect?: boolean;
+          twoFactorMethods?: readonly unknown[];
+          twoFactorSetup?: { backupCodes?: unknown };
+        } | null;
+        const backupCodes = result?.twoFactorSetup?.backupCodes;
         if (result?.twoFactorRedirect) {
           storePendingTwoFactorMethods(result.twoFactorMethods);
           await navigate({ to: "/auth/two-factor", replace: true });
+        } else if (result?.signedIn && Array.isArray(backupCodes) && backupCodes.every((code) => typeof code === "string")) {
+          // The server started two-step setup with this password: don't ask for it again.
+          handOffTwoFactorSetup(backupCodes);
+          await navigate({ to: "/auth/setup-2fa", replace: true });
         } else if (result?.signedIn) {
           await navigate({ to: "/admin", replace: true });
         } else {
@@ -159,6 +171,20 @@ export function ResetPasswordForm() {
         <Link to="/auth/login" className={linkClassName}>
           {t("backToSignIn")}
         </Link>
+      </div>
+    );
+  }
+
+  if (step === "used") {
+    const invite = purpose === "invite";
+    return (
+      <div className="flex flex-col gap-6">
+        <AuthHeader title={t(invite ? "inviteUsedTitle" : "linkUsedTitle")} description={t(invite ? "inviteUsedBody" : "linkUsedBody")} />
+        <Button asChild className="w-full">
+          <Link to="/auth/login" replace>
+            {t("signIn")}
+          </Link>
+        </Button>
       </div>
     );
   }

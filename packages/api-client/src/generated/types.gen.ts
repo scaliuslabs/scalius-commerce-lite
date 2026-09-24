@@ -2279,7 +2279,7 @@ export type PostApiV1DiscountsValidateData = {
             variantId?: string;
         }>;
         /**
-         * Delivery charge
+         * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
          */
         shippingCost?: number;
         /**
@@ -2331,7 +2331,14 @@ export type PostApiV1DiscountsValidateResponses = {
                 promotionId: string;
                 title: string;
                 code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
                 amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
             }>;
             offers: Array<{
                 promotionId: string;
@@ -2357,7 +2364,7 @@ export type PostApiV1DiscountsValidateResponses = {
             }>;
             rejectedCodes: Array<{
                 code: string;
-                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'unavailable';
+                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
                 message: string;
                 shortfallAmount?: number;
                 shortfallQuantity?: number;
@@ -2993,6 +3000,8 @@ export type GetApiV1StorefrontLayoutResponses = {
                 quantityLimitText: string;
                 saleOfferText: string;
                 saleOfferSpendText: string;
+                saleOfferGetText: string;
+                saleOfferGetSpendText: string;
                 freeBenefitText: string;
                 percentBenefitText: string;
             };
@@ -7326,7 +7335,7 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtp
 
 export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpData = {
     body: {
-        channel: 'email' | 'sms' | 'whatsapp';
+        channel?: 'email' | 'sms' | 'whatsapp';
         code: string;
     };
     path: {
@@ -7646,6 +7655,10 @@ export type PostApiV1CustomerAuthVerifyOtpData = {
             name: string;
             phone?: string;
             email?: string;
+            /**
+             * Save the delivery address of the latest order placed with the proven contact (from `suggestion.address`).
+             */
+            saveOrderAddress?: boolean;
         };
     };
     path?: never;
@@ -7758,6 +7771,18 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
                 profileComplete: boolean;
             };
             isNewUser?: boolean;
+            /**
+             * With needs_account_details: what the latest order placed with the proven contact says, to pre-fill.
+             */
+            suggestion?: {
+                name: string | null;
+                phone: string | null;
+                email: string | null;
+                address: {
+                    orderNumber: number | null;
+                    text: string;
+                } | null;
+            } | null;
         };
     };
 };
@@ -8643,6 +8668,23 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 label: string;
                 happenedAt: NullableTimestamp;
                 details?: string | null;
+            }>;
+            discounts: Array<{
+                promotionId: string;
+                title: string;
+                code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
+                amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
+                /**
+                 * The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind.
+                 */
+                kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
             }>;
             paymentRecovery: {
                 eligible: boolean;
@@ -10667,11 +10709,15 @@ export type GetApiV1ProductsBySlugResponses = {
                     content: string;
                 }>;
                 /**
-                 * Active automatic Buy X get Y discounts this product counts toward.
+                 * Active automatic Buy X get Y discounts this product counts toward or is given by.
                  */
                 offers: Array<{
                     promotionId: string;
                     title: string;
+                    /**
+                     * "buy": this product counts toward the offer and `products` are what the buyer gets; "get": this product is what the buyer gets and `products` are what to buy.
+                     */
+                    role: 'buy' | 'get';
                     buyQuantity: number | null;
                     buyAmount: number | null;
                     getQuantity: number;
@@ -11579,6 +11625,9 @@ export type PostApiV1OrdersPaymentRecoverySendOtpResponses = {
         success: true;
         data: {
             message: string;
+            destination?: string;
+            orderNumber?: number | null;
+            resendAfterSeconds?: number;
         };
     };
 };
@@ -11588,7 +11637,6 @@ export type PostApiV1OrdersPaymentRecoverySendOtpResponse = PostApiV1OrdersPayme
 export type PostApiV1OrdersPaymentRecoveryVerifyOtpData = {
     body: {
         orderId: string;
-        channel: 'email' | 'sms' | 'whatsapp';
         code: string;
     };
     path?: never;
@@ -11765,6 +11813,17 @@ export type PostApiV1OrdersLookupSendOtpErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -11803,12 +11862,14 @@ export type PostApiV1OrdersLookupSendOtpError = PostApiV1OrdersLookupSendOtpErro
 
 export type PostApiV1OrdersLookupSendOtpResponses = {
     /**
-     * Request accepted
+     * Code sent; says where
      */
     200: {
         success: true;
         data: {
             message: string;
+            destination: string;
+            channel: 'email' | 'sms' | 'whatsapp';
             resendAfterSeconds: number;
         };
     };
@@ -11976,6 +12037,56 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 shippingMethodBaseAmountMinor: number | null;
                 shippingFeeWaived: boolean | null;
                 discountAmountMinor: number | null;
+                discounts: Array<{
+                    promotionId: string;
+                    title: string;
+                    code: string | null;
+                    /**
+                     * Off the items: shown as a discount line.
+                     */
+                    amount: number;
+                    /**
+                     * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                     */
+                    shippingAmount: number;
+                    /**
+                     * The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind.
+                     */
+                    kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
+                }>;
+                notes: string | null;
+                tracking: {
+                    progress: {
+                        steps: Array<{
+                            key: 'placed' | 'confirmed' | 'shipped' | 'delivered';
+                            label: string;
+                            done: boolean;
+                            happenedAt: NullableTimestamp;
+                        }>;
+                        outcome: {
+                            key: string;
+                            label: string;
+                            happenedAt: NullableTimestamp;
+                        } | null;
+                    };
+                    timeline: Array<{
+                        id: string;
+                        type: 'order' | 'payment' | 'refund' | 'request';
+                        status: string;
+                        label: string;
+                        happenedAt: NullableTimestamp;
+                        details?: string | null;
+                    }>;
+                    shipments: Array<{
+                        statusLabel: string;
+                        courierName: string | null;
+                        trackingId: string | null;
+                        /**
+                         * http(s) courier tracking link
+                         */
+                        trackingUrl: string | null;
+                    }>;
+                };
                 taxAmountMinor: number;
                 totalAmountMinor: number | null;
                 taxLabel: string | null;
@@ -12489,7 +12600,14 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 promotionId: string;
                 title: string;
                 code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
                 amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
             }>;
             /**
              * Automatic Buy X get Y discounts the buyer has earned but not claimed: the items to get are not in the cart yet.
@@ -12521,7 +12639,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
              */
             rejectedCodes: Array<{
                 code: string;
-                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'unavailable';
+                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
                 message: string;
                 shortfallAmount?: number;
                 shortfallQuantity?: number;
@@ -19328,6 +19446,14 @@ export type GetApiV1AdminMediaResponses = {
                 updatedAt: string | number;
                 trashedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
+                /**
+                 * Distinct places that show the file: products, categories, collections, pages, banners, theme, navigation, invoice, social image, video covers and staff photos.
+                 */
+                usageCount: number;
+                /**
+                 * Past orders show this picture, so it can never be deleted permanently.
+                 */
+                keptForOrders: boolean;
             }>;
             pagination: {
                 limit: number;
@@ -20859,6 +20985,118 @@ export type GetApiV1AdminMediaByIdOriginalResponses = {
 
 export type GetApiV1AdminMediaByIdOriginalResponse = GetApiV1AdminMediaByIdOriginalResponses[keyof GetApiV1AdminMediaByIdOriginalResponses];
 
+export type GetApiV1AdminMediaByIdUsageData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/{id}/usage';
+};
+
+export type GetApiV1AdminMediaByIdUsageErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaByIdUsageError = GetApiV1AdminMediaByIdUsageErrors[keyof GetApiV1AdminMediaByIdUsageErrors];
+
+export type GetApiV1AdminMediaByIdUsageResponses = {
+    /**
+     * Where the file is used
+     */
+    200: {
+        success: true;
+        data: {
+            count: number;
+            references: Array<{
+                kind: 'product' | 'category' | 'collection' | 'page' | 'article' | 'banner' | 'theme' | 'navigation' | 'invoice' | 'social_image' | 'video_cover' | 'staff_photo';
+                id: string | null;
+                name: string | null;
+                trashed: boolean;
+            }>;
+            orderCount: number;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaByIdUsageResponse = GetApiV1AdminMediaByIdUsageResponses[keyof GetApiV1AdminMediaByIdUsageResponses];
+
 export type DeleteApiV1AdminMediaByIdPermanentData = {
     body?: never;
     path: {
@@ -21688,6 +21926,10 @@ export type GetApiV1AdminInventoryResponses = {
                 hasMore: boolean;
                 nextCursor: string | null;
             };
+            /**
+             * Store-wide alert level for SKUs without their own (variants and alerts sections)
+             */
+            defaultLowStockThreshold?: number | null;
             [key: string]: unknown;
         };
     };
@@ -22150,6 +22392,45 @@ export type PutApiV1AdminInventoryByVariantIdAlertLevelResponses = {
 };
 
 export type PutApiV1AdminInventoryByVariantIdAlertLevelResponse = PutApiV1AdminInventoryByVariantIdAlertLevelResponses[keyof PutApiV1AdminInventoryByVariantIdAlertLevelResponses];
+
+export type PutApiV1AdminInventoryDefaultAlertLevelData = {
+    body: {
+        defaultLowStockThreshold: number | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/default-alert-level';
+};
+
+export type PutApiV1AdminInventoryDefaultAlertLevelErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryDefaultAlertLevelError = PutApiV1AdminInventoryDefaultAlertLevelErrors[keyof PutApiV1AdminInventoryDefaultAlertLevelErrors];
+
+export type PutApiV1AdminInventoryDefaultAlertLevelResponses = {
+    /**
+     * Store alert level saved
+     */
+    200: {
+        success: true;
+        data: {
+            defaultLowStockThreshold: number | null;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryDefaultAlertLevelResponse = PutApiV1AdminInventoryDefaultAlertLevelResponses[keyof PutApiV1AdminInventoryDefaultAlertLevelResponses];
 
 export type GetApiV1AdminInventoryScannerLookupData = {
     body?: never;
@@ -32516,6 +32797,112 @@ export type PostApiV1AdminSettingsPaymentMethodsResponses = {
 
 export type PostApiV1AdminSettingsPaymentMethodsResponse = PostApiV1AdminSettingsPaymentMethodsResponses[keyof PostApiV1AdminSettingsPaymentMethodsResponses];
 
+export type DeleteApiV1AdminSettingsStripeData = {
+    body: {
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/stripe';
+};
+
+export type DeleteApiV1AdminSettingsStripeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsStripeError = DeleteApiV1AdminSettingsStripeErrors[keyof DeleteApiV1AdminSettingsStripeErrors];
+
+export type DeleteApiV1AdminSettingsStripeResponses = {
+    /**
+     * Stripe keys removed
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revision: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsStripeResponse = DeleteApiV1AdminSettingsStripeResponses[keyof DeleteApiV1AdminSettingsStripeResponses];
+
 export type GetApiV1AdminSettingsStripeData = {
     body?: never;
     path?: never;
@@ -32732,6 +33119,112 @@ export type PostApiV1AdminSettingsStripeResponses = {
 };
 
 export type PostApiV1AdminSettingsStripeResponse = PostApiV1AdminSettingsStripeResponses[keyof PostApiV1AdminSettingsStripeResponses];
+
+export type DeleteApiV1AdminSettingsSslcommerzData = {
+    body: {
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/sslcommerz';
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzError = DeleteApiV1AdminSettingsSslcommerzErrors[keyof DeleteApiV1AdminSettingsSslcommerzErrors];
+
+export type DeleteApiV1AdminSettingsSslcommerzResponses = {
+    /**
+     * SSLCommerz keys removed
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revision: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzResponse = DeleteApiV1AdminSettingsSslcommerzResponses[keyof DeleteApiV1AdminSettingsSslcommerzResponses];
 
 export type GetApiV1AdminSettingsSslcommerzData = {
     body?: never;
@@ -37631,6 +38124,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                 name: string | null;
                 logoUrl: string | null;
                 storefrontUrl: string | null;
+                nameFromAddress: boolean;
             };
         };
     };
@@ -40687,7 +41181,9 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                 discounts?: Array<{
                     name: string;
                     code: string | null;
+                    kind?: string;
                     amount: number;
+                    shippingAmount?: number;
                 }>;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -40900,7 +41396,9 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                 discounts?: Array<{
                     name: string;
                     code: string | null;
+                    kind?: string;
                     amount: number;
+                    shippingAmount?: number;
                 }>;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -44063,7 +44561,9 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 name: string;
                 code: string | null;
                 method: 'automatic' | 'code';
+                kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
                 amount: number;
+                shippingAmount: number;
             }>;
             status: string;
             paymentStatus: string | null;
@@ -45902,6 +46402,11 @@ export type PostApiV1AdminProductsBulkUpdateResponses = {
                 id: string;
                 aggregateRevision: number;
             }>;
+            skipped: Array<{
+                id: string;
+                name: string;
+                reason: 'needs_price';
+            }>;
         };
     };
 };
@@ -46723,6 +47228,10 @@ export type GetApiV1AdminProductsByIdResponses = {
                 posterUrl: string | null;
                 altText: string;
                 contextualAltText?: string | null;
+                /**
+                 * The file's name in Files.
+                 */
+                filename: string;
                 caption: string | null;
                 width: number | null;
                 height: number | null;
@@ -54975,6 +55484,10 @@ export type GetApiV1AdminSettingsDeliveryLocationsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
+                descendants?: {
+                    zones: number;
+                    areas: number;
+                };
                 [key: string]: unknown;
             }>;
             pagination: {
@@ -55100,6 +55613,10 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
+                descendants?: {
+                    zones: number;
+                    areas: number;
+                };
                 [key: string]: unknown;
             };
         };
@@ -55396,6 +55913,10 @@ export type GetApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
+            descendants?: {
+                zones: number;
+                areas: number;
+            };
             [key: string]: unknown;
         };
     };
@@ -55514,6 +56035,10 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
+            descendants?: {
+                zones: number;
+                areas: number;
+            };
             [key: string]: unknown;
         };
     };

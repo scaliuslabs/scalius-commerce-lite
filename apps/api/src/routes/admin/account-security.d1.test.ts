@@ -310,17 +310,34 @@ describe("staff sign-in and invites", () => {
 
     const accepted = await postAuth(env, "/api/auth/reset-password-session", { newPassword: "Karims-Own-Pass-1" }, resetSession);
     expect(accepted.status).toBe(200);
-    expect(await accepted.json()).toMatchObject({ status: true, signedIn: true });
-    const state = await (await authRoute(env, "/api/auth/dashboard-session", { headers: { Cookie: sessionCookie(accepted) } })).json() as {
+    const acceptedBody = await accepted.json() as { status: boolean; signedIn: boolean; twoFactorSetup?: { backupCodes: string[] } };
+    expect(acceptedBody).toMatchObject({ status: true, signedIn: true });
+    const karimCookie = sessionCookie(accepted);
+    const state = await (await authRoute(env, "/api/auth/dashboard-session", { headers: { Cookie: karimCookie } })).json() as {
       session: { user: { email: string; mustChangePassword: boolean; mustEnrollTwoFactor: boolean } };
     };
-    // Straight on to two-step setup, no second password prompt.
     expect(state.session.user).toMatchObject({ email: "karim@shop.test", mustChangePassword: false, mustEnrollTwoFactor: true });
     // Accepting an invite is not a password change.
     expect(outbox.at(-1)!.subject).not.toContain("password was changed");
 
-    // A used link is refused when the page opens, before any form.
-    expect((await postAuth(env, "/api/auth/reset-session", { token })).status).toBe(400);
+    // Two-step setup started with the password just set: the next page only
+    // confirms the emailed code, never asks for the password again.
+    expect(acceptedBody.twoFactorSetup?.backupCodes).toHaveLength(10);
+    expect((await postAuth(env, "/api/auth/two-factor/send-otp", {}, karimCookie)).status).toBe(200);
+    const enrolled = await call(karimCookie, "/2fa/method", { method: "email", code: await emailedCode(userId) });
+    expect(enrolled.status).toBe(200);
+    const after = await (await authRoute(env, "/api/auth/dashboard-session", { headers: { Cookie: enrolled.cookie } })).json() as {
+      session: { user: { twoFactorEnabled: boolean; mustEnrollTwoFactor: boolean }; twoFactorVerified: boolean };
+    };
+    expect(after.session).toMatchObject({ user: { twoFactorEnabled: true, mustEnrollTwoFactor: false }, twoFactorVerified: true });
+
+    // A used link is refused when the page opens, before any form, and says it was used.
+    const reopened = await postAuth(env, "/api/auth/reset-session", { token });
+    expect(reopened.status).toBe(400);
+    expect(await reopened.json()).toMatchObject({ code: "TOKEN_USED" });
+    // A replaced or unknown link still reads as expired.
+    expect(await (await postAuth(env, "/api/auth/reset-session", { token: firstToken })).json()).toMatchObject({ code: "INVALID_TOKEN" });
+    expect(await (await postAuth(env, "/api/auth/reset-session", { token: "a".repeat(40) })).json()).toMatchObject({ code: "INVALID_TOKEN" });
   });
 
   it("keeps password-reset links short and sends a 2FA account to its challenge after the reset", async () => {

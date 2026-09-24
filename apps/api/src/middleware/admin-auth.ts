@@ -114,7 +114,8 @@ async function verifyBetterAuthSignedCookieValue(
     return token;
 }
 
-async function getAdminSessionTokenFromCookieHeader(
+/** The session token in a correctly signed Better Auth cookie, whether or not that session still exists. */
+export async function getAdminSessionTokenFromCookieHeader(
     cookieHeader: string | undefined,
     secret: string | undefined,
 ): Promise<string | null> {

@@ -2,6 +2,7 @@
 // Reservation timeout logic: releases orphaned/expired reservations.
 // Designed to be called from a queue consumer or cron trigger.
 
+import { effectiveLowStockThresholdSql } from "./low-stock-policy";
 import { eq, and, sql, lt } from "drizzle-orm";
 import {
   inventoryMovements,
@@ -293,7 +294,7 @@ export async function releaseExpiredReservations(
           stockVersion: productVariants.stockVersion,
           trackInventory: productVariants.trackInventory,
           allowPreorder: productVariants.allowPreorder,
-          lowStockThreshold: productVariants.lowStockThreshold,
+          lowStockThreshold: effectiveLowStockThresholdSql(),
         })
         .from(productVariants)
         .where(eq(productVariants.id, variantId))

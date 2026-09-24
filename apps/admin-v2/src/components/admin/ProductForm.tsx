@@ -46,7 +46,7 @@ import { ProductSearchListing } from "./product-form/ProductSearchListing";
 import { StatusCard } from "./product-form/StatusCard";
 import { OrganizationCard } from "./product-form/OrganizationCard";
 import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
-import { generateSlug } from "./product-form/utils";
+import { generateSlug, productFieldLabel } from "./product-form/utils";
 import {
   DEFAULT_PRODUCT_CONDITION,
   productFormSchema,
@@ -57,7 +57,7 @@ import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
 import { useDuplicateProduct, useTrashProduct } from "@/lib/api-mutations/products";
 import { useMessages } from "~/i18n";
-import { productMessages, type ProductMessageKey } from "~/i18n/products";
+import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import { saveBarMessages } from "~/i18n/save-bar";
 import type { ProductRevisionConflict } from "@/lib/admin-api-error";
@@ -91,23 +91,16 @@ interface ProductFormProps {
   optionMatrixSaving?: boolean;
   /** Saved SKUs, for printing their labels from the page's menu. */
   variantIds?: string[];
+  /** Filled with a reader of the unsaved draft (values and changed fields). */
+  draftRef?: React.MutableRefObject<ProductDraftReader | null>;
+  /** Changes to put back on top of the loaded values, still unsaved (after a conflict). */
+  initialEdits?: Partial<ProductFormValues> | null;
   /** Throws away the product and variant drafts (the route remounts them from the last save). */
   onDiscard: () => void;
 }
 
-/** Banner names of the product fields a failed check can land on. */
-const FIELD_LABELS: Partial<Record<keyof ProductFormValues, ProductMessageKey>> = {
-  name: "title",
-  description: "description",
-  price: "price",
-  discountAmount: "discount",
-  discountPercentage: "discount",
-  categoryId: "category",
-  slug: "webAddress",
-  media: "media",
-  attributes: "attributes",
-  additionalInfo: "additionalSections",
-};
+/** Reads the unsaved product draft: its values and the fields the merchant changed. */
+export type ProductDraftReader = () => { values: ProductFormValues; changed: Array<keyof ProductFormValues> };
 
 /** The one product page: add, edit, or view (without products.edit). */
 export function ProductForm(props: ProductFormProps) {
@@ -152,6 +145,8 @@ function ProductEditor({
   optionMatrixDirty = false,
   optionMatrixSaving = false,
   variantIds = [],
+  draftRef,
+  initialEdits,
   onDiscard,
 }: ProductFormProps) {
   const t = useMessages(productMessages);
@@ -212,13 +207,31 @@ function ProductEditor({
     onVariantIssue: (path, message) => matrixRef.current?.showServerIssue(path, message) ?? null,
   });
   const productFormDirty = form.formState.isDirty;
+  // Read while rendering so react-hook-form keeps tracking which fields changed.
+  const dirtyFields = form.formState.dirtyFields;
+
+  // The route reads the draft after a conflict and hands the merchant's changes back once
+  // they sit on top of the latest version (still unsaved).
+  if (draftRef) {
+    draftRef.current = () => ({
+      values: form.getValues(),
+      changed: (Object.keys(dirtyFields) as Array<keyof ProductFormValues>).filter((key) => key !== "slugEdited"),
+    });
+  }
+  React.useEffect(() => {
+    if (!initialEdits) return;
+    for (const [key, value] of Object.entries(initialEdits)) {
+      form.setValue(key as keyof ProductFormValues, value as never, { shouldDirty: true });
+    }
+    // Applied once, when the form mounts on the latest version.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** One line per field that failed the page's own checks, for the save banner. */
   const describeInvalid = (errors: FieldErrors<ProductFormValues>) =>
     (Object.keys(errors) as Array<keyof ProductFormValues>).map((field) => {
       const message = errors[field]?.message;
-      const label = FIELD_LABELS[field] ? t(FIELD_LABELS[field]!) : null;
-      return label ? `${label}: ${typeof message === "string" ? message : s("fixErrors")}` : s("fixErrors");
+      return `${productFieldLabel(field)}: ${typeof message === "string" ? message : s("fixErrors")}`;
     });
 
   const save = async () => {
@@ -330,7 +343,7 @@ function ProductEditor({
           <fieldset disabled={readOnly} className="grid min-w-0 gap-4 lg:grid-cols-3">
             <div className="min-w-0 space-y-4 lg:col-span-2">
               <TitleDescriptionSection form={form} readOnly={readOnly} />
-              <ProductImagesSection form={form} />
+              <ProductImagesSection form={form} readOnly={readOnly} />
               <PricingCard form={form} />
               <Card>
                 <CardHeader>

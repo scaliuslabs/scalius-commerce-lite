@@ -64,7 +64,10 @@ export interface CheckoutDiscountLine {
   promotionId: string;
   title: string;
   code: string | null;
+  /** Off the items: a discount line. */
   amount: number;
+  /** Off delivery: shown on the delivery line, never as a discount line. */
+  shippingAmount: number;
 }
 
 export interface CheckoutOfferProduct {
@@ -97,6 +100,8 @@ export type CheckoutRejectedCodeReason =
   | "buy_items"
   | "not_combinable"
   | "lower_savings"
+  | "needs_delivery"
+  | "delivery_discount_applied"
   | "unavailable";
 
 /** An applied code that adds nothing right now, with why and what to do. */
@@ -451,7 +456,8 @@ function parseOffer(value: unknown): CheckoutDiscountOffer {
 
 const REJECTED_CODE_REASONS = new Set<CheckoutRejectedCodeReason>([
   "not_found", "needs_phone", "minimum_subtotal", "minimum_quantity",
-  "get_items", "buy_items", "not_combinable", "lower_savings", "unavailable",
+  "get_items", "buy_items", "not_combinable", "lower_savings", "needs_delivery",
+  "delivery_discount_applied", "unavailable",
 ]);
 
 /** The discount lines, offers and code statuses shared by the tax quote and the cart preview. */
@@ -468,6 +474,7 @@ export function parseDiscountFacts(data: Record<string, unknown>): CheckoutDisco
         title: requiredString(line.title, 160),
         code: line.code === null ? null : requiredString(line.code, MAX_CODE_LENGTH),
         amount: nonNegativeAmount(line.amount),
+        shippingAmount: nonNegativeAmount(line.shippingAmount),
       };
     }),
     offers: offers.map(parseOffer),

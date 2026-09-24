@@ -1,15 +1,11 @@
-import { and, eq, gt, inArray, lte, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, like, lte, ne, or, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
     orderPaymentRecoveryChallenges,
     orders,
 } from "@scalius/database/schema";
-import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
-import {
-    isCustomerAuthOtpChannel,
-    type CustomerAuthOtpChannel,
-} from "@scalius/shared/customer-auth-policy";
-import { customerAuthDocument } from "../settings/documents";
+import { AppError, RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
 import { isReady } from "@scalius/shared/readiness";
 import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
 import { getSmsProviderReadiness } from "../../integrations/sms";
@@ -32,7 +28,7 @@ const ORDER_PAYMENT_RECOVERY_PURPOSE = "order_payment_recovery";
 const OTP_TTL_SECONDS = 5 * 60;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_ATTEMPTS = 5;
-const GENERIC_RECOVERY_MESSAGE = "If this order can be recovered, a verification code was sent to the buyer contact.";
+const GENERIC_RECOVERY_MESSAGE = "If this order still needs an online payment, we've sent a code to the phone number or email saved on it.";
 
 type RecoveryMethod = "email" | "phone";
 
@@ -50,7 +46,11 @@ export interface SendOrderPaymentRecoveryOtpResult {
     message: string;
     channel?: CustomerAuthOtpChannel;
     method?: RecoveryMethod;
-    identifierMasked?: string;
+    /** Masked contact the code went to ("01•••••678"). */
+    destination?: string;
+    /** Short number shown to the buyer ("#1001"), once a code was sent. */
+    orderNumber?: number | null;
+    resendAfterSeconds?: number;
     queuePayload?: OtpQueuePayload;
     challengeKey?: string;
     deliveryKey?: string;
@@ -58,7 +58,6 @@ export interface SendOrderPaymentRecoveryOtpResult {
 
 export interface VerifyOrderPaymentRecoveryOtpInput {
     orderId: string;
-    channel: CustomerAuthOtpChannel;
     code: string;
     encryptionKey?: string;
 }
@@ -87,6 +86,7 @@ export interface CleanupExpiredOrderPaymentRecoveryChallengesResult {
 
 type RecoveryOrderContact = {
     id: string;
+    orderNumber: number | null;
     customerName: string | null;
     customerPhone: string;
     customerEmail: string | null;
@@ -112,15 +112,9 @@ export async function sendOrderPaymentRecoveryOtp(
         return { queued: false, message: GENERIC_RECOVERY_MESSAGE };
     }
 
-    const { channel, method, identifier } = await resolveRecoveryChannel(db, order, input.channel);
+    const { channel, method, target, destination } = await chooseOrderCodeChannel(db, order, input);
     const deliveryEncryptionKey = requireRecoveryDeliveryEncryptionKey(input.credentialEncryptionKey);
-    await assertOrderOtpChannelReady(db, {
-        channel,
-        emailEnv: input.emailEnv,
-        credentialEncryptionKey: input.credentialEncryptionKey,
-    });
-
-    await enforceOtpSendRateLimits(db, {
+    const allowance = await enforceOtpSendRateLimits(db, {
         ip: input.ip,
         identifiers: [`order:${orderId}`],
         hashKey: input.encryptionKey,
@@ -131,7 +125,7 @@ export async function sendOrderPaymentRecoveryOtp(
     const challengeKey = await buildRecoveryChallengeKey({
         orderId,
         channel,
-        identifier,
+        identifier: target,
         encryptionKey: input.encryptionKey,
     });
     const code = await deriveCustomerAuthOtpDeliveryCode({
@@ -144,22 +138,25 @@ export async function sendOrderPaymentRecoveryOtp(
         orderId,
         method,
         channel,
-        identifier,
-        deliveryTarget: identifier,
-        deliveryName: order.customerName?.trim() || "Customer",
+        identifier: target,
+        deliveryTarget: target,
+        deliveryName: order.customerName?.trim() || undefined,
         code,
         deliveryKey,
         encryptionKey: input.encryptionKey,
         deliveryEncryptionKey,
         nowSeconds,
+        resendCooldownSeconds: allowance.resendCooldownSeconds,
     });
 
     return {
         queued: true,
-        message: "Verification code sent. Please check the buyer contact.",
+        message: `We sent a code to ${destination}.`,
         channel,
         method,
-        identifierMasked: challenge.identifierMasked,
+        destination,
+        orderNumber: order.orderNumber,
+        resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - nowSeconds),
         queuePayload: {
             type: "auth.send_otp",
             challengeKey: challenge.challengeKey,
@@ -181,61 +178,12 @@ export async function verifyOrderPaymentRecoveryOtp(
 ): Promise<VerifyOrderPaymentRecoveryOtpResult> {
     const orderId = input.orderId.trim();
     const code = input.code.trim();
-    if (!orderId || !code || !isCustomerAuthOtpChannel(input.channel)) {
-        throw new ValidationError("Verification code could not be verified. Please request a new code.");
+    if (!orderId || !/^\d{4,12}$/.test(code)) {
+        throw new ValidationError("Enter the 6-digit code.");
     }
-
-    const order = await getRecoveryOrderContact(db, orderId);
-    if (!order) {
-        throw new ValidationError("Verification code could not be verified. Please request a new code.");
-    }
-
-    const { channel, method, identifier } = await resolveRecoveryChannel(db, order, input.channel);
     await previewOrderPaymentRecoveryLink(db, orderId);
-
-    const challengeKey = await buildRecoveryChallengeKey({
-        orderId,
-        channel,
-        identifier,
-        encryptionKey: input.encryptionKey,
-    });
-    const identifierHash = await hashRecoveryIdentifier(identifier, input.encryptionKey);
-    const codeHash = await hashRecoveryOtpCode(code, challengeKey, input.encryptionKey);
     const nowSeconds = currentUnixSeconds();
-
-    const consumedRows = await db.update(orderPaymentRecoveryChallenges)
-        .set({
-            status: "consumed",
-            attempts: sql`${orderPaymentRecoveryChallenges.attempts} + 1`,
-            consumedAt: nowSeconds,
-            updatedAt: nowSeconds,
-        })
-        .where(and(
-            eq(orderPaymentRecoveryChallenges.challengeKey, challengeKey),
-            eq(orderPaymentRecoveryChallenges.orderId, orderId),
-            eq(orderPaymentRecoveryChallenges.method, method),
-            eq(orderPaymentRecoveryChallenges.channel, channel),
-            eq(orderPaymentRecoveryChallenges.identifierHash, identifierHash),
-            eq(orderPaymentRecoveryChallenges.status, "pending"),
-            gt(orderPaymentRecoveryChallenges.expiresAt, nowSeconds),
-            sql`${orderPaymentRecoveryChallenges.attempts} < ${orderPaymentRecoveryChallenges.maxAttempts}`,
-            eq(orderPaymentRecoveryChallenges.codeHash, codeHash),
-        ))
-        .returning({
-            challengeKey: orderPaymentRecoveryChallenges.challengeKey,
-        });
-
-    if (!consumedRows[0]?.challengeKey) {
-        await recordWrongOrderOtpAttempt(db, {
-            challengeKey,
-            orderId,
-            method,
-            channel,
-            identifierHash,
-            codeHash,
-            nowSeconds,
-        });
-    }
+    await consumeLatestOrderOtpChallenge(db, { orderId, keyPrefix: RECOVERY_KEY_PREFIX, code, encryptionKey: input.encryptionKey, nowSeconds });
 
     const recovery = await createOrderPaymentRecoveryLink(db, orderId, {
         nowSeconds,
@@ -256,6 +204,102 @@ export async function verifyOrderPaymentRecoveryOtp(
             ...(typeof recovery.depositAmount === "number" ? { depositAmount: recovery.depositAmount } : {}),
         },
     };
+}
+
+/**
+ * Checks a code against the order's latest challenge of one kind (payment
+ * recovery or order lookup) and uses it up. Wrong codes count attempts.
+ */
+export async function consumeLatestOrderOtpChallenge(
+    db: Database,
+    input: { orderId: string; keyPrefix: string; code: string; encryptionKey?: string; nowSeconds: number },
+): Promise<void> {
+    const challenge = await db
+        .select()
+        .from(orderPaymentRecoveryChallenges)
+        .where(and(
+            eq(orderPaymentRecoveryChallenges.orderId, input.orderId),
+            like(orderPaymentRecoveryChallenges.challengeKey, `${input.keyPrefix}%`),
+        ))
+        .orderBy(desc(orderPaymentRecoveryChallenges.updatedAt))
+        .get();
+    if (!challenge) throw new ValidationError("There's no active code. Send a new code.", { attemptsLeft: 0 });
+
+    const codeHash = await hashRecoveryOtpCode(input.code, challenge.challengeKey, input.encryptionKey);
+    const consumed = await db.update(orderPaymentRecoveryChallenges)
+        .set({
+            status: "consumed",
+            attempts: sql`${orderPaymentRecoveryChallenges.attempts} + 1`,
+            consumedAt: input.nowSeconds,
+            updatedAt: input.nowSeconds,
+        })
+        .where(and(
+            eq(orderPaymentRecoveryChallenges.challengeKey, challenge.challengeKey),
+            eq(orderPaymentRecoveryChallenges.status, "pending"),
+            gt(orderPaymentRecoveryChallenges.expiresAt, input.nowSeconds),
+            sql`${orderPaymentRecoveryChallenges.attempts} < ${orderPaymentRecoveryChallenges.maxAttempts}`,
+            eq(orderPaymentRecoveryChallenges.codeHash, codeHash),
+        ))
+        .returning({ challengeKey: orderPaymentRecoveryChallenges.challengeKey });
+    if (consumed[0]) return;
+    await recordWrongOrderOtpAttempt(db, {
+        challengeKey: challenge.challengeKey,
+        orderId: input.orderId,
+        method: challenge.method,
+        channel: challenge.channel,
+        identifierHash: challenge.identifierHash,
+        codeHash,
+        nowSeconds: input.nowSeconds,
+    });
+}
+
+/** The order has no email and the store can't text: no code can reach the buyer. */
+export class NoOrderCodeChannelError extends AppError {
+    constructor() {
+        super(
+            409,
+            "NO_CODE_CHANNEL",
+            "This order has no email address, and this store can't send text messages. Contact the store to check on your order.",
+        );
+    }
+}
+
+/** "b•••@example.com" or "01•••••678": enough for the buyer to know where to look. */
+export function maskOrderContact(method: RecoveryMethod, target: string): string {
+    if (method === "email") {
+        const [local = "", domain = ""] = target.split("@");
+        return `${local.slice(0, 1)}•••@${domain}`;
+    }
+    const digits = target.replace(/\D/g, "");
+    const local = digits.startsWith("880") ? `0${digits.slice(3)}` : digits;
+    return `${local.slice(0, 2)}•••••${local.slice(-3)}`;
+}
+
+/**
+ * Where a code for this order can actually go: the phone on the order when the
+ * store can text (SMS, then WhatsApp), else the email on the order. The code
+ * never goes to a contact the visitor typed.
+ */
+export async function chooseOrderCodeChannel(
+    db: Database,
+    order: { customerPhone: string; customerEmail: string | null },
+    input: { channel?: CustomerAuthOtpChannel; emailEnv?: EmailRuntimeContext["env"]; credentialEncryptionKey?: string },
+): Promise<{ channel: CustomerAuthOtpChannel; method: RecoveryMethod; target: string; destination: string }> {
+    const [sms, whatsApp, email] = await Promise.all([
+        getSmsProviderReadiness(db, input.credentialEncryptionKey),
+        getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey),
+        getEmailProviderReadiness({ db, env: input.emailEnv, encryptionKey: input.credentialEncryptionKey }),
+    ]);
+    const orderEmail = order.customerEmail?.trim().toLowerCase() || null;
+    const available: CustomerAuthOtpChannel[] = [];
+    if (isReady(sms)) available.push("sms");
+    if (whatsApp.accessToken && whatsApp.phoneNumberId) available.push("whatsapp");
+    if (isReady(email) && orderEmail) available.push("email");
+    const channel = input.channel && available.includes(input.channel) ? input.channel : available[0];
+    if (!channel) throw new NoOrderCodeChannelError();
+    const method: RecoveryMethod = channel === "email" ? "email" : "phone";
+    const target = method === "email" ? orderEmail! : order.customerPhone;
+    return { channel, method, target, destination: maskOrderContact(method, target) };
 }
 
 export async function deleteOrderPaymentRecoveryChallenge(
@@ -309,6 +353,7 @@ async function getRecoveryOrderContact(
     return await db
         .select({
             id: orders.id,
+            orderNumber: orders.orderNumber,
             customerName: orders.customerName,
             customerPhone: orders.customerPhone,
             customerEmail: orders.customerEmail,
@@ -316,84 +361,6 @@ async function getRecoveryOrderContact(
         .from(orders)
         .where(eq(orders.id, orderId))
         .get() ?? null;
-}
-
-async function resolveRecoveryChannel(
-    db: Database,
-    order: RecoveryOrderContact,
-    requestedChannel: CustomerAuthOtpChannel | undefined,
-): Promise<{ channel: CustomerAuthOtpChannel; method: RecoveryMethod; identifier: string }> {
-    const policy = await getRecoveryOtpPolicy(db);
-    const channels = policy.otpChannels.filter((channel) => {
-        if (channel === "email") return Boolean(order.customerEmail?.trim());
-        return Boolean(order.customerPhone?.trim());
-    });
-
-    if (requestedChannel && !channels.includes(requestedChannel)) {
-        throw new ValidationError("That verification channel is not available for this order.");
-    }
-
-    const channel = requestedChannel && channels.includes(requestedChannel)
-        ? requestedChannel
-        : channels.includes(policy.defaultOtpChannel)
-            ? policy.defaultOtpChannel
-            : channels[0];
-
-    if (!channel) {
-        throw new ValidationError("No verification channel is available for this order.");
-    }
-
-    if (channel === "email") {
-        const identifier = order.customerEmail?.trim().toLowerCase();
-        if (!identifier) {
-            throw new ValidationError("Email verification is not available for this order.");
-        }
-        return { channel, method: "email", identifier };
-    }
-
-    const identifier = order.customerPhone?.trim();
-    if (!identifier) {
-        throw new ValidationError("Phone verification is not available for this order.");
-    }
-    return { channel, method: "phone", identifier };
-}
-
-async function getRecoveryOtpPolicy(db: Database) {
-    return (await customerAuthDocument.read(db)).policy;
-}
-
-export async function assertOrderOtpChannelReady(
-    db: Database,
-    input: {
-        channel: CustomerAuthOtpChannel;
-        emailEnv?: EmailRuntimeContext["env"];
-        credentialEncryptionKey?: string;
-    },
-): Promise<void> {
-    if (input.channel === "email") {
-        const readiness = await getEmailProviderReadiness({
-            db,
-            env: input.emailEnv,
-            encryptionKey: input.credentialEncryptionKey,
-        });
-        if (!isReady(readiness)) {
-            throw new ServiceUnavailableError("Email verification is currently unavailable. Contact store support.");
-        }
-        return;
-    }
-
-    if (input.channel === "sms") {
-        const readiness = await getSmsProviderReadiness(db, input.credentialEncryptionKey);
-        if (!isReady(readiness)) {
-            throw new ServiceUnavailableError("SMS verification is currently unavailable. Contact store support.");
-        }
-        return;
-    }
-
-    const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey);
-    if (!whatsAppSettings.accessToken || !whatsAppSettings.phoneNumberId) {
-        throw new ServiceUnavailableError("WhatsApp verification is currently unavailable. Contact store support.");
-    }
 }
 
 /** One pending code per challenge key (payment recovery or order lookup). */
@@ -412,13 +379,14 @@ export async function persistOrderOtpChallenge(
         encryptionKey?: string;
         deliveryEncryptionKey: string;
         nowSeconds: number;
+        resendCooldownSeconds?: number;
     },
 ): Promise<{ challengeKey: string; identifierMasked: string; expiresAt: number; resendAvailableAt: number }> {
     const challengeKey = input.challengeKey;
     const identifierHash = await hashRecoveryIdentifier(input.identifier, input.encryptionKey);
     const codeHash = await hashRecoveryOtpCode(input.code, challengeKey, input.encryptionKey);
     const expiresAt = input.nowSeconds + OTP_TTL_SECONDS;
-    const resendAvailableAt = input.nowSeconds + OTP_RESEND_COOLDOWN_SECONDS;
+    const resendAvailableAt = input.nowSeconds + (input.resendCooldownSeconds ?? OTP_RESEND_COOLDOWN_SECONDS);
     const identifierMasked = maskOtpIdentifier(input.identifier);
     const deliveryTargetEncrypted = await encryptRecoveryDeliveryValue(
         input.deliveryTarget,
@@ -560,13 +528,15 @@ export async function recordWrongOrderOtpAttempt(
     throw new ValidationError("That code couldn't be checked. Send a new code.", { attemptsLeft: 0 });
 }
 
+const RECOVERY_KEY_PREFIX = "order_payrec:";
+
 async function buildRecoveryChallengeKey(input: {
     orderId: string;
     channel: CustomerAuthOtpChannel;
     identifier: string;
     encryptionKey?: string;
 }): Promise<string> {
-    return `order_payrec:${await hmacSha256Hex(
+    return `${RECOVERY_KEY_PREFIX}${await hmacSha256Hex(
         requireOtpHashKey(input.encryptionKey),
         `order-payment-recovery-challenge:${input.orderId}:${input.channel}:${input.identifier.trim().toLowerCase()}`,
     )}`;

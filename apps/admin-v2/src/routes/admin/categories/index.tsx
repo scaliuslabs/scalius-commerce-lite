@@ -11,7 +11,7 @@ import {
   normalizeOptionalEnumSearchParam,
   type SearchValidatorInput,
 } from "~/lib/list-helpers";
-import { readListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -49,7 +49,7 @@ function listQuery(search: ReturnType<typeof validateCategorySearch>, term: stri
 export const Route = createFileRoute("/admin/categories/")({
   validateSearch: validateCategorySearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, readListSearch("categories"))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("categories", deps.q))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "categories") }] }),
   component: CategoriesPage,
   errorComponent: RouteErrorComponent,
@@ -116,6 +116,7 @@ function CategoriesPage() {
       actions={can.canCreate ? <Button asChild><Link to="/admin/categories/new">{t("addCategory")}</Link></Button> : null}
       search={search}
       list="categories"
+      countLabel={(count) => t("categoryCount", { count })}
       query={listQuery(search, term)}
       pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
       dataKey="categories"

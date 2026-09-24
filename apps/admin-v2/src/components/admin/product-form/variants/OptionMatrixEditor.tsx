@@ -35,8 +35,9 @@ import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib
 import { queryKeys } from "@/lib/query-keys";
 import { useCurrency } from "@/hooks/use-currency";
 import { SaveNotCompleted } from "../../shared/SaveBar";
+import { ConfirmDialog } from "../../shared/ConfirmDialog";
 import { readSkuTaken } from "../hooks/useProductSubmit";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import type {
@@ -157,11 +158,17 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   const [omittedVariantsByKey, setOmittedVariantsByKey] = React.useState<Map<string, DraftVariant>>(() => new Map());
   const savedOptionDraft = React.useMemo(() => initialOptions(savedOptions), [savedOptions]);
   const savedTopology = React.useMemo(() => optionTopologySignature(savedOptionDraft), [savedOptionDraft]);
-  const requiredStockAllocation = savedOptions.length === 0 && defaultSku?.trackInventory
-    ? defaultSku.stock
-    : topologyChanged
-      ? savedVariants.filter((variant) => !variant.isDefault && variant.trackInventory).reduce((total, variant) => total + variant.stock, 0)
-      : 0;
+  // Stock that must reach the new rows (the server's rule): a simple product's stock when
+  // options are first added, or the stock of saved variants an option change replaces.
+  // Variants that are only removed keep their stock on record (see the removal dialog).
+  const liveIds = new Set(variants.map((variant) => variant.id));
+  const replacedVariants = topologyChanged && variants.some((variant) => variant.id.startsWith("draft_"))
+    ? savedVariants.filter((variant) => !variant.isDefault && !variant.deletedAt && !liveIds.has(variant.id))
+    : [];
+  const simpleConversion = savedOptions.length === 0 && Boolean(defaultSku?.trackInventory);
+  const requiredStockAllocation = simpleConversion
+    ? defaultSku!.stock
+    : replacedVariants.reduce((total, variant) => total + (variant.trackInventory ? variant.stock : 0), 0);
   const blockedCommittedStock = savedOptions.length === 0 ? defaultSku?.reservedStock ?? 0 : 0;
   const committedByVariantId = React.useMemo(
     () => new Map(savedVariants.map((variant) => [variant.id, variant.reservedStock])),
@@ -177,6 +184,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   const matrixIssue = getOptionMatrixIssue(options, variants, images, combinationsPending, {
     committedByVariantId,
     requiredStockAllocation,
+    allocationScope: simpleConversion ? "all" : "new",
     blockedCommittedStock,
     allowSavedImageRemovalConfirmation: !dirty,
     requirePositivePrice,
@@ -225,6 +233,14 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     if (target?.variantId && target.field && ADVANCED_FIELDS.has(target.field)) setExpandedId(target.variantId);
   }, [draftIssue, serverIssue]);
 
+  // Removing saved variants that still hold stock is confirmed first, naming them.
+  const [pendingRemoval, setPendingRemoval] = React.useState<{ title: string; stocked: DraftVariant[]; apply: () => void } | null>(null);
+  const confirmRemoval = (title: string, removed: DraftVariant[], apply: () => void) => {
+    const stocked = removed.filter((variant) => !variant.id.startsWith("draft_") && variant.trackInventory && variant.stock > 0);
+    if (stocked.length === 0) apply();
+    else setPendingRemoval({ title, stocked, apply });
+  };
+
   const stageOptions = React.useCallback((nextOptions: DraftOption[]) => {
     setOptions(nextOptions);
     setCombinationsPending(true);
@@ -238,7 +254,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       variants,
       productName,
       productPrice,
-      requiredStockAllocation,
+      simpleConversion ? defaultSku!.stock : 0,
       excludedCombinationKeys,
     );
     setVariants(next);
@@ -246,7 +262,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     setTopologyChanged(optionTopologySignature(options) !== savedTopology);
     setCombinationsPending(false);
     setDirty(true);
-  }, [combinationCount, excludedCombinationKeys, options, productName, productPrice, requiredStockAllocation, savedTopology, validShape, variants]);
+  }, [combinationCount, defaultSku, excludedCombinationKeys, options, productName, productPrice, savedTopology, simpleConversion, validShape, variants]);
 
   // Variants follow the options as soon as every option has a name and a value.
   // Existing rows are matched by option values and keep their data; rows that
@@ -518,6 +534,12 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                 onChange={(next) => stageOptions(options.map((item) =>
                   item.id === option.id ? withGuessedOptionType(item, next, options) : item))}
                 onRemove={() => stageOptions(options.filter((item) => item.id !== option.id))}
+                onRemoveValue={(value) => confirmRemoval(
+                  t("removeValueTitle", { value: value.value }),
+                  variants.filter((variant) => variant.selectedOptionValueIds.includes(value.id)),
+                  () => stageOptions(options.map((item) =>
+                    item.id === option.id ? { ...item, values: item.values.filter((entry) => entry.id !== value.id) } : item)),
+                )}
               />
             ))}
           </div>
@@ -551,8 +573,10 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         </div>
       </div>
 
-      {/* Option-level problems show once a value is entered; variant problems sit on their field. */}
-      {shownIssue && !shownIssue.field && !simpleMode && options.some((option) => option.values.length > 0) ? (
+      {/* Option-level problems show once a value is entered (an option still being filled in waits
+          for Save); variant problems sit on their field. */}
+      {shownIssue && !shownIssue.field && !simpleMode && (!shownIssue.incomplete || revealed)
+        && options.some((option) => option.values.length > 0) ? (
         <p className="text-body text-destructive" role="alert">
           {lineFor(shownIssue)}
         </p>
@@ -568,7 +592,11 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           expandedId={expandedId}
           onExpandedChange={setExpandedId}
           onChange={updateVariant}
-          onRemove={removeVariants}
+          onRemove={(ids) => confirmRemoval(
+            t("stopSellingTitle", { count: ids.size }),
+            variants.filter((variant) => ids.has(variant.id)),
+            () => removeVariants(ids),
+          )}
           missingCombinations={missingCombinations}
           onRestoreCombination={restoreCombination}
           onRestoreAll={restoreAllCombinations}
@@ -578,6 +606,21 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       ) : options.length > 0 && !combinationsPending ? (
         <p className="text-body text-muted-foreground">{t("addOptionValues")}</p>
       ) : null}
+      <ConfirmDialog
+        open={pendingRemoval !== null}
+        onOpenChange={(open) => { if (!open) setPendingRemoval(null); }}
+        title={pendingRemoval?.title ?? ""}
+        description={pendingRemoval ? t("removeStockedBody", {
+          variants: pendingRemoval.stocked.map((variant) => `${nameOf(variant)} (${formatNumber(variant.stock)})`).join(", "),
+          count: formatNumber(pendingRemoval.stocked.reduce((total, variant) => total + variant.stock, 0)),
+        }) : ""}
+        confirmLabel={t("removeAnyway")}
+        cancelLabel={t("keepThem")}
+        onConfirm={() => {
+          pendingRemoval?.apply();
+          setPendingRemoval(null);
+        }}
+      />
     </section>
   );
 });
@@ -598,7 +641,7 @@ function Field({ label, help, error, children }: {
   children: (invalid: boolean) => React.ReactNode;
 }) {
   return (
-    <label className="block space-y-1 text-body text-muted-foreground">
+    <label className="flex flex-col gap-1 text-body text-muted-foreground">
       {label}
       {children(Boolean(error))}
       {error ? <span className="block text-destructive">{error}</span> : help ? <span className="block">{help}</span> : null}
@@ -606,7 +649,7 @@ function Field({ label, help, error, children }: {
   );
 }
 
-function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, onRemove }: {
+function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, onRemove, onRemoveValue }: {
   option: DraftOption;
   index: number;
   canMoveUp: boolean;
@@ -614,29 +657,37 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
   onMove: (direction: -1 | 1) => void;
   onChange: (option: DraftOption) => void;
   onRemove: () => void;
+  onRemoveValue: (value: DraftOption["values"][number]) => void;
 }) {
   const t = useMessages(productMessages);
   const [valueInput, setValueInput] = React.useState("");
+  const [duplicate, setDuplicate] = React.useState<string | null>(null);
   const optionLabel = option.name.trim() || t("optionNumber", { number: index + 1 });
+  const composerId = React.useId();
   const addValues = () => {
     const existing = new Set(option.values.map((value) => normalized(value.value)));
+    const repeated: string[] = [];
     const nextValues = valueInput.split(/[,\n]/).map((value) => value.trim()).filter(Boolean)
       .flatMap((value) => {
         const identity = normalized(value);
-        if (existing.has(identity)) return [];
+        if (existing.has(identity)) {
+          repeated.push(option.values.find((entry) => normalized(entry.value) === identity)?.value ?? value);
+          return [];
+        }
         existing.add(identity);
         return [{ id: draftId("value"), value }];
       });
-    if (!nextValues.length) return;
-    onChange({ ...option, values: [...option.values, ...nextValues] });
-    setValueInput("");
+    // A value already in the option stays in the box with a reason, never silently dropped.
+    setDuplicate(repeated[0] ?? null);
+    if (nextValues.length) onChange({ ...option, values: [...option.values, ...nextValues] });
+    setValueInput(repeated.join(", "));
   };
 
   // Shopify's option editor: the name (with how customers filter it) on one line, its values below.
   return (
     <div className="space-y-3 py-3">
       <div className="flex flex-wrap items-end gap-2">
-        <label className="min-w-0 flex-1 basis-48 space-y-1 text-body text-muted-foreground">
+        <label className="flex min-w-0 flex-1 basis-48 flex-col gap-1 text-body text-muted-foreground">
           {t("optionNameLabel")}
           <Input
             value={option.name}
@@ -645,7 +696,7 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
             aria-label={t("optionName", { number: index + 1 })}
           />
         </label>
-        <label className="w-full space-y-1 text-body text-muted-foreground sm:w-40">
+        <label className="flex w-full flex-col gap-1 text-body text-muted-foreground sm:w-40">
           {t("optionFilterAs")}
           <Select
             value={option.standardMapping}
@@ -685,7 +736,7 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
                 <button
                   type="button"
                   aria-label={t("removeValue", { value: value.value })}
-                  onClick={() => onChange({ ...option, values: option.values.filter((item) => item.id !== value.id) })}
+                  onClick={() => onRemoveValue(value)}
                   className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -697,7 +748,12 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
         <Input
           data-option-value-composer
           value={valueInput}
-          onChange={(event) => setValueInput(event.target.value)}
+          aria-invalid={Boolean(duplicate)}
+          aria-describedby={duplicate ? `${composerId}-duplicate` : undefined}
+          onChange={(event) => {
+            setValueInput(event.target.value);
+            setDuplicate(null);
+          }}
           onBlur={addValues}
           onKeyDown={(event) => {
             if (event.key === "Enter" || event.key === ",") {
@@ -708,6 +764,9 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
           placeholder={t(option.values.length ? "addValue" : "addValuesHint")}
           aria-label={t("addValueFor", { name: optionLabel })}
         />
+        {duplicate ? (
+          <p id={`${composerId}-duplicate`} className="text-body text-destructive">{t("valueDuplicate", { value: duplicate })}</p>
+        ) : null}
       </div>
     </div>
   );
@@ -873,7 +932,11 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
       </div>
       {selected.size > 0 ? (
         <div className="flex flex-wrap items-center gap-2 border-b bg-muted px-2 py-2 text-body">
-          <strong className="font-medium">{r("selected", { count: selected.size })}</strong>
+          {/* The count and Clear stay together on the left, so Clear never wraps alone. */}
+          <span className="flex items-center gap-1">
+            <strong className="font-medium">{r("selected", { count: selected.size })}</strong>
+            <Button type="button" variant="link" size="sm" onClick={() => setSelected(new Set())}>{t("clearSelection")}</Button>
+          </span>
           <NumberInput value={bulkPrice} onValueChange={setBulkPrice} placeholder={t("price")} aria-label={t("price")} aria-invalid={bulkPrice !== null && !Number.isFinite(bulkPrice)} className="w-24" />
           <NumberInput value={bulkStock} integer onValueChange={setBulkStock} placeholder={t("quantity")} aria-label={t("quantity")} aria-invalid={bulkStock !== null && !Number.isInteger(bulkStock)} className="w-24" />
           <VariantImagePicker
@@ -917,7 +980,6 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
               </Button>
             )
           ) : null}
-          <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(new Set())}>{t("clearSelection")}</Button>
         </div>
       ) : null}
       <div className="hidden md:block">
@@ -954,8 +1016,8 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
                       <button type="button" onClick={() => onExpandedChange(expanded ? null : variant.id)} className="flex min-h-10 w-full items-center gap-1.5 rounded-sm text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-expanded={expanded}>
                         {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
                         <span className="min-w-0">
-                          <span className="block truncate">{nameOf(variant)}</span>
-                          <span className="block truncate font-mono font-normal text-muted-foreground">{variant.sku}</span>
+                          <span className="block break-words">{nameOf(variant)}</span>
+                          <span className="block break-all font-mono font-normal text-muted-foreground">{variant.sku}</span>
                         </span>
                       </button>
                       {issueFor(variant.id, "photo") ? <p className="text-body text-destructive">{issueFor(variant.id, "photo")}</p> : null}
@@ -1007,18 +1069,29 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
                 <Checkbox checked={selected.has(variant.id)} onCheckedChange={(checked) => toggleSelected(variant.id, checked === true)} aria-label={r("select", { name: nameOf(variant) })} />
               </label>
               {photoPicker(variant)}
-              <strong className="min-w-0 flex-1 truncate text-body font-medium">{nameOf(variant)}</strong>
-              <Button
+              {/* Names and SKUs wrap: Bangla values run long and the SKU is how staff tell rows apart. */}
+              <button
                 type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={t("moreFieldsFor", { name: nameOf(variant) })}
                 aria-expanded={expandedId === variant.id}
+                aria-label={t("moreFieldsFor", { name: nameOf(variant) })}
                 onClick={() => onExpandedChange(expandedId === variant.id ? null : variant.id)}
+                className="flex min-h-11 min-w-0 flex-1 items-start gap-1.5 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ChevronDown className={cn("h-4 w-4", expandedId !== variant.id && "-rotate-90")} />
-              </Button>
+                <ChevronDown className={cn("mt-0.5 h-4 w-4 shrink-0", expandedId !== variant.id && "-rotate-90")} />
+                <span className="min-w-0">
+                  <span className="block break-words font-medium">{nameOf(variant)}</span>
+                  <span className="block break-all font-mono text-muted-foreground">{variant.sku}</span>
+                </span>
+              </button>
+              {/* Same order as the desktop table: print, then the destructive action last. */}
               <div className="flex shrink-0 justify-end gap-1">
+                {variant.id.startsWith("var_") && !printingDisabled ? (
+                  <Button asChild variant="ghost" size="icon">
+                    <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={t("printLabelFor", { name: nameOf(variant) })}>
+                      <Printer className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="ghost"
@@ -1028,15 +1101,8 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
                   aria-label={t("stopSellingVariant", { name: nameOf(variant) })}
                   onClick={() => onRemove(new Set([variant.id]))}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
-                {variant.id.startsWith("var_") && !printingDisabled ? (
-                  <Button asChild variant="ghost" size="icon">
-                    <Link to="/admin/inventory/labels" search={{ variants: variant.id }} aria-label={t("printLabelFor", { name: nameOf(variant) })}>
-                      <Printer className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                ) : null}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">

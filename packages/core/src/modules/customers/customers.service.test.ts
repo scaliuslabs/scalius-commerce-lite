@@ -380,6 +380,7 @@ describe("customer account order history pagination and timeline", () => {
         label: "Cancellation request approved",
         reason: "Ordered by mistake",
         submittedAt: at(1_780_000_900),
+        resolvedAt: at(1_780_001_000),
         updatedAt: null,
         createdAt: null,
       }],
@@ -453,5 +454,18 @@ describe("customer account order reads (SQLite)", () => {
     ]);
     expect(detail).not.toHaveProperty("notifications");
     expect(JSON.stringify(detail)).not.toMatch(/Accepted|resend/);
+  });
+
+  it("says a refused request was declined, dated when the store decided", async () => {
+    sqlite.exec(`UPDATE order_support_requests
+      SET status = 'rejected', active_key = NULL, submitted_at = 1780000700, resolved_at = 1780003600, updated_at = 1780003600
+      WHERE id = 'req_open'`);
+    const detail = await getCustomerOrderDetail(db, "account_1", "order_open");
+    expect(detail.supportRequests.map((request) => request.label)).toEqual(["Cancellation request declined"]);
+    expect(detail.timeline[0]).toMatchObject({
+      label: "Cancellation request declined",
+      happenedAt: new Date(1_780_003_600 * 1000).toISOString(),
+    });
+    expect([...detail.supportRequests, ...detail.timeline].map((event) => event.label).join(" ")).not.toMatch(/rejected/i);
   });
 });

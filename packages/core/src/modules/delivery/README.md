@@ -12,7 +12,8 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `types.ts` | Shared types: `ShipmentResult`, `ShipmentStatus`, `ShipmentOptions`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
 | `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries |
 | `provider-readiness.ts` | Activation/readiness rules for Pathao/Steadfast required fields plus keyed setup fingerprints for durable live-test proof |
-| `tracking.ts` | Standalone functions: `updateOrderStatusFromShipment()` maps shipment status to order status (with inventory side-effects via `applyInventoryForStatusChange`), `getTrackingUrl()` |
+| `tracking.ts` | Standalone functions: `updateOrderStatusFromShipment()` maps shipment status to order status (with inventory side-effects via `applyInventoryForStatusChange`) |
+| `tracking-url.ts` | `getTrackingUrl()`: the courier's public tracking page (used by buyer notifications) |
 | `status-mapper.ts` | `mapProviderStatus()` + `ShipmentStatusCode` enum -- normalizes provider-specific statuses to 14 canonical codes |
 | `locations.ts` | Location CRUD and external ID resolution functions |
 | `zones.ts` | Delivery zones and rates (`shipping_methods`). An address resolves to the zone of its most specific assigned place (area > zone > city), else the zoneless "Everywhere else" rates; local pickup rates are store-wide. `resolveDeliveryRate` is the one checkout decision (zone match, active, free-over on the items subtotal before discounts); zone edits CAS on `delivery_zones.revision`, Everywhere-else edits on a settings document revision. |
@@ -53,6 +54,8 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `createLocation` | `(db, data: LocationData)` | Creates with cuid2 ID |
 | `updateLocation` | `(db, id, data)` | Partial update |
 | `getLocationById` | `(db, id)` | Single active location, parses JSON fields |
+| `countLocationDescendants` | `(db, ids)` | Live thanas (`zone` rows) and areas under each city/thana, for the delete confirmation |
+| `deleteLocations` | `(db, ids)` | One batch: soft-deletes the locations with their thanas and areas and removes all of them from delivery zones (never leaves orphans) |
 | `getExternalLocationId` | `(db, locationId, providerType)` | Resolves provider-specific numeric ID from `externalIds` JSON |
 | `getExternalLocationIds` | `(db, { city?, zone?, area? }, providerType)` | Batch-resolves external IDs for city/zone/area |
 

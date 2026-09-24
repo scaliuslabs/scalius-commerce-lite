@@ -6,7 +6,7 @@ import { eq, and, ne, isNull, sql } from "drizzle-orm";
 import { productVariants, productLowStockAlerts } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { isLowStockThresholdEnabled } from "./low-stock-policy";
+import { effectiveLowStockThresholdSql, inventorySettingsDocument, isLowStockThresholdEnabled } from "./low-stock-policy";
 import { lowStockThresholdSchema } from "./inventory.validation";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 
@@ -71,7 +71,7 @@ export async function checkAndAlertLowStock(
       productId: productVariants.productId,
       stock: productVariants.stock,
       reservedStock: productVariants.reservedStock,
-      lowStockThreshold: productVariants.lowStockThreshold,
+      lowStockThreshold: effectiveLowStockThresholdSql(),
       trackInventory: productVariants.trackInventory,
     })
     .from(productVariants)
@@ -87,7 +87,8 @@ export async function checkAndAlertLowStock(
   }
 
   const available = variant.stock - variant.reservedStock;
-  // A sold-out SKU always needs review; an alert level also flags low stock.
+  // A sold-out SKU always needs review; the alert level that applies (its own,
+  // else the store default) also flags low stock.
   const threshold = isLowStockThresholdEnabled(variant.lowStockThreshold)
     ? variant.lowStockThreshold
     : 0;
@@ -180,12 +181,16 @@ export async function checkAndAlertLowStock(
 }
 
 /**
- * Acknowledge a low-stock alert (admin has seen it).
+ * Mark a SKU that needs review as seen. The alert row is refreshed from live
+ * stock first, so a SKU that went low without one (a new store default, a
+ * product-page edit) can be marked too. Returns false when it no longer needs
+ * review.
  */
 export async function acknowledgeLowStockAlert(
   db: Database,
   variantId: string
 ): Promise<boolean> {
+  await checkAndAlertLowStock(db, variantId);
   const acknowledged = await db
     .update(productLowStockAlerts)
     .set({
@@ -204,7 +209,28 @@ export async function acknowledgeLowStockAlert(
 }
 
 /**
- * Set a tracked SKU's alert level (`null` turns it off) and re-check its alert
+ * Save the store-wide alert level used by SKUs without their own (`null`
+ * turns it off). The Low stock list reads live stock against it, so no SKU
+ * is rewritten; the caller bumps the public cache generation because the
+ * level shapes buyer availability bands.
+ */
+export async function setDefaultLowStockThreshold(
+  db: Database,
+  level: number | null,
+): Promise<{ defaultLowStockThreshold: number | null }> {
+  const parsed = lowStockThresholdSchema.safeParse(level);
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues[0]?.message ?? "Enter a whole number.", {
+      field: "defaultLowStockThreshold",
+    });
+  }
+  const { value } = await inventorySettingsDocument.write(db, { defaultLowStockThreshold: parsed.data });
+  return { defaultLowStockThreshold: value.defaultLowStockThreshold };
+}
+
+/**
+ * Set a tracked SKU's alert level (`null` uses the store default, 0 turns it
+ * off) and re-check its alert
  * at once. This is not a stock mutation: no movement row, no stockVersion.
  * The level shapes the buyer availability band, so the caller bumps the
  * public cache generation after this commits.

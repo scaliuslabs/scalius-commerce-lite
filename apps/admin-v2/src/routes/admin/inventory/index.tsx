@@ -1,5 +1,5 @@
 import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { IndexTabs } from "~/components/admin/resource/IndexTabs";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
@@ -16,7 +16,7 @@ import {
 } from "~/components/admin/inventory/inventory-search";
 import type { InventoryWorkspaceSection } from "~/components/admin/inventory-workspace";
 import { inventoryQueryOptions } from "~/lib/api-query-options/inventory";
-import { readListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
@@ -27,7 +27,8 @@ export const Route = createFileRoute("/admin/inventory/")({
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) => {
     if (typeof window === "undefined") return;
-    const filters = { ...deps, q: readListSearch("inventory") };
+    // A `?q=` link wins once and becomes the session term (the page then drops it).
+    const filters = { ...deps, q: adoptListSearch("inventory", deps.q) };
     const query = filters.section === "variants"
       ? variantsQuery(filters)
       : filters.section === "alerts" ? alertsQuery(filters) : movementsQuery(filters);
@@ -44,6 +45,19 @@ function InventoryPage() {
   const [term, setTerm] = useListSearch("inventory");
   const filters = { ...search, q: term };
   const navigate = useNavigate();
+
+  // Search terms never stay in the address: adopt a `?q=` link, then remove it.
+  const urlTerm = search.q;
+  useEffect(() => {
+    if (urlTerm === undefined) return;
+    setTerm(urlTerm);
+    void navigate({
+      to: "/admin/inventory",
+      replace: true,
+      resetScroll: false,
+      search: ((previous: Record<string, unknown>) => ({ ...previous, q: undefined })) as never,
+    });
+  }, [navigate, setTerm, urlTerm]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const printIds = search.section === "variants" ? selectedIds : [];
 
@@ -103,7 +117,6 @@ function InventoryPage() {
               setTerm(sku);
               openTab("variants");
             }}
-            onSetAlertLevels={() => openTab("variants")}
           />
         ) : (
           <HistoryTab filters={filters} onFiltersChange={updateFilters} />

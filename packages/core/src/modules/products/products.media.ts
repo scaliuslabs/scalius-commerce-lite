@@ -18,6 +18,8 @@ export type ProductMediaProjection = {
     /** Product-context override only; null keeps Media alt/product-name fallback live. */
     contextualAltText?: string | null;
     altText: string;
+    /** The file's name in Files; identifies the item in the dashboard. */
+    filename: string;
     caption: string | null;
     width: number | null;
     height: number | null;
@@ -37,6 +39,8 @@ export interface ProductMediaProjectionRow {
     variantWidth: number | null;
     mediaAltText: string | null;
     contextualAltText: string | null;
+    /** Dashboard reads only; the storefront and checkout reads leave it out. */
+    filename?: string;
     caption: string | null;
     width: number | null;
     height: number | null;
@@ -200,6 +204,7 @@ export function selectProductMediaProjectionRows(
             mediaAltText: media.altText,
             contextualAltText: sql<string | null>`${productMedia.altText}`
                 .as("product_media_contextual_alt_text"),
+            filename: media.filename,
             caption: media.caption,
             width: media.width,
             height: media.height,
@@ -356,6 +361,7 @@ export function resolveProductMediaProjectionRows(
                 : null,
             contextualAltText: row.contextualAltText,
             altText: row.contextualAltText ?? row.mediaAltText ?? row.productName,
+            filename: row.filename ?? "",
             caption: row.caption,
             width: row.width,
             height: row.height,

@@ -15,6 +15,7 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
   shouldRejectCrossOriginCookieRequest: mocks.shouldRejectCrossOriginCookieRequest,
 }));
 
+import { accountOwnerReceiptRedirect } from "../../order-lookup-api";
 import { POST as sendCode } from "../../../pages/api/payment-recovery/send-code";
 import { POST as verifyCode } from "../../../pages/api/payment-recovery/verify";
 import { getOrderReceiptCookieName } from "../../order-receipt-cookie";
@@ -26,11 +27,14 @@ beforeEach(() => {
 });
 
 describe("payment recovery storefront proxies", () => {
-  it("requests a code through the public API without exposing contact hints", async () => {
+  it("says where the code went and the short order number, never the full contact", async () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: true,
       data: {
-        message: "If this order is eligible for payment recovery, a verification code will be sent to the buyer contact.",
+        message: "We sent a code to 01•••••888.",
+        destination: "01•••••888",
+        orderNumber: 1048,
+        resendAfterSeconds: 60,
       },
     }), {
       status: 200,
@@ -41,7 +45,7 @@ describe("payment recovery storefront proxies", () => {
       request: new Request("https://storefront.example.test/api/payment-recovery/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", channel: "sms" }),
+        body: JSON.stringify({ orderId: "order_1" }),
       }),
     } as never);
     const json = await response.json() as Record<string, unknown>;
@@ -51,25 +55,44 @@ describe("payment recovery storefront proxies", () => {
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(json).toEqual({
       success: true,
-      resultCode: "PAYMENT_RECOVERY_CODE_REQUEST_ACCEPTED",
+      sent: true,
+      message: "We sent a code to 01•••••888.",
+      orderNumber: 1048,
       resendAfterSeconds: 60,
     });
     expect(JSON.stringify(json)).not.toContain("01775528888");
     expect(JSON.stringify(json)).not.toContain("chk_");
     expect(apiPath).toBe("/orders/payment-recovery/send-otp");
-    expect(JSON.parse(String(requestInit.body))).toEqual({ orderId: "order_1", channel: "sms" });
+    expect(JSON.parse(String(requestInit.body))).toEqual({ orderId: "order_1" });
     expect(policy).toEqual({ retries: 0, timeout: 8000, auth: false });
   });
 
-  it("returns stable error classification without forwarding backend copy", async () => {
+  it("answers a neutral send without a code step", async () => {
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      success: true,
+      data: { message: "If this order still needs an online payment, we've sent a code to the phone number or email saved on it." },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    const response = await sendCode({
+      request: new Request("https://storefront.example.test/api/payment-recovery/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_fake" }),
+      }),
+    } as never);
+
+    expect(await response.json()).toMatchObject({ success: true, sent: false, orderNumber: null });
+  });
+
+  it("keeps provider detail on the server", async () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: {
-        code: "RATE_LIMIT_EXCEEDED",
+        code: "SERVICE_UNAVAILABLE",
         message: "Provider detail that must not be buyer-facing",
       },
     }), {
-      status: 429,
+      status: 503,
       headers: { "Content-Type": "application/json" },
     }));
 
@@ -77,13 +100,13 @@ describe("payment recovery storefront proxies", () => {
       request: new Request("https://storefront.example.test/api/payment-recovery/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", channel: "sms" }),
+        body: JSON.stringify({ orderId: "order_1" }),
       }),
     } as never);
     const json = await response.json() as Record<string, unknown>;
 
-    expect(response.status).toBe(429);
-    expect(json).toEqual({ success: false, errorCode: "RATE_LIMIT_EXCEEDED" });
+    expect(response.status).toBe(503);
+    expect(json).toEqual({ success: false, errorCode: "SERVICE_UNAVAILABLE" });
     expect(JSON.stringify(json)).not.toContain("Provider detail");
   });
 
@@ -113,7 +136,7 @@ describe("payment recovery storefront proxies", () => {
       request: new Request("https://storefront.example.test/api/payment-recovery/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", channel: "sms", code: "123456" }),
+        body: JSON.stringify({ orderId: "order_1", code: "123456" }),
       }),
     } as never);
     const json = await response.json() as Record<string, unknown>;
@@ -122,11 +145,7 @@ describe("payment recovery storefront proxies", () => {
 
     expect(response.status).toBe(200);
     expect(apiPath).toBe("/orders/payment-recovery/verify-otp");
-    expect(JSON.parse(String(requestInit.body))).toEqual({
-      orderId: "order_1",
-      channel: "sms",
-      code: "123456",
-    });
+    expect(JSON.parse(String(requestInit.body))).toEqual({ orderId: "order_1", code: "123456" });
     expect(policy).toEqual({ retries: 0, timeout: 8000, auth: true });
     expect(json).toEqual({
       success: true,
@@ -154,7 +173,7 @@ describe("payment recovery storefront proxies", () => {
       request: new Request("https://storefront.example.test/api/payment-recovery/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", channel: "sms", code: "000000" }),
+        body: JSON.stringify({ orderId: "order_1", code: "000000" }),
       }),
     } as never);
     const json = await response.json() as Record<string, unknown>;
@@ -164,7 +183,7 @@ describe("payment recovery storefront proxies", () => {
     expect(JSON.stringify(json)).not.toContain("could not be verified");
   });
 
-  it("passes the wait and the attempts left, never the backend copy", async () => {
+  it("passes the wait with its sentence, and the attempts left without backend copy", async () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       success: false,
       error: { code: "RATE_LIMIT", message: "Too many codes.", details: { retryAfterSeconds: 45 } },
@@ -178,22 +197,47 @@ describe("payment recovery storefront proxies", () => {
       request: new Request("https://storefront.example.test/api/payment-recovery/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", channel: "sms" }),
+        body: JSON.stringify({ orderId: "order_1" }),
       }),
     } as never);
     const wrong = await verifyCode({
       request: new Request("https://storefront.example.test/api/payment-recovery/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: "order_1", channel: "sms", code: "000000" }),
+        body: JSON.stringify({ orderId: "order_1", code: "000000" }),
       }),
     } as never);
 
     expect(limited.status).toBe(429);
     expect(limited.headers.get("Retry-After")).toBe("45");
-    expect(await limited.json()).toEqual({ success: false, errorCode: "RATE_LIMIT", retryAfterSeconds: 45 });
+    expect(await limited.json()).toEqual({ success: false, errorCode: "RATE_LIMIT", message: "Too many codes.", retryAfterSeconds: 45 });
     expect(wrong.status).toBe(400);
     expect(await wrong.json()).toEqual({ success: false, errorCode: "VALIDATION_ERROR", attemptsLeft: 1 });
+  });
+
+  it("sends a signed-in owner straight to the receipt with a private proof cookie", async () => {
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: { receiptToken: "chk_owner" } })));
+
+    const response = await accountOwnerReceiptRedirect(
+      "order_1",
+      "cs_tok=session_1; other=1",
+      new URLSearchParams({ orderId: "order_1", payment: "sslcommerz", result: "failed" }),
+    );
+    const [apiPath, init] = mocks.apiFetch.mock.calls[0]!;
+
+    expect(apiPath).toBe("/orders/receipt/order_1/owner-proof");
+    expect(new Headers(init.headers).get("X-Customer-Session")).toBe("session_1");
+    expect(response?.status).toBe(303);
+    expect(response?.headers.get("Location")).toBe("/order-success?orderId=order_1&payment=sslcommerz&result=failed");
+    expect(response?.headers.get("Set-Cookie")).toContain(`${getOrderReceiptCookieName("order_1")}=chk_owner`);
+  });
+
+  it("keeps the code form for a visitor who isn't the signed-in owner", async () => {
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: false }), { status: 404 }));
+
+    expect(await accountOwnerReceiptRedirect("order_1", null, new URLSearchParams())).toBeNull();
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
+    expect(await accountOwnerReceiptRedirect("order_1", "cs_tok=someone_else", new URLSearchParams())).toBeNull();
   });
 
   it("rejects cross-origin cookie writes before backend work", async () => {
@@ -206,7 +250,7 @@ describe("payment recovery storefront proxies", () => {
           Origin: "https://evil.example.test",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ orderId: "order_1", channel: "sms", code: "123456" }),
+        body: JSON.stringify({ orderId: "order_1", code: "123456" }),
       }),
     } as never);
 

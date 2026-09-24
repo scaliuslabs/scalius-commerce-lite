@@ -248,7 +248,8 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         expect(both.rejectedCodes).toEqual([]);
         expect(both.discounts).toEqual([
             expect.objectContaining({ title: "Tee half", code: "TEEHALF", amountMinor: 50_000 }),
-            expect.objectContaining({ title: "Ship free", code: "SHIPFREE", amountMinor: 6_000 }),
+            // Delivery savings are reported apart, for the delivery line.
+            expect.objectContaining({ title: "Ship free", code: "SHIPFREE", amountMinor: 0, shippingAmountMinor: 6_000 }),
         ]);
         expect(both.snapshot?.cart.submittedCodes).toEqual(["TEEHALF", "SHIPFREE"]);
 
@@ -285,6 +286,45 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         ]);
     });
 
+    it("splits each discount into savings on the items and on delivery", async () => {
+        const db = openStore(provider);
+        await live(db, { name: "Free delivery", codes: [{ code: "SHIP" }], effects: [freeShipping] });
+        await live(db, { name: "Tee 10%", codes: [{ code: "TEE10" }], combinesWith: { product: false, order: false, shipping: true }, effects: [percentOff(1_000, { productIds: ["prod_tee"] })] });
+        const result = await quote(db, null, { codes: ["TEE10", "SHIP"] });
+        expect(result.discounts).toEqual([
+            expect.objectContaining({ code: "TEE10", amountMinor: 10_000, shippingAmountMinor: 0 }),
+            expect.objectContaining({ code: "SHIP", amountMinor: 0, shippingAmountMinor: 6_000 }),
+        ]);
+    });
+
+    it("keeps a delivery code waiting until the buyer has a delivery option", async () => {
+        const db = openStore(provider);
+        await live(db, { name: "Free delivery", codes: [{ code: "SHIP" }], effects: [freeShipping] });
+        const noAddress = await preview(db, ["SHIP"], { shippingKnown: false, cart: { ...cart, shippingAmountMinor: 0 } });
+        expect(noAddress.rejectedCodes).toEqual([
+            expect.objectContaining({ code: "SHIP", reason: "needs_delivery", message: "Choose your delivery address to use SHIP." }),
+        ]);
+        expect((await preview(db, ["SHIP"])).discounts).toEqual([expect.objectContaining({ code: "SHIP", shippingAmountMinor: 6_000 })]);
+    });
+
+    it("says a second delivery code can't help once delivery is free, before any minimum it still needs", async () => {
+        const db = openStore(provider);
+        await live(db, { name: "Free delivery", codes: [{ code: "SHIP" }], effects: [freeShipping] });
+        await live(db, {
+            name: "Big basket delivery",
+            codes: [{ code: "SHIP10" }],
+            conditions: [{ kind: "minimum_item_quantity", config: { quantity: 10 } }],
+            effects: [freeShipping],
+        });
+        const result = await preview(db, ["SHIP", "SHIP10"]);
+        expect(result.rejectedCodes).toEqual([expect.objectContaining({
+            code: "SHIP10",
+            reason: "delivery_discount_applied",
+            conflictsWith: "SHIP",
+            message: "Only one delivery discount can be used. SHIP already applies to delivery.",
+        })]);
+    });
+
     it("keeps a one-use code pending until the buyer's phone is known", async () => {
         const db = openStore(provider);
         await live(db, { name: "Once", codes: [{ code: "ONCE" }], maxRedemptionsPerCustomer: 1, effects: [orderOff(1_000)] });
@@ -303,6 +343,10 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
             allocation: "across" as const,
             config: { basisPoints: 10_000, productIds: ["prod_cap"], getQuantity: 1, buy: { quantity: 2, ...buy } },
         }];
+        sqlite!.exec(`
+            INSERT INTO product_variants (id, product_id, sku, price_minor, is_default) VALUES
+                ('var_tee', 'prod_tee', 'TEE-1', 50000, 1), ('var_cap', 'prod_cap', 'CAP-1', 20000, 1);
+        `);
         await live(db, { name: "Two tees, free cap", endsAtEpochSeconds: NOW + 86_400, effects: buyGet({ productIds: ["prod_tee"] }) });
         await live(db, { name: "Shoes gift", effects: buyGet({ collectionIds: ["col_shoes"] }) });
         await live(db, { name: "Secret", codes: [{ code: "SECRET" }], effects: buyGet({ productIds: ["prod_tee"] }) });
@@ -310,13 +354,20 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         const tee = await listProductBuyGetOffers(db, "prod_tee", "BDT", NOW);
         expect(tee).toEqual([expect.objectContaining({
             title: "Two tees, free cap",
+            role: "buy",
             buyQuantity: 2,
             getQuantity: 1,
             basisPoints: 10_000,
             endsAtEpochSeconds: NOW + 86_400,
+            products: [expect.objectContaining({ id: "prod_cap" })],
         })]);
         expect((await listProductBuyGetOffers(db, "prod_boot", "BDT", NOW)).map(({ title }) => title)).toEqual(["Shoes gift"]);
-        expect(await listProductBuyGetOffers(db, "prod_cap", "BDT", NOW)).toEqual([]);
+        // The cap page names what to buy; an offer bought by collection names no product, so it stays off.
+        expect(await listProductBuyGetOffers(db, "prod_cap", "BDT", NOW)).toEqual([expect.objectContaining({
+            title: "Two tees, free cap",
+            role: "get",
+            products: [expect.objectContaining({ id: "prod_tee" })],
+        })]);
     });
 
     it("names the items a Buy X get Y code still needs, with a one-tap SKU for simple products", async () => {

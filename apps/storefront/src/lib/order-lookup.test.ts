@@ -8,6 +8,7 @@ import {
 import {
   formatCountdown,
   getOrderCodeFailureText,
+  getOrderLookupFieldErrors,
   normalizeOrderReference,
   readOrderLookupInput,
 } from "./order-lookup";
@@ -44,6 +45,17 @@ describe("order lookup input", () => {
     expect(readOrderLookupInput("1001", "0171234")).toEqual({ ok: false, field: "phone" });
     expect(readOrderLookupInput("1001", "01212345678")).toEqual({ ok: false, field: "phone" });
   });
+
+  it("gives every field its own message at once", () => {
+    expect(getOrderLookupFieldErrors(en, "", "")).toEqual({
+      reference: en.trackOrderNumberInvalidText,
+      phone: en.trackOrderPhoneInvalidText,
+    });
+    expect(getOrderLookupFieldErrors(BANGLA_CHECKOUT_LANGUAGE_DATA, "#1001", "0171234")).toEqual({
+      phone: BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderPhoneInvalidText,
+    });
+    expect(getOrderLookupFieldErrors(en, "১০০১", "০১৭১২-৩৪৫৬৭৮")).toEqual({});
+  });
 });
 
 describe("order code messages", () => {
@@ -58,6 +70,8 @@ describe("order code messages", () => {
     const text = getOrderCodeFailureText(en, { status: 429, retryAfterSeconds: 120 }, "send", unavailable);
     expect(text).toBe("Try again in 2:00");
     expect(getOrderCodeFailureText(en, { status: 429 }, "verify", unavailable)).toBe(en.paymentRecoveryRateLimitedText);
+    expect(getOrderCodeFailureText(en, { status: 429, message: "Too many codes.", retryAfterSeconds: 45 }, "send", unavailable))
+      .toBe("Too many codes. Try again in 0:45.");
     expect(`${text} ${en.paymentRecoveryRateLimitedText}`).not.toMatch(/\bIP\b/);
   });
 
@@ -68,6 +82,13 @@ describe("order code messages", () => {
       .toBe("That code isn't right. 3 attempts left.");
     expect(getOrderCodeFailureText(en, { status: 400, attemptsLeft: 0 }, "verify", unavailable))
       .toBe("This code can't be used anymore. Send a new code.");
+  });
+
+  it("shows the API's reason when a send is refused for this order", () => {
+    const notFound = "We couldn't find an order with that number and phone number. Check both and try again.";
+    expect(getOrderCodeFailureText(en, { status: 404, message: notFound }, "send", unavailable)).toBe(notFound);
+    expect(getOrderCodeFailureText(en, { status: 409, message: "No way to reach you." }, "send", unavailable)).toBe("No way to reach you.");
+    expect(getOrderCodeFailureText(en, { status: 400, message: "Backend detail" }, "send", unavailable)).toBe(en.paymentRecoverySendFailedText);
   });
 
   it("uses the page's unavailable copy and generic send/verify failures otherwise", () => {

@@ -198,8 +198,12 @@ function createOtpChallengeDb(row: {
   method: "email" | "phone";
   channel: "email" | "sms" | "whatsapp";
   expiresAt: number;
+  orderNumber?: number | null;
 } | null) {
   const tables: unknown[] = [];
+  const where = vi.fn(() => ({
+    get: vi.fn(async () => row),
+  }));
   return {
     id: "db",
     tables,
@@ -207,9 +211,9 @@ function createOtpChallengeDb(row: {
       from: vi.fn((table: unknown) => {
         tables.push(table);
         return {
-          where: vi.fn(() => ({
-            get: vi.fn(async () => row),
-          })),
+          where,
+          // Order codes read their order number with the challenge row.
+          leftJoin: vi.fn(() => ({ where })),
         };
       }),
     })),
@@ -1461,6 +1465,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       method: "email",
       channel: "email",
       expiresAt: 4_102_444_800,
+      orderNumber: 1048,
     });
     mocks.getDb.mockReturnValueOnce(db);
     // One key: CREDENTIAL_ENCRYPTION_KEY decrypts the D1 delivery target,
@@ -1501,7 +1506,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       expect.objectContaining({
         to: "recovery-buyer@example.com",
         subject: `${expectedCode} is your River & Loom code`,
-        text: expect.stringContaining("Use this code to finish paying for your order at River & Loom."),
+        text: expect.stringContaining("Use this code to finish paying for order #1048 at River & Loom."),
         idempotencyKey: deliveryKey,
       }),
       {
@@ -1523,6 +1528,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       method: "email",
       channel: "email",
       expiresAt: 4_102_444_800,
+      orderNumber: 1057,
     });
     mocks.getDb.mockReturnValueOnce(db);
     mocks.getCredentialEncryptionKey.mockReturnValue(otpDeliveryCredentialKey);
@@ -1554,7 +1560,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       fromName: "River & Loom",
     });
     expect(email.html).toContain('<html lang="bn">');
-    expect(email.text).toContain("হ্যালো,\n\nRiver & Loom-এ আপনার অর্ডার দেখতে এই কোডটি ব্যবহার করুন।");
+    expect(email.text).toContain("হ্যালো,\n\nRiver & Loom-এ অর্ডার #1057 দেখতে এই কোডটি ব্যবহার করুন।");
     expect(`${email.html}${email.text}`).not.toContain("Customer");
     expect(message.ack).toHaveBeenCalledTimes(1);
   });

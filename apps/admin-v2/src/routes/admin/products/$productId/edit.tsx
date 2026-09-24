@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useRef, useState } from "react";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { ProductForm } from "~/components/admin/ProductForm";
+import { ProductForm, type ProductDraftReader } from "~/components/admin/ProductForm";
+import { productFieldLabel } from "~/components/admin/product-form/utils";
 import type { OptionMatrixEditorHandle } from "~/components/admin/product-form/variants/option-matrix-editor-model";
 import { ProductRevisionConflictDialog } from "~/components/admin/product-form/ProductRevisionConflictDialog";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
@@ -56,6 +57,45 @@ function EditProductPage() {
   );
 }
 
+/** The editor's values for a saved product. */
+function toFormValues(product: ProductDetail): ProductFormValues {
+  return {
+    id: product.id,
+    name: product.name,
+    description: product.description,
+    price: product.price,
+    categoryId: product.categoryId ?? "",
+    slug: product.slug,
+    metaTitle: product.metaTitle,
+    metaDescription: product.metaDescription,
+    canonicalPath: product.canonicalPath,
+    noIndex: product.noIndex,
+    excludeFromSitemap: product.excludeFromSitemap,
+    excludeFromProductFeed: product.excludeFromProductFeed,
+    productCondition: product.productCondition ?? DEFAULT_PRODUCT_CONDITION,
+    isActive: product.isActive,
+    discountType: (product.discountType || "percentage") as "percentage" | "flat",
+    discountPercentage: product.discountPercentage || 0,
+    discountAmount: product.discountAmount || 0,
+    freeDelivery: product.freeDelivery,
+    slugEdited: true,
+    media: [...(product.media || [])]
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+      .map((item) => ({
+        ...item,
+        effectiveAltText: item.altText,
+        altText: item.contextualAltText ?? "",
+      })),
+    attributes: product.attributes || [],
+    additionalInfo: (product.additionalInfo || []).map((item) => ({ ...item })),
+  } as ProductFormValues;
+}
+
+/** Options and SKUs as saved, to tell whether someone else changed them. */
+function variantsSignature(product: ProductDetail): string {
+  return JSON.stringify([product.options, product.variants]);
+}
+
 function ProductEditor({ productId, initialProduct, categories }: {
   productId: string;
   initialProduct: ProductDetail;
@@ -76,6 +116,11 @@ function ProductEditor({ productId, initialProduct, categories }: {
   const [matrixSaving, setMatrixSaving] = useState(false);
   const [matrixIssue, setMatrixIssue] = useState<string | null>(null);
   const matrixRef = useRef<OptionMatrixEditorHandle>(null);
+  const draftRef = useRef<ProductDraftReader | null>(null);
+  // The merchant's changed fields, put back on top of the latest version after a conflict.
+  const [pendingEdits, setPendingEdits] = useState<Partial<ProductFormValues> | null>(null);
+  // Fields both people changed: the merchant's edits can't be applied automatically.
+  const [overlap, setOverlap] = useState<string[] | null>(null);
 
   const updateRevision = useCallback((revision: number) => {
     setAggregateRevision((current) => Math.max(current, revision));
@@ -98,6 +143,8 @@ function ProductEditor({ productId, initialProduct, categories }: {
       setMatrixDirty(false);
       setMatrixIssue(null);
       setRevisionConflict(null);
+      setPendingEdits(null);
+      setOverlap(null);
       setIsConflictOpen(false);
     } catch (error) {
       setReloadLatestError(getServerFnError(error, translate(productMessages, "reloadFailed")));
@@ -134,36 +181,49 @@ function ProductEditor({ productId, initialProduct, categories }: {
     if (!matrixDirty) void refreshMatrix();
   }, [matrixDirty, refreshMatrix]);
 
-  const defaultValues = {
-    id: formSnapshot.id,
-    name: formSnapshot.name,
-    description: formSnapshot.description,
-    price: formSnapshot.price,
-    categoryId: formSnapshot.categoryId ?? "",
-    slug: formSnapshot.slug,
-    metaTitle: formSnapshot.metaTitle,
-    metaDescription: formSnapshot.metaDescription,
-    canonicalPath: formSnapshot.canonicalPath,
-    noIndex: formSnapshot.noIndex,
-    excludeFromSitemap: formSnapshot.excludeFromSitemap,
-    excludeFromProductFeed: formSnapshot.excludeFromProductFeed,
-    productCondition: formSnapshot.productCondition ?? DEFAULT_PRODUCT_CONDITION,
-    isActive: formSnapshot.isActive,
-    discountType: (formSnapshot.discountType || "percentage") as "percentage" | "flat",
-    discountPercentage: formSnapshot.discountPercentage || 0,
-    discountAmount: formSnapshot.discountAmount || 0,
-    freeDelivery: formSnapshot.freeDelivery,
-    slugEdited: true,
-    media: [...(formSnapshot.media || [])]
-      .sort((left, right) => left.sortOrder - right.sortOrder)
-      .map((item) => ({
-        ...item,
-        effectiveAltText: item.altText,
-        altText: item.contextualAltText ?? "",
-      })),
-    attributes: formSnapshot.attributes || [],
-    additionalInfo: (formSnapshot.additionalInfo || []).map((item) => ({ ...item })),
-  };
+  const defaultValues = toFormValues(formSnapshot);
+
+  /**
+   * "Apply my changes": load the other save and put the merchant's changed fields back on
+   * top, still unsaved. When the other save changed the same fields (or the variants the
+   * merchant is editing), nothing is applied; the dialog names those fields instead.
+   */
+  const applyMineToLatest = useCallback(async () => {
+    const draft = draftRef.current?.();
+    if (!draft) return;
+    setIsReloadingLatest(true);
+    setReloadLatestError(null);
+    try {
+      const latest = await queryClient.fetchQuery({ ...productQueryOptions(productId), staleTime: 0 }) as ProductDetail;
+      if (latest.deletedAt) {
+        void navigate({ to: "/admin/products" });
+        return;
+      }
+      const before = toFormValues(formSnapshot);
+      const after = toFormValues(latest);
+      const same = (key: keyof ProductFormValues) => JSON.stringify(before[key]) === JSON.stringify(after[key]);
+      const clashes = draft.changed.filter((key) => !same(key));
+      const variantsChanged = matrixDirty && variantsSignature(matrixSnapshot) !== variantsSignature(latest);
+      if (clashes.length > 0 || variantsChanged) {
+        setOverlap([...clashes.map(productFieldLabel), ...(variantsChanged ? [translate(productMessages, "variants")] : [])]);
+        return;
+      }
+      setFormSnapshot(latest);
+      setAggregateRevision(latest.aggregateRevision);
+      setPendingEdits(Object.fromEntries(draft.changed.map((key) => [key, draft.values[key]])));
+      setFormGeneration((value) => value + 1);
+      if (!matrixDirty) {
+        setMatrixSnapshot(latest);
+        setMatrixGeneration((value) => value + 1);
+      }
+      setRevisionConflict(null);
+      setIsConflictOpen(false);
+    } catch (error) {
+      setReloadLatestError(getServerFnError(error, translate(productMessages, "reloadFailed")));
+    } finally {
+      setIsReloadingLatest(false);
+    }
+  }, [formSnapshot, matrixDirty, matrixSnapshot, navigate, productId, queryClient]);
 
   return (
     <>
@@ -177,9 +237,12 @@ function ProductEditor({ productId, initialProduct, categories }: {
         onAggregateRevisionChange={updateRevision}
         onRevisionConflict={(conflict) => {
           setRevisionConflict(conflict);
+          setOverlap(null);
           setIsConflictOpen(true);
         }}
         onOpenRevisionConflict={() => setIsConflictOpen(true)}
+        draftRef={draftRef}
+        initialEdits={pendingEdits}
         onProductSaved={handleProductSaved}
         optionMatrixIssue={matrixIssue}
         optionMatrixDirty={matrixDirty}
@@ -215,6 +278,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
               onSavingChange={setMatrixSaving}
               onRevisionConflict={(conflict) => {
                 setRevisionConflict(conflict);
+                setOverlap(null);
                 setIsConflictOpen(true);
               }}
               onSaved={() => void refreshMatrix()}
@@ -228,7 +292,10 @@ function ProductEditor({ productId, initialProduct, categories }: {
         isReloading={isReloadingLatest}
         reloadError={reloadLatestError}
         onOpenChange={setIsConflictOpen}
-        onKeepDraft={() => setIsConflictOpen(false)}
+        changedFields={isConflictOpen ? (draftRef.current?.().changed ?? []).map(productFieldLabel) : []}
+        variantsChanged={matrixDirty}
+        overlap={overlap}
+        onApplyMine={applyMineToLatest}
         onReloadLatest={reloadLatest}
         onProductUnavailable={() => void navigate({ to: "/admin/products" })}
       />
