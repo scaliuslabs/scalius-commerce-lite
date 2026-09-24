@@ -12,7 +12,7 @@ import {
   type CheckoutLanguageData,
   type LayoutData,
 } from "@/lib/api";
-import { NO_CODE_CHANNEL, formatCountdown, getOrderCodeFailureText } from "@/lib/order-lookup";
+import { failureNeedsStoreContact, formatCountdown, getOrderCodeFailureText } from "@/lib/order-lookup";
 import {
   accountOwnerReceiptRedirect,
   readOrderCodeFields,
@@ -51,7 +51,7 @@ const copy = checkoutLanguage?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
 let codeSent = false;
 let message = "";
 let failed = false;
-let noCodeChannel = false;
+let needsStoreContact = false;
 let orderNumber: number | null = null;
 let resendAfterSeconds = 0;
 let verified: VerifiedOrderReceipt | null = null;
@@ -66,7 +66,10 @@ if (isPost && orderId) {
     } else {
       const result = await verifyPaymentRecoveryCode({ orderId, code: fields.code });
       if (result.ok) verified = result.data;
-      else message = getOrderCodeFailureText(copy, result.failure, "verify", copy.paymentRecoveryCodesUnavailableText);
+      else {
+        needsStoreContact = failureNeedsStoreContact(result.failure);
+        message = getOrderCodeFailureText(copy, result.failure, "verify", copy.paymentRecoveryCodesUnavailableText);
+      }
     }
   } else {
     const result = await sendPaymentRecoveryCode({ orderId });
@@ -78,7 +81,7 @@ if (isPost && orderId) {
       orderNumber = result.data.orderNumber;
       resendAfterSeconds = result.data.resendAfterSeconds;
     } else {
-      noCodeChannel = result.failure.errorCode === NO_CODE_CHANNEL;
+      needsStoreContact = failureNeedsStoreContact(result.failure);
       message = getOrderCodeFailureText(copy, result.failure, "send", copy.paymentRecoveryCodesUnavailableText);
     }
   }
@@ -126,7 +129,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
             </div>
 
             <p data-order-code-message aria-live="polite" class={`min-h-5 text-sm ${failed ? "text-destructive" : "text-muted-foreground"}`}>{message}</p>
-            <StoreContact layoutData={layoutData} hidden={!noCodeChannel} />
+            <StoreContact layoutData={layoutData} hidden={!needsStoreContact} label={copy.storeContactLabelText} />
 
             <button
               type="submit"

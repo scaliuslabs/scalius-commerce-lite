@@ -9,7 +9,10 @@ import {
   getOrderReceiptSupportActionLabel,
   getOrderReceiptSupportRequestLabel,
   getOrderReceiptSupportStatusMessage,
+  orderReceiptSupportRequestNeedsStoreContact,
 } from "@/lib/order-success-localization";
+import type { StoreContactLink } from "@/lib/store-contact";
+import { StoreContactLine } from "@/components/StoreContactLine";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { normalizeBdMobile } from "@scalius/shared/phone-input";
 import type { AuthModalOpenDetail, AuthModalPrefill } from "@/components/AuthModal";
@@ -27,6 +30,8 @@ type OrderSuccessButtonsProps = {
   supportRequestActions?: OrderReceiptSupportRequestAction[];
   /** Opened by tracking or later: no "Continue shopping" and no sign-in-to-track upsell. */
   statusView?: boolean;
+  /** Business settings phone / WhatsApp / email, shown when a request is declined or settled. */
+  storeContact?: StoreContactLink[];
   copy: CheckoutLanguageData;
 };
 
@@ -77,6 +82,7 @@ export default function OrderSuccessButtons({
   supportRequests: initialSupportRequests = EMPTY_SUPPORT_REQUESTS,
   supportRequestActions: initialSupportRequestActions = EMPTY_SUPPORT_REQUEST_ACTIONS,
   statusView = false,
+  storeContact,
   copy,
 }: OrderSuccessButtonsProps) {
   const [accountCard, setAccountCard] = useState<AccountCardState>("checking");
@@ -370,6 +376,9 @@ export default function OrderSuccessButtons({
             <p className="mt-1 text-xs opacity-80">
               {getOrderReceiptSupportStatusMessage(latestSupportRequest, copy)}
             </p>
+            {orderReceiptSupportRequestNeedsStoreContact(latestSupportRequest) ? (
+              <StoreContactLine links={storeContact} label={copy.storeContactLabelText} className="mt-1 text-xs text-foreground" />
+            ) : null}
           </div>
         ) : null}
 

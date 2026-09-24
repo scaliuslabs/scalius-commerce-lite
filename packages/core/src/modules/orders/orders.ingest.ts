@@ -47,7 +47,9 @@ import { shouldCreateOrderCreatedNotification } from "./order-created-notificati
 import type { StorefrontOrderCommitPayload } from "./orders.types";
 import {
     chooseOrderCustomer,
+    linkedOrderHistory,
     normalizeContactEmail,
+    type VerifiedContact,
     selectContactCustomerCandidates,
     type ContactCustomerCandidate,
     type OrderContact,
@@ -185,6 +187,8 @@ interface ResolvedOrderCustomer {
     accountOwnerCustomerId: string | null;
     /** No customer owns this contact yet: a new guest record is created. */
     createProfile: boolean;
+    /** A signed-out order filed to an account by its verified email/phone (logged on the account). */
+    linkedBy?: VerifiedContact | null;
 }
 
 async function loadActiveAccountById(db: Database, id: string) {
@@ -292,7 +296,7 @@ async function resolveCustomerForOrder(
         if (!account?.accountClaimedAt) {
             throw new ValidationError("Customer account is no longer active. Please sign in again.");
         }
-        return { id: account.id, accountOwnerCustomerId: account.id, createProfile: false };
+        return { id: account.id, accountOwnerCustomerId: account.id, createProfile: false, linkedBy: null };
     }
 
     const contact: OrderContact = { phone: payload.orderData.customerPhone, email: payload.orderData.customerEmail };
@@ -303,8 +307,8 @@ async function resolveCustomerForOrder(
         : await selectContactCustomerCandidates(db, contact);
     const chosen = chooseOrderCustomer(candidates, contact);
     return chosen
-        ? { id: chosen.customerId, accountOwnerCustomerId: chosen.accountOwnerCustomerId, createProfile: false }
-        : { id: "cust_" + nanoid(), accountOwnerCustomerId: null, createProfile: true };
+        ? { id: chosen.customerId, accountOwnerCustomerId: chosen.accountOwnerCustomerId, createProfile: false, linkedBy: chosen.linkedBy }
+        : { id: "cust_" + nanoid(), accountOwnerCustomerId: null, createProfile: true, linkedBy: null };
 }
 
 function getReservationEntries(payload: StorefrontOrderCommitPayload): ReservationEntry[] {
@@ -436,6 +440,7 @@ function buildOrderWriteBatch(
                 zoneName: od.zoneName,
                 areaName: od.areaName,
                 changeType: "created",
+                actor: "buyer",
                 createdAt: sql`unixepoch()`,
             }),
         );
@@ -451,6 +456,13 @@ function buildOrderWriteBatch(
             })
             .where(eq(customers.id, customer.id)),
         );
+        if (customer.linkedBy && customer.accountOwnerCustomerId) {
+            writes.push(linkedOrderHistory(db, {
+                accountId: customer.accountOwnerCustomerId,
+                orderId: od.id,
+                via: customer.linkedBy,
+            }) as SQLiteBatchItem);
+        }
     }
 
     writes.push(

@@ -115,7 +115,7 @@ describe("admin customer list location projection", () => {
     });
 
     const resultQuery = queries[1]!;
-    expect(resultQuery.joins).toHaveLength(5);
+    expect(resultQuery.joins).toHaveLength(4);
     const dialect = new SQLiteSyncDialect();
     for (const [field, aliasName, idColumn] of [
       ["cityName", "customer_city_location", "city"],

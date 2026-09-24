@@ -41,6 +41,8 @@ export const orderDetailMessages = defineMessages({
     "cancel.keep": "Keep order",
 
     "customer.title": "Customer",
+    "customer.guestRecord": "Guest orders for {phone}",
+    "customer.orderedAs": "Ordered as {name}",
     "address.title": "Delivery address",
     "address.none": "No address",
     "fraud.title": "Courier fraud check",
@@ -526,6 +528,8 @@ export const orderDetailMessages = defineMessages({
     "cancel.keep": "অর্ডার রাখুন",
 
     "customer.title": "কাস্টমার",
+    "customer.guestRecord": "{phone} নম্বরের অতিথি অর্ডার",
+    "customer.orderedAs": "অর্ডার করা হয়েছে {name} নামে",
     "address.title": "ডেলিভারি ঠিকানা",
     "address.none": "ঠিকানা নেই",
     "fraud.title": "কুরিয়ার ফ্রড চেক",

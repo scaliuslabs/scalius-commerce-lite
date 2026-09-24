@@ -156,6 +156,8 @@ export interface Order {
   pricesIncludeTax?: boolean | null;
   discounts: OrderDiscount[];
   customerId: string | null;
+  /** The customer record the order is filed under (a guest record, an account or a merchant-added customer). */
+  customerRecord?: OrderCustomerRecord | null;
   cityName?: string;
   zoneName?: string;
   areaName?: string | null;
@@ -186,6 +188,13 @@ export interface Order {
     items: OrderEditState;
     details: OrderEditState;
   };
+}
+
+export interface OrderCustomerRecord {
+  id: string;
+  name: string;
+  kind: "account" | "guest" | "merchant";
+  phone: string;
 }
 
 export interface OrderDiscount {

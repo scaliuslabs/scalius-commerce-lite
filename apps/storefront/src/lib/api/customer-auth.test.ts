@@ -5,9 +5,9 @@ import {
   getCustomerOrderDetail,
   getCustomerOrders,
   getCustomerSession,
-  sendGuestOrdersCode,
+  sendPhoneVerificationCode,
   verifyCustomerOtp,
-  verifyGuestOrders,
+  verifyPhone,
 } from "./customer-auth";
 
 describe("customer auth API helpers", () => {
@@ -540,61 +540,65 @@ describe("customer auth API helpers", () => {
     expect(JSON.stringify(result)).not.toContain("reconcile_required");
     expect(JSON.stringify(result)).not.toContain("providerRefundId");
   });
-  it("reads guest orders on an unverified phone and drops malformed entries", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
-      success: true,
-      data: {
+  it("reads the account's own phone to verify, and nothing else about other orders", async () => {
+    const reply = (data: unknown) => new Response(JSON.stringify({ success: true, data }), { status: 200 });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(reply({ orders: [], phoneVerification: { phone: "+8801712345678" } }))
+      .mockResolvedValueOnce(reply({ orders: [], phoneVerification: null }))
+      .mockResolvedValueOnce(reply({ orders: [], phoneVerification: { phone: "" } }))
+      .mockResolvedValueOnce(reply({
         orders: [],
-        unclaimedGuestOrders: [
-          { id: "cust_guest_1", destination: "01•••••011", orderCount: 2, canVerify: false },
-          { id: "cust_guest_2", destination: "01•••••022", orderCount: 1 },
-          { id: "", destination: "01•••••033", orderCount: 1, canVerify: true },
-          { id: "cust_guest_4", destination: "01•••••044", orderCount: 0, canVerify: true },
-        ],
-      },
-    }), { status: 200 })));
+        unclaimedGuestOrders: [{ id: "cust_guest_1", destination: "01•••••011", orderCount: 2, canVerify: true }],
+      })));
 
-    const result = await getCustomerOrders();
-    expect(result.unclaimedGuestOrders).toEqual([
-      { id: "cust_guest_1", destination: "01•••••011", orderCount: 2, canVerify: false },
-      { id: "cust_guest_2", destination: "01•••••022", orderCount: 1, canVerify: true },
-    ]);
+    await expect(getCustomerOrders()).resolves.toMatchObject({ phoneVerification: { phone: "+8801712345678" } });
+    await expect(getCustomerOrders()).resolves.toMatchObject({ phoneVerification: null });
+    await expect(getCustomerOrders()).resolves.toMatchObject({ phoneVerification: null });
+    const legacy = await getCustomerOrders();
+    expect(legacy.phoneVerification).toBeNull();
+    expect(JSON.stringify(legacy)).not.toContain("01•••••011");
   });
 
-  it("sends and checks guest-order codes through the same-origin proxy, the code only in the body", async () => {
+  it("sends and checks the phone code through the same-origin proxy, the code only in the body", async () => {
     const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith("/send-code")
-      ? { success: true, data: { message: "We sent a code to 01•••••011.", destination: "01•••••011", resendAfterSeconds: 45 } }
-      : { success: true, data: { movedOrders: 2, message: "2 orders were added to your account." } }), { status: 200 }));
+      ? { success: true, data: { message: "We sent a code to 01•••••678.", resendAfterSeconds: 45 } }
+      : { success: true, data: { movedOrders: 1, message: "Your phone number is verified. 1 order was added to your account." } }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(sendGuestOrdersCode("cust_guest_1")).resolves.toEqual({
-      success: true, message: "We sent a code to 01•••••011.", destination: "01•••••011", resendAfterSeconds: 45,
+    await expect(sendPhoneVerificationCode()).resolves.toEqual({
+      success: true, message: "We sent a code to 01•••••678.", resendAfterSeconds: 45,
     });
-    await expect(verifyGuestOrders("cust_guest_1", "123456")).resolves.toEqual({
-      success: true, movedOrders: 2, message: "2 orders were added to your account.",
+    await expect(verifyPhone("123456")).resolves.toEqual({
+      success: true, movedOrders: 1, message: "Your phone number is verified. 1 order was added to your account.",
     });
     const [sendUrl, sendInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const [verifyUrl, verifyInit] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
-    expect(sendUrl).toBe("/api/customer-auth/guest-orders/cust_guest_1/send-code");
+    expect(sendUrl).toBe("/api/customer-auth/phone/send-code");
     expect(sendInit.method).toBe("POST");
-    expect(verifyUrl).toBe("/api/customer-auth/guest-orders/cust_guest_1/verify");
+    expect(sendInit.body).toBeUndefined();
+    expect(verifyUrl).toBe("/api/customer-auth/phone/verify");
+    expect(verifyInit.method).toBe("POST");
     expect(JSON.parse(String(verifyInit.body))).toEqual({ code: "123456" });
   });
 
-  it("keeps the server's guest-order code failures: waits, unavailable setup and conflicts", async () => {
+  it("keeps the server's phone code failures: waits, unavailable setup, wrong codes and conflicts", async () => {
     const reply = (status: number, error: unknown) => new Response(JSON.stringify({ success: false, error }), { status });
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(reply(429, { code: "RATE_LIMITED", message: "Too many codes.", details: { retryAfterSeconds: 90 } }))
-      .mockResolvedValueOnce(reply(503, { code: "OTP_UNAVAILABLE", message: "Text message codes are unavailable right now. Contact the store." }))
+      .mockResolvedValueOnce(reply(503, { code: "OTP_UNAVAILABLE", message: "Text message codes aren't available right now." }))
+      .mockResolvedValueOnce(reply(400, { code: "INVALID_CODE", message: "That code isn't right. 4 attempts left.", details: { attemptsLeft: 4 } }))
       .mockResolvedValueOnce(reply(409, { code: "CONFLICT", message: "This phone number is verified on another account. Sign in with it instead." })));
 
-    await expect(sendGuestOrdersCode("cust_guest_1")).resolves.toEqual({
+    await expect(sendPhoneVerificationCode()).resolves.toEqual({
       success: false, status: 429, error: "Too many codes.", retryAfterSeconds: 90,
     });
-    await expect(sendGuestOrdersCode("cust_guest_1")).resolves.toMatchObject({
-      success: false, status: 503, error: "Text message codes are unavailable right now. Contact the store.",
+    await expect(sendPhoneVerificationCode()).resolves.toMatchObject({
+      success: false, status: 503, error: "Text message codes aren't available right now.",
     });
-    await expect(verifyGuestOrders("cust_guest_1", "123456")).resolves.toMatchObject({
+    await expect(verifyPhone("000000")).resolves.toEqual({
+      success: false, status: 400, error: "That code isn't right. 4 attempts left.", attemptsLeft: 4,
+    });
+    await expect(verifyPhone("123456")).resolves.toMatchObject({
       success: false, status: 409, error: "This phone number is verified on another account. Sign in with it instead.",
     });
   });
