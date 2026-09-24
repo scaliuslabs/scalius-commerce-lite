@@ -1,16 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
-  failedBulkShipSummary,
-  findOrderActionBlock,
+  chunk,
   getOrderRefreshPause,
-  summarizeBulkShip,
+  planOrderBulkAction,
+  summarizeBulkResults,
 } from "./order-bulk-actions";
 
-type Order = Parameters<typeof findOrderActionBlock>[0][number];
+type Order = Parameters<typeof planOrderBulkAction>[0][number] & { id: string };
 
-function order(overrides: Partial<Order> = {}): Order {
+function order(id: string, overrides: Partial<Order> = {}): Order {
   return {
-    status: "completed",
+    id,
+    status: "pending",
     activeRefundOperation: null,
     paymentRecovery: { state: "none", activeProcessing: false } as Order["paymentRecovery"],
     shipmentRecovery: { state: "none", activeLock: false } as Order["shipmentRecovery"],
@@ -20,63 +21,84 @@ function order(overrides: Partial<Order> = {}): Order {
 
 const refunding = { active: true } as Order["activeRefundOperation"];
 const shipmentLocked = { state: "creating", activeLock: true } as Order["shipmentRecovery"];
-const paymentStarting = { state: "processing", activeProcessing: true } as Order["paymentRecovery"];
 const awaitingPayment = { state: "awaiting_payment", activeProcessing: false } as Order["paymentRecovery"];
+const ids = (orders: Order[]) => orders.map((item) => item.id);
 
-describe("order bulk action blocks", () => {
-  it("allows finished orders to be archived", () => {
-    expect(findOrderActionBlock([order(), order({ status: "cancelled" })], "archive")).toBeNull();
+describe("bulk action eligibility", () => {
+  it("confirms only new orders and groups the rest by status", () => {
+    const plan = planOrderBulkAction(
+      [
+        order("a"),
+        order("b", { status: "processing" }),
+        order("c", { status: "cancelled" }),
+        order("d", { status: "shipped" }),
+        order("e", { status: "cancelled" }),
+      ],
+      "confirm",
+    );
+    expect(ids(plan.eligible)).toEqual(["a", "b"]);
+    expect(plan.skipped).toEqual([
+      { kind: "status", status: "cancelled", count: 2 },
+      { kind: "status", status: "shipped", count: 1 },
+    ]);
   });
 
-  it("blocks archive for unfinished orders, refunds, courier checks and payment setup, in that order", () => {
-    expect(findOrderActionBlock([order({ status: "pending" }), order({ activeRefundOperation: refunding })], "archive"))
-      .toEqual({ reason: "status", count: 1 });
-    expect(findOrderActionBlock([order({ activeRefundOperation: refunding }), order({ activeRefundOperation: refunding })], "archive"))
-      .toEqual({ reason: "refund", count: 2 });
-    expect(findOrderActionBlock([order({ shipmentRecovery: shipmentLocked })], "archive"))
-      .toEqual({ reason: "shipment", count: 1 });
-    expect(findOrderActionBlock([order({ paymentRecovery: paymentStarting })], "archive"))
-      .toEqual({ reason: "paymentSetup", count: 1 });
+  it("sends and books couriers only for confirmed orders without unsettled work", () => {
+    const orders = [
+      order("a", { status: "confirmed" }),
+      order("b", { status: "pending" }),
+      order("c", { status: "confirmed", paymentRecovery: awaitingPayment }),
+      order("d", { status: "confirmed", shipmentRecovery: shipmentLocked }),
+    ];
+    for (const action of ["send", "ship"] as const) {
+      const plan = planOrderBulkAction(orders, action);
+      expect(ids(plan.eligible)).toEqual(["a"]);
+      expect(plan.skipped).toEqual([
+        { kind: "status", status: "pending", count: 1 },
+        { kind: "block", reason: "paymentRecovery", count: 1 },
+        { kind: "block", reason: "shipment", count: 1 },
+      ]);
+    }
   });
 
-  it("blocks shipping while online payment, refund or courier booking is unsettled", () => {
-    expect(findOrderActionBlock([order({ status: "pending" })], "ship")).toBeNull();
-    expect(findOrderActionBlock([order({ paymentRecovery: paymentStarting })], "ship"))
-      .toEqual({ reason: "paymentSetup", count: 1 });
-    expect(findOrderActionBlock([order({ paymentRecovery: awaitingPayment })], "ship"))
-      .toEqual({ reason: "paymentRecovery", count: 1 });
-    expect(findOrderActionBlock([order({ activeRefundOperation: refunding })], "ship"))
-      .toEqual({ reason: "refund", count: 1 });
-    expect(findOrderActionBlock([order({ shipmentRecovery: shipmentLocked })], "ship"))
-      .toEqual({ reason: "shipment", count: 1 });
+  it("archives only finished orders that have no refund in progress", () => {
+    const plan = planOrderBulkAction(
+      [
+        order("a", { status: "completed" }),
+        order("b", { status: "cancelled" }),
+        order("c", { status: "pending" }),
+        order("d", { status: "returned", activeRefundOperation: refunding }),
+      ],
+      "archive",
+    );
+    expect(ids(plan.eligible)).toEqual(["a", "b"]);
+    expect(plan.skipped).toEqual([
+      { kind: "status", status: "pending", count: 1 },
+      { kind: "block", reason: "refund", count: 1 },
+    ]);
   });
 });
 
-describe("bulk ship summaries", () => {
-  it("keeps only failed orders with a short, single-line error", () => {
-    const summary = summarizeBulkShip(
-      {
-        totalProcessed: 3,
-        successCount: 1,
-        failureCount: 2,
-        results: [
-          { orderId: "A1", success: true },
-          { orderId: "B2", success: false, error: `Courier\n  said ${"x".repeat(200)}` },
-          { orderId: "C3", success: false },
-        ],
-      } as unknown as Parameters<typeof summarizeBulkShip>[0],
+describe("bulk runs", () => {
+  it("splits requests into the server's 90-order batches", () => {
+    const batches = chunk(Array.from({ length: 181 }, (_, index) => index));
+    expect(batches.map((batch) => batch.length)).toEqual([90, 90, 1]);
+  });
+
+  it("keeps each failure with a short single-line reason", () => {
+    const outcome = summarizeBulkResults(
+      [
+        { orderId: "A1", success: true },
+        { orderId: "B2", success: false, error: `Only new orders\n  can be confirmed. ${"x".repeat(200)}` },
+        { orderId: "C3", success: false },
+      ],
       "fallback",
     );
-    expect(summary.failures.map((failure) => failure.orderId)).toEqual(["B2", "C3"]);
-    expect(summary.failures[0]!.error.startsWith("Courier said")).toBe(true);
-    expect(summary.failures[0]!.error.length).toBe(160);
-    expect(summary.failures[1]!.error).toBe("fallback");
-    expect(failedBulkShipSummary(["A1", "B2"], "down")).toEqual({
-      totalProcessed: 2,
-      successCount: 0,
-      failureCount: 2,
-      failures: [{ orderId: "A1", error: "down" }, { orderId: "B2", error: "down" }],
-    });
+    expect(outcome.succeeded).toEqual(["A1"]);
+    expect(outcome.failures.map((failure) => failure.orderId)).toEqual(["B2", "C3"]);
+    expect(outcome.failures[0]!.error.startsWith("Only new orders can be confirmed.")).toBe(true);
+    expect(outcome.failures[0]!.error.length).toBe(160);
+    expect(outcome.failures[1]!.error).toBe("fallback");
   });
 });
 

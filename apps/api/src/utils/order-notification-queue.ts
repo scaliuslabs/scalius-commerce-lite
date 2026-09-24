@@ -50,8 +50,6 @@ export function getOrderNotificationTypeForStatus(status: string): OrderNotifica
             return "order_returned";
         case "refunded":
             return "order_refunded";
-        case "partially_refunded":
-            return "order_partially_refunded";
         default:
             return null;
     }

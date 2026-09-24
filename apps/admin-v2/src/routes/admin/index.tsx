@@ -45,7 +45,7 @@ function HomePage() {
   const activity = useQuery(dashboardActivityQueryOptions());
   const openOrders = useQuery({
     queryKey: ["home", "open-orders"],
-    queryFn: () => apiData(getApiV1AdminOrders({ query: { statusGroup: "open", limit: 1 } })),
+    queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "unfulfilled", limit: 1 } })),
     enabled: canOpen("/admin/orders"),
   });
   const lowStock = useQuery({

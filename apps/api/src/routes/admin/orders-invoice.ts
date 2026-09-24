@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { recordOrderEvent } from "@scalius/core/modules/orders/order-timeline";
 import {
   getInvoiceDocument,
   issueInvoice,
@@ -35,6 +36,7 @@ const orderItemSchema = z.object({
 
 const invoiceOrderSchema = z.object({
   id: z.string(),
+  orderNumber: z.number().int().nullable().optional(),
   version: z.number().int().positive(),
   customerName: z.string(),
   customerPhone: z.string(),
@@ -70,6 +72,8 @@ const invoiceOrderSchema = z.object({
   fulfillmentStatus: z.string().nullable(),
   paidAmount: z.number().nullable(),
   balanceDue: z.number().nullable(),
+  refundedAmount: z.number().optional(),
+  discounts: z.array(z.object({ name: z.string(), code: z.string().nullable(), amount: z.number() })).optional(),
   createdAt: z.union([z.string(), z.number()]),
   updatedAt: z.union([z.string(), z.number()]),
   items: z.array(orderItemSchema),
@@ -202,6 +206,12 @@ app.openapi(issueInvoiceRoute, async (c) => {
     { ...payload, operationKey },
     user?.id ?? null,
   );
+  await recordOrderEvent(c.get("db"), {
+    orderId: c.req.valid("param").id,
+    kind: "invoice_issued",
+    actorId: user?.id ?? null,
+    data: { number: document.invoiceNumber },
+  });
   return ok(c, document);
 });
 

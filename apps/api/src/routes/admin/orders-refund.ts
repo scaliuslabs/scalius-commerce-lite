@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { recordOrderEvent } from "@scalius/core/modules/orders/order-timeline";
 import type { Database } from "@scalius/database/client";
 import {
     PartialRefundProcessedError,
@@ -313,6 +314,15 @@ app.openapi(refundOrderRoute, async (c) => {
         throw error;
     }
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
+    if (result.amount > 0) {
+        await recordOrderEvent(db, {
+            orderId,
+            kind: "refund_recorded",
+            actorId: (c.get("user") as { id?: string } | undefined)?.id ?? null,
+            body: data.reason?.trim() || null,
+            data: { amount: result.amount, full: result.isFullRefund },
+        });
+    }
     const sideEffects = await recordDirectRefundSideEffects({
         db,
         queue: c.env.JOBS_QUEUE,

@@ -1,7 +1,13 @@
 import { asc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "@scalius/database/client";
-import { orderItems, orders } from "@scalius/database/schema";
+import {
+  orderDiscountAllocations,
+  orderItems,
+  orderPayments,
+  orders,
+  PaymentRecordStatus,
+} from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import type { InvoiceOrderSnapshot } from "./invoice-snapshot";
 import { orderMoneyAmounts, orderMoneySelection } from "./order-money";
@@ -21,6 +27,7 @@ export async function readInvoiceOrderSource(
   const order = await db
     .select({
       id: orders.id,
+      orderNumber: orders.orderNumber,
       version: orders.version,
       customerName: orders.customerName,
       customerPhone: orders.customerPhone,
@@ -51,6 +58,12 @@ export async function readInvoiceOrderSource(
       createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
       updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
       deletedAt: sql<number | null>`CAST(${orders.deletedAt} AS INTEGER)`,
+      refundedMinor: sql<number>`COALESCE((
+        SELECT SUM(${orderPayments.amountMinor}) FROM ${orderPayments}
+        WHERE ${orderPayments.orderId} = ${orders.id}
+          AND ${orderPayments.paymentType} = 'refund'
+          AND ${orderPayments.status} = ${PaymentRecordStatus.REFUNDED}
+      ), 0)`,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
@@ -76,10 +89,36 @@ export async function readInvoiceOrderSource(
     .where(eq(orderItems.orderId, orderId))
     .orderBy(asc(orderItems.createdAt), asc(orderItems.id));
 
-  const { paidAmountMinor: _paidAmountMinor, balanceDueMinor: _balanceDueMinor, ...orderFacts } = order;
+  const discountRows = await db
+    .select({
+      name: orderDiscountAllocations.promotionName,
+      code: orderDiscountAllocations.promotionCode,
+      amountMinor: sql<number>`SUM(${orderDiscountAllocations.discountAmountMinor})`,
+    })
+    .from(orderDiscountAllocations)
+    .where(eq(orderDiscountAllocations.orderId, orderId))
+    .groupBy(
+      orderDiscountAllocations.promotionId,
+      orderDiscountAllocations.promotionName,
+      orderDiscountAllocations.promotionCode,
+    )
+    .orderBy(asc(orderDiscountAllocations.promotionName));
+
+  const {
+    paidAmountMinor: _paidAmountMinor,
+    balanceDueMinor: _balanceDueMinor,
+    refundedMinor,
+    ...orderFacts
+  } = order;
   return {
     ...orderFacts,
     ...orderMoneyAmounts(order),
+    refundedAmount: fromMinor(Number(refundedMinor) || 0, order.currencyDecimalPlaces),
+    discounts: discountRows.map((row) => ({
+      name: row.name,
+      code: row.code,
+      amount: fromMinor(Number(row.amountMinor) || 0, order.currencyDecimalPlaces),
+    })),
     items: items.map((item) => ({
       ...item,
       price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),

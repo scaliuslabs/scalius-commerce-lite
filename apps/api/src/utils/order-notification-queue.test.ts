@@ -101,7 +101,6 @@ describe("order notification queue helpers", () => {
         expect(getOrderNotificationTypeForStatus("DELIVERED")).toBe("order_delivered");
         expect(getOrderNotificationTypeForStatus("returned")).toBe("order_returned");
         expect(getOrderNotificationTypeForStatus("refunded")).toBe("order_refunded");
-        expect(getOrderNotificationTypeForStatus("partially_refunded")).toBe("order_partially_refunded");
         expect(getOrderNotificationTypeForStatus("cancelled")).toBe("order_cancelled");
         expect(getOrderNotificationTypeForStatus("confirmed")).toBeNull();
     });

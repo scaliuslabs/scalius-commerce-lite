@@ -11,7 +11,6 @@ const TONES: Record<StatusKind, Record<string, StatusBadgeVariant>> = {
     confirmed: "info",
     shipped: "info",
     returned: "warning",
-    partially_refunded: "warning",
     pending: "attention",
   },
   payment: { unpaid: "warning", partial: "warning", failed: "destructive" },

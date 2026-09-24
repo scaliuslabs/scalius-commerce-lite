@@ -238,15 +238,38 @@ export const orderListActiveRefundOperationSchema = z.object({
   providerStatus: z.string().nullable(),
 });
 
-export const orderFullEditReadinessSchema = z.object({
+export const orderEditLockReasonSchema = z.enum([
+  "shipped",
+  "closed",
+  "paid",
+  "online_payment",
+  "discount",
+  "history",
+  "inventory",
+  "archived",
+  "busy",
+  "unavailable",
+]);
+
+const orderEditStateSchema = z.object({
   allowed: z.boolean(),
-  reason: z.string().nullable(),
+  reason: orderEditLockReasonSchema.nullable(),
 });
 
-export const orderAmendmentReadinessSchema = z.object({
-  allowed: z.boolean(),
-  reason: z.string().nullable(),
+/** What can still change: items via the amendment quote, details until the order ships. */
+export const orderEditReadinessSchema = z.object({
+  items: orderEditStateSchema,
+  details: orderEditStateSchema,
 });
+
+const orderListFactsShape = {
+  orderNumber: z.number().int().nullable().openapi({ description: "Sequential store order number, shown as #1001." }),
+  archivedAt: nullableTimestampSchema,
+  openRequestType: z.enum(["cancel_pre_shipment", "return", "refund"]).nullable(),
+  cod: z.object({ status: z.string(), deliveryAttempts: z.number().int() }).nullable(),
+  refundDue: z.number().openapi({ description: "Value of received returns not refunded yet." }),
+  refundedAmount: z.number(),
+};
 
 /** Order summary — returned by listOrders (admin). */
 export const orderSummarySchema = z.object({
@@ -278,7 +301,7 @@ export const orderSummarySchema = z.object({
   shipmentRecovery: orderShipmentRecoverySchema,
   paymentRecovery: orderPaymentRecoverySchema,
   activeRefundOperation: orderListActiveRefundOperationSchema.nullable(),
-  fullEditReadiness: orderFullEditReadinessSchema,
+  ...orderListFactsShape,
 });
 
 /** Order item — returned inside order detail. */
@@ -292,6 +315,8 @@ export const orderItemSchema = z.object({
   productImage: z.string().nullable(),
   variantLabel: z.string().nullable(),
   fulfillmentStatus: z.string(),
+  shippedQuantity: z.number().int(),
+  inventoryTracked: z.boolean(),
   unitPriceMinor: z.number().int().nullable(),
   lineSubtotalMinor: z.number().int().nullable(),
   discountAmountMinor: z.number().int().nullable(),
@@ -394,16 +419,13 @@ export const orderDetailSchema = z.object({
   totalAmountMinor: z.number().int().nullable(),
   taxLabel: z.string().nullable(),
   pricesIncludeTax: z.boolean(),
-  promotion: z
-    .object({
-      id: z.string(),
-      revision: z.number().int().positive(),
-      evaluatorVersion: z.number().int().positive(),
-      method: z.enum(["automatic", "code"]),
-      name: z.string(),
-      code: z.string().nullable(),
-    })
-    .nullable(),
+  discounts: z.array(z.object({
+    promotionId: z.string(),
+    name: z.string(),
+    code: z.string().nullable(),
+    method: z.enum(["automatic", "code"]),
+    amount: z.number(),
+  })),
   status: z.string(),
   paymentStatus: z.string().nullable(),
   paymentMethod: z.string().nullable(),
@@ -429,8 +451,8 @@ export const orderDetailSchema = z.object({
   paymentRecovery: orderPaymentRecoverySchema,
   refundAttempts: z.array(orderRefundAttemptSchema),
   activeRefundOperation: activeRefundOperationSchema.nullable(),
-  fullEditReadiness: orderFullEditReadinessSchema,
-  amendmentReadiness: orderAmendmentReadinessSchema,
+  ...orderListFactsShape,
+  editReadiness: orderEditReadinessSchema,
   supportRequests: z.array(orderSupportRequestSchema),
 });
 

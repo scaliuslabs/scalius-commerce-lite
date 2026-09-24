@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -32,24 +31,30 @@ import {
   resolveProviderReadiness,
 } from "~/components/admin/delivery-providers/ProviderIcon";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { useHydrated } from "~/hooks/use-hydrated";
 import { useMessages } from "~/i18n";
-import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
 import { fulfillmentStatusLabel, orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import {
+  orderErrorMessage,
   useCreateOrderShipment,
   useLookupUnknownShipment,
   useReconcileShipment,
   useResolveUnknownShipment,
 } from "~/lib/api-mutations/orders";
+import { orderCodQueryOptions } from "~/lib/api-query-options/orders";
+import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
+import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
 import { queryKeys } from "~/lib/query-keys";
 import { canTransitionTo } from "@scalius/shared/order-state";
 import { cn } from "@scalius/shared/utils";
-import { ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
+import { canSendWithOwnCourier, ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
 import { OperationalReadNotice } from "./OperationalReadNotice";
-import { formatOrderDate } from "./formatters";
+import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order, OrderShipment } from "./types";
+import type { OrderActionRequest } from "./primary-action";
 
 type Outcome = "confirmed_existing" | "confirmed_not_created" | "confirmed_cancelled";
 type EvidenceSource = "courier_portal" | "courier_support";
@@ -112,6 +117,9 @@ function CourierCheckDialog({
     setTrackingId("");
     setConfirmed(false);
     operationKey.current = null;
+    mutation.reset();
+    // Every opening starts clean.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Any edit after ticking the box needs a fresh confirmation and key.
@@ -193,6 +201,7 @@ function CourierCheckDialog({
               onChange={(e) => { setEvidenceNote(e.target.value); edited(); }}
             />
           </div>
+          {mutation.isError ? <p role="alert" className="text-destructive">{orderErrorMessage(mutation.error)}</p> : null}
           <div className="flex items-start gap-3">
             <span className="flex h-5 items-center">
               <Checkbox id="courier-confirmed" checked={confirmed} disabled={mutation.isPending} onCheckedChange={(value) => setConfirmed(value === true)} />
@@ -202,7 +211,7 @@ function CourierCheckDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={close} disabled={mutation.isPending}>{r("cancel")}</Button>
-          <Button type="button" onClick={submit} disabled={mutation.isPending || !ready}>
+          <Button type="button" onClick={submit} loading={mutation.isPending} disabled={!ready}>
             {r("save")}
           </Button>
         </DialogFooter>
@@ -244,7 +253,7 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
       {needsCourierCheck || canRepair ? (
         <div className="flex flex-wrap gap-2">
           {needsCourierCheck && recovery.providerType === "steadfast" ? (
-            <Button type="button" size="sm" variant="outline" disabled={lookupMutation.isPending} onClick={lookup}>
+            <Button type="button" size="sm" variant="outline" loading={lookupMutation.isPending} onClick={lookup}>
               {t("courier.checkSteadfast")}
             </Button>
           ) : null}
@@ -258,7 +267,7 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
               type="button"
               size="sm"
               variant="outline"
-              disabled={repairMutation.isPending}
+              loading={repairMutation.isPending}
               onClick={() => repairMutation.mutate({ orderId: order.id, shipmentId })}
             >
               {t("shipments.repair")}
@@ -274,11 +283,16 @@ function ShipmentRow({
   shipment,
   canManage,
   refreshBlockedReason,
+  statusLabel,
+  money,
   onUpdated,
 }: {
   shipment: OrderShipment;
   canManage: boolean;
   refreshBlockedReason?: string;
+  /** Overrides the courier status, e.g. "Delivery failed". */
+  statusLabel?: string;
+  money: (amount: number) => string;
   onUpdated: () => void;
 }) {
   const t = useMessages(orderDetailMessages);
@@ -294,6 +308,7 @@ function ShipmentRow({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ShipmentStatusIndicator
           shipment={{ id: shipment.id, status: shipment.status, orderId: shipment.orderId, lastChecked: toIsoTimestamp(shipment.lastChecked) }}
+          label={statusLabel}
           onStatusUpdated={onUpdated}
           canRefresh={canManage && refreshable && !refreshBlockedReason}
           showLastChecked={refreshable}
@@ -307,19 +322,24 @@ function ShipmentRow({
       </p>
       {shipment.trackingId ? (
         <p className="text-muted-foreground">
-          {t("shipments.trackingId")}: <span className="font-mono">{shipment.trackingId}</span>
+          {t("shipments.trackingId")}: <code>{shipment.trackingId}</code>
           {trackingUrl ? (
             <>
               {" · "}
-              <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="text-link hover:underline">
                 {t("shipments.track")}
               </a>
             </>
           ) : null}
         </p>
       ) : null}
-      {shipment.note ? <p className="text-muted-foreground">{shipment.note}</p> : null}
-      {shipment.metadata ? (
+      {shipment.shipmentAmount != null ? (
+        <p className="text-muted-foreground tabular-nums">
+          {t("shipments.cost", { amount: money(shipment.shipmentAmount) })}
+        </p>
+      ) : null}
+      {shipment.note ? <p className="whitespace-pre-wrap text-muted-foreground">{shipment.note}</p> : null}
+      {shipment.metadata && shipment.providerType !== "manual" ? (
         <>
           <Button type="button" variant="link" size="sm" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
             {expanded ? t("shipments.hideDetails") : t("shipments.showDetails")}
@@ -337,8 +357,6 @@ function BookCourier({ order, focusRequest }: { order: Order; focusRequest?: num
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [providerId, setProviderId] = useState("");
   const mutation = useCreateOrderShipment();
-  const refundLocked = Boolean(order.activeRefundOperation?.active);
-  const shipmentLocked = order.shipmentRecovery?.activeLock === true;
   const providers = order.deliveryProviders ?? [];
   const selected = providers.find((provider) => provider.id === providerId);
   const readiness = selected ? resolveProviderReadiness(selected) : null;
@@ -347,119 +365,127 @@ function BookCourier({ order, focusRequest }: { order: Order; focusRequest?: num
     ? getProviderReadinessMessage(readiness)
     : noneReady ? getProviderReadinessMessage(resolveProviderReadiness(providers[0]!)) : "";
   const read = order.operationalReads?.deliveryProviders ?? { status: "ready" as const, refreshing: false };
-  const locked = refundLocked || shipmentLocked;
+  const locked = Boolean(order.activeRefundOperation?.active) || order.shipmentRecovery?.activeLock === true;
   // Pathao books by City → Zone (→ Area); without them the courier rejects the booking.
   const missingArea = selected?.type === "pathao" && (!order.city || !order.zone);
-  const canEditOrder = useOrderActionPermissions().canEditOrders
-    && (order.fullEditReadiness.allowed || order.amendmentReadiness?.allowed === true);
+  const notice = (
+    <OperationalReadNotice
+      read={read}
+      label={t("shipments.couriersFailed")}
+      onRetry={() => void queryClient.refetchQueries({ queryKey: queryKeys.settings.deliveryProviders(), type: "active" })}
+    />
+  );
 
   useEffect(() => {
     if (focusRequest) triggerRef.current?.focus();
   }, [focusRequest]);
 
-  const book = () => {
-    if (refundLocked) return void toast.error(t("locked.refund"));
-    if (shipmentLocked) return void toast.error(t("locked.shipment"));
-    if (!providerId) return void toast.error(t("shipments.chooseCourier"));
-    if (!selected || !readiness?.canCreateShipment) return void toast.error(blocker || t("shipments.courierNotReady"));
-    if (missingArea) return void toast.error(t("shipments.needsArea"));
-    mutation.mutate({ orderId: order.id, providerId, options: {} });
-  };
+  if (read.status === "loading" || read.status === "unavailable") return notice;
+  if (providers.length === 0) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-muted-foreground">{t("shipments.noCouriers")}</p>
+        <Button asChild variant="link" size="sm">
+          <Link to="/admin/settings/shipping">{t("shipments.connectCourier")}</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <section className="space-y-2 border-t pt-4">
-      <OperationalReadNotice
-        read={read}
-        label={t("shipments.couriersFailed")}
-        onRetry={() => void queryClient.refetchQueries({ queryKey: queryKeys.settings.deliveryProviders(), type: "active" })}
-      />
-      {read.status !== "loading" && read.status !== "unavailable" ? (
-        providers.length > 0 ? (
-          <>
-            <Label htmlFor="book-courier">{t("shipments.courier")}</Label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Select value={providerId} onValueChange={setProviderId} disabled={read.status !== "ready" || mutation.isPending || locked}>
-                <SelectTrigger id="book-courier" ref={triggerRef}>
-                  <SelectValue placeholder={t("shipments.chooseCourier")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {providers.map((provider) => {
-                    const providerReadiness = resolveProviderReadiness(provider);
-                    return (
-                      <SelectItem key={provider.id} value={provider.id} disabled={!providerReadiness.canCreateShipment}>
-                        {provider.name} · {getProviderReadinessLabel(providerReadiness)}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-              <Button
-                className="shrink-0"
-                onClick={book}
-                disabled={mutation.isPending || !providerId || readiness?.canCreateShipment === false || read.status !== "ready" || locked || missingArea}
-              >
-                {t("shipments.book")}
-              </Button>
-            </div>
-            {blocker ? <p className="text-muted-foreground">{blocker}</p> : null}
-            {missingArea ? (
-              <p className="text-muted-foreground">
-                {t("shipments.needsArea")}
-                {canEditOrder ? (
-                  <>
-                    {" "}
-                    <Link to="/admin/orders/$orderId/edit" params={{ orderId: order.id }} className="text-primary hover:underline">
-                      {t("edit")}
-                    </Link>
-                  </>
-                ) : null}
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-muted-foreground">{t("shipments.noCouriers")}</p>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/admin/settings/shipping">{t("shipments.connectCourier")}</Link>
-            </Button>
-          </div>
-        )
-      ) : null}
-      <ManualFulfillmentDialog order={order} />
-    </section>
+    <div className="space-y-2">
+      {notice}
+      <Label htmlFor="book-courier">{t("shipments.courier")}</Label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Select
+          value={providerId}
+          onValueChange={(value) => { setProviderId(value); mutation.reset(); }}
+          disabled={read.status !== "ready" || mutation.isPending || locked}
+        >
+          <SelectTrigger id="book-courier" ref={triggerRef}>
+            <SelectValue placeholder={t("shipments.chooseCourier")} />
+          </SelectTrigger>
+          <SelectContent>
+            {providers.map((provider) => {
+              const providerReadiness = resolveProviderReadiness(provider);
+              return (
+                <SelectItem key={provider.id} value={provider.id} disabled={!providerReadiness.canCreateShipment}>
+                  {provider.name} · {getProviderReadinessLabel(providerReadiness)}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+        <Button
+          className="shrink-0"
+          loading={mutation.isPending}
+          onClick={() => mutation.mutate({ orderId: order.id, providerId, options: {} })}
+          disabled={!providerId || readiness?.canCreateShipment === false || read.status !== "ready" || locked || missingArea}
+        >
+          {t("shipments.book")}
+        </Button>
+      </div>
+      {blocker ? <p className="text-muted-foreground">{blocker}</p> : null}
+      {missingArea ? <p className="text-muted-foreground">{t("shipments.needsArea")}</p> : null}
+      {mutation.isError ? <p role="alert" className="text-destructive">{orderErrorMessage(mutation.error)}</p> : null}
+    </div>
   );
 }
 
-export function ShipmentCard({ order, bookRequest }: { order: Order; bookRequest?: number }) {
+const CLOSED_ORDER_STATUSES = new Set(["cancelled", "returned", "refunded", "incomplete"]);
+const SETTLED_SHIPMENT_STATUSES = new Set(["delivered", "returned", "cancelled", "failed"]);
+
+export function ShipmentCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
   const queryClient = useQueryClient();
+  const hydrated = useHydrated();
   const cardRef = useRef<HTMLDivElement>(null);
   const [courierCheckOpen, setCourierCheckOpen] = useState(false);
+  const [sending, setSending] = useState(false);
   const canManage = useOrderActionPermissions().canManageOrderShipments;
   const read = order.operationalReads?.shipments ?? { status: "ready" as const, refreshing: false };
   const shipments = order.shipments ?? [];
+  const status = order.status.toLowerCase();
+  const saved = resolveSavedOrderMoneySummary(order);
+  const money = (amount: number) => (saved ? formatSavedMajorAmount(amount, saved) : formatCurrencyAmount(amount, order.currencyCode ?? "BDT"));
   const canBook = canManage
+    && !order.archivedAt
+    && status === "confirmed"
     && order.items.length > 0
     && order.fulfillmentStatus !== "complete"
     && canTransitionTo("order", order.status, "shipped");
+  const canSend = canManage && canSendWithOwnCourier(order);
   const refreshBlockedReason = order.activeRefundOperation?.active
     ? t("locked.refund")
     : order.shipmentRecovery?.activeLock ? t("locked.shipment") : undefined;
+  // A recorded failed delivery replaces "In transit" on the shipment still out.
+  const codQuery = useQuery({
+    ...orderCodQueryOptions(order.id),
+    enabled: hydrated && order.paymentMethod === "cod" && status === "shipped",
+    staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
+  });
+  const cod = hydrated && status === "shipped" ? codQuery.data?.tracking ?? null : null;
+  const failure = cod?.codStatus === "failed" ? cod : null;
+  const openShipmentId = shipments.find((shipment) => !SETTLED_SHIPMENT_STATUSES.has(shipment.status.toLowerCase()))?.id;
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(order.id) });
   };
 
   useEffect(() => {
-    if (bookRequest) cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [bookRequest]);
+    if (request?.action !== "bookCourier" && request?.action !== "sendOwnCourier") return;
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (request.action === "sendOwnCourier" && canSend) setSending(true);
+    // Only a new request should act.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request?.id]);
 
   return (
     <Card ref={cardRef} id="order-shipments" className="scroll-mt-4">
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>{t("shipments.title")}</CardTitle>
-        {order.fulfillmentStatus ? (
+        {order.fulfillmentStatus && !CLOSED_ORDER_STATUSES.has(status) ? (
           <Badge variant={statusBadgeVariant(order.fulfillmentStatus, "fulfillment")}>{fulfillmentStatusLabel(o, order.fulfillmentStatus)}</Badge>
         ) : null}
       </CardHeader>
@@ -470,6 +496,17 @@ export function ShipmentCard({ order, bookRequest }: { order: Order; bookRequest
           label={t("shipments.loadFailed")}
           onRetry={() => void queryClient.refetchQueries({ queryKey: queryKeys.orders.shipments(order.id), type: "active" })}
         />
+        {failure ? (
+          <div role="status" className="space-y-1">
+            <p className="font-medium text-destructive">{t("shipments.failedAttempt", { count: failure.deliveryAttempts })}</p>
+            {failure.failureReason || failure.failureNote ? (
+              <p className="whitespace-pre-wrap text-muted-foreground">
+                {[failure.failureReason ? orderDetailLabel(t, "cod.reason.", failure.failureReason) : null, failure.failureNote]
+                  .filter(Boolean).join(" · ")}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {read.status === "ready" || read.status === "stale" ? (
           shipments.length > 0 ? (
             <ul className="divide-y">
@@ -479,6 +516,10 @@ export function ShipmentCard({ order, bookRequest }: { order: Order; bookRequest
                   shipment={shipment}
                   canManage={canManage}
                   refreshBlockedReason={refreshBlockedReason}
+                  statusLabel={shipment.id !== openShipmentId
+                    ? undefined
+                    : status === "returned" ? t("cod.status.returned") : failure ? t("cod.status.failed") : undefined}
+                  money={money}
                   onUpdated={refresh}
                 />
               ))}
@@ -487,8 +528,18 @@ export function ShipmentCard({ order, bookRequest }: { order: Order; bookRequest
             <p className="text-muted-foreground">{t("shipments.empty")}</p>
           )
         ) : null}
-        {canBook ? <BookCourier order={order} focusRequest={bookRequest} /> : null}
+        {canBook || canSend ? (
+          <section className="space-y-2 border-t pt-4">
+            {canBook ? <BookCourier order={order} focusRequest={request?.action === "bookCourier" ? request.id : undefined} /> : null}
+            {canSend ? (
+              <Button type="button" variant="outline" className="w-full" onClick={() => setSending(true)}>
+                {t("fulfill.open")}
+              </Button>
+            ) : null}
+          </section>
+        ) : null}
       </CardContent>
+      <ManualFulfillmentDialog order={order} open={sending} onOpenChange={setSending} />
       <CourierCheckDialog
         order={order}
         shipmentId={order.shipmentRecovery?.shipmentId ?? ""}

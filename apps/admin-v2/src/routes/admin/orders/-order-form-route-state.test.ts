@@ -1,32 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { orderEditMode } from "./-order-form-route-state";
+import { orderFormMessages } from "~/i18n/order-form";
+import { editLockMessageKey, orderEditState } from "./-order-form-route-state";
 
 const allowed = { allowed: true, reason: null };
-const blocked = (reason: string) => ({ allowed: false, reason });
+const locked = (reason: string | null) => ({ allowed: false, reason });
 
-describe("order edit mode", () => {
-  it("uses the full editor when the server allows it", () => {
-    expect(orderEditMode({
-      fullEditReadiness: allowed,
-      amendmentReadiness: blocked("Only manual COD orders"),
-    })).toEqual({ mode: "edit" });
+describe("edit order state", () => {
+  it("edits the items whenever the server allows it", () => {
+    expect(orderEditState({ items: allowed, details: allowed })).toEqual({ mode: "amend" });
   });
 
-  it("uses the quote-backed amendment when only that is allowed", () => {
-    expect(orderEditMode({
-      fullEditReadiness: blocked("Has a tax snapshot"),
-      amendmentReadiness: allowed,
-    })).toEqual({ mode: "amend" });
+  it("explains a discount lock and points to the details edit on the order page", () => {
+    expect(orderEditState({ items: locked("discount"), details: allowed }))
+      .toEqual({ mode: "locked", message: "lockDiscount", canEditDetails: true });
   });
 
-  it("locks the order with the server's reason when neither is allowed", () => {
-    expect(orderEditMode({
-      fullEditReadiness: blocked("Already shipped"),
-      amendmentReadiness: blocked("Past the amendment window"),
-    })).toEqual({ mode: "locked", reason: "Already shipped" });
-    expect(orderEditMode({
-      fullEditReadiness: { allowed: false, reason: null },
-      amendmentReadiness: blocked("Past the amendment window"),
-    })).toEqual({ mode: "locked", reason: "Past the amendment window" });
+  it("does not offer the details edit after shipment", () => {
+    expect(orderEditState({ items: locked("shipped"), details: locked("shipped") }))
+      .toEqual({ mode: "locked", message: "lockShipped", canEditDetails: false });
+  });
+
+  it("has a plain sentence for every server reason and a fallback for unknown ones", () => {
+    for (const reason of [
+      "shipped", "closed", "paid", "online_payment", "discount",
+      "history", "inventory", "archived", "busy", "unavailable",
+    ]) {
+      const key = editLockMessageKey(reason);
+      expect(key).not.toBe("lockUnknown");
+      expect(orderFormMessages.en[key]).not.toMatch(/snapshot|immutable|_/);
+      expect(orderFormMessages.bn[key]).toBeTruthy();
+    }
+    expect(editLockMessageKey("something_new")).toBe("lockUnknown");
+    expect(editLockMessageKey(null)).toBe("lockUnknown");
   });
 });

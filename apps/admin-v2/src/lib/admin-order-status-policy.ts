@@ -8,7 +8,6 @@ export const OrderStatus = {
   CANCELLED: "cancelled",
   REFUNDED: "refunded",
   RETURNED: "returned",
-  PARTIALLY_REFUNDED: "partially_refunded",
   INCOMPLETE: "incomplete",
 } as const;
 
@@ -25,13 +24,11 @@ const ADMIN_STATUS_TRANSITIONS: Readonly<Partial<Record<OrderStatus, readonly Or
   cancelled: [],
   returned: [],
   refunded: [],
-  partially_refunded: [],
 };
 
 export const WORKFLOW_OWNED_ORDER_STATUSES = new Set([
   "returned",
   "refunded",
-  "partially_refunded",
 ]);
 
 export interface AdminOrderPaymentState {

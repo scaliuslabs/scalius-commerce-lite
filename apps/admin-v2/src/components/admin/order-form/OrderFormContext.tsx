@@ -12,10 +12,8 @@ import type { ManualOrderDiscountGuidance } from "./manual-order-discount";
 interface OrderFormState {
   form: UseFormReturn<OrderFormInput, unknown, OrderFormValues>;
   products: Product[];
-  /** Editing a saved order (full edit or amendment). */
+  /** Changing a saved order (amendment) rather than creating one. */
   isEdit: boolean;
-  /** Totals come from the server quote (create and amend); full edit has none. */
-  usesQuote: boolean;
   locations: {
     cities: DeliveryLocation[];
     zones: DeliveryLocation[];
@@ -54,7 +52,7 @@ interface OrderFormContextType extends OrderFormState {
     zoneButtonRef: Ref<HTMLButtonElement>;
     areaButtonRef: Ref<HTMLButtonElement>;
     notesRef: Ref<HTMLTextAreaElement>;
-    productSearchButtonRef: Ref<HTMLButtonElement>;
+    productSearchInputRef: Ref<HTMLInputElement>;
     shippingChargeRef: Ref<HTMLInputElement>;
     discountAmountRef: Ref<HTMLInputElement>;
     addItemButtonRef: Ref<HTMLButtonElement>;
@@ -78,7 +76,7 @@ export function OrderFormProvider({
     zoneButtonRef: useRef<HTMLButtonElement>(null),
     areaButtonRef: useRef<HTMLButtonElement>(null),
     notesRef: useRef<HTMLTextAreaElement>(null),
-    productSearchButtonRef: useRef<HTMLButtonElement>(null),
+    productSearchInputRef: useRef<HTMLInputElement>(null),
     shippingChargeRef: useRef<HTMLInputElement>(null),
     discountAmountRef: useRef<HTMLInputElement>(null),
     addItemButtonRef: useRef<HTMLButtonElement>(null),

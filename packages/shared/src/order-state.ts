@@ -8,7 +8,6 @@ export const ORDER_STATUSES = [
   "cancelled",
   "returned",
   "refunded",
-  "partially_refunded",
   "incomplete",
 ] as const;
 
@@ -16,6 +15,7 @@ export const PAYMENT_STATUSES = [
   "unpaid",
   "partial",
   "paid",
+  "partially_refunded",
   "refunded",
   "failed",
 ] as const;
@@ -35,9 +35,10 @@ export type OrderCodAction = "collected" | "failed" | "returned";
 const ORDER_COD_ACTION_STATUSES: Readonly<
   Record<OrderCodAction, readonly OrderStatusValue[]>
 > = {
-  collected: ["confirmed", "shipped", "delivered"],
-  failed: ["confirmed", "shipped"],
-  returned: ["shipped", "delivered", "completed"],
+  // Cash changes hands only at the door: the order must be out for delivery.
+  collected: ["shipped", "delivered"],
+  failed: ["shipped"],
+  returned: ["shipped", "delivered"],
 };
 
 export const ORDER_STATUS_TRANSITIONS: Record<
@@ -50,12 +51,11 @@ export const ORDER_STATUS_TRANSITIONS: Record<
   confirmed: ["shipped", "delivered", "cancelled"],
   // A courier handoff can be rebuilt without cancelling the order.
   shipped: ["confirmed", "delivered", "returned", "cancelled"],
-  delivered: ["completed", "returned", "refunded", "partially_refunded"],
-  completed: ["returned", "refunded", "partially_refunded"],
+  delivered: ["completed", "returned", "refunded"],
+  completed: ["returned", "refunded"],
   cancelled: [],
   returned: ["refunded"],
   refunded: [],
-  partially_refunded: ["refunded"],
 } as const;
 
 export const PAYMENT_STATUS_TRANSITIONS: Record<
@@ -64,7 +64,8 @@ export const PAYMENT_STATUS_TRANSITIONS: Record<
 > = {
   unpaid: ["partial", "paid", "failed"],
   partial: ["paid", "unpaid", "refunded", "failed"],
-  paid: ["partial", "refunded"],
+  paid: ["partially_refunded", "refunded"],
+  partially_refunded: ["refunded"],
   refunded: [],
   failed: ["unpaid", "partial", "paid"],
 } as const;

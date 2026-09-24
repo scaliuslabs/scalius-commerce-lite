@@ -25,7 +25,6 @@ export const DEFAULT_LIST_MAX_LIMIT = 100;
 export interface ListSearchParams<TSort extends string = string> {
   page: number;
   limit: number;
-  search: string;
   sort: TSort;
   order: "asc" | "desc";
   trashed: boolean;
@@ -138,8 +137,8 @@ export function createListSearchValidator<T extends readonly [string, ...string[
   },
 ) {
   const defaultLimit = normalizeListPositiveInteger(
-    defaults?.limit ?? 10,
-    10,
+    defaults?.limit ?? 50,
+    50,
     { max: DEFAULT_LIST_MAX_LIMIT },
   );
   const defaultSort = (defaults?.sort ?? sortOptions[0]) as T[number];
@@ -152,7 +151,6 @@ export function createListSearchValidator<T extends readonly [string, ...string[
     limit: normalizeListPositiveInteger(search.limit, defaultLimit, {
       max: DEFAULT_LIST_MAX_LIMIT,
     }),
-    search: normalizeSearchString(search.search),
     sort: normalizeEnumSearchParam(search.sort, sortOptions, defaultSort),
     order: normalizeEnumSearchParam(search.order, ["asc", "desc"] as const, defaultOrder),
     trashed: normalizeBooleanSearchParam(search.trashed),

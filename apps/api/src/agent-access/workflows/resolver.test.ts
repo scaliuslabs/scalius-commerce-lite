@@ -2712,8 +2712,7 @@ describe("reviewed agent workflow resolver", () => {
           query: {
             page: 1,
             limit: 10,
-            statusGroup: "open",
-            fulfillmentStatus: "pending",
+            view: "unfulfilled",
             sort: "createdAt",
             order: "desc",
           },

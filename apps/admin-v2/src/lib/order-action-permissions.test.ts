@@ -20,6 +20,8 @@ describe("order action permissions", () => {
       canResolveOrderSupportRequests: false,
       canUpdateOrderCod: false,
       canRefundOrders: false,
+      canPrintInvoices: false,
+      canViewFraudCheck: false,
       canBulkDeleteOrders: false,
       canBulkShipOrders: false,
       canSelectOrdersForBulkActions: false,
@@ -35,6 +37,8 @@ describe("order action permissions", () => {
       PERMISSIONS.ORDERS_CHANGE_STATUS,
       PERMISSIONS.ORDERS_MANAGE_SHIPMENTS,
       PERMISSIONS.ORDERS_REFUND,
+      PERMISSIONS.ORDERS_ISSUE_INVOICE,
+      PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW,
     ]);
 
     expect(actions).toEqual({
@@ -48,6 +52,8 @@ describe("order action permissions", () => {
       canResolveOrderSupportRequests: true,
       canUpdateOrderCod: true,
       canRefundOrders: true,
+      canPrintInvoices: true,
+      canViewFraudCheck: true,
       canBulkDeleteOrders: true,
       canBulkShipOrders: true,
       canSelectOrdersForBulkActions: true,
@@ -65,5 +71,14 @@ describe("order action permissions", () => {
       canBulkShipOrders: true,
       canSelectOrdersForBulkActions: true,
     });
+  });
+
+  it("shows invoice printing and delivery history only with their own permissions", () => {
+    expect(resolveOrderActions([PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_EDIT])).toMatchObject({
+      canPrintInvoices: false,
+      canViewFraudCheck: false,
+    });
+    expect(resolveOrderActions([PERMISSIONS.ORDERS_ISSUE_INVOICE])).toMatchObject({ canPrintInvoices: true });
+    expect(resolveOrderActions([PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW])).toMatchObject({ canViewFraudCheck: true });
   });
 });

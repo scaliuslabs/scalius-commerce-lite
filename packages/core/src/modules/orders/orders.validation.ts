@@ -47,22 +47,9 @@ const sellableOrderItemSchema = z.object({
         .max(99, "Quantity must be at most 99"),
 });
 
-const editableOrderItemSchema = sellableOrderItemSchema.extend({
-    price: z
-        .number()
-        .min(0, "Price must be greater than or equal to 0"),
-});
-
 const sellableOrderContentSchema = orderBaseContentSchema.extend({
     items: z
         .array(sellableOrderItemSchema)
-        .min(1, "Add at least one sellable item")
-        .max(MAX_ORDER_LINE_ITEMS, `Add at most ${MAX_ORDER_LINE_ITEMS} sellable items`),
-});
-
-const editableOrderContentSchema = orderBaseContentSchema.extend({
-    items: z
-        .array(editableOrderItemSchema)
         .min(1, "Add at least one sellable item")
         .max(MAX_ORDER_LINE_ITEMS, `Add at most ${MAX_ORDER_LINE_ITEMS} sellable items`),
 });
@@ -112,16 +99,20 @@ export const confirmManualOrderAmendmentSchema = previewManualOrderAmendmentSche
 export type PreviewManualOrderAmendmentInput = z.infer<typeof previewManualOrderAmendmentSchema>;
 export type ConfirmManualOrderAmendmentInput = z.infer<typeof confirmManualOrderAmendmentSchema>;
 
-/** Schema for updating an existing order (PUT /api/orders/:id) */
-export const updateOrderSchema = editableOrderContentSchema.extend({
-    expectedVersion: z
-        .number()
-        .int("Order version must be a whole number")
-        .min(1, "Order version is required"),
-    status: z.string().min(1, "Status is required"),
+/** Customer and delivery details of an order that has not shipped yet. */
+export const updateOrderDetailsSchema = orderBaseContentSchema.pick({
+    customerName: true,
+    customerPhone: true,
+    customerEmail: true,
+    shippingAddress: true,
+    city: true,
+    zone: true,
+    area: true,
+}).extend({
+    expectedVersion: z.number().int().min(1),
 });
 
-export type UpdateOrderInput = z.infer<typeof updateOrderSchema>;
+export type UpdateOrderDetailsInput = z.infer<typeof updateOrderDetailsSchema>;
 
 const orderRevisionSchema = z.object({
     id: z.string().min(1, "Order is required"),

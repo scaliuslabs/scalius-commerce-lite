@@ -27,6 +27,8 @@ export interface InvoiceOrderItemSnapshot {
 
 export interface InvoiceOrderSnapshot {
   id: string;
+  /** "#1001"; absent on invoices issued before order numbers existed. */
+  orderNumber?: number | null;
   version: number;
   customerName: string;
   customerPhone: string;
@@ -62,6 +64,10 @@ export interface InvoiceOrderSnapshot {
   fulfillmentStatus: string | null;
   paidAmount: number | null;
   balanceDue: number | null;
+  /** Money given back so far (major units); a partial refund shows as a credit line. */
+  refundedAmount?: number;
+  /** Each discount applied at checkout (major units). */
+  discounts?: Array<{ name: string; code: string | null; amount: number }>;
   createdAt: string | number;
   updatedAt: string | number;
   items: InvoiceOrderItemSnapshot[];
@@ -131,6 +137,7 @@ export function snapshotInvoiceOrder(
 ): InvoiceOrderSnapshot {
   return {
     id: order.id,
+    orderNumber: order.orderNumber ?? null,
     version: order.version,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
@@ -166,6 +173,12 @@ export function snapshotInvoiceOrder(
     fulfillmentStatus: order.fulfillmentStatus,
     paidAmount: order.paidAmount,
     balanceDue: order.balanceDue,
+    refundedAmount: order.refundedAmount ?? 0,
+    discounts: (order.discounts ?? []).map((discount) => ({
+      name: discount.name,
+      code: discount.code,
+      amount: discount.amount,
+    })),
     createdAt: timestamp(order.createdAt),
     updatedAt: timestamp(order.updatedAt),
     items: order.items.map((item) => ({

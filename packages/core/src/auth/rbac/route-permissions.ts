@@ -238,6 +238,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/orders/bulk-ship": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
+  "/api/v1/admin/orders/bulk-fulfill": {
+    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
+  },
+  "/api/v1/admin/orders/bulk-confirm": {
+    POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
+  },
   "/api/v1/admin/orders/export": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },
@@ -258,8 +264,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/orders/*": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
-    PUT: { permission: PERMISSIONS.ORDERS_EDIT },
-    PATCH: { permission: PERMISSIONS.ORDERS_EDIT },
   },
   "/api/v1/admin/orders/*/status": {
     PUT: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
@@ -268,6 +272,13 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/orders/*/restore": {
     POST: { permission: PERMISSIONS.ORDERS_RESTORE },
+  },
+  "/api/v1/admin/orders/*/details": {
+    PUT: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
+  "/api/v1/admin/orders/*/timeline": {
+    GET: { permission: PERMISSIONS.ORDERS_VIEW },
+    POST: { permission: PERMISSIONS.ORDERS_EDIT },
   },
   "/api/v1/admin/orders/*/shipments": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },

@@ -12,6 +12,7 @@ import { products, productVariants } from "./products";
 import { media } from "./media";
 import { inventoryMovements } from "./inventory";
 import { UNIX_NOW } from "./shared";
+import { user } from "./auth";
 import {
     OrderStatus,
     PaymentMethod,
@@ -26,6 +27,12 @@ import {
 
 export const orders = sqliteTable("orders", {
     id: text("id").primaryKey(),
+    /**
+     * Sequential per-store number shown as "#1001". Every order-creating write
+     * allocates it in the same INSERT (`nextOrderNumberSql`); the unique index
+     * makes a concurrent duplicate fail instead of committing.
+     */
+    orderNumber: integer("order_number"),
     customerName: text("customer_name").notNull(),
     customerPhone: text("customer_phone").notNull(),
     customerEmail: text("customer_email"),
@@ -55,11 +62,11 @@ export const orders = sqliteTable("orders", {
     totalAmountMinor: integer("total_amount_minor").notNull().default(0),
     taxLabel: text("tax_label"),
     pricesIncludeTax: integer("prices_include_tax", { mode: "boolean" }).notNull().default(false),
-    /** Valid: pending | processing | confirmed | shipped | delivered | completed | cancelled | refunded | returned | partially_refunded | incomplete (see OrderStatus enum) */
+    /** Valid: pending | processing | confirmed | shipped | delivered | completed | cancelled | refunded | returned | incomplete (see OrderStatus enum) */
     status: text("status").notNull().default(OrderStatus.PENDING),
     notes: text("notes"),
     paymentMethod: text("payment_method").notNull().default(PaymentMethod.COD),
-    /** Valid: unpaid | partial | paid | refunded | failed (see PaymentStatus enum) */
+    /** Valid: unpaid | partial | paid | partially_refunded | refunded | failed (see PaymentStatus enum) */
     paymentStatus: text("payment_status").notNull().default(PaymentStatus.UNPAID),
     paymentIntentId: text("payment_intent_id"),
     paidAmountMinor: integer("paid_amount_minor").notNull().default(0),
@@ -88,6 +95,7 @@ export const orders = sqliteTable("orders", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
     invoiceNumber: integer("invoice_number"),
 }, (table) => [
+    uniqueIndex("orders_order_number_unique").on(table.orderNumber),
     index("orders_status_idx").on(table.status),
     index("orders_payment_status_idx").on(table.paymentStatus),
     index("orders_customer_activity_idx").on(
@@ -279,6 +287,8 @@ export const orderItems = sqliteTable("order_items", {
     taxableAmountMinor: integer("taxable_amount_minor").notNull().default(0),
     taxAmountMinor: integer("tax_amount_minor").notNull().default(0),
     fulfillmentStatus: text("fulfillment_status").notNull().default(ItemFulfillmentStatus.PENDING),
+    /** Units handed to a courier so far; the line is "shipped" once this equals quantity. */
+    shippedQuantity: integer("shipped_quantity").notNull().default(0),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -708,6 +718,22 @@ export const orderSupportRequestEvents = sqliteTable("order_support_request_even
     index("order_support_request_events_order_created_idx").on(table.orderId, table.createdAt),
 ]);
 
+/** The order timeline: staff comments and what happened to the order, newest first. */
+export const orderEvents = sqliteTable("order_events", {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    body: text("body"),
+    /** JSON facts for the event (amounts in major units, labels are rendered by the dashboard). */
+    data: text("data"),
+    actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    index("order_events_order_created_idx").on(table.orderId, table.createdAt),
+]);
+
 export const paymentSessionAttempts = sqliteTable("payment_session_attempts", {
     id: text("id").primaryKey(),
     attemptKey: text("attempt_key").notNull(),
@@ -771,6 +797,7 @@ export const codTracking = sqliteTable("cod_tracking", {
     /** Valid: pending | collected | failed | returned (see CodStatus enum) */
     codStatus: text("cod_status").notNull().default(CodStatus.PENDING),
     failureReason: text("failure_reason"),
+    failureNote: text("failure_note"),
     collectedBy: text("collected_by"),
     collectedAmountMinor: integer("collected_amount_minor"),
     collectedAt: integer("collected_at", { mode: "timestamp" }),
@@ -911,6 +938,7 @@ export type OrderPayment = InferSelectModel<typeof orderPayments>;
 export type RefundAttempt = InferSelectModel<typeof refundAttempts>;
 export type OrderSupportRequest = InferSelectModel<typeof orderSupportRequests>;
 export type OrderSupportRequestEvent = InferSelectModel<typeof orderSupportRequestEvents>;
+export type OrderEvent = InferSelectModel<typeof orderEvents>;
 export type PaymentSessionAttempt = InferSelectModel<typeof paymentSessionAttempts>;
 export type PaymentPlan = InferSelectModel<typeof paymentPlans>;
 export type CodTracking = InferSelectModel<typeof codTracking>;

@@ -283,7 +283,6 @@ const CLOSED_ORDER_STATUSES = [
     OrderStatus.CANCELLED,
     OrderStatus.RETURNED,
     OrderStatus.REFUNDED,
-    OrderStatus.PARTIALLY_REFUNDED,
 ];
 
 function chunk<T>(values: readonly T[], size: number): T[][] {

@@ -11,7 +11,7 @@ describe("admin order status policy", () => {
     expect(getAdminOrderStatusTransitions("arbitrary-provider-status")).toEqual([]);
   });
   it("keeps refund and return states out of generic status changes", () => {
-    for (const status of ["returned", "refunded", "partially_refunded"]) {
+    for (const status of ["returned", "refunded"]) {
       expect(getAdminOrderStatusTransitions(status)).toEqual([]);
     }
     expect(getAdminOrderStatusTransitions("pending")).not.toContain("returned");

@@ -9,7 +9,7 @@ import {
     quoteManualOrderSchema,
     previewManualOrderAmendmentSchema,
     confirmManualOrderAmendmentSchema,
-    updateOrderSchema,
+    updateOrderDetailsSchema,
     archiveOrdersSchema,
     restoreOrderSchema,
     bulkShipOrderSchema
@@ -25,8 +25,8 @@ import {
     media,
     orders,
 } from "@scalius/database/schema";
-import { eq, sql } from "drizzle-orm";
-import { NotFoundError, ServiceUnavailableError } from "../../utils/api-error";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { NotFoundError, ServiceUnavailableError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
     successEnvelope,
@@ -42,6 +42,7 @@ import { publishedMediaObjectKey } from "@scalius/core/modules/media/media.prese
 import {
     activeRefundOperationSchema,
     orderDetailSchema,
+    orderEditReadinessSchema,
     orderItemSchema,
     orderPaymentRecoverySchema,
     orderRefundAttemptSchema,
@@ -63,7 +64,10 @@ import {
 } from "../../utils/cache-generation";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
-import { enqueueOrderNotificationsForStatus } from "../../utils/order-notification-queue";
+import {
+    enqueueOrderNotificationMessage,
+    enqueueOrderNotificationsForStatus,
+} from "../../utils/order-notification-queue";
 import {
     listOrderPaymentSessionAttempts,
     listOrderRefundAttempts,
@@ -89,15 +93,22 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 
 type AdminRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 type AdminRouteContext<R extends RouteConfig> = Parameters<AdminRouteHandler<R>>[0];
-type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
+type OrderListSort = (typeof ORDER_LIST_SORTS)[number];
 
 const paymentStatusQuerySchema = z.enum([
     PaymentStatus.UNPAID,
     PaymentStatus.PARTIAL,
     PaymentStatus.PAID,
+    PaymentStatus.PARTIALLY_REFUNDED,
     PaymentStatus.REFUNDED,
     PaymentStatus.FAILED,
 ]);
+
+const orderListViewQuerySchema = z.enum(OrdersService.ORDER_LIST_VIEWS).openapi({
+    description: "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+});
+
+const ORDER_LIST_SORTS = ["relevance", "customerName", "totalAmount", "createdAt", "updatedAt"] as const;
 
 const paymentMethodQuerySchema = z.enum(listPaymentMethodIds() as [string, ...string[]]);
 
@@ -127,7 +138,7 @@ const createOrderRequestSchema = createOrderSchema.extend({
 const recoveryLinkPaymentTypeSchema = z.enum(["full", "deposit", "balance"]);
 
 const ORDER_EXPORT_MAX_ROWS = 5_000;
-const ORDER_EXPORT_PAGE_SIZE = 100;
+const ORDER_EXPORT_PAGE_SIZE = 90;
 const PAYMENT_RECOVERY_EXPORT_MAX_ROWS = 5_000;
 const PAYMENT_RECOVERY_EXPORT_PAGE_SIZE = 100;
 
@@ -308,6 +319,7 @@ const paymentRecoveryLinkResponseSchema = successEnvelope(z.object({
 
 const orderFormDataSchema = z.object({
     id: z.string(),
+    orderNumber: z.number().int().nullable(),
     version: z.number().int().min(1),
     customerName: z.string(),
     customerPhone: z.string(),
@@ -324,15 +336,6 @@ const orderFormDataSchema = z.object({
     updatedAt: z.union([z.string(), z.number()]),
 }).passthrough();
 
-const orderFullEditReadinessSchema = z.object({
-    allowed: z.boolean(),
-    reason: z.string().nullable(),
-});
-
-const orderAmendmentReadinessSchema = z.object({
-    allowed: z.boolean(),
-    reason: z.string().nullable(),
-});
 
 const formDataItemSchema = z.object({
     orderItemId: z.string(),
@@ -376,7 +379,11 @@ const catalogProductsRoute = createRoute({
             description: "Paginated active product catalog",
             content: {
                 "application/json": {
-                    schema: paginatedEnvelope("products", productSummarySchema),
+                    schema: paginatedEnvelope("products", productSummarySchema.extend({
+                        availableStock: z.number().int().nullable().openapi({
+                            description: "Units buyers can still order across active SKUs; null when a SKU has no stock limit.",
+                        }),
+                    })),
                 },
             },
         },
@@ -393,9 +400,31 @@ app.openapi(catalogProductsRoute, async (c) => {
         status: "active",
         sort: "name",
         order: "asc",
-        agentSummary: true,
+        includeDescription: false,
     });
-    return ok(c, result);
+    const productIds = result.products.map((product) => product.id);
+    const stockRows = productIds.length > 0
+        ? await c.get("db").select({
+            productId: productVariants.productId,
+            available: sql<number>`SUM(CASE WHEN ${productVariants.stock} > ${productVariants.reservedStock}
+                THEN ${productVariants.stock} - ${productVariants.reservedStock} ELSE 0 END)`,
+            untracked: sql<number>`SUM(CASE WHEN ${productVariants.trackInventory} THEN 0 ELSE 1 END)`,
+        }).from(productVariants).where(and(
+            inArray(productVariants.productId, productIds),
+            isNull(productVariants.deletedAt),
+        )).groupBy(productVariants.productId).all()
+        : [];
+    const stockByProduct = new Map(stockRows.map((row) => [
+        row.productId,
+        Number(row.untracked) > 0 ? null : Number(row.available) || 0,
+    ]));
+    return ok(c, {
+        ...result,
+        products: result.products.map((product) => ({
+            ...product,
+            availableStock: stockByProduct.has(product.id) ? stockByProduct.get(product.id)! : 0,
+        })),
+    });
 });
 
 // ─── GET / (List) ────────────────────────────────────────────────────────────
@@ -413,23 +442,15 @@ const listOrdersRoute = createRoute({
             limit: z.coerce.number().optional().default(10).openapi({ description: "Items per page" }),
             search: z.string().optional().openapi({ description: "Search query" }),
             status: z.string().optional().openapi({ description: "Filter by status" }),
-            statusGroup: z.enum(["open", "in_transit", "delivered", "closed"])
-                .optional()
-                .openapi({ description: "Filter by order lifecycle view" }),
+            view: orderListViewQuerySchema.optional(),
+            openRequest: z.enum(["true", "false"]).optional().openapi({ description: "Only orders with an open customer request" }),
             paymentStatus: paymentStatusQuerySchema.optional().openapi({ description: "Filter by payment status" }),
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment method" }),
             fulfillmentStatus: fulfillmentStatusQuerySchema.optional().openapi({ description: "Filter by fulfillment status" }),
             paymentRecovery: paymentRecoveryQuerySchema.optional().openapi({ description: "Filter by hosted-payment recovery state" }),
             archived: z.enum(["true", "false"]).optional().openapi({ description: "Show archived orders" }),
-            sort: z.enum([
-                "relevance",
-                "customerName",
-                "totalAmount",
-                "status",
-                "createdAt",
-                "updatedAt",
-            ]).optional().openapi({
-                description: "Sort field. Use relevance with a search query to order by FTS rank.",
+            sort: z.enum(ORDER_LIST_SORTS).optional().openapi({
+                description: "Sort field (default: newest first; relevance when searching).",
             }),
             order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
             startDate: z.string()
@@ -454,13 +475,14 @@ app.openapi(listOrdersRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
     const effectiveSort: OrderListSort = query.sort
-        ?? (query.search?.trim() ? "relevance" : "updatedAt");
+        ?? (query.search?.trim() ? "relevance" : "createdAt");
     const result = await OrdersService.listOrders(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || "",
         status: query.status || undefined,
-        statusGroup: query.statusGroup,
+        view: query.view,
+        openRequest: query.openRequest === "true",
         paymentStatus: query.paymentStatus,
         paymentMethod: query.paymentMethod,
         fulfillmentStatus: query.fulfillmentStatus,
@@ -486,15 +508,20 @@ const exportOrdersRoute = createRoute({
         query: z.object({
             search: z.string().optional().openapi({ description: "Search query" }),
             status: z.string().optional().openapi({ description: "Filter by status" }),
-            statusGroup: z.enum(["open", "in_transit", "delivered", "closed"]).optional(),
+            view: orderListViewQuerySchema.optional(),
+            openRequest: z.enum(["true", "false"]).optional(),
+            ids: z.string().optional().openapi({
+                description: "Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.",
+            }),
+            format: z.enum(["summary", "items"]).optional().default("summary").openapi({
+                description: "One row per order (summary) or one row per item (items).",
+            }),
             paymentStatus: paymentStatusQuerySchema.optional(),
             paymentMethod: paymentMethodQuerySchema.optional(),
             fulfillmentStatus: fulfillmentStatusQuerySchema.optional(),
             paymentRecovery: paymentRecoveryQuerySchema.optional(),
             archived: z.enum(["true", "false"]).optional(),
-            sort: z.enum([
-                "relevance", "customerName", "totalAmount", "status", "createdAt", "updatedAt",
-            ]).optional(),
+            sort: z.enum(ORDER_LIST_SORTS).optional(),
             order: z.enum(["asc", "desc"]).optional().default("desc"),
             startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
             endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -518,21 +545,28 @@ const exportOrdersRoute = createRoute({
 
 app.openapi(exportOrdersRoute, async (c) => {
     const query = c.req.valid("query");
+    const db = c.get("db");
+    const ids = query.ids
+        ? [...new Set(query.ids.split(",").map((id) => id.trim()).filter(Boolean))]
+        : undefined;
+    if (ids && ids.length > 100) throw new ValidationError("Export at most 100 selected orders at a time.");
     const maxRows = Math.min(query.maxRows, ORDER_EXPORT_MAX_ROWS);
     const effectiveSort: OrderListSort = query.sort
-        ?? (query.search?.trim() ? "relevance" : "updatedAt");
-    const csvBuilder = createOrdersCsvArtifactBuilder();
+        ?? (query.search?.trim() ? "relevance" : "createdAt");
+    const csvBuilder = createOrdersCsvArtifactBuilder(query.format);
     let exportedRows = 0;
     let page = 1;
     let total = 0;
 
     exportPages: while (exportedRows < maxRows) {
-        const result = await OrdersService.listOrders(c.get("db"), {
+        const result = await OrdersService.listOrders(db, {
             page,
             limit: ORDER_EXPORT_PAGE_SIZE,
-            search: query.search || "",
+            ids,
+            search: ids ? "" : query.search || "",
             status: query.status || undefined,
-            statusGroup: query.statusGroup,
+            view: query.view,
+            openRequest: query.openRequest === "true",
             paymentStatus: query.paymentStatus,
             paymentMethod: query.paymentMethod,
             fulfillmentStatus: query.fulfillmentStatus,
@@ -544,8 +578,20 @@ app.openapi(exportOrdersRoute, async (c) => {
             endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
         });
         total = result.pagination.total;
+        const details = await OrdersService.loadOrderExportDetails(db, result.orders.map((order) => order.id));
         for (const order of result.orders) {
-            if (exportedRows >= maxRows || !csvBuilder.append(order)) break exportPages;
+            const detail = details.get(order.id);
+            const row = {
+                ...order,
+                subtotalAmount: fromMinor(order.subtotalAmountMinor ?? 0, order.currencyDecimalPlaces),
+                codStatus: order.cod?.status ?? null,
+                courierName: order.latestShipment?.providerName ?? null,
+                trackingId: order.latestShipment?.trackingId ?? null,
+                shippingAddress: detail?.shippingAddress ?? "",
+                notes: detail?.notes ?? null,
+                lines: detail?.lines ?? [],
+            };
+            if (exportedRows >= maxRows || !csvBuilder.append(row)) break exportPages;
             exportedRows += 1;
         }
         if (result.orders.length === 0 || page >= result.pagination.totalPages) break;
@@ -591,14 +637,7 @@ const paymentRecoveryListRoute = createRoute({
             search: z.string().optional().openapi({ description: "Search query" }),
             state: paymentRecoveryQuerySchema.optional().default("recoverable").openapi({ description: "Hosted-payment recovery state" }),
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment gateway" }),
-            sort: z.enum([
-                "relevance",
-                "customerName",
-                "totalAmount",
-                "status",
-                "createdAt",
-                "updatedAt",
-            ]).optional().openapi({ description: "Sort field" }),
+            sort: z.enum(ORDER_LIST_SORTS).optional().openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
             startDate: z.string()
                 .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -649,21 +688,11 @@ const paymentRecoveryExportRoute = createRoute({
             search: z.string().optional().openapi({ description: "Search query" }),
             state: paymentRecoveryQuerySchema.optional().default("recoverable").openapi({ description: "Hosted-payment recovery state" }),
             status: z.string().optional().openapi({ description: "Filter by exact order status" }),
-            statusGroup: z.enum(["open", "in_transit", "delivered", "closed"])
-                .optional()
-                .openapi({ description: "Filter by order lifecycle view" }),
             paymentStatus: paymentStatusQuerySchema.optional().openapi({ description: "Filter by payment status" }),
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment gateway" }),
             fulfillmentStatus: fulfillmentStatusQuerySchema.optional().openapi({ description: "Filter by fulfillment status" }),
             archived: z.enum(["true", "false"]).optional().openapi({ description: "Show archived orders" }),
-            sort: z.enum([
-                "relevance",
-                "customerName",
-                "totalAmount",
-                "status",
-                "createdAt",
-                "updatedAt",
-            ]).optional().openapi({ description: "Sort field" }),
+            sort: z.enum(ORDER_LIST_SORTS).optional().openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("desc").openapi({ description: "Sort order" }),
             startDate: z.string()
                 .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -708,7 +737,6 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
             limit: PAYMENT_RECOVERY_EXPORT_PAGE_SIZE,
             search: query.search || "",
             status: query.status || undefined,
-            statusGroup: query.statusGroup,
             paymentStatus: query.paymentStatus,
             paymentMethod: query.paymentMethod,
             fulfillmentStatus: query.fulfillmentStatus,
@@ -954,7 +982,11 @@ const archiveOrdersRoute = createRoute({
 app.openapi(archiveOrdersRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
+    const user = c.get("user") as { id?: string } | undefined;
     await OrdersService.archiveOrders(db, data.orders);
+    for (const order of data.orders) {
+        await OrdersService.recordOrderEvent(db, { orderId: order.id, kind: "archived", actorId: user?.id ?? null });
+    }
     return noContent(c);
 });
 
@@ -1002,6 +1034,16 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
         return responseResult;
     });
 
+    const shipUser = c.get("user") as { id?: string } | undefined;
+    for (const result of newlyShippedResults) {
+        await OrdersService.recordOrderEvent(db, {
+            orderId: result.orderId,
+            kind: "shipment_created",
+            actorId: shipUser?.id ?? null,
+            data: { courierName: null, trackingId: result.shipment.data?.trackingId ?? null, final: true },
+        });
+    }
+
     await enqueueOrderNotificationsForStatus({
         db,
         queue: c.env.JOBS_QUEUE,
@@ -1030,6 +1072,200 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
         results: responseResults,
     });
 }) as unknown as AdminRouteHandler<typeof bulkShipRoute>);
+
+// ─── POST /bulk-confirm, /bulk-fulfill ────────────────────────────────────────
+
+const bulkOrderIdsSchema = z.array(z.string().trim().min(1).max(180))
+    .min(1, "Select at least one order")
+    .max(90, "Select at most 90 orders at a time")
+    .refine((ids) => new Set(ids).size === ids.length, "Each order can appear only once");
+
+const bulkActionResponseSchema = successEnvelope(z.object({
+    results: z.array(z.object({
+        orderId: z.string(),
+        success: z.boolean(),
+        error: z.string().optional(),
+    })),
+}));
+
+const bulkConfirmRoute = createRoute({
+    operationId: "dashboard.orders.bulk_confirm",
+    method: "post",
+    path: "/bulk-confirm",
+    tags: ["Admin - Orders"],
+    summary: "Confirm several new orders",
+    request: {
+        body: { content: { "application/json": { schema: z.object({ orderIds: bulkOrderIdsSchema }) } } },
+    },
+    responses: {
+        200: { description: "Per-order results", content: { "application/json": { schema: bulkActionResponseSchema } } },
+        ...adminWriteErrorResponses,
+    },
+});
+
+app.openapi(bulkConfirmRoute, async (c) => {
+    const db = c.get("db");
+    const { orderIds } = c.req.valid("json");
+    const user = c.get("user") as { id?: string } | undefined;
+    const results = await OrdersService.bulkConfirmOrders(db, orderIds);
+    let bumped = false;
+    for (const result of results) {
+        if (!result.success || !result.update) continue;
+        if (!bumped && result.update.availabilityTransitionVariantIds.length > 0) {
+            await bumpCacheGeneration(c);
+            bumped = true;
+        }
+        await OrdersService.recordOrderEvent(db, {
+            orderId: result.orderId,
+            kind: "status_changed",
+            actorId: user?.id ?? null,
+            data: { from: result.update.notification?.previousStatus ?? null, to: "confirmed" },
+        });
+        const notification = result.update.notification;
+        if (notification) {
+            await enqueueOrderNotificationMessage({
+                db,
+                queue: c.env.JOBS_QUEUE,
+                message: {
+                    type: "order.notification",
+                    orderId: notification.orderId,
+                    customerEmail: notification.customerEmail,
+                    customerName: notification.customerName,
+                    notificationType: notification.notificationType,
+                },
+                dedupeKey: notification.dedupeKey ?? `order_status:${result.orderId}:${notification.notificationType}`,
+                source: "orders-bulk-confirm",
+            });
+        }
+    }
+    return ok(c, { results: results.map(({ orderId, success, error }) => ({ orderId, success, ...(error ? { error } : {}) })) });
+});
+
+const bulkFulfillRoute = createRoute({
+    operationId: "dashboard.orders.bulk_fulfill",
+    method: "post",
+    path: "/bulk-fulfill",
+    tags: ["Admin - Orders"],
+    summary: "Mark several confirmed orders as sent with your own courier",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        orderIds: bulkOrderIdsSchema,
+                        courierName: z.string().trim().max(120).optional(),
+                        note: z.string().trim().max(500).optional(),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: { description: "Per-order results", content: { "application/json": { schema: bulkActionResponseSchema } } },
+        ...adminWriteErrorResponses,
+    },
+});
+
+app.openapi(bulkFulfillRoute, async (c) => {
+    const db = c.get("db");
+    const { orderIds, courierName, note } = c.req.valid("json");
+    const user = c.get("user") as { id?: string } | undefined;
+    const results = await OrdersService.bulkFulfillOrders(db, orderIds, { courierName, note });
+    if (results.some((result) => (result.shipment?.availabilityTransitionVariantIds.length ?? 0) > 0)) {
+        await bumpCacheGeneration(c);
+    }
+    for (const result of results) {
+        if (!result.success || !result.shipment) continue;
+        await OrdersService.recordOrderEvent(db, {
+            orderId: result.orderId,
+            kind: "shipment_created",
+            actorId: user?.id ?? null,
+            data: { courierName: courierName || null, trackingId: null, final: true },
+        });
+    }
+    await enqueueOrderNotificationsForStatus({
+        db,
+        queue: c.env.JOBS_QUEUE,
+        orderIds: results.filter((result) => result.shipment?.statusChange).map((result) => result.orderId),
+        newStatus: "shipped",
+        dedupeKeyByOrderId: Object.fromEntries(results
+            .filter((result) => result.shipment?.statusChange)
+            .map((result) => [result.orderId, `shipment:${result.shipment!.shipmentId}:order_shipped`])),
+        source: "orders-bulk-fulfill",
+    });
+    return ok(c, { results: results.map(({ orderId, success, error }) => ({ orderId, success, ...(error ? { error } : {}) })) });
+});
+
+// ─── GET/POST /:id/timeline ──────────────────────────────────────────────────
+
+const timelineEventSchema = z.object({
+    id: z.string(),
+    kind: z.enum(OrdersService.ORDER_EVENT_KINDS),
+    body: z.string().nullable(),
+    data: z.record(z.string(), z.unknown()).nullable(),
+    actorName: z.string().nullable(),
+    createdAt: timestampSchema,
+});
+
+const getTimelineRoute = createRoute({
+    operationId: "dashboard.orders.timeline",
+    method: "get",
+    path: "/{id}/timeline",
+    tags: ["Admin - Orders"],
+    summary: "Order timeline: staff comments and what happened, newest first",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+        200: {
+            description: "Timeline",
+            content: { "application/json": { schema: successEnvelope(z.object({ events: z.array(timelineEventSchema) })) } },
+        },
+        404: errorResponses[404],
+    },
+});
+
+app.openapi(getTimelineRoute, (async (c: AdminRouteContext<typeof getTimelineRoute>) => {
+    const events = await OrdersService.listOrderTimeline(c.get("db"), c.req.valid("param").id);
+    return ok(c, { events: events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })) });
+}) as unknown as AdminRouteHandler<typeof getTimelineRoute>);
+
+const addCommentRoute = createRoute({
+    operationId: "dashboard.orders.comment_add",
+    method: "post",
+    path: "/{id}/timeline",
+    tags: ["Admin - Orders"],
+    summary: "Add a staff comment to the order timeline",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        body: z.string().trim().min(1, "Write a comment first.")
+                            .max(OrdersService.ORDER_COMMENT_MAX_LENGTH),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        201: {
+            description: "Comment added",
+            content: { "application/json": { schema: successEnvelope(timelineEventSchema) } },
+        },
+        ...adminOrderResourceMutationErrorResponses,
+    },
+});
+
+app.openapi(addCommentRoute, (async (c: AdminRouteContext<typeof addCommentRoute>) => {
+    const user = c.get("user") as { id?: string } | undefined;
+    const event = await OrdersService.addOrderComment(
+        c.get("db"),
+        c.req.valid("param").id,
+        c.req.valid("json").body,
+        user?.id ?? null,
+    );
+    return created(c, { ...event, createdAt: event.createdAt.toISOString() });
+}) as unknown as AdminRouteHandler<typeof addCommentRoute>);
 
 // ─── POST /:id/payment-recovery-link ─────────────────────────────────────────
 
@@ -1100,43 +1336,45 @@ app.openapi(getOrderRoute, (async (c: AdminRouteContext<typeof getOrderRoute>) =
     return ok(c, result);
 }) as unknown as AdminRouteHandler<typeof getOrderRoute>);
 
-// ─── PUT /:id ────────────────────────────────────────────────────────────────
+// ─── PUT /:id/details ───────────────────────────────────────────────────────
 
-const updateOrderRoute = createRoute({
-    operationId: "dashboard.orders.update",
+const updateOrderDetailsRoute = createRoute({
+    operationId: "dashboard.orders.update_details",
     method: "put",
-    path: "/{id}",
+    path: "/{id}/details",
     tags: ["Admin - Orders"],
-    summary: "Update an order",
+    summary: "Edit the customer and delivery details of an order that has not shipped",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: updateOrderSchema } } }
+        body: { content: { "application/json": { schema: updateOrderDetailsSchema } } },
     },
     responses: {
         200: {
-            description: "Order updated",
-            content: { "application/json": { schema: idResponse } },
+            description: "Details saved",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({ id: z.string(), version: z.number().int().min(1) })),
+                },
+            },
         },
         ...adminOrderResourceMutationErrorResponses,
-    }
+    },
 });
 
-app.openapi(updateOrderRoute, async (c) => {
+app.openapi(updateOrderDetailsRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const data = c.req.valid("json");
-    const result = await OrdersService.updateOrder(db, orderId, {
-        ...data,
-        areaName: data.areaName ?? undefined,
-        discountAmount: data.discountAmount ?? 0,
-    });
-    if (
-        Array.isArray(result.inventoryMutationVariantIds)
-        && result.inventoryMutationVariantIds.length > 0
-    ) {
-        await bumpCacheGeneration(c);
+    const user = c.get("user") as { id?: string } | undefined;
+    const result = await OrdersService.updateOrderDetails(db, orderId, c.req.valid("json"));
+    if (result.changedFields.length > 0) {
+        await OrdersService.recordOrderEvent(db, {
+            orderId,
+            kind: "details_edited",
+            actorId: user?.id ?? null,
+            data: { fields: result.changedFields },
+        });
     }
-    return ok(c, { id: result.id });
+    return ok(c, { id: result.id, version: result.version });
 });
 
 // ─── POST /:id/restore ──────────────────────────────────────────────────────
@@ -1161,7 +1399,9 @@ app.openapi(restoreOrderRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
+    const user = c.get("user") as { id?: string } | undefined;
     await OrdersService.restoreOrder(db, orderId, data.expectedVersion);
+    await OrdersService.recordOrderEvent(db, { orderId, kind: "unarchived", actorId: user?.id ?? null });
     return noContent(c);
 });
 
@@ -1200,6 +1440,8 @@ app.openapi(getItemsRoute, async (c) => {
             quantity: orderItems.quantity,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
             fulfillmentStatus: orderItems.fulfillmentStatus,
+            shippedQuantity: orderItems.shippedQuantity,
+            inventoryTracked: orderItems.inventoryTracked,
             unitPriceMinor: orderItems.unitPriceMinor,
             lineSubtotalMinor: orderItems.lineSubtotalMinor,
             discountAmountMinor: orderItems.discountAmountMinor,
@@ -1488,8 +1730,7 @@ const getFormDataRoute = createRoute({
                 "application/json": {
                     schema: successEnvelope(z.object({
                         order: orderFormDataSchema,
-                        fullEditReadiness: orderFullEditReadinessSchema,
-                        amendmentReadiness: orderAmendmentReadinessSchema,
+                        editReadiness: orderEditReadinessSchema,
                         productsWithVariants: z.array(formDataProductSchema),
                         defaultValues: orderFormDataSchema.extend({
                             discountAmount: z.number().nullable(),
@@ -1510,6 +1751,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
     const [[orderRow], storeDecimalPlaces] = await Promise.all([db
         .select({
             id: orders.id,
+            orderNumber: orders.orderNumber,
             version: orders.version,
             customerName: orders.customerName,
             customerPhone: orders.customerPhone,
@@ -1538,10 +1780,8 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
         shippingCharge: orderAmount(shippingAmountMinor),
     };
 
-    let fullEditReadiness = await OrdersService.getAdminOrderFullEditReadiness(db, orderId);
-    if (!fullEditReadiness) throw new NotFoundError("Order not found");
-    let amendmentReadiness = await OrdersService.getAdminOrderAmendmentReadiness(db, orderId);
-    if (!amendmentReadiness) throw new NotFoundError("Order not found");
+    const editReadiness = await OrdersService.getOrderEditReadiness(db, orderId);
+    if (!editReadiness) throw new NotFoundError("Order not found");
 
     const items = await db
         .select({
@@ -1606,7 +1846,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
         variantsByProductId.set(variant.productId, existing);
     }
 
-    if (fullEditReadiness.allowed || amendmentReadiness.allowed) {
+    if (editReadiness.items.allowed) {
         const productById = new Map(allProducts.map((product) => [product.id, product]));
         const variantById = new Map(allVariants.map((variant) => [variant.id, variant]));
         const hasUnavailableOriginalLine = items.some((item) => {
@@ -1620,12 +1860,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
                 || Boolean(variant.deletedAt);
         });
         if (hasUnavailableOriginalLine) {
-            const unavailable = {
-                allowed: false,
-                reason: "One or more original SKUs are no longer active. The historical order remains viewable, but its contents cannot be safely rewritten.",
-            };
-            fullEditReadiness = unavailable;
-            amendmentReadiness = unavailable;
+            editReadiness.items = { allowed: false, reason: "unavailable" };
         }
     }
 
@@ -1636,8 +1871,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
 
     return ok(c, {
         order,
-        fullEditReadiness,
-        amendmentReadiness,
+        editReadiness,
         productsWithVariants,
         defaultValues: {
             ...order,

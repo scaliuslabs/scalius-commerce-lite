@@ -158,7 +158,7 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     sqlite!.exec("INSERT INTO cod_tracking (id, order_id, cod_status) VALUES ('cod', 'order_cod', 'pending')");
 
     await expect(recordCODCollection(db, { orderId: "order_cod", collectedBy: "Courier", collectedAmountMinor: 9_999 }))
-      .rejects.toThrow("outstanding balance (100)");
+      .rejects.toThrow("Record the full cash balance of ৳100.");
     await recordCODCollection(db, { orderId: "order_cod", collectedBy: "Courier", collectedAmountMinor: 10_000 });
     await recordCODCollection(db, { orderId: "order_cod", collectedBy: "Courier", collectedAmountMinor: 10_000 });
     expect(get("SELECT payment_status, paid_amount_minor, balance_due_minor FROM orders"))
@@ -170,8 +170,8 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     // 40.5 BDT is converted once to 4050 paisa; the order keeps the exact remainder.
     await expect(processRefund(db, { orderId: "order_cod", amount: 40.5, reason: "damaged", manualSettlementConfirmed: true }))
       .resolves.toMatchObject({ success: true, amount: 40.5, isFullRefund: false });
-    expect(get("SELECT status, paid_amount_minor FROM orders"))
-      .toEqual({ status: "partially_refunded", paid_amount_minor: 5_950 });
+    expect(get("SELECT status, payment_status, paid_amount_minor, balance_due_minor FROM orders"))
+      .toEqual({ status: "delivered", payment_status: "partially_refunded", paid_amount_minor: 5_950, balance_due_minor: 0 });
     expect(get("SELECT amount_minor FROM order_payments WHERE payment_type = 'refund'")).toEqual({ amount_minor: 4_050 });
   });
 

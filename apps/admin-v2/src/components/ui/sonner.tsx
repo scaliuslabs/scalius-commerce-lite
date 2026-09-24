@@ -11,7 +11,9 @@ function Toaster(props: ToasterProps) {
       closeButton
       visibleToasts={3}
       gap={8}
-      offset={16}
+      // A page with a sticky bottom action bar sets --toast-lift so toasts sit above it.
+      offset={{ top: 16, right: 16, left: 16, bottom: "calc(16px + var(--toast-lift, 0px))" }}
+      mobileOffset={{ top: 16, right: 16, left: 16, bottom: "calc(16px + var(--toast-lift, 0px))" }}
       duration={4000}
       toastOptions={{
         unstyled: true,

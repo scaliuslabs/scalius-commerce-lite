@@ -18478,6 +18478,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
+            "configured": {
+              "type": "boolean"
+            },
             "total_parcels": {
               "type": "number"
             },
@@ -18530,7 +18533,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 ]
               }
             }
-          }
+          },
+          "required": [
+            "configured"
+          ]
         }
       },
       "required": [
@@ -30739,6 +30745,218 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
+    "operationId": "dashboard.orders.bulk_confirm",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/bulk-confirm",
+    "summary": "Confirm several new orders",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.change_status"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "orderIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "minItems": 1,
+                  "maxItems": 90
+                }
+              },
+              "required": [
+                "orderIds"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "orderId": {
+                    "type": "string"
+                  },
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "orderId",
+                  "success"
+                ]
+              }
+            }
+          },
+          "required": [
+            "results"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.bulk_fulfill",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/bulk-fulfill",
+    "summary": "Mark several confirmed orders as sent with your own courier",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.manage_shipments"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "orderIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "minItems": 1,
+                  "maxItems": 90
+                },
+                "courierName": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "note": {
+                  "type": "string",
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "orderIds"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "orderId": {
+                    "type": "string"
+                  },
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "orderId",
+                  "success"
+                ]
+              }
+            }
+          },
+          "required": [
+            "results"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.orders.bulk_ship",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/orders/bulk-ship",
@@ -31062,6 +31280,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "sku": {
                     "type": "string"
+                  },
+                  "availableStock": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "Units buyers can still order across active SKUs; null when a SKU has no stock limit."
                   }
                 },
                 "required": [
@@ -31081,7 +31304,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "category",
                   "variantCount",
                   "mediaCount",
-                  "primaryImage"
+                  "primaryImage",
+                  "availableStock"
                 ]
               }
             },
@@ -31206,6 +31430,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "nullable": true
                 },
+                "failureNote": {
+                  "type": "string",
+                  "nullable": true
+                },
                 "collectedBy": {
                   "type": "string",
                   "nullable": true
@@ -31257,6 +31485,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "lastAttemptAt",
                 "codStatus",
                 "failureReason",
+                "failureNote",
                 "collectedBy",
                 "collectedAmount",
                 "collectedAt",
@@ -31418,6 +31647,144 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           },
           "required": [
             "message"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.comment_add",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/{id}/timeline",
+    "summary": "Add a staff comment to the order timeline",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.edit"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "body": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "body"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "placed",
+                "comment",
+                "status_changed",
+                "details_edited",
+                "items_edited",
+                "shipment_created",
+                "cod_collected",
+                "cod_failed",
+                "cod_returned",
+                "refund_recorded",
+                "return_created",
+                "return_received",
+                "request_resolved",
+                "archived",
+                "unarchived",
+                "invoice_issued"
+              ]
+            },
+            "body": {
+              "type": "string",
+              "nullable": true
+            },
+            "data": {
+              "type": "object",
+              "nullable": true,
+              "additionalProperties": {}
+            },
+            "actorName": {
+              "type": "string",
+              "nullable": true
+            },
+            "createdAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "body",
+            "data",
+            "actorName",
+            "createdAt"
           ]
         }
       },
@@ -31892,14 +32259,54 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
-              "open",
-              "in_transit",
-              "delivered",
-              "closed"
+              "unfulfilled",
+              "unpaid",
+              "cod_to_collect",
+              "delivery_failed",
+              "returned"
+            ],
+            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned."
+          },
+          "required": false,
+          "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+          "name": "view",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
             ]
           },
           "required": false,
-          "name": "statusGroup",
+          "name": "openRequest",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "description": "Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection."
+          },
+          "required": false,
+          "description": "Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.",
+          "name": "ids",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "items"
+            ],
+            "default": "summary",
+            "description": "One row per order (summary) or one row per item (items)."
+          },
+          "required": false,
+          "description": "One row per order (summary) or one row per item (items).",
+          "name": "format",
           "in": "query"
         },
         {
@@ -31909,6 +32316,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "unpaid",
               "partial",
               "paid",
+              "partially_refunded",
               "refunded",
               "failed"
             ]
@@ -31976,7 +32384,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "relevance",
               "customerName",
               "totalAmount",
-              "status",
               "createdAt",
               "updatedAt"
             ]
@@ -32093,6 +32500,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "id": {
                   "type": "string"
                 },
+                "orderNumber": {
+                  "type": "integer",
+                  "nullable": true
+                },
                 "version": {
                   "type": "integer",
                   "minimum": 1
@@ -32157,6 +32568,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "id",
+                "orderNumber",
                 "version",
                 "customerName",
                 "customerPhone",
@@ -32174,36 +32586,71 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ],
               "additionalProperties": {}
             },
-            "fullEditReadiness": {
+            "editReadiness": {
               "type": "object",
               "properties": {
-                "allowed": {
-                  "type": "boolean"
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "allowed": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "shipped",
+                        "closed",
+                        "paid",
+                        "online_payment",
+                        "discount",
+                        "history",
+                        "inventory",
+                        "archived",
+                        "busy",
+                        "unavailable",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "allowed",
+                    "reason"
+                  ]
                 },
-                "reason": {
-                  "type": "string",
-                  "nullable": true
+                "details": {
+                  "type": "object",
+                  "properties": {
+                    "allowed": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "shipped",
+                        "closed",
+                        "paid",
+                        "online_payment",
+                        "discount",
+                        "history",
+                        "inventory",
+                        "archived",
+                        "busy",
+                        "unavailable",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "allowed",
+                    "reason"
+                  ]
                 }
               },
               "required": [
-                "allowed",
-                "reason"
-              ]
-            },
-            "amendmentReadiness": {
-              "type": "object",
-              "properties": {
-                "allowed": {
-                  "type": "boolean"
-                },
-                "reason": {
-                  "type": "string",
-                  "nullable": true
-                }
-              },
-              "required": [
-                "allowed",
-                "reason"
+                "items",
+                "details"
               ]
             },
             "productsWithVariants": {
@@ -32432,6 +32879,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "id": {
                   "type": "string"
                 },
+                "orderNumber": {
+                  "type": "integer",
+                  "nullable": true
+                },
                 "version": {
                   "type": "integer",
                   "minimum": 1
@@ -32527,6 +32978,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "id",
+                "orderNumber",
                 "version",
                 "customerName",
                 "customerPhone",
@@ -32548,8 +33000,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           },
           "required": [
             "order",
-            "fullEditReadiness",
-            "amendmentReadiness",
+            "editReadiness",
             "productsWithVariants",
             "defaultValues"
           ]
@@ -32608,6 +33059,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "requestKey": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "itemId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "quantity": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "itemId",
+                      "quantity"
+                    ]
+                  },
+                  "minItems": 1
+                },
                 "itemIds": {
                   "type": "array",
                   "items": {
@@ -32615,22 +33091,24 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   }
                 },
                 "trackingId": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 180
                 },
                 "trackingUrl": {
-                  "type": "string"
+                  "type": "string",
+                  "format": "uri"
                 },
                 "courierName": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 120
                 },
                 "note": {
-                  "type": "string"
-                },
-                "isFinalShipment": {
-                  "type": "boolean"
+                  "type": "string",
+                  "maxLength": 500
                 },
                 "shipmentAmount": {
-                  "type": "number"
+                  "type": "number",
+                  "minimum": 0
                 }
               }
             }
@@ -32982,46 +33460,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "pricesIncludeTax": {
               "type": "boolean"
             },
-            "promotion": {
-              "type": "object",
-              "nullable": true,
-              "properties": {
-                "id": {
-                  "type": "string"
+            "discounts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "promotionId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "automatic",
+                      "code"
+                    ]
+                  },
+                  "amount": {
+                    "type": "number"
+                  }
                 },
-                "revision": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "exclusiveMinimum": true
-                },
-                "evaluatorVersion": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "exclusiveMinimum": true
-                },
-                "method": {
-                  "type": "string",
-                  "enum": [
-                    "automatic",
-                    "code"
-                  ]
-                },
-                "name": {
-                  "type": "string"
-                },
-                "code": {
-                  "type": "string",
-                  "nullable": true
-                }
-              },
-              "required": [
-                "id",
-                "revision",
-                "evaluatorVersion",
-                "method",
-                "name",
-                "code"
-              ]
+                "required": [
+                  "promotionId",
+                  "name",
+                  "code",
+                  "method",
+                  "amount"
+                ]
+              }
             },
             "status": {
               "type": "string"
@@ -33144,6 +33616,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "fulfillmentStatus": {
                     "type": "string"
                   },
+                  "shippedQuantity": {
+                    "type": "integer"
+                  },
+                  "inventoryTracked": {
+                    "type": "boolean"
+                  },
                   "unitPriceMinor": {
                     "type": "integer",
                     "nullable": true
@@ -33174,6 +33652,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "productImage",
                   "variantLabel",
                   "fulfillmentStatus",
+                  "shippedQuantity",
+                  "inventoryTracked",
                   "unitPriceMinor",
                   "lineSubtotalMinor",
                   "discountAmountMinor",
@@ -33597,36 +34077,112 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "providerStatus"
               ]
             },
-            "fullEditReadiness": {
-              "type": "object",
-              "properties": {
-                "allowed": {
-                  "type": "boolean"
-                },
-                "reason": {
-                  "type": "string",
-                  "nullable": true
-                }
-              },
-              "required": [
-                "allowed",
-                "reason"
+            "orderNumber": {
+              "type": "integer",
+              "nullable": true,
+              "description": "Sequential store order number, shown as #1001."
+            },
+            "archivedAt": {
+              "$ref": "#/components/schemas/NullableTimestamp"
+            },
+            "openRequestType": {
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "cancel_pre_shipment",
+                "return",
+                "refund",
+                null
               ]
             },
-            "amendmentReadiness": {
+            "cod": {
               "type": "object",
+              "nullable": true,
               "properties": {
-                "allowed": {
-                  "type": "boolean"
+                "status": {
+                  "type": "string"
                 },
-                "reason": {
-                  "type": "string",
-                  "nullable": true
+                "deliveryAttempts": {
+                  "type": "integer"
                 }
               },
               "required": [
-                "allowed",
-                "reason"
+                "status",
+                "deliveryAttempts"
+              ]
+            },
+            "refundDue": {
+              "type": "number",
+              "description": "Value of received returns not refunded yet."
+            },
+            "refundedAmount": {
+              "type": "number"
+            },
+            "editReadiness": {
+              "type": "object",
+              "properties": {
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "allowed": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "shipped",
+                        "closed",
+                        "paid",
+                        "online_payment",
+                        "discount",
+                        "history",
+                        "inventory",
+                        "archived",
+                        "busy",
+                        "unavailable",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "allowed",
+                    "reason"
+                  ]
+                },
+                "details": {
+                  "type": "object",
+                  "properties": {
+                    "allowed": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "shipped",
+                        "closed",
+                        "paid",
+                        "online_payment",
+                        "discount",
+                        "history",
+                        "inventory",
+                        "archived",
+                        "busy",
+                        "unavailable",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "allowed",
+                    "reason"
+                  ]
+                }
+              },
+              "required": [
+                "items",
+                "details"
               ]
             },
             "supportRequests": {
@@ -33741,7 +34297,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "totalAmountMinor",
             "taxLabel",
             "pricesIncludeTax",
-            "promotion",
+            "discounts",
             "status",
             "paymentStatus",
             "paymentMethod",
@@ -33767,8 +34323,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "paymentRecovery",
             "refundAttempts",
             "activeRefundOperation",
-            "fullEditReadiness",
-            "amendmentReadiness",
+            "orderNumber",
+            "archivedAt",
+            "openRequestType",
+            "cod",
+            "refundDue",
+            "refundedAmount",
+            "editReadiness",
             "supportRequests"
           ]
         }
@@ -33847,6 +34408,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "properties": {
                 "id": {
                   "type": "string"
+                },
+                "orderNumber": {
+                  "type": "integer",
+                  "nullable": true
                 },
                 "version": {
                   "type": "integer",
@@ -33981,6 +34546,32 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "balanceDue": {
                   "type": "number",
                   "nullable": true
+                },
+                "refundedAmount": {
+                  "type": "number"
+                },
+                "discounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "code": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "amount": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "code",
+                      "amount"
+                    ]
+                  }
                 },
                 "createdAt": {
                   "anyOf": [
@@ -34337,6 +34928,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "id": {
                   "type": "string"
                 },
+                "orderNumber": {
+                  "type": "integer",
+                  "nullable": true
+                },
                 "version": {
                   "type": "integer",
                   "minimum": 0,
@@ -34470,6 +35065,32 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "balanceDue": {
                   "type": "number",
                   "nullable": true
+                },
+                "refundedAmount": {
+                  "type": "number"
+                },
+                "discounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "code": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "amount": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "code",
+                      "amount"
+                    ]
+                  }
                 },
                 "createdAt": {
                   "anyOf": [
@@ -34862,6 +35483,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "fulfillmentStatus": {
                 "type": "string"
               },
+              "shippedQuantity": {
+                "type": "integer"
+              },
+              "inventoryTracked": {
+                "type": "boolean"
+              },
               "unitPriceMinor": {
                 "type": "integer",
                 "nullable": true
@@ -34892,6 +35519,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "productImage",
               "variantLabel",
               "fulfillmentStatus",
+              "shippedQuantity",
+              "inventoryTracked",
               "unitPriceMinor",
               "lineSubtotalMinor",
               "discountAmountMinor",
@@ -34988,16 +35617,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
-              "open",
-              "in_transit",
-              "delivered",
-              "closed"
+              "unfulfilled",
+              "unpaid",
+              "cod_to_collect",
+              "delivery_failed",
+              "returned"
             ],
-            "description": "Filter by order lifecycle view"
+            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned."
           },
           "required": false,
-          "description": "Filter by order lifecycle view",
-          "name": "statusGroup",
+          "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+          "name": "view",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "Only orders with an open customer request"
+          },
+          "required": false,
+          "description": "Only orders with an open customer request",
+          "name": "openRequest",
           "in": "query"
         },
         {
@@ -35007,6 +35651,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "unpaid",
               "partial",
               "paid",
+              "partially_refunded",
               "refunded",
               "failed"
             ],
@@ -35084,14 +35729,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "relevance",
               "customerName",
               "totalAmount",
-              "status",
               "createdAt",
               "updatedAt"
             ],
-            "description": "Sort field. Use relevance with a search query to order by FTS rank."
+            "description": "Sort field (default: newest first; relevance when searching)."
           },
           "required": false,
-          "description": "Sort field. Use relevance with a search query to order by FTS rank.",
+          "description": "Sort field (default: newest first; relevance when searching).",
           "name": "sort",
           "in": "query"
         },
@@ -35518,21 +36162,46 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "providerStatus"
                     ]
                   },
-                  "fullEditReadiness": {
+                  "orderNumber": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "Sequential store order number, shown as #1001."
+                  },
+                  "archivedAt": {
+                    "$ref": "#/components/schemas/NullableTimestamp"
+                  },
+                  "openRequestType": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "cancel_pre_shipment",
+                      "return",
+                      "refund",
+                      null
+                    ]
+                  },
+                  "cod": {
                     "type": "object",
+                    "nullable": true,
                     "properties": {
-                      "allowed": {
-                        "type": "boolean"
+                      "status": {
+                        "type": "string"
                       },
-                      "reason": {
-                        "type": "string",
-                        "nullable": true
+                      "deliveryAttempts": {
+                        "type": "integer"
                       }
                     },
                     "required": [
-                      "allowed",
-                      "reason"
+                      "status",
+                      "deliveryAttempts"
                     ]
+                  },
+                  "refundDue": {
+                    "type": "number",
+                    "description": "Value of received returns not refunded yet."
+                  },
+                  "refundedAmount": {
+                    "type": "number"
                   }
                 },
                 "required": [
@@ -35564,7 +36233,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "shipmentRecovery",
                   "paymentRecovery",
                   "activeRefundOperation",
-                  "fullEditReadiness"
+                  "orderNumber",
+                  "archivedAt",
+                  "openRequestType",
+                  "cod",
+                  "refundDue",
+                  "refundedAmount"
                 ]
               }
             },
@@ -36213,25 +36887,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
-              "open",
-              "in_transit",
-              "delivered",
-              "closed"
-            ],
-            "description": "Filter by order lifecycle view"
-          },
-          "required": false,
-          "description": "Filter by order lifecycle view",
-          "name": "statusGroup",
-          "in": "query"
-        },
-        {
-          "schema": {
-            "type": "string",
-            "enum": [
               "unpaid",
               "partial",
               "paid",
+              "partially_refunded",
               "refunded",
               "failed"
             ],
@@ -36293,7 +36952,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "relevance",
               "customerName",
               "totalAmount",
-              "status",
               "createdAt",
               "updatedAt"
             ],
@@ -36640,7 +37298,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "relevance",
               "customerName",
               "totalAmount",
-              "status",
               "createdAt",
               "updatedAt"
             ],
@@ -37074,21 +37731,46 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "providerStatus"
                     ]
                   },
-                  "fullEditReadiness": {
+                  "orderNumber": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "Sequential store order number, shown as #1001."
+                  },
+                  "archivedAt": {
+                    "$ref": "#/components/schemas/NullableTimestamp"
+                  },
+                  "openRequestType": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "cancel_pre_shipment",
+                      "return",
+                      "refund",
+                      null
+                    ]
+                  },
+                  "cod": {
                     "type": "object",
+                    "nullable": true,
                     "properties": {
-                      "allowed": {
-                        "type": "boolean"
+                      "status": {
+                        "type": "string"
                       },
-                      "reason": {
-                        "type": "string",
-                        "nullable": true
+                      "deliveryAttempts": {
+                        "type": "integer"
                       }
                     },
                     "required": [
-                      "allowed",
-                      "reason"
+                      "status",
+                      "deliveryAttempts"
                     ]
+                  },
+                  "refundDue": {
+                    "type": "number",
+                    "description": "Value of received returns not refunded yet."
+                  },
+                  "refundedAmount": {
+                    "type": "number"
                   }
                 },
                 "required": [
@@ -37120,7 +37802,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "shipmentRecovery",
                   "paymentRecovery",
                   "activeRefundOperation",
-                  "fullEditReadiness"
+                  "orderNumber",
+                  "archivedAt",
+                  "openRequestType",
+                  "cod",
+                  "refundDue",
+                  "refundedAmount"
                 ]
               }
             },
@@ -41320,10 +42007,139 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
-    "operationId": "dashboard.orders.update",
+    "operationId": "dashboard.orders.timeline",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/orders/{id}/timeline",
+    "summary": "Order timeline: staff comments and what happened, newest first",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.view"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "placed",
+                      "comment",
+                      "status_changed",
+                      "details_edited",
+                      "items_edited",
+                      "shipment_created",
+                      "cod_collected",
+                      "cod_failed",
+                      "cod_returned",
+                      "refund_recorded",
+                      "return_created",
+                      "return_received",
+                      "request_resolved",
+                      "archived",
+                      "unarchived",
+                      "invoice_issued"
+                    ]
+                  },
+                  "body": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "data": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": {}
+                  },
+                  "actorName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "createdAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "kind",
+                  "body",
+                  "data",
+                  "actorName",
+                  "createdAt"
+                ]
+              }
+            }
+          },
+          "required": [
+            "events"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.update_details",
     "method": "PUT",
-    "pathTemplate": "/api/v1/admin/orders/{id}",
-    "summary": "Update an order",
+    "pathTemplate": "/api/v1/admin/orders/{id}/details",
+    "summary": "Edit the customer and delivery details of an order that has not shipped",
     "tags": [
       "Admin - Orders"
     ],
@@ -41398,70 +42214,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "nullable": true
                 },
-                "cityName": {
-                  "type": "string"
-                },
-                "zoneName": {
-                  "type": "string"
-                },
-                "areaName": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "notes": {
-                  "type": "string",
-                  "nullable": true,
-                  "maxLength": 500
-                },
-                "discountAmount": {
-                  "type": "number",
-                  "nullable": true,
-                  "minimum": 0
-                },
-                "shippingCharge": {
-                  "type": "number",
-                  "minimum": 0
-                },
-                "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "productId": {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      "variantId": {
-                        "type": "string",
-                        "nullable": true
-                      },
-                      "quantity": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 99
-                      },
-                      "price": {
-                        "type": "number",
-                        "minimum": 0
-                      }
-                    },
-                    "required": [
-                      "productId",
-                      "variantId",
-                      "quantity",
-                      "price"
-                    ]
-                  },
-                  "minItems": 1,
-                  "maxItems": 99
-                },
                 "expectedVersion": {
                   "type": "integer",
                   "minimum": 1
-                },
-                "status": {
-                  "type": "string",
-                  "minLength": 1
                 }
               },
               "required": [
@@ -41472,12 +42227,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "city",
                 "zone",
                 "area",
-                "notes",
-                "discountAmount",
-                "shippingCharge",
-                "items",
-                "expectedVersion",
-                "status"
+                "expectedVersion"
               ]
             }
           }
@@ -41499,10 +42249,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "id": {
               "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
             }
           },
           "required": [
-            "id"
+            "id",
+            "version"
           ]
         }
       },
@@ -41571,8 +42326,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cancelled",
                     "returned",
                     "refunded",
-                    "partially_refunded",
                     "incomplete"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "customer_changed_mind",
+                    "unreachable",
+                    "fake_order",
+                    "out_of_stock",
+                    "other"
                   ]
                 }
               },
@@ -76877,8 +77641,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                   "query": {
                     "page": 1,
                     "limit": 10,
-                    "statusGroup": "open",
-                    "fulfillmentStatus": "pending",
+                    "view": "unfulfilled",
                     "sort": "createdAt",
                     "order": "desc"
                   }
@@ -83414,6 +84177,22 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.orders.bulk_confirm",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.bulk_confirm"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.bulk_fulfill",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.bulk_fulfill"
+        ]
+      },
+      {
         "operationId": "dashboard.orders.bulk_ship",
         "surface": "dashboard",
         "mode": "operation-fallback",
@@ -83443,6 +84222,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.orders.cod_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.comment_add",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.comment_add"
         ]
       },
       {
@@ -83755,11 +84542,19 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
-        "operationId": "dashboard.orders.update",
+        "operationId": "dashboard.orders.timeline",
         "surface": "dashboard",
         "mode": "operation-fallback",
         "workflowIds": [
-          "operation.dashboard.orders.update"
+          "operation.dashboard.orders.timeline"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.update_details",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.update_details"
         ]
       },
       {
