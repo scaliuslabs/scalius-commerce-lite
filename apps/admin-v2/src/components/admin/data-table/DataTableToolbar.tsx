@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Search, X } from "lucide-react";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
+import { useColumnMenu } from "./DataTableColumnMenu";
 
 interface DataTableToolbarProps {
   searchValue: string;
@@ -26,6 +27,8 @@ export function DataTableToolbar({
   actions,
 }: DataTableToolbarProps) {
   const t = useMessages(resourceMessages);
+  // Sort and columns, from the table this toolbar sits on (Shopify: right of the search).
+  const columnMenu = useColumnMenu();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [localSearch, setLocalSearch] = useState(searchValue);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,6 +122,7 @@ export function DataTableToolbar({
           )}
         </div>
         {filters}
+        {columnMenu}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         {selectedCount > 0 && bulkActions}

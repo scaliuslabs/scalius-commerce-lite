@@ -11,6 +11,7 @@ import {
   type Column as TanStackColumn,
   type ColumnDef as TanStackColumnDef,
   type ColumnVisibilityState,
+  type Header as TanStackHeader,
   type PaginationState,
   type ReactTable,
   type Row as TanStackRow,
@@ -28,6 +29,17 @@ export interface ServerColumnMeta {
   mobile?: "primary" | "secondary" | "status";
   /** Money, counts and quantities: right-aligned with tabular figures. */
   numeric?: boolean;
+  /** The column's name in the column menu (needed when the header is not plain text). */
+  label?: string;
+  /**
+   * The title column: always shown, never hidden by width, pinned left when
+   * the table scrolls sideways. One per list.
+   */
+  primary?: boolean;
+  /** Higher stays longer when the table runs out of width (default 50). */
+  priority?: number;
+  /** Narrowest width (px) the column still reads well at (default 120). */
+  minWidth?: number;
 }
 
 /**
@@ -54,6 +66,11 @@ export type Cell<TData extends RowData, TValue = unknown> = TanStackCell<
   TValue
 >;
 export type Column<TData extends RowData, TValue = unknown> = TanStackColumn<
+  ServerTableFeatures,
+  TData,
+  TValue
+>;
+export type Header<TData extends RowData, TValue = unknown> = TanStackHeader<
   ServerTableFeatures,
   TData,
   TValue

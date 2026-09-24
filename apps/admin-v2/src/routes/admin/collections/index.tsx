@@ -75,17 +75,17 @@ function CollectionsPage() {
     {
       accessorKey: "name",
       header: sortHeader(t("collection")),
-      meta: { mobile: "primary" },
+      meta: { mobile: "primary", minWidth: 220 },
       cell: ({ row }) => <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.name}</ResourceRowLink>,
     },
     {
       id: "products",
       header: t("products"),
-      meta: { mobile: "secondary" },
+      meta: { mobile: "secondary", priority: 70, minWidth: 160 },
       cell: ({ row }) => {
         const config = normalizeCollectionConfig(row.original.config);
         return (
-          <span className="text-muted-foreground">
+          <span className="line-clamp-2 text-muted-foreground">
             {config.source === "dynamic"
               ? config.categoryIds.length === 1 ? t("autoOneCategory") : t("autoFromCategories", { count: config.categoryIds.length })
               : config.productIds.length === 1 ? t("productCountOne") : t("productCount", { count: config.productIds.length })}
@@ -97,12 +97,17 @@ function CollectionsPage() {
     {
       accessorKey: "isActive",
       header: sortHeader(t("status")),
-      meta: { mobile: "status" },
+      meta: { mobile: "status", priority: 90, minWidth: 100 },
       cell: ({ row }) => (
         <Badge variant={row.original.isActive ? "success" : "attention"}>{t(row.original.isActive ? "active" : "draft")}</Badge>
       ),
     },
-    { accessorKey: "updatedAt", header: sortHeader(t("updated")), cell: ({ row }) => <DateText value={row.original.updatedAt} /> },
+    {
+      accessorKey: "updatedAt",
+      header: sortHeader(t("updated")),
+      meta: { priority: 40, minWidth: 120 },
+      cell: ({ row }) => <DateText value={row.original.updatedAt} />,
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, search.trashed, can.canEdit]);
 

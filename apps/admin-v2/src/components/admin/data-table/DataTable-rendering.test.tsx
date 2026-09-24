@@ -71,6 +71,7 @@ function TableHarness({
             cells={row.getVisibleCells()}
             isSelected={row.getIsSelected()}
             includeDragColumn={false}
+            hasSelect={false}
           />
         ))}
       </tbody>
