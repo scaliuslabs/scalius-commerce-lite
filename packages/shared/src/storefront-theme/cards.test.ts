@@ -6,6 +6,10 @@ import {
   storefrontVariantSpec,
   type StorefrontCardRenderer,
 } from "./blocks";
+import { EMPTY_STORE_SHAPE } from "./fit";
+import { resolveStorefrontTheme } from "./resolve";
+import { storefrontTemplateTheme } from "./templates";
+import { STOREFRONT_IMAGE_RATIOS } from "./tokens";
 
 const anatomy = (id: string): StorefrontCardRenderer =>
   (storefrontVariantSpec("card", id).renders as (settings: unknown) => StorefrontCardRenderer)(
@@ -31,6 +35,12 @@ describe("card anatomy", () => {
       || (card.badge === "price" && card.discount !== "off")
       || card.body.includes("savings");
     if (saleText) expect(pairs(id)).toContain("destructive/card");
+  });
+
+  it.each(STOREFRONT_IMAGE_RATIOS)("resolves the %s photo ratio token for the card", (imageRatio) => {
+    const theme = storefrontTemplateTheme("marketplace");
+    theme.tokens.imageRatio = imageRatio;
+    expect(resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE).layout.productCard.imageRatio).toBe(imageRatio);
   });
 
   it("keeps the standard card as today's classic card", () => {
