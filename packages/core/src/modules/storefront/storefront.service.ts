@@ -28,7 +28,8 @@ import {
 } from "../../integrations/analytics";
 import { normalizeCloudflareWebAnalyticsConfig } from "../analytics/analytics.validation";
 import { planCollectionProducts } from "../collections/collections.service";
-import { planHomeMedia, planHomeProductLists, type HomeProductList } from "./homepage-sections";
+import { planHomeProductLists, type HomeProductList } from "../catalog/home-lists";
+import { planHomeMedia } from "./homepage-sections";
 import { normalizeCollectionConfig, publicCollectionConfig } from "../collections/collection-config";
 import {
   businessDocument,

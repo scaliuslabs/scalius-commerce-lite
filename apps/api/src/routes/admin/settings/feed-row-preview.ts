@@ -1,5 +1,4 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import {
   PRODUCT_FEED_ROW_PREVIEW_HARD_RESPONSE_BYTES,
   PRODUCT_FEED_ROW_PREVIEW_MAX_CURSOR_LENGTH,
@@ -10,12 +9,12 @@ import {
   PRODUCT_FEED_ROW_PREVIEW_RESPONSE_BUDGET_BYTES,
   executeProductFeedRowPreview,
   validateProductFeedRowPreviewCursor,
-} from "@scalius/core/modules/products";
+} from "@scalius/core/modules/catalog";
 import {
   getCurrencySettings,
   getMediaOptimizationSettings,
   getSeoSettings,
-} from "@scalius/core/modules/settings/site-settings.service";
+} from "@scalius/core/modules/settings";
 import { ok } from "../../../utils/api-response";
 import {
   errorResponses,

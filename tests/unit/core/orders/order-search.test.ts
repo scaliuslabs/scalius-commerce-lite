@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     buildPhoneSearchTerms,
     isLikelyPhoneSearch,
-} from "../../../../packages/core/src/modules/orders/orders.search";
+} from "../../../../packages/core/src/modules/orders/search";
 
 describe("order phone search", () => {
     it("matches Bangladeshi local mobile input against E.164 storage", () => {

@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
   quoteStorefrontDiscount: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/settings/settings.service", () => ({
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
   getCurrencyConfig: mocks.getCurrencyConfig,
 }));
 

@@ -15,7 +15,6 @@
     "paths": {
       "~/*": ["./src/*"],
       "@/*": ["./src/*"],
-      "@scalius/core/*": ["../../packages/core/src/*"],
       "@scalius/shared/*": ["../../packages/shared/src/*"]
     }
   },

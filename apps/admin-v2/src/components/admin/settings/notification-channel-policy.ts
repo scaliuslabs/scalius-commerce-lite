@@ -1,7 +1,7 @@
 import {
   ORDER_NOTIFICATION_TYPES,
   type OrderNotificationType,
-} from "@scalius/core/modules/notifications/notification-types";
+} from "@scalius/core/modules/notifications/browser";
 
 export const CUSTOMER_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp"] as const;
 

@@ -21,7 +21,7 @@ import {
   FRAUD_CHECK_PROVIDER_TYPES,
   getFraudCheckProviderDefinition,
   type FraudCheckProviderType,
-} from "@scalius/core/modules/fraud-checker/provider-definitions";
+} from "@scalius/core/modules/fraud-checker/browser";
 import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
 import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 import { Badge } from "~/components/ui/badge";

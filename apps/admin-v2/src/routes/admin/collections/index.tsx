@@ -8,7 +8,7 @@ import {
   postApiV1AdminCollectionsBulkRestore,
   postApiV1AdminCollectionsReorder,
 } from "@scalius/api-client/sdk";
-import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
+import { normalizeCollectionConfig } from "@scalius/core/modules/collections/browser";
 import { createListSearchValidator } from "~/lib/list-helpers";
 import { adoptListSearch, listSearchKey, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";

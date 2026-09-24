@@ -15,11 +15,12 @@ import {
   generateAgentOperationManifestSource,
 } from "./generate-agent-operation-manifest";
 import {
-  OPERATIONS,
-  methodRisk,
-  operationSurface,
-  registryEntry,
-  type OperationRegistryEntry,
+    OPERATION_GROUPS,
+    OPERATIONS,
+    methodRisk,
+    operationSurface,
+    registryEntry,
+    type OperationRegistryEntry,
 } from "./operation-registry";
 import {
   AGENT_STOREFRONT_INTENT_ROUTES,
@@ -643,6 +644,15 @@ describe("agent operation contract", () => {
       .map((operation) => `${operation.method} ${operation.pathTemplate} -> ${operation.operationId}`);
     expect(unregistered).toEqual([]);
     expect(manifest).toHaveLength(Object.keys(OPERATIONS).length);
+  });
+
+  it("keeps every operation ID in exactly one domain registry file", () => {
+    const counts = new Map<string, number>();
+    for (const group of OPERATION_GROUPS) {
+      for (const operationId of Object.keys(group)) counts.set(operationId, (counts.get(operationId) ?? 0) + 1);
+    }
+    expect([...counts].filter(([, count]) => count > 1).map(([operationId]) => operationId)).toEqual([]);
+    expect(counts.size).toBe(Object.keys(OPERATIONS).length);
   });
 
   it("keeps every registry row backed by exactly one live route", () => {

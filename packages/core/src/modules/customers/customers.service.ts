@@ -24,7 +24,7 @@ import { sql, isNull, isNotNull, inArray, asc, desc, eq, and, or, type SQL, type
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
-import { orderMoneyAmounts, orderMoneySelection } from "../orders/order-money";
+import { orderMoneyAmounts, orderMoneySelection } from "../orders/money";
 import { customerKind } from "./customer-identity";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";

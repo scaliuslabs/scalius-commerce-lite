@@ -15,17 +15,15 @@ function collectBrowserSourceFiles(directory: string): string[] {
 }
 
 describe("admin browser/core boundaries", () => {
-  it("imports runtime values from browser-safe core leaves, not server-heavy module barrels", () => {
+  it("imports @scalius/core domains only through their browser entries", () => {
     const violations: string[] = [];
-    const broadCoreModule = /^@scalius\/core\/modules\/[^/]+$/;
-    const staticImport = /import\s+([\s\S]*?)\s+from\s+["']([^"']+)["'];?/g;
+    const coreModuleImport = /(?:import|export)\s+[\s\S]*?\s+from\s+["'](@scalius\/core\/modules\/[^"']+)["']/g;
 
     for (const file of collectBrowserSourceFiles(ADMIN_SRC_ROOT)) {
       const source = readFileSync(file, "utf8");
-      for (const match of source.matchAll(staticImport)) {
-        const clause = match[1]?.trim() ?? "";
-        const specifier = match[2] ?? "";
-        if (broadCoreModule.test(specifier) && !clause.startsWith("type ")) {
+      for (const match of source.matchAll(coreModuleImport)) {
+        const specifier = match[1] ?? "";
+        if (!/^@scalius\/core\/modules\/[^/]+\/browser$/.test(specifier)) {
           violations.push(`${relative(ADMIN_SRC_ROOT, file)} -> ${specifier}`);
         }
       }

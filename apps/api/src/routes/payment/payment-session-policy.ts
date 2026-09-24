@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { PaymentPlanStatus, PaymentStatus, paymentPlans } from "@scalius/database/schema";
-import { checkoutDocument } from "@scalius/core/modules/settings/documents";
-import { getUnpayableOrderReason, type PayableOrderState } from "@scalius/core/modules/payments/payable-order";
+import { checkoutDocument } from "@scalius/core/modules/settings";
+import { getUnpayableOrderReason, type PayableOrderState } from "@scalius/core/modules/payments";
 import {
-  resolveOrderCurrencySnapshot,
-  type OrderCurrencySnapshot,
-} from "@scalius/core/modules/payments/order-currency";
+    resolveOrderCurrencySnapshot,
+    type OrderCurrencySnapshot,
+} from "@scalius/core/modules/payments/browser";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { ValidationError } from "../../utils/api-error";

@@ -3,7 +3,7 @@ import { getSmsSettings, saveSmsSettings, SMS_PROVIDER_IDS } from "@scalius/core
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../../schemas/responses";
-import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications/notification-provider-health";
+import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();

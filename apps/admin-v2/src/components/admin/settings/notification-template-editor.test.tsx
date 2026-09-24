@@ -4,7 +4,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defaultNotificationTemplates } from "@scalius/core/modules/notifications/notification-templates";
+import { defaultNotificationTemplates } from "@scalius/core/modules/notifications/browser";
 
 const DEFAULTS = defaultNotificationTemplates("en");
 

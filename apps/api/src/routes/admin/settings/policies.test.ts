@@ -1,8 +1,9 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { createPage, createPageSchema } from "@scalius/core/modules/pages";
-import { resolvePublicStorePolicies } from "@scalius/core/modules/settings/store-policies.service";
+import { createPage } from "@scalius/core/modules/pages";
+import { createPageSchema } from "@scalius/core/modules/pages/browser";
+import { resolvePublicStorePolicies } from "@scalius/core/modules/settings";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 

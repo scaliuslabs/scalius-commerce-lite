@@ -6,7 +6,7 @@ Batched D1 queries for the public storefront API. Shapes homepage and layout dat
 
 - `index.ts` -- barrel exports (re-exports everything from `storefront.service.ts`)
 - `storefront.service.ts` -- `getHomepageData()`, `getLayoutData()`
-- `homepage-sections.ts` -- the homepage section product lists and images, planned into the homepage's second batch
+- `homepage-sections.ts` -- the homepage section images, planned into the homepage's second batch (the product lists are `catalog/home-lists.ts`)
 
 ## Local Helpers
 
@@ -30,9 +30,9 @@ a theme preview passes `requests` for its draft instead.
 **Batch 2** (one `db.batch`, skipped when nothing needs it):
 - `planCollectionProducts()` (collections service): products of the
   homepage collections and of collection-sourced section lists;
-- `planHomeProductLists()` (`homepage-sections.ts`): newest, on sale,
+- `planHomeProductLists()` (`catalog/home-lists.ts`): newest, on sale,
   popular (distinct buyers in real orders of 30 days) and category lists;
-- `planHomeMedia()`: section images (ready or trashed images only);
+- `planHomeMedia()` (`homepage-sections.ts`): section images (ready or trashed images only);
 - the hero rendition lookup for slides still on an original upload.
 
 Every product statement is scoped to the products it returns (the buyer
@@ -134,7 +134,7 @@ Returns: `{ analytics, header, navigation, footer, currency, theme, media, metaC
 
 - `@scalius/database` -- `categories`, `collections`, `heroSliders`, `analytics`, `pages`, `settings`
 - `@scalius/core/integrations/analytics` -- `processAnalyticsScript()`, `shouldUsePartytown()`
-- `@scalius/core/modules/collections/collections.service` -- `resolveCollectionProductsBatch()`
+- `../collections/collections.service` -- `resolveCollectionProductsBatch()`
 - `nanoid` -- fallback ID generation for footer social links/menus
 
 ## Known Gaps

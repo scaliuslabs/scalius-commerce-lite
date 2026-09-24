@@ -1,4 +1,4 @@
-export * from "./types";
+export * from "./browser";
 export * from "./money";
 export * from "./calculator";
 export * from "./discount-allocation";

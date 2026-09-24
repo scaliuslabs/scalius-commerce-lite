@@ -19,14 +19,15 @@ vi.mock("@scalius/core/integrations/whatsapp", () => ({ getWhatsAppCloudApiSetti
 vi.mock("@scalius/core/integrations/firebase/settings", () => ({
     getFirebaseServiceAccountReadiness: mocks.getFirebaseServiceAccountReadiness,
 }));
-vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
+vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@scalius/core/modules/notifications")>()),
     clearNotificationProviderBlocks: mocks.clearNotificationProviderBlocks,
     describeNotificationProviderBlock: (block: { channel: string; provider: string }) =>
-        `${block.channel}/${block.provider} paused`,
+          `${block.channel}/${block.provider} paused`,
     getNotificationProviderBlock: mocks.getNotificationProviderBlock,
 }));
 
-import { ORDER_NOTIFICATION_TYPES } from "@scalius/core/modules/notifications/notification-types";
+import { ORDER_NOTIFICATION_TYPES } from "@scalius/core/modules/notifications/browser";
 import { notificationChannelsRoutes } from "./notification-channels";
 
 const rules = (channels: string[], override: Record<string, string[]> = {}) => ({

@@ -6,7 +6,7 @@ import { analyticsRoutes } from "../routes/analytics";
 import { customerAuthRoutes } from "../routes/customer-auth";
 import { discountRoutes } from "../routes/discounts";
 import { metaConversionsRoutes } from "../routes/meta-conversions";
-import { orderRoutes } from "../routes/orders";
+import { orderRoutes } from "../routes/storefront-orders";
 import { storefrontAgentContextRoutes } from "../routes/storefront-agent-contexts";
 import { storefrontAgentContinuationRoutes } from "../routes/storefront-agent-continuations";
 

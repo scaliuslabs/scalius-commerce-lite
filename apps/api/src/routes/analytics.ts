@@ -9,7 +9,7 @@ import {
   shouldInjectAnalyticsScript,
   shouldUsePartytown
 } from "@scalius/core/integrations/analytics";
-import { normalizeCloudflareWebAnalyticsConfig } from "@scalius/core/modules/analytics/analytics.validation";
+import { normalizeCloudflareWebAnalyticsConfig } from "@scalius/core/modules/analytics/browser";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 

@@ -7,9 +7,13 @@ const mocks = vi.hoisted(() => ({
   getCheckoutConfig: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/payments/gateway-settings", () => ({}));
+vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments")>()),
 
-vi.mock("@scalius/core/modules/settings/checkout-config.service", () => ({
+}));
+
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
   getCheckoutConfig: mocks.getCheckoutConfig,
 }));
 
