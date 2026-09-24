@@ -356,7 +356,7 @@ describe("order receipt route", () => {
     ["cancelled", "unpaid"],
     ["refunded", "refunded"],
     ["returned", "partial"],
-    ["partially_refunded", "partial"],
+    ["delivered", "partially_refunded"],
     ["pending", "failed"],
   ])(
     "does not expose a buyer-visible balance for %s/%s orders",

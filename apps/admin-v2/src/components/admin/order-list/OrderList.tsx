@@ -1,37 +1,67 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Archive, ShoppingBag, Truck } from "lucide-react";
+import { toast } from "sonner";
+import { Archive, CircleCheck, Download, MoreHorizontal, Printer, Send, ShoppingBag, Truck } from "lucide-react";
+import { getApiV1AdminOrders } from "@scalius/api-client/sdk";
 import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { DataTable } from "~/components/admin/data-table/DataTable";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import type { Row } from "~/components/admin/data-table/table-config";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { apiData } from "~/lib/api";
+import { getServerFnError } from "~/lib/api-helpers";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
+import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { createDataSelector, getCanonicalPageForPagination } from "~/lib/list-helpers";
+import { useListSearch } from "~/lib/list-search";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages } from "~/i18n/order-list";
-import { BulkShipDialog } from "./BulkShipDialog";
-import { getOrderColumns } from "./order-columns";
-import { getOrderRefreshPause } from "./order-bulk-actions";
+import { BulkOrdersDialog } from "./BulkOrdersDialog";
+import { ExportOrdersDialog } from "./ExportOrdersDialog";
+import { getOrderColumns, orderName } from "./order-columns";
+import { getOrderRefreshPause, planOrderBulkAction, type OrderBulkAction } from "./order-bulk-actions";
+import { useOrderExportDialog } from "./order-export";
 import {
   CLEARED_ORDER_FILTERS,
   countOrderFilters,
+  ORDER_SEARCH_LIST,
+  orderFilterQuery,
   orderListQuery,
-  orderSearchUpdates,
+  orderSearchSortUpdates,
   type OrderListSearch,
 } from "./order-list-search";
-import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { OrderListToolbar } from "./OrderListToolbar";
 import { OrderMobileCard } from "./OrderMobileCard";
 import { useOrderActions, type OrderSelection } from "./use-order-actions";
 import { useOrderAutoRefresh } from "./use-order-auto-refresh";
 
 const selectOrders = createDataSelector<OrderListItem>("orders");
+/** "Archive all matching orders" loads at most this many orders to act on. */
+const ALL_MATCHING_LIMIT = 1000;
+/** The invoice print page takes at most 90 orders. */
+const PRINT_LIMIT = 90;
 
-/** The order table inside the Orders card: toolbar, rows, bulk archive/ship and their dialogs. */
+async function loadAllMatchingOrders(filters: ReturnType<typeof orderFilterQuery>): Promise<OrderListItem[]> {
+  const orders: OrderListItem[] = [];
+  for (let page = 1; orders.length < ALL_MATCHING_LIMIT; page += 1) {
+    const result = selectOrders(await apiData(getApiV1AdminOrders({ query: { ...filters, page, limit: 100 } })));
+    orders.push(...result.data);
+    if (result.data.length === 0 || page >= result.pagination.totalPages) break;
+  }
+  return orders.slice(0, ALL_MATCHING_LIMIT);
+}
+
+/** The order table inside the Orders card: toolbar, rows, bulk actions and their dialogs. */
 export function OrderList({
   search,
   onChange,
@@ -42,33 +72,40 @@ export function OrderList({
   const t = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
   const orderActions = useOrderActionPermissions();
+  const [term, setTerm] = useListSearch(ORDER_SEARCH_LIST);
+  const exportDialog = useOrderExportDialog();
   const showArchived = search.archived;
+  const dateField = search.sort === "updatedAt" ? "updatedAt" : "createdAt";
+  const filters = useMemo(() => orderFilterQuery(search, term), [search, term]);
+  const filtersKey = JSON.stringify(filters);
+  const [allMatchingKey, setAllMatchingKey] = useState<string | null>(null);
   const selection = useRef<OrderSelection>({ rows: [], clear: () => {}, deselect: () => {} });
   const refetchRef = useRef<() => Promise<unknown>>(async () => undefined);
   const actions = useOrderActions(orderActions, selection);
-  const { editOrder, requestArchive, restore, changeStatus, updatingStatusIds } = actions;
+  const { archive, restore, changeStatus, updatingStatusIds } = actions;
 
   const columns = useMemo(
     () =>
       getOrderColumns({
         showArchived,
+        dateField,
+        selectable: true,
         orderActions,
         updatingStatusIds,
-        onEdit: editOrder,
-        onArchive: requestArchive,
+        onArchive: (order) => archive([order]),
         onRestore: restore,
         onStatusUpdate: changeStatus,
         onShipmentRefreshed: () => void refetchRef.current(),
       }),
-    [showArchived, orderActions, updatingStatusIds, editOrder, requestArchive, restore, changeStatus],
+    [showArchived, dateField, orderActions, updatingStatusIds, archive, restore, changeStatus],
   );
 
   const {
     table, rawData, error, isError, isFetching, isLoading, refetch, pagination,
-    selectedRows, clearSelection, deselectIds,
+    selectedRows, selectedIds, clearSelection, deselectIds,
   } = useServerTable({
     columns,
-    queryOptions: ordersQueryOptions(orderListQuery(search)),
+    queryOptions: ordersQueryOptions(orderListQuery(search, term)),
     dataSelector: selectOrders,
     currentPage: search.page,
     currentLimit: search.limit,
@@ -78,8 +115,17 @@ export function OrderList({
     defaultPageSize: 10,
   });
 
+  const pageRows = table.getRowModel().rows;
+  const pageFullySelected = pageRows.length > 0 && selectedRows.length === pageRows.length;
+  const allSelected = pageFullySelected && allMatchingKey === filtersKey && pagination.total > pageRows.length;
+  const selectedCount = allSelected ? pagination.total : selectedRows.length;
+  const clearAll = useCallback(() => {
+    setAllMatchingKey(null);
+    clearSelection();
+  }, [clearSelection]);
+
   useEffect(() => {
-    selection.current = { rows: selectedRows, clear: clearSelection, deselect: deselectIds };
+    selection.current = { rows: selectedRows, clear: clearAll, deselect: deselectIds };
     refetchRef.current = refetch;
   });
 
@@ -91,42 +137,108 @@ export function OrderList({
 
   const refreshPause = getOrderRefreshPause({
     selectedCount: selectedRows.length,
-    actionDialogOpen: actions.dialogOpen,
+    actionDialogOpen: actions.dialogOpen || exportDialog.open,
     mutationInFlight: actions.busy,
   });
   const autoRefresh = useOrderAutoRefresh({ refetch, isFetching, paused: refreshPause !== null });
 
-  const selectable = orderActions.canSelectOrdersForBulkActions && !showArchived;
   const mobileCardRenderer = useCallback(
     (row: Row<OrderListItem>) => (
       <OrderMobileCard
         order={row.original}
-        selectable={selectable}
+        dateField={dateField}
+        selectable
         isSelected={row.getIsSelected()}
         onToggleSelection={() => row.toggleSelected()}
       />
     ),
-    [selectable],
+    [dateField],
   );
 
-  const filtered = Boolean(search.search.trim() || search.view) || countOrderFilters(search) > 0;
-  const bulkButtons = showArchived ? null : (
+  const openBulk = (action: OrderBulkAction) => {
+    if (!allSelected) {
+      actions.openBulk(action, selectedRows);
+      return;
+    }
+    actions.openBulk(action, null);
+    loadAllMatchingOrders(filters).then(actions.setDialogOrders, (loadError: unknown) => {
+      actions.closeBulk();
+      toast.error(getServerFnError(loadError, t("loadOrdersFailed")));
+    });
+  };
+
+  const archiveSelection = () => {
+    if (allSelected) openBulk("archive");
+    else archive(selectedRows, clearAll);
+  };
+
+  const printInvoices = () => {
+    const ids = selectedIds.slice(0, PRINT_LIMIT).join(",");
+    window.open(withDashboardBasePath(`/invoices?ids=${ids}`), "_blank", "noopener");
+  };
+
+  const canArchiveSelection =
+    orderActions.canBulkDeleteOrders
+    && (allSelected || planOrderBulkAction(selectedRows, "archive").eligible.length > 0);
+  const moreActions = [
+    !allSelected && orderActions.canPrintInvoices
+      ? { key: "print", icon: Printer, label: t("printInvoices"), disabled: selectedIds.length > PRINT_LIMIT, onSelect: printInvoices }
+      : null,
+    { key: "export", icon: Download, label: t("export"), disabled: false, onSelect: () => exportDialog.setOpen(true) },
+    !showArchived && orderActions.canBulkDeleteOrders
+      ? { key: "archive", icon: Archive, label: t("archive"), disabled: !canArchiveSelection || actions.busy, onSelect: archiveSelection }
+      : null,
+  ].filter((action) => action !== null);
+
+  const bulkButtons = (
     <>
-      {orderActions.canBulkShipOrders ? (
-        <Button variant="outline" onClick={actions.openBulkShip} disabled={actions.busy}>
+      {pageFullySelected && !allSelected && pagination.total > pageRows.length ? (
+        <Button variant="link" onClick={() => setAllMatchingKey(filtersKey)}>
+          {t("selectAllMatching", { count: pagination.total })}
+        </Button>
+      ) : null}
+      {!showArchived && !allSelected && orderActions.canChangeOrderStatus ? (
+        <Button variant="outline" onClick={() => openBulk("confirm")} disabled={actions.busy}>
+          <CircleCheck className="h-4 w-4" />
+          {t("confirm")}
+        </Button>
+      ) : null}
+      {!showArchived && !allSelected && orderActions.canManageOrderShipments ? (
+        <Button variant="outline" onClick={() => openBulk("send")} disabled={actions.busy}>
+          <Send className="h-4 w-4" />
+          {t("markAsSent")}
+        </Button>
+      ) : null}
+      {!showArchived && !allSelected && orderActions.canBulkShipOrders ? (
+        <Button variant="outline" onClick={() => openBulk("ship")} disabled={actions.busy}>
           <Truck className="h-4 w-4" />
-          {t("ship")}
+          {t("bookCourier")}
         </Button>
       ) : null}
-      {orderActions.canBulkDeleteOrders ? (
-        <Button variant="outline" onClick={actions.requestBulkArchive} disabled={actions.busy}>
-          <Archive className="h-4 w-4" />
-          {t("archive")}
-        </Button>
-      ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="icon" aria-label={tr("moreActions")} title={tr("moreActions")}>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {moreActions.map((action) => (
+            <DropdownMenuItem key={action.key} disabled={action.disabled} onSelect={action.onSelect}>
+              <action.icon className="h-4 w-4" />
+              {action.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </>
   );
-  const archiveCount = actions.archiveRequest?.orders.length ?? 0;
+
+  const filtered = Boolean(term.trim() || search.view) || countOrderFilters(search) > 0;
+  const clearFilters = () => {
+    setTerm("");
+    onChange({ ...CLEARED_ORDER_FILTERS, ...orderSearchSortUpdates("", term, search.sort), view: undefined });
+  };
+  const cancelOrder = actions.cancelOrder;
 
   return (
     <>
@@ -143,10 +255,23 @@ export function OrderList({
         mobileCardRenderer={mobileCardRenderer}
         toolbar={<div className="px-2 pt-2"><OrderListToolbar
             search={search}
+            term={term}
+            onSearch={(value) => {
+              const sortUpdates = orderSearchSortUpdates(value, term, search.sort);
+              setTerm(value);
+              onChange(sortUpdates, { replace: true });
+            }}
             onChange={onChange}
             selectedCount={selectedRows.length}
             autoRefresh={{ ...autoRefresh, pause: refreshPause }}
-            bulkActions={<div className="hidden gap-2 md:flex">{bulkButtons}</div>}
+            bulkActions={
+              <div className="hidden flex-wrap items-center gap-2 md:flex">
+                <span className="text-body font-medium">
+                  {allSelected ? t("allSelected", { count: selectedCount }) : tr("selected", { count: selectedCount })}
+                </span>
+                {bulkButtons}
+              </div>
+            }
           /></div>}
         emptyState={{
           icon: ShoppingBag,
@@ -157,10 +282,7 @@ export function OrderList({
               ? tr("noResultsHint")
               : t("emptyBody"),
           action: filtered || showArchived ? (
-            <Button
-              variant="outline"
-              onClick={() => onChange({ ...CLEARED_ORDER_FILTERS, ...orderSearchUpdates("", search), view: undefined })}
-            >
+            <Button variant="outline" onClick={clearFilters}>
               {t("clearFilters")}
             </Button>
           ) : orderActions.canCreateOrders ? (
@@ -171,51 +293,49 @@ export function OrderList({
         }}
       />
 
-      <SelectionSheet count={selectedRows.length} clearLabel={t("clearSelection")} onClear={clearSelection}>
+      <SelectionSheet count={selectedCount} clearLabel={t("clearSelection")} onClear={clearAll}>
         {bulkButtons}
       </SelectionSheet>
 
       <ConfirmDialog
-        open={actions.archiveRequest !== null}
+        open={cancelOrder !== null}
         onOpenChange={(open) => {
-          if (!open) actions.closeArchive();
+          if (!open) actions.setCancelOrder(null);
         }}
-        title={
-          actions.archiveRequest?.bulk
-            ? t("archiveTitleBulk", { count: archiveCount })
-            : t("archiveTitle", { id: actions.archiveRequest?.orders[0]?.id ?? "" })
-        }
-        description={t("archiveBody")}
-        confirmLabel={t("archive")}
-        cancelLabel={tr("cancel")}
-        variant="default"
-        isLoading={actions.isArchiving}
-        loadingLabel={tr("working")}
-        onConfirm={actions.confirmArchive}
-      />
-
-      <ConfirmDialog
-        open={actions.cancelOrderId !== null}
-        onOpenChange={(open) => {
-          if (!open) actions.setCancelOrderId(null);
-        }}
-        title={t("cancelTitle", { id: actions.cancelOrderId ?? "" })}
+        title={t("cancelTitle", { number: cancelOrder ? orderName(cancelOrder) : "" })}
         description={t("cancelBody")}
         confirmLabel={t("cancelOrder")}
         cancelLabel={t("keepOrder")}
         onConfirm={() => {
-          if (actions.cancelOrderId) actions.changeStatus(actions.cancelOrderId, "cancelled", true);
+          if (cancelOrder) actions.changeStatus(cancelOrder, "cancelled", true);
         }}
       />
 
-      <BulkShipDialog
-        isOpen={actions.shipOpen}
-        onOpenChange={actions.setShipOpen}
-        isShipping={actions.isShipping}
-        onConfirm={(providerId) => void actions.submitBulkShip(providerId)}
-        itemCount={selectedRows.length}
-        resultSummary={actions.shipResult}
+      <BulkOrdersDialog
+        action={actions.dialog?.action ?? null}
+        orders={actions.dialog?.orders ?? null}
+        selectedCount={actions.dialog?.orders && !allSelected ? actions.dialog.orders.length : selectedCount}
+        note={allSelected && pagination.total > ALL_MATCHING_LIMIT
+          ? t("allMatchingCapped", { count: ALL_MATCHING_LIMIT })
+          : undefined}
+        running={actions.running}
+        outcome={actions.outcome}
+        onOpenChange={(open) => {
+          if (!open) actions.closeBulk();
+        }}
+        onRun={actions.runBulk}
+      />
+
+      <ExportOrdersDialog
+        open={exportDialog.open}
+        onOpenChange={exportDialog.setOpen}
+        filters={filters}
+        pageIds={pageRows.map((row) => row.original.id)}
+        selectedIds={selectedIds}
+        allSelected={allSelected}
+        total={pagination.total}
       />
     </>
   );
 }
+

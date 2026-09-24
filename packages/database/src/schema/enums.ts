@@ -11,7 +11,6 @@ export const OrderStatus = {
     CANCELLED: "cancelled",
     REFUNDED: "refunded",
     RETURNED: "returned",
-    PARTIALLY_REFUNDED: "partially_refunded",
     INCOMPLETE: "incomplete",
 } as const;
 
@@ -29,6 +28,7 @@ export const PaymentStatus = {
     UNPAID: "unpaid",
     PARTIAL: "partial",
     PAID: "paid",
+    PARTIALLY_REFUNDED: "partially_refunded",
     REFUNDED: "refunded",
     FAILED: "failed",
 } as const;

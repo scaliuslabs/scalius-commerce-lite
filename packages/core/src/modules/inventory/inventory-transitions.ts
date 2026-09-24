@@ -6,7 +6,7 @@
 // call applyInventoryForStatusChange() instead of manually adjusting stock.
 
 import { and, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
-import { inventoryMovements, orders, orderItems, InventoryPool, productVariants } from "@scalius/database/schema";
+import { inventoryMovements, orders, orderItems, orderReturns, InventoryPool, productVariants } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { reserveStockBatch, type ReservationBatchItem } from "./reserve";
@@ -164,6 +164,14 @@ function hasBuyerCapacityTransition(
  *
  * Returns empty statements array if no inventory action is needed.
  */
+async function hasOpenOrderReturn(db: Database, orderId: string): Promise<boolean> {
+    const row = await db.select({ id: orderReturns.id }).from(orderReturns).where(and(
+        eq(orderReturns.orderId, orderId),
+        sql`${orderReturns.status} NOT IN ('cancelled', 'rejected')`,
+    )).get();
+    return Boolean(row);
+}
+
 export async function buildInventoryStatements(
     db: Database,
     orderId: string,
@@ -206,6 +214,12 @@ export async function buildInventoryStatements(
     }
 
     if (needsRestore && currentAction === "deducted") {
+        // A return record owns the stock of what came back: its receipt
+        // restocks good units and writes off damaged ones. Restoring the whole
+        // order here as well would count returned units twice.
+        if (newStatus === "returned" && await hasOpenOrderReturn(db, orderId)) {
+            return { statements: [], newAction: currentAction, availabilityTransitionVariantIds: [] };
+        }
         const availabilityTransitionVariantIds = await restoreDeductedOrderStock(db, order);
         return {
             statements: [buildInventoryActionUpdate(db, order, "restored")],

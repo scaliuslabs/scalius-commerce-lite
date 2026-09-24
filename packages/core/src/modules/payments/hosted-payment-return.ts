@@ -56,7 +56,6 @@ const TERMINAL_ORDER_STATUSES = new Set<string>([
   OrderStatus.CANCELLED,
   OrderStatus.RETURNED,
   OrderStatus.REFUNDED,
-  OrderStatus.PARTIALLY_REFUNDED,
 ]);
 
 type HostedReturnOrder = {
@@ -114,8 +113,7 @@ export async function reconcileHostedPaymentReturn(
         ${orders.status} NOT IN (
           ${OrderStatus.CANCELLED},
           ${OrderStatus.RETURNED},
-          ${OrderStatus.REFUNDED},
-          ${OrderStatus.PARTIALLY_REFUNDED}
+          ${OrderStatus.REFUNDED}
         )
         AND ${orders.paymentStatus} = ${PaymentStatus.PARTIAL}
         AND ${orders.paidAmountMinor} > 0
@@ -165,7 +163,6 @@ export async function reconcileHostedPaymentReturn(
             OrderStatus.CANCELLED,
             OrderStatus.RETURNED,
             OrderStatus.REFUNDED,
-            OrderStatus.PARTIALLY_REFUNDED,
           ]),
           eq(orders.paymentStatus, PaymentStatus.PARTIAL),
           sql`${orders.paidAmountMinor} > 0`,

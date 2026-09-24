@@ -97,7 +97,7 @@ describe("admin order mutation OpenAPI responses", () => {
             "/api/v1/admin/orders/payment-recovery/export",
             "get",
             [
-                "search", "state", "status", "statusGroup", "paymentStatus",
+                "search", "state", "status", "paymentStatus",
                 "paymentMethod", "fulfillmentStatus", "archived", "sort", "order",
                 "startDate", "endDate", "maxRows",
             ],
@@ -157,7 +157,7 @@ describe("admin order mutation OpenAPI responses", () => {
     it("documents representative order, refund, return, COD, and fulfillment failures", () => {
         const spec = buildAdminOrdersSpec();
 
-        expectResponses(spec, "/api/v1/admin/orders/{id}", "put", [
+        expectResponses(spec, "/api/v1/admin/orders/{id}/details", "put", [
             "200",
             "400",
             "401",

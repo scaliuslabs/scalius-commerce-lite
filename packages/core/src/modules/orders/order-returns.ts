@@ -11,7 +11,6 @@ import { nanoid } from "nanoid";
 
 import { safeBatch, type Database } from "@scalius/database/client";
 import {
-  ItemFulfillmentStatus,
   OrderStatus,
   orderItems,
   orderReturnCommands,
@@ -132,10 +131,6 @@ const RETURNABLE_ORDER_STATUSES = new Set<string>([
   OrderStatus.SHIPPED,
   OrderStatus.DELIVERED,
   OrderStatus.COMPLETED,
-]);
-const FULFILLED_ITEM_STATUSES = new Set<string>([
-  ItemFulfillmentStatus.SHIPPED,
-  ItemFulfillmentStatus.DELIVERED,
 ]);
 
 function stableStringify(value: unknown): string {
@@ -296,7 +291,7 @@ async function loadRemainingReturnableByItem(
   orderId: string,
 ): Promise<Map<string, number>> {
   const [items, committedRows] = await Promise.all([
-    db.select({ id: orderItems.id, quantity: orderItems.quantity })
+    db.select({ id: orderItems.id, shippedQuantity: orderItems.shippedQuantity })
       .from(orderItems)
       .where(eq(orderItems.orderId, orderId))
       .all(),
@@ -322,7 +317,7 @@ async function loadRemainingReturnableByItem(
   }
   return new Map(items.map((item) => [
     item.id,
-    Math.max(0, item.quantity - (committedByItem.get(item.id) ?? 0)),
+    Math.max(0, item.shippedQuantity - (committedByItem.get(item.id) ?? 0)),
   ]));
 }
 
@@ -478,10 +473,9 @@ export async function createOrderReturn(
   const itemRows = await db
     .select({
       id: orderItems.id,
-      quantity: orderItems.quantity,
+      shippedQuantity: orderItems.shippedQuantity,
       variantId: orderItems.variantId,
       inventoryTracked: orderItems.inventoryTracked,
-      fulfillmentStatus: orderItems.fulfillmentStatus,
     })
     .from(orderItems)
     .where(and(eq(orderItems.orderId, orderId), inArray(orderItems.id, requestedIds)))
@@ -492,8 +486,8 @@ export async function createOrderReturn(
   const itemById = new Map(itemRows.map((item) => [item.id, item]));
   for (const line of input.lines) {
     const item = itemById.get(line.orderItemId)!;
-    if (!FULFILLED_ITEM_STATUSES.has(item.fulfillmentStatus)) {
-      throw new ValidationError("Only shipped or delivered order items can be returned.", {
+    if (item.shippedQuantity <= 0) {
+      throw new ValidationError("Only items that were sent can be returned.", {
         orderItemId: item.id,
       });
     }
@@ -532,10 +526,10 @@ export async function createOrderReturn(
   }
   for (const line of input.lines) {
     const item = itemById.get(line.orderItemId)!;
-    if ((committedByItem.get(line.orderItemId) ?? 0) + line.quantity > item.quantity) {
-      throw new ValidationError("Return quantity exceeds the fulfilled quantity still eligible for return.", {
+    if ((committedByItem.get(line.orderItemId) ?? 0) + line.quantity > item.shippedQuantity) {
+      throw new ValidationError("That's more than was sent and not already returned.", {
         orderItemId: line.orderItemId,
-        fulfilledQuantity: item.quantity,
+        fulfilledQuantity: item.shippedQuantity,
       });
     }
   }
@@ -821,11 +815,11 @@ async function shouldMarkWholeOrderReturned(
   nextReceivedByLineId: ReadonlyMap<string, number>,
 ): Promise<boolean> {
   const fulfilledItems = await db
-    .select({ id: orderItems.id, quantity: orderItems.quantity })
+    .select({ id: orderItems.id, shippedQuantity: orderItems.shippedQuantity })
     .from(orderItems)
     .where(and(
       eq(orderItems.orderId, orderId),
-      inArray(orderItems.fulfillmentStatus, [ItemFulfillmentStatus.SHIPPED, ItemFulfillmentStatus.DELIVERED]),
+      sql`${orderItems.shippedQuantity} > 0`,
     ))
     .all();
   if (fulfilledItems.length === 0) return false;
@@ -852,7 +846,7 @@ async function shouldMarkWholeOrderReturned(
       (receivedByItem.get(row.orderItemId) ?? 0) + received,
     );
   }
-  return fulfilledItems.every((item) => (receivedByItem.get(item.id) ?? 0) === item.quantity);
+  return fulfilledItems.every((item) => (receivedByItem.get(item.id) ?? 0) === item.shippedQuantity);
 }
 
 export async function receiveOrderReturn(
@@ -892,7 +886,7 @@ export async function receiveOrderReturn(
       });
     }
     if (receipt.restockQuantity > 0 && (!line.inventoryTracked || !line.variantId)) {
-      throw new ValidationError("This return line is not backed by a tracked sellable SKU and cannot be restocked.", {
+      throw new ValidationError("Stock isn't tracked for this item, so it can't go back into stock.", {
         lineId: line.id,
       });
     }
@@ -1275,22 +1269,6 @@ export async function cancelOrderReturn(
     throw new ConflictError("Return changed while cancellation was being committed. Reload and try again.");
   }
   return resultWithOrderStatus(db, baseResult);
-}
-
-export async function assertOrderItemsHaveNoReturnHistory(
-  db: Database,
-  orderId: string,
-): Promise<void> {
-  const row = await db
-    .select({ id: orderReturns.id, status: orderReturns.status })
-    .from(orderReturns)
-    .where(eq(orderReturns.orderId, orderId))
-    .get();
-  if (row) {
-    throw new ConflictError(
-      "Order items cannot be replaced or permanently deleted after a return record exists.",
-    );
-  }
 }
 
 export async function assertNoActiveReturnReceipt(

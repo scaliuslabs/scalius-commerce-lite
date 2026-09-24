@@ -3,6 +3,7 @@ import { ChevronDown, LoaderCircle } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
+import { getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy";
 import { useMessages } from "~/i18n";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 
@@ -16,11 +17,10 @@ interface OrderStatusSelectorProps {
   status: string;
   paymentStatus: string | null;
   paidAmount: number;
-  orderId: string;
   isLoading: boolean;
   /** Why the status can't change right now; the selector is read-only when set. */
   lockedReason?: string;
-  onStatusUpdate: (orderId: string, newStatus: string) => void;
+  onStatusUpdate: (newStatus: string) => void;
 }
 
 /** Order status with an inline menu of the allowed next statuses. */
@@ -28,7 +28,6 @@ export function OrderStatusSelector({
   status,
   paymentStatus,
   paidAmount,
-  orderId,
   isLoading,
   lockedReason,
   onStatusUpdate,
@@ -53,7 +52,8 @@ export function OrderStatusSelector({
     [requestMenuOpen],
   );
 
-  if (lockedReason) {
+  // A final status (e.g. Cancelled) reads as plain status, without a menu that offers nothing.
+  if (lockedReason || getAdminOrderStatusTransitions(status, { paymentStatus, paidAmount }).length === 0) {
     return (
       <Badge variant={statusBadgeVariant(status, "order")} title={lockedReason}>
         {label}
@@ -85,7 +85,6 @@ export function OrderStatusSelector({
         status={status}
         paymentStatus={paymentStatus}
         paidAmount={paidAmount}
-        orderId={orderId}
         open={open}
         onOpenChange={setOpen}
         onStatusUpdate={onStatusUpdate}

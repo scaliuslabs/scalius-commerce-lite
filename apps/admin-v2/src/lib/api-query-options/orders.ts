@@ -9,6 +9,7 @@ import {
   getApiV1AdminOrdersByIdPayments,
   getApiV1AdminOrdersByIdReturns,
   getApiV1AdminOrdersByIdShipments,
+  getApiV1AdminOrdersByIdTimeline,
   getApiV1AdminOrdersCatalogProducts,
   type postApiV1AdminOrdersQuote,
 } from "@scalius/api-client/sdk";
@@ -24,6 +25,7 @@ export type OrderDetailDto = ApiResult<typeof getApiV1AdminOrdersById>;
 export type OrderItemDto = ApiResult<typeof getApiV1AdminOrdersByIdItems>[number];
 export type OrderShipmentDto = ApiResult<typeof getApiV1AdminOrdersByIdShipments>[number];
 export type OrderPaymentsPayload = ApiResult<typeof getApiV1AdminOrdersByIdPayments>;
+export type OrderTimelineEvent = ApiResult<typeof getApiV1AdminOrdersByIdTimeline>["events"][number];
 export type ManualOrderQuotePayload = ApiResult<typeof postApiV1AdminOrdersQuote>;
 
 type ApiNotification =
@@ -117,5 +119,13 @@ export const orderShipmentsQueryOptions = (orderId: string) =>
   queryOptions({
     queryKey: queryKeys.orders.shipments(orderId),
     queryFn: () => apiData(getApiV1AdminOrdersByIdShipments({ path: { id: orderId } })),
+    staleTime: 0,
+  });
+
+/** Staff comments and what happened to the order, newest first. */
+export const orderTimelineQueryOptions = (orderId: string) =>
+  queryOptions({
+    queryKey: ["orders", "timeline", orderId] as const,
+    queryFn: () => apiData(getApiV1AdminOrdersByIdTimeline({ path: { id: orderId } })),
     staleTime: 0,
   });

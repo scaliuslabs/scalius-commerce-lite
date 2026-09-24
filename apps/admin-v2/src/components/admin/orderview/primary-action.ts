@@ -3,19 +3,23 @@ import { getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy"
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import type { Order } from "./types";
 
-export type OrderPrimaryAction = "confirm" | "bookCourier" | "collectCod";
+export type OrderPrimaryAction = "confirm" | "bookCourier" | "sendOwnCourier" | "collectCod";
+/** The next step asked of a card; a new `id` repeats the request. */
+export type OrderActionRequest = { action: OrderPrimaryAction | "refund"; id: number };
 
 const CLOSED_SHIPMENT_STATUSES = new Set(["cancelled", "failed", "returned"]);
 
 /**
- * The one next step shown in the phone action bar. Every card still applies
- * its own guards; this only picks which card flow to start.
+ * The one next step of an order (header on desktop, bottom bar on phones):
+ * confirm → send (book a courier, or your own rider when none is connected)
+ * → collect the cash. Every card still applies its own guards; this only
+ * picks which card flow to start.
  */
 export function resolveOrderPrimaryAction(
   order: Order,
   actions: Pick<OrderActionPermissions, "canChangeOrderStatus" | "canManageOrderShipments" | "canUpdateOrderCod">,
 ): OrderPrimaryAction | null {
-  if (order.activeRefundOperation?.active || order.shipmentRecovery?.activeLock) return null;
+  if (order.archivedAt || order.activeRefundOperation?.active || order.shipmentRecovery?.activeLock) return null;
   const status = order.status.toLowerCase();
 
   if (status === "pending" || status === "processing") {
@@ -25,17 +29,17 @@ export function resolveOrderPrimaryAction(
   }
 
   if (status === "confirmed") {
-    const shipmentsKnown = (order.operationalReads?.shipments.status ?? "ready") === "ready";
+    const reads = order.operationalReads;
+    const known = (reads?.shipments.status ?? "ready") === "ready"
+      && (reads?.deliveryProviders.status ?? "ready") === "ready";
     const hasActiveShipment = (order.shipments ?? []).some(
       (shipment) => !CLOSED_SHIPMENT_STATUSES.has(shipment.status.toLowerCase()),
     );
-    return actions.canManageOrderShipments
-      && shipmentsKnown
-      && !hasActiveShipment
-      && order.items.length > 0
-      && order.fulfillmentStatus !== "complete"
-      ? "bookCourier"
-      : null;
+    if (!actions.canManageOrderShipments || !known || hasActiveShipment
+      || order.items.length === 0 || order.fulfillmentStatus === "complete") {
+      return null;
+    }
+    return (order.deliveryProviders ?? []).length > 0 ? "bookCourier" : "sendOwnCourier";
   }
 
   if (

@@ -8,7 +8,6 @@ const CLOSED_COLLECTION_ORDER_STATUSES = new Set([
   "cancelled",
   "returned",
   "refunded",
-  "partially_refunded",
 ]);
 
 export function buildOrderPaymentPresentation(input: {

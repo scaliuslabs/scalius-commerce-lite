@@ -1,24 +1,14 @@
 import { useCallback, useState, type RefObject } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
-import {
-  useArchiveOrders,
-  useBulkShipOrders,
-  useRestoreOrder,
-  useUpdateOrderStatus,
-} from "~/lib/api-mutations/orders";
+import { orderErrorMessage, useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
 import { isAdminOrderStatus } from "~/lib/admin-order-status-policy";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { useMessages } from "~/i18n";
-import { orderListMessages } from "~/i18n/order-list";
-import {
-  failedBulkShipSummary,
-  findOrderActionBlock,
-  summarizeBulkShip,
-  type BulkShipResultSummary,
-  type OrderBulkAction,
-} from "./order-bulk-actions";
+import { orderListMessages, pluralKey } from "~/i18n/order-list";
+import { planOrderBulkAction, type OrderBulkAction, type OrderBulkOutcome } from "./order-bulk-actions";
+import type { BulkRunExtras } from "./BulkOrdersDialog";
+import { useArchiveOrdersWithUndo, useOrderBulkRun } from "./use-order-list-mutations";
 
 /** The current table selection; read when an action runs, so handlers stay stable. */
 export interface OrderSelection {
@@ -33,172 +23,132 @@ export function useOrderActions(
   selection: RefObject<OrderSelection>,
 ) {
   const t = useMessages(orderListMessages);
-  const navigate = useNavigate();
   const statusMutation = useUpdateOrderStatus();
-  const archiveMutation = useArchiveOrders();
   const restoreMutation = useRestoreOrder();
-  const bulkShipMutation = useBulkShipOrders();
+  const bulkRun = useOrderBulkRun();
+  const archiveMutation = useArchiveOrdersWithUndo({ canUndo: orderActions.canRestoreOrders });
 
   const [updatingStatusIds, setUpdatingStatusIds] = useState<ReadonlySet<string>>(new Set());
-  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
-  const [archiveRequest, setArchiveRequest] = useState<{ orders: OrderListItem[]; bulk: boolean } | null>(null);
-  const [shipOpen, setShipOpen] = useState(false);
-  const [isShipping, setIsShipping] = useState(false);
-  const [shipResult, setShipResult] = useState<BulkShipResultSummary | null>(null);
-
-  /** Toasts and returns false when the role or an order's state doesn't allow the action. */
-  const allowed = useCallback(
-    (permitted: boolean, orders: readonly OrderListItem[], action?: OrderBulkAction) => {
-      if (!permitted) {
-        toast.error(t("noPermission"));
-        return false;
-      }
-      const block = action ? findOrderActionBlock(orders, action) : null;
-      if (block) {
-        toast.error(t(action === "ship" ? "shipBlocked" : "archiveBlocked"), {
-          description: t("blockedDetail", { count: block.count, reason: t(`block.${block.reason}`) }),
-        });
-        return false;
-      }
-      return true;
-    },
-    [t],
-  );
-
-  const editOrder = useCallback(
-    (orderId: string) => {
-      if (!allowed(orderActions.canEditOrders, [])) return;
-      void navigate({ to: "/admin/orders/$orderId/edit", params: { orderId } });
-    },
-    [allowed, navigate, orderActions.canEditOrders],
-  );
+  const [cancelOrder, setCancelOrder] = useState<OrderListItem | null>(null);
+  const [dialog, setDialog] = useState<{ action: OrderBulkAction; orders: OrderListItem[] | null } | null>(null);
+  const [outcome, setOutcome] = useState<OrderBulkOutcome | null>(null);
 
   const changeStatus = useCallback(
-    (orderId: string, nextStatus: string, confirmed = false) => {
+    (order: OrderListItem, nextStatus: string, confirmed = false) => {
       const status = nextStatus.toLowerCase();
-      if (!isAdminOrderStatus(status) || !allowed(orderActions.canChangeOrderStatus, [])) return;
+      if (!isAdminOrderStatus(status) || !orderActions.canChangeOrderStatus) return;
       if (status === "cancelled" && !confirmed) {
-        setCancelOrderId(orderId);
+        setCancelOrder(order);
         return;
       }
-      setUpdatingStatusIds((prev) => new Set(prev).add(orderId));
+      setUpdatingStatusIds((prev) => new Set(prev).add(order.id));
       statusMutation.mutate(
-        { orderId, status },
+        { orderId: order.id, status },
         {
+          // The list has no order banner, so a refused change is said here.
+          onError: (error) => toast.error(orderErrorMessage(error)),
           onSettled: () =>
             setUpdatingStatusIds((prev) => {
               const next = new Set(prev);
-              next.delete(orderId);
+              next.delete(order.id);
               return next;
             }),
         },
       );
     },
-    [allowed, orderActions.canChangeOrderStatus, statusMutation],
+    [orderActions.canChangeOrderStatus, statusMutation],
   );
 
-  const requestArchive = useCallback(
-    (order: OrderListItem) => {
-      if (allowed(orderActions.canDeleteOrders, [order], "archive")) {
-        setArchiveRequest({ orders: [order], bulk: false });
-      }
+  /** Archives right away; the toast offers Undo instead of asking first. */
+  const archive = useCallback(
+    (orders: readonly OrderListItem[], onDone?: () => void) => {
+      if (!orderActions.canDeleteOrders || archiveMutation.isPending) return;
+      const plan = planOrderBulkAction(orders, "archive");
+      if (plan.eligible.length === 0) return;
+      archiveMutation.mutate(
+        { orders: plan.eligible, skipped: orders.length - plan.eligible.length },
+        { onSuccess: () => onDone?.() },
+      );
     },
-    [allowed, orderActions.canDeleteOrders],
+    [archiveMutation, orderActions.canDeleteOrders],
   );
-
-  const requestBulkArchive = useCallback(() => {
-    const rows = selection.current.rows;
-    if (rows.length > 0 && allowed(orderActions.canBulkDeleteOrders, rows, "archive")) {
-      setArchiveRequest({ orders: rows, bulk: true });
-    }
-  }, [allowed, orderActions.canBulkDeleteOrders, selection]);
-
-  const confirmArchive = useCallback(() => {
-    if (!archiveRequest) return;
-    const orders = archiveRequest.bulk ? selection.current.rows : archiveRequest.orders;
-    const permitted = archiveRequest.bulk ? orderActions.canBulkDeleteOrders : orderActions.canDeleteOrders;
-    if (orders.length === 0 || !allowed(permitted, orders, "archive")) {
-      setArchiveRequest(null);
-      return;
-    }
-    archiveMutation.mutate(
-      { orders: orders.map((order) => ({ id: order.id, expectedVersion: order.version })) },
-      {
-        onSuccess: () => {
-          if (archiveRequest.bulk) selection.current.clear();
-        },
-        onSettled: () => setArchiveRequest(null),
-      },
-    );
-  }, [allowed, archiveMutation, archiveRequest, orderActions, selection]);
 
   const restore = useCallback(
     (order: OrderListItem) => {
-      if (allowed(orderActions.canRestoreOrders, [])) {
-        restoreMutation.mutate({ id: order.id, expectedVersion: order.version });
-      }
+      if (!orderActions.canRestoreOrders) return;
+      restoreMutation.mutate(
+        { id: order.id, expectedVersion: order.version },
+        { onError: (error) => toast.error(orderErrorMessage(error)) },
+      );
     },
-    [allowed, orderActions.canRestoreOrders, restoreMutation],
+    [orderActions.canRestoreOrders, restoreMutation],
   );
 
-  const openBulkShip = useCallback(() => {
-    const rows = selection.current.rows;
-    if (isShipping || rows.length === 0) return;
-    if (!allowed(orderActions.canBulkShipOrders, rows, "ship")) return;
-    setShipResult(null);
-    setShipOpen(true);
-  }, [allowed, isShipping, orderActions.canBulkShipOrders, selection]);
+  /** Opens a bulk dialog for the selected rows, or for loaded "all matching" orders (null while loading). */
+  const openBulk = useCallback((action: OrderBulkAction, orders: OrderListItem[] | null) => {
+    setOutcome(null);
+    setDialog({ action, orders });
+  }, []);
 
-  const submitBulkShip = useCallback(
-    async (providerId: string) => {
-      const rows = selection.current.rows;
-      if (isShipping || rows.length === 0) return;
-      if (!allowed(orderActions.canBulkShipOrders, rows, "ship")) return;
-      const orderIds = rows.map((order) => order.id);
-      setShipResult(null);
-      setIsShipping(true);
-      try {
-        const result = await bulkShipMutation.mutateAsync({ orderIds, providerId, options: {} });
-        if (result.successCount === orderIds.length) {
+  const closeBulk = useCallback(() => {
+    if (!bulkRun.isPending && !archiveMutation.isPending) setDialog(null);
+  }, [archiveMutation.isPending, bulkRun.isPending]);
+
+  const runBulk = useCallback(
+    (eligible: OrderListItem[], extras: BulkRunExtras) => {
+      if (!dialog || eligible.length === 0 || bulkRun.isPending) return;
+      if (dialog.action === "archive") {
+        // Pass every loaded order so the toast can say how many were skipped.
+        archive(dialog.orders ?? eligible, () => {
           selection.current.clear();
-          setShipOpen(false);
-          return;
-        }
-        setShipResult(summarizeBulkShip(result, t("shipFailedGeneric")));
-        selection.current.deselect(
-          result.results.filter((item) => item.success).map((item) => item.orderId),
-        );
-      } catch {
-        setShipResult(failedBulkShipSummary(orderIds, t("shipRequestFailed")));
-      } finally {
-        setIsShipping(false);
+          setDialog(null);
+        });
+        return;
       }
+      const orderIds = eligible.map((order) => order.id);
+      const input = dialog.action === "confirm"
+        ? { action: "confirm" as const, orderIds }
+        : dialog.action === "send"
+          ? { action: "send" as const, orderIds, courierName: extras.courierName?.trim(), note: extras.note?.trim() }
+          : { action: "ship" as const, orderIds, providerId: extras.providerId ?? "" };
+      const doneToast = t(pluralKey(`bulkDone.${dialog.action}`, orderIds.length));
+      bulkRun.mutate(input, {
+        onSuccess: (result) => {
+          if (result.failures.length === 0) {
+            selection.current.clear();
+            setDialog(null);
+            toast.success(doneToast);
+            return;
+          }
+          // Failed orders stay selected (and in the dialog) so the merchant can look at them or retry.
+          const failed = new Set(result.failures.map((failure) => failure.orderId));
+          selection.current.deselect(result.succeeded);
+          setDialog((current) =>
+            current ? { ...current, orders: current.orders?.filter((order) => failed.has(order.id)) ?? null } : current);
+          setOutcome(result);
+        },
+      });
     },
-    [allowed, bulkShipMutation, isShipping, orderActions.canBulkShipOrders, selection, t],
+    [archive, bulkRun, dialog, selection, t],
   );
 
   return {
     updatingStatusIds,
     changeStatus,
-    editOrder,
     restore,
-    requestArchive,
-    requestBulkArchive,
-    confirmArchive,
-    archiveRequest,
-    closeArchive: () => setArchiveRequest(null),
+    archive,
     isArchiving: archiveMutation.isPending,
-    cancelOrderId,
-    setCancelOrderId,
-    openBulkShip,
-    submitBulkShip,
-    shipOpen,
-    setShipOpen: (open: boolean) => {
-      if (!isShipping) setShipOpen(open);
-    },
-    isShipping,
-    shipResult,
-    busy: isShipping || archiveMutation.isPending,
-    dialogOpen: archiveRequest !== null || shipOpen || cancelOrderId !== null,
+    cancelOrder,
+    setCancelOrder,
+    dialog,
+    openBulk,
+    setDialogOrders: (orders: OrderListItem[]) =>
+      setDialog((current) => (current ? { ...current, orders } : current)),
+    closeBulk,
+    runBulk,
+    outcome,
+    running: bulkRun.isPending || (dialog?.action === "archive" && archiveMutation.isPending),
+    busy: bulkRun.isPending || archiveMutation.isPending,
+    dialogOpen: dialog !== null || cancelOrder !== null,
   };
 }

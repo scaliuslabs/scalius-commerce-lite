@@ -1,7 +1,12 @@
+import { COMMERCE_UTC_OFFSET_SECONDS } from "@scalius/shared/commerce-time";
+import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
+
 export const ORDER_CSV_ARTIFACT_MAX_BYTES = 16 * 1024 * 1024;
 
 const UTF8_BOM = "\uFEFF";
 
+/** A payment-recovery queue row. */
 export interface OrderCsvSummary {
   id: string;
   customerName: string;
@@ -42,8 +47,9 @@ export interface OrderCsvArtifact {
   truncatedByBytes: boolean;
 }
 
-export interface OrderCsvArtifactBuilder {
-  append(order: OrderCsvSummary): boolean;
+export interface OrderCsvArtifactBuilder<T = OrderCsvSummary> {
+  /** Adds one order (one or more CSV rows); false once the byte limit is reached. */
+  append(order: T): boolean;
   finish(): OrderCsvArtifact;
 }
 
@@ -53,7 +59,10 @@ export function spreadsheetSafeCsvCell(value: unknown): string {
     : value instanceof Date
       ? value.toISOString()
       : String(value);
-  const safe = /^[\t\r\n ]*[=+\-@]/.test(normalized) ? `'${normalized}` : normalized;
+  // An international phone ("+8801712345678") is data, not a formula.
+  const safe = /^[\t\r\n ]*[=+\-@]/.test(normalized) && !/^\+\d{6,15}$/.test(normalized)
+    ? `'${normalized}`
+    : normalized;
   return `"${safe.replaceAll('"', '""')}"`;
 }
 
@@ -61,11 +70,11 @@ function row(values: unknown[]): string {
   return values.map(spreadsheetSafeCsvCell).join(",");
 }
 
-function createCsvArtifactBuilder(
+function createCsvArtifactBuilder<T>(
   headers: string[],
-  values: (order: OrderCsvSummary) => unknown[],
+  values: (order: T) => unknown[][],
   maxBytes: number,
-): OrderCsvArtifactBuilder {
+): OrderCsvArtifactBuilder<T> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
     throw new RangeError("CSV artifact byte limit must be a positive safe integer.");
   }
@@ -85,7 +94,7 @@ function createCsvArtifactBuilder(
   return {
     append(order) {
       if (truncatedByBytes) return false;
-      const chunk = `\n${row(values(order))}`;
+      const chunk = values(order).map((cells) => `\n${row(cells)}`).join("");
       const chunkBytes = encoder.encode(chunk).byteLength;
       if (byteLength + chunkBytes > maxBytes) {
         truncatedByBytes = true;
@@ -107,36 +116,190 @@ function createCsvArtifactBuilder(
   };
 }
 
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
+  processing: "Processing",
+  confirmed: "Confirmed",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  returned: "Returned",
+  refunded: "Refunded",
+  incomplete: "Payment not finished",
+};
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  unpaid: "Unpaid",
+  partial: "Partly paid",
+  paid: "Paid",
+  partially_refunded: "Partially refunded",
+  refunded: "Refunded",
+  failed: "Failed",
+};
+const FULFILLMENT_STATUS_LABELS: Record<string, string> = {
+  pending: "Unfulfilled",
+  partial: "Partly fulfilled",
+  complete: "Fulfilled",
+};
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cod: "Cash on delivery",
+  stripe: "Card (Stripe)",
+  sslcommerz: "SSLCommerz",
+};
+const COD_STATUS_LABELS: Record<string, string> = {
+  pending: "To collect",
+  collected: "Collected",
+  failed: "Delivery failed",
+  returned: "Returned to sender",
+};
+
+function label(labels: Record<string, string>, value: string | null | undefined): string {
+  if (!value) return "";
+  return labels[value] ?? value.replace(/_/g, " ");
+}
+
+/** "2026-09-24 05:28" in store time (Asia/Dhaka), so orders land on the right day. */
+export function formatCommerceDateTime(value: unknown): string {
+  const date = value instanceof Date
+    ? value
+    : typeof value === "number"
+      ? new Date(value < 10_000_000_000 ? value * 1000 : value)
+      : typeof value === "string" ? new Date(value) : null;
+  if (!date || !Number.isFinite(date.getTime())) return "";
+  return new Date(date.getTime() + COMMERCE_UTC_OFFSET_SECONDS * 1000)
+    .toISOString()
+    .slice(0, 16)
+    .replace("T", " ");
+}
+
+export interface OrderCsvLine {
+  productName: string | null;
+  variantLabel: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+/** One order in the export: the list row plus its address, lines and delivery facts. */
+export interface OrderCsvRow {
+  id: string;
+  orderNumber: number | null;
+  createdAt: unknown;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
+  shippingAddress: string;
+  cityName: string | null;
+  zoneName: string | null;
+  areaName: string | null;
+  status: string;
+  paymentStatus: string | null;
+  paymentMethod: string | null;
+  fulfillmentStatus: string | null;
+  subtotalAmount: number;
+  shippingCharge: number;
+  discountAmount: number;
+  totalAmount: number;
+  paidAmount: number;
+  balanceDue: number;
+  codStatus: string | null;
+  courierName: string | null;
+  trackingId: string | null;
+  notes: string | null;
+  lines: OrderCsvLine[];
+}
+
+export type OrderCsvFormat = "summary" | "items";
+
+function describeLine(line: OrderCsvLine): string {
+  const name = [line.productName, line.variantLabel].filter(Boolean).join(" (") + (line.variantLabel ? ")" : "");
+  return `${line.quantity} × ${name || "Item"}`;
+}
+
+function orderColumns(order: OrderCsvRow): unknown[] {
+  return [
+    formatOrderNumber(order.orderNumber, order.id),
+    formatCommerceDateTime(order.createdAt),
+    order.customerName,
+    formatPhoneForProvider(order.customerPhone),
+    order.customerEmail,
+    order.shippingAddress,
+    order.areaName,
+    order.zoneName,
+    order.cityName,
+    label(ORDER_STATUS_LABELS, order.status),
+    label(PAYMENT_STATUS_LABELS, order.paymentStatus),
+    label(PAYMENT_METHOD_LABELS, order.paymentMethod),
+    label(FULFILLMENT_STATUS_LABELS, order.fulfillmentStatus),
+    order.courierName,
+    order.trackingId,
+  ];
+}
+
+const ORDER_HEADERS = [
+  "Order", "Date", "Customer", "Phone", "Email", "Address", "Area", "Zone", "City",
+  "Status", "Payment", "Payment method", "Delivery", "Courier", "Tracking",
+];
+
+/**
+ * The merchant's working export: store-time dates, readable statuses, the
+ * delivery address, items, delivery charge, courier/tracking and cash on
+ * delivery, either one row per order or one row per item (ORD-11).
+ */
 export function createOrdersCsvArtifactBuilder(
+  format: OrderCsvFormat = "summary",
   maxBytes = ORDER_CSV_ARTIFACT_MAX_BYTES,
-): OrderCsvArtifactBuilder {
-  return createCsvArtifactBuilder([
-    "Order ID", "Customer Name", "Phone", "Email", "City", "Zone", "Area",
-    "Status", "Payment Status", "Payment Method", "Payment Recovery",
-    "Recovery Gateway", "Recovery Status", "Recovery Attempts", "Shipment Recovery",
-    "Shipment Recovery Status", "Fulfillment Status", "Total Amount", "Discount",
-    "Items", "Created At",
-  ], (order) => [
-    order.id, order.customerName, order.customerPhone, order.customerEmail,
-    order.cityName ?? order.city, order.zoneName ?? order.zone, order.areaName ?? order.area,
-    order.status, order.paymentStatus, order.paymentMethod,
-    order.paymentRecovery.state === "none" ? "" : order.paymentRecovery.label,
-    order.paymentRecovery.gateway, order.paymentRecovery.status, order.paymentRecovery.attempts,
-    order.shipmentRecovery.state === "none" ? "" : order.shipmentRecovery.label,
-    order.shipmentRecovery.status, order.fulfillmentStatus, order.totalAmount,
-    order.discountAmount, order.itemCount, order.createdAt,
-  ], maxBytes);
+) {
+  if (format === "items") {
+    return createCsvArtifactBuilder<OrderCsvRow>([
+      ...ORDER_HEADERS, "Product", "Variant", "Quantity", "Unit price", "Line total",
+      "Delivery charge", "Discount", "Order total", "Cash to collect",
+    ], (order) => (order.lines.length > 0 ? order.lines : [null]).map((line, index) => [
+      ...orderColumns(order),
+      line?.productName ?? "",
+      line?.variantLabel ?? "",
+      line?.quantity ?? "",
+      line?.unitPrice ?? "",
+      line?.lineTotal ?? "",
+      // Order-level money only on the first line so column sums stay right.
+      index === 0 ? order.shippingCharge : "",
+      index === 0 ? order.discountAmount : "",
+      index === 0 ? order.totalAmount : "",
+      index === 0 ? cashToCollect(order) : "",
+    ]), maxBytes);
+  }
+  return createCsvArtifactBuilder<OrderCsvRow>([
+    ...ORDER_HEADERS, "Items", "Item count", "Subtotal", "Delivery charge", "Discount",
+    "Total", "Paid", "Cash to collect", "Cash on delivery", "Note",
+  ], (order) => [[
+    ...orderColumns(order),
+    order.lines.map(describeLine).join("; "),
+    order.lines.reduce((sum, line) => sum + line.quantity, 0),
+    order.subtotalAmount,
+    order.shippingCharge,
+    order.discountAmount,
+    order.totalAmount,
+    order.paidAmount,
+    cashToCollect(order),
+    order.paymentMethod === "cod" ? label(COD_STATUS_LABELS, order.codStatus) : "",
+    order.notes,
+  ]], maxBytes);
+}
+
+function cashToCollect(order: OrderCsvRow): number | string {
+  if (order.paymentMethod !== "cod") return "";
+  return ["cancelled", "returned", "refunded"].includes(order.status) ? 0 : order.balanceDue;
 }
 
 export function createPaymentRecoveryCsvArtifactBuilder(
   maxBytes = ORDER_CSV_ARTIFACT_MAX_BYTES,
 ): OrderCsvArtifactBuilder {
-  return createCsvArtifactBuilder([
+  return createCsvArtifactBuilder<OrderCsvSummary>([
     "Order ID", "Customer Name", "Phone", "Email", "Order Status", "Payment Status",
     "Payment Method", "Recovery State", "Recovery Label", "Recovery Gateway",
     "Recovery Payment Type", "Recovery Attempt Status", "Recovery Attempts",
     "Active Processing", "Stale Processing", "Recovery Updated At", "Total Amount", "Created At",
-  ], (order) => [
+  ], (order) => [[
     order.id, order.customerName, order.customerPhone, order.customerEmail, order.status,
     order.paymentStatus, order.paymentMethod, order.paymentRecovery.state,
     order.paymentRecovery.label, order.paymentRecovery.gateway, order.paymentRecovery.paymentType,
@@ -144,5 +307,5 @@ export function createPaymentRecoveryCsvArtifactBuilder(
     order.paymentRecovery.activeProcessing ? "yes" : "no",
     order.paymentRecovery.staleProcessing ? "yes" : "no", order.paymentRecovery.updatedAt,
     order.totalAmount, order.createdAt,
-  ], maxBytes);
+  ]], maxBytes);
 }

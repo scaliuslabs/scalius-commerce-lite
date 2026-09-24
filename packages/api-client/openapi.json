@@ -95659,6 +95659,9 @@
                     "data": {
                       "type": "object",
                       "properties": {
+                        "configured": {
+                          "type": "boolean"
+                        },
                         "total_parcels": {
                           "type": "number"
                         },
@@ -95711,7 +95714,10 @@
                             ]
                           }
                         }
-                      }
+                      },
+                      "required": [
+                        "configured"
+                      ]
                     }
                   },
                   "required": [
@@ -135208,8 +135214,17 @@
                       "cancelled",
                       "returned",
                       "refunded",
-                      "partially_refunded",
                       "incomplete"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "customer_changed_mind",
+                      "unreachable",
+                      "fake_order",
+                      "out_of_stock",
+                      "other"
                     ]
                   }
                 },
@@ -135542,6 +135557,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "failureNote": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "collectedBy": {
                               "type": "string",
                               "nullable": true
@@ -135593,6 +135612,7 @@
                             "lastAttemptAt",
                             "codStatus",
                             "failureReason",
+                            "failureNote",
                             "collectedBy",
                             "collectedAmount",
                             "collectedAt",
@@ -136208,6 +136228,31 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "requestKey": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "itemId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "itemId",
+                        "quantity"
+                      ]
+                    },
+                    "minItems": 1
+                  },
                   "itemIds": {
                     "type": "array",
                     "items": {
@@ -136215,22 +136260,24 @@
                     }
                   },
                   "trackingId": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 180
                   },
                   "trackingUrl": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "uri"
                   },
                   "courierName": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 120
                   },
                   "note": {
-                    "type": "string"
-                  },
-                  "isFinalShipment": {
-                    "type": "boolean"
+                    "type": "string",
+                    "maxLength": 500
                   },
                   "shipmentAmount": {
-                    "type": "number"
+                    "type": "number",
+                    "minimum": 0
                   }
                 }
               }
@@ -140406,6 +140453,10 @@
                             "id": {
                               "type": "string"
                             },
+                            "orderNumber": {
+                              "type": "integer",
+                              "nullable": true
+                            },
                             "version": {
                               "type": "integer",
                               "minimum": 0,
@@ -140539,6 +140590,32 @@
                             "balanceDue": {
                               "type": "number",
                               "nullable": true
+                            },
+                            "refundedAmount": {
+                              "type": "number"
+                            },
+                            "discounts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "amount": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "code",
+                                  "amount"
+                                ]
+                              }
                             },
                             "createdAt": {
                               "anyOf": [
@@ -141211,6 +141288,10 @@
                             "id": {
                               "type": "string"
                             },
+                            "orderNumber": {
+                              "type": "integer",
+                              "nullable": true
+                            },
                             "version": {
                               "type": "integer",
                               "minimum": 0,
@@ -141344,6 +141425,32 @@
                             "balanceDue": {
                               "type": "number",
                               "nullable": true
+                            },
+                            "refundedAmount": {
+                              "type": "number"
+                            },
+                            "discounts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "amount": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "code",
+                                  "amount"
+                                ]
+                              }
                             },
                             "createdAt": {
                               "anyOf": [
@@ -146210,6 +146317,11 @@
                               },
                               "sku": {
                                 "type": "string"
+                              },
+                              "availableStock": {
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "Units buyers can still order across active SKUs; null when a SKU has no stock limit."
                               }
                             },
                             "required": [
@@ -146229,7 +146341,8 @@
                               "category",
                               "variantCount",
                               "mediaCount",
-                              "primaryImage"
+                              "primaryImage",
+                              "availableStock"
                             ]
                           }
                         },
@@ -146588,16 +146701,31 @@
             "schema": {
               "type": "string",
               "enum": [
-                "open",
-                "in_transit",
-                "delivered",
-                "closed"
+                "unfulfilled",
+                "unpaid",
+                "cod_to_collect",
+                "delivery_failed",
+                "returned"
               ],
-              "description": "Filter by order lifecycle view"
+              "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned."
             },
             "required": false,
-            "description": "Filter by order lifecycle view",
-            "name": "statusGroup",
+            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+            "name": "view",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "Only orders with an open customer request"
+            },
+            "required": false,
+            "description": "Only orders with an open customer request",
+            "name": "openRequest",
             "in": "query"
           },
           {
@@ -146607,6 +146735,7 @@
                 "unpaid",
                 "partial",
                 "paid",
+                "partially_refunded",
                 "refunded",
                 "failed"
               ],
@@ -146684,14 +146813,13 @@
                 "relevance",
                 "customerName",
                 "totalAmount",
-                "status",
                 "createdAt",
                 "updatedAt"
               ],
-              "description": "Sort field. Use relevance with a search query to order by FTS rank."
+              "description": "Sort field (default: newest first; relevance when searching)."
             },
             "required": false,
-            "description": "Sort field. Use relevance with a search query to order by FTS rank.",
+            "description": "Sort field (default: newest first; relevance when searching).",
             "name": "sort",
             "in": "query"
           },
@@ -147122,21 +147250,46 @@
                                   "providerStatus"
                                 ]
                               },
-                              "fullEditReadiness": {
+                              "orderNumber": {
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "Sequential store order number, shown as #1001."
+                              },
+                              "archivedAt": {
+                                "$ref": "#/components/schemas/NullableTimestamp"
+                              },
+                              "openRequestType": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "cancel_pre_shipment",
+                                  "return",
+                                  "refund",
+                                  null
+                                ]
+                              },
+                              "cod": {
                                 "type": "object",
+                                "nullable": true,
                                 "properties": {
-                                  "allowed": {
-                                    "type": "boolean"
+                                  "status": {
+                                    "type": "string"
                                   },
-                                  "reason": {
-                                    "type": "string",
-                                    "nullable": true
+                                  "deliveryAttempts": {
+                                    "type": "integer"
                                   }
                                 },
                                 "required": [
-                                  "allowed",
-                                  "reason"
+                                  "status",
+                                  "deliveryAttempts"
                                 ]
+                              },
+                              "refundDue": {
+                                "type": "number",
+                                "description": "Value of received returns not refunded yet."
+                              },
+                              "refundedAmount": {
+                                "type": "number"
                               }
                             },
                             "required": [
@@ -147168,7 +147321,12 @@
                               "shipmentRecovery",
                               "paymentRecovery",
                               "activeRefundOperation",
-                              "fullEditReadiness"
+                              "orderNumber",
+                              "archivedAt",
+                              "openRequestType",
+                              "cod",
+                              "refundDue",
+                              "refundedAmount"
                             ]
                           }
                         },
@@ -147623,14 +147781,54 @@
             "schema": {
               "type": "string",
               "enum": [
-                "open",
-                "in_transit",
-                "delivered",
-                "closed"
+                "unfulfilled",
+                "unpaid",
+                "cod_to_collect",
+                "delivery_failed",
+                "returned"
+              ],
+              "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned."
+            },
+            "required": false,
+            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+            "name": "view",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
               ]
             },
             "required": false,
-            "name": "statusGroup",
+            "name": "openRequest",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection."
+            },
+            "required": false,
+            "description": "Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.",
+            "name": "ids",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "summary",
+                "items"
+              ],
+              "default": "summary",
+              "description": "One row per order (summary) or one row per item (items)."
+            },
+            "required": false,
+            "description": "One row per order (summary) or one row per item (items).",
+            "name": "format",
             "in": "query"
           },
           {
@@ -147640,6 +147838,7 @@
                 "unpaid",
                 "partial",
                 "paid",
+                "partially_refunded",
                 "refunded",
                 "failed"
               ]
@@ -147707,7 +147906,6 @@
                 "relevance",
                 "customerName",
                 "totalAmount",
-                "status",
                 "createdAt",
                 "updatedAt"
               ]
@@ -148124,7 +148322,6 @@
                 "relevance",
                 "customerName",
                 "totalAmount",
-                "status",
                 "createdAt",
                 "updatedAt"
               ],
@@ -148562,21 +148759,46 @@
                                   "providerStatus"
                                 ]
                               },
-                              "fullEditReadiness": {
+                              "orderNumber": {
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "Sequential store order number, shown as #1001."
+                              },
+                              "archivedAt": {
+                                "$ref": "#/components/schemas/NullableTimestamp"
+                              },
+                              "openRequestType": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "cancel_pre_shipment",
+                                  "return",
+                                  "refund",
+                                  null
+                                ]
+                              },
+                              "cod": {
                                 "type": "object",
+                                "nullable": true,
                                 "properties": {
-                                  "allowed": {
-                                    "type": "boolean"
+                                  "status": {
+                                    "type": "string"
                                   },
-                                  "reason": {
-                                    "type": "string",
-                                    "nullable": true
+                                  "deliveryAttempts": {
+                                    "type": "integer"
                                   }
                                 },
                                 "required": [
-                                  "allowed",
-                                  "reason"
+                                  "status",
+                                  "deliveryAttempts"
                                 ]
+                              },
+                              "refundDue": {
+                                "type": "number",
+                                "description": "Value of received returns not refunded yet."
+                              },
+                              "refundedAmount": {
+                                "type": "number"
                               }
                             },
                             "required": [
@@ -148608,7 +148830,12 @@
                               "shipmentRecovery",
                               "paymentRecovery",
                               "activeRefundOperation",
-                              "fullEditReadiness"
+                              "orderNumber",
+                              "archivedAt",
+                              "openRequestType",
+                              "cod",
+                              "refundDue",
+                              "refundedAmount"
                             ]
                           }
                         },
@@ -148959,25 +149186,10 @@
             "schema": {
               "type": "string",
               "enum": [
-                "open",
-                "in_transit",
-                "delivered",
-                "closed"
-              ],
-              "description": "Filter by order lifecycle view"
-            },
-            "required": false,
-            "description": "Filter by order lifecycle view",
-            "name": "statusGroup",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
                 "unpaid",
                 "partial",
                 "paid",
+                "partially_refunded",
                 "refunded",
                 "failed"
               ],
@@ -149039,7 +149251,6 @@
                 "relevance",
                 "customerName",
                 "totalAmount",
-                "status",
                 "createdAt",
                 "updatedAt"
               ],
@@ -151404,6 +151615,995 @@
         }
       }
     },
+    "/api/v1/admin/orders/bulk-confirm": {
+      "post": {
+        "operationId": "dashboard.orders.bulk_confirm",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Confirm several new orders",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "orderIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
+                  }
+                },
+                "required": [
+                  "orderIds"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Per-order results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "orderId": {
+                                "type": "string"
+                              },
+                              "success": {
+                                "type": "boolean"
+                              },
+                              "error": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "orderId",
+                              "success"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "results"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.change_status"
+        }
+      }
+    },
+    "/api/v1/admin/orders/bulk-fulfill": {
+      "post": {
+        "operationId": "dashboard.orders.bulk_fulfill",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Mark several confirmed orders as sent with your own courier",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "orderIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 180
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
+                  },
+                  "courierName": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "orderIds"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Per-order results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "orderId": {
+                                "type": "string"
+                              },
+                              "success": {
+                                "type": "boolean"
+                              },
+                              "error": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "orderId",
+                              "success"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "results"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_shipments"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/timeline": {
+      "get": {
+        "operationId": "dashboard.orders.timeline",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Order timeline: staff comments and what happened, newest first",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "events": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "placed",
+                                  "comment",
+                                  "status_changed",
+                                  "details_edited",
+                                  "items_edited",
+                                  "shipment_created",
+                                  "cod_collected",
+                                  "cod_failed",
+                                  "cod_returned",
+                                  "refund_recorded",
+                                  "return_created",
+                                  "return_received",
+                                  "request_resolved",
+                                  "archived",
+                                  "unarchived",
+                                  "invoice_issued"
+                                ]
+                              },
+                              "body": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "data": {
+                                "type": "object",
+                                "nullable": true,
+                                "additionalProperties": {}
+                              },
+                              "actorName": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "kind",
+                              "body",
+                              "data",
+                              "actorName",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "events"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.orders.comment_add",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Add a staff comment to the order timeline",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Comment added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "placed",
+                            "comment",
+                            "status_changed",
+                            "details_edited",
+                            "items_edited",
+                            "shipment_created",
+                            "cod_collected",
+                            "cod_failed",
+                            "cod_returned",
+                            "refund_recorded",
+                            "return_created",
+                            "return_received",
+                            "request_resolved",
+                            "archived",
+                            "unarchived",
+                            "invoice_issued"
+                          ]
+                        },
+                        "body": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": {}
+                        },
+                        "actorName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "body",
+                        "data",
+                        "actorName",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.edit"
+        }
+      }
+    },
     "/api/v1/admin/orders/{id}/payment-recovery-link": {
       "post": {
         "operationId": "dashboard.orders.payment_recovery_link",
@@ -151935,46 +153135,40 @@
                         "pricesIncludeTax": {
                           "type": "boolean"
                         },
-                        "promotion": {
-                          "type": "object",
-                          "nullable": true,
-                          "properties": {
-                            "id": {
-                              "type": "string"
+                        "discounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "promotionId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "method": {
+                                "type": "string",
+                                "enum": [
+                                  "automatic",
+                                  "code"
+                                ]
+                              },
+                              "amount": {
+                                "type": "number"
+                              }
                             },
-                            "revision": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "exclusiveMinimum": true
-                            },
-                            "evaluatorVersion": {
-                              "type": "integer",
-                              "minimum": 0,
-                              "exclusiveMinimum": true
-                            },
-                            "method": {
-                              "type": "string",
-                              "enum": [
-                                "automatic",
-                                "code"
-                              ]
-                            },
-                            "name": {
-                              "type": "string"
-                            },
-                            "code": {
-                              "type": "string",
-                              "nullable": true
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "revision",
-                            "evaluatorVersion",
-                            "method",
-                            "name",
-                            "code"
-                          ]
+                            "required": [
+                              "promotionId",
+                              "name",
+                              "code",
+                              "method",
+                              "amount"
+                            ]
+                          }
                         },
                         "status": {
                           "type": "string"
@@ -152097,6 +153291,12 @@
                               "fulfillmentStatus": {
                                 "type": "string"
                               },
+                              "shippedQuantity": {
+                                "type": "integer"
+                              },
+                              "inventoryTracked": {
+                                "type": "boolean"
+                              },
                               "unitPriceMinor": {
                                 "type": "integer",
                                 "nullable": true
@@ -152127,6 +153327,8 @@
                               "productImage",
                               "variantLabel",
                               "fulfillmentStatus",
+                              "shippedQuantity",
+                              "inventoryTracked",
                               "unitPriceMinor",
                               "lineSubtotalMinor",
                               "discountAmountMinor",
@@ -152550,36 +153752,112 @@
                             "providerStatus"
                           ]
                         },
-                        "fullEditReadiness": {
-                          "type": "object",
-                          "properties": {
-                            "allowed": {
-                              "type": "boolean"
-                            },
-                            "reason": {
-                              "type": "string",
-                              "nullable": true
-                            }
-                          },
-                          "required": [
-                            "allowed",
-                            "reason"
+                        "orderNumber": {
+                          "type": "integer",
+                          "nullable": true,
+                          "description": "Sequential store order number, shown as #1001."
+                        },
+                        "archivedAt": {
+                          "$ref": "#/components/schemas/NullableTimestamp"
+                        },
+                        "openRequestType": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "cancel_pre_shipment",
+                            "return",
+                            "refund",
+                            null
                           ]
                         },
-                        "amendmentReadiness": {
+                        "cod": {
                           "type": "object",
+                          "nullable": true,
                           "properties": {
-                            "allowed": {
-                              "type": "boolean"
+                            "status": {
+                              "type": "string"
                             },
-                            "reason": {
-                              "type": "string",
-                              "nullable": true
+                            "deliveryAttempts": {
+                              "type": "integer"
                             }
                           },
                           "required": [
-                            "allowed",
-                            "reason"
+                            "status",
+                            "deliveryAttempts"
+                          ]
+                        },
+                        "refundDue": {
+                          "type": "number",
+                          "description": "Value of received returns not refunded yet."
+                        },
+                        "refundedAmount": {
+                          "type": "number"
+                        },
+                        "editReadiness": {
+                          "type": "object",
+                          "properties": {
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "allowed": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [
+                                    "shipped",
+                                    "closed",
+                                    "paid",
+                                    "online_payment",
+                                    "discount",
+                                    "history",
+                                    "inventory",
+                                    "archived",
+                                    "busy",
+                                    "unavailable",
+                                    null
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "allowed",
+                                "reason"
+                              ]
+                            },
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "allowed": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [
+                                    "shipped",
+                                    "closed",
+                                    "paid",
+                                    "online_payment",
+                                    "discount",
+                                    "history",
+                                    "inventory",
+                                    "archived",
+                                    "busy",
+                                    "unavailable",
+                                    null
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "allowed",
+                                "reason"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "items",
+                            "details"
                           ]
                         },
                         "supportRequests": {
@@ -152694,7 +153972,7 @@
                         "totalAmountMinor",
                         "taxLabel",
                         "pricesIncludeTax",
-                        "promotion",
+                        "discounts",
                         "status",
                         "paymentStatus",
                         "paymentMethod",
@@ -152720,8 +153998,13 @@
                         "paymentRecovery",
                         "refundAttempts",
                         "activeRefundOperation",
-                        "fullEditReadiness",
-                        "amendmentReadiness",
+                        "orderNumber",
+                        "archivedAt",
+                        "openRequestType",
+                        "cod",
+                        "refundDue",
+                        "refundedAmount",
+                        "editReadiness",
                         "supportRequests"
                       ]
                     }
@@ -152802,13 +154085,15 @@
           "type": "permission",
           "permission": "orders.view"
         }
-      },
+      }
+    },
+    "/api/v1/admin/orders/{id}/details": {
       "put": {
-        "operationId": "dashboard.orders.update",
+        "operationId": "dashboard.orders.update_details",
         "tags": [
           "Admin - Orders"
         ],
-        "summary": "Update an order",
+        "summary": "Edit the customer and delivery details of an order that has not shipped",
         "parameters": [
           {
             "schema": {
@@ -152857,70 +154142,9 @@
                     "type": "string",
                     "nullable": true
                   },
-                  "cityName": {
-                    "type": "string"
-                  },
-                  "zoneName": {
-                    "type": "string"
-                  },
-                  "areaName": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "notes": {
-                    "type": "string",
-                    "nullable": true,
-                    "maxLength": 500
-                  },
-                  "discountAmount": {
-                    "type": "number",
-                    "nullable": true,
-                    "minimum": 0
-                  },
-                  "shippingCharge": {
-                    "type": "number",
-                    "minimum": 0
-                  },
-                  "items": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "productId": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "variantId": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "quantity": {
-                          "type": "integer",
-                          "minimum": 1,
-                          "maximum": 99
-                        },
-                        "price": {
-                          "type": "number",
-                          "minimum": 0
-                        }
-                      },
-                      "required": [
-                        "productId",
-                        "variantId",
-                        "quantity",
-                        "price"
-                      ]
-                    },
-                    "minItems": 1,
-                    "maxItems": 99
-                  },
                   "expectedVersion": {
                     "type": "integer",
                     "minimum": 1
-                  },
-                  "status": {
-                    "type": "string",
-                    "minLength": 1
                   }
                 },
                 "required": [
@@ -152931,12 +154155,7 @@
                   "city",
                   "zone",
                   "area",
-                  "notes",
-                  "discountAmount",
-                  "shippingCharge",
-                  "items",
-                  "expectedVersion",
-                  "status"
+                  "expectedVersion"
                 ]
               }
             }
@@ -152945,7 +154164,7 @@
         },
         "responses": {
           "200": {
-            "description": "Order updated",
+            "description": "Details saved",
             "content": {
               "application/json": {
                 "schema": {
@@ -152962,10 +154181,15 @@
                       "properties": {
                         "id": {
                           "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 1
                         }
                       },
                       "required": [
-                        "id"
+                        "id",
+                        "version"
                       ]
                     }
                   },
@@ -153528,6 +154752,12 @@
                           "fulfillmentStatus": {
                             "type": "string"
                           },
+                          "shippedQuantity": {
+                            "type": "integer"
+                          },
+                          "inventoryTracked": {
+                            "type": "boolean"
+                          },
                           "unitPriceMinor": {
                             "type": "integer",
                             "nullable": true
@@ -153558,6 +154788,8 @@
                           "productImage",
                           "variantLabel",
                           "fulfillmentStatus",
+                          "shippedQuantity",
+                          "inventoryTracked",
                           "unitPriceMinor",
                           "lineSubtotalMinor",
                           "discountAmountMinor",
@@ -154844,6 +156076,10 @@
                             "id": {
                               "type": "string"
                             },
+                            "orderNumber": {
+                              "type": "integer",
+                              "nullable": true
+                            },
                             "version": {
                               "type": "integer",
                               "minimum": 1
@@ -154908,6 +156144,7 @@
                           },
                           "required": [
                             "id",
+                            "orderNumber",
                             "version",
                             "customerName",
                             "customerPhone",
@@ -154925,36 +156162,71 @@
                           ],
                           "additionalProperties": {}
                         },
-                        "fullEditReadiness": {
+                        "editReadiness": {
                           "type": "object",
                           "properties": {
-                            "allowed": {
-                              "type": "boolean"
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "allowed": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [
+                                    "shipped",
+                                    "closed",
+                                    "paid",
+                                    "online_payment",
+                                    "discount",
+                                    "history",
+                                    "inventory",
+                                    "archived",
+                                    "busy",
+                                    "unavailable",
+                                    null
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "allowed",
+                                "reason"
+                              ]
                             },
-                            "reason": {
-                              "type": "string",
-                              "nullable": true
+                            "details": {
+                              "type": "object",
+                              "properties": {
+                                "allowed": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "enum": [
+                                    "shipped",
+                                    "closed",
+                                    "paid",
+                                    "online_payment",
+                                    "discount",
+                                    "history",
+                                    "inventory",
+                                    "archived",
+                                    "busy",
+                                    "unavailable",
+                                    null
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "allowed",
+                                "reason"
+                              ]
                             }
                           },
                           "required": [
-                            "allowed",
-                            "reason"
-                          ]
-                        },
-                        "amendmentReadiness": {
-                          "type": "object",
-                          "properties": {
-                            "allowed": {
-                              "type": "boolean"
-                            },
-                            "reason": {
-                              "type": "string",
-                              "nullable": true
-                            }
-                          },
-                          "required": [
-                            "allowed",
-                            "reason"
+                            "items",
+                            "details"
                           ]
                         },
                         "productsWithVariants": {
@@ -155183,6 +156455,10 @@
                             "id": {
                               "type": "string"
                             },
+                            "orderNumber": {
+                              "type": "integer",
+                              "nullable": true
+                            },
                             "version": {
                               "type": "integer",
                               "minimum": 1
@@ -155278,6 +156554,7 @@
                           },
                           "required": [
                             "id",
+                            "orderNumber",
                             "version",
                             "customerName",
                             "customerPhone",
@@ -155299,8 +156576,7 @@
                       },
                       "required": [
                         "order",
-                        "fullEditReadiness",
-                        "amendmentReadiness",
+                        "editReadiness",
                         "productsWithVariants",
                         "defaultValues"
                       ]
@@ -199899,8 +201175,7 @@
                     "query": {
                       "page": 1,
                       "limit": 10,
-                      "statusGroup": "open",
-                      "fulfillmentStatus": "pending",
+                      "view": "unfulfilled",
                       "sort": "createdAt",
                       "order": "desc"
                     }
@@ -206436,6 +207711,22 @@
           ]
         },
         {
+          "operationId": "dashboard.orders.bulk_confirm",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.bulk_confirm"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.bulk_fulfill",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.bulk_fulfill"
+          ]
+        },
+        {
           "operationId": "dashboard.orders.bulk_ship",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -206465,6 +207756,14 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.orders.cod_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.comment_add",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.comment_add"
           ]
         },
         {
@@ -206777,11 +208076,19 @@
           ]
         },
         {
-          "operationId": "dashboard.orders.update",
+          "operationId": "dashboard.orders.timeline",
           "surface": "dashboard",
           "mode": "operation-fallback",
           "workflowIds": [
-            "operation.dashboard.orders.update"
+            "operation.dashboard.orders.timeline"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.update_details",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.update_details"
           ]
         },
         {

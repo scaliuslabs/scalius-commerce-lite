@@ -1,85 +1,95 @@
 import { isOrderArchiveStatusEligible } from "@scalius/core/modules/orders/order-archive-policy";
 import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
-import type { postApiV1AdminOrdersBulkShip } from "@scalius/api-client/sdk";
-import type { ApiResult } from "~/lib/api";
 
-export type OrderBulkAction = "archive" | "ship";
-export type OrderBlockReason =
-  | "status"
-  | "refund"
-  | "shipment"
-  | "paymentSetup"
-  | "paymentRecovery";
+/** confirm: bulk Confirm · send: own courier "Mark as sent" · ship: book a courier · archive. */
+export type OrderBulkAction = "confirm" | "send" | "ship" | "archive";
+export type OrderBlockReason = "refund" | "shipment" | "paymentSetup" | "paymentRecovery";
 
-type BlockableOrder = Pick<
+type PlannableOrder = Pick<
   OrderListItem,
   "status" | "activeRefundOperation" | "paymentRecovery" | "shipmentRecovery"
 >;
 
-const IS_BLOCKED: Record<OrderBlockReason, (order: BlockableOrder) => boolean> = {
-  status: (order) => !isOrderArchiveStatusEligible(order.status),
+const IS_BLOCKED: Record<OrderBlockReason, (order: PlannableOrder) => boolean> = {
   refund: (order) => order.activeRefundOperation?.active === true,
   shipment: (order) => order.shipmentRecovery?.activeLock === true,
   paymentSetup: (order) => order.paymentRecovery?.activeProcessing === true,
-  paymentRecovery: (order) =>
-    order.paymentRecovery != null && order.paymentRecovery.state !== "none",
+  paymentRecovery: (order) => order.paymentRecovery != null && order.paymentRecovery.state !== "none",
 };
 
-const CHECKS: Record<OrderBulkAction, readonly OrderBlockReason[]> = {
-  archive: ["status", "refund", "shipment", "paymentSetup"],
-  ship: ["paymentSetup", "paymentRecovery", "refund", "shipment"],
+const SENDING_BLOCKS: readonly OrderBlockReason[] = ["paymentSetup", "paymentRecovery", "refund", "shipment"];
+
+const RULES: Record<OrderBulkAction, { status: (status: string) => boolean; blocks: readonly OrderBlockReason[] }> = {
+  confirm: { status: (status) => status === "pending" || status === "processing", blocks: [] },
+  send: { status: (status) => status === "confirmed", blocks: SENDING_BLOCKS },
+  ship: { status: (status) => status === "confirmed", blocks: SENDING_BLOCKS },
+  archive: { status: isOrderArchiveStatusEligible, blocks: ["refund", "shipment", "paymentSetup"] },
 };
 
-/** The first reason (and how many orders it affects) that stops this action, or null. */
-export function findOrderActionBlock(
-  orders: readonly BlockableOrder[],
-  action: OrderBulkAction,
-): { reason: OrderBlockReason; count: number } | null {
-  for (const reason of CHECKS[action]) {
-    const count = orders.filter(IS_BLOCKED[reason]).length;
-    if (count > 0) return { reason, count };
-  }
-  return null;
+/** Why one order is left out: its status (e.g. "cancelled") or work in progress on it. */
+export type OrderSkip = { kind: "status"; status: string } | { kind: "block"; reason: OrderBlockReason };
+
+export function orderSkipReason(order: PlannableOrder, action: OrderBulkAction): OrderSkip | null {
+  const rule = RULES[action];
+  if (!rule.status(order.status)) return { kind: "status", status: order.status };
+  const reason = rule.blocks.find((block) => IS_BLOCKED[block](order));
+  return reason ? { kind: "block", reason } : null;
 }
 
-export interface BulkShipResultSummary {
-  totalProcessed: number;
-  successCount: number;
-  failureCount: number;
+export interface OrderBulkPlan<T> {
+  eligible: T[];
+  /** Skipped orders grouped by reason, largest group first. */
+  skipped: Array<OrderSkip & { count: number }>;
+}
+
+/** Which selected orders the action will run on, and why the rest are skipped. */
+export function planOrderBulkAction<T extends PlannableOrder>(
+  orders: readonly T[],
+  action: OrderBulkAction,
+): OrderBulkPlan<T> {
+  const eligible: T[] = [];
+  const groups = new Map<string, OrderSkip & { count: number }>();
+  for (const order of orders) {
+    const skip = orderSkipReason(order, action);
+    if (!skip) {
+      eligible.push(order);
+      continue;
+    }
+    const key = skip.kind === "status" ? `status:${skip.status}` : `block:${skip.reason}`;
+    const group = groups.get(key);
+    if (group) group.count += 1;
+    else groups.set(key, { ...skip, count: 1 });
+  }
+  return { eligible, skipped: [...groups.values()].sort((a, b) => b.count - a.count) };
+}
+
+/** Bulk endpoints take at most 90 orders per request. */
+export function chunk<T>(items: readonly T[], size = 90): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  return chunks;
+}
+
+/** What a bulk run did: the orders it finished and a short plain reason for each one it couldn't. */
+export interface OrderBulkOutcome {
+  succeeded: string[];
   failures: Array<{ orderId: string; error: string }>;
 }
 
-type BulkShipOrdersPayload = ApiResult<typeof postApiV1AdminOrdersBulkShip>;
-
-function safeShipError(error: unknown, fallback: string): string {
-  return typeof error === "string" && error.trim()
-    ? error.replace(/\s+/g, " ").slice(0, 160)
-    : fallback;
-}
-
-export function summarizeBulkShip(
-  result: BulkShipOrdersPayload,
+export function summarizeBulkResults(
+  results: ReadonlyArray<{ orderId: string; success: boolean; error?: string | null }>,
   fallbackError: string,
-): BulkShipResultSummary {
+): OrderBulkOutcome {
   return {
-    totalProcessed: result.totalProcessed,
-    successCount: result.successCount,
-    failureCount: result.failureCount,
-    failures: result.results
+    succeeded: results.filter((item) => item.success).map((item) => item.orderId),
+    failures: results
       .filter((item) => !item.success)
-      .map((item) => ({ orderId: item.orderId, error: safeShipError(item.error, fallbackError) })),
-  };
-}
-
-export function failedBulkShipSummary(
-  orderIds: readonly string[],
-  error: string,
-): BulkShipResultSummary {
-  return {
-    totalProcessed: orderIds.length,
-    successCount: 0,
-    failureCount: orderIds.length,
-    failures: orderIds.map((orderId) => ({ orderId, error })),
+      .map((item) => ({
+        orderId: item.orderId,
+        error: typeof item.error === "string" && item.error.trim()
+          ? item.error.replace(/\s+/g, " ").slice(0, 160)
+          : fallbackError,
+      })),
   };
 }
 

@@ -1,20 +1,25 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, MessageCircle, Phone } from "lucide-react";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { Alert } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { TooltipProvider } from "~/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
+import { orderFormMessages } from "~/i18n/order-form";
 import {
   fulfillmentStatusLabel,
   orderMessages,
   orderStatusLabel,
   paymentStatusLabel,
 } from "~/i18n/orders";
-import { useUpdateOrderStatus } from "~/lib/api-mutations/orders";
+import { useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
+import { clearOrderNotice, useOrderNotice } from "~/lib/order-notice";
+import { editLockMessageKey } from "~/routes/admin/orders/-order-form-route-state";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { OrderCustomerCard } from "./orderview/OrderCustomerCard";
 import { OrderItemsCard } from "./orderview/OrderItemsCard";
@@ -23,45 +28,66 @@ import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
 import { OrderReturnsCard } from "./orderview/OrderReturnsCard";
 import { OrderStatusCard } from "./orderview/OrderStatusCard";
 import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard";
+import { OrderTimelineCard } from "./orderview/OrderTimelineCard";
 import { PaymentCard } from "./orderview/PaymentCard";
 import { ShipmentCard } from "./orderview/ShipmentCard";
-import { resolveOrderPrimaryAction } from "./orderview/primary-action";
+import { resolveOrderPrimaryAction, type OrderActionRequest } from "./orderview/primary-action";
 import { orderBadgeVisibility, statusBadgeVariant } from "./orderview/status-badges";
 import { customerContactLinks } from "./orderview/contact-links";
 import { useOrderNeighbours } from "./orderview/order-neighbours";
 import type { Order } from "./orderview/types";
 
 /** Order statuses worth repeating in the header next to payment and delivery. */
-const HEADER_ORDER_STATUSES = new Set(["cancelled", "returned", "refunded", "partially_refunded", "incomplete"]);
+const HEADER_ORDER_STATUSES = new Set(["cancelled", "returned", "refunded", "incomplete"]);
+/** Item locks that the order's state already explains; the others get a reason. */
+const SELF_EXPLAINED_LOCKS = new Set(["shipped", "closed", "archived"]);
 
 /**
  * Shopify-style order page. Desktop: main column (items, delivery, payment,
- * returns, messages) and a side column (status, customer, notes). Phones: one
- * column in working order, with the next step in a bottom bar.
+ * returns, messages, timeline) and a side column (status, customer, notes).
+ * Phones: one column in working order, with the next step in a bottom bar.
  */
 export function OrderView({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
+  const f = useMessages(orderFormMessages);
   const actions = useOrderActionPermissions();
   const statusMutation = useUpdateOrderStatus();
-  const [request, setRequest] = useState<{ action: "bookCourier" | "collectCod"; id: number } | null>(null);
+  const restoreMutation = useRestoreOrder();
+  const notice = useOrderNotice(order.id);
+  const [request, setRequest] = useState<OrderActionRequest | null>(null);
   const primary = resolveOrderPrimaryAction(order, actions);
   const status = order.status.toLowerCase();
   const badges = orderBadgeVisibility(order);
   const neighbours = useOrderNeighbours(order.id);
   const contact = customerContactLinks(order.customerPhone);
-  // Orders that can never be edited (e.g. storefront orders with saved tax) show no Edit.
-  const canEditContents = order.fullEditReadiness.allowed || order.amendmentReadiness?.allowed === true;
+  const name = formatOrderNumber(order.orderNumber, order.id);
+  const archived = Boolean(order.archivedAt);
+  const itemsLock = order.editReadiness.items;
   const editBlockedReason = order.activeRefundOperation?.active
     ? t("locked.refund")
     : order.shipmentRecovery?.activeLock
       ? t("locked.shipment")
-      : null;
+      : !itemsLock.allowed && itemsLock.reason && !SELF_EXPLAINED_LOCKS.has(itemsLock.reason)
+        ? f(editLockMessageKey(itemsLock.reason))
+        : null;
+  const canEdit = actions.canEditOrders && (itemsLock.allowed || editBlockedReason !== null);
+
+  // The page banner belongs to this order only.
+  useEffect(() => () => clearOrderNotice(order.id), [order.id]);
 
   const runPrimary = () => {
+    if (!primary) return;
+    clearOrderNotice(order.id);
     if (primary === "confirm") statusMutation.mutate({ orderId: order.id, status: "confirmed" });
-    else if (primary) setRequest({ action: primary, id: Date.now() });
+    else setRequest({ action: primary, id: Date.now() });
   };
+
+  const primaryButton = primary ? (
+    <Button onClick={runPrimary} loading={primary === "confirm" && statusMutation.isPending}>
+      {t(`primary.${primary}`)}
+    </Button>
+  ) : null;
 
   return (
     <ErrorBoundary
@@ -76,9 +102,10 @@ export function OrderView({ order }: { order: Order }) {
         <div className="space-y-4 pb-24 lg:pb-0">
           <PageHeader
             backTo="/admin/orders"
-            title={o("order", { id: order.id })}
+            title={o("order", { number: name })}
             badge={
               <div className="flex flex-wrap gap-1">
+                {archived ? <Badge variant="secondary">{o("archived")}</Badge> : null}
                 {HEADER_ORDER_STATUSES.has(status) ? (
                   <Badge variant={statusBadgeVariant(status, "order")}>{orderStatusLabel(o, status)}</Badge>
                 ) : null}
@@ -95,29 +122,55 @@ export function OrderView({ order }: { order: Order }) {
             }
             actions={
               <>
-                <Button variant="outline" asChild>
-                  <Link to="/invoice/$orderId" params={{ orderId: order.id }} target="_blank" rel="noopener noreferrer">
-                    {t("printInvoice")}
-                  </Link>
-                </Button>
-                {actions.canEditOrders && canEditContents ? (
+                {actions.canPrintInvoices ? (
+                  <Button variant="outline" asChild>
+                    <Link to="/invoice/$orderId" params={{ orderId: order.id }} target="_blank" rel="noopener noreferrer">
+                      {t("printInvoice")}
+                    </Link>
+                  </Button>
+                ) : null}
+                {canEdit ? (
                   editBlockedReason ? (
-                    <Button variant="outline" disabled title={editBlockedReason}>{t("edit")}</Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span tabIndex={0}>
+                          <Button variant="outline" disabled>{t("edit")}</Button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>{editBlockedReason}</TooltipContent>
+                    </Tooltip>
                   ) : (
                     <Button variant="outline" asChild>
                       <Link to="/admin/orders/$orderId/edit" params={{ orderId: order.id }}>{t("edit")}</Link>
                     </Button>
                   )
                 ) : null}
-                {neighbours ? (
-                  <div className="flex">
-                    <NeighbourLink orderId={neighbours.previous} label={t("nav.previous")}><ChevronLeft className="size-4" /></NeighbourLink>
-                    <NeighbourLink orderId={neighbours.next} label={t("nav.next")}><ChevronRight className="size-4" /></NeighbourLink>
-                  </div>
+                {archived && actions.canRestoreOrders ? (
+                  <Button
+                    variant="outline"
+                    loading={restoreMutation.isPending}
+                    onClick={() => restoreMutation.mutate({ id: order.id, expectedVersion: order.version })}
+                  >
+                    {t("unarchive")}
+                  </Button>
                 ) : null}
+                {primaryButton ? <span className="hidden lg:inline-flex">{primaryButton}</span> : null}
+                <div className="hidden lg:flex">
+                  <NeighbourLink orderId={neighbours?.previous ?? null} label={t("nav.previous")}><ChevronLeft className="size-4" /></NeighbourLink>
+                  <NeighbourLink orderId={neighbours?.next ?? null} label={t("nav.next")}><ChevronRight className="size-4" /></NeighbourLink>
+                </div>
               </>
             }
           />
+
+          {notice ? (
+            <Alert variant="warning">
+              <div className="col-start-2 flex items-center justify-between gap-2">
+                <p>{notice}</p>
+                <Button variant="ghost" size="sm" onClick={() => clearOrderNotice(order.id)}>{t("dismiss")}</Button>
+              </div>
+            </Alert>
+          ) : null}
 
           <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
             <div className="contents lg:col-span-2 lg:block lg:space-y-4">
@@ -125,14 +178,11 @@ export function OrderView({ order }: { order: Order }) {
                 <div className="order-2 lg:order-none"><OrderSupportRequestsCard order={order} /></div>
               ) : null}
               <div className="order-3 lg:order-none"><OrderItemsCard order={order} /></div>
-              <div className="order-5 lg:order-none">
-                <ShipmentCard order={order} bookRequest={request?.action === "bookCourier" ? request.id : undefined} />
-              </div>
-              <div className="order-4 lg:order-none">
-                <PaymentCard order={order} collectRequest={request?.action === "collectCod" ? request.id : undefined} />
-              </div>
-              <div className="order-8 lg:order-none"><OrderReturnsCard order={order} /></div>
+              <div className="order-4 lg:order-none"><ShipmentCard order={order} request={request} /></div>
+              <div className="order-5 lg:order-none"><PaymentCard order={order} request={request} /></div>
+              <div className="order-8 lg:order-none"><OrderReturnsCard order={order} onRefund={() => setRequest({ action: "refund", id: Date.now() })} /></div>
               <div className="order-9 lg:order-none"><OrderNotificationsCard order={order} /></div>
+              <div className="order-10 lg:order-none"><OrderTimelineCard order={order} /></div>
             </div>
             <div className="contents lg:block lg:space-y-4">
               <div className="order-1 lg:order-none"><OrderStatusCard order={order} /></div>
@@ -142,8 +192,7 @@ export function OrderView({ order }: { order: Order }) {
           </div>
         </div>
 
-        {/* Phones: Call and WhatsApp stay in thumb reach, next to the one next step. */}
-        <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t bg-background p-3 lg:hidden">
+        <PhoneActionBar>
           <Button variant="outline" size={primary ? "icon" : "lg"} className={primary ? "shrink-0" : "flex-1"} asChild>
             <a href={contact.call} aria-label={t("contact.callName", { name: order.customerName })}>
               <Phone className="size-4" />
@@ -159,13 +208,37 @@ export function OrderView({ order }: { order: Order }) {
             </Button>
           ) : null}
           {primary ? (
-            <Button className="flex-1" size="lg" onClick={runPrimary} disabled={statusMutation.isPending}>
+            <Button className="flex-1" size="lg" onClick={runPrimary} loading={primary === "confirm" && statusMutation.isPending}>
               {t(`primary.${primary}`)}
             </Button>
           ) : null}
-        </div>
+        </PhoneActionBar>
       </TooltipProvider>
     </ErrorBoundary>
+  );
+}
+
+/**
+ * Phones: Call and WhatsApp stay in thumb reach, next to the one next step.
+ * While the bar shows, toasts sit above it (`--toast-lift`, read by the Toaster).
+ */
+function PhoneActionBar({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = ref.current;
+    const root = document.documentElement;
+    if (!bar || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => root.style.setProperty("--toast-lift", `${bar.offsetHeight}px`));
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--toast-lift");
+    };
+  }, []);
+  return (
+    <div ref={ref} className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t bg-background p-3 lg:hidden">
+      {children}
+    </div>
   );
 }
 

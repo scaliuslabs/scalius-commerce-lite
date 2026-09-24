@@ -266,7 +266,6 @@ describe("customer account order money projection", () => {
       OrderStatus.CANCELLED,
       OrderStatus.RETURNED,
       OrderStatus.REFUNDED,
-      OrderStatus.PARTIALLY_REFUNDED,
     ]) {
       expect(getCustomerVisibleBalanceDueMinor({
         status,

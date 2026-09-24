@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -14,7 +15,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
-import { useApproveOrderReturn } from "~/lib/api-mutations/orders";
+import { orderErrorMessage, useApproveOrderReturn } from "~/lib/api-mutations/orders";
 import { StableReturnCommandKey, type OrderReturnDto } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
 import { createReturnCommandKey, getOrderItemName, parseReturnQuantity } from "./shared";
@@ -62,13 +63,14 @@ export function ApproveReturnDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("returns.reviewTitle")}</DialogTitle>
           <DialogDescription>{t("returns.reviewHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
           <ul className="divide-y rounded-md border">
             {orderReturn.lines.map((line) => {
               const name = getOrderItemName(itemsById.get(line.orderItemId));
@@ -105,7 +107,7 @@ export function ApproveReturnDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>
-          <Button type="button" variant={rejectAll ? "destructive" : "default"} onClick={submit} disabled={mutation.isPending}>
+          <Button type="button" variant={rejectAll ? "destructive" : "default"} onClick={submit} loading={mutation.isPending}>
             {rejectAll
               ? t("returns.reject")
               : t("returns.approveSummary", {

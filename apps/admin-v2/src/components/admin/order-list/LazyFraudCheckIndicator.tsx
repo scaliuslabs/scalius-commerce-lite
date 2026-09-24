@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import { LoaderCircle, Shield } from "lucide-react";
 import { Button } from "../../ui/button";
+import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderListMessages } from "~/i18n/order-list";
 
@@ -10,15 +11,24 @@ const FraudCheckIndicator = lazy(() =>
   })),
 );
 
-function HistoryTrigger({ isLoading = false, onActivate }: { isLoading?: boolean; onActivate?: () => void }) {
+function HistoryTrigger({
+  customerName,
+  isLoading = false,
+  onActivate,
+}: {
+  customerName: string;
+  isLoading?: boolean;
+  onActivate?: () => void;
+}) {
   const t = useMessages(orderListMessages);
+  const label = t("checkHistoryFor", { name: customerName });
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon"
-      title={t("checkHistory")}
-      aria-label={t("checkHistory")}
+      title={label}
+      aria-label={label}
       aria-busy={isLoading || undefined}
       disabled={isLoading}
       onClick={onActivate}
@@ -28,13 +38,15 @@ function HistoryTrigger({ isLoading = false, onActivate }: { isLoading?: boolean
   );
 }
 
-/** Shield button that loads the customer's courier delivery history on first click. */
-export function LazyFraudCheckIndicator({ phone }: { phone: string }) {
+/** Shield button that loads the customer's courier delivery history on first click; hidden without access. */
+export function LazyFraudCheckIndicator({ phone, customerName }: { phone: string; customerName: string }) {
+  const { canViewFraudCheck } = useOrderActionPermissions();
   const [shouldLoad, setShouldLoad] = useState(false);
-  if (!shouldLoad) return <HistoryTrigger onActivate={() => setShouldLoad(true)} />;
+  if (!canViewFraudCheck) return null;
+  if (!shouldLoad) return <HistoryTrigger customerName={customerName} onActivate={() => setShouldLoad(true)} />;
   return (
-    <Suspense fallback={<HistoryTrigger isLoading />}>
-      <FraudCheckIndicator phone={phone} trigger={<HistoryTrigger />} />
+    <Suspense fallback={<HistoryTrigger customerName={customerName} isLoading />}>
+      <FraudCheckIndicator phone={phone} trigger={<HistoryTrigger customerName={customerName} />} />
     </Suspense>
   );
 }

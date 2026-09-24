@@ -15,16 +15,15 @@ import {
 type ProductVariant = Product["variants"][number];
 
 interface OrderItemsTableProps {
-  resolvedProductsById?: Record<string, Product>;
   resolvedVariantsById?: Record<string, ProductVariant>;
 }
 
-/** The order's lines: product, variant, quantity, line total and remove. */
-export function OrderItemsTable({
-  resolvedProductsById = {},
-  resolvedVariantsById = {},
-}: OrderItemsTableProps) {
-  const { form, products, isEdit, usesQuote, manualQuote } = useOrderForm();
+/**
+ * The order's lines: product, variant, quantity, line total and remove. Line
+ * totals are before the order discount, so they add up to the subtotal.
+ */
+export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTableProps) {
+  const { form, products, isEdit, manualQuote } = useOrderForm();
   const { fmt } = useCurrency();
   const t = useMessages(orderFormMessages);
   const items = form.watch("items") as OrderItem[];
@@ -52,13 +51,12 @@ export function OrderItemsTable({
   return (
     <ul className="divide-y border-t">
       {items.map((item, index) => {
-        const product = resolvedProductsById[item.productId]
-          ?? products.find((candidate) => candidate.id === item.productId);
+        const product = products.find((candidate) => candidate.id === item.productId);
         const variant = item.variantId
           ? resolvedVariantsById[item.variantId]
             ?? product?.variants.find((candidate) => candidate.id === item.variantId)
           : undefined;
-        const quotedLine = usesQuote && manualQuote.isCurrent
+        const quotedLine = manualQuote.isCurrent
           ? manualQuote.data?.lines.find((line) =>
               line.index === index
               && line.productId === item.productId
@@ -68,7 +66,10 @@ export function OrderItemsTable({
         const maximumQuantity = isEdit
           ? null
           : remainingStockForNewOrderLine(variant, items, index);
-        const name = product?.name ?? t("unknownProduct");
+        const name = item.name ?? product?.name ?? t("unknownProduct");
+        const variantText = item.variantLabel !== undefined
+          ? item.variantLabel
+          : orderItemVariantLabel(variant);
 
         return (
           <li
@@ -78,7 +79,7 @@ export function OrderItemsTable({
             <div className="min-w-0 flex-1 basis-40">
               <p className="truncate text-body font-medium">{name}</p>
               <p className="truncate text-body text-muted-foreground">
-                {orderItemVariantLabel(variant)} · {fmt(quotedLine?.unitPrice ?? item.price)}
+                {[variantText, fmt(quotedLine?.unitPrice ?? item.price)].filter(Boolean).join(" · ")}
               </p>
             </div>
             <OrderItemQuantityInput
@@ -90,7 +91,7 @@ export function OrderItemsTable({
                 ? undefined
                 : exceededStockMessage(maximumQuantity)}
             />
-            <p className="min-w-20 text-right text-body font-medium">
+            <p className="min-w-20 text-right text-body font-medium tabular-nums">
               {fmt(quotedLine?.lineSubtotal ?? item.price * item.quantity)}
             </p>
             <Button

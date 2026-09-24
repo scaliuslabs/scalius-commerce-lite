@@ -304,7 +304,7 @@ describe("agent workflow catalog", () => {
       "dashboard.shipping_methods.list",
     ]);
     expect(DAILY_OPERATING_SNAPSHOT_WORKFLOW.phases[0]!.steps[2]!.input.template).toMatchObject({
-      query: { statusGroup: "open", fulfillmentStatus: "pending" },
+      query: { view: "unfulfilled" },
     });
     expect(workflowStep(
       DAILY_OPERATING_SNAPSHOT_WORKFLOW,

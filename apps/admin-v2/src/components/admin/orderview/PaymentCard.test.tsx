@@ -26,8 +26,9 @@ vi.mock("~/lib/api-query-options/orders", () => ({
   orderCodQueryOptions: (id: string) => ({ queryKey: ["cod", id], queryFn: mocks.cod }),
 }));
 vi.mock("~/lib/api-mutations/orders", () => ({
-  useUpdateOrderCod: () => ({ mutate: mocks.mutate, isPending: false }),
-  useRefundOrder: () => ({ mutate: mocks.refund, isPending: false }),
+  useUpdateOrderCod: () => ({ mutate: mocks.mutate, reset: vi.fn(), isPending: false }),
+  useRefundOrder: () => ({ mutate: mocks.refund, reset: vi.fn(), isPending: false }),
+  orderErrorMessage: (error: Error) => error.message,
   useReconcileRefundAttempt: () => ({ mutate: mocks.mutate, isPending: false }),
   useIssueOrderPaymentRecoveryLink: () => ({ mutateAsync: mocks.issue, isPending: false }),
 }));
@@ -41,7 +42,8 @@ const order: Order = {
   area: null, notes: null, discountAmount: 0, shippingCharge: 0, status: "incomplete",
   createdAt: 1_783_000_000, updatedAt: 1_783_000_000, items: [], totalAmount: 1800,
   customerId: null, paymentMethod: "sslcommerz", paymentStatus: "failed", paidAmount: 0,
-  balanceDue: 1800, fullEditReadiness: { allowed: false, reason: null },
+  balanceDue: 1800, orderNumber: 1001, archivedAt: null, discounts: [], refundDue: 0, refundedAmount: 0,
+  editReadiness: { items: { allowed: false, reason: "closed" }, details: { allowed: false, reason: "closed" } },
 };
 type SessionAttempt = OrderPaymentsPayload["paymentSessionAttempts"][number];
 const attempt: SessionAttempt = {
@@ -110,8 +112,8 @@ describe("PaymentCard", () => {
       const row = sessionRow();
       expect(row.textContent).toContain(en["session.failed"]);
       expect(row.textContent).toContain(session.lastError);
-      expect(row.querySelector("summary")?.textContent).toBe(en.technicalDetails);
-      expect(row.querySelector("details")?.textContent).toContain("correlation_recorded");
+      // Provider ids stay out of the merchant's view.
+      expect(row.textContent).not.toContain("correlation_recorded");
       expect(button(en["recovery.copy"])).toBeUndefined();
     });
 
@@ -123,10 +125,10 @@ describe("PaymentCard", () => {
       expect(sessionRow().textContent).not.toMatch(/retry|reuse|completed|refunded/i);
     });
 
-    it("shows unfinished processing with its expiry in technical details", async () => {
+    it("shows unfinished processing with its expiry", async () => {
       await renderSession({ status: "processing", staleProcessing: true, claimExpiresAt: 1_783_000_030 }, { status: "cancelled" });
       expect(sessionRow().textContent).toContain(en["session.unfinished"]);
-      expect(sessionRow().querySelector("details")?.textContent).toContain(en["session.expires"].replace(" {date}", ""));
+      expect(sessionRow().textContent).toContain(en["session.expires"].replace(" {date}", ""));
     });
 
     it("keeps the server's no-link decision while payment is processing", async () => {
@@ -156,20 +158,25 @@ describe("PaymentCard", () => {
     });
   });
 
-  it("summarises a partial refund as paid, refunded and net", async () => {
-    const payment = {
-      id: "pay_1", orderId: "order_refund", amount: 1800, currency: "BDT", paymentMethod: "stripe",
-      paymentType: "full", status: "succeeded", providerRef: null, providerSecondaryRef: null,
-      codCollectedBy: null, codCollectedAt: null, codReceiptUrl: null, createdAt: 1, updatedAt: 1,
-    };
-    await render(
-      { id: "order_refund", status: "partially_refunded", paymentMethod: "stripe", paymentStatus: "partial", paidAmount: 1300, balanceDue: 500 },
-      { ...emptyPayments, payments: [payment, { ...payment, id: "pay_2", amount: 500, paymentType: "refund", status: "refunded" }] },
-    );
+  it("summarises a partial refund as paid, refunded and net, with its own badge", async () => {
+    await render({
+      id: "order_refund", status: "delivered", paymentMethod: "stripe", paymentStatus: "partially_refunded",
+      paidAmount: 1300, refundedAmount: 500, balanceDue: 0,
+    });
     const rows = [...host.querySelectorAll("dl div")].map((row) => row.textContent);
     expect(rows).toContain(`${en["payment.refunded"]}−৳500`);
     expect(rows).toContain(`${en["payment.net"]}৳1300`);
     expect(rows.some((row) => row?.startsWith(en["payment.balanceDue"]))).toBe(false);
+    expect(host.textContent).toContain("Partially refunded");
+    expect(host.textContent).not.toContain("Partly paid");
+  });
+
+  it("shows money still owed for returned items", async () => {
+    await render({ id: "order_owed", status: "returned", paymentMethod: "stripe", paymentStatus: "paid", paidAmount: 2480, refundDue: 1600, balanceDue: 0 });
+    const rows = [...host.querySelectorAll("dl div")].map((row) => row.textContent);
+    expect(rows).toContain("Refund owed৳1600");
+    // A returned order is closed: no payment badge.
+    expect(host.querySelector("[data-slot='badge']")).toBeNull();
   });
 
   describe("cash on delivery", () => {
@@ -177,14 +184,14 @@ describe("PaymentCard", () => {
       id: "order_cod", paymentMethod: "cod", status: "delivered", paymentStatus: "paid", paidAmount: 1800, balanceDue: 0,
     };
 
-    it("records a COD refund only after the merchant confirms the money was returned", async () => {
+    it("pre-fills only what came back and records it after the merchant confirms the money was returned", async () => {
       mocks.permissions.canRefundOrders = true;
       mocks.cod.mockResolvedValue({ tracking: null });
-      await render(codOrder);
+      await render({ ...codOrder, refundDue: 600 });
       await act(async () => button(en["refund.recordCash"])!.click());
 
       const submit = [...document.querySelectorAll('[role="dialog"] button')]
-        .find((candidate) => candidate.textContent === en["refund.recordCashAmount"].replace("{amount}", "৳1800")) as HTMLButtonElement;
+        .find((candidate) => candidate.textContent === en["refund.recordCashAmount"].replace("{amount}", "৳600")) as HTMLButtonElement;
       expect(submit.disabled).toBe(true);
       expect(document.body.textContent).toContain(en["refund.manualConfirm"]);
 
@@ -192,9 +199,31 @@ describe("PaymentCard", () => {
       expect(submit.disabled).toBe(false);
       await act(async () => submit.click());
       expect(mocks.refund).toHaveBeenCalledWith(
-        { orderId: "order_cod", amount: 1800, reason: "requested_by_customer", manualSettlementConfirmed: true },
+        { orderId: "order_cod", amount: 600, reason: "requested_by_customer", manualSettlementConfirmed: true },
         expect.anything(),
       );
+    });
+
+    it("never pre-fills the full order and flags more than was paid next to the field", async () => {
+      mocks.permissions.canRefundOrders = true;
+      mocks.cod.mockResolvedValue({ tracking: null });
+      await render(codOrder);
+      await act(async () => button(en["refund.recordCash"])!.click());
+      const amount = document.querySelector<HTMLInputElement>("#refundAmount")!;
+      expect(amount.value).toBe("");
+
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      await act(async () => {
+        setter.call(amount, "3000");
+        amount.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => document.querySelector<HTMLButtonElement>("#manualSettlementConfirmed")!.click());
+      const submit = [...document.querySelectorAll('[role="dialog"] button')]
+        .find((candidate) => candidate.textContent === en["refund.recordCashAmount"].replace("{amount}", "৳3000")) as HTMLButtonElement;
+      await act(async () => submit.click());
+      expect(mocks.refund).not.toHaveBeenCalled();
+      expect(amount.getAttribute("aria-invalid")).toBe("true");
+      expect(document.querySelector("#refundAmount-help")?.textContent).toBe(en["refund.amountInvalid"].replace("{amount}", "৳1800"));
     });
 
     it("hides refunds from merchants without refund permission", async () => {
@@ -216,6 +245,37 @@ describe("PaymentCard", () => {
       mocks.cod.mockResolvedValue({ tracking: null });
       await render({ ...codOrder, status: "shipped", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800 });
       expect(button(en["cod.markCollected"])).toBeDefined();
+    });
+
+    it("doesn't offer collecting cash before the order is sent", async () => {
+      mocks.permissions.canUpdateOrderCod = true;
+      mocks.cod.mockResolvedValue({ tracking: null });
+      await render({ ...codOrder, status: "confirmed", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800 });
+      expect(button(en["cod.markCollected"])).toBeUndefined();
+    });
+
+    it("collects exactly the balance and asks who collected it", async () => {
+      mocks.permissions.canUpdateOrderCod = true;
+      mocks.cod.mockResolvedValue({ tracking: null });
+      await render({ ...codOrder, status: "shipped", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800 });
+      await act(async () => button(en["cod.markCollected"])!.click());
+      expect(document.querySelector("#collectedAmount")).toBeNull();
+      const submit = button(en["cod.collectAmount"].replace("{amount}", "৳1800"))!;
+      await act(async () => submit.click());
+      expect(mocks.mutate).not.toHaveBeenCalled();
+      expect(document.querySelector("#collectedBy-error")?.textContent).toBe(en["cod.collectorRequired"]);
+
+      const input = document.querySelector<HTMLInputElement>("#collectedBy")!;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      await act(async () => {
+        setter.call(input, "Rider Karim");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => submit.click());
+      expect(mocks.mutate).toHaveBeenCalledWith(
+        { orderId: "order_cod", action: "collected", collectedBy: "Rider Karim", collectedAmount: 1800 },
+        expect.anything(),
+      );
     });
   });
 });

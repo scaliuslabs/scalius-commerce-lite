@@ -442,7 +442,9 @@ export async function refreshAgentStorefrontPaymentContinuation(
     }).where(eq(agentStorefrontContinuations.id, continuationId));
     return;
   }
-  const complete = row.paymentStatus === PaymentStatus.PAID || row.paymentStatus === PaymentStatus.PARTIAL;
+  const complete = row.paymentStatus === PaymentStatus.PAID
+    || row.paymentStatus === PaymentStatus.PARTIAL
+    || row.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
   if (complete) {
     await db.update(agentStorefrontContinuations).set({
       status: "complete",

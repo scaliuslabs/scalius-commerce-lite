@@ -706,12 +706,21 @@ export const OPERATIONS = {
     risk: "destructive",
     revision: "required",
   },
+  "dashboard.orders.bulk_confirm": {
+    openWorld: true,
+    batch: "forbidden",
+  },
+  "dashboard.orders.bulk_fulfill": {
+    openWorld: true,
+    batch: "forbidden",
+  },
   "dashboard.orders.bulk_ship": {
     openWorld: true,
     batch: "forbidden",
   },
   "dashboard.orders.catalog_products": {},
   "dashboard.orders.cod_get": {},
+  "dashboard.orders.comment_add": {},
   "dashboard.orders.cod_update": {
     risk: "financial",
     openWorld: true,
@@ -848,12 +857,13 @@ export const OPERATIONS = {
     batch: "forbidden",
   },
   "dashboard.orders.shipments": {},
+  "dashboard.orders.timeline": {},
   "dashboard.orders.support_request_update": {
     openWorld: true,
     revision: "optional",
     batch: "forbidden",
   },
-  "dashboard.orders.update": { revision: "required" },
+  "dashboard.orders.update_details": { revision: "required" },
   "dashboard.orders.update_status": {
     openWorld: true,
     batch: "forbidden",

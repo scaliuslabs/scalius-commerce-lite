@@ -211,6 +211,23 @@ describe("admin fraud checker credential handling", () => {
     expect(mocks.saveFraudProvider).not.toHaveBeenCalled();
   });
 
+  it("answers a lookup with no connected service as a state, not a 404", async () => {
+    const { app, env } = createTestApp();
+    const { NotFoundError } = await import("@scalius/core/errors");
+    mocks.fraudLookupWithActiveProvider.mockRejectedValueOnce(
+      new NotFoundError("No active fraud checker provider configured"),
+    );
+
+    const response = await app.request("/api/v1/admin/fraud-checker/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: "+8801700000000" }),
+    }, env);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, data: { configured: false } });
+  });
+
   it("projects lookup facts without echoing phone or arbitrary provider fields", async () => {
     const { app, env } = createTestApp();
     mocks.fraudLookupWithActiveProvider.mockResolvedValueOnce({

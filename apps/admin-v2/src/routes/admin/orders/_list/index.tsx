@@ -3,11 +3,13 @@ import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react
 import { OrderList } from "~/components/admin/order-list/OrderList";
 import {
   ORDER_SEARCH_DEFAULTS,
+  ORDER_SEARCH_LIST,
   orderListQuery,
   validateOrderSearch,
   type OrderListSearch,
 } from "~/components/admin/order-list/order-list-search";
 import { ordersQueryOptions } from "~/lib/api-query-options/orders";
+import { readListSearch } from "~/lib/list-search";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { translate } from "~/i18n";
@@ -19,9 +21,11 @@ export const Route = createFileRoute("/admin/orders/_list/")({
   loaderDeps: ({ search }) => search,
   staleTime: 30_000,
   loader: async ({ context: { queryClient }, deps }) => {
-    await warmRouteQuery(queryClient, ordersQueryOptions(orderListQuery(deps)));
+    // The search term lives in this tab's session (empty on the server), never in the URL.
+    const term = typeof window === "undefined" ? "" : readListSearch(ORDER_SEARCH_LIST);
+    await warmRouteQuery(queryClient, ordersQueryOptions(orderListQuery(deps, term)));
   },
-  head: () => ({ meta: [{ title: `${translate(orderMessages, "orders")} | Scalius Admin` }] }),
+  head: () => ({ meta: [{ title: `${translate(orderMessages, "orders")} | Scalius` }] }),
   component: OrdersIndexPage,
   errorComponent: RouteErrorComponent,
 });

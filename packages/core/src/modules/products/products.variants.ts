@@ -87,7 +87,6 @@ const ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT = [
     OrderStatus.CANCELLED,
     OrderStatus.RETURNED,
     OrderStatus.REFUNDED,
-    OrderStatus.PARTIALLY_REFUNDED,
 ];
 
 export function assertConsistentVariantOptionAxes(

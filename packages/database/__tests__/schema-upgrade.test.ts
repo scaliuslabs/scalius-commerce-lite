@@ -221,6 +221,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 103,
         postgresStatements: 52,
       },
+      {
+        version: 70,
+        name: "0070_order_numbers_timeline",
+        sqliteStatements: 11,
+        postgresStatements: 11,
+      },
     ]);
   });
 
@@ -339,6 +345,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 67, name: "0067_settings_documents" },
           { version: 68, name: "0068_single_discount_engine" },
           { version: 69, name: "0069_integer_money" },
+          { version: 70, name: "0070_order_numbers_timeline" },
         ],
       });
     } finally {

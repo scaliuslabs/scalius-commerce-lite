@@ -1,6 +1,7 @@
 // src/modules/orders/orders.ingest.ts
 // Synchronous storefront order commit path used by checkout-facing APIs.
 
+import { nextOrderNumberSql } from "./order-number";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
     agentStorefrontContexts,
@@ -508,6 +509,7 @@ function buildOrderWriteBatch(
 
     writes.push(
         db.insert(orders).values({
+            orderNumber: nextOrderNumberSql(),
             id: od.id,
             customerName: od.customerName,
             customerPhone: od.customerPhone,

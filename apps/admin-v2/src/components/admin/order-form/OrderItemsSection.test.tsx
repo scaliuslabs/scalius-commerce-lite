@@ -9,15 +9,13 @@ import type { Product } from "./types";
 const state = vi.hoisted(() => ({
   items: [] as unknown[],
   setValue: vi.fn(),
-  toastError: vi.fn(),
   picked: null as null | ((product: Product) => void),
 }));
 
-vi.mock("sonner", () => ({ toast: { error: state.toastError } }));
 vi.mock("./OrderFormContext", () => ({
   useOrderForm: () => ({
-    form: { getValues: () => state.items, setValue: state.setValue },
-    refs: { productSearchButtonRef: { current: null } },
+    form: { getValues: () => state.items, setValue: state.setValue, formState: { errors: {} } },
+    refs: { productSearchInputRef: { current: null } },
     isEdit: false,
   }),
 }));
@@ -62,7 +60,6 @@ describe("adding a product to a manual order", () => {
   beforeEach(async () => {
     state.items = [];
     state.setValue.mockReset();
-    state.toastError.mockReset();
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -81,15 +78,15 @@ describe("adding a product to a manual order", () => {
   it("adds a single-variant product at quantity 1 in one click", async () => {
     await act(async () => state.picked!(product([variant("sku_1")])));
     expect(state.setValue).toHaveBeenCalledWith("items", [
-      { productId: "prod_1", variantId: "sku_1", quantity: 1, price: 180 },
+      { productId: "prod_1", variantId: "sku_1", quantity: 1, price: 180, name: "Lamp", variantLabel: "sku_1" },
     ], { shouldDirty: true, shouldValidate: true });
     expect(host.querySelector('[data-testid="variant-choice"]')).toBeNull();
   });
 
-  it("does not add an out-of-stock single variant", async () => {
+  it("explains an out-of-stock single variant next to the search instead of adding it", async () => {
     await act(async () => state.picked!(product([variant("sku_1", 0)])));
     expect(state.setValue).not.toHaveBeenCalled();
-    expect(state.toastError).toHaveBeenCalledOnce();
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("Lamp: Out of stock.");
   });
 
   it("asks for a variant when there are several", async () => {
