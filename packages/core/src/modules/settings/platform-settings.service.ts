@@ -19,14 +19,22 @@ import {
 } from "@scalius/shared/platform-config";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { ValidationError } from "@scalius/core/errors";
-import type { SettingsStoreKv } from "./settings-store";
+import type { SettingsDocumentWriteResult, SettingsStoreKv } from "./settings-store";
 import { platformDocument } from "./documents";
 
 type PlatformKv = SettingsStoreKv;
 
 /** Reads the stored platform configuration (no cache). */
 export async function getPlatformSettings(db: Database): Promise<PlatformConfig> {
-  return (await platformDocument.readDetailed(db, {}, { skipCache: true })).value;
+  return (await getPlatformSettingsDocument(db)).value;
+}
+
+/** The stored origins and the revision a save must send back. */
+export async function getPlatformSettingsDocument(
+  db: Database,
+): Promise<SettingsDocumentWriteResult<PlatformConfig>> {
+  const { value, revision } = await platformDocument.readDetailed(db, {}, { skipCache: true });
+  return { value, revision };
 }
 
 export type PlatformSettingsPatch = Partial<{
@@ -140,7 +148,9 @@ export async function savePlatformSettings(
   patch: PlatformSettingsPatch,
   /** Written through so Worker-entry readers see the new origins at once. */
   kv?: PlatformKv | null,
-): Promise<PlatformConfig> {
+  /** The revision the editor loaded; a stale one is a 409 conflict. */
+  options: { expectedRevision?: number } = {},
+): Promise<SettingsDocumentWriteResult<PlatformConfig>> {
   const documentPatch: Partial<PlatformConfig> = {};
 
   if (patch.apiUrl !== undefined) {
@@ -210,7 +220,7 @@ export async function savePlatformSettings(
     documentPatch.storefrontUrl = storefrontUrl;
   }
 
-  return (await platformDocument.write(db, documentPatch, { kv })).value;
+  return platformDocument.write(db, documentPatch, { kv }, options);
 }
 
 export async function readCachedPlatformConfig(

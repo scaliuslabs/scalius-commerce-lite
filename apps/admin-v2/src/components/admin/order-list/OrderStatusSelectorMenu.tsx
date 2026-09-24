@@ -19,10 +19,9 @@ export interface OrderStatusSelectorMenuProps {
   status: string;
   paymentStatus: string | null;
   paidAmount: number;
-  orderId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onStatusUpdate: (orderId: string, newStatus: string) => void;
+  onStatusUpdate: (newStatus: string) => void;
   trigger: ReactNode;
 }
 
@@ -30,7 +29,6 @@ export function OrderStatusSelectorMenu({
   status,
   paymentStatus,
   paidAmount,
-  orderId,
   open,
   onOpenChange,
   onStatusUpdate,
@@ -49,7 +47,7 @@ export function OrderStatusSelectorMenu({
         <DropdownMenuLabel>{t("changeStatus")}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={status}
-          onValueChange={(next) => onStatusUpdate(orderId, next)}
+          onValueChange={onStatusUpdate}
         >
           {transitions.map((next) => (
             <DropdownMenuRadioItem key={next} value={next}>
@@ -57,9 +55,6 @@ export function OrderStatusSelectorMenu({
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
-        {transitions.length === 0 ? (
-          <p className="px-2 py-1.5 text-body text-muted-foreground">{t("noTransitions")}</p>
-        ) : null}
         {cancelNeedsRefund ? (
           <p className="border-t px-2 py-2 text-body text-muted-foreground">{t("cancelNeedsRefund")}</p>
         ) : null}

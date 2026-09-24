@@ -191,6 +191,8 @@ describe.each(["d1", "turso"] as const)("storefront checkout commit (%s)", (prov
     });
     expect(sqlite!.prepare("SELECT id FROM orders").get()?.id)
       .toBe((replay as { response: { orderId: string } }).response.orderId);
+    // The checkout commit numbers the order in the same INSERT (#1001).
+    expect(sqlite!.prepare("SELECT order_number FROM orders").get()).toEqual({ order_number: 1001 });
   });
 
   it("refuses the same checkout key with different checkout details (409)", async () => {

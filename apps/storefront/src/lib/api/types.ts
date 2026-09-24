@@ -88,6 +88,8 @@ export interface PaginatedResponse<T> {
   };
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];
+  /** Set when the search matched nothing and these results are for this corrected query. */
+  correctedQuery?: string | null;
 }
 
 export interface BuyerPriceRange {
@@ -171,6 +173,20 @@ export interface Product {
   hasVariants: boolean;
   availableForSale?: boolean;
   variants?: ProductVariant[];
+  /** Automatic Buy X get Y discounts this product counts toward (product page only). */
+  offers?: ProductBuyGetOffer[];
+}
+
+export interface ProductBuyGetOffer {
+  promotionId: string;
+  title: string;
+  buyQuantity: number | null;
+  buyAmount: number | null;
+  getQuantity: number;
+  /** 100 means the items to get are free. */
+  percentOff: number;
+  endsAtEpochSeconds: number | null;
+  products: Array<{ id: string; slug: string; name: string; variantId: string | null; price: number | null }>;
 }
 
 export interface ProductVariant {
@@ -463,7 +479,14 @@ export interface OrderReceiptSupportRequestAction {
 
 export interface OrderReceipt {
   id: string;
+  /** Short per-store number ("#1001"); absent until every order has one. */
+  orderNumber?: number | null;
   customerName: string;
+  /** The phone the courier calls; the receipt is proof-gated to its buyer. */
+  customerPhone: string;
+  customerEmail: string | null;
+  /** True when the order is saved to a customer account. */
+  accountLinked: boolean;
   shippingAddress: string;
   totalAmount: number;
   shippingCharge: number;
@@ -520,26 +543,19 @@ export interface ShippingMethod {
   id: string;
   name: string;
   fee: number;
+  /** Delivery is free once the items subtotal (before discounts) reaches this. */
+  freeOver?: number | null;
   description: string | null;
+  /** Pickup rates name the place the buyer collects from. */
+  kind?: "delivery" | "pickup";
+  /** True for a default rate that applies outside every delivery zone. */
+  everywhereElse?: boolean;
+  pickupAddress?: string | null;
+  pickupHours?: string | null;
   isActive: boolean;
   sortOrder: number;
   createdAt: string | null;
   updatedAt: string | null;
-}
-
-export interface Discount {
-  id: string;
-  code: string;
-  type: string;
-  discountValue: number;
-}
-
-export interface DiscountValidationResponse {
-  valid: boolean;
-  error?: string;
-  discount?: Discount;
-  discountAmount?: number;
-  requiresCustomerPhone?: boolean;
 }
 
 export interface AnalyticsConfig {
@@ -548,15 +564,6 @@ export interface AnalyticsConfig {
   usePartytown: boolean;
   config: string;
   location: string;
-}
-
-export interface SearchResults {
-  products: Product[];
-  categories: Category[];
-  pages: Page[];
-  success: boolean;
-  query: string;
-  timestamp: string;
 }
 
 // ---------------------------------------------------------------------------

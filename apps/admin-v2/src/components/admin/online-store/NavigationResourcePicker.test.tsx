@@ -172,7 +172,7 @@ describe("NavigationResourcePicker", () => {
     if (!secondOption) throw new Error("Expected second-page product");
     await act(async () => secondOption.click());
 
-    expect(onValueChange).toHaveBeenCalledWith("prod_021", "Product 021");
+    expect(onValueChange).toHaveBeenCalledWith(expect.objectContaining({ id: "prod_021", name: "Product 021" }));
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
   });
 });

@@ -8,6 +8,8 @@ import {
   type VariantPricing,
   type DiscountType,
 } from "../lib/pricing-engine";
+import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+import { toLatinDigits } from "@scalius/shared/phone-input";
 import {
   createInitialSelection,
   filterVariantsBySelection,
@@ -24,9 +26,9 @@ import {
   type VariantOptionAvailability,
 } from "../lib/variant-state-machine";
 import {
-  validateQuantity,
   validateAddToCart,
   clampQuantity,
+  QUANTITY_CONSTRAINTS,
 } from "../lib/product-validation";
 import { getBuyerStockSummary } from "@/lib/product-sellable-variants";
 import {
@@ -34,7 +36,6 @@ import {
   extractProductDataFromDOM,
   convertVariantToAnalyticsData,
 } from "../lib/product-analytics";
-import { TOAST_CONFIG } from "../config";
 import type { ProductOptionDefinition } from "@/lib/api";
 import { resolveVariantCartMedia } from "../lib/cart-media";
 import {
@@ -140,10 +141,10 @@ export function init() {
     requested && !getBuyerStockSummary([requested.variant]).canPurchaseAny
       ? requested.variant
       : null;
-  state.selection = state.unavailableRequestedVariant
-    ? {}
-    : (requested?.selection ??
-      createInitialSelection(state.options, state.variants));
+  // A link to a sold-out combination still shows that combination, marked sold out.
+  state.selection = requested?.selection ??
+    createInitialSelection(state.options, state.variants);
+  hideExpiredOffers();
 
   initQuantity();
   bindOptions();
@@ -151,22 +152,47 @@ export function init() {
   refresh();
 }
 
+/** Offers end on their own schedule: hide one that ended while the page was cached. */
+function hideExpiredOffers() {
+  const now = Date.now() / 1000;
+  document.querySelectorAll<HTMLElement>("[data-offer-ends]").forEach((offer) => {
+    const endsAt = Number(offer.dataset.offerEnds);
+    if (endsAt > 0 && endsAt <= now) offer.hidden = true;
+  });
+}
+
+/**
+ * The quantity accepts Bangla digits, never changes silently, and says so
+ * when it is capped at the most one order line can hold.
+ */
+function readQuantity(): number {
+  const input = cache.quantity;
+  const message = document.getElementById("quantity-message");
+  if (!input) return 1;
+  const typed = Number.parseInt(toLatinDigits(input.value).replace(/\D/g, ""), 10);
+  const quantity = clampQuantity(Number.isFinite(typed) ? typed : 1);
+  input.value = String(quantity);
+  const capped = Number.isFinite(typed) && typed > QUANTITY_CONSTRAINTS.MAX;
+  if (message) {
+    message.textContent = capped
+      ? formatCheckoutLanguageText(cache.actions?.dataset.quantityLimitText ?? "", { count: QUANTITY_CONSTRAINTS.MAX })
+      : "";
+    message.classList.toggle("hidden", !capped);
+  }
+  return quantity;
+}
+
 function initQuantity() {
   const minus = document.getElementById("quantity-minus");
   const plus = document.getElementById("quantity-plus");
   if (!minus || !plus || !cache.quantity) return;
   const update = (delta: number) => {
-    cache.quantity!.value = clampQuantity(
-      (Number.parseInt(cache.quantity!.value, 10) || 1) + delta,
-    ).toString();
+    cache.quantity!.value = String(readQuantity() + delta);
+    readQuantity();
   };
   minus.addEventListener("click", () => update(-1));
   plus.addEventListener("click", () => update(1));
-  cache.quantity.addEventListener("change", () => {
-    cache.quantity!.value = validateQuantity(
-      cache.quantity!.value,
-    ).value.toString();
-  });
+  cache.quantity.addEventListener("change", readQuantity);
 }
 
 function bindOptions() {
@@ -175,12 +201,12 @@ function bindOptions() {
     const definitionId = button.dataset.optionDefinitionId;
     const valueId = button.dataset.optionValueId;
     if (!definitionId || !valueId) return;
+    // Options behave like radio buttons: choosing the chosen value keeps it.
     const choose = () => {
       state.hasVariantSelectionInteraction = true;
       state.unavailableRequestedVariant = null;
-      if (state.selection[definitionId] === valueId)
-        delete state.selection[definitionId];
-      else
+      showMissingOption(definitionId, "");
+      if (state.selection[definitionId] !== valueId) {
         state.selection = reconcileSelectionForValue(
           state.variants,
           definitionId,
@@ -188,6 +214,7 @@ function bindOptions() {
           state.selection,
           order,
         );
+      }
       if (cache.status)
         cache.status.textContent = `${button.dataset.optionValue || "Option"} selected.`;
       refresh();
@@ -257,15 +284,17 @@ function refresh() {
 }
 
 const OPTION_CLASSES = [
-  "bg-black",
-  "text-white",
-  "border-black",
+  "bg-primary",
+  "text-primary-foreground",
+  "border-primary",
   "bg-muted",
   "border-dashed",
   "border-muted-foreground",
-  "opacity-50",
+  "text-muted-foreground",
   "line-through",
   "cursor-not-allowed",
+  "ring-2",
+  "ring-destructive",
 ];
 
 function updateOptionButtons() {
@@ -290,7 +319,7 @@ function updateOptionButtons() {
           "text-foreground",
           "border-input",
         );
-        button.classList.add("bg-black", "text-white", "border-black");
+        button.classList.add("bg-primary", "text-primary-foreground", "border-primary");
       } else if (status === "incompatible") {
         button.classList.remove("bg-background", "border-input");
         button.classList.add(
@@ -299,13 +328,13 @@ function updateOptionButtons() {
           "border-muted-foreground",
         );
       } else if (status === "sold_out") {
-        button.classList.add(
-          "opacity-50",
-          "line-through",
-          "cursor-not-allowed",
-        );
+        button.classList.remove("text-foreground");
+        button.classList.add("text-muted-foreground", "line-through", "cursor-not-allowed");
+        if (selected) button.classList.add("ring-2", "ring-destructive");
       }
-      button.disabled = status === "sold_out";
+      // Sold-out values stay focusable and choosable, so a buyer sees why.
+      if (status === "sold_out") button.setAttribute("aria-disabled", "true");
+      else button.removeAttribute("aria-disabled");
       button.dataset.optionAvailability = status;
       button.setAttribute("aria-pressed", String(selected));
       button.setAttribute(
@@ -327,10 +356,10 @@ function optionButtonLabel(
   status: VariantOptionAvailability,
   selected: boolean,
 ) {
+  void selected;
   if (status === "sold_out") return `${name}: ${value}. Out of stock.`;
   if (status === "incompatible")
     return `${name}: ${value}. Not available with the current selection.`;
-  if (selected) return `${name}: ${value}. Selected; activate again to clear.`;
   return `${name}: ${value}`;
 }
 
@@ -349,40 +378,24 @@ function updateStockAndActions() {
       ? filterVariantsBySelection(state.variants, state.selection)
       : state.variants;
   const summary = getBuyerStockSummary(candidates);
-  const exactAvailable = Boolean(
-    !state.unavailableRequestedVariant &&
-    exact &&
-    getBuyerStockSummary([exact]).canPurchaseAny,
-  );
   const copy = cache.actions?.dataset;
   const actions = getProductActionsPresentation({
     productName: cache.container?.dataset.productName ?? "Product",
-    exactVariantAvailable: exactAvailable,
-    anyVariantAvailable: summary.canPurchaseAny,
-    copy: copy?.addToCartText
-      ? {
-          addToCartText: copy.addToCartText,
-          buyNowText: copy.buyNowText ?? "",
-          selectOptionsText: copy.selectOptionsText ?? "",
-          unavailableText: copy.unavailableText ?? "",
-        }
-      : undefined,
+    anyVariantAvailable: getBuyerStockSummary(state.variants).canPurchaseAny,
+    chosenVariantSoldOut: Boolean(exact && !getBuyerStockSummary([exact]).canPurchaseAny),
+    copy: {
+      addToCartText: copy?.addToCartText ?? "",
+      buyNowText: copy?.buyNowText ?? "",
+      unavailableText: copy?.unavailableText ?? "",
+    },
   });
   cache.unavailableNotice?.classList.toggle(
     "hidden",
     !state.unavailableRequestedVariant,
   );
   if (cache.stockBadge) {
-    cache.stockBadge.classList.remove(
-      "text-primary",
-      "bg-primary/10",
-      "text-destructive",
-      "bg-destructive/10",
-    );
-    cache.stockBadge.classList.add(
-      summary.tone === "available" ? "text-primary" : "text-destructive",
-      summary.tone === "available" ? "bg-primary/10" : "bg-destructive/10",
-    );
+    cache.stockBadge.classList.toggle("text-primary", summary.tone === "available");
+    cache.stockBadge.classList.toggle("text-destructive", summary.tone !== "available");
   }
   if (cache.stockText) cache.stockText.textContent = summary.text;
   setButton(
@@ -395,6 +408,8 @@ function updateStockAndActions() {
     cache.buyLabel,
     actions.buyNow,
   );
+  // Like Shopify, a sold-out product shows one "Sold out" button, not two.
+  if (cache.buyButton) cache.buyButton.hidden = actions.buyNow.disabled;
 }
 
 function setButton(
@@ -411,58 +426,36 @@ function setButton(
 function updatePrice() {
   if (!state.productPricing) return;
   const exact = state.unavailableRequestedVariant ?? exactVariant();
-  const starting = shouldShowStartingVariantPrice(
-    state.options.length > 0,
-    exact,
-  );
-  if (starting) {
-    const candidates = Object.keys(state.selection).length
+  const candidates = exact
+    ? [exact]
+    : Object.keys(state.selection).length
       ? filterVariantsBySelection(state.variants, state.selection)
       : state.variants;
-    const price = getBuyerVariantPricePresentation(
-      state.productPricing,
-      candidates,
-    ).pricing.finalPrice;
-    cache.priceElements.forEach(
-      (element) =>
-        (element.textContent = `From ${formatPrice(price, undefined, state.productPricing!.currencyDecimalPlaces)}`),
-    );
-    cache.originalPriceElements.forEach((element) =>
-      element.classList.add("hidden"),
-    );
-    cache.discountBadge?.classList.add("hidden");
-    return;
-  }
-  const variantPricing: VariantPricing | null = exact
-    ? {
+  const presentation = getBuyerVariantPricePresentation(state.productPricing, candidates);
+  // "From" only while the remaining choices are priced differently.
+  const starting =
+    shouldShowStartingVariantPrice(state.options.length > 0, exact) && presentation.isStartingAt;
+  const pricing = exact
+    ? calculateVariantPrice(state.productPricing, {
         price: exact.price,
         discountType: exact.discountType,
         discountPercentage: exact.discountPercentage,
         discountAmount: exact.discountAmount,
-      }
-    : null;
-  const pricing = calculateVariantPrice(state.productPricing, variantPricing);
-  cache.priceElements.forEach(
-    (element) =>
-      (element.textContent = formatPrice(
-        pricing.finalPrice,
-        undefined,
-        state.productPricing!.currencyDecimalPlaces,
-      )),
-  );
+      } satisfies VariantPricing)
+    : presentation.pricing;
+  cache.priceElements.forEach((element) => {
+    const price = formatPrice(pricing.finalPrice);
+    element.textContent = starting
+      ? formatCheckoutLanguageText(element.dataset.fromTemplate || "{price}", { price })
+      : price;
+  });
   cache.originalPriceElements.forEach((element) => {
-    element.textContent = formatPrice(
-      pricing.originalPrice,
-      undefined,
-      state.productPricing!.currencyDecimalPlaces,
-    );
+    element.textContent = formatPrice(pricing.originalPrice);
     element.classList.toggle("hidden", !pricing.hasDiscount);
   });
-  const badge = formatDiscountBadge(
-    pricing.discountType,
-    pricing.discountPercentage,
-    pricing.discountAmount,
-  );
+  const badge = pricing.hasDiscount
+    ? formatDiscountBadge(pricing.discountType, pricing.discountPercentage, pricing.discountAmount)
+    : null;
   if (cache.discountBadge) {
     cache.discountBadge.textContent = badge ?? "";
     cache.discountBadge.classList.toggle("hidden", !badge);
@@ -493,21 +486,39 @@ function selectedCartOptions(variant: Variant): CartItemOption[] {
   }));
 }
 
+/** "Choose a Size" under the option the buyer has not picked yet. */
+function showMissingOption(definitionId: string, message: string) {
+  const group = document.querySelector<HTMLElement>(
+    `fieldset[data-option-definition-id="${CSS.escape(definitionId)}"]`,
+  );
+  const note = group?.querySelector<HTMLElement>(".option-missing-message");
+  if (!note) return;
+  note.textContent = message;
+  note.classList.toggle("hidden", !message);
+  if (message) {
+    group!.scrollIntoView({ behavior: "smooth", block: "center" });
+    group!.querySelector<HTMLButtonElement>(".variant-option-btn")?.focus({ preventScroll: true });
+  }
+}
+
 function add(redirect: boolean) {
   if (!cache.container || !state.productPricing) return;
-  if (state.unavailableRequestedVariant)
-    return showToast(
-      "The requested option is out of stock. Choose another option.",
-      "error",
-    );
   const validation = validateSelection(
     state.selection,
     state.options,
     state.variants,
   );
+  if (validation.missingOption) {
+    return showMissingOption(
+      validation.missingOption.id,
+      formatCheckoutLanguageText(cache.actions?.dataset.chooseOptionText || "{option}", {
+        option: validation.missingOption.name,
+      }),
+    );
+  }
   if (!validation.valid || !validation.variant)
-    return showToast(validation.error || "Please select options", "error");
-  const quantity = Number.parseInt(cache.quantity?.value || "1", 10);
+    return showError(validation.error || "That option combination is unavailable.");
+  const quantity = readQuantity();
   const pricing = calculateVariantPrice(state.productPricing, {
     price: validation.variant.price,
     discountType: validation.variant.discountType,
@@ -533,20 +544,14 @@ function add(redirect: boolean) {
     freeDelivery: cache.container.dataset.productFreeDelivery === "true",
   });
   if (!cartData.valid || !cartData.data)
-    return showToast(
-      cartData.errors[0] || "Unable to add this product",
-      "error",
-    );
+    return showError(cartData.errors[0] || "Unable to add this product");
   const added = addToCart({
     ...cartData.data,
     variantId: validation.variant.id,
     options: selectedCartOptions(validation.variant),
   });
   if (!added)
-    return showToast(
-      "This product option could not be added. Please refresh and try again.",
-      "error",
-    );
+    return showError("This product option could not be added. Please refresh and try again.");
   const product = extractProductDataFromDOM(cache.container);
   if (product)
     trackProductAddToCart({
@@ -554,25 +559,18 @@ function add(redirect: boolean) {
       variant: convertVariantToAnalyticsData(validation.variant),
       quantity,
     });
-  showToast("Added to cart", "success");
   if (redirect) window.location.href = "/cart";
-  else {
-    if (window.innerWidth < 768) window.scrollTo(0, 0);
-    document.dispatchEvent(new CustomEvent("open-cart"));
-  }
+  else document.dispatchEvent(new CustomEvent("open-cart"));
 }
 
-function showToast(message: string, type: "success" | "error") {
-  const config = TOAST_CONFIG.variants[type];
-  const element = document.createElement("div");
-  element.className = `${TOAST_CONFIG.container} ${config.bg} ${config.border} ${config.text} text-sm font-medium`;
+/** A problem with the purchase stays next to the buttons until the next try. */
+function showError(message: string) {
+  const existing = cache.actions?.querySelector<HTMLElement>("[data-product-action-error]");
+  existing?.remove();
+  const element = document.createElement("p");
+  element.dataset.productActionError = "";
+  element.className = "rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive";
   element.textContent = message;
-  element.setAttribute("role", type === "error" ? "alert" : "status");
-  if (cache.actions) {
-    cache.actions.insertBefore(element, cache.actions.firstChild);
-  } else {
-    element.classList.add("fixed", "inset-x-4", "top-4", "z-50", "mx-auto", "max-w-md", "shadow-lg");
-    document.body.appendChild(element);
-  }
-  setTimeout(() => element.remove(), 3000);
+  element.setAttribute("role", "alert");
+  cache.actions?.insertBefore(element, cache.actions.firstChild);
 }

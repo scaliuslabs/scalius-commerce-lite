@@ -11,6 +11,7 @@ vi.mock("@scalius/shared/request-origin-guard", () => ({
 }));
 
 import { requestRuntime } from "@/lib/api/runtime";
+import { getOrderReceiptCookieName, getOrderReceiptFinalizeCookieName } from "@/lib/order-receipt-cookie";
 import { POST } from "../../../../pages/api/auth/logout";
 
 beforeEach(() => {
@@ -82,5 +83,33 @@ describe("logout proxy backend revocation", () => {
     expect(response.status).toBe(200);
     expect(httpFetch).not.toHaveBeenCalled();
     expect(response.headers.get("Set-Cookie")).toContain("cs_tok=; Max-Age=0");
+  });
+
+  it("expires every receipt on this device and its checkout marker, so a shared phone shows no previous buyer", async () => {
+    vi.stubEnv("DEV", false);
+    mocks.rejectCrossOrigin = false;
+    const receiptA = getOrderReceiptCookieName("JJEHCFQ3C1JJ35GX");
+    const receiptB = getOrderReceiptCookieName("order/with spaces");
+
+    const response = await POST({
+      request: new Request("https://storefront.example.test/api/auth/logout", {
+        method: "POST",
+        headers: {
+          Cookie: `cs_tok=session; ${receiptA}=token-a; theme=dark; ${receiptB}=token-b`,
+          Origin: "https://storefront.example.test",
+        },
+      }),
+    } as never);
+
+    const cleared = response.headers.getSetCookie();
+    expect(cleared).toEqual([
+      "cs_tok=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax; Secure",
+      "cs_auth=; Max-Age=0; Path=/; SameSite=Lax; Secure",
+      `${receiptA}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`,
+      `${getOrderReceiptFinalizeCookieName("JJEHCFQ3C1JJ35GX")}=; Max-Age=0; Path=/order-success; HttpOnly; Secure; SameSite=Lax`,
+      `${receiptB}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`,
+      `${getOrderReceiptFinalizeCookieName("order/with spaces")}=; Max-Age=0; Path=/order-success; HttpOnly; Secure; SameSite=Lax`,
+    ]);
+    expect(cleared.join("\n")).not.toMatch(/token-|theme/);
   });
 });

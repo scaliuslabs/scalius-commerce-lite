@@ -5,7 +5,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider, fraudLookupWithActiveProvider, getFraudProviderUrlIssue } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
 import { FRAUD_CHECK_PROVIDER_TYPES } from "@scalius/core/modules/fraud-checker/provider";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../utils/encryption-key";
-import { ValidationError } from "../../utils/api-error";
+import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
@@ -326,6 +326,8 @@ const lookupSchema = z.object({
 });
 
 const lookupResponseSchema = z.object({
+    /** False when no courier fraud-check service is connected: a state, not an error. */
+    configured: z.boolean(),
     total_parcels: z.number().optional(),
     total_delivered: z.number().optional(),
     total_cancel: z.number().optional(),
@@ -360,11 +362,20 @@ const lookupRoute = createRoute({
 app.openapi(lookupRoute, async (c) => {
     const db = c.get("db");
     const { phone } = c.req.valid("json");
-    const result = await fraudLookupWithActiveProvider(db, phone, getCredentialEncryptionKey(c.env as Record<string, unknown>));
-    return ok(c, projectFraudLookupResult(
-        result.data as Record<string, unknown> | undefined,
-        result.riskLevel,
-    ));
+    let result: Awaited<ReturnType<typeof fraudLookupWithActiveProvider>>;
+    try {
+        result = await fraudLookupWithActiveProvider(db, phone, getCredentialEncryptionKey(c.env as Record<string, unknown>));
+    } catch (error: unknown) {
+        if (error instanceof NotFoundError) return ok(c, { configured: false });
+        throw error;
+    }
+    return ok(c, {
+        configured: true,
+        ...projectFraudLookupResult(
+            result.data as Record<string, unknown> | undefined,
+            result.riskLevel,
+        ),
+    });
 });
 
 export { app as adminFraudCheckerRoutes };

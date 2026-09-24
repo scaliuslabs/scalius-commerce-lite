@@ -5,12 +5,16 @@ import { PAYMENT_WEBHOOK_PROVIDERS, type WebhookEventStatus } from "./webhook-id
 
 const PAYMENT_WEBHOOK_ISSUE_STATUSES = ["failed", "manual_reconciliation"] as const satisfies readonly WebhookEventStatus[];
 const MAX_PAYMENT_WEBHOOK_ISSUES_PER_ORDER = 10;
+/** Why a payment update needs attention, as a stable code the dashboard words in its own language. */
+export const PAYMENT_WEBHOOK_ISSUE_REASONS = ["manual_reconciliation", "stale", "dead_letter", "failed"] as const;
+export type PaymentWebhookIssueReason = (typeof PAYMENT_WEBHOOK_ISSUE_REASONS)[number];
 
 export interface PaymentWebhookIssue {
   id: string;
   provider: string;
   eventType: string;
   status: (typeof PAYMENT_WEBHOOK_ISSUE_STATUSES)[number];
+  reason: PaymentWebhookIssueReason;
   message: string;
   error: string | null;
   queueType: string | null;
@@ -67,6 +71,7 @@ export function formatPaymentWebhookIssue(row: PaymentWebhookIssueRow): PaymentW
     provider: row.provider,
     eventType: row.eventType,
     status: row.status === "manual_reconciliation" ? "manual_reconciliation" : "failed",
+    reason: paymentWebhookIssueReason(row.status, parsed),
     message: buildPaymentWebhookIssueMessage(row.status, parsed),
     error: parsed.error ?? null,
     queueType: parsed.queueType ?? null,
@@ -94,6 +99,13 @@ function parseWebhookResult(result: string | null): ParsedWebhookResult {
 
 function readString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
+function paymentWebhookIssueReason(status: string, result: ParsedWebhookResult): PaymentWebhookIssueReason {
+  if (status === "manual_reconciliation") return "manual_reconciliation";
+  if (result.reason === "stale_queued_payment_webhook") return "stale";
+  if (result.reason === "payment_events_dlq") return "dead_letter";
+  return "failed";
 }
 
 function buildPaymentWebhookIssueMessage(status: string, result: ParsedWebhookResult): string {

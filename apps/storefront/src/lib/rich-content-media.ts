@@ -119,6 +119,22 @@ function getImagePlan(isPriorityImage: boolean) {
 }
 
 /**
+ * The first image in rich HTML at a share-sized rendition: the share image
+ * (og:image, BlogPosting image) of content without its own featured image.
+ */
+export function firstRichContentImageUrl(
+  html: string | null | undefined,
+  width: number,
+): string | null {
+  for (const [, attrs] of (html ?? "").matchAll(IMG_TAG_RE)) {
+    const srcMatch = attrs?.match(SRC_ATTR_RE);
+    const src = srcMatch ? readAttributeValue(srcMatch).trim() : "";
+    if (!shouldSkipImage(src)) return mediaImageUrl(src, width) || null;
+  }
+  return null;
+}
+
+/**
  * Serves pre-generated renditions for images inside admin-authored rich HTML.
  * Attribute parsing is deliberately narrow: it only manages image loading
  * attributes and preserves the rest of the original tag untouched. Images

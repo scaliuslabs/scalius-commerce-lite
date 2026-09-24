@@ -32,6 +32,21 @@ describe("catalog sorting", () => {
     );
   });
 
+  it("keeps the search page's default relevance order out of the URL", () => {
+    document.body.innerHTML = `
+      <select data-catalog-sort data-list-pathname="/search" data-default-sort="relevance"
+        data-current-filters='{"q":"bag","sortBy":"price-asc"}'>
+        <option value="relevance" selected>Best match</option>
+      </select>
+    `;
+    setupCatalogSorts();
+
+    document.querySelector("select")!.dispatchEvent(new Event("change"));
+
+    expect(window.location.pathname).toBe("/search");
+    expect(window.location.search).toBe("?q=bag");
+  });
+
   it("binds each rendered select only once", () => {
     setupCatalogSorts();
     setupCatalogSorts();

@@ -27,7 +27,7 @@ Cloudflare Email Service is the native/default option. Do not add another paid/e
 Category `email` keys:
 
 - `email_provider` -- `cloudflare` or `resend`.
-- `email_sender` -- default From address, falling back to `noreply@example.com` at runtime.
+- `email_sender` -- default From address, falling back to `noreply@example.com` at runtime. Buyer emails pass `fromName` (the store name); Cloudflare and Mailpit receive it as a separate name field and Resend as a quoted `"Name" <address>`.
 - `resend_api_key` -- encrypted Resend key. Runtime reads use strict credential resolution with the dedicated `CREDENTIAL_ENCRYPTION_KEY`; unreadable ciphertext returns `hasResendApiKey=false` instead of falling through to Resend with ciphertext. Writes of real keys must require `CREDENTIAL_ENCRYPTION_KEY`.
 
 Admin API:

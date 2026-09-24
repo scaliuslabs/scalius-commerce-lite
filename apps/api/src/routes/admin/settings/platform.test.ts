@@ -6,13 +6,13 @@ import { PLATFORM_READINESS_FIX } from "@scalius/shared/platform-config";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-  getPlatformSettings: vi.fn(),
+  getPlatformSettingsDocument: vi.fn(),
   savePlatformSettings: vi.fn(),
   bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings/platform-settings.service", () => ({
-  getPlatformSettings: mocks.getPlatformSettings,
+  getPlatformSettingsDocument: mocks.getPlatformSettingsDocument,
   savePlatformSettings: mocks.savePlatformSettings,
 }));
 
@@ -49,8 +49,8 @@ function createTestApp(options: { platformConfig?: typeof EFFECTIVE | undefined 
   } as unknown as Env;
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 
-  mocks.getPlatformSettings.mockResolvedValue(STORED);
-  mocks.savePlatformSettings.mockResolvedValue(STORED);
+  mocks.getPlatformSettingsDocument.mockResolvedValue({ value: STORED, revision: 4 });
+  mocks.savePlatformSettings.mockResolvedValue({ value: STORED, revision: 5 });
   mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
   app.onError((error, c) => {
@@ -71,7 +71,7 @@ function putJson(app: OpenAPIHono<{ Bindings: Env }>, env: Env, body: unknown) {
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ expectedRevision: 4, ...(body as object) }),
     },
     env,
   );
@@ -90,11 +90,12 @@ describe("admin platform settings", () => {
 
       expect(response.status).toBe(200);
       expect(response.headers.get("Cache-Control")).toBe("private, no-store");
-      expect(mocks.getPlatformSettings).toHaveBeenCalledWith(db);
+      expect(mocks.getPlatformSettingsDocument).toHaveBeenCalledWith(db);
       await expect(response.json()).resolves.toEqual({
         success: true,
         data: {
           ...STORED,
+          revision: 4,
           readiness: {
             status: "incomplete",
             issues: [
@@ -131,10 +132,9 @@ describe("admin platform settings", () => {
 
     it("reports complete readiness once all four origins are stored", async () => {
       const { app, env } = createTestApp();
-      mocks.getPlatformSettings.mockResolvedValue({
-        ...STORED,
-        apiUrl: "https://api.example.com",
-        mediaUrl: "https://cdn.example.com",
+      mocks.getPlatformSettingsDocument.mockResolvedValue({
+        value: { ...STORED, apiUrl: "https://api.example.com", mediaUrl: "https://cdn.example.com" },
+        revision: 4,
       });
 
       const response = await app.request("/api/v1/admin/settings/platform", { method: "GET" }, env);
@@ -152,7 +152,7 @@ describe("admin platform settings", () => {
         apiUrl: "https://api.example.com",
         mediaUrl: "https://cdn.example.com",
       };
-      mocks.savePlatformSettings.mockResolvedValue(saved);
+      mocks.savePlatformSettings.mockResolvedValue({ value: saved, revision: 5 });
 
       const response = await putJson(app, env, {
         apiUrl: "https://api.example.com",
@@ -164,7 +164,7 @@ describe("admin platform settings", () => {
       expect(mocks.savePlatformSettings).toHaveBeenCalledWith(db, {
         apiUrl: "https://api.example.com",
         mediaUrl: "https://cdn.example.com",
-      }, cache);
+      }, cache, { expectedRevision: 4 });
       expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
       );
       // The response reflects the persisted state, not the request-time env.
@@ -172,6 +172,7 @@ describe("admin platform settings", () => {
         success: true,
         data: {
           ...saved,
+          revision: 5,
           readiness: { status: "ready", issues: [], missing: [] },
           effective: {
             storefrontUrl: "https://shop.example.com",
@@ -198,7 +199,7 @@ describe("admin platform settings", () => {
           localLoginDisabled: false,
         },
       };
-      mocks.savePlatformSettings.mockResolvedValue(saved);
+      mocks.savePlatformSettings.mockResolvedValue({ value: saved, revision: 5 });
 
       const response = await putJson(app, env, {
         dashboardUrl: "https://shop.example.com/ops/dashboard",
@@ -212,7 +213,7 @@ describe("admin platform settings", () => {
         dashboardUrl: "https://shop.example.com/ops/dashboard",
         setupTokenRequired: true,
         identityHandoff: { enabled: true, issuer: "https://idp.example.com", audience: "scalius:store-1" },
-      }, expect.anything());
+      }, expect.anything(), { expectedRevision: 4 });
       expect(body.data.dashboardBasePath).toBe("/ops/dashboard");
       expect(body.data.identityHandoff).toEqual(saved.identityHandoff);
     });
@@ -229,7 +230,7 @@ describe("admin platform settings", () => {
       expect(mocks.savePlatformSettings).toHaveBeenCalledWith(db, {
         customerAuthCookieDomain: "",
         corsAllowedOrigins: [],
-      }, expect.anything());
+      }, expect.anything(), { expectedRevision: 4 });
     });
 
     it.each([

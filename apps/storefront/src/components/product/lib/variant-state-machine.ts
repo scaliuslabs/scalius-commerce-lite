@@ -91,23 +91,26 @@ export function getVariantOptionAvailabilityMap(
   return result;
 }
 
+/**
+ * Shopify's "selected or first available variant": the first purchasable SKU in
+ * the merchant's option order. Nothing is selected when every SKU is sold out.
+ */
 export function createInitialSelection(
   options: ProductOptionDefinition[],
   variants: Variant[],
 ): VariantSelection {
-  const selection: VariantSelection = {};
-  for (const option of options) {
-    if (option.values.length !== 1) continue;
-    const valueId = option.values[0]!.id;
-    const availability = getVariantOptionAvailabilityMap(
-      variants,
-      option.id,
-      [valueId],
-      selection,
-    ).get(valueId);
-    if (availability === "available") selection[option.id] = valueId;
-  }
-  return selection;
+  const rank = (variant: Variant) => {
+    const values = selectedValueMap(variant);
+    return options.map((option) => option.values.findIndex((value) => value.id === values[option.id]));
+  };
+  const firstAvailable = variants
+    .filter(isVariantPurchasable)
+    .map((variant) => ({ variant, rank: rank(variant) }))
+    .sort((a, b) => {
+      for (let i = 0; i < a.rank.length; i += 1) if (a.rank[i] !== b.rank[i]) return a.rank[i]! - b.rank[i]!;
+      return 0;
+    })[0]?.variant;
+  return firstAvailable ? selectedValueMap(firstAvailable) : {};
 }
 
 export function reconcileSelectionForValue(
@@ -131,9 +134,9 @@ export function validateSelection(
   selection: VariantSelection,
   options: ProductOptionDefinition[],
   variants: Variant[],
-): { valid: boolean; error?: string; variant?: Variant } {
+): { valid: boolean; error?: string; variant?: Variant; missingOption?: ProductOptionDefinition } {
   const missing = options.find((option) => !selection[option.id]);
-  if (missing) return { valid: false, error: `Select ${missing.name}.` };
+  if (missing) return { valid: false, error: `Select ${missing.name}.`, missingOption: missing };
   const resolved = resolveExactVariantSelection(variants, selection)?.variant;
   if (!resolved) return { valid: false, error: "That option combination is unavailable." };
   if (!isVariantPurchasable(resolved)) return { valid: false, error: "That option combination is out of stock." };

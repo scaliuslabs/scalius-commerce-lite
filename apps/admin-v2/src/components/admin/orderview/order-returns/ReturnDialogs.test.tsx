@@ -11,6 +11,7 @@ import { ReceiveReturnDialog } from "./ReceiveReturnDialog";
 
 const mocks = vi.hoisted(() => ({ approve: vi.fn(), receive: vi.fn() }));
 vi.mock("~/lib/api-mutations/orders", () => ({
+  orderErrorMessage: (error: Error) => error.message,
   useApproveOrderReturn: () => ({ mutate: mocks.approve, isPending: false }),
   useReceiveOrderReturn: () => ({ mutate: mocks.receive, isPending: false }),
 }));
@@ -65,11 +66,28 @@ describe("return dialogs", () => {
     const name = "Shirt · M";
     await act(async () => setNumber(input(en["returns.receivedQty"].replace("{name}", name)), "3"));
     await act(async () => setNumber(input(en["returns.restockQty"].replace("{name}", name)), "1"));
-    await act(async () => button(en["returns.receiveSummary"].replace("{received}", "3").replace("{restock}", "1").replace("{damaged}", "2")).click());
+    await act(async () => button(en["returns.receiveCount"].replace("{count}", "3")).click());
 
     const [payload] = mocks.receive.mock.calls[0]!;
     expect(payload.expectedVersion).toBe(4);
     expect(payload.lines).toEqual([{ lineId: "line_1", receivedQuantity: 3, restockQuantity: 1, damagedQuantity: 2 }]);
+  });
+
+  it("only receives untracked items, never asking to restock them", async () => {
+    const untracked = {
+      ...orderReturn,
+      lines: [{ ...orderReturn.lines[0]!, inventoryTracked: false }],
+    } as OrderReturnDto;
+    await act(async () => root.render(
+      <ReceiveReturnDialog orderReturn={untracked} itemsById={itemsById} open onOpenChange={() => undefined} />,
+    ));
+    const name = "Shirt · M";
+    expect(document.querySelector(`input[aria-label="${en["returns.restockQty"].replace("{name}", name)}"]`)).toBeNull();
+    await act(async () => setNumber(input(en["returns.receivedQty"].replace("{name}", name)), "2"));
+    await act(async () => button(en["returns.receiveCount"].replace("{count}", "2")).click());
+
+    const [payload] = mocks.receive.mock.calls[0]!;
+    expect(payload.lines).toEqual([{ lineId: "line_1", receivedQuantity: 2, restockQuantity: 0, damagedQuantity: 2 }]);
   });
 
   it("approves quantities without sending any stock change", async () => {

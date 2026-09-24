@@ -28,6 +28,7 @@ import type {
 } from "./types";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { fromMinor } from "@scalius/shared/money";
+import { formatOrderMoney } from "../orders/order-money";
 import { computePaymentStateAfterPayment } from "./payment-state";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 
@@ -65,12 +66,12 @@ export function validateCODCollectionDetails(
 ): NormalizedCodCollection {
   const currency = resolveOrderCurrencySnapshot(order);
   if (typeof params.collectedBy !== "string") {
-    throw new ValidationError("Collector name is required for COD collection.");
+    throw new ValidationError("Enter who collected the cash.");
   }
 
   const collectedBy = params.collectedBy.trim();
   if (!collectedBy) {
-    throw new ValidationError("Collector name is required for COD collection.");
+    throw new ValidationError("Enter who collected the cash.");
   }
 
   assertPositiveMinor(params.collectedAmountMinor);
@@ -82,7 +83,7 @@ export function validateCODCollectionDetails(
   if (params.collectedAmountMinor !== expectedAmountMinor) {
     const expectedAmount = fromMinor(expectedAmountMinor, currency.decimalPlaces);
     throw new ValidationError(
-      `COD collected amount must match the outstanding balance (${expectedAmount}).`,
+      `Record the full cash balance of ${formatOrderMoney(expectedAmountMinor, currency)}.`,
       { expectedAmount, collectedAmount: fromMinor(params.collectedAmountMinor, currency.decimalPlaces) },
     );
   }
@@ -435,6 +436,7 @@ export async function recordCODFailure(
       .set({
         codStatus: "failed",
         failureReason: params.reason,
+        failureNote: params.notes?.trim() || null,
         deliveryAttempts: sql`${codTracking.deliveryAttempts} + 1`,
         lastAttemptAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,

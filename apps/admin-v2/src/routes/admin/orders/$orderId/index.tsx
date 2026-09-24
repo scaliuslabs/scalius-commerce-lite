@@ -1,67 +1,43 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { OrderView } from "~/components/admin/OrderView";
 import { Button } from "~/components/ui/button";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
-import type {
-  DeliveryProviderRecord,
-} from "~/lib/api-query-options/delivery";
-import type { Order } from "~/components/admin/orderview/types";
+import type { DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
+import type { Order, OrderShipment, OrderTimestamp } from "~/components/admin/orderview/types";
 import {
   orderQueryOptions,
   orderShipmentsQueryOptions,
+  type OrderDetailDto,
+  type OrderShipmentDto,
 } from "~/lib/api-query-options/orders";
 import { deliveryProvidersQueryOptions } from "~/lib/api-query-options/delivery";
+import { isAdminApiNotFoundError } from "~/lib/admin-api-error";
 import {
   ORDER_DETAIL_PREFETCH_STALE_MS,
   prefetchOrderDetailQueries,
 } from "~/lib/order-detail-prefetch";
-import type {
-  OrderDetailDto,
-  OrderShipmentDto,
-} from "~/lib/api-query-options/orders";
-import type { OrderShipment, OrderTimestamp } from "~/components/admin/orderview/types";
+import { getOrderActionPermissions } from "~/lib/order-action-permissions";
+import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useHydrated } from "~/hooks/use-hydrated";
 import {
   resolveOrderOperationalReadState,
   type OrderOperationalReadState,
 } from "~/lib/order-operational-read-state";
 
-type ShipmentMetadata = Record<string, unknown> | string | null;
-
-function toOptionalString(value: string | null | undefined): string | undefined {
-  return value ?? undefined;
-}
-
-function toTimestamp(
-  value: unknown,
-  fallback: OrderTimestamp,
-): OrderTimestamp {
-  return typeof value === "string" || typeof value === "number" || value instanceof Date
-    ? value
-    : fallback;
-}
-
-function toMetadata(value: unknown): ShipmentMetadata {
-  if (value == null) return null;
-  if (typeof value === "string") return value;
-  if (typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return null;
-}
-
-function toOrderShipment(
-  shipment: OrderShipmentDto,
-  fallbackTimestamp: OrderTimestamp,
-): OrderShipment {
+function toOrderShipment(shipment: OrderShipmentDto, fallbackTimestamp: OrderTimestamp): OrderShipment {
   const raw = shipment as Record<string, unknown>;
-  const createdAt = toTimestamp(raw.createdAt, fallbackTimestamp);
-  const updatedAt = toTimestamp(raw.updatedAt, createdAt);
+  const createdAt = typeof raw.createdAt === "string" || typeof raw.createdAt === "number"
+    ? raw.createdAt
+    : fallbackTimestamp;
+  const updatedAt = typeof raw.updatedAt === "string" || typeof raw.updatedAt === "number"
+    ? raw.updatedAt
+    : createdAt;
+  const metadata = raw.metadata;
   return {
     id: shipment.id,
     orderId: shipment.orderId,
@@ -70,20 +46,17 @@ function toOrderShipment(
     providerName: shipment.providerName,
     externalId: shipment.externalId,
     trackingId: shipment.trackingId,
-    trackingUrl:
-      typeof raw.trackingUrl === "string" ? raw.trackingUrl : null,
-    courierName:
-      typeof raw.courierName === "string" ? raw.courierName : null,
+    trackingUrl: typeof raw.trackingUrl === "string" ? raw.trackingUrl : null,
+    courierName: typeof raw.courierName === "string" ? raw.courierName : null,
     status: shipment.status,
     rawStatus: shipment.rawStatus,
     note: typeof raw.note === "string" ? raw.note : null,
-    metadata: toMetadata(raw.metadata),
-    shipmentItems:
-      typeof raw.shipmentItems === "string" ? raw.shipmentItems : null,
-    shipmentAmount:
-      typeof raw.shipmentAmount === "number" ? raw.shipmentAmount : null,
-    isFinalShipment:
-      typeof raw.isFinalShipment === "boolean" ? raw.isFinalShipment : null,
+    metadata: typeof metadata === "string" || (metadata && typeof metadata === "object" && !Array.isArray(metadata))
+      ? metadata as OrderShipment["metadata"]
+      : null,
+    shipmentItems: typeof raw.shipmentItems === "string" ? raw.shipmentItems : null,
+    shipmentAmount: typeof raw.shipmentAmount === "number" ? raw.shipmentAmount : null,
+    isFinalShipment: typeof raw.isFinalShipment === "boolean" ? raw.isFinalShipment : null,
     createdAt,
     updatedAt,
     lastChecked: shipment.lastChecked ?? updatedAt,
@@ -94,72 +67,44 @@ function toOrderViewModel(
   order: OrderDetailDto,
   shipments: OrderShipmentDto[],
   deliveryProviders: DeliveryProviderRecord[],
-  operationalReads: {
-    shipments: OrderOperationalReadState;
-    deliveryProviders: OrderOperationalReadState;
-  },
+  operationalReads: Order["operationalReads"],
 ): Order {
   return {
-    id: order.id,
-    version: order.version,
-    customerName: order.customerName,
-    customerPhone: order.customerPhone,
-    customerEmail: order.customerEmail,
+    ...order,
     shippingAddress: order.shippingAddress ?? "",
     city: order.city ?? "",
     zone: order.zone ?? "",
-    area: order.area,
-    notes: order.notes,
-    discountAmount: order.discountAmount,
-    shippingCharge: order.shippingCharge,
-    status: order.status,
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-    items: order.items,
-    totalAmount: order.totalAmount,
-    currencyCode: order.currencyCode,
-    currencyDecimalPlaces: order.currencyDecimalPlaces,
-    subtotalAmountMinor: order.subtotalAmountMinor,
-    shippingAmountMinor: order.shippingAmountMinor,
-    shippingMethodId: order.shippingMethodId,
-    shippingMethodName: order.shippingMethodName,
-    shippingMethodDescription: order.shippingMethodDescription,
-    shippingMethodBaseAmountMinor: order.shippingMethodBaseAmountMinor,
-    shippingFeeWaived: order.shippingFeeWaived,
-    discountAmountMinor: order.discountAmountMinor,
-    taxAmountMinor: order.taxAmountMinor,
-    totalAmountMinor: order.totalAmountMinor,
-    taxLabel: order.taxLabel,
-    pricesIncludeTax: order.pricesIncludeTax,
-    promotion: order.promotion,
-    customerId: order.customerId,
-    cityName: toOptionalString(order.cityName),
-    zoneName: toOptionalString(order.zoneName),
-    areaName: order.areaName,
+    cityName: order.cityName ?? undefined,
+    zoneName: order.zoneName ?? undefined,
+    supportRequests: order.supportRequests ?? [],
     shipments: shipments.map((shipment) => toOrderShipment(shipment, order.createdAt)),
     deliveryProviders,
     operationalReads,
-    paymentMethod: order.paymentMethod,
-    paymentStatus: order.paymentStatus,
-    paidAmount: order.paidAmount,
-    balanceDue: order.balanceDue,
-    fulfillmentStatus: order.fulfillmentStatus,
-    refundAttempts: order.refundAttempts,
-    activeRefundOperation: order.activeRefundOperation,
-    shipmentRecovery: order.shipmentRecovery,
-    paymentRecovery: order.paymentRecovery,
-    supportRequests: order.supportRequests ?? [],
-    fullEditReadiness: order.fullEditReadiness,
-    amendmentReadiness: order.amendmentReadiness,
   };
 }
 
+function readState(query: { isLoading: boolean; isError: boolean; isFetching: boolean; data: unknown }, hydrated: boolean): OrderOperationalReadState {
+  return resolveOrderOperationalReadState({
+    hydrated,
+    loading: query.isLoading,
+    error: query.isError,
+    fetching: query.isFetching,
+    hasData: query.data !== undefined,
+  });
+}
+
 export const Route = createFileRoute("/admin/orders/$orderId/")({
-  loader: async ({ context: { queryClient }, params }) => {
-    await prefetchOrderDetailQueries(queryClient, params.orderId);
+  loader: async ({ context, params }) => {
+    const { canManageOrderShipments } = getOrderActionPermissions(
+      (permission) => context.isSuperAdmin || context.permissions.includes(permission),
+    );
+    const order = await prefetchOrderDetailQueries(context.queryClient, params.orderId, {
+      couriers: canManageOrderShipments,
+    });
+    return { name: formatOrderNumber(order.orderNumber, order.id) };
   },
-  head: ({ params }) => ({
-    meta: [{ title: `${translate(orderMessages, "order", { id: params.orderId })} | Scalius` }],
+  head: ({ loaderData }) => ({
+    meta: [{ title: `${loaderData?.name ?? ""} | Scalius` }],
   }),
   errorComponent: OrderDetailErrorComponent,
   component: OrderViewPage,
@@ -168,6 +113,7 @@ export const Route = createFileRoute("/admin/orders/$orderId/")({
 function OrderViewPage() {
   const { orderId } = Route.useParams();
   const isHydrated = useHydrated();
+  const { canManageOrderShipments } = useOrderActionPermissions();
   // Poll for webhook-driven updates (shipment status, payment confirmation)
   const { data: order } = useSuspenseQuery({
     ...orderQueryOptions(orderId),
@@ -180,63 +126,57 @@ function OrderViewPage() {
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
     refetchInterval: 30_000,
   });
+  // The courier list is only readable by staff who can book couriers.
   const providersQuery = useQuery({
     ...deliveryProvidersQueryOptions(),
-    enabled: isHydrated,
+    enabled: isHydrated && canManageOrderShipments,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
 
-  const fullOrder = useMemo(() => {
-    const hydratedShipments = isHydrated && Array.isArray(shipmentsQuery.data)
-      ? shipmentsQuery.data
-      : [];
-    const activeProviders = isHydrated && Array.isArray(providersQuery.data)
-      ? (providersQuery.data as DeliveryProviderRecord[]).filter((p) => p.isActive)
-      : [];
-    return toOrderViewModel(order, hydratedShipments, activeProviders, {
-      shipments: resolveOrderOperationalReadState({
-        hydrated: isHydrated,
-        loading: shipmentsQuery.isLoading,
-        error: shipmentsQuery.isError,
-        fetching: shipmentsQuery.isFetching,
-        hasData: shipmentsQuery.data !== undefined,
-      }),
-      deliveryProviders: resolveOrderOperationalReadState({
-        hydrated: isHydrated,
-        loading: providersQuery.isLoading,
-        error: providersQuery.isError,
-        fetching: providersQuery.isFetching,
-        hasData: providersQuery.data !== undefined,
-      }),
-    });
-  }, [
-    isHydrated,
+  const { data: shipments, isLoading: shipmentsLoading, isError: shipmentsError, isFetching: shipmentsFetching } = shipmentsQuery;
+  const { data: providers, isLoading: providersLoading, isError: providersError, isFetching: providersFetching } = providersQuery;
+  const fullOrder = useMemo(() => toOrderViewModel(
     order,
-    providersQuery.data,
-    providersQuery.isError,
-    providersQuery.isFetching,
-    providersQuery.isLoading,
-    shipmentsQuery.data,
-    shipmentsQuery.isError,
-    shipmentsQuery.isFetching,
-    shipmentsQuery.isLoading,
+    isHydrated && Array.isArray(shipments) ? shipments : [],
+    isHydrated && Array.isArray(providers)
+      ? (providers as DeliveryProviderRecord[]).filter((provider) => provider.isActive)
+      : [],
+    {
+      shipments: readState({ data: shipments, isLoading: shipmentsLoading, isError: shipmentsError, isFetching: shipmentsFetching }, isHydrated),
+      deliveryProviders: readState({ data: providers, isLoading: providersLoading, isError: providersError, isFetching: providersFetching }, isHydrated),
+    },
+  ), [
+    isHydrated, order,
+    shipments, shipmentsLoading, shipmentsError, shipmentsFetching,
+    providers, providersLoading, providersError, providersFetching,
   ]);
 
   return <OrderView order={fullOrder} />;
 }
 
+/** A missing order can't be retried; an unreachable server can. */
 function OrderDetailErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const t = useMessages(orderDetailMessages);
   const r = useMessages(resourceMessages);
+  const router = useRouter();
+  const notFound = isAdminApiNotFoundError(error);
+  const status = (error as { status?: unknown }).status;
+  const unreachable = !notFound && (typeof status !== "number" || status >= 500);
   return (
-    <section className="mx-auto max-w-xl space-y-4 rounded-lg border bg-card p-6">
+    <section className="mx-auto max-w-xl space-y-4 rounded-xl bg-card p-6 shadow-card">
       <div className="space-y-1">
-        <h1 className="text-heading-lg font-semibold">{t("loadFailed")}</h1>
-        {error.message ? <p className="text-body text-muted-foreground">{error.message}</p> : null}
+        <h1 className="text-heading-lg font-semibold">
+          {notFound ? t("notFound") : unreachable ? t("error.network") : t("loadFailed")}
+        </h1>
+        <p className="text-body text-muted-foreground">
+          {notFound ? t("notFoundHelp") : unreachable ? t("error.networkHelp") : error.message}
+        </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={reset}>{r("retry")}</Button>
-        <Button asChild variant="outline">
+        {notFound ? null : (
+          <Button type="button" onClick={() => { reset(); void router.invalidate(); }}>{r("retry")}</Button>
+        )}
+        <Button asChild variant={notFound ? "default" : "outline"}>
           <Link to="/admin/orders">{t("backToOrders")}</Link>
         </Button>
       </div>

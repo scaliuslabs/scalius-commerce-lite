@@ -4,17 +4,9 @@ import type { DateRange } from "react-day-picker";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { ORDER_STATUSES } from "@scalius/shared/order-state";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
-import { OrderStatus } from "~/lib/admin-order-status-policy";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
 import { formatDateTime, useMessages } from "~/i18n";
 import {
@@ -30,12 +22,9 @@ import {
   CLEARED_ORDER_FILTERS,
   countOrderFilters,
   FULFILLMENT_STATUSES,
-  orderFilterUpdates,
-  orderSearchUpdates,
   PAYMENT_METHODS,
   PAYMENT_RECOVERY_STATES,
   PAYMENT_STATUSES,
-  STATUS_GROUPS,
   type OrderListSearch,
 } from "./order-list-search";
 
@@ -47,17 +36,19 @@ const DateRangePickerWithPresets = lazy(() =>
 
 const ANY = "any";
 const SORT_OPTIONS = [
-  "updatedAt:desc",
   "createdAt:desc",
   "createdAt:asc",
+  "updatedAt:desc",
   "totalAmount:desc",
   "totalAmount:asc",
   "customerName:asc",
-  "status:asc",
 ] as const;
 
 interface OrderListToolbarProps {
   search: OrderListSearch;
+  /** The search term (kept in this tab's session, not the URL). */
+  term: string;
+  onSearch: (term: string) => void;
   onChange: (updates: Partial<OrderListSearch>) => void;
   selectedCount: number;
   bulkActions: ReactNode;
@@ -134,6 +125,8 @@ function DateRangeFilter({
 /** One row: search, Filters, sort and auto-refresh; the filter fields open below it. */
 export function OrderListToolbar({
   search,
+  term,
+  onSearch,
   onChange,
   selectedCount,
   bulkActions,
@@ -143,20 +136,15 @@ export function OrderListToolbar({
   const to = useMessages(orderMessages);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filterCount = countOrderFilters(search);
-  const filter = (patch: Partial<OrderListSearch>) => onChange(orderFilterUpdates(search, patch));
-  const statusValue = search.status
-    ? `status:${search.status}`
-    : search.statusGroup
-      ? `group:${search.statusGroup}`
-      : undefined;
+  const filter = (patch: Partial<OrderListSearch>) => onChange({ ...patch, page: 1 });
   const sortOptions: ReadonlyArray<(typeof SORT_OPTIONS)[number] | "relevance:desc"> =
-    search.search.trim() ? ["relevance:desc", ...SORT_OPTIONS] : SORT_OPTIONS;
+    term.trim() ? ["relevance:desc", ...SORT_OPTIONS] : SORT_OPTIONS;
 
   return (
     <div className="space-y-2 pb-2">
       <DataTableToolbar
-        searchValue={search.search}
-        onSearchChange={(value) => onChange(orderSearchUpdates(value, search))}
+        searchValue={term}
+        onSearchChange={onSearch}
         searchPlaceholder={t("searchPlaceholder")}
         selectedCount={selectedCount}
         bulkActions={bulkActions}
@@ -205,34 +193,12 @@ export function OrderListToolbar({
       {filtersOpen ? (
         <div id="order-filters" className="space-y-4 border-t pt-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <FilterSelect
-              label={t("orderStatus")}
-              value={statusValue}
-              onChange={(value) =>
-                filter({
-                  status: value?.startsWith("status:") ? value.slice(7) : undefined,
-                  statusGroup: value?.startsWith("group:")
-                    ? (value.slice(6) as OrderListSearch["statusGroup"])
-                    : undefined,
-                })
-              }
-            >
-              <SelectGroup>
-                <SelectLabel>{t("stage")}</SelectLabel>
-                {STATUS_GROUPS.map((group) => (
-                  <SelectItem key={group} value={`group:${group}`}>
-                    {t(`group.${group}`)}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-              <SelectGroup>
-                <SelectLabel>{t("exactStatus")}</SelectLabel>
-                {Object.values(OrderStatus).map((status) => (
-                  <SelectItem key={status} value={`status:${status}`}>
-                    {orderStatusLabel(to, status)}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
+            <FilterSelect label={t("orderStatus")} value={search.status} onChange={(status) => filter({ status })}>
+              {ORDER_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {orderStatusLabel(to, status)}
+                </SelectItem>
+              ))}
             </FilterSelect>
             <FilterSelect
               label={t("payment")}
@@ -287,13 +253,23 @@ export function OrderListToolbar({
             />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="order-filter-archived"
-                checked={search.archived}
-                onCheckedChange={(checked) => filter({ archived: checked === true })}
-              />
-              <Label htmlFor="order-filter-archived">{t("showArchived")}</Label>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="order-filter-open-request"
+                  checked={search.openRequest}
+                  onCheckedChange={(checked) => filter({ openRequest: checked === true })}
+                />
+                <Label htmlFor="order-filter-open-request">{t("openRequestFilter")}</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="order-filter-archived"
+                  checked={search.archived}
+                  onCheckedChange={(checked) => filter({ archived: checked === true })}
+                />
+                <Label htmlFor="order-filter-archived">{t("showArchived")}</Label>
+              </div>
             </div>
             {filterCount > 0 ? (
               <Button variant="ghost" onClick={() => onChange(CLEARED_ORDER_FILTERS)}>

@@ -10,6 +10,7 @@ import {
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { createListSearchValidator } from "~/lib/list-helpers";
+import { readListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -31,11 +32,11 @@ const validateCustomerSearch = createListSearchValidator(
   { sort: "updatedAt", limit: 20 },
 );
 
-function listQuery(search: ReturnType<typeof validateCustomerSearch>) {
+function listQuery(search: ReturnType<typeof validateCustomerSearch>, term: string) {
   return customersQueryOptions({
     page: search.page,
     limit: search.limit,
-    search: search.search || undefined,
+    search: term || undefined,
     sort: search.sort,
     order: search.order,
     trashed: search.trashed ? "true" : undefined,
@@ -45,7 +46,7 @@ function listQuery(search: ReturnType<typeof validateCustomerSearch>) {
 export const Route = createFileRoute("/admin/customers/")({
   validateSearch: validateCustomerSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps)),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, readListSearch("customers"))),
   head: () => ({ meta: [{ title: translate(customersMessages, "customers") }] }),
   component: CustomersPage,
   errorComponent: RouteErrorComponent,
@@ -60,6 +61,7 @@ async function runEach(rows: Customer[], call: (id: string) => Promise<unknown>)
 
 function CustomersPage() {
   const search = Route.useSearch();
+  const [term] = useListSearch("customers");
   const t = useMessages(customersMessages);
   const { fmt } = useCurrency();
   const { hasPermission } = usePermissions();
@@ -101,8 +103,9 @@ function CustomersPage() {
       title={t("customers")}
       actions={hasPermission(PERMISSIONS.CUSTOMERS_CREATE) ? <Button asChild><Link to="/admin/customers/new">{t("addCustomer")}</Link></Button> : null}
       search={search}
-      query={listQuery(search)}
-      pageQuery={(page, limit) => listQuery({ ...search, page, limit })}
+      list="customers"
+      query={listQuery(search, term)}
+      pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
       dataKey="customers"
       columns={columns}
       invalidate={[queryKeys.customers.all, queryKeys.dashboard.all]}

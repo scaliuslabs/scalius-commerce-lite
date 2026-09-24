@@ -61,6 +61,9 @@ function MenuEditor({ menuId }: { menuId: string }) {
   }, [deleted, navigate]);
   const nameChanged = name.trim() !== menu.name;
   const unpublished = menu.revision !== menu.publishedRevision;
+  // Item edits are kept on the server until saved, so they survive a reload: say so.
+  const [restored, setRestored] = useState(unpublished && menu.publishedRevision != null);
+  if (restored && !unpublished) setRestored(false);
 
   useSaveBar({
     label: menu.name,
@@ -160,6 +163,7 @@ function MenuEditor({ menuId }: { menuId: string }) {
 
       <SectionCard
         title={t("menuItems")}
+        description={restored ? t("restoredChanges") : undefined}
         action={
           <Button type="button" variant="outline" size="sm" onClick={() => setDialog({ itemId: "new" })}>
             <Plus /> {t("addMenuItem")}

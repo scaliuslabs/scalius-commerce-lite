@@ -62,6 +62,22 @@ describe("route error page", () => {
     expect(container.querySelector("h1")?.textContent).toBe("Couldn't reach Scalius");
   });
 
+  it("says Scalius isn't responding when the server answered with a gateway error, not that the connection is down", () => {
+    const reset = show(new AdminApiResponseError("API error: 502", 502));
+    expect(container.querySelector("h1")?.textContent).toBe("Scalius isn't responding");
+    expect(container.textContent).not.toContain("internet connection");
+    const buttons = [...container.querySelectorAll("button")];
+    expect(buttons.map((button) => button.textContent)).toEqual(["Try again"]);
+    act(() => buttons[0]!.click());
+    expect(reset).toHaveBeenCalledOnce();
+
+    // The browser itself says it's offline: that is the connection.
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    show(new AdminApiResponseError("API error: 502", 502));
+    expect(container.querySelector("h1")?.textContent).toBe("Couldn't reach Scalius");
+    onLine.mockRestore();
+  });
+
   it("treats a missing or forbidden record as a page you can leave, with a link home", () => {
     show(new AdminApiResponseError("Order not found", 404));
     expect(container.querySelector("h1")?.textContent).toBe("There's no page at this address");

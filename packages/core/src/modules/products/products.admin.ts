@@ -22,7 +22,8 @@ import {
     isFts5SearchEnabled,
     sanitizeFtsQuery,
 } from "../../search/fts5";
-import type { CreateProductInput, UpdateProductInput } from "./products.validation";
+import { createProductSchema, type CreateProductInput, type UpdateProductInput } from "./products.validation";
+import { DEFAULT_PRODUCT_CONDITION } from "@scalius/shared/product-condition";
 import { nanoid } from "nanoid";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { ProductWithDetails } from "./products.types";
@@ -53,6 +54,8 @@ import { normalizeOptionIdentity } from "./products.option-model";
 import {
     resolveNewVariantBarcode,
     rethrowProductVariantIdentityConstraint,
+    assertSkusFree,
+    readableDefaultSku,
 } from "./products.variants";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import {
@@ -584,6 +587,9 @@ export async function listProducts(db: Database, options: {
             .select({
                 productId: productVariants.productId,
                 count: sql<number>`count(${productVariants.id})`,
+                trackedCount: sql<number>`sum(CASE WHEN ${productVariants.trackInventory} THEN 1 ELSE 0 END)`,
+                onHand: sql<number>`sum(CASE WHEN ${productVariants.trackInventory} THEN ${productVariants.stock} ELSE 0 END)`,
+                hasSkuDiscount: sql<number>`max(CASE WHEN ${productVariants.discountBps} > 0 OR ${productVariants.discountAmountMinor} > 0 THEN 1 ELSE 0 END)`,
             })
             .from(productVariants)
             .where(
@@ -592,6 +598,13 @@ export async function listProducts(db: Database, options: {
                 ) AND ${productVariants.deletedAt} IS NULL`,
             )
             .groupBy(productVariants.productId),
+        // Trash only: SKUs with stock history keep a product from permanent delete.
+        db
+            .selectDistinct({ productId: productVariants.productId })
+            .from(productVariants)
+            .where(sql`${showTrashed ? sql`1` : sql`0`} = 1 AND ${productVariants.productId} IN (
+                SELECT CAST(value AS TEXT) FROM json_each(${productIdSet})
+            ) AND EXISTS (SELECT 1 FROM ${inventoryMovements} WHERE ${inventoryMovements.variantId} = ${productVariants.id})`),
         db
             .select({
                 productId: productMedia.productId,
@@ -616,17 +629,17 @@ export async function listProducts(db: Database, options: {
             .orderBy(productVariants.productId, asc(productVariants.createdAt)),
         selectProductMediaProjectionRows(db, agentSummary ? [] : productIds),
     ]);
-    const variantCounts = enrichmentResults[0] as { productId: string; count: number }[];
-    const mediaCounts = enrichmentResults[1] as { productId: string; count: number }[];
-    const productSkus = enrichmentResults[2] as { productId: string; sku: string }[];
-    const mediaProjectionRows = enrichmentResults[3] as ProductMediaProjectionRow[];
+    type VariantSummaryRow = { productId: string; count: number; trackedCount: number; onHand: number; hasSkuDiscount: number };
+    const variantCounts = enrichmentResults[0] as VariantSummaryRow[];
+    const productsWithStockHistory = new Set((enrichmentResults[1] as { productId: string }[]).map((row) => row.productId));
+    const mediaCounts = enrichmentResults[2] as { productId: string; count: number }[];
+    const productSkus = enrichmentResults[3] as { productId: string; sku: string }[];
+    const mediaProjectionRows = enrichmentResults[4] as ProductMediaProjectionRow[];
     const mediaByProduct = agentSummary
         ? new Map<string, ProductMediaProjection[]>()
         : resolveProductMediaProjectionRows(mediaProjectionRows);
 
-    const variantCountMap = new Map<string, number>(
-        variantCounts.map((vc: { productId: string; count: number }) => [vc.productId, vc.count]),
-    );
+    const variantSummaryMap = new Map(variantCounts.map((row) => [row.productId, row]));
 
     const mediaCountMap = new Map<string, number>(
         mediaCounts.map((ic: { productId: string; count: number }) => [ic.productId, ic.count]),
@@ -665,7 +678,15 @@ export async function listProducts(db: Database, options: {
         category: {
             name: product.categoryName || "Uncategorized",
         },
-        variantCount: variantCountMap.get(product.id) || 0,
+        variantCount: Number(variantSummaryMap.get(product.id)?.count ?? 0),
+        /** Tracked on-hand units across live SKUs; null when no SKU tracks quantity. */
+        onHand: Number(variantSummaryMap.get(product.id)?.trackedCount ?? 0) > 0
+            ? Number(variantSummaryMap.get(product.id)?.onHand ?? 0)
+            : null,
+        /** Some SKUs carry their own discount, so the product price isn't the whole story. */
+        hasVariantDiscount: Number(variantSummaryMap.get(product.id)?.hasSkuDiscount ?? 0) > 0,
+        /** Trash only: stock history keeps this product from permanent delete. */
+        hasStockHistory: productsWithStockHistory.has(product.id),
         mediaCount: mediaCountMap.get(product.id) || 0,
         primaryImage: primaryImageMap.get(product.id) || null,
         sku: skuMap.get(product.id) || undefined,
@@ -948,14 +969,23 @@ export async function createProduct(
 
     await assertActiveAttributeAssignments(db, data.attributes ?? []);
 
+    await assertSkusFree(db, data.optionMatrix
+        ? data.optionMatrix.variants.map((variant, index) => ({ sku: variant.sku, field: `optionMatrix.variants.${index}.sku` }))
+        : data.defaultSku?.sku ? [{ sku: data.defaultSku.sku, field: "defaultSku.sku" }] : []);
+
     const productId = "prod_" + nanoid();
     const decimalPlaces = await readStoreDecimalPlaces(db);
     const productPrice = catalogPriceColumns(data, decimalPlaces);
     const priceMinor = toMinor(data.price, decimalPlaces);
+    const baseDefaultVariant = defaultVariantValues(productId, priceMinor);
     const defaultVariant = {
-        ...defaultVariantValues(productId, priceMinor),
-        ...(data.defaultSku?.sku ? { sku: data.defaultSku.sku } : {}),
+        ...baseDefaultVariant,
+        sku: data.optionMatrix ? baseDefaultVariant.sku : data.defaultSku?.sku ?? await readableDefaultSku(db, data.name),
         trackInventory: data.defaultSku?.trackInventory ?? false,
+        weight: data.defaultSku?.weight ?? null,
+        ...(data.defaultSku?.barcode
+            ? resolveNewVariantBarcode(baseDefaultVariant.id, data.defaultSku.barcode, data.defaultSku.barcodeType)
+            : {}),
     };
     const mediaPlan = await validateProductMediaPlan(db, productId, data.media, false);
 
@@ -1793,4 +1823,199 @@ export async function bulkDeleteProducts(
             throw error;
         }
     }
+}
+
+export type ProductBulkChanges = { isActive?: boolean; categoryId?: string };
+
+/**
+ * Sets status and/or category on up to 90 products in one batch. Every claim
+ * is revision-guarded, so the whole change applies or none of it does.
+ * Activating requires a positive price on the product and every live SKU.
+ */
+export async function bulkUpdateProducts(
+    db: Database,
+    claims: ProductAggregateRevisionClaim[],
+    changes: ProductBulkChanges,
+): Promise<ProductAggregateRevisionResult[]> {
+    const ids = claims.map((claim) => claim.id);
+    if (ids.length === 0) throw new ValidationError("No product IDs provided");
+    if (new Set(ids).size !== ids.length) {
+        throw new ValidationError("Each product may appear only once in a bulk change.");
+    }
+    if (changes.isActive === undefined && changes.categoryId === undefined) {
+        throw new ValidationError("Choose what to change.");
+    }
+    if (changes.categoryId !== undefined) {
+        const category = await db
+            .select({ id: categories.id })
+            .from(categories)
+            .where(and(eq(categories.id, changes.categoryId), isNull(categories.deletedAt)))
+            .get();
+        if (!category) throw new ValidationError("That category no longer exists.", { field: "categoryId" });
+    }
+    if (changes.isActive) {
+        const unpriced = await db
+            .select({ id: products.id, name: products.name })
+            .from(products)
+            .where(and(
+                inArray(products.id, ids),
+                or(
+                    sql`${products.priceMinor} <= 0`,
+                    sql`EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.productId} = ${products.id} AND ${productVariants.deletedAt} IS NULL AND ${productVariants.priceMinor} <= 0)`,
+                ),
+            ));
+        if (unpriced.length > 0) {
+            throw new ValidationError(
+                `Add a price to ${unpriced[0]!.name}${unpriced.length > 1 ? ` and ${unpriced.length - 1} more` : ""} before making ${unpriced.length > 1 ? "them" : "it"} active.`,
+                { field: "isActive", products: unpriced },
+            );
+        }
+    }
+    const statements = claims.flatMap((claim) => [
+        buildProductAggregateRevisionGuard(db, claim.id, claim.expectedAggregateRevision),
+        db
+            .update(products)
+            .set({
+                ...(changes.isActive !== undefined ? { isActive: changes.isActive } : {}),
+                ...(changes.categoryId !== undefined ? { categoryId: changes.categoryId } : {}),
+                aggregateRevision: sql`${products.aggregateRevision} + 1`,
+                updatedAt: sql`unixepoch()`,
+            })
+            .where(and(eq(products.id, claim.id), isNull(products.deletedAt)))
+            .returning({ aggregateRevision: products.aggregateRevision }),
+    ]);
+    try {
+        const results = await safeBatch(db, statements as never) as unknown[];
+        return claims.map((_, index) => readProductAggregateRevisionResult(results[index * 2 + 1]));
+    } catch (error) {
+        if (isProductAggregateRevisionConflict(error)) {
+            const staleClaim = await findStaleProductAggregateRevisionClaim(db, claims, "active");
+            if (staleClaim) {
+                return rethrowProductAggregateRevisionConflictIfStale(
+                    db,
+                    staleClaim.id,
+                    staleClaim.expectedAggregateRevision,
+                    error,
+                );
+            }
+        }
+        throw error;
+    }
+}
+
+/** `${base}${suffix}` values that no SKU uses yet: BASE-COPY, then BASE-COPY-2 … */
+async function freeCopySkus(db: Database, skus: string[]): Promise<string[]> {
+    const stems = skus.map((sku) => `${sku.trim().slice(0, 90)}-COPY`);
+    const taken = new Set<string>();
+    for (let index = 0; index < stems.length; index += 40) {
+        const chunk = stems.slice(index, index + 40);
+        const rows = await db
+            .select({ sku: productVariants.sku })
+            .from(productVariants)
+            .where(or(...chunk.map((stem) => sql`lower(trim(${productVariants.sku})) = ${stem.toLowerCase()} OR lower(trim(${productVariants.sku})) LIKE ${`${stem.toLowerCase()}-%`}`)));
+        rows.forEach((row) => taken.add(row.sku.trim().toLowerCase()));
+    }
+    return stems.map((stem) => {
+        let candidate = stem;
+        for (let suffix = 2; taken.has(candidate.toLowerCase()); suffix += 1) candidate = `${stem}-${suffix}`;
+        taken.add(candidate.toLowerCase());
+        return candidate;
+    });
+}
+
+/**
+ * Copies a product as a new draft: text, pricing, media, attributes, extra
+ * sections and its options with every live variant. Copies start with no
+ * stock, new SKUs (…-COPY) and fresh generated barcodes, because stock,
+ * SKU and barcode identities belong to one sellable item only.
+ */
+export async function duplicateProduct(
+    db: Database,
+    id: string,
+    name: string,
+): Promise<{ id: string; aggregateRevision: number }> {
+    const source = await getProductDetails(db, id);
+    if (!source || source.deletedAt) throw new NotFoundError("Product not found");
+    if (!source.categoryId) throw new ValidationError("Choose a category for this product before copying it.");
+
+    let slug = `${source.slug.slice(0, 90)}-copy`;
+    const slugRows = await db
+        .select({ slug: products.slug })
+        .from(products)
+        .where(sql`${products.slug} = ${slug} OR ${products.slug} LIKE ${`${slug}-%`}`);
+    const slugs = new Set(slugRows.map((row) => row.slug));
+    for (let suffix = 2; slugs.has(slug); suffix += 1) slug = `${source.slug.slice(0, 90)}-copy-${suffix}`;
+
+    const readyMedia = source.media.filter((item) => item.status === "ready");
+    const mediaIdMap = new Map(readyMedia.map((item) => [item.id, `pmed_${nanoid()}`]));
+    const media = readyMedia.map((item, index) => ({
+        id: mediaIdMap.get(item.id)!,
+        mediaId: item.mediaId,
+        altText: item.contextualAltText ?? null,
+        isPrimary: readyMedia.some((entry) => entry.isPrimary) ? item.isPrimary : index === 0,
+    }));
+    const liveVariants = source.variants.filter((variant) => !variant.deletedAt);
+    const optionVariants = liveVariants.filter((variant) => !variant.isDefault);
+    const skus = await freeCopySkus(db, liveVariants.map((variant) => variant.sku));
+    const skuOf = new Map(liveVariants.map((variant, index) => [variant.id, skus[index]!]));
+
+    const input = createProductSchema.parse({
+        name: name.trim().slice(0, 100),
+        description: source.description,
+        price: source.price,
+        categoryId: source.categoryId,
+        isActive: false,
+        discountType: source.discountType === "flat" ? "flat" : "percentage",
+        discountPercentage: source.discountPercentage,
+        discountAmount: source.discountAmount,
+        freeDelivery: source.freeDelivery,
+        metaTitle: source.metaTitle,
+        metaDescription: source.metaDescription,
+        canonicalPath: null,
+        noIndex: source.noIndex,
+        excludeFromSitemap: source.excludeFromSitemap,
+        excludeFromProductFeed: source.excludeFromProductFeed,
+        productCondition: source.productCondition ?? DEFAULT_PRODUCT_CONDITION,
+        slug,
+        media,
+        attributes: source.attributes,
+        additionalInfo: source.additionalInfo.map((item) => ({ ...item, id: `prc_${nanoid()}` })),
+        ...(source.options.length > 0 && optionVariants.length > 0
+            ? {
+                optionMatrix: {
+                    options: source.options.map((option) => ({
+                        id: option.id,
+                        name: option.name,
+                        standardMapping: option.standardMapping,
+                        values: option.values.map((value) => ({ id: value.id, value: value.value })),
+                    })),
+                    variants: optionVariants.map((variant) => ({
+                        id: variant.id,
+                        selectedOptionValueIds: [...variant.selectedOptions]
+                            .sort((a, b) => a.position - b.position)
+                            .map((option) => option.optionValueId),
+                        imageId: variant.imageId ? mediaIdMap.get(variant.imageId) ?? null : null,
+                        sku: skuOf.get(variant.id)!,
+                        price: variant.price,
+                        stock: 0,
+                        trackInventory: variant.trackInventory,
+                        weight: variant.weight,
+                        barcode: null,
+                        barcodeType: null,
+                        discountType: variant.discountType === "flat" ? "flat" : "percentage",
+                        discountPercentage: variant.discountType === "flat" ? null : variant.discountPercentage,
+                        discountAmount: variant.discountType === "flat" ? variant.discountAmount : null,
+                    })),
+                },
+            }
+            : {
+                defaultSku: {
+                    sku: liveVariants[0] ? skuOf.get(liveVariants[0].id) : undefined,
+                    trackInventory: liveVariants[0]?.trackInventory ?? false,
+                    stock: 0,
+                    weight: liveVariants[0]?.weight ?? null,
+                },
+            }),
+    });
+    return createProduct(db, input);
 }

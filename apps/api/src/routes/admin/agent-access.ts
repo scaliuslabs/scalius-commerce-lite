@@ -77,17 +77,22 @@ function assertSuperAdmin(c: {
     return { id: principal.ownerUserId };
   }
   const user = c.get("user");
-  const session = c.get("session");
-  if (
-    user.isSuperAdmin !== true ||
-    user.twoFactorEnabled !== true ||
-    session?.twoFactorVerified !== true
-  ) {
+  if (!canManageFromSession(c)) {
     throw new ForbiddenError(
-      "Agent access management requires a 2FA-verified Super Admin session",
+      "Only the store owner can manage app access, with two-step verification turned on.",
     );
   }
   return user;
+}
+
+/** A Super Admin's dashboard session with two-step verification done. */
+function canManageFromSession(c: {
+  get(key: "user"): { isSuperAdmin?: boolean; twoFactorEnabled?: boolean };
+  get(key: "session"): { twoFactorVerified?: boolean | null } | undefined;
+}): boolean {
+  return c.get("user").isSuperAdmin === true &&
+    c.get("user").twoFactorEnabled === true &&
+    c.get("session")?.twoFactorVerified === true;
 }
 
 function requirePepper(env: Env): string {
@@ -191,7 +196,7 @@ const listConnectionsRoute = createRoute({
   method: "get", path: "/connections", tags: ["Admin - Agent Access"],
   operationId: "dashboard.agent_access.connections.list",
   summary: "List agent connections",
-  description: "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes.",
+  description: "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes. `canManage` says whether this caller may create, change or revoke access (a Super Admin with two-step verification done), so the dashboard asks for two-step verification before offering those forms.",
   request: { query: pageQuerySchema.extend({
     status: z.enum(["current", "pending", "active", "revoked", "expired"]).optional(),
     resource: resourceSchema.optional(),
@@ -201,10 +206,11 @@ const listConnectionsRoute = createRoute({
 });
 app.openapi(listConnectionsRoute, async (c) => {
   const principal = c.get("agentPrincipal");
-  return ok(c, await listAgentConnections(c.get("db"), {
+  const page = await listAgentConnections(c.get("db"), {
     ...c.req.valid("query"),
     ...getAgentConnectionListScope(principal),
-  }));
+  });
+  return ok(c, { ...page, canManage: principal ? principal.isSuperAdmin : canManageFromSession(c) });
 });
 
 const getConnectionRoute = createRoute({

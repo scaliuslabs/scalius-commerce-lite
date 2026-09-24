@@ -15,6 +15,7 @@ import {
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
+import { backfillMissingMediaVariants } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
@@ -40,6 +41,8 @@ export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
 export const EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
+/** Each image costs one R2 read, one Images info call and up to six transforms. */
+export const MEDIA_RENDITION_BACKFILL_LIMIT = 4;
 
 type ScheduledMaintenanceMetadata = {
   cron?: string;
@@ -414,5 +417,20 @@ async function runScheduledMaintenanceInner(
   );
   if (handoffEventsPruned > 0) {
     console.log(`[scheduled] Identity handoff audit prune: deleted=${handoffEventsPruned}`);
+  }
+
+  // Images that still publish only their original get WebP renditions a few
+  // at a time. Rendition URLs replace the published image URLs, so one
+  // generation bump per run that saved any. Local dev binds no IMAGES.
+  const images = env.IMAGES;
+  if (images) {
+    const renditions = await timed("media_rendition_backfill", () =>
+      backfillMissingMediaVariants(db, env.BUCKET, images, { limit: MEDIA_RENDITION_BACKFILL_LIMIT }),
+    );
+    if (renditions.generated > 0) {
+      await timed("media_rendition_cache_generation", () =>
+        bumpCacheGeneration({ env, executionCtx }),
+      );
+    }
   }
 }

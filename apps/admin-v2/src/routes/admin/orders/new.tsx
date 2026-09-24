@@ -10,7 +10,7 @@ export const Route = createFileRoute("/admin/orders/new")({
   loader: ({ context: { queryClient } }) =>
     queryClient.ensureQueryData(deliveryLocationsQueryOptions({ type: "city" })),
   head: () => ({
-    meta: [{ title: `${translate(orderFormMessages, "createOrder")} | Scalius Admin` }],
+    meta: [{ title: `${translate(orderFormMessages, "createOrder")} | Scalius` }],
   }),
   errorComponent: OrderFormRouteError,
   component: NewOrderPage,

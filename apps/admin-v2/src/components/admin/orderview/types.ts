@@ -2,6 +2,7 @@ import type {
   DeliveryProviderRecord,
 } from "~/lib/api-query-options/delivery";
 import type { OrderOperationalReadState } from "@/lib/order-operational-read-state";
+import type { OrderShipmentRecoveryReason } from "@scalius/core/modules/orders/orders.types";
 
 export type OrderTimestamp = Date | string | number;
 export type ShipmentMetadata = Record<string, unknown> | string | null;
@@ -16,6 +17,9 @@ export interface OrderItem {
   productImage: string | null;
   variantLabel: string | null;
   fulfillmentStatus?: string | null;
+  /** Units already handed to a courier. */
+  shippedQuantity?: number;
+  inventoryTracked?: boolean;
   unitPriceMinor?: number | null;
   lineSubtotalMinor?: number | null;
   discountAmountMinor?: number | null;
@@ -33,8 +37,6 @@ export interface OrderRefundAttempt {
   providerStatus: string | null;
   active: boolean;
   severity: "info" | "success" | "warning" | "danger";
-  label: string;
-  message: string;
   createdAt: OrderTimestamp | null;
   updatedAt: OrderTimestamp | null;
   nextProbeAt: OrderTimestamp | null;
@@ -58,8 +60,6 @@ export interface ActiveRefundOperation {
   active: true;
   status: string;
   severity: "info" | "success" | "warning" | "danger";
-  label: string;
-  message: string;
   amount: number;
   currency: string;
   gateway: string;
@@ -77,10 +77,10 @@ export interface ActiveRefundOperation {
 
 export interface ShipmentRecovery {
   state: "none" | "creating" | "needs_attention" | "failed";
+  /** Stable code the dashboard words in its own language (see `shipmentRecoveryCopy`). */
+  reason: OrderShipmentRecoveryReason;
   severity: "info" | "warning" | "danger";
   activeLock: boolean;
-  label: string;
-  message: string | null;
   shipmentId: string | null;
   status: string | null;
   providerType: string | null;
@@ -93,8 +93,6 @@ export interface ShipmentRecovery {
 
 export interface PaymentRecovery {
   state: "none" | "awaiting_payment" | "processing" | "needs_attention";
-  label: string;
-  message: string | null;
   gateway: string | null;
   paymentType: string | null;
   status: string | null;
@@ -156,14 +154,7 @@ export interface Order {
   totalAmountMinor?: number | null;
   taxLabel?: string | null;
   pricesIncludeTax?: boolean | null;
-  promotion?: {
-    id: string;
-    revision: number;
-    evaluatorVersion: number;
-    method: "automatic" | "code";
-    name: string;
-    code: string | null;
-  } | null;
+  discounts: OrderDiscount[];
   customerId: string | null;
   cityName?: string;
   zoneName?: string;
@@ -186,14 +177,32 @@ export interface Order {
   shipmentRecovery?: ShipmentRecovery;
   paymentRecovery?: PaymentRecovery;
   supportRequests?: OrderSupportRequest[];
-  fullEditReadiness: {
-    allowed: boolean;
-    reason: string | null;
+  orderNumber: number | null;
+  archivedAt: OrderTimestamp | null;
+  /** Value of received returns not refunded yet. */
+  refundDue: number;
+  refundedAmount: number;
+  editReadiness: {
+    items: OrderEditState;
+    details: OrderEditState;
   };
-  amendmentReadiness?: {
-    allowed: boolean;
-    reason: string | null;
-  };
+}
+
+export interface OrderDiscount {
+  promotionId: string;
+  name: string;
+  code: string | null;
+  method: "automatic" | "code";
+  amount: number;
+}
+
+export type OrderEditLockReason =
+  | "shipped" | "closed" | "paid" | "online_payment" | "discount"
+  | "history" | "inventory" | "archived" | "busy" | "unavailable";
+
+export interface OrderEditState {
+  allowed: boolean;
+  reason: OrderEditLockReason | null;
 }
 
 export interface OrderShipment {

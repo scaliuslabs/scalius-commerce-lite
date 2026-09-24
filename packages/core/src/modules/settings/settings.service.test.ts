@@ -127,7 +127,7 @@ describe("notification channel settings", () => {
             refund_failed: ["email"],
             order_partially_refunded: ["email"],
             payment_balance_paid: ["email"],
-            support_request_submitted: [],
+            support_request_submitted: ["email"],
             support_request_status_updated: ["email"],
         });
     });

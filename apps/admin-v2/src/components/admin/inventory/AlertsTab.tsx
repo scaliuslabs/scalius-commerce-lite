@@ -28,8 +28,8 @@ import {
   ALERT_FILTERS,
   alertsQuery,
   type AlertFilter,
+  type InventoryFilters,
   type InventoryFiltersChange,
-  type InventorySearch,
 } from "./inventory-search";
 
 const ALERT_LABEL = {
@@ -47,19 +47,20 @@ export function toDate(value: string | number): Date {
 }
 
 interface AlertsTabProps {
-  filters: Pick<InventorySearch, "q" | "alert">;
+  filters: Pick<InventoryFilters, "q" | "alert">;
   onFiltersChange: InventoryFiltersChange;
   onReview: (sku: string) => void;
+  onSetAlertLevels: () => void;
 }
 
-export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps) {
+export function AlertsTab({ filters, onFiltersChange, onReview, onSetAlertLevels }: AlertsTabProps) {
   const t = useMessages(inventoryMessages);
   const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const { inventory: permissions } = useCatalogActionPermissions();
   const { q: search, alert: status } = filters;
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [limit, setLimit] = useState(50);
   useEffect(() => setPage(1), [search, status]);
 
   const acknowledge = useMutation({
@@ -68,7 +69,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
       toast.success(t("markedSeen"));
       await queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : r("actionFailed")),
+    onError: () => toast.error(r("actionFailed")),
   });
 
   const statusBadge = (alert: InventoryAlert) => {
@@ -106,7 +107,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
       cell: ({ row }) => (
         <div className="min-w-0">
           {name(row.original)}
-          <span className="font-mono text-body text-muted-foreground">{row.original.variantSku}</span>
+          <span className="block break-all font-mono text-body text-muted-foreground">{row.original.variantSku}</span>
         </div>
       ),
     },
@@ -118,7 +119,12 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
     {
       id: "threshold",
       header: () => <div className="text-right">{t("alertAt")}</div>,
-      cell: ({ row }) => <div className="text-right tabular-nums text-muted-foreground">{formatNumber(row.original.threshold)}</div>,
+      // Sold-out variants without an alert level are flagged with level 0.
+      cell: ({ row }) => (
+        <div className="text-right tabular-nums text-muted-foreground">
+          {row.original.threshold > 0 ? formatNumber(row.original.threshold) : "—"}
+        </div>
+      ),
     },
     { id: "status", header: () => r("status"), cell: ({ row }) => statusBadge(row.original) },
     {
@@ -146,7 +152,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
     onSortingChange: () => undefined,
     enableRowSelection: false,
     enableSorting: false,
-    defaultPageSize: 20,
+    defaultPageSize: 50,
   });
 
   const mobileCard = (row: Row<InventoryAlert>) => {
@@ -156,9 +162,8 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
             {name(alert)}
-            <p className="truncate text-body text-muted-foreground">
-              <span className="font-mono">{alert.variantSku}</span> · {t("availableCount", { count: alert.currentQty })}
-            </p>
+            <p className="break-all font-mono text-body text-muted-foreground">{alert.variantSku}</p>
+            <p className="text-body text-muted-foreground">{t("availableCount", { count: alert.currentQty })}</p>
           </div>
           {statusBadge(alert)}
         </div>
@@ -213,7 +218,11 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
               </Button>
             ),
           }
-        : { title: t("noAlerts"), description: t("noAlertsHint") }}
+        : {
+            title: t("noAlerts"),
+            description: t("noAlertsHint"),
+            action: <Button type="button" variant="outline" onClick={onSetAlertLevels}>{t("setAlertLevels")}</Button>,
+          }}
     />
   );
 }

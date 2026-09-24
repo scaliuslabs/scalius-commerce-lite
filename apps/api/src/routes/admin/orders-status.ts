@@ -38,6 +38,7 @@ const codTrackingSchema = z.object({
     lastAttemptAt: z.union([z.string(), z.number()]).nullable(),
     codStatus: z.string(),
     failureReason: z.string().nullable(),
+    failureNote: z.string().nullable(),
     collectedBy: z.string().nullable(),
     collectedAmount: z.number().nullable(),
     collectedAt: z.union([z.string(), z.number()]).nullable(),
@@ -139,7 +140,17 @@ const updateStatusRoute = createRoute({
     summary: "Update order status",
     request: {
         params: z.object({ id: z.string() }),
-        body: { content: { "application/json": { schema: z.object({ status: z.enum(ORDER_STATUSES) }) } } }
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        status: z.enum(ORDER_STATUSES),
+                        /** Why an order is cancelled; recorded on the timeline. */
+                        reason: z.enum(["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"]).optional(),
+                    }),
+                },
+            },
+        },
     },
     responses: {
         200: {
@@ -150,11 +161,28 @@ const updateStatusRoute = createRoute({
     }
 });
 
+function actorIdOf(c: { get(key: "user"): unknown }): string | null {
+    return (c.get("user") as { id?: string } | undefined)?.id ?? null;
+}
+
 app.openapi(updateStatusRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
+    const before = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
     const result = await OrdersService.updateOrderStatus(db, orderId, data.status);
+    if (before && before.status !== data.status) {
+        await OrdersService.recordOrderEvent(db, {
+            orderId,
+            kind: "status_changed",
+            actorId: actorIdOf(c),
+            data: {
+                from: before.status,
+                to: data.status,
+                ...(data.status === "cancelled" && data.reason ? { reason: data.reason } : {}),
+            },
+        });
+    }
     if (result.availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
 
     if (result.notification) {
@@ -262,6 +290,16 @@ app.openapi(postCodRoute, async (c) => {
     const result = await OrdersService.processCodAction(db, orderId, data);
     const { availabilityTransitionVariantIds, ...responseData } = result;
     if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+    await OrdersService.recordOrderEvent(db, data.action === "collected"
+        ? {
+            orderId,
+            kind: "cod_collected",
+            actorId: actorIdOf(c),
+            data: { amount: data.collectedAmount, collectedBy: data.collectedBy },
+        }
+        : data.action === "failed"
+            ? { orderId, kind: "cod_failed", actorId: actorIdOf(c), body: data.notes || null, data: { reason: data.reason } }
+            : { orderId, kind: "cod_returned", actorId: actorIdOf(c) });
 
     // Enqueue notification for COD status changes that affect order status
     const COD_NOTIFICATION_MAP: Partial<Record<typeof data.action, OrderNotificationType>> = {
@@ -326,13 +364,19 @@ app.openapi(getFulfillRoute, async (c) => {
 // ─── POST /:id/fulfill ──────────────────────────────────────────────────────
 
 const fulfillSchema = z.object({
+    /** Retry key: a repeated request returns the first shipment instead of failing. */
+    requestKey: z.string().uuid().optional(),
+    /** Part of a line is fine; defaults to everything not sent yet. */
+    items: z.array(z.object({
+        itemId: z.string().min(1),
+        quantity: z.number().int().min(1),
+    })).min(1).optional(),
     itemIds: z.array(z.string()).optional(),
-    trackingId: z.string().optional(),
-    trackingUrl: z.string().optional(),
-    courierName: z.string().optional(),
-    note: z.string().optional(),
-    isFinalShipment: z.boolean().optional(),
-    shipmentAmount: z.number().optional()
+    trackingId: z.string().trim().max(180).optional(),
+    trackingUrl: z.string().trim().url("Enter a full link, starting with https://").optional(),
+    courierName: z.string().trim().max(120).optional(),
+    note: z.string().trim().max(500).optional(),
+    shipmentAmount: z.number().min(0, "The delivery cost can't be negative.").optional(),
 });
 
 const postFulfillRoute = createRoute({
@@ -362,9 +406,22 @@ app.openapi(postFulfillRoute, async (c) => {
     const {
         statusChange,
         availabilityTransitionVariantIds,
+        replayed,
         ...responseData
     } = result;
     if (availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+    if (!replayed) {
+        await OrdersService.recordOrderEvent(db, {
+            orderId,
+            kind: "shipment_created",
+            actorId: actorIdOf(c),
+            data: {
+                courierName: data.courierName || null,
+                trackingId: data.trackingId || null,
+                final: result.isFinalShipment,
+            },
+        });
+    }
     await enqueueOrderStatusChangeNotification({
         db,
         queue: c.env.JOBS_QUEUE,
@@ -467,6 +524,13 @@ app.openapi(createShipmentRoute, async (c) => {
 
     const now = new Date();
     await db.update(deliveryShipments).set({ lastChecked: now }).where(eq(deliveryShipments.id, createdShipmentRecord.id));
+
+    await OrdersService.recordOrderEvent(db, {
+        orderId,
+        kind: "shipment_created",
+        actorId: actorIdOf(c),
+        data: { courierName: provider?.name ?? null, trackingId: createdShipmentRecord.trackingId ?? null, final: true },
+    });
 
     if (shipmentResult.shipment) {
         await enqueueOrderNotificationsForStatus({

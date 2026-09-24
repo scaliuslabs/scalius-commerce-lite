@@ -10,7 +10,6 @@ import {
 } from "@scalius/api-client/sdk";
 import { FormContainer } from "~/components/admin/shared/FormContainer";
 import { SaveNotCompleted } from "~/components/admin/shared/use-form-save-bar";
-import { ReadOnlyNotice } from "~/components/admin/resource/ReadOnlyNotice";
 import { SearchListingCard } from "~/components/admin/search-listing/SearchListingCard";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { useMessages } from "~/i18n";
@@ -57,7 +56,7 @@ function CollectionSearchListing({ form, disabled }: { form: CollectionFormApi; 
   return (
     <SearchListingCard
       resource="collection"
-      path={canonicalPath || (id ? `/collections/${id}` : undefined)}
+      path={canonicalPath || (id ? `/collections/${id}` : null)}
       value={{ title: metaTitle ?? "", description: metaDescription ?? "", hidden: noIndex === true }}
       onChange={(next) => {
         if (next.title !== undefined) form.setValue("metaTitle", next.title || null, edit);
@@ -238,12 +237,12 @@ export function CollectionForm({
       canSave={canSave}
       form={form}
       onSave={saveCollection}
-      formClassName="mx-auto max-w-5xl pb-6"
+      unsavedLabel={isEdit ? undefined : tf("unsavedCollection")}
+      savedMessage={tf("saved")}
     >
-      {!canSave ? <ReadOnlyNotice /> : null}
-      <fieldset disabled={!canSave} className="grid min-w-0 gap-4 lg:grid-cols-3 lg:items-start">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-3 lg:items-start">
         <div className="min-w-0 space-y-4 lg:col-span-2">
-          <CollectionContentSection form={form} />
+          <CollectionContentSection form={form} readOnly={!canSave} />
           <ProductSelectionSection
             form={form}
             selectedSource={selectedSource}
@@ -265,7 +264,7 @@ export function CollectionForm({
           selectedCategoryIds={selectedSource === "dynamic" ? selectedCategoryIds : []}
           onProductDiscovered={rememberProduct}
         />
-      </fieldset>
+      </div>
     </FormContainer>
   );
 }

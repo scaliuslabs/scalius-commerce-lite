@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { Archive, Pencil, Undo } from "lucide-react";
+import { Archive, Undo } from "lucide-react";
 import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Badge } from "~/components/ui/badge";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
@@ -20,6 +21,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages, type OrderListMessageKey } from "~/i18n/order-list";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { canRefreshShipment } from "~/lib/shipment-action-policy";
+import { orderSkipReason } from "./order-bulk-actions";
 import { LazyFraudCheckIndicator } from "./LazyFraudCheckIndicator";
 import { LazyOrderItemsPopover } from "./LazyOrderItemsPopover";
 import { ListDate } from "./ListDate";
@@ -28,28 +30,34 @@ import { OrderStatusSelector } from "./OrderStatusSelector";
 
 export interface OrderRowHandlers {
   showArchived: boolean;
+  /** Rows show the time they are sorted by: last update when sorting by it, otherwise when placed. */
+  dateField: "createdAt" | "updatedAt";
+  selectable: boolean;
   orderActions: OrderActionPermissions;
   updatingStatusIds: ReadonlySet<string>;
-  onEdit: (orderId: string) => void;
   onArchive: (order: OrderListItem) => void;
   onRestore: (order: OrderListItem) => void;
-  onStatusUpdate: (orderId: string, status: string) => void;
+  onStatusUpdate: (order: OrderListItem, status: string) => void;
   onShipmentRefreshed: () => void;
 }
+
+type OrderName = Pick<OrderListItem, "id" | "orderNumber">;
+
+export const orderName = (order: OrderName) => formatOrderNumber(order.orderNumber, order.id);
 
 function Title({ k }: { k: OrderListMessageKey }) {
   const t = useMessages(orderListMessages);
   return <>{t(k)}</>;
 }
 
-export function OrderNumberLink({ order }: { order: Pick<OrderListItem, "id"> }) {
+export function OrderNumberLink({ order }: { order: OrderName }) {
   return (
     <Link
       to="/admin/orders/$orderId"
       params={{ orderId: order.id }}
       className="rounded-sm font-mono text-body font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      #{order.id}
+      {orderName(order)}
     </Link>
   );
 }
@@ -72,6 +80,17 @@ export function FulfillmentBadge({ order }: { order: Pick<OrderListItem, "status
     <Badge variant={statusBadgeVariant(order.fulfillmentStatus, "fulfillment")}>
       {fulfillmentStatusLabel(t, order.fulfillmentStatus)}
     </Badge>
+  );
+}
+
+/** What needs the merchant's attention: an open customer request or money owed back. */
+export function OrderAttentionBadges({ order }: { order: Pick<OrderListItem, "openRequestType" | "refundDue"> }) {
+  const t = useMessages(orderMessages);
+  return (
+    <>
+      {order.openRequestType ? <Badge variant="attention">{t(`request.${order.openRequestType}`)}</Badge> : null}
+      {order.refundDue > 0 ? <Badge variant="warning">{t("refundOwed")}</Badge> : null}
+    </>
   );
 }
 
@@ -110,7 +129,7 @@ function FulfillmentCell({ order, handlers }: { order: OrderListItem; handlers: 
             && canRefreshShipment(shipment)
             && !locked
           }
-          refreshDisabledReason={locked ? order.shipmentRecovery.message ?? t("block.shipment") : undefined}
+          refreshDisabledReason={locked ? t("block.shipment") : undefined}
           onStatusUpdated={handlers.onShipmentRefreshed}
         />
       ) : null}
@@ -125,7 +144,7 @@ function useStatusLockedReason(order: OrderListItem, handlers: OrderRowHandlers)
   if (handlers.showArchived) return t("restoreToChange");
   if (!handlers.orderActions.canChangeOrderStatus) return tr("readOnly");
   if (order.activeRefundOperation?.active) return t("block.refund");
-  if (order.shipmentRecovery?.activeLock) return order.shipmentRecovery.message ?? t("block.shipment");
+  if (order.shipmentRecovery?.activeLock) return t("block.shipment");
   return undefined;
 }
 
@@ -137,23 +156,13 @@ function StatusCell({ order, handlers }: { order: OrderListItem; handlers: Order
         status={order.status}
         paymentStatus={order.paymentStatus}
         paidAmount={order.paidAmount}
-        orderId={order.id}
         isLoading={handlers.updatingStatusIds.has(order.id)}
         lockedReason={lockedReason}
-        onStatusUpdate={handlers.onStatusUpdate}
+        onStatusUpdate={(status) => handlers.onStatusUpdate(order, status)}
       />
+      <OrderAttentionBadges order={order} />
       <OrderLockBadges order={order} />
     </div>
-  );
-}
-
-function canEditFromList(order: OrderListItem, handlers: OrderRowHandlers): boolean {
-  return (
-    !handlers.showArchived
-    && handlers.orderActions.canEditOrders
-    && order.fullEditReadiness.allowed
-    && order.activeRefundOperation?.active !== true
-    && order.shipmentRecovery?.activeLock !== true
   );
 }
 
@@ -161,18 +170,15 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
   const t = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
   const actions = [
-    canEditFromList(order, handlers)
-      ? { label: tr("edit"), icon: Pencil, onClick: () => handlers.onEdit(order.id) }
-      : null,
-    !handlers.showArchived && handlers.orderActions.canDeleteOrders
+    !handlers.showArchived && handlers.orderActions.canDeleteOrders && !orderSkipReason(order, "archive")
       ? { label: t("archive"), icon: Archive, onClick: () => handlers.onArchive(order) }
       : null,
     handlers.showArchived && handlers.orderActions.canRestoreOrders
-      ? { label: tr("restore"), icon: Undo, onClick: () => handlers.onRestore(order) }
+      ? { label: t("unarchive"), icon: Undo, onClick: () => handlers.onRestore(order) }
       : null,
   ].filter((action) => action !== null);
   if (actions.length === 0) return null;
-  return <DataTableRowActions extraActions={actions} menuLabel={`${tr("moreActions")} #${order.id}`} />;
+  return <DataTableRowActions extraActions={actions} menuLabel={`${tr("moreActions")} ${orderName(order)}`} />;
 }
 
 export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderListItem, unknown>[] {
@@ -183,7 +189,7 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
       cell: ({ row }) => (
         <div className="flex flex-col">
           <OrderNumberLink order={row.original} />
-          <ListDate value={row.original.createdAt} className="text-body text-muted-foreground" />
+          <ListDate value={row.original[handlers.dateField]} className="text-body text-muted-foreground" />
         </div>
       ),
     },
@@ -195,7 +201,7 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
           <p className="truncate font-medium">{row.original.customerName}</p>
           <div className="flex items-center gap-1 text-body text-muted-foreground">
             <span className="whitespace-nowrap font-mono">{formatPhoneForDisplay(row.original.customerPhone)}</span>
-            <LazyFraudCheckIndicator phone={row.original.customerPhone} />
+            <LazyFraudCheckIndicator phone={row.original.customerPhone} customerName={row.original.customerName} />
           </div>
         </div>
       ),
@@ -231,10 +237,8 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     },
   ];
 
-  if (handlers.orderActions.canSelectOrdersForBulkActions && !handlers.showArchived) {
-    columns.unshift(
-      createSelectColumn<OrderListItem>({ getLabel: (row) => `#${(row as OrderListItem).id}` }),
-    );
+  if (handlers.selectable) {
+    columns.unshift(createSelectColumn<OrderListItem>({ getLabel: (row) => orderName(row as OrderListItem) }));
   }
   return columns;
 }

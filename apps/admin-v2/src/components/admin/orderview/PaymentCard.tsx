@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Alert } from "~/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -25,8 +28,8 @@ import {
 import { useCurrency } from "~/hooks/use-currency";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
-import { useMessages } from "~/i18n";
-import { orderDetailLabel, orderDetailMessages, type OrderDetailMessageKey } from "~/i18n/order-detail";
+import { formatNumber, useMessages } from "~/i18n";
+import { orderDetailLabel, orderDetailMessages, refundStateCopy, type OrderDetailMessageKey } from "~/i18n/order-detail";
 import {
   orderMessages,
   paymentMethodLabel,
@@ -39,6 +42,7 @@ import {
   type OrderPaymentsPayload,
 } from "~/lib/api-query-options/orders";
 import {
+  orderErrorMessage,
   useIssueOrderPaymentRecoveryLink,
   useReconcileRefundAttempt,
   useRefundOrder,
@@ -57,7 +61,8 @@ import { buildOrderPaymentPresentation } from "~/lib/order-payment-presentation"
 import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
 import { OperationalReadNotice } from "./OperationalReadNotice";
-import { statusBadgeVariant } from "./status-badges";
+import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
+import type { OrderActionRequest } from "./primary-action";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
 
 type CodAction = "collected" | "failed" | "returned";
@@ -101,16 +106,11 @@ function sessionAttemptLabel(attempt: SessionAttempt): OrderDetailMessageKey | n
   return null;
 }
 
-function humanize(value: string): string {
-  const text = value.replace(/[_-]+/g, " ").trim();
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 function time(value: unknown): string | null {
   return formatOrderTimestamp(value as OrderTimestamp | null);
 }
 
-export function PaymentCard({ order, collectRequest }: { order: Order; collectRequest?: number }) {
+export function PaymentCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
   const r = useMessages(resourceMessages);
@@ -124,15 +124,17 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
   const savedSummary = resolveSavedOrderMoneySummary(order);
   const money = (major: number) => (savedSummary ? formatSavedMajorAmount(major, savedSummary) : fmt(major));
   const isCOD = order.paymentMethod === "cod";
+  const paid = Number(order.paidAmount ?? 0);
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
-  const [refundAmount, setRefundAmount] = useState("");
+  const [refundAmount, setRefundAmount] = useState<number | null>(null);
+  const [refundAmountError, setRefundAmountError] = useState<string | null>(null);
   const [refundReason, setRefundReason] = useState<string>("requested_by_customer");
   const [manualSettlementConfirmed, setManualSettlementConfirmed] = useState(false);
   const [codAction, setCodAction] = useState<CodAction | null>(null);
   const [collectedBy, setCollectedBy] = useState("");
-  const [collectedAmount, setCollectedAmount] = useState("");
+  const [collectorError, setCollectorError] = useState<string | null>(null);
   const [failReason, setFailReason] = useState<CodFailureReason>("not_home");
   const [failNotes, setFailNotes] = useState("");
 
@@ -158,13 +160,14 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
   const webhookIssues = paymentsResult?.paymentWebhookIssues ?? [];
   const refundAttempts: OrderRefundAttempt[] = paymentsResult?.refundAttempts ?? order.refundAttempts ?? [];
   const activeRefund = paymentsResult?.activeRefundOperation ?? order.activeRefundOperation ?? null;
+  const activeRefundCopy = activeRefund
+    ? refundStateCopy(t, activeRefund.status, activeRefund.gateway, paymentMethodLabel(o, activeRefund.gateway))
+    : null;
   const isRefundLocked = Boolean(activeRefund?.active);
   const plan = paymentsResult?.plan ?? null;
-  // paidAmount is net of refunds; refunded refund rows give back the gross.
-  const refundedAmount = payments
-    .filter((payment) => payment.paymentType === "refund" && payment.status === "refunded")
-    .reduce((sum, payment) => sum + Math.abs(Number(payment.amount) || 0), 0);
-  const grossPaid = Number(order.paidAmount ?? 0) + refundedAmount;
+  // paidAmount is net of refunds; the gross is what came in.
+  const refundedAmount = Number(order.refundedAmount ?? 0);
+  const grossPaid = paid + refundedAmount;
 
   const requiresManualSettlementConfirmation = isCOD || payments.some((payment) =>
     payment.paymentMethod === "cod" && payment.paymentType !== "refund" && payment.status === "succeeded");
@@ -173,6 +176,7 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
     && Number(order.balanceDue ?? 0) > 0;
   const usesCashCollection = isCOD || hasCashBalanceDueOnDelivery;
   const cashCollectionAmount = Number(order.balanceDue ?? 0) > 0 ? Number(order.balanceDue) : order.totalAmount;
+  const sentUnits = order.items.reduce((sum, item) => sum + (item.shippedQuantity ?? item.quantity), 0);
 
   const recovery = order.paymentRecovery ?? null;
   const canShowRecoveryLink = canIssueRecoveryLink
@@ -181,6 +185,7 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
       ? recovery?.canIssueRecoveryLink === true
       : inferRecoveryLinkEligibility(order, sessionAttempts, payments));
 
+  // Cash changes hands at the door: collection opens once the order is out.
   const canRecordCodCollection = canUpdateCod && canProcessOrderCodAction(order.status, "collected");
   const canRecordCodFailure = canUpdateCod && canProcessOrderCodAction(order.status, "failed");
   const canRecordCodReturn = canUpdateCod && canProcessOrderCodAction(order.status, "returned");
@@ -206,36 +211,45 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
   const refundCheckMutation = useReconcileRefundAttempt();
   const recoveryLinkMutation = useIssueOrderPaymentRecoveryLink();
   const presentation = buildOrderPaymentPresentation({ orderStatus: order.status, balanceDue: order.balanceDue });
+  const showBadge = orderBadgeVisibility(order).payment;
 
-  const openCollect = () => {
+  const openCod = (action: CodAction) => {
+    codMutation.reset();
     setCollectedBy("");
-    setCollectedAmount(String(cashCollectionAmount));
-    setCodAction("collected");
+    setCollectorError(null);
+    setFailReason("not_home");
+    setFailNotes("");
+    setCodAction(action);
+  };
+  const openRefund = () => {
+    refundMutation.reset();
+    setRefundAmount(initialRefundAmount(order));
+    setRefundAmountError(null);
+    setRefundReason("requested_by_customer");
+    setManualSettlementConfirmed(false);
+    setRefundOpen(true);
   };
 
-  // The phone action bar asks this card to open its own collect flow.
+  // The next-step button and the Returns card ask this card to open its own flows.
   useEffect(() => {
-    if (!collectRequest) return;
+    if (request?.action !== "collectCod" && request?.action !== "refund") return;
     cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (canOpenCollect) openCollect();
-    // Only a new request should open the dialog.
+    if (request.action === "collectCod" && canOpenCollect) openCod("collected");
+    if (request.action === "refund" && canRefund && !isRefundLocked) openRefund();
+    // Only a new request should open a dialog.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collectRequest]);
+  }, [request?.id]);
 
   function submitCodAction() {
     if (!codAction) return;
-    if (!canUpdateCod) return void toast.error(r("readOnly"));
-    if (!canProcessOrderCodAction(order.status, codAction)) {
-      toast.error(t("cod.unavailable"));
-      return setCodAction(null);
-    }
-    if (isRefundLocked) return void toast.error(t("locked.refund"));
     let body: { orderId: string } & ApiBody<typeof postApiV1AdminOrdersByIdCod>;
     if (codAction === "collected") {
-      const amount = parseFloat(collectedAmount);
-      if (!collectedBy.trim()) return void toast.error(t("cod.collectorRequired"));
-      if (isNaN(amount) || amount <= 0) return void toast.error(t("cod.amountRequired"));
-      body = { orderId: order.id, action: "collected", collectedBy: collectedBy.trim(), collectedAmount: amount };
+      if (!collectedBy.trim()) {
+        setCollectorError(t("cod.collectorRequired"));
+        document.getElementById("collectedBy")?.focus();
+        return;
+      }
+      body = { orderId: order.id, action: "collected", collectedBy: collectedBy.trim(), collectedAmount: cashCollectionAmount };
     } else if (codAction === "failed") {
       body = {
         orderId: order.id,
@@ -249,45 +263,31 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
     codMutation.mutate(body, { onSuccess: () => setCodAction(null) });
   }
 
+  const refundValue = refundAmount ?? Number.NaN;
+  const refundAmountProblem = (): string | null =>
+    Number.isFinite(refundValue) && refundValue > 0 && refundValue <= paid
+      ? null
+      : t("refund.amountInvalid", { amount: money(paid) });
+
   function handleIssueRefund() {
-    if (isRefundLocked) return void toast.error(t("locked.refund"));
-    const amount = parseFloat(refundAmount);
-    if (isNaN(amount) || amount <= 0 || amount > (order.paidAmount ?? 0)) {
-      return void toast.error(t("refund.amountInvalid", { amount: money(order.paidAmount ?? 0) }));
-    }
-    if (!refundReason.trim()) return void toast.error(t("refund.reasonRequired"));
-    if (requiresManualSettlementConfirmation && !manualSettlementConfirmed) {
-      return void toast.error(t("refund.confirmFirst"));
+    const problem = refundAmountProblem();
+    setRefundAmountError(problem);
+    if (problem) {
+      document.getElementById("refundAmount")?.focus();
+      return;
     }
     refundMutation.mutate(
       {
         orderId: order.id,
-        amount,
+        amount: refundValue,
         reason: refundReason,
         manualSettlementConfirmed: requiresManualSettlementConfirmation ? true : undefined,
       },
-      {
-        onSuccess: async () => {
-          setRefundOpen(false);
-          await paymentsQuery.refetch();
-        },
-      },
-    );
-  }
-
-  function handleCheckRefund(attempt: OrderRefundAttempt) {
-    if (!canRefund) return void toast.error(r("readOnly"));
-    refundCheckMutation.mutate(
-      { orderId: order.id, attemptId: attempt.id },
-      { onSettled: refetchPayments },
+      { onSuccess: () => setRefundOpen(false) },
     );
   }
 
   async function handleCopyRecoveryLink() {
-    if (!canIssueRecoveryLink) return void toast.error(r("readOnly"));
-    if (!canShowRecoveryLink) {
-      return void toast.error(recovery?.recoveryLinkBlockedReason ?? t("recovery.unavailable"));
-    }
     let link: Awaited<ReturnType<typeof recoveryLinkMutation.mutateAsync>>;
     try {
       link = await recoveryLinkMutation.mutateAsync({ orderId: order.id });
@@ -304,14 +304,10 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
   }
 
   // Confirm buttons echo the live amount, e.g. "Record ৳500 cash refund".
-  const refundValue = parseFloat(refundAmount);
   const refundConfirmLabel = Number.isFinite(refundValue) && refundValue > 0
     ? t(requiresManualSettlementConfirmation ? "refund.recordCashAmount" : "refund.issueAmount", { amount: money(refundValue) })
     : t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue");
-  const collectValue = parseFloat(collectedAmount);
-  const collectConfirmLabel = Number.isFinite(collectValue) && collectValue > 0
-    ? t("cod.collectAmount", { amount: money(collectValue) })
-    : t(hasCashBalanceDueOnDelivery ? "cod.recordBalance" : "cod.markCollected");
+  const collectTitle = t(hasCashBalanceDueOnDelivery ? "cod.recordBalance" : "cod.markCollected");
 
   const refreshButton = (
     <Button type="button" variant="ghost" size="sm" onClick={refetchPayments} disabled={historyFetching}>
@@ -323,19 +319,19 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
     <Card ref={cardRef} id="order-payment" className="scroll-mt-4">
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>{t("payment.title")}</CardTitle>
-        {order.paymentStatus ? (
+        {showBadge && order.paymentStatus ? (
           <Badge variant={statusBadgeVariant(order.paymentStatus, "payment")}>{paymentStatusLabel(o, order.paymentStatus)}</Badge>
         ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
-        {activeRefund ? (
+        {activeRefundCopy && activeRefund ? (
           <div role="status" className="space-y-1">
-            <p className="font-medium">{activeRefund.label} · {formatCurrencyAmount(activeRefund.amount, activeRefund.currency)}</p>
-            <p className="text-muted-foreground">{activeRefund.message}</p>
+            <p className="font-medium">{activeRefundCopy.label} · {formatCurrencyAmount(activeRefund.amount, activeRefund.currency)}</p>
+            {activeRefundCopy.help ? <p className="text-muted-foreground">{activeRefundCopy.help}</p> : null}
           </div>
         ) : null}
 
-        <dl className="space-y-1">
+        <dl className="space-y-1 tabular-nums">
           <Row label={t("summary.total")} value={savedSummary ? formatSavedMinorAmount(savedSummary.totalMinor, savedSummary) : fmt(order.totalAmount)} />
           {grossPaid > 0 ? (
             <Row label={t("payment.paidWith", { method: paymentMethodLabel(o, order.paymentMethod ?? "cod") })} value={money(grossPaid)} />
@@ -347,7 +343,7 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
               <Row label={t("payment.refunded")} value={`−${money(refundedAmount)}`} />
               <div className="flex justify-between gap-4 border-t pt-1 font-medium">
                 <dt>{t("payment.net")}</dt>
-                <dd>{money(order.paidAmount ?? 0)}</dd>
+                <dd>{money(paid)}</dd>
               </div>
             </>
           ) : null}
@@ -357,22 +353,26 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
               <dd>{money(presentation.amountDue)}</dd>
             </div>
           ) : null}
+          {order.refundDue > 0 ? (
+            <div className="flex justify-between gap-4 border-t pt-1 font-medium">
+              <dt>{o("refundOwed")}</dt>
+              <dd>{money(order.refundDue)}</dd>
+            </div>
+          ) : null}
           {plan ? (
             <>
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">{t("plan.deposit")}</dt>
-                <dd>{fmt(plan.depositAmount)} · {plan.depositPaidAt ? t("plan.paid") : presentation.collectionClosed ? t("plan.closed") : t("plan.pending")}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">{t("plan.balance")}</dt>
-                <dd>
-                  {fmt(plan.balanceDue)} · {plan.balancePaidAt
-                    ? t("plan.paid")
-                    : presentation.collectionClosed
-                      ? t("plan.closed")
-                      : plan.balanceDueDate ? t("plan.due", { date: plan.balanceDueDate }) : t("plan.pending")}
-                </dd>
-              </div>
+              <Row
+                label={t("plan.deposit")}
+                value={`${fmt(plan.depositAmount)} · ${plan.depositPaidAt ? t("plan.paid") : presentation.collectionClosed ? t("plan.closed") : t("plan.pending")}`}
+              />
+              <Row
+                label={t("plan.balance")}
+                value={`${fmt(plan.balanceDue)} · ${plan.balancePaidAt
+                  ? t("plan.paid")
+                  : presentation.collectionClosed
+                    ? t("plan.closed")
+                    : plan.balanceDueDate ? t("plan.due", { date: plan.balanceDueDate }) : t("plan.pending")}`}
+              />
             </>
           ) : null}
         </dl>
@@ -388,8 +388,8 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
 
         {canShowRecoveryLink ? (
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-muted-foreground">{recovery?.message ?? t("recovery.help")}</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => void handleCopyRecoveryLink()} disabled={recoveryLinkMutation.isPending}>
+            <p className="text-muted-foreground">{t("recovery.help")}</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => void handleCopyRecoveryLink()} loading={recoveryLinkMutation.isPending}>
               {t("recovery.copy")}
             </Button>
           </div>
@@ -407,7 +407,9 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
             <ul className="divide-y text-muted-foreground">
               {webhookIssues.map((issue) => (
                 <li key={issue.id} className="py-2">
-                  {paymentMethodLabel(o, issue.provider)} · {time(issue.processedAt)} — {issue.message}
+                  <p>{[paymentMethodLabel(o, issue.provider), time(issue.processedAt)].filter(Boolean).join(" · ")}</p>
+                  <p>{t(`webhook.reason.${issue.reason}`, { gateway: paymentMethodLabel(o, issue.provider) })}</p>
+                  {issue.error ? <p className="break-words">{issue.error}</p> : null}
                 </li>
               ))}
             </ul>
@@ -421,34 +423,26 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
               {refreshButton}
             </div>
             <ul className="divide-y">
-            {sessionAttempts.map((attempt) => {
-              const label = sessionAttemptLabel(attempt);
-              return (
-                <li key={attempt.id} className="space-y-1 py-2" data-testid="session-attempt">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium">{label ? t(label) : humanize(attempt.status)}</span>
-                    <span>{formatCurrencyAmount(attempt.amount, attempt.currency)}</span>
-                  </div>
-                  {attempt.activeProcessing ? <p className="text-muted-foreground">{t("session.processingHelp")}</p> : null}
-                  <p className="text-muted-foreground">
-                    {paymentMethodLabel(o, attempt.gateway)} · {time(attempt.createdAt)}
-                  </p>
-                  {attempt.lastError ? <p className="break-words text-destructive">{attempt.lastError}</p> : null}
-                  {attempt.claimExpiresAt || attempt.providerSessionId || attempt.providerCorrelationId ? (
-                    <details className="text-muted-foreground">
-                      <summary className="cursor-pointer">{t("technicalDetails")}</summary>
-                      <p className="break-all">
-                        {[
-                          attempt.claimExpiresAt ? t("session.expires", { date: time(attempt.claimExpiresAt) ?? "" }) : null,
-                          attempt.providerSessionId,
-                          attempt.providerCorrelationId,
-                        ].filter(Boolean).join(" · ")}
-                      </p>
-                    </details>
-                  ) : null}
-                </li>
-              );
-            })}
+              {sessionAttempts.map((attempt) => {
+                const label = sessionAttemptLabel(attempt);
+                return (
+                  <li key={attempt.id} className="space-y-1 py-2" data-testid="session-attempt">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium">{label ? t(label) : orderDetailLabel(t, "payment.status.", attempt.status)}</span>
+                      <span className="tabular-nums">{formatCurrencyAmount(attempt.amount, attempt.currency)}</span>
+                    </div>
+                    {attempt.activeProcessing ? <p className="text-muted-foreground">{t("session.processingHelp")}</p> : null}
+                    <p className="text-muted-foreground">
+                      {[
+                        paymentMethodLabel(o, attempt.gateway),
+                        time(attempt.createdAt),
+                        attempt.claimExpiresAt && !attempt.activeProcessing ? t("session.expires", { date: time(attempt.claimExpiresAt) ?? "" }) : null,
+                      ].filter(Boolean).join(" · ")}
+                    </p>
+                    {attempt.lastError ? <p className="break-words text-destructive">{attempt.lastError}</p> : null}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ) : null}
@@ -462,42 +456,32 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
                   <dt className="font-medium">{t(hasCashBalanceDueOnDelivery ? "cod.balanceTitle" : "cod.title")}</dt>
                   <dd>
                     <Badge variant={statusBadgeVariant(codTracking.codStatus)}>
-                      {presentation.collectionClosed ? t("cod.closed") : codStatusLabel(t, codTracking.codStatus)}
+                      {presentation.collectionClosed ? t("cod.closed") : orderDetailLabel(t, "cod.status.", codTracking.codStatus)}
                     </Badge>
                   </dd>
                 </div>
                 {presentation.collectionClosed ? (
-                  <Row label={t("cod.lastStatus")} value={codStatusLabel(t, codTracking.codStatus)} />
+                  <Row label={t("cod.lastStatus")} value={orderDetailLabel(t, "cod.status.", codTracking.codStatus)} />
                 ) : null}
-                {codTracking.deliveryAttempts > 0 ? <Row label={t("cod.attempts")} value={String(codTracking.deliveryAttempts)} /> : null}
+                {codTracking.deliveryAttempts > 0 ? <Row label={t("cod.attempts")} value={formatNumber(codTracking.deliveryAttempts)} /> : null}
                 {codTracking.collectedBy ? <Row label={t("cod.collectedBy")} value={codTracking.collectedBy} /> : null}
-                {codTracking.collectedAmount ? <Row label={t("cod.collectedAmount")} value={fmt(codTracking.collectedAmount)} /> : null}
-                {codTracking.failureReason ? <Row label={t("cod.failureReason")} value={codFailureLabel(t, codTracking.failureReason)} /> : null}
+                {codTracking.collectedAmount ? <Row label={t("cod.collectedAmount")} value={money(codTracking.collectedAmount)} /> : null}
+                {codTracking.failureReason ? <Row label={t("cod.failureReason")} value={orderDetailLabel(t, "cod.reason.", codTracking.failureReason)} /> : null}
+                {codTracking.failureNote ? <Row label={t("cod.notes")} value={codTracking.failureNote} /> : null}
               </dl>
             ) : null}
             {codRead.status === "ready" && codOpen && (canRecordCodCollection || (isCOD && (canRecordCodFailure || canRecordCodReturn))) ? (
               <div className="flex flex-wrap gap-2">
                 {canRecordCodCollection ? (
-                  <Button size="sm" disabled={isRefundLocked} onClick={openCollect}>
-                    {t(hasCashBalanceDueOnDelivery ? "cod.recordBalance" : "cod.markCollected")}
-                  </Button>
+                  <Button size="sm" disabled={isRefundLocked} onClick={() => openCod("collected")}>{collectTitle}</Button>
                 ) : null}
                 {isCOD && canRecordCodFailure ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isRefundLocked}
-                    onClick={() => {
-                      setFailReason("not_home");
-                      setFailNotes("");
-                      setCodAction("failed");
-                    }}
-                  >
+                  <Button size="sm" variant="outline" disabled={isRefundLocked} onClick={() => openCod("failed")}>
                     {t("cod.recordFailure")}
                   </Button>
                 ) : null}
-                {isCOD && canRecordCodReturn && codTracking && codTracking.deliveryAttempts > 0 ? (
-                  <Button size="sm" variant="ghost" disabled={isRefundLocked} onClick={() => setCodAction("returned")}>
+                {isCOD && canRecordCodReturn ? (
+                  <Button size="sm" variant="outline" disabled={isRefundLocked} onClick={() => openCod("returned")}>
                     {t("cod.markReturned")}
                   </Button>
                 ) : null}
@@ -513,44 +497,36 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
               {refreshButton}
             </div>
             <ul className="divide-y">
-            {refundAttempts.map((attempt) => {
-              const checking = refundCheckMutation.isPending && refundCheckMutation.variables?.attemptId === attempt.id;
-              const when = time(attempt.refundedAt ?? attempt.failedAt ?? attempt.nextProbeAt ?? attempt.createdAt);
-              const refs = [
-                attempt.allocationCount && attempt.allocationCount > 1
-                  ? t("refund.allocation", { index: (attempt.allocationIndex ?? 0) + 1, count: attempt.allocationCount })
-                  : null,
-                attempt.refundReference,
-                attempt.providerRefundId,
-                attempt.providerCorrelationId,
-                attempt.providerStatus,
-                attempt.sourceTransactionId,
-              ].filter(Boolean);
-              return (
-                <li key={attempt.id} className="space-y-1 py-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium">{attempt.label}</span>
-                    <span>{formatCurrencyAmount(attempt.amount, attempt.currency)}</span>
-                  </div>
-                  {attempt.refundedAt ? null : <p className="text-muted-foreground">{attempt.message}</p>}
-                  {attempt.lastError ? <p className="break-words text-destructive">{attempt.lastError}</p> : null}
-                  <p className="text-muted-foreground">
-                    {[attempt.reason ? refundReasonLabel(t, attempt.reason) : null, when].filter(Boolean).join(" · ")}
-                  </p>
-                  {refs.length > 0 ? (
-                    <details className="text-muted-foreground">
-                      <summary className="cursor-pointer">{t("technicalDetails")}</summary>
-                      <p className="break-all">{refs.join(" · ")}</p>
-                    </details>
-                  ) : null}
-                  {canRefund && attempt.active && MANUAL_REFUND_CHECK_STATUSES.has(attempt.status) ? (
-                    <Button type="button" variant="outline" size="sm" onClick={() => handleCheckRefund(attempt)} disabled={refundCheckMutation.isPending} aria-busy={checking || undefined}>
-                      {t("refund.checkNow")}
-                    </Button>
-                  ) : null}
-                </li>
-              );
-            })}
+              {refundAttempts.map((attempt) => {
+                const checking = refundCheckMutation.isPending && refundCheckMutation.variables?.attemptId === attempt.id;
+                const when = time(attempt.refundedAt ?? attempt.failedAt ?? attempt.nextProbeAt ?? attempt.createdAt);
+                const copy = refundStateCopy(t, attempt.status, attempt.gateway, paymentMethodLabel(o, attempt.gateway));
+                return (
+                  <li key={attempt.id} className="space-y-1 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium">{copy.label}</span>
+                      <span className="tabular-nums">{formatCurrencyAmount(attempt.amount, attempt.currency)}</span>
+                    </div>
+                    {attempt.refundedAt || !copy.help ? null : <p className="text-muted-foreground">{copy.help}</p>}
+                    {attempt.lastError ? <p className="break-words text-destructive">{attempt.lastError}</p> : null}
+                    <p className="text-muted-foreground">
+                      {[attempt.reason ? orderDetailLabel(t, "refund.reason.", attempt.reason) : null, when].filter(Boolean).join(" · ")}
+                    </p>
+                    {canRefund && attempt.active && MANUAL_REFUND_CHECK_STATUSES.has(attempt.status) ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => refundCheckMutation.mutate({ orderId: order.id, attemptId: attempt.id }, { onSettled: refetchPayments })}
+                        disabled={refundCheckMutation.isPending && !checking}
+                        loading={checking}
+                      >
+                        {t("refund.checkNow")}
+                      </Button>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ) : null}
@@ -565,20 +541,21 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
                 {payments.map((payment) => (
                   <li key={payment.id} className="space-y-1 py-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium">{humanize(payment.paymentType)} · {paymentMethodLabel(o, payment.paymentMethod)}</span>
-                      <span>{formatCurrencyAmount(payment.amount, payment.currency)}</span>
+                      <span className="font-medium">
+                        {orderDetailLabel(t, "payment.type.", payment.paymentType)} · {paymentMethodLabel(o, payment.paymentMethod)}
+                      </span>
+                      <span className="tabular-nums">{formatCurrencyAmount(payment.amount, payment.currency)}</span>
                     </div>
                     <p className="break-all text-muted-foreground">
                       {[
-                        humanize(payment.status),
+                        orderDetailLabel(t, "payment.status.", payment.status),
                         time(payment.createdAt),
                         payment.providerRef,
-                        payment.providerSecondaryRef,
                         payment.codCollectedBy ? t("cod.collectedByName", { name: payment.codCollectedBy }) : null,
                       ].filter(Boolean).join(" · ")}
                     </p>
                     {payment.codReceiptUrl ? (
-                      <a href={payment.codReceiptUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                      <a href={payment.codReceiptUrl} target="_blank" rel="noreferrer" className="text-link hover:underline">
                         {t("cod.receipt")}
                       </a>
                     ) : null}
@@ -589,122 +566,131 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
           </section>
         ) : null}
 
-        {canRefund && (order.paidAmount ?? 0) > 0 && order.paymentStatus !== "refunded" ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={isRefundLocked}
-            onClick={() => {
-              setRefundAmount(String(order.paidAmount));
-              setRefundReason("requested_by_customer");
-              setManualSettlementConfirmed(false);
-              setRefundOpen(true);
-            }}
-          >
+        {canRefund && paid > 0 && order.paymentStatus !== "refunded" ? (
+          <Button variant="outline" size="sm" disabled={isRefundLocked} onClick={openRefund}>
             {t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue")}
           </Button>
         ) : null}
       </CardContent>
 
-      <Dialog open={codAction === "collected"} onOpenChange={(open) => !open && setCodAction(null)}>
+      <Dialog open={codAction === "collected"} onOpenChange={(open) => !open && !codMutation.isPending && setCodAction(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t(hasCashBalanceDueOnDelivery ? "cod.recordBalance" : "cod.markCollected")}</DialogTitle>
+            <DialogTitle>{collectTitle}</DialogTitle>
             <DialogDescription>{t(hasCashBalanceDueOnDelivery ? "cod.balanceHelp" : "cod.collectHelp")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="collectedBy">{t("cod.collectedBy")}</Label>
-              <Input id="collectedBy" placeholder={t("cod.collectorPlaceholder")} value={collectedBy} onChange={(e) => setCollectedBy(e.target.value)} />
+            {codMutation.isError ? <Alert variant="destructive">{orderErrorMessage(codMutation.error)}</Alert> : null}
+            <div className="flex items-baseline justify-between gap-4">
+              <p className="text-muted-foreground">{t("cod.amountToCollect")}</p>
+              <p className="text-heading-md font-semibold tabular-nums">{money(cashCollectionAmount)}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="collectedAmount">{t("cod.amountLabel", { symbol })}</Label>
-              <Input id="collectedAmount" type="number" inputMode="decimal" value={collectedAmount} onChange={(e) => setCollectedAmount(e.target.value)} />
+              <Label htmlFor="collectedBy">{t("cod.collectedBy")}</Label>
+              <Input
+                id="collectedBy"
+                placeholder={t("cod.collectorPlaceholder")}
+                value={collectedBy}
+                required
+                maxLength={120}
+                aria-invalid={Boolean(collectorError) || undefined}
+                aria-describedby={collectorError ? "collectedBy-error" : undefined}
+                onChange={(e) => setCollectedBy(e.target.value)}
+                onBlur={() => setCollectorError(collectedBy.trim() ? null : t("cod.collectorRequired"))}
+              />
+              {collectorError ? <p id="collectedBy-error" className="text-destructive">{collectorError}</p> : null}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCodAction(null)}>{r("cancel")}</Button>
-            <Button onClick={submitCodAction} disabled={codMutation.isPending || !canRecordCodCollection}>
-              {collectConfirmLabel}
+            <Button variant="outline" onClick={() => setCodAction(null)} disabled={codMutation.isPending}>{r("cancel")}</Button>
+            <Button onClick={submitCodAction} loading={codMutation.isPending} disabled={!canRecordCodCollection}>
+              {t("cod.collectAmount", { amount: money(cashCollectionAmount) })}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={codAction === "failed"} onOpenChange={(open) => !open && setCodAction(null)}>
+      <Dialog open={codAction === "failed"} onOpenChange={(open) => !open && !codMutation.isPending && setCodAction(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("cod.recordFailure")}</DialogTitle>
             <DialogDescription>{t("cod.failureHelp")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {codMutation.isError ? <Alert variant="destructive">{orderErrorMessage(codMutation.error)}</Alert> : null}
             <div className="space-y-2">
               <Label htmlFor="failReason">{t("cod.failureReason")}</Label>
               <Select value={failReason} onValueChange={(value) => setFailReason(value as CodFailureReason)}>
                 <SelectTrigger id="failReason"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {COD_FAILURE_REASONS.map((reason) => (
-                    <SelectItem key={reason} value={reason}>{codFailureLabel(t, reason)}</SelectItem>
+                    <SelectItem key={reason} value={reason}>{orderDetailLabel(t, "cod.reason.", reason)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="failNotes">{t("cod.notes")}</Label>
-              <Input id="failNotes" value={failNotes} onChange={(e) => setFailNotes(e.target.value)} />
+              <Textarea id="failNotes" value={failNotes} maxLength={500} onChange={(e) => setFailNotes(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCodAction(null)}>{r("cancel")}</Button>
-            <Button variant="destructive" onClick={submitCodAction} disabled={codMutation.isPending || !canRecordCodFailure}>
+            <Button variant="outline" onClick={() => setCodAction(null)} disabled={codMutation.isPending}>{r("cancel")}</Button>
+            <Button variant="destructive" onClick={submitCodAction} loading={codMutation.isPending} disabled={!canRecordCodFailure}>
               {t("cod.recordFailure")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={codAction === "returned"} onOpenChange={(open) => !open && setCodAction(null)}>
+      <Dialog open={codAction === "returned"} onOpenChange={(open) => !open && !codMutation.isPending && setCodAction(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("cod.returnTitle")}</DialogTitle>
-            <DialogDescription>{t("cod.returnHelp")}</DialogDescription>
+            <DialogTitle>{sentUnits === 1 ? t("cod.returnTitleOne") : t("cod.returnTitle", { count: sentUnits })}</DialogTitle>
+            <DialogDescription>
+              {[
+                presentation.amountDue > 0 ? t("cod.returnBalance", { amount: money(presentation.amountDue) }) : null,
+                t("cod.returnHelp"),
+              ].filter(Boolean).join(" ")}
+            </DialogDescription>
           </DialogHeader>
+          {codMutation.isError ? <Alert variant="destructive">{orderErrorMessage(codMutation.error)}</Alert> : null}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCodAction(null)}>{r("cancel")}</Button>
-            <Button variant="destructive" onClick={submitCodAction} disabled={codMutation.isPending || !canRecordCodReturn}>
+            <Button variant="outline" onClick={() => setCodAction(null)} disabled={codMutation.isPending}>{r("cancel")}</Button>
+            <Button variant="destructive" onClick={submitCodAction} loading={codMutation.isPending} disabled={!canRecordCodReturn}>
               {t("cod.markReturned")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={refundOpen}
-        onOpenChange={(open) => {
-          setRefundOpen(open);
-          if (!open) setManualSettlementConfirmed(false);
-        }}
-      >
+      <Dialog open={refundOpen} onOpenChange={(open) => !refundMutation.isPending && setRefundOpen(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue")}</DialogTitle>
             <DialogDescription>{t(requiresManualSettlementConfirmation ? "refund.manualHelp" : "refund.help")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {refundMutation.isError ? <Alert variant="destructive">{orderErrorMessage(refundMutation.error)}</Alert> : null}
             <div className="space-y-2">
               <Label htmlFor="refundAmount">{t("refund.amount", { symbol })}</Label>
-              <Input
+              <NumberInput
                 id="refundAmount"
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0.01"
-                max={order.paidAmount ?? 0}
                 value={refundAmount}
                 disabled={isRefundLocked}
-                onChange={(e) => setRefundAmount(e.target.value)}
+                aria-invalid={Boolean(refundAmountError) || undefined}
+                aria-describedby="refundAmount-help"
+                onValueChange={(value) => {
+                  setRefundAmount(value);
+                  if (refundAmountError) setRefundAmountError(null);
+                }}
+                onBlur={() => setRefundAmountError(refundAmount === null ? null : refundAmountProblem())}
               />
-              <p className="text-body text-muted-foreground">{t("refund.max", { amount: money(order.paidAmount ?? 0) })}</p>
+              <p id="refundAmount-help" className={refundAmountError ? "text-destructive" : "text-muted-foreground"}>
+                {refundAmountError ?? (order.refundDue > 0
+                  ? t("refund.maxOwed", { owed: money(order.refundDue), amount: money(paid) })
+                  : t("refund.max", { amount: money(paid) }))}
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="refundReason">{t("refund.reason")}</Label>
@@ -712,14 +698,14 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
                 <SelectTrigger id="refundReason"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {REFUND_REASONS.map((reason) => (
-                    <SelectItem key={reason} value={reason}>{refundReasonLabel(t, reason)}</SelectItem>
+                    <SelectItem key={reason} value={reason}>{orderDetailLabel(t, "refund.reason.", reason)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             {requiresManualSettlementConfirmation ? (
               <div className="flex items-start gap-3">
-                <span className="flex h-5 items-center">
+                <span className="flex h-lh items-center">
                   <Checkbox
                     id="manualSettlementConfirmed"
                     checked={manualSettlementConfirmed}
@@ -736,7 +722,8 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
             </Button>
             <Button
               onClick={handleIssueRefund}
-              disabled={refundMutation.isPending || isRefundLocked || (requiresManualSettlementConfirmation && !manualSettlementConfirmed)}
+              loading={refundMutation.isPending}
+              disabled={isRefundLocked || (requiresManualSettlementConfirmation && !manualSettlementConfirmed)}
             >
               {refundConfirmLabel}
             </Button>
@@ -747,15 +734,17 @@ export function PaymentCard({ order, collectRequest }: { order: Order; collectRe
   );
 }
 
-const codStatusLabel = (t: Parameters<typeof orderDetailLabel>[0], status: string) => orderDetailLabel(t, "cod.status.", status);
-const codFailureLabel = (t: Parameters<typeof orderDetailLabel>[0], reason: string) => orderDetailLabel(t, "cod.reason.", reason);
-const refundReasonLabel = (t: Parameters<typeof orderDetailLabel>[0], reason: string) => orderDetailLabel(t, "refund.reason.", reason);
+/** Only what came back is owed; the rest of a refund is the merchant's call. */
+export function initialRefundAmount(order: Pick<Order, "refundDue" | "paidAmount">): number | null {
+  const owed = Math.min(Number(order.refundDue ?? 0), Number(order.paidAmount ?? 0));
+  return owed > 0 ? owed : null;
+}
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd>{value}</dd>
+      <dd className="min-w-0 break-words text-right">{value}</dd>
     </div>
   );
 }

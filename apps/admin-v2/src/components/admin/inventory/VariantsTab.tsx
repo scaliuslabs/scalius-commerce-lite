@@ -33,8 +33,8 @@ import { AdjustStockDialog } from "./AdjustStockDialog";
 import {
   STOCK_FILTERS,
   variantsQuery,
+  type InventoryFilters,
   type InventoryFiltersChange,
-  type InventorySearch,
   type StockFilter,
   type VariantSort,
 } from "./inventory-search";
@@ -86,6 +86,12 @@ function AvailableBreakdown({ variant, children }: { variant: InventoryVariant; 
           ))}
         </dl>
         <p className="pt-3 text-body text-muted-foreground">{t("availableHelp")}</p>
+        <p className="flex justify-between gap-4 border-t pt-2 mt-3 text-body">
+          <span className="text-muted-foreground">{t("alertLevelShort")}</span>
+          <span className="font-medium tabular-nums">
+            {variant.lowStockThreshold === null ? t("alertOff") : formatNumber(variant.lowStockThreshold)}
+          </span>
+        </p>
       </PopoverContent>
     </Popover>
   );
@@ -129,7 +135,7 @@ export function VariantName({ productId, productName, optionLabel }: {
 }
 
 interface VariantsTabProps {
-  filters: Pick<InventorySearch, "q" | "stock">;
+  filters: Pick<InventoryFilters, "q" | "stock">;
   onFiltersChange: InventoryFiltersChange;
   onSelectionChange: (variantIds: string[]) => void;
 }
@@ -144,7 +150,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [sort, setSort] = useState<VariantSort>({ field: "available", order: "asc" });
-  // Filters live in the URL; any change (typed, cleared or from another tab) starts at page 1.
+  // Any filter or search change (typed, cleared or from another tab) starts at page 1.
   useEffect(() => setPage(1), [search, status]);
   // The last chosen variant stays set while the dialog closes, so its content never jumps.
   const [adjusting, setAdjusting] = useState<InventoryVariant | null>(null);
@@ -250,10 +256,11 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
         </span>
         <div className="min-w-0 flex-1 space-y-1">
           <VariantCell variant={variant} />
+          {/* The SKU is how stock is picked: shown whole, wrapping if it must. */}
+          <p className="break-all font-mono text-body text-muted-foreground">{variant.sku}</p>
           <div className="flex min-w-0 items-center gap-2">
             <StockBadge variant={variant} />
             <AvailableBreakdown variant={variant}>{t("availableCount", { count: variant.available })}</AvailableBreakdown>
-            <span className="truncate font-mono text-body text-muted-foreground">{variant.sku}</span>
           </div>
         </div>
         <div className="self-center">{adjustButton(variant)}</div>

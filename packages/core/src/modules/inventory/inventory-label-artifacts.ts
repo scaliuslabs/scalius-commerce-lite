@@ -1,4 +1,5 @@
 import { getBarcodeValidationError } from "@scalius/shared/barcode-identity";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 
 export const INVENTORY_LABEL_ARTIFACT_MAX_COPIES = 1_000;
 export const INVENTORY_LABEL_ARTIFACT_MAX_BYTES = 16 * 1024 * 1024;
@@ -13,9 +14,13 @@ export type InventoryLabelArtifactVariant = {
   barcodeType: string | null;
 };
 
+export type InventoryLabelCurrency = { code: string; symbol: string };
+
 export type InventoryLabelArtifactJob = {
   format: "csv" | "html" | "pdf";
   mode: "job" | "test";
+  /** Dashboard language, so printed prices read like the preview. */
+  locale: "en" | "bn";
   quantities: Record<string, number>;
   order: "selected" | "product" | "sku";
   preset: {
@@ -181,15 +186,20 @@ function csvCell(value: unknown): string {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-function formatPrice(value: number, currencyCode: string): string {
-  try {
-    return new Intl.NumberFormat("en", { style: "currency", currency: currencyCode }).format(value);
-  } catch {
-    return `${currencyCode} ${value.toFixed(2)}`;
-  }
+/**
+ * The dashboard's money format (its label preview): store symbol, lakh
+ * grouping, the currency's decimals, digits in the dashboard language.
+ */
+function formatPrice(value: number, currency: InventoryLabelCurrency, locale: InventoryLabelArtifactJob["locale"]): string {
+  const digits = getDecimalPlaces(currency.code);
+  const amount = new Intl.NumberFormat(locale === "bn" ? "bn-BD" : "en-IN", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Math.abs(value));
+  return `${value < 0 ? "-" : ""}${currency.symbol}${amount}`;
 }
 
-function renderCsv(copies: readonly LabelCopy[], currencyCode: string): string {
+function renderCsv(copies: readonly LabelCopy[], job: InventoryLabelArtifactJob, currency: InventoryLabelCurrency): string {
   return [
     ["Product", "Variant", "SKU", "Barcode", "Barcode type", "Price", "Copy"].map(csvCell).join(","),
     ...copies.map((copy) => [
@@ -198,7 +208,7 @@ function renderCsv(copies: readonly LabelCopy[], currencyCode: string): string {
       copy.sku,
       copy.barcode,
       copy.barcodeType,
-      formatPrice(copy.effectivePrice, currencyCode),
+      formatPrice(copy.effectivePrice, currency, job.locale),
       copy.copyIndex + 1,
     ].map(csvCell).join(",")),
   ].join("\n") + "\n";
@@ -218,7 +228,7 @@ function barcodeSvg(copy: LabelCopy): string {
   return `<svg viewBox="0 0 ${bits.length} 50" preserveAspectRatio="none" aria-label="Barcode ${escapeHtml(displayValue)}">${bars.join("")}</svg>`;
 }
 
-function renderHtml(copies: readonly LabelCopy[], job: InventoryLabelArtifactJob, currencyCode: string): string {
+function renderHtml(copies: readonly LabelCopy[], job: InventoryLabelArtifactJob, currency: InventoryLabelCurrency): string {
   const preset = job.preset;
   const capacity = preset.columns * preset.rows;
   const cells = [...Array.from({ length: job.startOffset }, () => null), ...copies];
@@ -231,7 +241,7 @@ function renderHtml(copies: readonly LabelCopy[], job: InventoryLabelArtifactJob
       ${barcodeSvg(copy)}<div class="code">${escapeHtml(copy.barcode)}</div>
       ${job.content.showProduct ? `<div class="product">${escapeHtml(copy.productName)}</div>` : ""}
       ${job.content.showVariant && copy.optionLabel ? `<div>${escapeHtml(copy.optionLabel)}</div>` : ""}
-      <div>${job.content.showSku ? escapeHtml(copy.sku) : ""}${job.content.showSku && job.content.showPrice ? " · " : ""}${job.content.showPrice ? escapeHtml(formatPrice(copy.effectivePrice, currencyCode)) : ""}</div>
+      <div>${job.content.showSku ? escapeHtml(copy.sku) : ""}${job.content.showSku && job.content.showPrice ? " · " : ""}${job.content.showPrice ? escapeHtml(formatPrice(copy.effectivePrice, currency, job.locale)) : ""}</div>
     </div>` : "<div></div>").join("");
     return `<section class="page"><div class="grid">${labels}</div></section>`;
   }).join("");
@@ -252,7 +262,7 @@ function pdfText(value: string): string {
 function renderPdf(
   copies: readonly LabelCopy[],
   job: InventoryLabelArtifactJob,
-  currencyCode: string,
+  currency: InventoryLabelCurrency,
 ): Uint8Array<ArrayBuffer> {
   const preset = job.preset;
   const capacity = preset.columns * preset.rows;
@@ -296,11 +306,13 @@ function renderPdf(
           runStart = -1;
         }
       }
+      // The built-in PDF font is ASCII only, so the price uses the currency code and Latin digits.
+      const price = formatPrice(copy.effectivePrice, { code: currency.code, symbol: `${currency.code} ` }, "en");
       const lines = [
         copy.barcode,
         job.content.showProduct ? copy.productName : "",
         job.content.showVariant ? copy.optionLabel ?? "" : "",
-        [job.content.showSku ? copy.sku : "", job.content.showPrice ? formatPrice(copy.effectivePrice, currencyCode) : ""].filter(Boolean).join("  "),
+        [job.content.showSku ? copy.sku : "", job.content.showPrice ? price : ""].filter(Boolean).join("  "),
       ].filter(Boolean).slice(0, Math.max(1, Math.floor((height - barcodeHeight - 8) / 8)));
       lines.forEach((line, index) => {
         commands.push(`BT /F1 ${index === 0 ? 6 : 7} Tf ${(left + 4).toFixed(2)} ${(barcodeBottom - 8 - index * 8).toFixed(2)} Td (${pdfText(line!)}) Tj ET`);
@@ -327,18 +339,18 @@ function renderPdf(
 export function buildInventoryLabelArtifact(
   variants: readonly InventoryLabelArtifactVariant[],
   job: InventoryLabelArtifactJob,
-  currencyCode: string,
+  currency: InventoryLabelCurrency,
 ): InventoryLabelArtifact {
   const allCopies = buildCopies(variants, job);
   const copies = job.mode === "test" ? allCopies.slice(0, 1) : allCopies;
   const pageCount = Math.ceil((job.startOffset + copies.length) / (job.preset.columns * job.preset.rows));
   let artifact: Omit<InventoryLabelArtifact, "byteLength">;
   if (job.format === "csv") {
-    artifact = { body: renderCsv(copies, currencyCode), contentType: "text/csv; charset=utf-8", extension: "csv", copyCount: copies.length, pageCount };
+    artifact = { body: renderCsv(copies, job, currency), contentType: "text/csv; charset=utf-8", extension: "csv", copyCount: copies.length, pageCount };
   } else if (job.format === "html") {
-    artifact = { body: renderHtml(copies, job, currencyCode), contentType: "text/html; charset=utf-8", extension: "html", copyCount: copies.length, pageCount };
+    artifact = { body: renderHtml(copies, job, currency), contentType: "text/html; charset=utf-8", extension: "html", copyCount: copies.length, pageCount };
   } else {
-    artifact = { body: renderPdf(copies, job, currencyCode), contentType: "application/pdf", extension: "pdf", copyCount: copies.length, pageCount };
+    artifact = { body: renderPdf(copies, job, currency), contentType: "application/pdf", extension: "pdf", copyCount: copies.length, pageCount };
   }
   const byteLength = typeof artifact.body === "string"
     ? new TextEncoder().encode(artifact.body).byteLength

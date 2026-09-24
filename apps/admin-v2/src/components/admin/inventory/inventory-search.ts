@@ -22,10 +22,9 @@ export type AlertFilter = (typeof ALERT_FILTERS)[number];
 export type MovementType = (typeof MOVEMENT_TYPES)[number];
 export type MovementFilter = (typeof MOVEMENT_FILTERS)[number];
 
-/** Inventory list state in the URL: enum filters, calendar dates and the one free-text `q`. */
+/** Inventory list state in the URL: the tab, enum filters and calendar dates. */
 export type InventorySearch = {
   section: InventoryWorkspaceSection;
-  q: string;
   stock: StockFilter;
   alert: AlertFilter;
   type: MovementFilter;
@@ -36,7 +35,6 @@ export type InventorySearch = {
 /** Values equal to these are stripped from the URL. */
 export const INVENTORY_SEARCH_DEFAULTS = {
   section: "variants",
-  q: "",
   stock: "all",
   alert: "active",
   type: "all",
@@ -44,7 +42,10 @@ export const INVENTORY_SEARCH_DEFAULTS = {
   to: "",
 } as const satisfies InventorySearch;
 
-export type InventoryFiltersChange = (patch: Partial<Omit<InventorySearch, "section">>) => void;
+/** What a tab filters by: the URL state plus the search term, which lives in the session (`useListSearch("inventory")`). */
+export type InventoryFilters = InventorySearch & { q: string };
+
+export type InventoryFiltersChange = (patch: Partial<Omit<InventoryFilters, "section">>) => void;
 
 function pick<T extends string>(value: unknown, values: readonly T[], fallback: T): T {
   return values.includes(value as T) ? (value as T) : fallback;
@@ -57,7 +58,6 @@ function calendarDate(value: unknown): string {
 export function validateInventorySearch(search: Record<string, unknown>): InventorySearch {
   return {
     section: normalizeInventoryWorkspaceSection(search.section),
-    q: typeof search.q === "string" ? search.q.trim().slice(0, 200) : "",
     stock: pick(search.stock, STOCK_FILTERS, "all"),
     alert: pick(search.alert, ALERT_FILTERS, "active"),
     type: pick(search.type, MOVEMENT_FILTERS, "all"),
@@ -72,7 +72,7 @@ export const MOVEMENT_PAGE_SIZE = 50;
 
 /** One query builder per tab, shared by the route prefetch and the tab so their cache keys match. */
 export const variantsQuery = (
-  search: Pick<InventorySearch, "q" | "stock">,
+  search: Pick<InventoryFilters, "q" | "stock">,
   page = 1,
   limit = 50,
   sort: VariantSort = { field: "available", order: "asc" },
@@ -87,9 +87,9 @@ export const variantsQuery = (
 });
 
 export const alertsQuery = (
-  search: Pick<InventorySearch, "q" | "alert">,
+  search: Pick<InventoryFilters, "q" | "alert">,
   page = 1,
-  limit = 20,
+  limit = 50,
 ): InventoryQuery => ({
   section: "alerts",
   search: search.q || undefined,
@@ -99,7 +99,7 @@ export const alertsQuery = (
 });
 
 export const movementsQuery = (
-  search: Pick<InventorySearch, "q" | "type" | "from" | "to">,
+  search: Pick<InventoryFilters, "q" | "type" | "from" | "to">,
   cursor?: string,
 ): InventoryQuery => ({
   section: "movements",

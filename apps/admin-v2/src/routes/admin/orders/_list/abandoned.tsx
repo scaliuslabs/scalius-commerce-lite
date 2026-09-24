@@ -1,21 +1,32 @@
 import { useCallback } from "react";
-import { createFileRoute, useNavigate, stripSearchParams } from "@tanstack/react-router";
-import { AbandonedCheckoutList } from "~/components/admin/order-list/AbandonedCheckoutList";
+import { createFileRoute, retainSearchParams, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import {
-  validateAbandonedCheckoutSearch,
-  type AbandonedCheckoutRouteState,
-} from "~/lib/abandoned-checkout-route-state";
+  AbandonedCheckoutList,
+  type AbandonedCheckoutListState,
+} from "~/components/admin/order-list/AbandonedCheckoutList";
+import { validateAbandonedCheckoutSearch } from "~/lib/abandoned-checkout-route-state";
+import type { SearchValidatorInput } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { translate } from "~/i18n";
 import { orderListMessages } from "~/i18n/order-list";
 
+/** Page, sort and order live in the URL; the search term stays in this tab's session. */
+function validateSearch(search: SearchValidatorInput<AbandonedCheckoutListState>): AbandonedCheckoutListState {
+  const { search: _term, ...state } = validateAbandonedCheckoutSearch(search);
+  return state;
+}
+
 export const Route = createFileRoute("/admin/orders/_list/abandoned")({
-  validateSearch: validateAbandonedCheckoutSearch,
+  validateSearch,
   search: {
-    middlewares: [stripSearchParams({ page: 1, limit: 20, search: "", sort: "updatedAt", order: "desc" })],
+    // Opening a checkout (…/abandoned/$checkoutId) keeps the list's page and sort behind the sheet.
+    middlewares: [
+      retainSearchParams(true),
+      stripSearchParams({ page: 1, limit: 20, sort: "updatedAt", order: "desc" }),
+    ],
   },
   head: () => ({
-    meta: [{ title: `${translate(orderListMessages, "abandonedTitle")} | Scalius Admin` }],
+    meta: [{ title: `${translate(orderListMessages, "abandonedTitle")} | Scalius` }],
   }),
   errorComponent: RouteErrorComponent,
   component: AbandonedCheckoutsPage,
@@ -23,10 +34,11 @@ export const Route = createFileRoute("/admin/orders/_list/abandoned")({
 
 function AbandonedCheckoutsPage() {
   const search = Route.useSearch();
-  const navigate = useNavigate({ from: Route.fullPath });
+  const navigate = useNavigate({ from: "/admin/orders/abandoned" });
   const onChange = useCallback(
-    (updates: Partial<AbandonedCheckoutRouteState>, options?: { replace?: boolean }) => {
+    (updates: Partial<AbandonedCheckoutListState>, options?: { replace?: boolean }) => {
       void navigate({
+        to: "/admin/orders/abandoned",
         search: (previous) => ({ ...previous, ...updates }),
         replace: options?.replace,
       });

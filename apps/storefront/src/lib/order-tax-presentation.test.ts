@@ -35,9 +35,9 @@ describe("storefront saved order tax presentation", () => {
       taxLabel: "VAT",
       pricesIncludeTax: false,
     });
-    expect(formatSavedMinorAmount(summary!.taxMinor, summary!)).toBe("BDT 25.00");
-    expect(formatSavedMinorAmount(summary!.totalMinor, summary!)).toBe("BDT 275.00");
-    expect(formatSavedMinorAmount(1_234_500, summary!)).toBe("BDT 12,345.00");
+    expect(formatSavedMinorAmount(summary!.taxMinor, summary!)).toBe("৳25");
+    expect(formatSavedMinorAmount(summary!.totalMinor, summary!)).toBe("৳275");
+    expect(formatSavedMinorAmount(1_234_500, summary!)).toBe("৳12,345");
   });
 
   it("falls back for legacy or inconsistent rows instead of inventing tax", () => {

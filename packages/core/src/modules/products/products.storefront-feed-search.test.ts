@@ -646,6 +646,13 @@ describe("storefront feed category search", () => {
             { ...color, values: ["Red", "Blue"] },
         ]);
         await expect(resolvePublicAttributeFilters(db, {
+            "option.size": ["42", "41"],
+            color: ["Red"],
+        }, [])).resolves.toEqual([
+            { id: "option.size", name: "size", slug: "option.size", values: ["42", "41"] },
+            { ...color, values: ["Red"] },
+        ]);
+        await expect(resolvePublicAttributeFilters(db, {
             color: Array.from({ length: 91 }, (_, index) => `Value ${index}`),
         }, [])).rejects.toThrow(/At most 90 attribute filter values/);
         expect(maxBoundParameters).toBeLessThanOrEqual(100);

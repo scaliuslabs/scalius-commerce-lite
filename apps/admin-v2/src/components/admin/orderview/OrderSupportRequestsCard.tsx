@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Alert } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -11,15 +12,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Textarea } from "~/components/ui/textarea";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
+import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
-import { useResolveOrderSupportRequest } from "~/lib/api-mutations/orders";
+import { orderErrorMessage, useResolveOrderSupportRequest } from "~/lib/api-mutations/orders";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
 import {
   StableReturnCommandKey,
@@ -27,18 +29,27 @@ import {
   type OrderReturnDto,
 } from "~/lib/order-return-workflow";
 import { formatOrderTimestamp } from "./formatters";
-import { createReturnCommandKey, getOrderItemName, parseReturnQuantity } from "./order-returns/shared";
+import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./order-returns/shared";
+import { restockedUnits } from "./OrderStatusCard";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order, OrderSupportRequest } from "./types";
 
 type Resolution = "under_review" | "approved" | "rejected" | "completed";
 const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
 
-function resolutionsFor(status: string): Resolution[] {
-  if (status === "submitted") return ["under_review", "approved", "rejected", "completed"];
-  if (status === "under_review") return ["approved", "rejected", "completed"];
-  if (status === "approved") return ["completed"];
-  return [];
+/**
+ * Answers a merchant can give. Accepting a cancellation cancels the order,
+ * so it needs the right to cancel orders.
+ */
+export function resolutionsFor(request: Pick<OrderSupportRequest, "status" | "type">, canCancelOrders: boolean): Resolution[] {
+  const options: Resolution[] = request.status === "submitted"
+    ? ["under_review", "approved", "rejected", "completed"]
+    : request.status === "under_review"
+      ? ["approved", "rejected", "completed"]
+      : request.status === "approved" ? ["completed"] : [];
+  return request.type === "cancel_pre_shipment" && !canCancelOrders
+    ? options.filter((option) => option !== "approved")
+    : options;
 }
 
 function ResolveDialog({
@@ -53,9 +64,11 @@ function ResolveDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useMessages(orderDetailMessages);
+  const o = useMessages(orderMessages);
   const r = useMessages(resourceMessages);
+  const canCancelOrders = useOrderActionPermissions().canChangeOrderStatus;
   const mutation = useResolveOrderSupportRequest();
-  const options = request ? resolutionsFor(request.status) : [];
+  const options = request ? resolutionsFor(request, canCancelOrders) : [];
   const [selected, setSelected] = useState<Resolution | null>(null);
   const [note, setNote] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -78,17 +91,20 @@ function ResolveDialog({
 
   useEffect(() => {
     if (!open || !request) return;
-    setSelected(resolutionsFor(request.status)[0] ?? null);
+    // Nothing is pre-selected: the merchant picks the answer.
+    setSelected(null);
     setNote("");
     setQuantities({});
     commandKey.current.clear();
+    mutation.reset();
   }, [open, request?.id, request?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!request) return <Dialog open={false} onOpenChange={onOpenChange} />;
 
   const canSubmit = Boolean(selected)
-    && !mutation.isPending
     && (!isReturnApproval || (returnsQuery.isSuccess && returnLines.length > 0));
+  const isCancelApproval = request.type === "cancel_pre_shipment" && selected === "approved";
+  const restock = restockedUnits(order);
 
   const submit = () => {
     if (!selected || !canSubmit) return;
@@ -115,10 +131,11 @@ function ResolveDialog({
     <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{request.label}</DialogTitle>
+          <DialogTitle>{o(`request.${request.type}`)}</DialogTitle>
           <DialogDescription>{request.reason}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
           <RadioGroup value={selected ?? ""} onValueChange={(value) => setSelected(value as Resolution)}>
             {options.map((option) => (
               <div key={option} className="flex items-center gap-3">
@@ -129,6 +146,11 @@ function ResolveDialog({
           </RadioGroup>
           {request.type === "return" ? (
             <p className="text-body text-muted-foreground">{t("requests.returnHelp")}</p>
+          ) : null}
+          {isCancelApproval ? (
+            <p className="text-body text-muted-foreground">
+              {[t("requests.cancelHelp"), restock > 0 ? t("cancel.restock", { count: restock }) : null].filter(Boolean).join(" ")}
+            </p>
           ) : null}
 
           {isReturnApproval ? (
@@ -152,15 +174,12 @@ function ResolveDialog({
                         <p className="font-medium">{name}</p>
                         <p className="text-muted-foreground">{t("returns.available", { count: max })}</p>
                       </div>
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        max={max}
+                      <NumberInput
+                        integer
                         className="w-20 shrink-0"
                         aria-label={t("returns.returnQty", { name })}
                         value={quantities[item.id] ?? 0}
-                        onChange={(e) => setQuantities((current) => ({ ...current, [item.id]: parseReturnQuantity(e.target.value, max) }))}
+                        onValueChange={(value) => setQuantities((current) => ({ ...current, [item.id]: clampQuantity(value, max) }))}
                       />
                     </li>
                   );
@@ -176,8 +195,14 @@ function ResolveDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>
-          <Button type="button" onClick={submit} disabled={!canSubmit}>
-            {r("save")}
+          <Button
+            type="button"
+            variant={isCancelApproval ? "destructive" : "default"}
+            onClick={submit}
+            disabled={!canSubmit}
+            loading={mutation.isPending}
+          >
+            {isCancelApproval ? t("requests.acceptCancel") : r("save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -187,7 +212,9 @@ function ResolveDialog({
 
 export function OrderSupportRequestsCard({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
-  const canResolve = useOrderActionPermissions().canResolveOrderSupportRequests;
+  const o = useMessages(orderMessages);
+  const actions = useOrderActionPermissions();
+  const canResolve = actions.canResolveOrderSupportRequests;
   const [selected, setSelected] = useState<OrderSupportRequest | null>(null);
   const [open, setOpen] = useState(false);
   const requests = order.supportRequests ?? [];
@@ -206,14 +233,14 @@ export function OrderSupportRequestsCard({ order }: { order: Order }) {
             <li key={request.id} className="flex flex-wrap items-start justify-between gap-2 py-3">
               <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{request.label}</span>
+                  <span className="font-medium">{o(`request.${request.type}`)}</span>
                   <Badge variant={statusBadgeVariant(request.status)}>{orderDetailLabel(t, "requests.status.", request.status)}</Badge>
                 </div>
                 <p className="text-muted-foreground">{request.reason}</p>
                 {request.message ? <p className="line-clamp-3 text-muted-foreground">{request.message}</p> : null}
                 <p className="text-muted-foreground">{formatOrderTimestamp(request.submittedAt ?? request.createdAt)}</p>
               </div>
-              {canResolve && request.active && resolutionsFor(request.status).length > 0 ? (
+              {canResolve && request.active && resolutionsFor(request, actions.canChangeOrderStatus).length > 0 ? (
                 <Button
                   type="button"
                   size="sm"

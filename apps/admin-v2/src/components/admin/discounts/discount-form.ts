@@ -105,12 +105,32 @@ export function epochToStoreTime(epochSeconds: number): { date: string; time: st
   return partsIn(epochSeconds * 1_000);
 }
 
-export function majorToMinor(value: string, currencyCode: string): number | null {
+/** Money inputs above this (major units) are typos, not discounts (৳10,00,000). */
+export const MAX_AMOUNT_MAJOR = 1_000_000;
+/** The API's cap for item quantities (buy, get, per order, minimum items). */
+export const MAX_QUANTITY = 10_000;
+
+/** Bengali digits (০-৯) typed on a Bangla keyboard → Latin, so every number field accepts them. */
+export function latinDigits(value: string): string {
+  return value.replace(/[০-৯]/gu, (digit) => String(digit.charCodeAt(0) - 0x09e6));
+}
+
+/** Why an amount can't be saved, or null when it can. */
+export function amountError(value: string, currencyCode: string): DiscountMessageKey | null {
   const precision = getDecimalPlaces(currencyCode);
-  const match = /^(\d+)(?:\.(\d+))?$/u.exec(value.trim());
-  if (!match || (match[2]?.length ?? 0) > precision) return null;
-  const minor = Number(match[1]) * 10 ** precision + Number((match[2] ?? "").padEnd(precision, "0") || "0");
-  return Number.isSafeInteger(minor) && minor > 0 ? minor : null;
+  const match = /^(\d+)(?:\.(\d+))?$/u.exec(latinDigits(value).trim());
+  if (!match) return "errorAmount";
+  if ((match[2]?.length ?? 0) > precision) return precision === 0 ? "errorWholeAmount" : "errorDecimals";
+  const major = Number(`${match[1]}.${match[2] ?? "0"}`);
+  if (major <= 0) return "errorAmount";
+  return major > MAX_AMOUNT_MAJOR ? "errorAmountMax" : null;
+}
+
+export function majorToMinor(value: string, currencyCode: string): number | null {
+  if (amountError(value, currencyCode)) return null;
+  const precision = getDecimalPlaces(currencyCode);
+  const [whole, fraction = ""] = latinDigits(value).trim().split(".");
+  return Number(whole) * 10 ** precision + Number(fraction.padEnd(precision, "0") || "0");
 }
 
 export function minorToMajor(value: number, currencyCode: string): string {
@@ -119,15 +139,22 @@ export function minorToMajor(value: number, currencyCode: string): string {
   return precision === 0 ? fixed : fixed.replace(/\.?0+$/u, "");
 }
 
-function positiveInteger(value: string): number | null {
-  if (!/^\d+$/u.test(value.trim())) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+function positiveInteger(value: string, max = Number.MAX_SAFE_INTEGER): number | null {
+  const digits = latinDigits(value).trim();
+  if (!/^\d+$/u.test(digits)) return null;
+  const parsed = Number(digits);
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= max ? parsed : null;
+}
+
+function quantityError(value: string, max = MAX_QUANTITY): DiscountMessageKey | null {
+  if (positiveInteger(value) === null) return "errorQuantity";
+  return positiveInteger(value, max) === null ? "errorQuantityMax" : null;
 }
 
 function percentToBasisPoints(value: string): number | null {
-  if (!/^\d+(?:\.\d{1,2})?$/u.test(value.trim())) return null;
-  const basisPoints = Math.round(Number(value) * 100);
+  const digits = latinDigits(value).trim();
+  if (!/^\d+(?:\.\d{1,2})?$/u.test(digits)) return null;
+  const basisPoints = Math.round(Number(digits) * 100);
   return basisPoints >= 1 && basisPoints <= 10_000 ? basisPoints : null;
 }
 
@@ -243,8 +270,15 @@ export function draftFromDiscount(record: DiscountRecord, currencyCode: string):
   };
 }
 
-export function validateDraft(draft: DiscountDraft, currencyCode: string): DraftErrors {
+export function validateDraft(
+  draft: DiscountDraft,
+  currencyCode: string,
+  nowSeconds = Math.floor(Date.now() / 1_000),
+): DraftErrors {
   const errors: DraftErrors = {};
+  const set = (field: keyof DiscountDraft, error: DiscountMessageKey | null) => {
+    if (error) errors[field] = error;
+  };
   if (draft.method === "code") {
     if (!draft.code.trim()) errors.code = "errorCodeRequired";
     else if (!CODE_PATTERN.test(draft.code.trim().toUpperCase())) errors.code = "errorCodeFormat";
@@ -254,43 +288,36 @@ export function validateDraft(draft: DiscountDraft, currencyCode: string): Draft
     errors.title = "errorTitleLength";
   }
   if (draft.type === "products" || draft.type === "order") {
-    const valid = draft.valueKind === "percentage"
-      ? percentToBasisPoints(draft.value) !== null
-      : majorToMinor(draft.value, currencyCode) !== null;
-    if (!valid) errors.value = draft.valueKind === "percentage" ? "errorPercent" : "errorAmount";
+    set("value", draft.valueKind === "percentage"
+      ? percentToBasisPoints(draft.value) === null ? "errorPercent" : null
+      : amountError(draft.value, currencyCode));
   }
   if (draft.type === "products" && draft.appliesTo.ids.length === 0) errors.appliesTo = "errorPickItems";
-  if (
-    bundlesShipping(draft)
-    && draft.freeShippingMinimum.trim()
-    && majorToMinor(draft.freeShippingMinimum, currencyCode) === null
-  ) {
-    errors.freeShippingMinimum = "errorAmount";
+  if (bundlesShipping(draft) && draft.freeShippingMinimum.trim()) {
+    set("freeShippingMinimum", amountError(draft.freeShippingMinimum, currencyCode));
   }
   if (draft.type === "buy_get") {
-    const buyValid = draft.buyKind === "quantity"
-      ? positiveInteger(draft.buyValue) !== null
-      : majorToMinor(draft.buyValue, currencyCode) !== null;
-    if (!buyValid) errors.buyValue = draft.buyKind === "quantity" ? "errorQuantity" : "errorAmount";
+    set("buyValue", draft.buyKind === "quantity" ? quantityError(draft.buyValue) : amountError(draft.buyValue, currencyCode));
     if (draft.buyScope.ids.length === 0) errors.buyScope = "errorPickItems";
-    if (positiveInteger(draft.getQuantity) === null) errors.getQuantity = "errorQuantity";
+    set("getQuantity", quantityError(draft.getQuantity));
     if (draft.getScope.ids.length === 0) errors.getScope = "errorPickItems";
     if (draft.getValueKind === "percentage" && percentToBasisPoints(draft.getValue) === null) errors.getValue = "errorPercent";
-    if (draft.limitUsesPerOrder && positiveInteger(draft.usesPerOrder) === null) errors.usesPerOrder = "errorQuantity";
+    if (draft.limitUsesPerOrder) set("usesPerOrder", quantityError(draft.usesPerOrder));
   } else if (draft.minimum !== "none") {
-    const valid = draft.minimum === "amount"
-      ? majorToMinor(draft.minimumValue, currencyCode) !== null
-      : positiveInteger(draft.minimumValue) !== null;
-    if (!valid) errors.minimumValue = draft.minimum === "amount" ? "errorAmount" : "errorQuantity";
+    set("minimumValue", draft.minimum === "amount"
+      ? amountError(draft.minimumValue, currencyCode)
+      : quantityError(draft.minimumValue));
   }
-  if (draft.method === "code" && draft.limitTotal && positiveInteger(draft.totalUses) === null) {
-    errors.totalUses = "errorQuantity";
+  if (draft.method === "code" && draft.limitTotal) {
+    set("totalUses", quantityError(draft.totalUses, Number.MAX_SAFE_INTEGER));
   }
   const start = storeTimeToEpoch(draft.startDate, draft.startTime);
   if (start === null) errors.startDate = "errorDate";
   if (draft.hasEnd) {
     const end = storeTimeToEpoch(draft.endDate, draft.endTime);
     if (end === null) errors.endDate = "errorDate";
+    // An ended discount can't be switched on; say so before saving.
+    else if (end <= nowSeconds) errors.endDate = "errorEndPassed";
     else if (start !== null && end <= start) errors.endDate = "errorEndBeforeStart";
   }
   return errors;
@@ -421,71 +448,119 @@ export function discountStatus(
   record: Pick<DiscountRecord, "status" | "startsAtEpochSeconds" | "endsAtEpochSeconds">,
   nowSeconds = Math.floor(Date.now() / 1_000),
 ): DiscountStatus {
-  if (record.status === "draft") return "draft";
-  if (record.status !== "active") return "inactive";
+  if (record.status !== "active" && record.status !== "draft") return "inactive";
+  // Past its end date a draft can never go live either: both are expired.
   if (record.endsAtEpochSeconds !== null && record.endsAtEpochSeconds <= nowSeconds) return "expired";
+  if (record.status === "draft") return "draft";
   if (record.startsAtEpochSeconds !== null && record.startsAtEpochSeconds > nowSeconds) return "scheduled";
   return "active";
+}
+
+/** A code whose total-use limit is used up: still on, but no buyer can apply it. */
+export function limitReached(record: Pick<DiscountRecord, "maxRedemptions" | "redemptionCount">): boolean {
+  return record.maxRedemptions !== null && record.redemptionCount >= record.maxRedemptions;
+}
+
+/**
+ * A fixed amount off each item that is more than every selected product's
+ * price makes them free (the storefront clamps it). `prices` are the selected
+ * products' prices in major units, or null while they load.
+ */
+export function exceedsEveryPrice(draft: DiscountDraft, prices: number[] | null, currencyCode: string): boolean {
+  if (draft.type !== "products" || draft.valueKind !== "fixed" || draft.oncePerOrder) return false;
+  if (draft.appliesTo.kind !== "products" || !prices || prices.length === 0) return false;
+  const amount = majorToMinor(draft.value, currencyCode);
+  const precision = getDecimalPlaces(currencyCode);
+  return amount !== null && prices.every((price) => amount > Math.round(price * 10 ** precision));
 }
 
 /** Message key + vars for one summary line, rendered by the caller's `t`. */
 export type SummaryLine = { key: DiscountMessageKey; vars?: Record<string, string | number> };
 
-const one = (value: string) => value.trim() === "1";
+export interface SummaryFormat {
+  /** A valid major-unit amount, e.g. "1500" → "৳1,500.00". */
+  money: (major: string) => string;
+  /** A valid number → the dashboard language's digits. */
+  number: (value: string) => string;
+  date: (epochSeconds: number) => string;
+  /** The picked items by name ("Panjabi, Attar and 1 more") or by count ("3 products"). */
+  scope: (scope: Scope) => string;
+}
 
-export function summarizeDraft(
-  draft: DiscountDraft,
-  format: { money: (major: string) => string; date: (epochSeconds: number) => string },
-): SummaryLine[] {
+const one = (value: string) => latinDigits(value).trim() === "1";
+
+/** The value in a few words for the list: "10% off · 2 products", "Buy 2 get 1". */
+export function describeValue(draft: DiscountDraft, currencyCode: string, format: SummaryFormat): SummaryLine {
+  const value = draft.valueKind === "percentage"
+    ? `${format.number(draft.value)}%`
+    : format.money(draft.value);
+  if (draft.type === "shipping") return { key: "type_shipping" };
+  if (draft.type === "order") return { key: "listValueOrder", vars: { value } };
+  if (draft.type === "products") return { key: "listValueProducts", vars: { value, scope: format.scope(draft.appliesTo) } };
+  const get = format.number(draft.getQuantity);
+  return draft.buyKind === "quantity"
+    ? { key: "listValueBuyGet", vars: { buy: format.number(draft.buyValue), get } }
+    : { key: "listValueSpendGet", vars: { value: format.money(draft.buyValue), get } };
+}
+
+/** The Summary card: one line per fact, only once that fact is complete and valid. */
+export function summarizeDraft(draft: DiscountDraft, currencyCode: string, format: SummaryFormat): SummaryLine[] {
   const lines: SummaryLine[] = [];
-  const value = draft.valueKind === "percentage" ? `${draft.value || 0}%` : format.money(draft.value || "0");
-  const hasValue = draft.value.trim() !== "";
+  const clean = (value: string) => latinDigits(value).trim();
+  const amount = (value: string) => (amountError(value, currencyCode) ? null : format.money(clean(value)));
+  const percent = (value: string) => (percentToBasisPoints(value) === null ? null : `${format.number(clean(value))}%`);
+  const count = (value: string, max?: number) => (quantityError(value, max) ? null : format.number(clean(value)));
+  const value = draft.valueKind === "percentage" ? percent(draft.value) : amount(draft.value);
   if (draft.type === "products") {
-    if (hasValue) {
-      lines.push({ key: draft.valueKind === "fixed" && !draft.oncePerOrder ? "summaryOffEachItem" : "summaryOff", vars: { value } });
-    }
-    const count = draft.appliesTo.ids.length;
-    if (count > 0) {
-      const one = count === 1;
-      lines.push({
-        key: draft.appliesTo.kind === "products"
-          ? one ? "summaryProduct" : "summaryProducts"
-          : one ? "summaryCollection" : "summaryCollections",
-        vars: { count },
-      });
-    }
-  } else if (draft.type === "order") {
-    if (hasValue) lines.push({ key: "summaryOffOrder", vars: { value } });
+    if (value) lines.push({ key: draft.valueKind === "fixed" && !draft.oncePerOrder ? "summaryOffEachItem" : "summaryOff", vars: { value } });
+    if (draft.appliesTo.ids.length > 0) lines.push({ key: "summaryAppliesTo", vars: { names: format.scope(draft.appliesTo) } });
+  } else if (draft.type === "order" && value) {
+    lines.push({ key: "summaryOffOrder", vars: { value } });
   }
   if (bundlesShipping(draft)) {
-    lines.push(draft.freeShippingMinimum.trim()
-      ? { key: "summaryPlusFreeShippingOver", vars: { value: format.money(draft.freeShippingMinimum) } }
-      : { key: "summaryPlusFreeShipping" });
+    const over = amount(draft.freeShippingMinimum);
+    if (!draft.freeShippingMinimum.trim()) lines.push({ key: "summaryPlusFreeShipping" });
+    else if (over) lines.push({ key: "summaryPlusFreeShippingOver", vars: { value: over } });
   }
   if (draft.type === "shipping") {
     lines.push({ key: "summaryFreeShipping" });
   } else if (draft.type === "buy_get") {
-    const buy: SummaryLine = draft.buyKind === "quantity"
-      ? { key: draft.buyValue.trim() === "1" ? "summaryBuyOne" as const : "summaryBuyQuantity" as const, vars: { count: draft.buyValue || 0 } }
-      : { key: "summaryBuyAmount" as const, vars: { value: format.money(draft.buyValue || "0") } };
-    lines.push(buy);
-    lines.push(draft.getValueKind === "free"
-      ? { key: one(draft.getQuantity) ? "summaryGetFreeOne" : "summaryGetFree", vars: { count: draft.getQuantity || 0 } }
-      : { key: one(draft.getQuantity) ? "summaryGetPercentOne" : "summaryGetPercent", vars: { count: draft.getQuantity || 0, value: `${draft.getValue || 0}%` } });
-    if (draft.limitUsesPerOrder) {
-      lines.push({ key: one(draft.usesPerOrder) ? "summaryUsesPerOrderOne" : "summaryUsesPerOrder", vars: { count: draft.usesPerOrder || 0 } });
+    if (draft.buyScope.ids.length > 0) {
+      const names = format.scope(draft.buyScope);
+      const buyAmount = amount(draft.buyValue);
+      const buyCount = count(draft.buyValue);
+      if (draft.buyKind === "amount" && buyAmount) lines.push({ key: "summaryBuyAmount", vars: { value: buyAmount, names } });
+      if (draft.buyKind === "quantity" && buyCount) {
+        lines.push({ key: one(draft.buyValue) ? "summaryBuyOne" : "summaryBuyQuantity", vars: { count: buyCount, names } });
+      }
     }
-    lines.push({ key: "summaryCustomerAdds" });
+    const getCount = count(draft.getQuantity);
+    const getPercent = percent(draft.getValue);
+    if (draft.getScope.ids.length > 0 && getCount && (draft.getValueKind === "free" || getPercent)) {
+      const names = format.scope(draft.getScope);
+      const single = one(draft.getQuantity);
+      lines.push(draft.getValueKind === "free"
+        ? { key: single ? "summaryGetFreeOne" : "summaryGetFree", vars: { count: getCount, names } }
+        : { key: single ? "summaryGetPercentOne" : "summaryGetPercent", vars: { count: getCount, names, value: getPercent! } });
+      lines.push({ key: "summaryCustomerAdds", vars: { names } });
+    }
+    const uses = count(draft.usesPerOrder);
+    if (draft.limitUsesPerOrder && uses) {
+      lines.push({ key: one(draft.usesPerOrder) ? "summaryUsesPerOrderOne" : "summaryUsesPerOrder", vars: { count: uses } });
+    }
   }
   if (draft.type !== "buy_get") {
-    lines.push(draft.minimum === "none"
-      ? { key: "summaryNoMinimum" }
-      : draft.minimum === "amount"
-        ? { key: "summaryMinimumAmount", vars: { value: format.money(draft.minimumValue || "0") } }
-        : { key: one(draft.minimumValue) ? "summaryMinimumQuantityOne" : "summaryMinimumQuantity", vars: { count: draft.minimumValue || 0 } });
+    const minimumAmount = amount(draft.minimumValue);
+    const minimumCount = count(draft.minimumValue);
+    if (draft.minimum === "none") lines.push({ key: "summaryNoMinimum" });
+    else if (draft.minimum === "amount" && minimumAmount) lines.push({ key: "summaryMinimumAmount", vars: { value: minimumAmount } });
+    else if (draft.minimum === "quantity" && minimumCount) {
+      lines.push({ key: one(draft.minimumValue) ? "summaryMinimumQuantityOne" : "summaryMinimumQuantity", vars: { count: minimumCount } });
+    }
   }
   if (draft.method === "code") {
-    if (draft.limitTotal) lines.push({ key: one(draft.totalUses) ? "summaryTotalUsesOne" : "summaryTotalUses", vars: { count: draft.totalUses || 0 } });
+    const total = count(draft.totalUses, Number.MAX_SAFE_INTEGER);
+    if (draft.limitTotal && total) lines.push({ key: one(draft.totalUses) ? "summaryTotalUsesOne" : "summaryTotalUses", vars: { count: total } });
     if (draft.oncePerCustomer) lines.push({ key: "summaryOncePerCustomer" });
     if (!draft.limitTotal && !draft.oncePerCustomer) lines.push({ key: "summaryNoLimits" });
   }
@@ -496,7 +571,7 @@ export function summarizeDraft(
   const start = storeTimeToEpoch(draft.startDate, draft.startTime);
   const end = draft.hasEnd ? storeTimeToEpoch(draft.endDate, draft.endTime) : null;
   if (start !== null) {
-    lines.push(end !== null
+    lines.push(end !== null && end > start
       ? { key: "summaryActiveBetween", vars: { start: format.date(start), end: format.date(end) } }
       : { key: "summaryActiveFrom", vars: { start: format.date(start) } });
   }

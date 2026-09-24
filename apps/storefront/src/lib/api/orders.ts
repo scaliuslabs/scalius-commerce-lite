@@ -327,6 +327,29 @@ export async function validateCartItems(
   }
 }
 
+/**
+ * Server-side only: a signed-in account owner who lacks this browser's receipt
+ * cookie (the order email's link, another device) gets a fresh private proof.
+ * Returns null when the session does not own the order.
+ */
+export async function getAccountOwnerReceiptProof(
+  orderId: string,
+  customerSessionToken: string,
+): Promise<string | null> {
+  const response = await apiFetch(
+    `/orders/receipt/${encodeURIComponent(orderId)}/owner-proof`,
+    {
+      method: "POST",
+      headers: { "X-Customer-Session": customerSessionToken },
+      cache: "no-store",
+    },
+    { retries: 0, timeout: 5000, auth: true },
+  );
+  if (!response.ok) return null;
+  const data = unwrapData<{ receiptToken?: unknown }>(await response.json());
+  return typeof data?.receiptToken === "string" ? data.receiptToken : null;
+}
+
 export async function getOrderReceipt(
   orderId: string,
   receiptToken: string,

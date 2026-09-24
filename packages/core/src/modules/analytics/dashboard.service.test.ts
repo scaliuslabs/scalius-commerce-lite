@@ -1,22 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 
-import { getDashboardHomeSummary, getRecentOrders } from "./dashboard.service";
-
-function createRecentOrdersDb(rows: unknown[]) {
-    const chain = {
-        from: vi.fn(() => chain),
-        where: vi.fn(() => chain),
-        orderBy: vi.fn(() => chain),
-        limit: vi.fn(() => chain),
-        then: (resolve: (value: unknown[]) => void, reject?: (reason: unknown) => void) =>
-            Promise.resolve(rows).then(resolve, reject),
-    };
-    return {
-        db: { select: vi.fn(() => chain) } as unknown as Database,
-        chain,
-    };
-}
+import { getDashboardHomeSummary } from "./dashboard.service";
 
 function createDashboardHomeDb(batchRows: unknown[]) {
     const chains: Array<Record<string, ReturnType<typeof vi.fn>>> = [];
@@ -46,41 +31,6 @@ describe("dashboard query observability", () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
-    });
-
-    it("logs a generic timing label for dashboard reads", async () => {
-        const { db, chain } = createRecentOrdersDb([
-            {
-                id: "ord_1",
-                customerName: "Buyer",
-                totalAmountMinor: 120_000,
-                currencyDecimalPlaces: 2,
-                status: "processing",
-                createdAt: "2026-06-28T06:00:00.000Z",
-            },
-        ]);
-
-        const result = await getRecentOrders(db, 3);
-
-        expect(chain.limit).toHaveBeenCalledWith(3);
-        expect(chain.where).toHaveBeenCalledOnce();
-        expect(result).toEqual([
-            {
-                id: "ord_1",
-                customerName: "Buyer",
-                totalAmount: 1200,
-                status: "processing",
-                createdAt: new Date("2026-06-28T06:00:00.000Z"),
-            },
-        ]);
-        expect(console.log).toHaveBeenCalledWith("[dashboard-query]", expect.objectContaining({
-            event: "dashboard_query_completed",
-            query: "recent_orders",
-            attempts: 1,
-            durationMs: expect.any(Number),
-        }));
-        expect(console.warn).not.toHaveBeenCalled();
-        expect(console.error).not.toHaveBeenCalled();
     });
 
     it("loads dashboard home metrics and recent orders in one provider batch", async () => {
@@ -137,5 +87,19 @@ describe("dashboard query observability", () => {
             attempts: 1,
             durationMs: expect.any(Number),
         }));
+    });
+
+    it("skips the recent-order feed when none is requested", async () => {
+        const { db, batch } = createDashboardHomeDb([
+            [{ count: 1 }],
+            [{ count: 2 }],
+            [{ count: 0, revenueMinor: null, currencyDecimalPlaces: 2, delivered: 0, processing: 0, shipping: 0, cancelled: 0 }],
+            [{ count: 0, revenueMinor: null, currencyDecimalPlaces: 2 }],
+        ]);
+
+        const result = await getDashboardHomeSummary(db, 0);
+
+        expect(batch.mock.calls[0]?.[0]).toHaveLength(4);
+        expect(result.recentOrders).toEqual([]);
     });
 });

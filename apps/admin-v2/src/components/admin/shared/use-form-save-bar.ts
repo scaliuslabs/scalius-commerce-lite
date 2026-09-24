@@ -1,15 +1,9 @@
 import type { FieldValues, UseFormReturn } from "react-hook-form";
 import { translate } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
-import { useSaveBar } from "./SaveBar";
+import { SaveNotCompleted, useSaveBar } from "./SaveBar";
 
-/** A save that failed after the editor already showed the merchant why. */
-export class SaveNotCompleted extends Error {
-  constructor(message = translate(resourceMessages, "saveFailed")) {
-    super(message);
-    this.name = "SaveNotCompleted";
-  }
-}
+export { SaveNotCompleted };
 
 interface FormSaveBarOptions<T extends FieldValues, R extends FieldValues> {
   form: UseFormReturn<T, unknown, R>;

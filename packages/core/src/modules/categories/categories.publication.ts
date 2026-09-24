@@ -1,11 +1,7 @@
 import { categories, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard } from "@scalius/database/client";
 import { and, eq, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
-import type { BatchItem } from "drizzle-orm/batch";
 import { publicProductBaseConditions } from "../products/products.public-eligibility";
-
-export const CATEGORY_PUBLISH_NOT_READY = "CATEGORY_PUBLISH_NOT_READY";
 
 export type CategoryPublishReadiness = {
     ready: boolean;
@@ -72,7 +68,7 @@ export async function getCategoryPublishReadiness(
         ? []
         : [{
             code: "no_buyer_resolvable_products",
-            message: "Add at least one active product with a buyer-resolvable SKU before publishing.",
+            message: "No active products yet: the category page is empty until you add some.",
         }];
     const warnings: CategoryPublishReadiness["warnings"] = [];
     if (!row.imageUrl?.trim()) {
@@ -91,15 +87,4 @@ export async function getCategoryPublishReadiness(
         blockers,
         warnings,
     };
-}
-
-export function buildCategoryPublishReadyGuard(
-    db: Database,
-    categoryId: string,
-): BatchItem<"sqlite"> {
-    return buildBatchGuard(
-        db,
-        buyerResolvableCategoryProductExists(categoryId),
-        CATEGORY_PUBLISH_NOT_READY,
-    );
 }

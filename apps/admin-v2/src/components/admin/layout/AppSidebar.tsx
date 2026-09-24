@@ -68,7 +68,7 @@ export function AppSidebar({ nav, showSettings }: { nav: VisibleNavItem[]; showS
   };
 
   return (
-    <Sidebar aria-label={t("mainNavigation")}>
+    <Sidebar aria-label={t("mainNavigation")} closeLabel={t("closeMenu")}>
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>{ungrouped.map(renderItem)}</SidebarMenu>

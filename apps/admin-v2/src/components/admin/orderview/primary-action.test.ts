@@ -12,6 +12,7 @@ const base = {
   paidAmount: 0, balanceDue: 500, items: [item], shipments: [], fulfillmentStatus: "pending",
 } as unknown as Order;
 const order = (overrides: Partial<Order>): Order => ({ ...base, ...overrides });
+const courier = { id: "prov_1", name: "Pathao", type: "pathao", isActive: true } as NonNullable<Order["deliveryProviders"]>[number];
 
 describe("order primary phone action", () => {
   it("confirms pending and processing orders", () => {
@@ -20,8 +21,27 @@ describe("order primary phone action", () => {
     expect(resolveOrderPrimaryAction(order({ status: "pending" }), { ...all, canChangeOrderStatus: false })).toBeNull();
   });
 
+  it("sends with your own rider when no courier is connected", () => {
+    expect(resolveOrderPrimaryAction(order({ status: "confirmed" }), all)).toBe("sendOwnCourier");
+  });
+
+  it("waits for the courier list before choosing how to send", () => {
+    const loading = order({
+      status: "confirmed",
+      operationalReads: {
+        shipments: { status: "ready", refreshing: false },
+        deliveryProviders: { status: "loading", refreshing: false },
+      },
+    });
+    expect(resolveOrderPrimaryAction(loading, all)).toBeNull();
+  });
+
+  it("offers nothing on an archived order", () => {
+    expect(resolveOrderPrimaryAction(order({ archivedAt: 1 }), all)).toBeNull();
+  });
+
   it("books a courier only for confirmed orders without an active shipment", () => {
-    expect(resolveOrderPrimaryAction(order({ status: "confirmed" }), all)).toBe("bookCourier");
+    expect(resolveOrderPrimaryAction(order({ status: "confirmed", deliveryProviders: [courier] }), all)).toBe("bookCourier");
     const booked = order({
       status: "confirmed",
       shipments: [{ id: "s1", orderId: "ord_1", providerId: "p", providerType: "pathao", externalId: null, trackingId: null, status: "pending", rawStatus: null, createdAt: 1 }],
@@ -35,7 +55,7 @@ describe("order primary phone action", () => {
       },
     });
     expect(resolveOrderPrimaryAction(unknownShipments, all)).toBeNull();
-    expect(resolveOrderPrimaryAction(order({ status: "confirmed" }), { ...all, canManageOrderShipments: false })).toBeNull();
+    expect(resolveOrderPrimaryAction(order({ status: "confirmed", deliveryProviders: [courier] }), { ...all, canManageOrderShipments: false })).toBeNull();
   });
 
   it("collects COD on shipped or delivered orders with a balance", () => {

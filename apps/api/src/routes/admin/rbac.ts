@@ -2,7 +2,8 @@
 // Admin OpenAPI routes for RBAC (roles, permissions, user roles).
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { eq, inArray, and } from "drizzle-orm";
+import { eq, inArray, and, count } from "drizzle-orm";
+import type { Database } from "@scalius/database/client";
 import { roles, rolePermissions, permissions, userRoles, user } from "@scalius/database/schema";
 import {
     hasPermission,
@@ -15,7 +16,11 @@ import {
     getUserPermissionContext,
     getRolePermissions
 } from "@scalius/core/auth/rbac/helpers";
-import { PERMISSIONS, getPermissionsByCategory } from "@scalius/core/auth/rbac/permissions";
+import {
+    PERMISSIONS,
+    getPermissionsByCategory,
+    permissionPrerequisites,
+} from "@scalius/core/auth/rbac/permissions";
 
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";
@@ -46,6 +51,28 @@ export function assertPermissionSubset(
             );
         }
     }
+}
+
+/** A role is saved only with what each permission needs ("Edit products" needs "View products"). */
+function assertPrerequisites(requestedPermissions: readonly string[]): void {
+    const requested = new Set(requestedPermissions);
+    for (const permission of requested) {
+        const missing = permissionPrerequisites(permission).find((required) => !requested.has(required));
+        if (missing) {
+            throw new ValidationError(`${permission} needs ${missing}`);
+        }
+    }
+}
+
+/** How many staff hold each role, so a role in use can't be deleted by surprise. */
+async function staffCounts(db: Database, roleIds: readonly string[]): Promise<Map<string, number>> {
+    if (roleIds.length === 0) return new Map();
+    const rows = await db
+        .select({ roleId: userRoles.roleId, staff: count() })
+        .from(userRoles)
+        .where(inArray(userRoles.roleId, [...roleIds]))
+        .groupBy(userRoles.roleId);
+    return new Map(rows.map((row) => [row.roleId, Number(row.staff)]));
 }
 
 // -- Validation Schemas --
@@ -89,6 +116,8 @@ const roleSchema = z.object({
     isSystem: z.boolean(),
     permissions: z.array(z.string().max(150)).max(ROLE_PERMISSION_LIMIT),
     permissionsTruncated: z.boolean().optional(),
+    /** Staff who hold this role; a role in use can't be deleted. */
+    staffCount: z.number().int().min(0),
     createdAt: z.union([z.string(), z.number()]),
     updatedAt: z.union([z.string(), z.number()]),
 });
@@ -138,8 +167,10 @@ app.openapi(listRolesRoute, async (c) => {
             limit: limit + 1,
             offset: (page - 1) * limit,
         });
+        const pageRoles = roleRows.slice(0, limit);
+        const counts = await staffCounts(db, pageRoles.map((role) => role.id));
         return ok(c, {
-            roles: roleRows.slice(0, limit),
+            roles: pageRoles.map((role) => ({ ...role, staffCount: counts.get(role.id) ?? 0 })),
             pagination: { page, limit, hasMore: roleRows.length > limit },
         });
     } catch (error: unknown) {
@@ -180,6 +211,7 @@ app.openapi(createRoleRoute, (async (c: AdminRouteContext<typeof createRoleRoute
         }
 
         const data = c.req.valid("json");
+        assertPrerequisites(data.permissions);
         assertPermissionSubset(
             sessionUser,
             c.get("adminPermissions"),
@@ -228,7 +260,8 @@ app.openapi(createRoleRoute, (async (c: AdminRouteContext<typeof createRoleRoute
                 displayName: data.displayName,
                 description: data.description,
                 isSystem: false,
-                permissions: data.permissions
+                permissions: data.permissions,
+                staffCount: 0,
             }
         });
     } catch (error: unknown) {
@@ -278,6 +311,7 @@ app.openapi(getRoleRoute, (async (c: AdminRouteContext<typeof getRoleRoute>) => 
 
         const allPerms = await getRolePermissions(db, roleId);
         const perms = allPerms.slice(0, ROLE_PERMISSION_LIMIT).map((name) => name.slice(0, 150));
+        const counts = await staffCounts(db, [roleId]);
 
         return ok(c, {
             role: {
@@ -290,6 +324,7 @@ app.openapi(getRoleRoute, (async (c: AdminRouteContext<typeof getRoleRoute>) => 
                 updatedAt: role[0]!.updatedAt,
                 permissions: perms,
                 permissionsTruncated: allPerms.length > perms.length,
+                staffCount: counts.get(roleId) ?? 0,
             }
         });
     } catch (error: unknown) {
@@ -339,6 +374,17 @@ app.openapi(updateRoleRoute, async (c) => {
         const role = existingRole[0];
         if (!role) throw new NotFoundError("Role not found");
         const data = c.req.valid("json");
+        if (data.permissions !== undefined) {
+            if (role.isSystem) {
+                throw new ValidationError("Cannot modify permissions of system roles");
+            }
+            assertPrerequisites(data.permissions);
+            assertPermissionSubset(
+                sessionUser,
+                c.get("adminPermissions"),
+                data.permissions,
+            );
+        }
 
         if (data.displayName || data.description !== undefined) {
             await db
@@ -352,15 +398,6 @@ app.openapi(updateRoleRoute, async (c) => {
         }
 
         if (data.permissions !== undefined) {
-            assertPermissionSubset(
-                sessionUser,
-                c.get("adminPermissions"),
-                data.permissions,
-            );
-            if (role.isSystem) {
-                throw new ValidationError("Cannot modify permissions of system roles");
-            }
-
             await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
 
             if (data.permissions.length > 0) {
@@ -390,11 +427,13 @@ app.openapi(updateRoleRoute, async (c) => {
 
         const roleData = updatedRole[0];
         if (!roleData) throw new NotFoundError("Role not found after update");
+        const counts = await staffCounts(db, [roleId]);
 
         return ok(c, {
             role: {
                 ...roleData,
-                permissions: updatedPerms
+                permissions: updatedPerms,
+                staffCount: counts.get(roleId) ?? 0,
             }
         });
     } catch (error: unknown) {
@@ -589,6 +628,15 @@ app.openapi(removeRoleRoute, async (c) => {
 
         if (targetUser[0]?.isSuperAdmin) {
             throw new ValidationError("Cannot modify super admin's roles");
+        }
+
+        // Staff always keep a role; removing access entirely is "Remove staff".
+        const heldRoles = await db
+            .select({ roleId: userRoles.roleId })
+            .from(userRoles)
+            .where(eq(userRoles.userId, data.userId));
+        if (heldRoles.some((held) => held.roleId === data.roleId) && heldRoles.length === 1) {
+            throw new ValidationError("Staff need a role. Give them another role first");
         }
 
         await removeRoleFromUser(db, data.userId, data.roleId, kv);

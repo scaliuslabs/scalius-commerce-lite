@@ -12,7 +12,6 @@ import {
   settings,
   themeSettings,
   categories,
-  shippingMethods,
   checkoutLanguages,
 } from "@scalius/database/schema";
 import { eq, isNull, and, or, sql } from "drizzle-orm";
@@ -37,9 +36,11 @@ import {
   homepageDocument,
   mediaDocument,
   metaConversionsDocument,
+  policiesDocument,
   securityDocument,
   seoDocument,
 } from "../settings/documents";
+import { resolvePublicStorePolicies } from "../settings/store-policies.service";
 import {
   selectSettingsDocuments,
   SETTINGS_DOCUMENT_ROW_KEY,
@@ -160,13 +161,6 @@ export async function getHomepageData(db: Database) {
             AND ${settings.key} = ${SETTINGS_DOCUMENT_ROW_KEY}
         )`,
       )),
-
-    // 4. One active method is enough to prove delivery is offered.
-    db
-      .select({ id: shippingMethods.id })
-      .from(shippingMethods)
-      .where(eq(shippingMethods.isActive, true))
-      .limit(1),
   ]);
 
   const [
@@ -174,7 +168,6 @@ export async function getHomepageData(db: Database) {
     heroResults,
     collectionResults,
     categoryResults,
-    shippingMethodResults,
   ] =
     batchResults;
 
@@ -183,12 +176,11 @@ export async function getHomepageData(db: Database) {
     seoDocument.fromRows(rows),
     homepageDocument.fromRows(rows),
   ]);
-  const seoSettings = seo.stored ? {
-    homepageTitle: seo.value.homepageTitle,
-    homepageMetaDescription: seo.value.homepageMetaDescription,
-  } : {
-    homepageTitle: "Welcome to Scalius Commerce",
-    homepageMetaDescription: "Your one-stop shop for everything amazing.",
+  // Unset copy stays null: the storefront titles the homepage with the
+  // store name instead of inventing a platform-branded headline.
+  const seoSettings = {
+    homepageTitle: seo.value.homepageTitle.trim() || null,
+    homepageMetaDescription: seo.value.homepageMetaDescription.trim() || null,
   };
   const homepageConfig = homepage.value;
 
@@ -264,39 +256,6 @@ export async function getHomepageData(db: Database) {
     .map((id) => categoryById.get(id))
     .filter((category): category is NonNullable<typeof category> => Boolean(category));
 
-  const trustItems: Array<{
-    kind: "delivery" | "returns";
-    title: string;
-    detail: string;
-    href?: string;
-  }> = [];
-  if ((shippingMethodResults as Array<{ id: string }>).length > 0) {
-    trustItems.push({
-      kind: "delivery",
-      title: "Delivery options",
-      detail: "Choose an available method at checkout.",
-    });
-  }
-  const returnPolicy = seo.value.returnPolicy;
-  if (returnPolicy.enabled) {
-    const returnTitle = returnPolicy.category === "finite"
-      ? `${returnPolicy.returnWindowDays}-day returns`
-      : returnPolicy.category === "unlimited"
-        ? "Open-ended returns"
-        : "Final sale policy";
-    const returnDetail = returnPolicy.category === "no_returns"
-      ? "Review the policy before ordering."
-      : returnPolicy.returnFees === "free"
-        ? "Return shipping is covered."
-        : "Return shipping may apply.";
-    trustItems.push({
-      kind: "returns",
-      title: returnTitle,
-      detail: returnDetail,
-      ...(returnPolicy.policyUrl ? { href: returnPolicy.policyUrl } : {}),
-    });
-  }
-
   return {
     seo: seoSettings,
     hero,
@@ -307,9 +266,11 @@ export async function getHomepageData(db: Database) {
         title: homepageConfig.categoryRail.title,
         categories: homepageCategories,
       },
+      // The storefront states delivery, cash-on-delivery and return facts
+      // from the live shipping, checkout and return-policy data it already
+      // reads for product pages (apps/storefront/src/lib/delivery-facts.ts).
       trustStrip: {
-        enabled: homepageConfig.trustStrip.enabled && trustItems.length > 0,
-        items: trustItems,
+        enabled: homepageConfig.trustStrip.enabled,
       },
     },
   };
@@ -335,6 +296,7 @@ const LAYOUT_DOCUMENTS = [
   seoDocument,
   businessDocument,
   securityDocument,
+  policiesDocument,
 ];
 
 /**
@@ -391,7 +353,7 @@ export async function getLayoutData(
   ] = batchResults;
   const rows = documentRows as SettingsDocumentRow[];
   const ctx = { encryptionKey: options.credentialEncryptionKey };
-  const [header, footer, currency, media, metaCapiSettings, seo, business, security] = await Promise.all([
+  const [header, footer, currency, media, metaCapiSettings, seo, business, security, policies] = await Promise.all([
     headerDocument.fromRows(rows, ctx),
     footerDocument.fromRows(rows, ctx),
     currencyDocument.fromRows(rows, ctx),
@@ -400,7 +362,10 @@ export async function getLayoutData(
     seoDocument.fromRows(rows, ctx),
     businessDocument.fromRows(rows, ctx),
     securityDocument.fromRows(rows, ctx),
+    policiesDocument.fromRows(rows, ctx),
   ]);
+  // Only linked policies whose pages are published; nothing to read when none are linked.
+  const publicPolicies = await resolvePublicStorePolicies(db, policies.value);
   // Process Analytics
   const processedAnalytics = analyticsResults
     .filter(shouldInjectAnalyticsScript)
@@ -590,6 +555,7 @@ export async function getLayoutData(
     },
     cspAllowedDomains: security.value.cspAllowedDomains,
     storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults),
+    policies: publicPolicies,
   };
 }
 
@@ -607,7 +573,14 @@ function resolveStorefrontCopy(
     languageCode: checkoutLanguageBaseCode(code),
     addToCartText: copy.addToCartText,
     buyNowText: copy.buyNowText,
-    selectOptionsText: copy.selectOptionsText,
     unavailableText: copy.unavailableText,
+    chooseOptionText: copy.chooseOptionText,
+    fromPriceText: copy.fromPriceText,
+    quantityLabelText: copy.quantityLabelText,
+    quantityLimitText: copy.quantityLimitText,
+    saleOfferText: copy.saleOfferText,
+    saleOfferSpendText: copy.saleOfferSpendText,
+    freeBenefitText: copy.freeBenefitText,
+    percentBenefitText: copy.percentBenefitText,
   };
 }

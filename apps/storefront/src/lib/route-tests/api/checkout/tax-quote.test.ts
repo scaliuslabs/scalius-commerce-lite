@@ -233,6 +233,28 @@ describe("checkout tax quote proxy", () => {
     expect(JSON.stringify(body)).not.toContain("buyerPhone");
   });
 
+  it("says only that the delivery rate was refused, so the cart can re-read the rates", async () => {
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      success: false,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "This delivery option isn't available for the selected address.",
+        details: { reason: "delivery_rate_unavailable", zoneId: "zone_internal" },
+      },
+    }), { status: 400 }));
+
+    const response = await POST({
+      request: storefrontRequest(requestPayload()),
+    } as never);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      success: false,
+      error: "Current checkout total is unavailable",
+      details: { reason: "delivery_rate_unavailable" },
+    });
+  });
+
   it("fails closed when the upstream success payload violates the quote contract", async () => {
     mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
       ...quoteEnvelope(),

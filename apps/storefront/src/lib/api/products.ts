@@ -180,6 +180,7 @@ export interface ProductListOptions {
   cursor?: string;
   limit?: number;
   sort?:
+    | "relevance"
     | "newest"
     | "price-asc"
     | "price-desc"
@@ -207,6 +208,7 @@ type ProductListPayload = {
   pagination?: PaginatedResponse<Product>["pagination"];
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];
+  correctedQuery?: string | null;
 };
 
 type FeedProductListPayload = {
@@ -329,6 +331,7 @@ function normalizeProductListPayload(
     pagination: candidate.pagination,
     priceRange: normalizeBuyerPriceRange(candidate.priceRange),
     facets: normalizeProductFacets(candidate.facets),
+    correctedQuery: typeof candidate.correctedQuery === "string" ? candidate.correctedQuery : null,
   };
 }
 

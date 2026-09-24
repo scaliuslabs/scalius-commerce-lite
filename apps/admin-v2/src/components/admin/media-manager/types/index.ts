@@ -78,28 +78,22 @@ export interface MediaWorkspaceRouteUpdateOptions {
   replace?: boolean;
 }
 
-export type UploadItemStatus =
-  | "queued"
-  | "initiating"
-  | "uploading"
-  | "paused"
-  | "completing"
-  | "complete"
-  | "failed"
-  | "cancelled";
+export type UploadItemStatus = "queued" | "uploading" | "processing" | "done" | "failed";
 
+/** Catalog keys (i18n/media) for why a file didn't upload. */
+export type UploadError = "notImage" | "notVideo" | "notMedia" | "imageTooLarge" | "videoTooLarge" | "failed";
+
+/** queued → uploading (%) → processing → done (then auto-dismissed), or failed with a plain reason. */
 export interface UploadQueueItem {
   id: string;
   file: File;
-  kind: MediaKind;
+  /** null when the file was rejected before upload. */
+  kind: MediaKind | null;
   status: UploadItemStatus;
   progress: number;
-  uploadedParts: number[];
-  expectedParts: number;
   sessionId: string | null;
-  failedPart: number | null;
-  error: string | null;
-  warning: string | null;
+  error: UploadError | null;
+  warning: "variantsNotSaved" | "metadataNotSaved" | null;
   result: LibraryMediaFile | null;
 }
 
@@ -124,6 +118,13 @@ export function capabilityAccept(capability: MediaCapability): string {
 
 export function capabilityKind(capability: MediaCapability): MediaKind | undefined {
   return capability === "both" ? undefined : capability;
+}
+
+/** Catalog key (i18n/media) for the picker title: plural when several files can be chosen. */
+export function chooseKey(capability: MediaCapability, multiple = false) {
+  if (capability === "image") return multiple ? "chooseImages" : "chooseImage";
+  if (capability === "video") return multiple ? "chooseVideos" : "chooseVideo";
+  return multiple ? "chooseFiles" : "chooseFile";
 }
 
 /** Catalog key (i18n/media) for the upload limits of a capability. */

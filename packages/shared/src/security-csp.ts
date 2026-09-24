@@ -1,9 +1,22 @@
+/**
+ * Why a trusted-website entry was refused, in merchant terms:
+ * `https` — it isn't HTTPS; `path` — it has a path, query or login part;
+ * `invalid` — it isn't a site address at all.
+ */
+export type CspSourceProblem = "https" | "path" | "invalid";
+
 export interface NormalizedCspSourceResult {
   value: string | null;
-  error: string | null;
+  error: CspSourceProblem | null;
 }
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+// Browsers percent-encode junk into a "host" (`not a url` → `not%20a%20url`);
+// only a real domain name or an IPv4 address counts.
+const DOMAIN = /^(?:[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?\.)+[a-z\d-]{2,63}$/;
+const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+
+const refused = (error: CspSourceProblem): NormalizedCspSourceResult => ({ value: null, error });
 
 function hasForbiddenUrlParts(url: URL): boolean {
   return Boolean(
@@ -15,36 +28,19 @@ function hasForbiddenUrlParts(url: URL): boolean {
   );
 }
 
-function isValidProtocol(url: URL): boolean {
-  if (url.protocol === "https:") return true;
-  return url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname);
+function isRealHost(hostname: string): boolean {
+  return LOOPBACK_HOSTS.has(hostname) || DOMAIN.test(hostname) || IPV4.test(hostname);
 }
 
 function normalizeWildcardSource(raw: string): NormalizedCspSourceResult {
-  const withoutScheme = raw.replace(/^https:\/\//i, "");
-  if (!withoutScheme.startsWith("*.")) {
-    return { value: null, error: "Wildcard sources must start with *." };
-  }
-
-  const host = withoutScheme.slice(2);
-  if (!host || host.includes("*") || /[/?#@]/.test(host)) {
-    return { value: null, error: "Use a wildcard host such as *.example.com." };
-  }
-
+  const host = raw.replace(/^https:\/\//i, "").slice(2);
+  if (/[/?#@]/.test(host)) return refused("path");
   try {
     const parsed = new URL(`https://${host}`);
-    if (hasForbiddenUrlParts(parsed) || !parsed.hostname.includes(".")) {
-      return {
-        value: null,
-        error: "Use a complete wildcard host such as *.example.com.",
-      };
-    }
+    if (host.includes("*") || !DOMAIN.test(parsed.hostname)) return refused("invalid");
     return { value: `https://*.${parsed.host.toLowerCase()}`, error: null };
   } catch {
-    return {
-      value: null,
-      error: "Use a valid wildcard host such as *.example.com.",
-    };
+    return refused("invalid");
   }
 }
 
@@ -58,41 +54,25 @@ function normalizeWildcardSource(raw: string): NormalizedCspSourceResult {
 export function normalizeMerchantCspSource(
   input: unknown,
 ): NormalizedCspSourceResult {
-  if (typeof input !== "string" || !input.trim()) {
-    return { value: null, error: "Enter a host or HTTPS origin." };
-  }
+  if (typeof input !== "string" || !input.trim()) return refused("invalid");
 
   const raw = input.trim();
+  if (/\s/.test(raw) || raw === "*" || /^(data|blob|javascript):/i.test(raw)) return refused("invalid");
   if (raw.startsWith("*.") || /^https:\/\/\*\./i.test(raw)) {
     return normalizeWildcardSource(raw);
-  }
-  if (/^(data|blob|javascript|file|ftp):/i.test(raw) || raw === "*") {
-    return { value: null, error: "Only a specific HTTPS host can be trusted." };
   }
 
   try {
     const parsed = new URL(
       /^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`,
     );
-    if (!isValidProtocol(parsed)) {
-      return {
-        value: null,
-        error: "Use HTTPS. HTTP is allowed only for local development.",
-      };
-    }
-    if (hasForbiddenUrlParts(parsed)) {
-      return {
-        value: null,
-        error:
-          "Enter an origin only, without credentials, a path, query, or fragment.",
-      };
-    }
-    if (!parsed.hostname) {
-      return { value: null, error: "Enter a valid host or HTTPS origin." };
-    }
+    if (!isRealHost(parsed.hostname)) return refused("invalid");
+    const loopbackHttp = parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname);
+    if (parsed.protocol !== "https:" && !loopbackHttp) return refused("https");
+    if (hasForbiddenUrlParts(parsed)) return refused("path");
     return { value: parsed.origin.toLowerCase(), error: null };
   } catch {
-    return { value: null, error: "Enter a valid host or HTTPS origin." };
+    return refused("invalid");
   }
 }
 

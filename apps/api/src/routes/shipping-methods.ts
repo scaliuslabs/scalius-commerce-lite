@@ -1,7 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
-import { shippingMethods as shippingMethodsTable } from "@scalius/database/schema";
-import { eq, isNull, asc, and } from "drizzle-orm";
+import { listDeliveryRatesForAddress } from "@scalius/core/modules/delivery/zones";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { fromMinor } from "@scalius/shared/money";
 
@@ -9,13 +8,24 @@ import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-// GET /shipping-methods — list all active shipping methods
+const locationId = z.string().trim().min(1).max(128).optional();
+
+// GET /shipping-methods — the delivery rates offered for an address
 const listShippingMethodsRoute = createRoute({
   method: "get",
   path: "/",
   operationId: "storefront.shipping_methods.list",
   tags: ["Shipping Methods"],
-  summary: "List all active shipping methods",
+  summary: "List the delivery rates offered for an address",
+  description:
+    "With cityId (plus zoneId/areaId when chosen), returns the rates of the delivery zone that address resolves to plus every local pickup rate (`kind: \"pickup\"`); an empty list means the store doesn't deliver there. Without an address, returns every active rate. `fee` is the rate's charge; checkout charges nothing once the items subtotal (before discounts) reaches `freeOver`.",
+  request: {
+    query: z.object({
+      cityId: locationId,
+      zoneId: locationId,
+      areaId: locationId,
+    }),
+  },
   responses: {
     200: {
       description: "Shipping methods list",
@@ -24,6 +34,13 @@ const listShippingMethodsRoute = createRoute({
           id: z.string().max(128),
           name: z.string().max(100),
           fee: z.number().min(0),
+          freeOver: z.number().min(0).nullable(),
+          kind: z.enum(["delivery", "pickup"]),
+          everywhereElse: z.boolean().openapi({
+            description: "True for a rate that applies outside every delivery zone (the store's default rates); false for a rate of one delivery zone.",
+          }),
+          pickupAddress: z.string().max(500).nullable(),
+          pickupHours: z.string().max(120).nullable(),
           description: z.string().max(255).nullable(),
           isActive: z.boolean(),
           sortOrder: z.number().int(),
@@ -32,47 +49,29 @@ const listShippingMethodsRoute = createRoute({
         })).max(100),
       })) } },
     },
+    400: errorResponses[400],
     500: errorResponses[500],
   }
 });
 
 app.openapi(listShippingMethodsRoute, async (c) => {
   const db = c.get("db");
-  const currencyRead = getCurrencyConfig(db);
-  const methods = await db
-    .select({
-      id: shippingMethodsTable.id,
-      name: shippingMethodsTable.name,
-      feeMinor: shippingMethodsTable.feeMinor,
-      description: shippingMethodsTable.description,
-      isActive: shippingMethodsTable.isActive,
-      sortOrder: shippingMethodsTable.sortOrder,
-      createdAt: shippingMethodsTable.createdAt,
-      updatedAt: shippingMethodsTable.updatedAt
-    })
-    .from(shippingMethodsTable)
-    .where(
-      and(
-        eq(shippingMethodsTable.isActive, true),
-        isNull(shippingMethodsTable.deletedAt),
-      ),
-    )
-    .orderBy(
-      asc(shippingMethodsTable.sortOrder),
-      asc(shippingMethodsTable.name),
-    );
+  const { cityId, zoneId, areaId } = c.req.valid("query");
+  const [rates, { decimalPlaces }] = await Promise.all([
+    listDeliveryRatesForAddress(db, cityId ? { city: cityId, zone: zoneId, area: areaId } : null),
+    getCurrencyConfig(db),
+  ]);
 
-  const { decimalPlaces } = await currencyRead;
-  const formattedMethods = methods.map(({ feeMinor, ...method }) => ({
-    ...method,
-    fee: fromMinor(feeMinor, decimalPlaces),
-    createdAt:
-      method.createdAt instanceof Date ? method.createdAt.toISOString() : null,
-    updatedAt:
-      method.updatedAt instanceof Date ? method.updatedAt.toISOString() : null
-  }));
-
-  return ok(c, { shippingMethods: formattedMethods });
+  return ok(c, {
+    shippingMethods: rates.map(({ zoneId, feeMinor, freeOverMinor, createdAt, updatedAt, ...rate }) => ({
+      ...rate,
+      everywhereElse: zoneId === null,
+      fee: fromMinor(feeMinor, decimalPlaces),
+      freeOver: freeOverMinor === null ? null : fromMinor(freeOverMinor, decimalPlaces),
+      createdAt: createdAt instanceof Date ? createdAt.toISOString() : null,
+      updatedAt: updatedAt instanceof Date ? updatedAt.toISOString() : null,
+    })),
+  });
 });
 
 export { app as shippingMethodRoutes };

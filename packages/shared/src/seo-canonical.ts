@@ -25,6 +25,7 @@ const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
   "robots.txt",
   "search",
   "sitemap.xml",
+  "track-order",
 ]);
 
 export function normalizeCanonicalPathInput(

@@ -7,6 +7,7 @@
  * - `toMinor` rounds half-up at the currency's decimal places.
  * - A percentage discount prices each unit at round-half-up of
  *   `priceMinor × (10000 − bps) / 10000`; the discount is the difference.
+ *   In BDT that rounding is to whole taka (`cashRoundingMinor`).
  * - Proportional splits (order discounts, tax) use largest-remainder
  *   allocation with a stable key tie-break, so parts always sum to the whole.
  */
@@ -54,16 +55,36 @@ export function bpsToPercent(bps: number): number {
 
 export type CatalogDiscountType = "percentage" | "flat";
 
+/**
+ * Cash rounding: amounts that come from a percentage are rounded half-up to
+ * whole taka in BDT, because couriers and riders collect whole taka. Other
+ * currencies keep minor-unit rounding.
+ */
+export function cashRoundingMinor(currencyCode: string): number {
+  return currencyCode.trim().toUpperCase() === "BDT" ? 100 : 1;
+}
+
+/**
+ * `baseMinor × basisPoints / 10000`, rounded half-up to a multiple of the
+ * currency's cash rounding unit and never above the base.
+ */
+export function percentOfMinor(baseMinor: number, basisPoints: number, currencyCode: string): number {
+  if (basisPoints >= 10_000) return baseMinor;
+  const unit = BigInt(cashRoundingMinor(currencyCode));
+  const value = ((BigInt(baseMinor) * BigInt(basisPoints) + 5_000n * unit) / (10_000n * unit)) * unit;
+  return Math.min(baseMinor, Number(value));
+}
+
 /** The per-unit price after a catalog (product/variant) discount, in minor units. */
 export function discountedPriceMinor(
   priceMinor: number,
   discountType: unknown,
   discountBps: number | null | undefined,
   discountAmountMinor: number | null | undefined,
+  currencyCode: string,
 ): number {
   if (discountType === "percentage" && discountBps != null && discountBps > 0) {
-    const keptBps = BigInt(10_000 - Math.min(discountBps, 10_000));
-    return Number((BigInt(priceMinor) * keptBps + 5_000n) / 10_000n);
+    return percentOfMinor(priceMinor, 10_000 - Math.min(discountBps, 10_000), currencyCode);
   }
   if (discountType === "flat" && discountAmountMinor != null && discountAmountMinor > 0) {
     return Math.max(priceMinor - discountAmountMinor, 0);

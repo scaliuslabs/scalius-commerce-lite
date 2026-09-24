@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { ConflictError, ValidationError } from "@scalius/core/errors";
+import { ValidationError } from "@scalius/core/errors";
 
-import { defineSettingsDocument, selectSettingsDocuments, type SettingsStoreKv } from "./settings-store";
+import {
+  defineSettingsDocument,
+  selectSettingsDocuments,
+  SettingsRevisionConflictError,
+  writeSettingsDocuments,
+  type SettingsStoreKv,
+} from "./settings-store";
 
 const KEY = Buffer.alloc(32, 7).toString("base64");
 const OTHER_KEY = Buffer.alloc(32, 9).toString("base64");
@@ -70,10 +76,11 @@ describe("settings documents", () => {
 
     await expect(demo.write(db, { label: "x".repeat(21) })).rejects.toBeInstanceOf(ValidationError);
     await expect(demo.write(db, { label: "Late" }, {}, { expectedRevision: 0 }))
-      .rejects.toBeInstanceOf(ConflictError);
-    const custom = new Error("custom conflict");
-    await expect(demo.write(db, { label: "Late" }, {}, { expectedRevision: 5, conflict: () => custom }))
-      .rejects.toBe(custom);
+      .rejects.toMatchObject({
+        status: 409,
+        code: "SETTINGS_REVISION_CONFLICT",
+        details: { document: "demo", expectedRevision: 0, currentRevision: 1 },
+      });
     expect((await demo.readDetailed(db)).value.label).toBe("Shop");
   });
 
@@ -90,13 +97,52 @@ describe("settings documents", () => {
     await demo.write(harness.db, { label: "Shop" });
 
     await expect(demo.write(harness.db, { label: "Mine" }, {}, { expectedRevision: 1 }))
-      .rejects.toBeInstanceOf(ConflictError);
+      .rejects.toBeInstanceOf(SettingsRevisionConflictError);
     expect((await demo.readDetailed(harness.db)).value.label).toBe("Concurrent");
 
     // A plain patch is re-applied on the newer document instead.
     raced = false;
     await demo.write(harness.db, { hosts: ["b.example"] });
     expect((await demo.readDetailed(harness.db)).value).toMatchObject({ label: "Concurrent", hosts: ["b.example"] });
+  });
+
+  it("commits several documents all-or-nothing when one of them is stale", async () => {
+    const { db } = createSqliteD1Database();
+    await demo.write(db, { label: "Shop" });
+    await cached.write(db, { origin: "https://a.example" });
+    await cached.write(db, { origin: "https://b.example" });
+
+    await expect(writeSettingsDocuments(db, [
+      { document: demo, patch: { label: "Mine" }, expectedRevision: 1 },
+      { document: cached, patch: { origin: "https://mine.example" }, expectedRevision: 1 },
+    ])).rejects.toMatchObject({
+      code: "SETTINGS_REVISION_CONFLICT",
+      details: { document: "cached", expectedRevision: 1, currentRevision: 2 },
+    });
+    expect((await demo.readDetailed(db)).value.label).toBe("Shop");
+
+    // A write that goes stale after it was built rolls back its neighbours too.
+    let race = false;
+    const harness = createSqliteD1Database({
+      beforeBatch: (sqlite) => {
+        if (race) sqlite.exec(`UPDATE settings SET revision = revision + 1 WHERE category = 'cached'`);
+      },
+    });
+    await demo.write(harness.db, { label: "Shop" });
+    await cached.write(harness.db, { origin: "https://a.example" });
+    race = true;
+    await expect(writeSettingsDocuments(harness.db, [
+      { document: demo, patch: { label: "Mine" }, expectedRevision: 1 },
+      { document: cached, patch: { origin: "https://mine.example" }, expectedRevision: 1 },
+    ])).rejects.toBeInstanceOf(SettingsRevisionConflictError);
+    expect((await demo.readDetailed(harness.db)).value.label).toBe("Shop");
+    expect((await cached.readDetailed(harness.db)).value.origin).toBe("https://a.example");
+
+    const saved = await writeSettingsDocuments(db, [
+      { document: demo, patch: { label: "Mine" }, expectedRevision: 1 },
+      { document: cached, patch: { origin: "https://mine.example" }, expectedRevision: 2 },
+    ]);
+    expect(saved.map((write) => write.revision)).toEqual([2, 3]);
   });
 
   it("replaces the whole document over the defaults when asked", async () => {

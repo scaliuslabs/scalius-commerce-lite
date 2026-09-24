@@ -1,8 +1,36 @@
 import type { Database } from "@scalius/database/client";
-import { orders } from "@scalius/database/schema";
+import { customers, orders } from "@scalius/database/schema";
 import { and, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 
 import { ConflictError, ForbiddenError, NotFoundError } from "@scalius/core/errors";
+import { createOrderReceiptToken, recordOrderReceipt } from "../orders/order-receipts";
+import { customerAccountOrderVisibilityCondition } from "./customers.service";
+
+/**
+ * A signed-in account owner opens their own receipt without the checkout
+ * browser's cookie: the customer session proves ownership (the same check as
+ * the account order page) and a fresh private receipt proof is issued, which
+ * the storefront keeps in its httpOnly receipt cookie, never in a URL.
+ */
+export async function issueAccountOwnerReceipt(
+  db: Database,
+  input: { customerId: string; orderId: string },
+): Promise<{ orderId: string; receiptToken: string; expiresAt: number }> {
+  const owned = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(and(eq(orders.id, input.orderId), customerAccountOrderVisibilityCondition(input.customerId)))
+    .get();
+  if (!owned) throw new NotFoundError("Order receipt not found");
+
+  const receiptToken = createOrderReceiptToken();
+  const receipt = await recordOrderReceipt(db, {
+    orderId: owned.id,
+    token: receiptToken,
+    source: "account_owner",
+  });
+  return { orderId: owned.id, receiptToken, expiresAt: receipt.expiresAt };
+}
 
 export interface ClaimGuestOrderToAccountInput {
   orderId: string;
@@ -32,6 +60,53 @@ function immutableContactConditions(input: ClaimGuestOrderToAccountInput): SQL[]
   if (phone) conditions.push(eq(orders.customerPhone, phone));
   if (email) conditions.push(sql`lower(trim(${orders.customerEmail})) = ${email}`);
   return conditions;
+}
+
+/**
+ * The statement that adds unowned orders placed with an account's VERIFIED
+ * email or phone to that account's history (Shopify attaches orders by
+ * verified contact). Returns null when the account has nothing verified.
+ * Only private account ownership changes; the merchant CRM link and the
+ * order's own contact snapshot stay as they are.
+ */
+export function buildVerifiedContactOrderLink(
+  db: Database,
+  input: { customerId: string; email?: string | null; phone?: string | null },
+) {
+  const conditions: SQL[] = [];
+  const phone = normalizePhone(input.phone);
+  const email = normalizeEmail(input.email);
+  if (phone) conditions.push(eq(orders.customerPhone, phone));
+  if (email) conditions.push(sql`lower(trim(${orders.customerEmail})) = ${email}`);
+  if (conditions.length === 0) return null;
+  return db
+    .update(orders)
+    .set({ accountOwnerCustomerId: input.customerId })
+    .where(and(
+      isNull(orders.accountOwnerCustomerId),
+      isNull(orders.deletedAt),
+      or(...conditions),
+    ));
+}
+
+/** Links verified-contact guest orders for a signed-in account (any device). */
+export async function linkVerifiedContactOrders(db: Database, customerId: string): Promise<void> {
+  const account = await db
+    .select({
+      email: customers.email,
+      phone: customers.phone,
+      emailVerifiedAt: customers.emailVerifiedAt,
+      phoneVerifiedAt: customers.phoneVerifiedAt,
+    })
+    .from(customers)
+    .where(and(eq(customers.id, customerId), isNull(customers.deletedAt)))
+    .get();
+  if (!account) return;
+  await buildVerifiedContactOrderLink(db, {
+    customerId,
+    email: account.emailVerifiedAt ? account.email : null,
+    phone: account.phoneVerifiedAt ? account.phone : null,
+  });
 }
 
 /**

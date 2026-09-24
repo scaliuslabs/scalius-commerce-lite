@@ -4,7 +4,7 @@ import { getArticleBySlug } from "@/lib/api/articles";
 import { getLayoutData } from "@/lib/api";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
-import { optimizeRichContentImages } from "@/lib/rich-content-media";
+import { firstRichContentImageUrl, optimizeRichContentImages } from "@/lib/rich-content-media";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { processShortcodes } from "@/lib/shortcodes";
 import {
@@ -48,7 +48,10 @@ const canonicalUrl = buildResourceCanonicalSeoUrl(
 const featuredImageUrl = article.featuredImage?.url
   ? mediaImageUrl(article.featuredImage.url, 1200)
   : null;
-const absoluteImageUrl = toAbsoluteStorefrontSeoUrl(featuredImageUrl);
+// Posts without a featured image share their first content image.
+const shareImageUrl =
+  featuredImageUrl || firstRichContentImageUrl(article.content, 1200);
+const absoluteImageUrl = toAbsoluteStorefrontSeoUrl(shareImageUrl);
 const featuredImageAlt =
   article.featuredImage?.altText ||
   article.featuredImage?.filename ||
@@ -89,7 +92,7 @@ const articleJsonLd =
     ? serializeJsonForInlineScript({
         "@context": "https://schema.org",
         "@type": "BlogPosting",
-        headline: article.title,
+        headline: article.title.trim(),
         description,
         url: canonicalUrl,
         mainEntityOfPage: canonicalUrl,
@@ -139,7 +142,7 @@ const breadcrumbJsonLd =
   hideFooter={article.hideFooter}
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
-  ogImage={featuredImageUrl ?? undefined}
+  ogImage={shareImageUrl ?? undefined}
   ogType="article"
   noindex={article.noIndex === true}
 >

@@ -163,6 +163,32 @@ describe("sign-in forms keep credentials out of URLs", () => {
     expect(container.textContent).toContain("Password changed");
   });
 
+  it("opens an invite as account setup and continues straight into sign-in", async () => {
+    window.history.replaceState(null, "", "/auth/reset-password#invite=proof-proof-proof-1234");
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: true, purpose: "invite" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: true, signedIn: true }), { status: 200 }));
+    await render(<ResetPasswordForm />);
+    expect(window.location.href).not.toContain("proof-proof");
+    expect(container.textContent).toContain("Set up your account");
+
+    type(container.querySelector("#new-password"), SECRET);
+    await submit();
+    expect(navigate).toHaveBeenCalledWith({ to: "/admin", replace: true });
+  });
+
+  it("hands a reset for a two-step account to the code screen", async () => {
+    window.history.replaceState(null, "", "/auth/reset-password#token=proof-proof-proof-1234");
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: true, purpose: "reset" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: true, twoFactorRedirect: true, twoFactorMethods: ["totp"] }), { status: 200 }));
+    await render(<ResetPasswordForm />);
+    type(container.querySelector("#new-password"), SECRET);
+    await submit();
+    expect(navigate).toHaveBeenCalledWith({ to: "/auth/two-factor", replace: true });
+    expect(window.sessionStorage.getItem("scalius.pendingTwoFactorMethods")).toContain("totp");
+  });
+
   it("sends the setup key as a header, never in the body or the URL", async () => {
     authClient.signIn.email.mockResolvedValue({ data: {}, error: null });
     await render(<SetupForm setupTokenRequired />);
@@ -279,6 +305,20 @@ describe("sign-in error states", () => {
     expect(container.querySelector("form")).toBeNull();
     expect(container.textContent).toContain("This link has expired");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("says a used or expired invite has expired, before showing any form", async () => {
+    window.history.replaceState(null, "", "/auth/reset-password#invite=proof-proof-proof-1234");
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ code: "INVALID_TOKEN" }), { status: 400 }));
+    await render(<ResetPasswordForm />);
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.textContent).toContain("This invite has expired");
+    expect(container.textContent).toContain("Ask the store owner to resend it.");
+  });
+
+  it("tells a suspended staff member why sign-in stopped", async () => {
+    await signInWith({ status: 403, code: "BANNED_USER", message: "Your access to this store is suspended." });
+    expect(alertText()).toBe("Your access to this store is suspended. Contact the store owner.");
   });
 
   it("switches to the expired state when the server rejects the reset link", async () => {

@@ -2,10 +2,6 @@
 // src/pages/cart.astro
 import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import CheckoutLocationFields from "@/components/checkout/CheckoutLocationFields.astro";
 import CheckoutShippingMethods from "@/components/checkout/CheckoutShippingMethods.astro";
 import CheckoutPhoneField from "@/components/CheckoutPhoneField.astro";
@@ -27,6 +23,7 @@ import {
   createOrderReceiptFinalizeCookieHeader,
 } from "@/lib/order-receipt-cookie";
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
+import { termsSegments } from "@/lib/checkout/terms-text";
 import { hashCheckoutCartFingerprint } from "@/lib/checkout/session-state";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import type { CartValidationIssue } from "@/lib/api/orders";
@@ -75,12 +72,17 @@ const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   isDefault: true,
 };
 const copy = lang.languageData;
+const policyPath = (kind: "terms" | "privacy") =>
+  layoutData?.policies?.find((policy) => policy.kind === kind)?.path ?? null;
+const agreement = termsSegments(copy.termsText, {
+  terms: { label: copy.termsLinkText, href: policyPath("terms") },
+  privacy: { label: copy.privacyLinkText, href: policyPath("privacy") },
+});
 const [existingCheckoutMessageBefore, existingCheckoutMessageAfter = ""] =
   copy.existingCheckoutMessage.split("{orderId}", 2);
 
 // Initialize error message and success state
 let errorMessage = "";
-let successOrderId = "";
 let isProcessing = false;
 let staleCustomerSession = false;
 let codCartRepairState: {
@@ -145,7 +147,6 @@ if (Astro.request.method === "POST" && codOnly) {
         result.orderId &&
         result.receiptToken
       ) {
-        successOrderId = result.orderId;
         const response = Astro.redirect(
           `/order-success?orderId=${encodeURIComponent(result.orderId)}`,
         );
@@ -229,6 +230,11 @@ const submitLabel = staleCustomerSession && checkoutConfig.guestCheckoutEnabled 
       ? copy.checkoutUnavailableText
       : copy.continueToPaymentText;
 const serializedCheckoutConfig = serializeJsonForInlineScript(checkoutConfig);
+// One input style for every checkout field.
+const labelClass = "mb-1 block text-sm font-medium text-foreground";
+const fieldClass =
+  "block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 aria-[invalid=true]:border-destructive";
+const errorClass = "mt-1 hidden text-sm font-medium text-destructive";
 const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
 ---
 
@@ -266,9 +272,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     data-guest-checkout-enabled={checkoutConfig.guestCheckoutEnabled !== false
       ? "true"
       : "false"}
-    data-default-shipping-id={shippingMethods[0]?.id || ""}
-    data-default-shipping-fee={String(shippingMethods[0]?.fee ?? 0)}
-    data-default-shipping-name={shippingMethods[0]?.name || ""}
     hidden
   >
   </div>
@@ -277,8 +280,10 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     id="cartPageRoot"
     data-cart-ready="false"
     data-cart-has-items="false"
-    class="container mx-auto max-w-6xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7"
+    data-cart-state="loading"
+    class="group container mx-auto max-w-6xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7"
   >
+    <h1 class="sr-only">{copy.pageTitle}</h1>
     <noscript>
       <div
         class="mb-3 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
@@ -287,15 +292,17 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         {copy.noScriptText}
       </div>
     </noscript>
-    <CheckoutProgress current="information" paymentRequired={!codOnly} copy={copy} />
+    <div class="group-data-[cart-state=empty]:hidden">
+      <CheckoutProgress current="information" paymentRequired={!codOnly} copy={copy} />
+    </div>
     {
       checkoutUnavailable && (
         <div
-          class="bg-destructive/10 border border-destructive/20 text-destructive px-3 py-2 sm:px-4 sm:py-3 rounded mb-2 sm:mb-2.5 relative text-xs sm:text-sm"
+          class="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
           role="alert"
         >
-          <strong class="font-bold">{copy.checkoutUnavailableText}: </strong>
-          <span class="block sm:inline">{checkoutUnavailableMessage}</span>
+          <strong class="font-semibold">{copy.checkoutUnavailableText}: </strong>
+          <span>{checkoutUnavailableMessage}</span>
         </div>
       )
     }
@@ -303,262 +310,66 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     {
       errorMessage && (
         <div
-          class="bg-destructive/10 border border-destructive/20 text-destructive px-3 py-2 sm:px-4 sm:py-3 rounded mb-2 sm:mb-2.5 relative text-xs sm:text-sm"
+          class="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
           role="alert"
         >
-          <strong class="font-bold">{copy.errorPrefixText} </strong>
-          <span class="block sm:inline">{errorMessage}</span>
-        </div>
-      )
-    }
-
-    {
-      successOrderId && (
-        <div
-          class="bg-primary/10 border border-primary/20 text-primary px-3 py-2 sm:px-4 sm:py-3 rounded mb-2 sm:mb-2.5 relative text-xs sm:text-sm"
-          role="alert"
-        >
-          <strong class="font-bold">{copy.successPrefixText} </strong>
-          <span class="block sm:inline">
-            {copy.orderPlacedSuccessText.replace("{orderId}", successOrderId)}
-          </span>
+          {errorMessage}
         </div>
       )
     }
 
     <aside
       id="checkoutRecoveryNotice"
-      class="hidden mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100"
+      class="hidden mb-3 rounded-xl border border-border bg-muted px-4 py-3 text-foreground"
       role="status"
       aria-hidden="true"
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p class="text-sm font-semibold">{copy.existingCheckoutTitle}</p>
-          <p class="mt-1 text-xs leading-5 opacity-80">
+          <p class="mt-1 text-sm text-muted-foreground">
             {existingCheckoutMessageBefore}<span id="checkoutRecoveryReference" class="font-mono"></span>{existingCheckoutMessageAfter}
           </p>
         </div>
         <a
           id="checkoutRecoveryLink"
           data-astro-prefetch="false"
-          class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-amber-950 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-900 dark:bg-amber-100 dark:text-amber-950 dark:hover:bg-white"
+          class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
         >
           {copy.reviewExistingCheckoutText}
         </a>
       </div>
     </aside>
 
-    <div class="flex flex-col lg:flex-row-reverse gap-4 lg:gap-8">
-      <!-- Cart Items Section - Right on Desktop -->
-      <div
-        class="lg:w-5/12 lg:sticky lg:self-start transition-all duration-200 order-1"
-        style="top: calc(var(--header-height, 64px) + 1rem);"
-      >
-        <div
-          class="bg-card rounded-xl border border-border shadow-sm overflow-hidden"
-        >
-          <div
-            class="p-3 sm:p-4 border-b border-border bg-muted/50 flex items-center justify-between"
-          >
-            <h1 class="text-[1.25rem] font-bold leading-tight text-foreground sm:text-2xl">
-              {lang.languageData.cartSectionTitle}
-            </h1>
-            <a
-              href="/"
-              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted sm:min-h-9"
-            >
-              <span aria-hidden="true">←</span>
-              {lang.languageData.continueShoppingText}
-            </a>
-          </div>
-
-          <div
-            id="cartValidationMessage"
-            class="hidden mx-3 mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive sm:mx-4"
-            role="alert"
-          >
-          </div>
-
-          <div
-            class="min-h-24 divide-y divide-gray-50 p-3 sm:p-4 block"
-            id="cartItems"
-            aria-live="polite"
-            aria-busy="true"
-          >
-            <div
-              class="py-8 text-center text-sm text-muted-foreground"
-              role="status"
-            >
-              {copy.cartLoadingText}
-            </div>
-          </div>
-
-          <div
-            id="cartSummary"
-            class="hidden bg-muted/50 p-3 sm:p-4 space-y-2 border-t border-border"
-          >
-            <div
-              class="flex justify-between text-xs sm:text-sm text-muted-foreground"
-            >
-              <span>{lang.languageData.subtotalText}</span>
-              <span id="subtotal" class="font-medium text-foreground">—</span>
-            </div>
-            <div
-              class="flex justify-between text-xs sm:text-sm text-muted-foreground"
-            >
-              <span>{lang.languageData.shippingText}</span>
-              <span id="shippingCost" class="font-medium text-foreground"
-                >—</span
-              >
-            </div>
-            <div
-              id="taxRow"
-              class="flex justify-between gap-3 text-xs sm:text-sm text-muted-foreground"
-            >
-              <span id="taxLabel">{copy.taxText}</span>
-              <span
-                id="taxAmount"
-                class="text-right font-medium text-foreground"
-                aria-live="polite"
-                aria-atomic="true"
-              >
-                —
-              </span>
-            </div>
-            <p
-              id="taxStatus"
-              class="hidden text-xs leading-4 text-destructive"
-              role="status"
-            >
-            </p>
-            <div
-              class="flex justify-between text-xs sm:text-sm text-primary"
-              id="discountRow"
-            >
-              <span class="flex items-center gap-1"
-                >{lang.languageData.discountText}
-                <span
-                  id="appliedDiscountCode"
-                  class="font-mono text-xs bg-primary/10 px-1 rounded"
-                ></span></span
-              >
-              <span id="discountAmount" class="font-bold">—</span>
-            </div>
-            <ul id="discountOffers" class="hidden space-y-1 text-xs sm:text-sm text-primary" role="status"></ul>
-
-            <div class="pt-2 border-t border-border mt-2">
-              <div class="flex justify-between items-baseline">
-                <span
-                  id="totalLabel"
-                  data-final-label={lang.languageData.totalText}
-                  class="text-sm font-bold text-foreground"
-                  >{copy.estimatedTotalText}</span
-                >
-                <span
-                  id="total"
-                  class="text-lg sm:text-xl font-extrabold text-foreground tracking-tight"
-                  >—</span
-                >
-              </div>
-            </div>
-
-            <!-- Discount Code Form -->
-            <div class="pt-3 mt-1">
-              <form
-                id="discountForm"
-                method="post"
-                action="/cart"
-                class="relative"
-                novalidate
-              >
-                <div class="flex gap-2">
-                  <input
-                    type="text"
-                    id="discountCodeInput"
-                    aria-describedby="discountMessage"
-                    placeholder={lang.languageData.discountCodePlaceholder}
-                    class="h-11 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base font-mono uppercase tracking-wider text-foreground transition-all focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:h-9"
-                  />
-                  <button
-                    type="submit"
-                    id="applyDiscountBtn"
-                    class="h-11 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 sm:h-9 sm:text-sm"
-                  >
-                    {lang.languageData.applyDiscountText}
-                  </button>
-                  <button
-                    type="button"
-                    id="removeDiscountBtn"
-                    class="h-11 rounded-lg border border-destructive/20 bg-destructive/10 px-4 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 sm:h-9 sm:text-sm"
-                    style="display: none;"
-                  >
-                    {lang.languageData.removeDiscountText}
-                  </button>
-                </div>
-                <div
-                  id="discountMessage"
-                  role="status"
-                  aria-live="polite"
-                  aria-atomic="true"
-                  class="absolute -bottom-5 left-0 text-[10px] sm:text-xs font-medium text-danger truncate max-w-full"
-                  style="display: none;"
-                >
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Checkout Form Section - Left on Desktop -->
-      <div id="checkoutPanel" class="hidden lg:w-7/12 order-2">
-        <!-- Optional customer login trigger -->
+    <!-- The form comes first in reading and keyboard order; on phones the cart shows above it. -->
+    <div class="grid gap-4 lg:grid-cols-12 lg:gap-8">
+      <div id="checkoutPanel" class="hidden order-2 min-w-0 lg:order-1 lg:col-span-7">
         <div id="checkoutSignInPrompt" class="mb-3" data-account-required={checkoutConfig.guestCheckoutEnabled === false ? "true" : "false"}>
           <button
             type="button"
             onclick="window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { intent: 'sign_in' } }))"
-            class="w-full text-left rounded-lg bg-primary/10 border border-border px-4 py-3 text-sm text-primary hover:bg-primary/20 transition-colors shadow-sm flex items-center justify-between group"
+            class="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           >
-            <span class="flex items-center gap-2">
-              <svg
-                class="h-5 w-5 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                ></path>
-              </svg>
-              <span class="font-medium">
-                {checkoutConfig.guestCheckoutEnabled === false
-                  ? copy.signInToCheckoutText
-                  : copy.signInPromptText}
-              </span>
+            <span class="font-medium">
+              {checkoutConfig.guestCheckoutEnabled === false
+                ? copy.signInToCheckoutText
+                : copy.signInPromptText}
             </span>
-            <span
-              class="text-primary font-bold group-hover:translate-x-0.5 transition-transform"
-              >→</span
-            >
+            <span aria-hidden="true">→</span>
           </button>
         </div>
 
         <div
           id="checkoutFormCard"
           class:list={[
-            "bg-card rounded-xl border border-border shadow-sm p-3 sm:p-4 mb-3",
+            "rounded-xl border border-border bg-card p-4 sm:p-5",
             { hidden: checkoutConfig.guestCheckoutEnabled === false },
           ]}
         >
           <form
             method="POST"
             action="/cart"
-            class="space-y-3"
+            class="space-y-6"
             id="checkoutForm"
             novalidate
           >
@@ -572,145 +383,145 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             />
             <input
               type="hidden"
-              name="discountCodeHidden"
-              id="discountCodeHidden"
+              name="discountCodes"
+              id="discountCodesInput"
             />
 
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label
-                  htmlFor="customerName"
-                  className="mb-1 block text-sm font-medium text-foreground"
-                >
-                  {lang.languageData.customerNameLabel}
-                  <span class="text-destructive ml-0.5">*</span>
-                </Label>
-                <Input
-                  type="text"
-                  id="customerName"
-                  name="customerName"
-                  required
-                  placeholder={lang.languageData.customerNamePlaceholder}
-                  className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-base text-foreground sm:h-9"
-                />
-              </div>
+            <section aria-labelledby="contactHeading" class="space-y-3">
+              <h2 id="contactHeading" class="text-base font-semibold text-foreground">{copy.contactHeadingText}</h2>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label for="customerName" class={labelClass}>
+                    {copy.customerNameLabel}
+                    <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="customerName"
+                    name="customerName"
+                    autocomplete="name"
+                    aria-required="true"
+                    aria-describedby="customerName-error"
+                    maxlength="100"
+                    placeholder={copy.customerNamePlaceholder}
+                    class={fieldClass}
+                  />
+                  <p id="customerName-error" class={errorClass} role="alert"></p>
+                </div>
 
-              <div>
-                <CheckoutPhoneField
-                  label={lang.languageData.customerPhoneLabel}
-                  placeholder={lang.languageData.customerPhonePlaceholder}
-                  allowedCountries={checkoutConfig.allowedCountries || []}
-                  allowedCountriesMode={allowedCountriesMode}
-                  requiredMessage={copy.phoneRequiredText}
-                  invalidMessage={copy.phoneInvalidText}
-                  countryNotAcceptedMessage={copy.phoneCountryNotAcceptedText}
-                  countrySelectLabel={copy.phoneCountryLabelText}
-                  languageCode={lang.code}
-                />
-              </div>
-
-              {
-                lang.fieldVisibility.showEmailField && (
-                  <div class="sm:col-span-2">
-                    <Label
-                      htmlFor="customerEmail"
-                      className="mb-1 block text-sm font-medium text-foreground"
-                    >
-                      {lang.languageData.customerEmailLabel}
-                    </Label>
-                    <Input
-                      type="email"
-                      id="customerEmail"
-                      name="customerEmail"
-                      placeholder={lang.languageData.customerEmailPlaceholder}
-                      className="h-11 w-full bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 text-base text-foreground sm:h-9"
-                    />
-                  </div>
-                )
-              }
-
-              <div class="sm:col-span-2 border-t border-border pt-4">
-                <Label
-                  htmlFor="shippingAddress"
-                  className="mb-1 block text-sm font-medium text-foreground"
-                >
-                  {lang.languageData.shippingAddressLabel}
-                  <span class="text-destructive ml-0.5">*</span>
-                </Label>
-                <Textarea
-                  id="shippingAddress"
-                  name="shippingAddress"
-                  required
-                  minLength={MIN_SHIPPING_ADDRESS_LENGTH}
-                  aria-describedby="shippingAddressError"
-                  placeholder={lang.languageData.shippingAddressPlaceholder}
-                  rows={2}
-                  className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2 text-base text-foreground"
-                />
-                <p
-                  id="shippingAddressError"
-                  class="mt-1 hidden text-xs font-medium text-destructive"
-                  role="alert"
-                >
-                </p>
-              </div>
-
-              <div class="sm:col-span-2">
-                <div class="space-y-4">
-                  <div class="relative pt-1">
-                    <CheckoutLocationFields
-                      cities={cities}
-                      cityLabel={lang.languageData.cityLabel}
-                      zoneLabel={lang.languageData.zoneLabel}
-                      areaLabel={lang.languageData.areaLabel}
-                      cityPlaceholder={copy.selectCityPlaceholder}
-                      zonePlaceholder={copy.selectZonePlaceholder}
-                      areaPlaceholder={copy.selectAreaPlaceholder}
-                      loadingText={copy.loadingText}
-                      zonesLoadFailedText={copy.zonesLoadFailedText}
-                      areasLoadFailedText={copy.areasLoadFailedText}
-                      showAreaField={lang.fieldVisibility.showAreaField}
-                    />
-                    <p
-                      id="shippingLocationError"
-                      class="mt-1 hidden text-xs font-medium text-destructive"
-                      role="alert"
-                    >
-                    </p>
-                  </div>
-
-                  <CheckoutShippingMethods
-                    shippingMethods={shippingMethods}
-                    shippingMethodLabel={lang.languageData.shippingMethodLabel}
-                    freeText={copy.freeText}
-                    noShippingMethodsText={copy.noShippingMethodsText}
-                    waivedShippingFeeText={copy.waivedShippingFeeText}
+                <div>
+                  <CheckoutPhoneField
+                    label={copy.customerPhoneLabel}
+                    help={copy.customerPhoneHelp}
+                    placeholder={copy.customerPhonePlaceholder}
+                    allowedCountries={checkoutConfig.allowedCountries || []}
+                    allowedCountriesMode={allowedCountriesMode}
+                    requiredMessage={copy.phoneRequiredText}
+                    invalidMessage={copy.phoneInvalidText}
+                    countryNotAcceptedMessage={copy.phoneCountryNotAcceptedText}
+                    countrySelectLabel={copy.phoneCountryLabelText}
+                    languageCode={lang.code}
                   />
                 </div>
+
+                {
+                  lang.fieldVisibility.showEmailField && (
+                    <div class="sm:col-span-2">
+                      <label for="customerEmail" class={labelClass}>
+                        {copy.customerEmailLabel}
+                      </label>
+                      <input
+                        type="email"
+                        id="customerEmail"
+                        name="customerEmail"
+                        autocomplete="email"
+                        inputmode="email"
+                        aria-describedby="customerEmail-error"
+                        maxlength="254"
+                        placeholder={copy.customerEmailPlaceholder}
+                        class={fieldClass}
+                      />
+                      <p id="customerEmail-error" class={errorClass} role="alert"></p>
+                    </div>
+                  )
+                }
               </div>
+            </section>
+
+            <section aria-labelledby="deliveryHeading" class="space-y-3">
+              <h2 id="deliveryHeading" class="text-base font-semibold text-foreground">{copy.deliveryHeadingText}</h2>
+              <div>
+                <label for="shippingAddress" class={labelClass}>
+                  {copy.shippingAddressLabel}
+                  <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+                </label>
+                <textarea
+                  id="shippingAddress"
+                  name="shippingAddress"
+                  autocomplete="street-address"
+                  aria-required="true"
+                  minlength={MIN_SHIPPING_ADDRESS_LENGTH}
+                  maxlength="500"
+                  aria-describedby="shippingAddressError"
+                  placeholder={copy.shippingAddressPlaceholder}
+                  rows={2}
+                  class={`${fieldClass} h-auto min-h-16 resize-none py-2`}
+                ></textarea>
+                <p id="shippingAddressError" class={errorClass} role="alert"></p>
+              </div>
+
+              <div>
+                <CheckoutLocationFields
+                  cities={cities}
+                  cityLabel={copy.cityLabel}
+                  zoneLabel={copy.zoneLabel}
+                  areaLabel={copy.areaLabel}
+                  cityPlaceholder={copy.selectCityPlaceholder}
+                  zonePlaceholder={copy.selectZonePlaceholder}
+                  areaPlaceholder={copy.selectAreaPlaceholder}
+                  zoneSearchPlaceholder={copy.zoneSearchPlaceholder}
+                  loadingText={copy.loadingText}
+                  zonesLoadFailedText={copy.zonesLoadFailedText}
+                  areasLoadFailedText={copy.areasLoadFailedText}
+                  showAreaField={lang.fieldVisibility.showAreaField}
+                />
+                <p id="shippingLocationError" class={errorClass} role="alert"></p>
+              </div>
+
+              <CheckoutShippingMethods
+                shippingMethods={shippingMethods}
+                shippingMethodLabel={copy.shippingMethodLabel}
+                freeText={copy.freeText}
+                freeOverText={copy.freeOverText}
+                waivedShippingFeeText={copy.waivedShippingFeeText}
+                pickupFromText={copy.pickupFromText}
+                chooseAddressText={copy.chooseAddressForDeliveryText}
+                noDeliveryText={copy.noDeliveryToAddressText}
+                failedText={copy.deliveryOptionsFailedText}
+                retryText={copy.retryText}
+                loadingText={copy.loadingText}
+              />
 
               {
                 lang.fieldVisibility.showOrderNotesField && (
-                  <div class="sm:col-span-2">
-                    <Label
-                      htmlFor="notes"
-                      className="mb-1.5 block text-sm font-medium text-foreground"
-                    >
-                      {lang.languageData.orderNotesLabel}
-                    </Label>
-                    <Textarea
+                  <div>
+                    <label for="notes" class={labelClass}>
+                      {copy.orderNotesLabel}
+                    </label>
+                    <textarea
                       id="notes"
                       name="notes"
-                      placeholder={lang.languageData.orderNotesPlaceholder}
+                      maxlength="500"
+                      placeholder={copy.orderNotesPlaceholder}
                       rows={2}
-                      className="w-full min-h-16 resize-none bg-muted border-input rounded-lg focus:bg-background focus:border-primary focus:ring-primary/20 px-3 py-2.5 text-base text-foreground"
-                    />
+                      class={`${fieldClass} h-auto min-h-16 resize-none py-2`}
+                    ></textarea>
                   </div>
                 )
               }
-            </div>
+            </section>
 
-            <div class="pt-4">
+            <div>
               <p
                 id="checkoutFormMessage"
                 class="mb-3 hidden rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
@@ -718,25 +529,27 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 tabindex="-1"
               >
               </p>
-              <Button
+              <button
                 type="submit"
-                className="h-11 w-full bg-primary text-primary-foreground font-bold text-base py-3 sm:h-10 sm:py-3.5 rounded-xl shadow-lg hover:bg-primary/90 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-200 overflow-hidden relative"
+                class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                 id="submitButton"
-                disabled={true}
+                disabled
               >
-                <span class="relative z-10" id="submitButtonText">
-                  {
-                    isProcessing
-                      ? lang.languageData.processingText
-                      : submitLabel
-                  }
+                <span id="submitButtonText">
+                  {isProcessing ? copy.processingText : submitLabel}
                 </span>
-              </Button>
+              </button>
 
               {
                 codOnly && (
-                  <p class="mt-3 text-center text-[10px] text-muted-foreground">
-                    {lang.languageData.termsText}
+                  <p class="mt-3 text-center text-sm text-muted-foreground">
+                    {agreement.map((segment) =>
+                      segment.href ? (
+                        <a href={segment.href} class="underline underline-offset-2 hover:text-foreground">{segment.text}</a>
+                      ) : (
+                        segment.text
+                      ),
+                    )}
                   </p>
                 )
               }
@@ -744,13 +557,115 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           </form>
         </div>
       </div>
+
+      <div
+        id="cartColumn"
+        class="order-1 min-w-0 lg:order-2 lg:col-span-5 lg:sticky lg:self-start group-data-[cart-state=empty]:lg:col-span-12"
+        style="top: calc(var(--header-height, 64px) + 1rem);"
+      >
+        <section
+          aria-labelledby="cartHeading"
+          class="overflow-hidden rounded-xl border border-border bg-card group-data-[cart-state=empty]:mx-auto group-data-[cart-state=empty]:max-w-lg"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <h2 id="cartHeading" class="text-lg font-semibold text-foreground">
+              {copy.cartSectionTitle}
+            </h2>
+            <a
+              href="/"
+              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring sm:min-h-9"
+            >
+              <span aria-hidden="true">←</span>
+              {copy.continueShoppingText}
+            </a>
+          </div>
+
+          <div
+            id="cartValidationMessage"
+            class="hidden mx-4 mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+            role="alert"
+          >
+          </div>
+
+          <div
+            class="min-h-24 p-4"
+            id="cartItems"
+            aria-busy="true"
+          >
+            <div class="py-8 text-center text-sm text-muted-foreground" role="status">
+              {copy.cartLoadingText}
+            </div>
+          </div>
+          <p id="cartUndo" class="mx-4 mb-3 text-sm text-muted-foreground" role="status" hidden></p>
+
+          <div
+            id="cartSummary"
+            class="hidden space-y-2 border-t border-border bg-muted/40 p-4"
+          >
+            <div class="flex justify-between text-sm text-muted-foreground">
+              <span>{copy.subtotalText}</span>
+              <span id="subtotal" class="font-medium tabular-nums text-foreground">—</span>
+            </div>
+            <div class="flex justify-between text-sm text-muted-foreground">
+              <span>{copy.shippingText}</span>
+              <span id="shippingCost" class="font-medium tabular-nums text-foreground">—</span>
+            </div>
+            <div id="discountLines" class="space-y-1"></div>
+            <div id="taxRow" class="hidden flex justify-between gap-3 text-sm text-muted-foreground">
+              <span id="taxLabel">{copy.taxText}</span>
+              <span id="taxAmount" class="text-right font-medium tabular-nums text-foreground">—</span>
+            </div>
+
+            <div class="mt-2 border-t border-border pt-2">
+              <div class="flex items-baseline justify-between" aria-live="polite" aria-atomic="true">
+                <span
+                  id="totalLabel"
+                  data-final-label={copy.totalText}
+                  class="text-sm font-semibold text-foreground"
+                  >{copy.estimatedTotalText}</span
+                >
+                <span id="total" class="text-xl font-semibold tabular-nums text-foreground">—</span>
+              </div>
+              <p id="taxStatus" class="mt-1 hidden text-sm text-destructive" role="status"></p>
+            </div>
+
+            <form id="discountForm" method="post" action="/cart" class="pt-3" novalidate>
+              <label for="discountCodeInput" class="sr-only">{copy.discountCodePlaceholder}</label>
+              <div class="flex gap-2">
+                <input
+                  type="text"
+                  id="discountCodeInput"
+                  aria-describedby="discountMessage"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  enterkeyhint="done"
+                  maxlength="50"
+                  placeholder={copy.discountCodePlaceholder}
+                  class={`${fieldClass} min-w-0 flex-1`}
+                />
+                <button
+                  type="submit"
+                  id="applyDiscountBtn"
+                  class="h-11 shrink-0 rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
+                >
+                  {copy.applyDiscountText}
+                </button>
+              </div>
+              <p id="discountMessage" class="mt-1.5 text-sm" role="status" aria-live="polite" hidden></p>
+            </form>
+            <ul id="appliedCodes" class="hidden space-y-2"></ul>
+            <ul id="discountOffers" class="hidden space-y-2" role="status"></ul>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 </Layout>
 
 <CheckoutLoadingOverlay
-  title={lang.languageData.processingOrderTitle}
-  message={lang.languageData.processingOrderMessage}
+  title={copy.processingOrderTitle}
+  message={copy.processingOrderMessage}
 />
 
 <script>
@@ -758,14 +673,17 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     initCartFunctionality,
     isDiscountValidationPending,
     resumeCartPageFromHistory,
+    updateCheckoutButtonState,
   } from "@/lib/cart/client";
   import { getCustomerSession } from "@/lib/api/customer-auth";
   import {
     cartHasFreeDeliveryItem,
+    cartItemsSubtotal,
     cartStore,
     getEffectiveCartShippingFee,
   } from "@/store/cart";
-  import { enhanceShippingMethods } from "@/lib/checkout/shipping-methods";
+  import { enhanceShippingMethods, fetchDeliveryRates } from "@/lib/checkout/shipping-methods";
+  import { formatMoney } from "@/lib/currency";
   import { browserApiUrl } from "@/lib/api/browser-url";
   import {
     enhanceLocationSelects,
@@ -778,25 +696,28 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     loadCheckoutPhoneValidator,
   } from "@/lib/checkout/phone-field";
   import {
+    clearCheckoutFormDraft,
+    discardCheckoutFormDraftOfOtherOwner,
     readCheckoutFormDraft,
     readHostedPaymentRecoverySession,
     syncCheckoutTransferSession,
     writeCheckoutFormDraft,
     writeCheckoutTransferSession,
   } from "@/lib/checkout/session-state";
+  import { rememberSubmittedCart } from "@/lib/checkout/receipt-finalization";
   import { findNamedCheckoutControl } from "@/lib/checkout/form-controls";
   import {
-    getShippingAddressError,
-    MIN_SHIPPING_ADDRESS_LENGTH,
-  } from "@/lib/checkout/shipping-address";
+    checkoutInformationFields,
+    enhanceCheckoutFields,
+  } from "@/lib/checkout/field-validation";
   import {
     hideCheckoutLoadingOverlay,
     showCheckoutLoadingOverlay,
   } from "@/lib/checkout/loading-overlay";
-  import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
   import type { CheckoutLanguageData as CheckoutLanguageStrings } from "@scalius/shared/checkout-language";
 
   type CustomerAutofillProfile = {
+    customerId?: string | null;
     name?: string | null;
     phone?: string | null;
     email?: string | null;
@@ -839,24 +760,56 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     void callback();
   };
 
+  const isSignedIn = () =>
+    document.cookie.split(";").some((c) => c.trim().startsWith("cs_auth=1"));
+  const ownerOf = (customer: CustomerAutofillProfile) =>
+    customer.customerId || customer.email || "customer";
+
+  // A draft written by a guest (or another account) never follows a signed-in
+  // buyer, and a signed-in buyer's draft never outlives their sign-out.
+  if (!isSignedIn()) discardCheckoutFormDraftOfOtherOwner("guest");
+
   initCheckoutPhoneField(cartPageSignal);
 
   void initCartFunctionality();
 
   // Wired after the cart runtime so its listeners receive the initial
-  // delivery-method and location events.
+  // delivery-method and location events. The delivery options follow the
+  // address, so they are wired first and re-read on every location change.
+  const shippingMethods = enhanceShippingMethods(document, {
+    loadRates: (address) => fetchDeliveryRates(browserApiUrl(""), address),
+    readDraftMethod: () => readCheckoutFormDraft()?.shippingLocation,
+    readSubtotal: () => cartItemsSubtotal(cartStore.get().items),
+    isFeeWaived: () => cartHasFreeDeliveryItem(cartStore.get().items),
+    formatMoney,
+    signal: cartPageSignal,
+  });
+  window.addEventListener(
+    "delivery-rate-rejected",
+    () => void shippingMethods?.rejectSelected(),
+    { signal: cartPageSignal },
+  );
   const locationRoot = document.querySelector<HTMLElement>("[data-location-fields]");
   const locationSelects = locationRoot
     ? enhanceLocationSelects(locationRoot, {
         load: (level, parentId) =>
           fetchLocationOptions(browserApiUrl(""), level, parentId),
-        onChange: (detail) =>
+        onChange: (detail) => {
           window.dispatchEvent(
             new CustomEvent("checkout-location-change", { detail }),
-          ),
+          );
+          void shippingMethods?.setAddress(detail);
+        },
         signal: cartPageSignal,
       })
     : null;
+  // An address already in the form (restored by the browser) gets its rates too.
+  const formLocation = (name: string) => findNamedCheckoutControl(document, name)?.value ?? "";
+  void shippingMethods?.setAddress({
+    cityId: formLocation("city"),
+    zoneId: formLocation("zone"),
+    areaId: formLocation("area"),
+  });
   window.addEventListener(
     "location-prefill",
     (event) =>
@@ -866,11 +819,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     { signal: cartPageSignal },
   );
 
-  const shippingMethods = enhanceShippingMethods(document, {
-    readDraftMethod: () => readCheckoutFormDraft()?.shippingLocation,
-    isFeeWaived: () => cartHasFreeDeliveryItem(cartStore.get().items),
-    signal: cartPageSignal,
-  });
   const unsubscribeShippingFees = cartStore.subscribe(() =>
     shippingMethods?.refreshFees(),
   );
@@ -878,44 +826,28 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     once: true,
   });
 
-  // ── Customer login pre-fill ───────────────────────────────────────────────
+  // ── Draft and account prefill ─────────────────────────────────────────────
 
   const buyerEditedFields = new Set<string>();
+  const contactFields = ["customerName", "customerEmail", "shippingAddress", "notes"] as const;
 
-  // Helper to fill basic fields
-  const fillBasicCustomerFields = (customer: CustomerAutofillProfile) => {
-    const draft = readCheckoutFormDraft();
-    const preferredName = draft && "customerName" in draft
-      ? draft.customerName
-      : customer?.name;
-    if (preferredName && !buyerEditedFields.has("customerName")) {
-      const el = document.getElementById("customerName") as HTMLInputElement;
-      if (el && !el.value) el.value = preferredName;
-    }
-    const preferredPhone = draft && "customerPhone" in draft
-      ? draft.customerPhone
-      : customer?.phone;
-    if (preferredPhone && !buyerEditedFields.has("customerPhone")) {
+  const setFieldValue = (name: string, value: string | null | undefined, overwrite: boolean) => {
+    const el = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`);
+    if (el && (overwrite || (!el.value && value))) el.value = value ?? "";
+  };
+
+  /** Empty fields take the account's saved details; the buyer's own edits win. */
+  const fillBasicCustomerFields = (customer: CustomerAutofillProfile, overwrite = false) => {
+    const draft = overwrite ? null : readCheckoutFormDraft();
+    const pick = (field: keyof NonNullable<typeof draft>, fallback?: string | null) =>
+      draft && field in draft ? draft[field] : fallback;
+    if (!buyerEditedFields.has("customerName")) setFieldValue("customerName", pick("customerName", customer.name), overwrite);
+    if (!buyerEditedFields.has("customerEmail")) setFieldValue("customerEmail", pick("customerEmail", customer.email), overwrite);
+    if (!buyerEditedFields.has("shippingAddress")) setFieldValue("shippingAddress", pick("shippingAddress", customer.address), overwrite);
+    const phone = pick("customerPhone", customer.phone);
+    if (phone && !buyerEditedFields.has("customerPhone")) {
       // The field validates the profile phone against the store's policy.
-      window.dispatchEvent(
-        new CustomEvent("phone-prefill", { detail: preferredPhone }),
-      );
-    }
-    const preferredEmail = draft && "customerEmail" in draft
-      ? draft.customerEmail
-      : customer?.email;
-    if (preferredEmail && !buyerEditedFields.has("customerEmail")) {
-      const el = document.getElementById("customerEmail") as HTMLInputElement;
-      if (el && !el.value) el.value = preferredEmail;
-    }
-    const preferredAddress = draft && "shippingAddress" in draft
-      ? draft.shippingAddress
-      : customer?.address;
-    if (preferredAddress && !buyerEditedFields.has("shippingAddress")) {
-      const el = document.getElementById(
-        "shippingAddress",
-      ) as HTMLTextAreaElement;
-      if (el && !el.value) el.value = preferredAddress;
+      window.dispatchEvent(new CustomEvent("phone-prefill", { detail: phone }));
     }
   };
 
@@ -978,22 +910,22 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     const checkoutId = (
       document.getElementById("checkoutIdInput") as HTMLInputElement | null
     )?.value;
-    const discountCodeHidden = (
-      document.getElementById("discountCodeHidden") as HTMLInputElement | null
+    const discountCodes = (
+      document.getElementById("discountCodesInput") as HTMLInputElement | null
     )?.value;
     const expectedQuoteFingerprint = (
       document.getElementById("expectedQuoteFingerprint") as HTMLInputElement | null
     )?.value;
-    const shippingMethodId =
-      window.lastShippingEventDetail?.id || values.shippingLocation;
+    const shippingMethodId = window.lastShippingEventDetail?.id;
     const shippingMethodName = window.lastShippingEventDetail?.name;
     let shippingCharge = "";
-    if (cartItems) {
+    if (cartItems && window.lastShippingEventDetail) {
       try {
         shippingCharge = String(
           getEffectiveCartShippingFee(
             JSON.parse(cartItems),
-            window.lastShippingEventDetail?.fee ?? 0,
+            window.lastShippingEventDetail.fee,
+            window.lastShippingEventDetail.freeOver,
           ),
         );
       } catch {
@@ -1004,7 +936,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       ...values,
       ...(cartItems ? { cartItems } : {}),
       ...(checkoutId ? { checkoutId } : {}),
-      ...(discountCodeHidden !== undefined ? { discountCodeHidden } : {}),
+      ...(discountCodes !== undefined ? { discountCodes } : {}),
       ...(expectedQuoteFingerprint ? { expectedQuoteFingerprint } : {}),
       ...(shippingMethodId ? { shippingMethodId } : {}),
       ...(shippingMethodName ? { shippingMethodName } : {}),
@@ -1040,27 +972,24 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     { once: true, signal: cartPageSignal },
   );
 
-  const restoreCheckoutFormDraft = () => {
-    const draft = readCheckoutFormDraft();
+  // A signed-in buyer's draft is restored only once the account confirms it is theirs.
+  const restoreCheckoutFormDraft = (ownerVerified = !isSignedIn()) => {
+    const draft = ownerVerified ? readCheckoutFormDraft() : null;
     if (!draft) return;
-
-    for (const field of [
-      "customerName",
-      "customerEmail",
-      "shippingAddress",
-      "notes",
-    ] as const) {
-      const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-        `[name="${field}"]`,
-      );
-      if (input && !input.value && draft[field]) input.value = draft[field] || "";
-    }
-
+    for (const field of contactFields) setFieldValue(field, draft[field], false);
     if (draft.customerPhone) {
       window.dispatchEvent(
         new CustomEvent("phone-prefill", { detail: draft.customerPhone }),
       );
     }
+  };
+
+  /** Clears every contact and address field (another person's draft, or sign-out). */
+  const clearCustomerFields = () => {
+    for (const field of contactFields) setFieldValue(field, "", true);
+    const phone = document.getElementById("customerPhone-input") as HTMLInputElement | null;
+    if (phone) phone.value = "";
+    buyerEditedFields.clear();
   };
 
   runWhenDomReady(() => {
@@ -1113,7 +1042,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       signal: cartPageSignal,
     });
 
-    const draft = readCheckoutFormDraft();
+    const draft = isSignedIn() ? null : readCheckoutFormDraft();
     if (draft?.city || draft?.cityName) {
       void locationSelects?.prefill({
         city: draft.city,
@@ -1126,11 +1055,11 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     }
   });
 
-  // Helper to auto-select City/Zone/Area selects for a signed-in customer.
-  const fillLocationDropdowns = (customer: CustomerAutofillProfile) => {
+  // City/Zone/Area for a signed-in customer.
+  const fillLocationDropdowns = (customer: CustomerAutofillProfile, overwrite = false) => {
     try {
-      if (latestDraftLocation.city || latestDraftLocation.cityName) return;
-      const draft = readCheckoutFormDraft();
+      if (!overwrite && (latestDraftLocation.city || latestDraftLocation.cityName)) return;
+      const draft = overwrite ? null : readCheckoutFormDraft();
       const draftOwnsLocation = Boolean(
         draft && ["city", "cityName", "zone", "zoneName", "area", "areaName"]
           .some((field) => Object.prototype.hasOwnProperty.call(draft, field)),
@@ -1146,11 +1075,13 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           }
         : customer;
       if (!preferred?.cityName && !preferred?.city) return;
-      const existingCity =
-        document.querySelector<HTMLSelectElement>('select[name="city"]')?.value;
-      const existingZone =
-        document.querySelector<HTMLSelectElement>('select[name="zone"]')?.value;
-      if (existingCity || existingZone) return;
+      if (!overwrite) {
+        const existingCity =
+          document.querySelector<HTMLSelectElement>('select[name="city"]')?.value;
+        const existingZone =
+          document.querySelector<HTMLSelectElement>('select[name="zone"]')?.value;
+        if (existingCity || existingZone) return;
+      }
       window.dispatchEvent(
         new CustomEvent("location-prefill", {
           detail: {
@@ -1173,51 +1104,58 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     document.getElementById("checkoutFormCard")?.classList.remove("hidden");
   };
 
-  // 1. Initial page load hydration (standalone fetch)
+  // 1. Page load: a signed-in buyer's empty fields take their saved details.
   runWhenDomReady(async () => {
-    const isUserLoggedIn = document.cookie
-      .split(";")
-      .some((c) => c.trim().startsWith("cs_auth=1"));
-    if (isUserLoggedIn || !guestCheckoutEnabled) {
-      const session = await getCustomerSession();
-      if (session.unavailable) {
-        console.warn(
-          "Customer session autofill skipped:",
-          session.error || "Account status could not be read.",
-        );
-        return;
-      }
-      if (session?.authenticated && session.customer) {
-        fillBasicCustomerFields(session.customer);
-        fillLocationDropdowns(session.customer);
-        revealCheckoutFormForCustomer();
-      }
+    if (!isSignedIn() && guestCheckoutEnabled) return;
+    const session = await getCustomerSession();
+    if (session.unavailable) {
+      console.warn(
+        "Customer session autofill skipped:",
+        session.error || "Account status could not be read.",
+      );
+      return;
+    }
+    if (session?.authenticated && session.customer) {
+      discardCheckoutFormDraftOfOtherOwner(ownerOf(session.customer));
+      restoreCheckoutFormDraft(true);
+      fillBasicCustomerFields(session.customer);
+      fillLocationDropdowns(session.customer);
+      revealCheckoutFormForCustomer();
+    } else if (discardCheckoutFormDraftOfOtherOwner("guest")) {
+      clearCustomerFields();
     }
   });
 
-  // 2. Active login intercept (AuthModal)
+  // 2. Signing in from checkout: the account's details replace what was typed
+  // before (possibly someone else's), and the cart stays.
   window.addEventListener(
     "customer-login",
     ((e: CustomEvent<CustomerAutofillProfile>) => {
       if (cartPageSignal.aborted) return;
       const customer = e.detail;
-      fillBasicCustomerFields(customer);
+      clearCheckoutFormDraft();
+      discardCheckoutFormDraftOfOtherOwner(ownerOf(customer));
+      buyerEditedFields.clear();
+      fillBasicCustomerFields(customer, true);
+      fillLocationDropdowns(customer, true);
       revealCheckoutFormForCustomer();
-      // Modal normally resolves quickly, but schedule location fill slightly later to avoid DOM races
-      const timeoutId = window.setTimeout(
-        () => fillLocationDropdowns(customer),
-        300,
-      );
-      cartPageSignal.addEventListener(
-        "abort",
-        () => window.clearTimeout(timeoutId),
-        { once: true },
-      );
+      persistCheckoutFormDraftNow();
     }) as EventListener,
     { signal: cartPageSignal },
   );
 
-  // ── Multi-gateway checkout redirect ──
+  // 3. Signing out: the next person on this phone sees an empty form.
+  window.addEventListener(
+    "customer-logout",
+    () => {
+      clearCheckoutFormDraft();
+      discardCheckoutFormDraftOfOtherOwner("guest");
+      clearCustomerFields();
+    },
+    { signal: cartPageSignal },
+  );
+
+  // ── Submit ──
 
   runWhenDomReady(() => {
     const form = document.getElementById("checkoutForm") as HTMLFormElement;
@@ -1232,7 +1170,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       return !input?.value || input.value === "{}" || input.value === "[]";
     };
 
-    const readCustomerSessionForCheckout = async () => getCustomerSession();
     const initialSubmitText = submitButtonText?.textContent?.trim() || checkoutCopy.placeOrderText;
     const checkoutFormMessage = document.getElementById("checkoutFormMessage");
     let submitAfterCustomerSessionCheck = false;
@@ -1277,44 +1214,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       messageEl.scrollIntoView?.({ behavior: "smooth", block: "center" });
     };
 
-    const updateCheckoutButtonState = () => {
-      if (submitButton) {
-        const cartReady =
-          document.getElementById("cartPageRoot")?.dataset.cartReady === "true";
-        const empty = isCartEmpty();
-        const cartBlocked = window.hasCartValidationIssues?.() === true;
-        const checkoutPending = readHostedPaymentRecoverySession() !== null;
-        const discountValidationPending = isDiscountValidationPending();
-        const quoteUnverified =
-          codOnly &&
-          !/^taxq_[A-Za-z0-9_-]{22}$/.test(
-            (document.getElementById("expectedQuoteFingerprint") as HTMLInputElement | null)
-              ?.value ?? "",
-          );
-        submitButton.disabled =
-          !cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending || discountValidationPending || quoteUnverified;
-        if (!cartReady || checkoutUnavailable || empty || cartBlocked || checkoutPending || discountValidationPending || quoteUnverified)
-          submitButton.classList.add("opacity-50", "cursor-not-allowed");
-        else submitButton.classList.remove("opacity-50", "cursor-not-allowed");
-        submitButton.title = !cartReady
-          ? checkoutCopy.cartLoadingText
-          : checkoutUnavailable
-            ? checkoutUnavailableMessage
-            : empty
-              ? checkoutCopy.emptyCartText
-              : cartBlocked
-                ? window.getCartBlockedMessage?.() ||
-                  checkoutCopy.cartAttentionText
-                : checkoutPending
-                  ? checkoutCopy.reviewExistingCheckoutText
-                : discountValidationPending
-                  ? checkoutCopy.processingText
-                : quoteUnverified
-                  ? checkoutCopy.totalVerificationFailedText
-                : "";
-      }
-    };
-
     updateCheckoutButtonState();
     document.addEventListener("cart-updated", updateCheckoutButtonState, {
       signal: cartPageSignal,
@@ -1338,56 +1237,43 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       { signal: cartPageSignal },
     );
 
-    const shippingAddressInput = document.getElementById(
-      "shippingAddress",
-    ) as HTMLTextAreaElement | null;
-    const shippingAddressError = document.getElementById(
-      "shippingAddressError",
+    const fields = enhanceCheckoutFields(
+      checkoutInformationFields(form, checkoutCopy),
+      cartPageSignal,
     );
-    const shippingLocationError = document.getElementById(
-      "shippingLocationError",
-    );
-    const syncShippingAddressValidity = (showError: boolean) => {
-      if (!shippingAddressInput) return true;
-      const addressError = getShippingAddressError(shippingAddressInput.value);
-      const message = !addressError
-        ? null
-        : shippingAddressInput.value.trim()
-          ? formatCheckoutLanguageText(checkoutCopy.addressIncompleteText, {
-              minimum: MIN_SHIPPING_ADDRESS_LENGTH,
-            })
-          : checkoutCopy.addressRequiredText;
-      shippingAddressInput.setCustomValidity(message ?? "");
-      if (shippingAddressError) {
-        shippingAddressError.textContent = showError ? (message ?? "") : "";
-        shippingAddressError.classList.toggle("hidden", !showError || !message);
-      }
-      return message === null;
-    };
 
-    shippingAddressInput?.addEventListener(
-      "input",
-      () => {
-        const errorIsVisible =
-          shippingAddressError?.classList.contains("hidden") === false;
-        syncShippingAddressValidity(errorIsVisible);
-      },
-      { signal: cartPageSignal },
-    );
-    shippingAddressInput?.addEventListener(
-      "invalid",
-      () => syncShippingAddressValidity(true),
-      { signal: cartPageSignal },
-    );
-    window.addEventListener(
-      "checkout-location-change",
-      () => {
-        if (!shippingLocationError) return;
-        shippingLocationError.textContent = "";
-        shippingLocationError.classList.add("hidden");
-      },
-      { signal: cartPageSignal },
-    );
+    /**
+     * Marks every problem under its field at once, then moves to the first
+     * one (the phone field reports its own message in place).
+     */
+    const validateInformation = (): boolean => {
+      const firstField = fields.validateAll();
+      const phone = checkoutPhoneResult();
+      const phoneMessage = phone.ok
+        ? ""
+        : phone.message === "required"
+          ? checkoutCopy.phoneRequiredText
+          : phone.message === "country"
+            ? checkoutCopy.phoneCountryNotAcceptedText
+            : checkoutCopy.phoneInvalidText;
+      if (phoneMessage) {
+        window.dispatchEvent(new CustomEvent("phone-validation-error", {
+          detail: { name: "customerPhone", message: phoneMessage, focus: false },
+        }));
+      }
+      const phoneInput = document.getElementById("customerPhone-input");
+      const nameInput = document.getElementById("customerName");
+      // Visual order: name, phone, then the rest.
+      let first: HTMLElement | null = firstField;
+      if (phoneMessage && phoneInput && (!first || first !== nameInput)) first = phoneInput;
+      if (!first) return true;
+      first.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      const focusable = first.matches("fieldset")
+        ? first.querySelector<HTMLElement>("input:checked, input")
+        : first;
+      focusable?.focus({ preventScroll: true });
+      return false;
+    };
 
     form.addEventListener(
       "submit",
@@ -1435,9 +1321,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           submitButton.disabled = true;
           setSubmitButtonText(checkoutCopy.checkingAccountText);
 
-          const session = await readCustomerSessionForCheckout();
+          const session = await getCustomerSession();
           if (isDiscountValidationPending()) {
-            e.preventDefault();
             restoreSubmitButton();
             return;
           }
@@ -1468,7 +1353,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           submitAfterCustomerSessionCheck = false;
         }
 
-        // Cart empty check
         if (isCartEmpty()) {
           e.preventDefault();
           restoreSubmitButton();
@@ -1483,109 +1367,12 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         // older draft values before any async validation or navigation.
         persistCheckoutFormDraftNow(true);
 
-        // Validate in visual form order and keep every error inline. The form
-        // is novalidate so browser-native validation bubbles cannot conflict
-        // with the field that receives focus.
+        if (!validateInformation()) {
+          e.preventDefault();
+          restoreSubmitButton();
+          return;
+        }
         const phoneValidation = checkoutPhoneResult();
-        const missing = ["customerName", "customerPhone", "shippingAddress"].filter(
-          (field) =>
-            field === "customerPhone"
-              ? phoneValidation.message === "required"
-              : !document
-                  .querySelector<HTMLInputElement>(`[name="${field}"]`)
-                  ?.value?.trim(),
-        );
-        if (missing.length > 0) {
-          e.preventDefault();
-          restoreSubmitButton();
-          const firstMissing = missing[0];
-          const missingTarget = document.querySelector<HTMLElement>(`[name="${firstMissing}"]`);
-          if (firstMissing === "customerPhone") {
-            window.dispatchEvent(new CustomEvent("phone-validation-error", {
-              detail: { name: "customerPhone", message: checkoutCopy.phoneRequiredText },
-            }));
-            missingTarget?.focus({ preventScroll: true });
-          } else {
-            const missingMessage = firstMissing === "customerName"
-              ? checkoutCopy.nameRequiredText
-              : checkoutCopy.addressRequiredText;
-            showCheckoutFormError(missingMessage, missingTarget);
-          }
-          return;
-        }
-
-        if (!phoneValidation.ok) {
-          e.preventDefault();
-          restoreSubmitButton();
-          window.dispatchEvent(
-            new CustomEvent("phone-validation-error", {
-              detail: {
-                name: "customerPhone",
-                message: phoneValidation.message === "country"
-                  ? checkoutCopy.phoneCountryNotAcceptedText
-                  : checkoutCopy.phoneInvalidText,
-              },
-            }),
-          );
-          return;
-        }
-        persistCheckoutFormDraftNow(true);
-
-        if (!syncShippingAddressValidity(true)) {
-          e.preventDefault();
-          restoreSubmitButton();
-          shippingAddressInput?.focus({ preventScroll: true });
-          shippingAddressInput?.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-          return;
-        }
-
-        const cityInput = document.querySelector<HTMLInputElement>(
-          '[name="city"]',
-        );
-        const zoneInput = document.querySelector<HTMLInputElement>(
-          '[name="zone"]',
-        );
-        if (!cityInput?.value?.trim() || !zoneInput?.value?.trim()) {
-          e.preventDefault();
-          restoreSubmitButton();
-          const missingCity = !cityInput?.value?.trim();
-          const message = missingCity
-            ? checkoutCopy.cityZoneRequiredText
-            : checkoutCopy.zoneRequiredText;
-          if (shippingLocationError) {
-            shippingLocationError.textContent = message;
-            shippingLocationError.classList.remove("hidden");
-            shippingLocationError.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-          }
-          document
-            .getElementById(missingCity ? "checkout-city" : "checkout-zone")
-            ?.focus({ preventScroll: true });
-          return;
-        }
-
-        const shippingLocationInput = findNamedCheckoutControl(
-          document,
-          "shippingLocation",
-        );
-        if (!shippingLocationInput?.value?.trim()) {
-          e.preventDefault();
-          restoreSubmitButton();
-          if (shippingLocationError) {
-            shippingLocationError.textContent = checkoutCopy.deliveryRequiredText;
-            shippingLocationError.classList.remove("hidden");
-            shippingLocationError.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-          document
-            .querySelector<HTMLInputElement>('input[name="shippingLocation"]')
-            ?.focus({ preventScroll: true });
-          return;
-        }
 
         const expectedQuoteFingerprintInput = document.getElementById(
           "expectedQuoteFingerprint",
@@ -1610,7 +1397,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           const cartIsValid = await (window.validateCartSnapshot?.() ??
             Promise.resolve(true));
           if (isDiscountValidationPending()) {
-            e.preventDefault();
             restoreSubmitButton();
             return;
           }
@@ -1635,11 +1421,13 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           submitAfterCartValidation = false;
         }
 
+        const submittedCart =
+          (document.getElementById("cartItemsInput") as HTMLInputElement | null)?.value ?? "{}";
+
         if (!codOnly) {
           // ── Multi-gateway flow: intercept and redirect to /checkout ──
           e.preventDefault();
 
-          // Collect all form data + cart items into sessionStorage
           const formData = new FormData(form);
           const checkoutData: Record<string, string> = {};
           formData.forEach((value, key) => {
@@ -1647,49 +1435,23 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           });
           checkoutData.customerPhone = phoneValidation.value;
 
-          // Also grab location hidden fields that may not be in formData
-          const fields = [
-            "city",
-            "zone",
-            "area",
-            "shippingLocation",
-            "cityName",
-            "zoneName",
-            "areaName",
-          ];
-          for (const f of fields) {
+          // Location hidden fields that may not be in formData.
+          for (const f of ["city", "zone", "area", "shippingLocation", "cityName", "zoneName", "areaName"]) {
             const el = findNamedCheckoutControl(document, f);
             if (el) checkoutData[f] = el.value;
           }
 
-          // Capture the current shipping fee from the delivery options
-          // Fall back to the first shipping method's fee when no selection has been made
-          const defaultShippingFee = parseFloat(
-            meta?.dataset.defaultShippingFee || "0",
-          );
-          const defaultShippingId =
-            meta?.dataset.defaultShippingId || undefined;
-          const selectedShippingFee =
-            window.lastShippingEventDetail?.fee ?? defaultShippingFee;
-          const shippingMethodId =
-            window.lastShippingEventDetail?.id ?? defaultShippingId;
-          const shippingMethodName = window.lastShippingEventDetail?.name
-            ?? meta?.dataset.defaultShippingName;
+          // The delivery option chosen for this address (validation required one).
+          const shippingMethodId = window.lastShippingEventDetail?.id;
+          const shippingMethodName = window.lastShippingEventDetail?.name;
 
-          const cartDataForShipping = JSON.parse(
-            (document.getElementById("cartItemsInput") as HTMLInputElement)
-              ?.value || "{}",
-          );
-          const shippingFee = getEffectiveCartShippingFee(
-            cartDataForShipping,
-            selectedShippingFee,
-          );
-
-          checkoutData["shippingCharge"] = String(shippingFee);
-          if (shippingMethodId)
-            checkoutData["shippingMethodId"] = shippingMethodId;
-          if (shippingMethodName)
-            checkoutData["shippingMethodName"] = shippingMethodName;
+          checkoutData["shippingCharge"] = String(getEffectiveCartShippingFee(
+            JSON.parse(submittedCart),
+            window.lastShippingEventDetail?.fee ?? 0,
+            window.lastShippingEventDetail?.freeOver ?? null,
+          ));
+          if (shippingMethodId) checkoutData["shippingMethodId"] = shippingMethodId;
+          if (shippingMethodName) checkoutData["shippingMethodName"] = shippingMethodName;
 
           const transferWrite = writeCheckoutTransferSession(
             checkoutData,
@@ -1712,6 +1474,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
         }
 
         // ── COD-only flow: normal form POST ──
+        rememberSubmittedCart(submittedCart);
         submitButton.disabled = true;
         setSubmitButtonText(checkoutCopy.processingText);
         showCheckoutLoadingOverlay({
@@ -1723,64 +1486,3 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     );
   });
 </script>
-
-<style>
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: #e5e7eb transparent;
-  }
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    background-color: #e5e7eb;
-    border-radius: 3px;
-  }
-  .space-y-2 > div,
-  .space-y-2\.5 > div {
-    position: relative;
-  }
-  input:focus,
-  textarea:focus,
-  button:focus {
-    outline: 2px solid #3b82f6;
-    outline-offset: 2px;
-  }
-  @media (max-width: 640px) {
-    .container {
-      padding-left: 8px;
-      padding-right: 8px;
-    }
-    .text-lg {
-      font-size: 1rem;
-    }
-    .text-xl {
-      font-size: 1.125rem;
-    }
-    .py-3 {
-      padding-top: 0.5rem;
-      padding-bottom: 0.5rem;
-    }
-    .px-4 {
-      padding-left: 0.75rem;
-      padding-right: 0.75rem;
-    }
-    .px-2\.5 {
-      padding-left: 0.5rem;
-      padding-right: 0.5rem;
-    }
-    .py-1\.5 {
-      padding-top: 0.25rem;
-      padding-bottom: 0.25rem;
-    }
-    .min-h-\[4\.5rem\] {
-      min-height: 3.5rem;
-    }
-    .min-h-\[4rem\] {
-      min-height: 3rem;
-    }
-  }
-</style>

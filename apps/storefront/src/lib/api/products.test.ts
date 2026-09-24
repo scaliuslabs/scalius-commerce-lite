@@ -144,6 +144,7 @@ describe("storefront product API helpers", () => {
       pagination,
       facets: [],
       priceRange: undefined,
+      correctedQuery: null,
     });
   });
 

@@ -15,15 +15,20 @@ vi.mock("~/hooks/use-order-action-permissions", () => ({
   useOrderActionPermissions: () => ({ canManageOrderShipments: mocks.canManage }),
 }));
 vi.mock("~/lib/api-mutations/orders", () => ({
-  useCreateOrderShipment: () => ({ mutate: vi.fn(), isPending: false }),
-  useReconcileShipment: () => ({ mutate: mocks.repair, isPending: false }),
-  useLookupUnknownShipment: () => ({ mutate: vi.fn(), isPending: false }),
-  useResolveUnknownShipment: () => ({ mutate: vi.fn(), isPending: false }),
+  orderErrorMessage: (error: Error) => error.message,
+  useCreateOrderShipment: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
+  useReconcileShipment: () => ({ mutate: mocks.repair, reset: vi.fn(), isPending: false }),
+  useLookupUnknownShipment: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
+  useResolveUnknownShipment: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
 }));
-vi.mock("./ManualFulfillmentDialog", () => ({
-  ManualFulfillmentDialog: () => <button type="button">own-courier</button>,
+vi.mock("./ManualFulfillmentDialog", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./ManualFulfillmentDialog")>()),
+  ManualFulfillmentDialog: () => null,
 }));
 vi.mock("~/components/admin/ShipmentStatusIndicator", () => ({ default: () => null }));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ children }: { children: React.ReactNode }) => <a href="/admin/settings/shipping">{children}</a>,
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -33,12 +38,11 @@ const order: Order = {
   area: null, notes: null, discountAmount: 0, shippingCharge: 0, status: "confirmed",
   createdAt: 1_783_000_000, updatedAt: 1_783_000_000, items: [], totalAmount: 1800,
   customerId: null, paymentMethod: "cod", paymentStatus: "unpaid", paidAmount: 0,
-  balanceDue: 1800, fullEditReadiness: { allowed: false, reason: null },
+  balanceDue: 1800, orderNumber: 1001, archivedAt: null, discounts: [], refundDue: 0, refundedAmount: 0,
+  editReadiness: { items: { allowed: false, reason: "closed" }, details: { allowed: false, reason: "closed" } },
 };
 const recovery: ShipmentRecovery = {
-  state: "needs_attention", severity: "danger", activeLock: true,
-  label: "Courier confirmation needed",
-  message: "Check the courier portal or contact the courier with this order number before attempting another booking.",
+  state: "needs_attention", reason: "courier_unconfirmed", severity: "danger", activeLock: true,
   shipmentId: "shipment_unknown", status: "reconcile_required", providerType: "pathao",
   canRepair: false, canRefresh: false, canRetryCreate: false, unknownOutcome: true, updatedAt: null,
 };
@@ -83,8 +87,8 @@ describe("ShipmentCard recovery authority", () => {
         shipments: { status, refreshing: false },
         deliveryProviders: { status: "ready", refreshing: false },
       } });
-      expect(host.textContent).toContain("Courier confirmation needed");
-      expect(host.textContent).toContain(recovery.message);
+      expect(host.textContent).toContain(en["shipmentRecovery.courier_unconfirmed"]);
+      expect(host.textContent).toContain(en["shipmentRecovery.courier_unconfirmed.help"]);
       expect(host.textContent).toContain(en["courier.checkTitle"]);
       expect(repairButton()).toBeUndefined();
       expect(mocks.repair).not.toHaveBeenCalled();
@@ -92,7 +96,7 @@ describe("ShipmentCard recovery authority", () => {
   );
 
   it("retains the authorized repair action for incomplete local finalization", async () => {
-    await render({ shipmentRecovery: { ...recovery, canRepair: true, label: "Shipment needs reconciliation" } });
+    await render({ shipmentRecovery: { ...recovery, reason: "reconcile_required", canRepair: true } });
     expect(repairButton()).toBeDefined();
     await act(async () => repairButton()!.click());
     expect(mocks.repair).toHaveBeenCalledExactlyOnceWith({ orderId: order.id, shipmentId: recovery.shipmentId });
@@ -123,6 +127,18 @@ describe("ShipmentCard recovery authority", () => {
 
     expect(host.textContent).toContain(en["shipments.empty"]);
     expect(host.textContent).not.toContain(en["shipments.book"]);
-    expect(host.textContent).not.toContain("own-courier");
+    expect(host.textContent).not.toContain(en["fulfill.open"]);
+  });
+
+  it("offers your own rider for what is left to send", async () => {
+    await render({
+      shipmentRecovery: undefined,
+      items: [{
+        id: "item_shipment", productId: "product_shipment", variantId: null, quantity: 3, shippedQuantity: 1,
+        price: 600, productName: "Kurta", productImage: null, variantLabel: null,
+      }],
+      shipments: [],
+    });
+    expect(host.textContent).toContain(en["fulfill.open"]);
   });
 });

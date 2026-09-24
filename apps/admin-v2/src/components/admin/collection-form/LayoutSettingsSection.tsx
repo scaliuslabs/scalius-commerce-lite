@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "~/components/ui/form";
 import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
 import { useMessages } from "~/i18n";
@@ -55,10 +56,10 @@ export const LayoutSettingsSection = React.memo(function LayoutSettingsSection({
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="active">{t("active")}</SelectItem>
-                    <SelectItem value="inactive">{t("inactive")}</SelectItem>
+                    <SelectItem value="inactive">{t("draft")}</SelectItem>
                   </SelectContent>
                 </Select>
-                {field.value ? null : <FormDescription>{t("inactiveHelp")}</FormDescription>}
+                <FormDescription>{t(field.value ? "activeHelp" : "draftHelp")}</FormDescription>
               </FormItem>
             )}
           />
@@ -171,13 +172,13 @@ export const LayoutSettingsSection = React.memo(function LayoutSettingsSection({
                   <FormItem>
                     <FormLabel>{t("productsShown")}</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        max={24}
-                        {...field}
-                        onChange={(event) => field.onChange(Number.parseInt(event.target.value, 10) || 1)}
+                      <NumberInput
+                        integer
+                        name={field.name}
+                        ref={field.ref}
+                        onBlur={field.onBlur}
+                        value={field.value}
+                        onValueChange={(value) => field.onChange(value ?? Number.NaN)}
                       />
                     </FormControl>
                     <FormDescription>{t("productsShownHelp")}</FormDescription>

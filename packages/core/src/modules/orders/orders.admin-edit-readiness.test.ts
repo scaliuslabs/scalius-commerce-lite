@@ -1,78 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import {
-    buildAdminOrderAmendmentReadiness,
-    buildAdminOrderFullEditReadiness,
-    type AdminOrderAmendmentSource,
-    type AdminOrderFullEditSource,
-} from "./orders.admin";
+import { buildOrderEditReadiness, type OrderEditSource } from "./orders.admin";
 
-function editableOrder(
-    overrides: Partial<AdminOrderFullEditSource> = {},
-): AdminOrderFullEditSource {
-    return {
-        status: "pending",
-        paymentStatus: "unpaid",
-        paidAmountMinor: 0,
-        fulfillmentStatus: "pending",
-        shipmentClaimId: null,
-        shipmentClaimExpiresAt: null,
-        hasTaxSnapshot: false,
-        hasPaymentHistory: false,
-        hasShipmentHistory: false,
-        hasRefundHistory: false,
-        hasReturnHistory: false,
-        hasInvoiceHistory: false,
-        ...overrides,
-    };
-}
-
-describe("admin full-order edit readiness", () => {
-    it.each(["pending", "processing", "confirmed"])(
-        "allows an unsettled manual order in %s",
-        (status) => {
-            expect(buildAdminOrderFullEditReadiness(editableOrder({ status }))).toEqual({
-                allowed: true,
-                reason: null,
-            });
-        },
-    );
-
-    it("locks shipped and terminal order states", () => {
-        const result = buildAdminOrderFullEditReadiness(
-            editableOrder({ status: "shipped" }),
-        );
-        expect(result.allowed).toBe(false);
-        expect(result.reason).toContain("before shipment");
-    });
-
-    // Stored evidence rows (payment, refund, shipment, tax snapshot, return,
-    // invoice) are covered end to end in orders.admin-full-edit-readiness.d1.test.ts.
-    it.each([
-        { paymentStatus: "paid", paidAmountMinor: 10000 },
-        { paymentStatus: "unpaid", paidAmountMinor: 100 },
-    ])("locks payment state: %o", (override) => {
-        const result = buildAdminOrderFullEditReadiness(editableOrder(override));
-        expect(result.allowed).toBe(false);
-        expect(result.reason).toContain("Payment or refund evidence");
-    });
-
-    it.each([
-        { fulfillmentStatus: "partial" },
-        {
-            shipmentClaimId: "claim_1",
-            shipmentClaimExpiresAt: new Date(Date.now() + 60_000),
-        },
-    ])("locks fulfillment and shipment evidence: %o", (override) => {
-        const result = buildAdminOrderFullEditReadiness(editableOrder(override));
-        expect(result.allowed).toBe(false);
-        expect(result.reason).toContain("Fulfillment or shipment evidence");
-    });
-});
-
-function amendableOrder(
-    overrides: Partial<AdminOrderAmendmentSource> = {},
-): AdminOrderAmendmentSource {
+function order(overrides: Partial<OrderEditSource> = {}): OrderEditSource {
     return {
         status: "confirmed",
         paymentMethod: "cod",
@@ -81,7 +11,7 @@ function amendableOrder(
         fulfillmentStatus: "pending",
         inventoryAction: "reserved",
         shipmentClaimId: null,
-        isManualOrder: true,
+        archivedAt: null,
         hasTaxSnapshot: true,
         hasPaymentHistory: false,
         hasPaymentSessionHistory: false,
@@ -97,29 +27,49 @@ function amendableOrder(
     };
 }
 
-describe("manual COD amendment readiness", () => {
-    it("allows only untouched manual COD orders with authoritative snapshots", () => {
-        expect(buildAdminOrderAmendmentReadiness(amendableOrder())).toEqual({
-            allowed: true,
-            reason: null,
+describe("order edit readiness", () => {
+    it.each(["pending", "processing", "confirmed"])(
+        "lets a %s COD order (dashboard or storefront) change items and details",
+        (status) => {
+            expect(buildOrderEditReadiness(order({ status }))).toEqual({
+                items: { allowed: true, reason: null },
+                details: { allowed: true, reason: null },
+            });
+        },
+    );
+
+    it.each([
+        [{ status: "shipped" }, "shipped"],
+        [{ status: "delivered" }, "shipped"],
+        [{ fulfillmentStatus: "partial" }, "shipped"],
+        [{ hasShipmentHistory: true }, "shipped"],
+        [{ status: "cancelled" }, "closed"],
+        [{ status: "incomplete" }, "closed"],
+        [{ archivedAt: new Date() }, "archived"],
+        [{ shipmentClaimId: "claim_1" }, "busy"],
+    ] as const)("locks everything for %o (%s)", (override, reason) => {
+        expect(buildOrderEditReadiness(order(override))).toEqual({
+            items: { allowed: false, reason },
+            details: { allowed: false, reason },
         });
     });
 
     it.each([
-        { isManualOrder: false },
-        { paymentMethod: "stripe" },
-        { paymentStatus: "paid", paidAmountMinor: 10000 },
-        { hasPaymentSessionHistory: true },
-        { hasPaymentPlan: true },
-        { hasCleanCodTracking: false },
-        { hasShipmentHistory: true },
-        { hasNonPendingItem: true },
-        { hasRefundHistory: true },
-        { hasReturnHistory: true },
-        { hasInvoiceHistory: true },
-        { hasTaxSnapshot: false },
-        { hasPromotionAllocation: true },
-    ])("locks unsafe evidence: %o", (override) => {
-        expect(buildAdminOrderAmendmentReadiness(amendableOrder(override)).allowed).toBe(false);
+        [{ paymentMethod: "stripe" }, "online_payment"],
+        [{ paymentStatus: "paid", paidAmountMinor: 10000 }, "paid"],
+        [{ hasPaymentSessionHistory: true }, "paid"],
+        [{ hasPaymentPlan: true }, "paid"],
+        [{ hasCleanCodTracking: false }, "paid"],
+        [{ hasRefundHistory: true }, "history"],
+        [{ hasReturnHistory: true }, "history"],
+        [{ hasInvoiceHistory: true }, "history"],
+        [{ hasTaxSnapshot: false }, "history"],
+        [{ hasPromotionAllocation: true }, "discount"],
+        [{ inventoryAction: "deducted" }, "inventory"],
+    ] as const)("keeps details editable but locks items for %o (%s)", (override, reason) => {
+        expect(buildOrderEditReadiness(order(override))).toEqual({
+            items: { allowed: false, reason },
+            details: { allowed: true, reason: null },
+        });
     });
 });

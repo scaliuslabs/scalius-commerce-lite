@@ -15,8 +15,16 @@ import {
     createOrderReturnSchema,
     listOrderReturns,
     listOrderSupportRequests,
+    recordOrderEvent,
+    updateOrderStatus,
 } from "@scalius/core/modules/orders";
-import { enqueueOrderSupportRequestNotificationForOrder } from "../../utils/order-notification-queue";
+import { orders } from "@scalius/database/schema";
+import { eq } from "drizzle-orm";
+import {
+    enqueueOrderNotificationMessage,
+    enqueueOrderSupportRequestNotificationForOrder,
+} from "../../utils/order-notification-queue";
+import { bumpCacheGeneration } from "../../utils/cache-generation";
 import { ok } from "../../utils/api-response";
 import {
     conflictResponse,
@@ -24,7 +32,9 @@ import {
     successEnvelope,
 } from "../../schemas/responses";
 import { orderSupportRequestSchema } from "../../schemas/entities";
-import { NotFoundError, ValidationError } from "../../utils/api-error";
+import { ForbiddenError, NotFoundError, ValidationError } from "../../utils/api-error";
+import { hasPermission } from "@scalius/core/auth/rbac/helpers";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -82,12 +92,20 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
     const body = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
     let linkedReturnId: string | null = null;
+    let targetStatus = body.status;
     if (body.status === "approved") {
         const supportRequest = (await listOrderSupportRequests(db, orderId)).find(
             (request) => request.id === requestId,
         );
         if (!supportRequest) {
             throw new NotFoundError("Support request not found");
+        }
+        if (supportRequest.type === "cancel_pre_shipment" && supportRequest.active) {
+            // Accepting a cancellation request cancels the order: stock goes
+            // back and the customer is told. If it can't be cancelled (money
+            // was paid, or it already shipped) the request stays open (ORD-08).
+            await cancelOrderForRequest(c, orderId, user?.id ?? null);
+            targetStatus = "completed";
         }
         if (supportRequest.type === "return") {
             linkedReturnId = supportRequest.returnId
@@ -114,12 +132,19 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
         }
     }
     const result = await updateAdminOrderSupportRequestStatus(db, orderId, requestId, {
-        status: body.status,
+        status: targetStatus,
         note: body.note ?? null,
         actorId: user?.id ?? null,
         returnId: linkedReturnId,
     });
     if (result.statusChanged) {
+        await recordOrderEvent(db, {
+            orderId,
+            kind: "request_resolved",
+            actorId: user?.id ?? null,
+            body: body.note?.trim() || null,
+            data: { type: result.request.type, status: result.newStatus },
+        });
         await enqueueOrderSupportRequestNotificationForOrder({
             db,
             queue: c.env.JOBS_QUEUE,
@@ -143,6 +168,47 @@ const updateSupportRequestStatusHandler: AdminRouteHandler<
         supportRequests: result.supportRequests,
     });
 };
+
+async function cancelOrderForRequest(
+    c: Parameters<typeof updateSupportRequestStatusHandler>[0],
+    orderId: string,
+    actorId: string | null,
+): Promise<void> {
+    const db = c.get("db");
+    // Accepting cancels the order, so it needs the same right as cancelling.
+    if (!actorId || !await hasPermission(db, actorId, PERMISSIONS.ORDERS_CHANGE_STATUS, c.env.CACHE)) {
+        throw new ForbiddenError("You don't have permission to cancel orders.");
+    }
+    const before = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+    if (!before) throw new NotFoundError("Order not found");
+    if (before.status === "cancelled") return;
+    if (!["incomplete", "pending", "processing", "confirmed"].includes(before.status)) {
+        throw new ValidationError("This order was already sent, so it can't be cancelled. Reject the request or start a return.");
+    }
+    const result = await updateOrderStatus(db, orderId, "cancelled");
+    if (result.availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+    await recordOrderEvent(db, {
+        orderId,
+        kind: "status_changed",
+        actorId,
+        data: { from: before.status, to: "cancelled", reason: "customer_request" },
+    });
+    if (result.notification) {
+        await enqueueOrderNotificationMessage({
+            db,
+            queue: c.env.JOBS_QUEUE,
+            message: {
+                type: "order.notification",
+                orderId: result.notification.orderId,
+                customerEmail: result.notification.customerEmail,
+                customerName: result.notification.customerName,
+                notificationType: result.notification.notificationType,
+            },
+            dedupeKey: result.notification.dedupeKey ?? `order_status:${orderId}:${result.notification.notificationType}`,
+            source: "orders-support-request-cancel",
+        });
+    }
+}
 
 app.openapi(updateSupportRequestStatusRoute, updateSupportRequestStatusHandler);
 

@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
 
+import { hasPageAccess } from "./page-permissions";
 import { PERMISSIONS } from "./permissions";
 import { getRoutePermission } from "./route-permissions";
+
+/** Whether a signed-in staff member with exactly these permissions may make the call. */
+function allowed(permissions: string[], path: string, method: "GET" | "POST" | "PUT" | "DELETE" = "GET") {
+  const route = getRoutePermission(path, method);
+  if (!route) return false;
+  if (route.allowAnyAdmin) return permissions.length > 0;
+  if (route.permission) return permissions.includes(route.permission);
+  if (route.anyOf) return route.anyOf.some((permission) => permissions.includes(permission));
+  return route.allOf?.every((permission) => permissions.includes(permission)) ?? false;
+}
 
 describe("route permissions", () => {
   it("maps compact abandoned-checkout summaries to order read authority", () => {
@@ -303,4 +314,72 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_EDIT });
   });
 
+
+  it("lets every staff member read the store's display facts but never change them", () => {
+    const orderClerk = [PERMISSIONS.ORDERS_VIEW];
+    for (const path of [
+      "/api/v1/admin/settings/currency",
+      "/api/v1/admin/settings/storefront-url",
+      "/api/v1/admin/settings/seo",
+    ]) {
+      expect(allowed(orderClerk, path)).toBe(true);
+      expect(allowed(orderClerk, path, "POST")).toBe(false);
+      expect(allowed([], path)).toBe(false);
+    }
+    expect(allowed(orderClerk, "/api/v1/admin/settings/business")).toBe(false);
+    expect(allowed(orderClerk, "/api/v1/admin/settings/general")).toBe(false);
+  });
+
+  it("opens exactly the reads a view-only product page needs", () => {
+    const viewer = [PERMISSIONS.PRODUCTS_VIEW];
+    expect(allowed(viewer, "/api/v1/admin/products/prod_1")).toBe(true);
+    expect(allowed(viewer, "/api/v1/admin/categories/form-options")).toBe(true);
+    expect(allowed(viewer, "/api/v1/admin/attributes")).toBe(true);
+    expect(allowed(viewer, "/api/v1/admin/categories")).toBe(false);
+    expect(allowed(viewer, "/api/v1/admin/products/prod_1", "PUT")).toBe(false);
+    expect(allowed([PERMISSIONS.COLLECTIONS_VIEW], "/api/v1/admin/products/by-ids")).toBe(true);
+    expect(allowed([PERMISSIONS.COLLECTIONS_VIEW], "/api/v1/admin/products")).toBe(false);
+  });
+
+  it("gives order staff the invoice header and courier list only with the matching permission", () => {
+    expect(allowed([PERMISSIONS.ORDERS_ISSUE_INVOICE], "/api/v1/admin/settings/business")).toBe(true);
+    expect(allowed([PERMISSIONS.ORDERS_ISSUE_INVOICE], "/api/v1/admin/settings/business", "POST")).toBe(false);
+    expect(allowed([PERMISSIONS.ORDERS_MANAGE_SHIPMENTS], "/api/v1/admin/settings/delivery-providers")).toBe(true);
+    expect(allowed([PERMISSIONS.ORDERS_MANAGE_SHIPMENTS], "/api/v1/admin/settings/delivery-providers/prov_1")).toBe(false);
+    expect(allowed([PERMISSIONS.ORDERS_MANAGE_SHIPMENTS], "/api/v1/admin/settings/delivery-providers", "POST")).toBe(false);
+    expect(allowed([PERMISSIONS.ORDERS_VIEW], "/api/v1/admin/settings/delivery-providers")).toBe(false);
+  });
+
+  it("gates removing staff behind staff management", () => {
+    expect(allowed([PERMISSIONS.TEAM_MANAGE], "/api/v1/admin/auth/users/user_2/remove", "POST")).toBe(true);
+    expect(allowed([PERMISSIONS.TEAM_VIEW, PERMISSIONS.TEAM_MANAGE_ROLES], "/api/v1/admin/auth/users/user_2/remove", "POST"))
+      .toBe(false);
+  });
+
+  it("guards only the versioned admin API", () => {
+    expect(getRoutePermission("/api/products", "GET")).toBeNull();
+    expect(getRoutePermission("/api/settings/seo", "GET")).toBeNull();
+  });
+});
+
+describe("page permissions", () => {
+  const can = (permissions: string[], path: string) => hasPageAccess(new Set(permissions), false, path);
+
+  it("opens catalog and content records read-only for view roles", () => {
+    expect(can([PERMISSIONS.PRODUCTS_VIEW], "/admin/products/prod_1/edit")).toBe(true);
+    expect(can([PERMISSIONS.CATEGORIES_VIEW], "/admin/categories/cat_1/edit")).toBe(true);
+    expect(can([PERMISSIONS.COLLECTIONS_VIEW], "/admin/collections/col_1/edit")).toBe(true);
+    expect(can([PERMISSIONS.PAGES_VIEW], "/admin/pages/page_1/edit")).toBe(true);
+    expect(can([PERMISSIONS.PAGES_VIEW], "/admin/articles/post_1/edit")).toBe(true);
+    expect(can([PERMISSIONS.PAGES_VIEW], "/admin/pages/new")).toBe(false);
+    expect(can([PERMISSIONS.CATEGORIES_VIEW], "/admin/products/prod_1/edit")).toBe(false);
+  });
+
+  it("opens staff and role pages to the people who can change them", () => {
+    expect(can([PERMISSIONS.TEAM_MANAGE_ROLES], "/admin/settings/users/roles/role_1")).toBe(true);
+    expect(can([PERMISSIONS.TEAM_MANAGE], "/admin/settings/users/roles/role_1")).toBe(false);
+    expect(can([PERMISSIONS.TEAM_MANAGE], "/admin/settings/users/user_2")).toBe(true);
+    expect(can([PERMISSIONS.TEAM_VIEW], "/admin/settings/users/user_2")).toBe(false);
+    expect(can([PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW], "/admin/settings/shipping/areas")).toBe(true);
+  });
 });

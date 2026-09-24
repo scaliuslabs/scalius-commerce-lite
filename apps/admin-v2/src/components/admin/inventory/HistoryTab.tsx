@@ -27,8 +27,8 @@ import { describeMovementNote } from "./movement-note";
 import {
   MOVEMENT_TYPES,
   movementsQuery,
+  type InventoryFilters,
   type InventoryFiltersChange,
-  type InventorySearch,
   type MovementFilter,
   type MovementType,
 } from "./inventory-search";
@@ -99,7 +99,7 @@ function MovementDetails({ movement }: { movement: InventoryMovement }) {
 }
 
 interface HistoryTabProps {
-  filters: Pick<InventorySearch, "q" | "type" | "from" | "to">;
+  filters: Pick<InventoryFilters, "q" | "type" | "from" | "to">;
   onFiltersChange: InventoryFiltersChange;
 }
 
@@ -109,7 +109,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
   const { q: search, type, from: startDate, to: endDate } = filters;
   const [cursors, setCursors] = useState<string[]>([""]);
   const [exporting, setExporting] = useState(false);
-  // Filters live in the URL; any change goes back to the first page.
+  // Any filter or search change goes back to the first page.
   useEffect(() => setCursors([""]), [search, type, startDate, endDate]);
 
   const query = useQuery({
@@ -136,7 +136,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
           maxRows: 5_000,
         }),
       });
-      if (!response.ok) throw new Error(t("exportFailed"));
+      if (!response.ok) throw new Error("export failed");
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
@@ -145,8 +145,8 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : t("exportFailed"));
+    } catch {
+      toast.error(t("exportFailed"));
     } finally {
       setExporting(false);
     }
@@ -235,16 +235,19 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
             {movements.map((movement) => (
               <li key={movement.id} className="flex flex-col gap-1 px-3 py-2 sm:flex-row sm:items-start sm:gap-3">
                 <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                     <Badge variant="outline" className="shrink-0">
                       {MOVEMENT_TYPES.includes(movement.type as MovementType)
                         ? t(`type_${movement.type as MovementType}`)
                         : movement.type}
                     </Badge>
-                    <span className="truncate text-body font-medium">
+                    <span className="text-body font-medium">
                       {movement.productName ?? t("unknownProduct")}
+                      {movement.optionLabel ? (
+                        <span className="font-normal text-muted-foreground"> · {movement.optionLabel}</span>
+                      ) : null}
                     </span>
-                    <span className="truncate font-mono text-body text-muted-foreground">
+                    <span className="break-all font-mono text-body text-muted-foreground">
                       {movement.variantSku ?? movement.variantId.slice(0, 8)}
                     </span>
                   </div>

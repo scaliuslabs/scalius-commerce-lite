@@ -80,12 +80,12 @@ describe("platform settings storage", () => {
   });
 
   it("round-trips every field through save and get", async () => {
-    const saved = await savePlatformSettings(db, {
+    const saved = (await savePlatformSettings(db, {
       ...PRODUCTION_PATCH,
       storefrontUrl: "https://Shop.Example.com/",
       customerAuthCookieDomain: ".Example.com",
       corsAllowedOrigins: "https://mobile.example.com, https://mobile.example.com/ https://kiosk.example.com",
-    });
+    })).value;
 
     expect(saved).toEqual({
       ...PRODUCTION_PATCH,
@@ -100,9 +100,9 @@ describe("platform settings storage", () => {
   it("applies partial patches without touching other stored values", async () => {
     await savePlatformSettings(db, PRODUCTION_PATCH);
 
-    const updated = await savePlatformSettings(db, {
+    const updated = (await savePlatformSettings(db, {
       mediaUrl: "http://localhost:8787/api/v1/media",
-    });
+    })).value;
 
     expect(updated).toEqual({
       ...PRODUCTION_PATCH,
@@ -114,7 +114,7 @@ describe("platform settings storage", () => {
   it("stores a dashboard path prefix and the automation contracts", async () => {
     await savePlatformSettings(db, PRODUCTION_PATCH);
 
-    const saved = await savePlatformSettings(db, {
+    const saved = (await savePlatformSettings(db, {
       dashboardUrl: "https://shop.example.com/dashboard/",
       setupTokenRequired: true,
       identityHandoff: {
@@ -123,7 +123,7 @@ describe("platform settings storage", () => {
         audience: "scalius:store-1",
         jwksUrl: "https://idp.example.com/.well-known/jwks.json",
       },
-    });
+    })).value;
 
     expect(saved).toEqual({
       ...PRODUCTION_PATCH,
@@ -140,18 +140,18 @@ describe("platform settings storage", () => {
     await expect(getPlatformSettings(db)).resolves.toEqual(saved);
 
     // A later partial patch keeps the untouched handoff fields.
-    const disabledLogin = await savePlatformSettings(db, {
+    const disabledLogin = (await savePlatformSettings(db, {
       identityHandoff: { localLoginDisabled: true },
-    });
+    })).value;
     expect(disabledLogin.identityHandoff).toEqual({
       ...saved.identityHandoff,
       localLoginDisabled: true,
     });
 
     // Turning the handoff off also re-enables password sign-in.
-    const disabled = await savePlatformSettings(db, {
+    const disabled = (await savePlatformSettings(db, {
       identityHandoff: { enabled: false },
-    });
+    })).value;
     expect(disabled.identityHandoff).toEqual({
       ...saved.identityHandoff,
       enabled: false,
@@ -187,13 +187,13 @@ describe("platform settings storage", () => {
   it("clears optional values with an empty string", async () => {
     await savePlatformSettings(db, PRODUCTION_PATCH);
 
-    const cleared = await savePlatformSettings(db, {
+    const cleared = (await savePlatformSettings(db, {
       apiUrl: "",
       dashboardUrl: "  ",
       mediaUrl: "",
       customerAuthCookieDomain: "",
       corsAllowedOrigins: [],
-    });
+    })).value;
 
     expect(cleared).toEqual({
       ...EMPTY_PLATFORM_CONFIG,
@@ -251,7 +251,7 @@ describe("platform settings storage", () => {
     );
 
     const duplicatesAreFine = [...tooMany.slice(0, PLATFORM_CORS_ORIGINS_MAX_COUNT), tooMany[0]!];
-    const saved = await savePlatformSettings(db, { corsAllowedOrigins: duplicatesAreFine });
+    const saved = (await savePlatformSettings(db, { corsAllowedOrigins: duplicatesAreFine })).value;
     expect(saved.corsAllowedOrigins).toEqual(tooMany.slice(0, PLATFORM_CORS_ORIGINS_MAX_COUNT));
   });
 
@@ -389,7 +389,7 @@ describe("resolvePlatformConfig", () => {
 
   it("writes saves through to the cache", async () => {
     const kv = createKv();
-    const saved = await savePlatformSettings(db, PRODUCTION_PATCH, kv);
+    const saved = (await savePlatformSettings(db, PRODUCTION_PATCH, kv)).value;
     await expect(readCachedPlatformConfig(kv)).resolves.toEqual(saved);
   });
 

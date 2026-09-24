@@ -223,23 +223,17 @@ describe("createAuth", () => {
         JWT_SECRET: legacyJwtSecret,
       } as never);
 
-      const options = mocks.betterAuth.mock.calls[0]?.[0] as {
-        emailVerification?: {
-          sendVerificationEmail?: (input: {
-            user: { email: string; name: string };
-            url: string;
-          }) => Promise<void>;
+      const twoFactorOptions = mocks.twoFactor.mock.calls[0]?.[0] as {
+        otpOptions?: {
+          sendOTP?: (input: { user: { email: string; name: string }; otp: string }) => Promise<void>;
         };
       };
-      const sendVerificationEmail = options.emailVerification?.sendVerificationEmail;
-      if (!sendVerificationEmail) {
-        throw new Error("Expected sendVerificationEmail callback");
+      const sendOTP = twoFactorOptions.otpOptions?.sendOTP;
+      if (!sendOTP) {
+        throw new Error("Expected sendOTP callback");
       }
 
-      await sendVerificationEmail({
-        user: { email: "admin@example.com", name: "Admin" },
-        url: "https://api.example.com/verify",
-      });
+      await sendOTP({ user: { email: "admin@example.com", name: "Admin" }, otp: "123456" });
 
       const emailContext = mocks.sendEmail.mock.calls[0]?.[1] as
         | { encryptionKey?: string; env?: Record<string, unknown> }
@@ -262,50 +256,14 @@ describe("createAuth", () => {
     }
   });
 
-  it("clears invited-admin password setup after a reset token is consumed", async () => {
-    const where = vi.fn(async () => undefined);
-    const set = vi.fn(() => ({ where }));
-    const update = vi.fn(() => ({ set }));
-    mocks.getDb.mockReturnValueOnce({
-      id: "db",
-      update,
-    } as never);
-
-    createAuth({
-      BETTER_AUTH_SECRET: "test-secret",
-      BETTER_AUTH_URL: "http://localhost:4323",
-    } as never);
-
-    const options = mocks.betterAuth.mock.calls[0]?.[0] as {
-      emailAndPassword?: {
-        onPasswordReset?: (input: { user: { id: string } }) => Promise<void>;
-      };
-    };
-
-    await options.emailAndPassword?.onPasswordReset?.({ user: { id: "user_1" } });
-
-    expect(update).toHaveBeenCalledTimes(2);
-    expect(set).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      mustChangePassword: false,
-      updatedAt: expect.any(Date),
-    }));
-    expect(set).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      status: "accepted",
-      acceptedAt: expect.any(Date),
-      updatedAt: expect.any(Date),
-    }));
-    expect(where).toHaveBeenCalledTimes(2);
-    expect(mocks.safeBatch).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.arrayContaining([expect.anything(), expect.anything()]),
-    );
-  });
-
   it("does not let invitation bookkeeping block password-reset session revocation", async () => {
     const where = vi.fn(() => ({ kind: "update" }));
     const set = vi.fn(() => ({ where }));
     mocks.getDb.mockReturnValueOnce({
       id: "db",
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({ where: vi.fn(() => ({ get: vi.fn(async () => ({ mustChangePassword: true })) })) })),
+      })),
       update: vi.fn(() => ({ set })),
     } as never);
     mocks.safeBatch.mockRejectedValueOnce(new Error("D1 unavailable"));
@@ -333,69 +291,6 @@ describe("createAuth", () => {
     }
   });
 
-  it("records a delivered administrator setup link with its real one-hour lifetime", async () => {
-    const inviteGet = vi.fn(async () => ({
-      role: "admin",
-      mustChangePassword: true,
-      invitationId: "invite_1",
-      invitationStatus: "pending",
-    }));
-    const updateWhere = vi.fn(async () => undefined);
-    const updateSet = vi.fn((_value: Record<string, unknown>) => ({ where: updateWhere }));
-    mocks.getDb.mockReturnValueOnce({
-      select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          leftJoin: vi.fn(() => ({
-            where: vi.fn(() => ({ get: inviteGet })),
-          })),
-        })),
-      })),
-      update: vi.fn(() => ({ set: updateSet })),
-    } as never);
-    mocks.sendEmail.mockResolvedValueOnce({ success: true, provider: "resend" });
-
-    createAuth({
-      BETTER_AUTH_SECRET: "test-secret",
-      BETTER_AUTH_URL: "http://localhost:4323",
-    } as never);
-    const options = mocks.betterAuth.mock.calls.at(-1)?.[0] as {
-      emailAndPassword?: {
-        resetPasswordTokenExpiresIn?: number;
-        sendResetPassword?: (input: {
-          user: { id: string; email: string; name: string };
-          token: string;
-        }) => Promise<void>;
-      };
-    };
-
-    const before = Date.now();
-    expect(options.emailAndPassword?.resetPasswordTokenExpiresIn).toBe(60 * 60);
-    await options.emailAndPassword?.sendResetPassword?.({
-      user: { id: "user_1", email: "invite@example.com", name: "Invitee" },
-      token: "one_time_reset_secret",
-    });
-    const sentState = updateSet.mock.calls.at(-1)?.[0] as {
-      deliveryStatus?: string;
-      lastSentAt?: Date;
-      expiresAt?: Date;
-    };
-
-    expect(sentState.deliveryStatus).toBe("sent");
-    expect(sentState.lastSentAt?.getTime()).toBeGreaterThanOrEqual(before);
-    expect(sentState.expiresAt?.getTime()).toBe(
-      (sentState.lastSentAt?.getTime() ?? 0) + 60 * 60 * 1000,
-    );
-    expect(mocks.sendEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        subject: "Set up your Scalius Commerce admin account",
-        html: expect.stringContaining(
-          "http://localhost:4323/auth/reset-password#token=one_time_reset_secret",
-        ),
-      }),
-      expect.anything(),
-    );
-  });
-
   it("records failed setup delivery and does not claim that a link was sent", async () => {
     const updateWhere = vi.fn(async () => undefined);
     const updateSet = vi.fn((_value: Record<string, unknown>) => ({ where: updateWhere }));
@@ -415,6 +310,7 @@ describe("createAuth", () => {
         })),
       })),
       update: vi.fn(() => ({ set: updateSet })),
+      delete: vi.fn(() => ({ where: vi.fn(() => ({ kind: "delete" })) })),
     } as never);
     mocks.sendEmail.mockResolvedValueOnce({ success: false, provider: "log" });
 

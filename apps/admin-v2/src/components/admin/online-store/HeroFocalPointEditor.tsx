@@ -53,7 +53,6 @@ export function HeroFocalPointEditor({
           type="button"
           variant="secondary"
           size="sm"
-          className="absolute bottom-1.5 right-1.5 z-10"
           aria-label={t("focusFor", { name: imageText || t("thisBanner") })}
         >
           <Crosshair />

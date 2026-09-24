@@ -1,8 +1,13 @@
 import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, CreditCard, Inbox, Package, Palette, Store, Truck } from "lucide-react";
-import { getApiV1AdminInventoryAlerts, getApiV1AdminOrders } from "@scalius/api-client/sdk";
+import { ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, Palette, Store, Truck } from "lucide-react";
+import {
+  getApiV1AdminInventoryAlerts,
+  getApiV1AdminOrders,
+  getApiV1AdminSettingsSeoFeedDiagnostics,
+} from "@scalius/api-client/sdk";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -17,6 +22,7 @@ import { apiData } from "~/lib/api";
 import { canAccessAdminPath } from "~/lib/admin-access";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { dashboardActivityQueryOptions, dashboardSummaryQueryOptions } from "~/lib/api-query-options/dashboard-home";
+import { navigationPlacementsQueryOptions } from "~/lib/api-query-options/online-store";
 import { formatDateTime, formatNumber, translate, useMessages } from "~/i18n";
 import { homeMessages } from "~/i18n/home";
 
@@ -30,9 +36,12 @@ export const Route = createFileRoute("/admin/")({
   component: HomePage,
 });
 
-/** Today's date in store time (Asia/Dhaka) as YYYY-MM-DD, matching the activity feed. */
 type HomeKey = keyof (typeof homeMessages)["en"];
 
+/** Feed exclusions a merchant fixes on the product (not a deliberate setting). */
+const FIXABLE_FEED_REASONS = new Set(["missing_image", "non_positive_price", "no_buyer_sku", "inconsistent_option_axes"]);
+
+/** Today's date in store time (Asia/Dhaka) as YYYY-MM-DD, matching the activity feed. */
 const storeToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
 
 function HomePage() {
@@ -45,7 +54,7 @@ function HomePage() {
   const activity = useQuery(dashboardActivityQueryOptions());
   const openOrders = useQuery({
     queryKey: ["home", "open-orders"],
-    queryFn: () => apiData(getApiV1AdminOrders({ query: { statusGroup: "open", limit: 1 } })),
+    queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "unfulfilled", limit: 1 } })),
     enabled: canOpen("/admin/orders"),
   });
   const lowStock = useQuery({
@@ -53,6 +62,15 @@ function HomePage() {
     queryFn: () => apiData(getApiV1AdminInventoryAlerts({ query: { status: "active" } })),
     enabled: canOpen("/admin/inventory"),
   });
+  // Store readiness (Shopify's Home tasks): products the product feed leaves
+  // out for a fixable reason, and a storefront header without a menu.
+  const feed = useQuery({
+    queryKey: ["home", "feed-diagnostics"],
+    queryFn: () => apiData(getApiV1AdminSettingsSeoFeedDiagnostics()),
+    enabled: canOpen("/admin/online-store/preferences"),
+    staleTime: 5 * 60_000,
+  });
+  const placements = useQuery({ ...navigationPlacementsQueryOptions(), enabled: canOpen("/admin/online-store/navigation") });
 
   if (summary.isError) {
     return (
@@ -70,77 +88,96 @@ function HomePage() {
   if (!summary.data) return <PageHeader title={t("home")} />;
 
   const { stats, recentOrders } = summary.data;
-  if (stats.totalProducts === 0 && recentOrders.length === 0) return <SetupCards canOpen={canOpen} />;
-
-  const days = (activity.data?.dailyActivityData ?? []).slice(-30);
-  const today = days.find((day) => day.date === storeToday());
   const month = stats.currentMonth;
+  if (stats.totalProducts === 0 && month.orders === 0 && recentOrders.length === 0) return <SetupCards canOpen={canOpen} />;
+
+  // The API sends no money to roles without "View sales numbers": order counts only.
+  const sales = month.revenue !== null;
+  const canSeeOrders = canOpen("/admin/orders");
+  const days = (activity.data?.dailyActivityData ?? [])
+    .slice(-30)
+    .map((day) => ({ ...day, revenue: day.revenue ?? 0 }));
+  const today = days.find((day) => day.date === storeToday());
   const openCount = openOrders.data?.pagination.total ?? 0;
   const lowCount = lowStock.data?.alerts.length ?? 0;
+  const feedGaps = feed.data?.policy.productCatalogEnabled
+    ? feed.data.reasons.filter((entry) => FIXABLE_FEED_REASONS.has(entry.reason)).reduce((sum, entry) => sum + entry.products, 0)
+    : 0;
+  const needsHeaderMenu = placements.data !== undefined && !placements.data.some(({ placement, menuDeletedAt, publicationItemCount }) =>
+    placement.surface === "header" && placement.isEnabled && !menuDeletedAt && (publicationItemCount ?? 0) > 0);
+  const caughtUp = openCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu;
 
   return (
     <div className="space-y-4 pb-8">
       <PageHeader title={t("home")} />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label={t("salesToday")} value={fmt(today?.revenue ?? 0)} />
+      <div className={sales ? "grid grid-cols-2 gap-3 lg:grid-cols-4" : "grid grid-cols-2 gap-3"}>
+        {sales ? <Metric label={t("salesToday")} value={fmt(today?.revenue ?? 0)} /> : null}
         <Metric label={t("ordersToday")} value={formatNumber(today?.orders ?? 0)} />
-        <Metric label={t("salesThisMonth")} value={fmt(month.revenue)} change={month.revenueGrowth} />
+        {sales ? <Metric label={t("salesThisMonth")} value={fmt(month.revenue ?? 0)} change={month.revenueGrowth} /> : null}
         <Metric label={t("ordersThisMonth")} value={formatNumber(month.orders)} change={month.orderGrowth} />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("salesChart")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {days.some((day) => day.revenue > 0) ? (
-            <DashboardSalesChart days={days} money={fmt} />
-          ) : (
-            <p className="py-8 text-center text-body text-muted-foreground">{t("noSalesYet")}</p>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>{t("recentOrders")}</CardTitle>
-            {canOpen("/admin/orders") ? (
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/admin/orders">{t("viewAll")}</Link>
-              </Button>
-            ) : null}
+      {sales ? (
+        <Card>
+          <CardHeader className="space-y-1">
+            <CardTitle>{t("salesChart")}</CardTitle>
+            <p className="text-body text-muted-foreground">{t("grossHelp")}</p>
           </CardHeader>
-          <CardContent className="p-0">
-            {recentOrders.length === 0 ? (
-              <p className="px-4 pb-4 text-body text-muted-foreground">{t("noOrders")}</p>
+          <CardContent>
+            {days.some((day) => day.revenue > 0) ? (
+              <DashboardSalesChart days={days} money={fmt} />
             ) : (
-              <ul className="divide-y border-t">
-                {recentOrders.map((order) => {
-                  const placed = unixToDate(order.createdAt);
-                  return (
-                    <li key={order.id}>
-                      <Link
-                        to="/admin/orders/$orderId"
-                        params={{ orderId: order.id }}
-                        className="flex min-h-11 items-center gap-3 px-4 py-2 text-body hover:bg-muted md:min-h-10"
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">{order.customerName}</span>
-                          <span className="block text-muted-foreground">
-                            {placed ? formatDateTime(placed, { dateStyle: "medium", timeStyle: "short" }) : null}
-                          </span>
-                        </span>
-                        <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(to, order.status)}</Badge>
-                        <span className="tabular-nums">{fmt(order.totalAmount)}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+              <p className="py-8 text-center text-body text-muted-foreground">{t("noSalesYet")}</p>
             )}
           </CardContent>
         </Card>
+      ) : (
+        <p className="text-body text-muted-foreground">{t("noSalesAccess")}</p>
+      )}
+
+      {/* Cards keep their own height: a short to-do list doesn't stretch to the orders list. */}
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        {canSeeOrders ? (
+          <Card className="min-w-0 lg:col-span-2">
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>{t("recentOrders")}</CardTitle>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/admin/orders">{t("viewAll")}</Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {recentOrders.length === 0 ? (
+                <p className="px-4 pb-4 text-body text-muted-foreground">{t("noOrders")}</p>
+              ) : (
+                <ul className="divide-y border-t">
+                  {recentOrders.map((order) => {
+                    const placed = unixToDate(order.createdAt);
+                    return (
+                      <li key={order.id}>
+                        <Link
+                          to="/admin/orders/$orderId"
+                          params={{ orderId: order.id }}
+                          className="flex min-h-11 items-center gap-3 px-4 py-2 text-body hover:bg-muted md:min-h-10"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">
+                              {formatOrderNumber(order.orderNumber, order.id)} · {order.customerName}
+                            </span>
+                            <span className="block text-muted-foreground">
+                              {placed ? formatDateTime(placed, { dateStyle: "medium", timeStyle: "short" }) : null}
+                            </span>
+                          </span>
+                          <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(to, order.status)}</Badge>
+                          <span className="tabular-nums">{fmt(order.totalAmount)}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>
@@ -157,7 +194,17 @@ function HomePage() {
                 {lowCount === 1 ? t("lowStockOne") : t("lowStock", { count: lowCount })}
               </TodoLink>
             ) : null}
-            {openCount === 0 && lowCount === 0 ? <p className="text-body text-muted-foreground">{t("allDone")}</p> : null}
+            {feedGaps > 0 ? (
+              <TodoLink to="/admin/online-store/preferences" icon={<ImageOff className="h-4 w-4" />}>
+                {feedGaps === 1 ? t("notInFeedOne") : t("notInFeed", { count: feedGaps })}
+              </TodoLink>
+            ) : null}
+            {needsHeaderMenu ? (
+              <TodoLink to="/admin/online-store/navigation" icon={<Menu className="h-4 w-4" />}>
+                {t("addHeaderMenu")}
+              </TodoLink>
+            ) : null}
+            {caughtUp ? <p className="text-body text-muted-foreground">{t("allDone")}</p> : null}
           </CardContent>
         </Card>
       </div>
@@ -183,7 +230,7 @@ function Metric({ label, value, change }: { label: string; value: string; change
   );
 }
 
-function TodoLink({ to, search, icon, children }: { to: string; search: Record<string, string>; icon: ReactNode; children: ReactNode }) {
+function TodoLink({ to, search, icon, children }: { to: string; search?: Record<string, string>; icon: ReactNode; children: ReactNode }) {
   return (
     <Link to={to} search={search as never} className="flex min-h-11 items-center gap-3 rounded-md px-2 text-body font-medium hover:bg-muted">
       {icon}

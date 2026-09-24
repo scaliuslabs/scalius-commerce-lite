@@ -14,6 +14,8 @@ interface ShipmentStatusIndicatorProps {
     lastChecked?: string;
     orderId: string;
   };
+  /** Replaces the courier status text, e.g. after a recorded failed delivery. */
+  label?: string;
   onStatusUpdated?: (updatedShipment: { id: string; orderId: string; status: string; lastChecked: string | null; [key: string]: unknown }) => void;
   canRefresh?: boolean;
   refreshDisabledReason?: string;
@@ -23,6 +25,7 @@ interface ShipmentStatusIndicatorProps {
 /** Courier delivery status with a refresh button and when it was last checked. */
 export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   shipment,
+  label,
   onStatusUpdated,
   canRefresh = true,
   refreshDisabledReason,
@@ -44,7 +47,7 @@ export const ShipmentStatusIndicator: FC<ShipmentStatusIndicatorProps> = ({
   return (
     <div className="flex items-start gap-1 text-body">
       <div className="min-w-0">
-        <p className="truncate">{shipmentStatusLabel(t, shipment.status)}</p>
+        <p className="truncate">{label ?? shipmentStatusLabel(t, shipment.status)}</p>
         {showLastChecked ? (
           <p className="text-body text-muted-foreground">
             {checkedAt ? t("lastChecked", { time: checkedAt }) : t("neverChecked")}

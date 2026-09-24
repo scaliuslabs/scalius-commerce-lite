@@ -1,5 +1,5 @@
 import { OrderStatus } from "@scalius/database/schema";
-import { ValidationError } from "@scalius/core/errors";
+import { ConflictError, ValidationError } from "@scalius/core/errors";
 
 /**
  * The generic status editor is deliberately narrower than the internal order
@@ -17,7 +17,6 @@ const GENERIC_ADMIN_STATUS_TRANSITIONS: Readonly<Record<string, readonly string[
   [OrderStatus.CANCELLED]: [],
   [OrderStatus.RETURNED]: [],
   [OrderStatus.REFUNDED]: [],
-  [OrderStatus.PARTIALLY_REFUNDED]: [],
 };
 
 export function isGenericAdminOrderStatusTransitionAllowed(current: string, next: string): boolean {
@@ -26,14 +25,16 @@ export function isGenericAdminOrderStatusTransitionAllowed(current: string, next
 
 export function assertGenericAdminOrderStatusTransition(current: string, next: string): void {
   if (isGenericAdminOrderStatusTransitionAllowed(current, next)) return;
-  if (
-    next === OrderStatus.RETURNED
-    || next === OrderStatus.REFUNDED
-    || next === OrderStatus.PARTIALLY_REFUNDED
-  ) {
-    throw new ValidationError(
-      "Returns and refunds must use their dedicated item-level workflow.",
-    );
+  if (next === OrderStatus.RETURNED || next === OrderStatus.REFUNDED) {
+    throw new ValidationError("Use Return or Refund on the order page for this.");
   }
-  throw new ValidationError(`The generic status editor cannot move an order from ${current} to ${next}.`);
+  // The dashboard only offers allowed moves, so a refusal means the order
+  // changed since it was loaded: answer 409 so the page reloads it.
+  throw new ConflictError(
+    `This order is now ${statusWords(current)}, so it can't be marked ${statusWords(next)}. Reload to see the latest.`,
+  );
+}
+
+function statusWords(status: string): string {
+  return status.replace(/_/g, " ");
 }

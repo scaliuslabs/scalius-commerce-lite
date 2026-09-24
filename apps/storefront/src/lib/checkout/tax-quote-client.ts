@@ -7,7 +7,7 @@ import {
 } from "./tax-quote-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
 import type { CartValidationIssue } from "../api/orders";
-import { parseTaxQuoteCartIssues } from "./tax-quote-error-contract";
+import { isDeliveryRateUnavailable, parseTaxQuoteCartIssues } from "./tax-quote-error-contract";
 
 const TAX_QUOTE_ENDPOINT = "/api/checkout/tax-quote";
 const TAX_QUOTE_TIMEOUT_MS = 10_000;
@@ -40,6 +40,14 @@ export class TaxQuoteCartChangedError extends Error {
   }
 }
 
+/** The chosen delivery rate no longer serves the address: re-read the rates. */
+export class TaxQuoteDeliveryRateError extends Error {
+  constructor() {
+    super("The chosen delivery option isn't available for this address.");
+    this.name = "TaxQuoteDeliveryRateError";
+  }
+}
+
 function readCartItems(value: unknown): Record<string, CheckoutCartLine> {
   if (typeof value !== "string") throw new TaxQuoteUnavailableError();
   try {
@@ -62,18 +70,25 @@ function cleanOptionalText(value: unknown, maxLength: number): string | undefine
   return normalized ? normalized.slice(0, maxLength) : undefined;
 }
 
-function readDiscountCode(data: Record<string, unknown>): string | undefined {
-  const hidden = data.discountCodeHidden;
-  if (typeof hidden === "string" && hidden.trim()) {
+/**
+ * The applied discount codes: the cart and checkout transfer carry them as a
+ * JSON array string (`discountCodes`); the quote re-checks every one.
+ */
+export function readDiscountCodes(data: Record<string, unknown>): string[] {
+  let value = data.discountCodes;
+  if (typeof value === "string") {
     try {
-      const parsed = JSON.parse(hidden) as { code?: unknown };
-      const parsedCode = cleanOptionalText(parsed.code, 100);
-      if (parsedCode) return parsedCode;
+      value = JSON.parse(value);
     } catch {
-      return cleanOptionalText(hidden, 100);
+      return [];
     }
   }
-  return cleanOptionalText(data.discountCode, 100);
+  return Array.isArray(value)
+    ? value.flatMap((code) => {
+        const clean = cleanOptionalText(code, 50);
+        return clean ? [clean.toUpperCase()] : [];
+      })
+    : [];
 }
 
 function variantLabel(item: CheckoutCartLine): string | undefined {
@@ -101,7 +116,7 @@ export function buildTaxQuoteRequest(
       zone: data.zone,
       area: data.area,
       shippingMethodId: data.shippingMethodId,
-      discountCode: readDiscountCode(data),
+      discountCodes: readDiscountCodes(data),
       customerPhone: data.customerPhone,
     });
   } catch {
@@ -131,6 +146,7 @@ export async function fetchAuthoritativeTaxQuote(
       const payload = await response.json().catch(() => null);
       const issues = parseTaxQuoteCartIssues(payload);
       if (issues.length > 0) throw new TaxQuoteCartChangedError(issues);
+      if (isDeliveryRateUnavailable(payload)) throw new TaxQuoteDeliveryRateError();
       throw new TaxQuoteUnavailableError();
     }
     const quote = parseTaxQuoteEnvelope(await response.json());
@@ -157,6 +173,7 @@ export async function fetchAuthoritativeTaxQuote(
     return quote;
   } catch (error) {
     if (error instanceof TaxQuoteCartChangedError) throw error;
+    if (error instanceof TaxQuoteDeliveryRateError) throw error;
     if (error instanceof TaxQuoteUnavailableError) throw error;
     if (error instanceof TaxQuoteContractError) throw new TaxQuoteUnavailableError();
     throw new TaxQuoteUnavailableError();

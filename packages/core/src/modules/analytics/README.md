@@ -9,7 +9,7 @@ Third-party analytics script management, Meta Conversions API integration, and a
 | `index.ts` | Barrel exports (re-exports dashboard.service, analytics.validation, analytics.service, meta.service, meta-pixel-parity) |
 | `analytics.service.ts` | Standalone functions for CRUD on analytics scripts |
 | `analytics.validation.ts` | Zod validation schemas for create/update/toggle |
-| `dashboard.service.ts` | `getDashboardSummaryStats()`, `getDashboardStats()`, `getRecentOrders()`, `getDailyActivityData()` |
+| `dashboard.service.ts` | `getDashboardHomeSummary()`, `getDailyActivityData()` |
 | `meta.service.ts` | Standalone functions for Meta Conversions API settings and log management |
 | `meta-pixel-parity.ts` | Pure parser/diagnostic helpers for comparing CAPI Pixel ID with active browser Pixel snippets |
 | `provider-health.ts` | Read-only provider readiness summary for admin UI/API without provider calls or secret/script echo |
@@ -77,20 +77,17 @@ must not return script config, access tokens, or provider payloads.
 
 ## Dashboard Statistics
 
-### `getDashboardSummaryStats(db: Database)`
-Returns lightweight admin-home metrics without the lifetime revenue scan:
-- `totalProducts` -- active, non-deleted products count
-- `totalCustomers` -- non-deleted customers count
-- `currentMonth` -- orders, revenue, orderGrowth (% vs last month), revenueGrowth, orderStatus breakdown (delivered, processing, shipping, cancelled)
-- `lastMonth` -- orders, revenue
+### `getDashboardHomeSummary(db: Database, recentOrderLimit: number)`
+One provider batch for Home:
+- `stats.totalProducts` -- active, non-deleted products count
+- `stats.totalCustomers` -- non-deleted customers count
+- `stats.currentMonth` -- orders, revenue, orderGrowth (% vs last month), revenueGrowth, orderStatus breakdown (delivered, processing, shipping, cancelled)
+- `stats.lastMonth` -- orders, revenue
+- `recentOrders` -- the N most recent non-deleted orders (customerName, totalAmount, status, createdAt); `0` skips the query
 
-### `getDashboardStats(db: Database)`
-Returns the full dashboard metrics contract for legacy/full-summary callers:
-- all fields from `getDashboardSummaryStats()`
-- `totalRevenue` -- lifetime revenue (excludes cancelled/returned)
-
-### `getRecentOrders(db: Database, limit = 5)`
-Returns N most recent non-deleted orders with customerName, totalAmount, status, createdAt (converted from unix to Date).
+The admin API omits every revenue value (`null`) unless the caller holds
+`dashboard.analytics` ("View sales numbers"), and the order feed unless they
+hold `orders.view`.
 
 ### `getDailyActivityData(db: Database, days: number)`
 Returns per-day arrays for the last N days with zero-filling for days with no data:
@@ -98,8 +95,7 @@ Returns per-day arrays for the last N days with zero-filling for days with no da
 
 Dashboard reads emit generic Worker log events under `[dashboard-query]` with
 `dashboard_query_completed`, `dashboard_query_retry`, or `dashboard_query_failed`.
-Labels are `summary_stats`, `full_stats`, `recent_orders`, and
-`daily_activity_{days}d`; payloads include duration and attempt counts only, not
+Labels are `home_summary` and `daily_activity_{days}d`; payloads include duration and attempt counts only, not
 order/customer values.
 
 Dashboard SQL/index changes should be evidence-driven. On the current production

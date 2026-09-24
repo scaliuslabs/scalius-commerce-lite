@@ -23,7 +23,12 @@ vi.mock("~/hooks/use-order-action-permissions", () => ({
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const order = {
-  id: "ord_1001", version: 1, status: "pending", paymentStatus: "unpaid", paidAmount: 0, items: [],
+  id: "ord_1001", orderNumber: 1001, version: 1, status: "pending", paymentStatus: "unpaid", paidAmount: 0,
+  customerEmail: null,
+  items: [
+    { id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 0 },
+    { id: "i2", quantity: 5, inventoryTracked: false, shippedQuantity: 0 },
+  ],
 } as unknown as Order;
 
 describe("OrderStatusCard", () => {
@@ -71,7 +76,11 @@ describe("OrderStatusCard", () => {
     await chooseStatus(o["status.cancelled"]);
 
     const dialog = document.querySelector('[role="alertdialog"]');
-    expect(dialog?.textContent).toContain(t["cancel.title"].replace("{id}", "ord_1001"));
+    expect(dialog?.textContent).toContain(t["cancel.title"].replace("{name}", "#1001"));
+    expect(dialog?.textContent).toContain(t["cancel.body"]);
+    // Only stock-tracked units go back; nobody is told without an email on file.
+    expect(dialog?.textContent).toContain(t["cancel.restock"].replace("{count}", "2"));
+    expect(dialog?.textContent).not.toContain(t["cancel.notify"]);
     expect(mocks.mutate).not.toHaveBeenCalled();
 
     const keep = [...dialog!.querySelectorAll("button")].find((button) => button.textContent === t["cancel.keep"]);
@@ -84,5 +93,12 @@ describe("OrderStatusCard", () => {
     await act(async () => confirm?.click());
     expect(mocks.mutate).toHaveBeenCalledTimes(1);
     expect(mocks.mutate).toHaveBeenCalledWith({ orderId: "ord_1001", status: "cancelled" });
+  });
+
+  it("shows a final status as plain text, not a menu", async () => {
+    await act(async () => root.render(<OrderStatusCard order={{ ...order, status: "cancelled" }} />));
+    expect(host.querySelector(`[aria-label="${t["status.title"]}"]`)).toBeNull();
+    expect(host.textContent).toContain(o["status.cancelled"]);
+    expect(host.textContent).toContain(t["status.cancelledFinal"]);
   });
 });

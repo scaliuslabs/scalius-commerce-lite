@@ -1,7 +1,11 @@
 import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useWatch } from "react-hook-form";
+import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -24,8 +28,12 @@ import { cn } from "@scalius/shared/utils";
 import { useOrderForm } from "./OrderFormContext";
 import type { DeliveryLocation } from "./types";
 import { AdminPhoneInput } from "@/components/admin/shared/AdminPhoneInput";
+import { usePermissions } from "@/contexts/PermissionContext";
+import { customersQueryOptions } from "@/lib/api-query-options/customers";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
+import { customerFill, customerLookupTerm, findCustomerByPhone } from "./customer-lookup";
 
 const SELECT_KEY = { city: "selectCity", zone: "selectZone", area: "selectArea" } as const;
 
@@ -63,7 +71,10 @@ function LocationPicker({
               <PopoverTrigger asChild>
                 <FormControl>
                   <Button
-                    ref={buttonRef}
+                    ref={(el) => {
+                      field.ref(el);
+                      buttonRef.current = el;
+                    }}
                     type="button"
                     variant="outline"
                     role="combobox"
@@ -129,13 +140,60 @@ function LocationPicker({
   );
 }
 
+/**
+ * New orders only: once the phone is a complete number, finds the saved
+ * customer with that number and fills the fields the merchant left empty
+ * (name, email, last address). The phone goes to the API, never the URL.
+ */
+function useReturningCustomer() {
+  const { form, isEdit, locations, loadZones, loadAreas } = useOrderForm();
+  const { hasPermission } = usePermissions();
+  const phone = useWatch({ control: form.control, name: "customerPhone" });
+  const term = useDebounce(customerLookupTerm(phone ?? ""), 400);
+  const enabled = !isEdit && term !== null && hasPermission(ADMIN_PERMISSIONS.CUSTOMERS_VIEW);
+  const lookup = useQuery({
+    ...customersQueryOptions({ page: 1, limit: 5, search: term ?? "" }),
+    enabled,
+    retry: false,
+  });
+  const customer = enabled && lookup.data
+    ? findCustomerByPhone(lookup.data.customers, phone ?? "")
+    : null;
+  const [filledFor, setFilledFor] = React.useState<{ phone: string; filled: boolean } | null>(null);
+
+  React.useEffect(() => {
+    if (!customer || filledFor?.phone === customer.phone || locations.cities.length === 0) return;
+    const values = form.getValues();
+    const fill = customerFill(customer, {
+      customerName: values.customerName ?? "",
+      customerEmail: values.customerEmail ?? null,
+      shippingAddress: values.shippingAddress ?? "",
+      city: values.city ?? "",
+      zone: values.zone ?? "",
+      area: values.area ?? null,
+    }, new Set(locations.cities.map((city) => city.id)));
+    const set = { shouldDirty: true, shouldValidate: true };
+    if (fill.customerName !== undefined) form.setValue("customerName", fill.customerName, set);
+    if (fill.customerEmail !== undefined) form.setValue("customerEmail", fill.customerEmail, set);
+    if (fill.shippingAddress !== undefined) form.setValue("shippingAddress", fill.shippingAddress, set);
+    if (fill.city !== undefined) form.setValue("city", fill.city, set);
+    if (fill.zone !== undefined) form.setValue("zone", fill.zone, set);
+    if (fill.area !== undefined) form.setValue("area", fill.area, set);
+    if (fill.city) void loadZones(fill.city);
+    if (fill.zone) void loadAreas(fill.zone);
+    setFilledFor({ phone: customer.phone, filled: Object.keys(fill).length > 0 });
+  }, [customer, filledFor, form, loadAreas, loadZones, locations.cities]);
+
+  return customer ? { customer, filled: filledFor?.phone === customer.phone && filledFor.filled } : null;
+}
+
 /** Side column: Customer, Delivery address and Notes cards. */
 export function CustomerInfoSection() {
-  const { form, isEdit, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =
+  const { form, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =
     useOrderForm();
   const t = useMessages(orderFormMessages);
-  const initialPhone = React.useRef(isEdit ? form.getValues("customerPhone") : undefined);
   const [city, zone] = form.watch(["city", "zone"]);
+  const returning = useReturningCustomer();
   // A picked location is an edit: mark it dirty so Save turns on.
   const pick = { shouldDirty: true, shouldValidate: true };
 
@@ -174,13 +232,27 @@ export function CustomerInfoSection() {
                 <FormLabel>{t("phone")}</FormLabel>
                 <FormControl>
                   <AdminPhoneInput
-                    ref={refs.customerPhoneRef}
+                    ref={(el) => {
+                      field.ref(el);
+                      refs.customerPhoneRef.current = el;
+                    }}
+                    name={field.name}
                     value={field.value}
                     onChange={field.onChange}
-                    preserveExistingValue={initialPhone.current}
+                    onBlur={field.onBlur}
                     onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, refs.customerEmailRef)}
                   />
                 </FormControl>
+                <FormDescription>
+                  {returning
+                    ? [
+                        returning.customer.totalOrders === 1
+                          ? t("returningCustomerOne")
+                          : t("returningCustomer", { count: returning.customer.totalOrders }),
+                        returning.filled ? t("filledFromCustomer") : null,
+                      ].filter(Boolean).join(" ")
+                    : t("phoneHelp")}
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -296,7 +368,7 @@ export function CustomerInfoSection() {
                       field.ref(el);
                       refs.notesRef.current = el;
                     }}
-                    onKeyDown={(e) => handleKeyDown(e, refs.productSearchButtonRef)}
+                    onKeyDown={(e) => handleKeyDown(e, refs.productSearchInputRef)}
                   />
                 </FormControl>
                 <FormMessage />

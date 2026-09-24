@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -25,7 +26,10 @@ function riskLevel(data: FraudLookupData): RiskLevel {
   return rate >= 80 ? "low" : rate >= 50 ? "medium" : "high";
 }
 
-/** The customer's courier delivery history (delivered vs cancelled parcels). */
+/**
+ * The customer's courier delivery history (delivered vs cancelled parcels).
+ * Without a connected fraud check service (`configured: false`) it says how to connect one.
+ */
 export function FraudCheckIndicator({ phone, trigger }: { phone: string; trigger: ReactNode }) {
   const t = useMessages(orderListMessages);
   const [open, setOpen] = useState(true);
@@ -36,6 +40,7 @@ export function FraudCheckIndicator({ phone, trigger }: { phone: string; trigger
     retry: false,
     staleTime: 5 * 60_000,
   });
+  const notConnected = data?.configured === false;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -43,11 +48,20 @@ export function FraudCheckIndicator({ phone, trigger }: { phone: string; trigger
       <PopoverContent align="start" className="w-80 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-body font-medium">{t("deliveryHistory")}</p>
-          <Button variant="ghost" size="sm" onClick={() => void refetch()} disabled={isFetching}>
-            {isFetching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : t("refresh")}
-          </Button>
+          {!notConnected ? (
+            <Button variant="ghost" size="sm" onClick={() => void refetch()} disabled={isFetching}>
+              {isFetching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : t("refresh")}
+            </Button>
+          ) : null}
         </div>
-        {error ? (
+        {notConnected ? (
+          <p className="text-body text-muted-foreground">
+            {t("fraudNotConnected")}{" "}
+            <Link to="/admin/settings/apps" className="text-link hover:underline">
+              {t("fraudSettingsLink")}
+            </Link>
+          </p>
+        ) : error ? (
           <p className="text-body text-destructive">{getServerFnError(error, t("historyFailed"))}</p>
         ) : !data ? (
           <LoaderCircle className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />

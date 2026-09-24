@@ -150,10 +150,11 @@ describe("CategoryForm", () => {
     await render();
 
     expect(document.querySelector("h1")?.textContent).toBe("Add category");
-    expect(document.body.textContent).toContain("Add at least one active product to publish this category.");
+    expect(document.body.textContent).toContain("Customers can't see it yet. Make it active when it's ready.");
     type(byLabel("Name"), "Eid Panjabi 2026");
     await settle();
     expect(document.body.textContent).toContain("https://shop.example/categories/eid-panjabi-2026");
+    expect(document.querySelector("[data-save-bar]")?.textContent).toContain("Unsaved category");
 
     await click(button("Save"));
 
@@ -162,12 +163,13 @@ describe("CategoryForm", () => {
       expect.objectContaining({
         name: "Eid Panjabi 2026",
         slug: "eid-panjabi-2026",
+        status: "draft",
         canonicalPath: null,
         noIndex: false,
         excludeFromSitemap: false,
       }),
     );
-    expect(toastMock.success).toHaveBeenCalledWith("Changes saved");
+    expect(toastMock.success).toHaveBeenCalledWith("Category saved");
     expect(navigate).toHaveBeenCalledWith(
       expect.objectContaining({ to: "/admin/categories/$categoryId/edit", params: { categoryId: "cat_new" } }),
     );
@@ -196,7 +198,7 @@ describe("CategoryForm", () => {
         excludeFromSitemap: true,
       }),
     });
-    expect(toastMock.success).toHaveBeenCalledWith("Changes saved");
+    expect(toastMock.success).toHaveBeenCalledWith("Category saved");
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -262,20 +264,43 @@ describe("CategoryForm", () => {
     expect(toastMock.success).not.toHaveBeenCalled();
   });
 
-  it("blocks publishing a category without active products", async () => {
-    await render({ defaultValues: saved, isEdit: true, publishReadiness: notReady });
-
-    expect(document.body.textContent).toContain("Add at least one active product to publish this category.");
+  async function chooseStatus(label: string) {
     const status = byLabel<HTMLButtonElement>("Status");
     await act(async () => {
       status.focus();
       status.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     await settle();
-    const published = Array.from(document.querySelectorAll('[role="option"]')).find(
-      (option) => option.textContent === "Published",
+    const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(
+      (candidate) => candidate.textContent === label,
     );
-    expect(published?.getAttribute("aria-disabled")).toBe("true");
+    if (!option) throw new Error(`No status ${label}`);
+    await click(option);
+  }
+
+  it("creates an active category and warns that it stays empty until products are added", async () => {
+    api.create.mockResolvedValue({ id: "cat_new", revision: 1, status: "published" });
+    await render();
+
+    type(byLabel("Name"), "Eid sale");
+    await settle();
+    await chooseStatus("Active");
+
+    expect(document.body.textContent).toContain("Customers can browse it on your store.");
+    expect(document.body.textContent).toContain("It stays empty on your store until you add active products.");
+    await click(button("Save"));
+    expect(api.create.mock.calls[0]?.[0]?.body).toEqual(expect.objectContaining({ status: "published", slug: "eid-sale" }));
+  });
+
+  it("explains each status and warns only when an active category has no active products", async () => {
+    await render({ defaultValues: saved, isEdit: true, publishReadiness: notReady });
+
+    await chooseStatus("Hidden");
+    expect(document.body.textContent).toContain("Customers can't see it. Use it to organize products.");
+    await chooseStatus("Active");
+    expect(document.body.textContent).toContain("It stays empty on your store until you add active products.");
+    await click(button("Save"));
+    expect(api.update.mock.calls[0]?.[0]?.body).toEqual(expect.objectContaining({ status: "published", expectedRevision: 4 }));
   });
 
   it("shows a read-only editor without edit permission", async () => {

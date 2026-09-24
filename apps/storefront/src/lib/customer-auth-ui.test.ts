@@ -1,109 +1,52 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  getCustomerAuthAlternateIntent,
-  getCustomerAuthAlternateIntentLabel,
-  getCustomerAuthInputError,
-  resolveCustomerAuthUi,
-} from "./customer-auth-ui";
+import { checkContact, checkNewAccount, formatWait, resolveCustomerAuthUi } from "./customer-auth-ui";
 
-describe("customer auth UI policy", () => {
-  it("renders Email/SMS tabs for legacy both mode", () => {
-    const ui = resolveCustomerAuthUi("both", "sms");
+describe("customer sign-in UI model", () => {
+  it("offers Email and Phone when the store enables both, and asks new buyers only for missing contacts", () => {
+    const email = resolveCustomerAuthUi("both");
+    expect(email.showMethodSwitcher).toBe(true);
+    expect(email.requestMethod).toBe("email");
+    expect(email.newAccount).toEqual({ phone: "required", email: "hidden" });
 
-    expect(ui.showMethodSwitcher).toBe(true);
-    expect(ui.requestOptions.map((option) => option.label)).toEqual(["Email", "SMS"]);
-    expect(ui.currentOption.destinationLabel).toBe("Phone number");
+    const phone = resolveCustomerAuthUi("both", "sms");
+    expect(phone.requestMethod).toBe("phone");
+    expect(phone.newAccount).toEqual({ phone: "hidden", email: "optional" });
   });
 
-  it("normalizes legacy phone to SMS-only UI", () => {
-    const ui = resolveCustomerAuthUi("phone");
-
-    expect(ui.authMethod).toBe("sms_otp");
-    expect(ui.showMethodSwitcher).toBe(false);
-    expect(ui.currentOption).toMatchObject({
-      method: "phone",
-      channel: "sms",
-      destinationLabel: "Phone number",
-    });
-  });
-
-  it("normalizes unsupported email_phone_mandatory to email UI", () => {
-    const ui = resolveCustomerAuthUi("email_phone_mandatory", "sms");
-
-    expect(ui.authMethod).toBe("email");
-    expect(ui.otpChannel).toBe("email");
-    expect(ui.currentOption.destinationLabel).toBe("Email address");
-  });
-
-  it("supports independent collection and verification choices", () => {
+  it("follows a store that requires email for phone sign-ups", () => {
     const ui = resolveCustomerAuthUi({
-      otpChannels: ["email", "sms", "whatsapp"],
+      otpChannels: ["sms"],
       requiredContactFields: ["email", "phone"],
       optionalContactFields: [],
-      defaultOtpChannel: "whatsapp",
+      defaultOtpChannel: "sms",
     });
-
-    expect(ui.currentOption.channel).toBe("whatsapp");
-    expect(ui.requestOptions.map((option) => option.label)).toEqual(["Email", "SMS", "WhatsApp"]);
-    expect(ui.fields.email).toMatchObject({ visible: true, required: true, primary: false });
-    expect(ui.fields.phone).toMatchObject({ visible: true, required: true, primary: true });
-  });
-
-  it("validates email OTP with phone collected for account creation", () => {
-    expect(resolveCustomerAuthUi("email", "email", "sign_in").fields.phone.visible).toBe(false);
-    expect(resolveCustomerAuthUi("email", "email", "sign_up").fields.phone).toMatchObject({
-      visible: true,
-      required: true,
-      primary: false,
+    expect(ui.showMethodSwitcher).toBe(false);
+    expect(ui.newAccount).toEqual({ phone: "hidden", email: "required" });
+    expect(checkNewAccount(ui, { name: "Rahim", phone: "", email: "" })).toEqual({
+      ok: false, field: "email", message: "Enter your email address.",
     });
-
-    expect(getCustomerAuthInputError({
-      authPolicy: "email",
-      otpChannel: "email",
-      intent: "sign_up",
-      identifier: "buyer@example.com",
-      phoneInput: "+8801712345678",
-    })).toBeNull();
-
-    expect(getCustomerAuthInputError({
-      authPolicy: "email",
-      otpChannel: "email",
-      intent: "sign_up",
-      identifier: "buyer@example.com",
-    })).toBe("Enter a valid phone number for account creation.");
-
-    expect(getCustomerAuthInputError({
-      authPolicy: "email",
-      otpChannel: "email",
-      intent: "sign_in",
-      identifier: "buyer@example.com",
-    })).toBeNull();
   });
 
-  it("validates optional email on phone OTP while phone remains primary", () => {
-    expect(getCustomerAuthInputError({
-      authPolicy: "whatsapp_otp",
-      otpChannel: "whatsapp",
-      identifier: "+8801712345678",
-      emailInput: "",
-    })).toBeNull();
-
-    expect(getCustomerAuthInputError({
-      authPolicy: "sms_otp",
-      otpChannel: "sms",
-      identifier: "+8801712345678",
-      emailInput: "not-an-email",
-    })).toBe("Enter a valid email address, or leave it blank.");
+  it("accepts Bangla digits and any spacing for phones, and explains bad input", () => {
+    expect(checkContact("phone", "০১৭১২ ৩৪৫-৬৭৮")).toEqual({ ok: true, value: "+8801712345678" });
+    expect(checkContact("phone", "0171")).toMatchObject({ ok: false, message: "Enter a valid mobile number, like 01712345678." });
+    expect(checkContact("email", " Buyer@Example.com ")).toEqual({ ok: true, value: "buyer@example.com" });
+    expect(checkContact("email", "buyer@")).toMatchObject({ ok: false });
   });
 
-  it("maps post-OTP intent errors to safe alternate actions", () => {
-    expect(getCustomerAuthAlternateIntent("An account already exists for this phone number. Sign in instead.")).toBe("sign_in");
-    expect(getCustomerAuthAlternateIntent("No account was found for this email. Create an account instead.")).toBe("sign_up");
-    expect(getCustomerAuthAlternateIntent("Multiple accounts use this email. Please use phone verification or contact store support.")).toBeNull();
-    expect(getCustomerAuthAlternateIntent("This phone number belongs to a deleted customer account. Contact store support to restore access.")).toBeNull();
-    expect(getCustomerAuthAlternateIntent("Incorrect code. Please try again.")).toBeNull();
-    expect(getCustomerAuthAlternateIntentLabel("sign_in")).toBe("Sign in with this contact");
-    expect(getCustomerAuthAlternateIntentLabel("sign_up")).toBe("Create an account with this contact");
+  it("validates the new-account details for an email sign-up", () => {
+    const ui = resolveCustomerAuthUi("email");
+    expect(checkNewAccount(ui, { name: " ", phone: "01712345678", email: "" })).toMatchObject({ field: "name" });
+    expect(checkNewAccount(ui, { name: "Rahim", phone: "", email: "" })).toMatchObject({ field: "phone" });
+    expect(checkNewAccount(ui, { name: " Rahim ", phone: "01712-345678", email: "" })).toEqual({
+      ok: true, account: { name: "Rahim", phone: "+8801712345678" },
+    });
+  });
+
+  it("formats honest waits", () => {
+    expect(formatWait(120)).toBe("2:00");
+    expect(formatWait(45)).toBe("0:45");
+    expect(formatWait(-3)).toBe("0:00");
   });
 });

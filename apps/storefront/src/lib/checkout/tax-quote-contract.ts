@@ -7,7 +7,9 @@ const MAX_CART_KEY_LENGTH = 256;
 const MAX_NAME_LENGTH = 200;
 const MAX_LABEL_LENGTH = 200;
 const MAX_LOCATION_LENGTH = 180;
-const MAX_CODE_LENGTH = 100;
+const MAX_CODE_LENGTH = 50;
+/** Mirrors the API's `MAX_SUBMITTED_DISCOUNT_CODES`. */
+const MAX_DISCOUNT_CODES = 5;
 const MAX_PHONE_LENGTH = 16;
 const MAX_DISPLAY_LABEL_LENGTH = 80;
 const MAX_SHIPPING_METHOD_NAME_LENGTH = 100;
@@ -35,7 +37,7 @@ export interface TaxQuoteRequest {
   zone: string;
   area?: string;
   shippingMethodId: string;
-  discountCode?: string;
+  discountCodes: string[];
   customerPhone?: string;
 }
 
@@ -57,7 +59,66 @@ export interface TaxQuoteShippingMethod {
   feeWaived: boolean;
 }
 
-export interface CheckoutTaxQuote {
+/** One line per applied discount (automatic by title, codes with their code). */
+export interface CheckoutDiscountLine {
+  promotionId: string;
+  title: string;
+  code: string | null;
+  amount: number;
+}
+
+export interface CheckoutOfferProduct {
+  id: string;
+  slug: string;
+  name: string;
+  /** Set for simple products: they can be added in one tap. */
+  variantId: string | null;
+  price: number | null;
+}
+
+/** A Buy X get Y the buyer completes by adding items. */
+export interface CheckoutDiscountOffer {
+  promotionId: string;
+  title: string;
+  code: string | null;
+  kind: "get" | "buy";
+  percentOff: number;
+  quantity: number;
+  shortfallAmount: number | null;
+  products: CheckoutOfferProduct[];
+}
+
+export type CheckoutRejectedCodeReason =
+  | "not_found"
+  | "needs_phone"
+  | "minimum_subtotal"
+  | "minimum_quantity"
+  | "get_items"
+  | "buy_items"
+  | "not_combinable"
+  | "lower_savings"
+  | "unavailable";
+
+/** An applied code that adds nothing right now, with why and what to do. */
+export interface CheckoutRejectedCode {
+  code: string;
+  reason: CheckoutRejectedCodeReason;
+  message: string;
+  shortfallAmount?: number;
+  shortfallQuantity?: number;
+  conflictsWith?: string;
+  offer?: CheckoutDiscountOffer;
+  requiresCustomerPhone?: boolean;
+}
+
+export interface CheckoutDiscountFacts {
+  discounts: CheckoutDiscountLine[];
+  /** Automatic Buy X get Y the buyer earned: the items to get are not in the cart yet. */
+  offers: CheckoutDiscountOffer[];
+  rejectedCodes: CheckoutRejectedCode[];
+}
+
+export interface CheckoutTaxQuote extends CheckoutDiscountFacts {
   valid: true;
   quoteFingerprint: string;
   displayLabel: string;
@@ -77,8 +138,6 @@ export interface CheckoutTaxQuote {
   totalMinor: number;
   totalAmount: number;
   shippingMethod: TaxQuoteShippingMethod;
-  /** Earned Buy X get Y discounts whose free item is not in the cart yet. */
-  discountOffers: string[];
   items: TaxQuoteItem[];
 }
 
@@ -210,7 +269,9 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
   }
 
   const area = optionalString(value.area, MAX_LOCATION_LENGTH);
-  const discountCode = optionalString(value.discountCode, MAX_CODE_LENGTH);
+  const codes = value.discountCodes ?? [];
+  if (!Array.isArray(codes) || codes.length > MAX_DISCOUNT_CODES) fail();
+  const discountCodes = codes.map((code) => requiredString(code, MAX_CODE_LENGTH).toUpperCase());
   const customerPhone = optionalString(value.customerPhone, MAX_PHONE_LENGTH);
   if (customerPhone && customerPhone.length < 7) fail();
 
@@ -221,7 +282,7 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
     zone: requiredString(value.zone, MAX_LOCATION_LENGTH),
     ...(area ? { area } : {}),
     shippingMethodId: requiredString(value.shippingMethodId, MAX_ID_LENGTH),
-    ...(discountCode ? { discountCode } : {}),
+    discountCodes: [...new Set(discountCodes)],
     ...(customerPhone ? { customerPhone } : {}),
   };
 }
@@ -323,9 +384,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     fail();
   }
 
-  const offers = data.discountOffers ?? [];
-  if (!Array.isArray(offers) || offers.length > 3) fail();
-  const discountOffers = offers.map((offer) => requiredString(offer, 160));
+  const discountFacts = parseDiscountFacts(data);
 
   if (!Array.isArray(data.items) || data.items.length === 0) fail();
   if (data.items.length > TAX_QUOTE_MAX_ITEMS) fail();
@@ -361,7 +420,69 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     totalMinor,
     totalAmount,
     shippingMethod,
-    discountOffers,
+    ...discountFacts,
     items,
+  };
+}
+
+function parseOffer(value: unknown): CheckoutDiscountOffer {
+  if (!isRecord(value) || (value.kind !== "get" && value.kind !== "buy")) fail();
+  if (!Array.isArray(value.products) || value.products.length > 3) fail();
+  return {
+    promotionId: requiredString(value.promotionId, MAX_ID_LENGTH),
+    title: requiredString(value.title, 160),
+    code: value.code === null ? null : requiredString(value.code, MAX_CODE_LENGTH),
+    kind: value.kind,
+    percentOff: nonNegativeAmount(value.percentOff),
+    quantity: positiveQuantity(Math.min(Number(value.quantity), MAX_QUANTITY)),
+    shortfallAmount: value.shortfallAmount === null ? null : nonNegativeAmount(value.shortfallAmount),
+    products: value.products.map((product) => {
+      if (!isRecord(product)) fail();
+      return {
+        id: requiredString(product.id, MAX_ID_LENGTH),
+        slug: requiredString(product.slug, MAX_ID_LENGTH),
+        name: requiredString(product.name, MAX_NAME_LENGTH),
+        variantId: product.variantId === null ? null : requiredString(product.variantId, MAX_ID_LENGTH),
+        price: product.price === null ? null : nonNegativeAmount(product.price),
+      };
+    }),
+  };
+}
+
+const REJECTED_CODE_REASONS = new Set<CheckoutRejectedCodeReason>([
+  "not_found", "needs_phone", "minimum_subtotal", "minimum_quantity",
+  "get_items", "buy_items", "not_combinable", "lower_savings", "unavailable",
+]);
+
+/** The discount lines, offers and code statuses shared by the tax quote and the cart preview. */
+export function parseDiscountFacts(data: Record<string, unknown>): CheckoutDiscountFacts {
+  const { discounts = [], offers = [], rejectedCodes = [] } = data;
+  if (!Array.isArray(discounts) || discounts.length > 10) fail();
+  if (!Array.isArray(offers) || offers.length > 3) fail();
+  if (!Array.isArray(rejectedCodes) || rejectedCodes.length > MAX_DISCOUNT_CODES) fail();
+  return {
+    discounts: discounts.map((line) => {
+      if (!isRecord(line)) fail();
+      return {
+        promotionId: requiredString(line.promotionId, MAX_ID_LENGTH),
+        title: requiredString(line.title, 160),
+        code: line.code === null ? null : requiredString(line.code, MAX_CODE_LENGTH),
+        amount: nonNegativeAmount(line.amount),
+      };
+    }),
+    offers: offers.map(parseOffer),
+    rejectedCodes: rejectedCodes.map((rejection) => {
+      if (!isRecord(rejection) || !REJECTED_CODE_REASONS.has(rejection.reason as CheckoutRejectedCodeReason)) fail();
+      return {
+        code: requiredString(rejection.code, MAX_CODE_LENGTH),
+        reason: rejection.reason as CheckoutRejectedCodeReason,
+        message: requiredString(rejection.message, 300),
+        ...(typeof rejection.shortfallAmount === "number" ? { shortfallAmount: nonNegativeAmount(rejection.shortfallAmount) } : {}),
+        ...(typeof rejection.shortfallQuantity === "number" ? { shortfallQuantity: positiveQuantity(Math.min(rejection.shortfallQuantity, MAX_QUANTITY)) } : {}),
+        ...(typeof rejection.conflictsWith === "string" ? { conflictsWith: requiredString(rejection.conflictsWith, 160) } : {}),
+        ...(rejection.offer !== undefined ? { offer: parseOffer(rejection.offer) } : {}),
+        ...(rejection.requiresCustomerPhone === true ? { requiresCustomerPhone: true } : {}),
+      };
+    }),
   };
 }

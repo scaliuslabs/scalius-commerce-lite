@@ -2,6 +2,26 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
 import { search } from "./index";
 
+const RELEVANCE_FIXTURE = `
+  INSERT INTO categories (id, name, slug, status) VALUES ('cat_bags', 'Bags', 'bags', 'published');
+  INSERT INTO products (id, name, description, price_minor, slug, category_id, is_active, created_at) VALUES
+    ('p_mouse', 'Pebble Silent Mouse', 'Ships in a padded bag', 1000, 'pebble-mouse', NULL, 1, 300),
+    ('p_belt', 'Trail Belt Bag', 'Hip pack', 1000, 'trail-belt-bag', NULL, 1, 100),
+    ('p_tote', 'Market Tote', 'Everyday carry', 1000, 'market-tote', 'cat_bags', 1, 200),
+    ('p_kettle', 'Copper Tea Kettle', 'Stovetop', 1000, 'copper-kettle', NULL, 1, 50);
+  INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory) VALUES
+    ('v_mouse', 'p_mouse', 'MOUSE-1', 1000, 0, 0, 1, 0),
+    ('v_belt', 'p_belt', 'BELT-1', 1000, 0, 0, 1, 0),
+    ('v_tote', 'p_tote', 'TOTE-1', 1000, 0, 0, 1, 0),
+    ('v_kettle', 'p_kettle', 'KETTLE-1', 1000, 0, 0, 1, 0);
+`;
+
+function relevanceDb() {
+  const { sqlite, db } = createSqliteD1Database();
+  sqlite.exec(RELEVANCE_FIXTURE);
+  return db;
+}
+
 function setup(onQuery?: () => void) {
   const harness = createSqliteD1Database({ onQuery });
   harness.sqlite.exec(`
@@ -56,5 +76,31 @@ describe("public search", () => {
     });
 
     await expect(search(db, "runner")).rejects.toThrow("storage unavailable");
+  });
+});
+
+describe("public search relevance and correction", () => {
+  it("ranks title matches, then category matches, above description-only matches", async () => {
+    const result = await search(relevanceDb(), "bag", { searchPages: false, searchCategories: false });
+
+    expect(result.products.map((product) => product.id)).toEqual(["p_belt", "p_tote", "p_mouse"]);
+  });
+
+  it("answers a misspelled or Bangla query with the corrected catalog word", async () => {
+    const db = relevanceDb();
+
+    for (const query of ["kettel", "ketle", "কেতলি", "চায়ের কেতলি"]) {
+      const result = await search(db, query, { correctTypos: true, searchPages: false });
+      expect(result.correctedQuery).toBe("kettle");
+      expect(result.products.map((product) => product.id)).toEqual(["p_kettle"]);
+    }
+  });
+
+  it("corrects only buyer searches that found nothing", async () => {
+    const db = relevanceDb();
+
+    expect(await search(db, "kettel")).toMatchObject({ products: [], correctedQuery: null });
+    expect(await search(db, "kettle", { correctTypos: true })).toMatchObject({ correctedQuery: null });
+    expect(await search(db, "zzzzqqq", { correctTypos: true })).toMatchObject({ products: [], correctedQuery: null });
   });
 });

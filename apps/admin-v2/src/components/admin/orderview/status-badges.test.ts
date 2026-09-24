@@ -6,7 +6,7 @@ describe("order status badges", () => {
     expect(orderBadgeVisibility({ status: "cancelled" })).toEqual({ payment: false, fulfillment: false });
     expect(orderBadgeVisibility({ status: "Returned" })).toEqual({ payment: false, fulfillment: false });
     expect(orderBadgeVisibility({ status: "shipped" })).toEqual({ payment: true, fulfillment: true });
-    expect(orderBadgeVisibility({ status: "partially_refunded" })).toEqual({ payment: true, fulfillment: true });
+    expect(statusBadgeVariant("partially_refunded", "payment")).toBe("secondary");
   });
 
   it("follows the design-system tone table per kind", () => {

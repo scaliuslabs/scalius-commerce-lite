@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { recordOrderEvent } from "@scalius/core/modules/orders/order-timeline";
 import {
     approveOrderReturn,
     approveOrderReturnSchema,
@@ -243,12 +244,16 @@ app.openapi(createRouteDefinition, async (c) => {
         bodyCommandKey,
         "commandKey",
     );
-    return created(c, await createOrderReturn(
-        c.get("db"),
-        c.req.valid("param").id,
-        { ...payload, commandKey },
-        actor(c),
-    ));
+    const orderId = c.req.valid("param").id;
+    const result = await createOrderReturn(c.get("db"), orderId, { ...payload, commandKey }, actor(c));
+    await recordOrderEvent(c.get("db"), {
+        orderId,
+        kind: "return_created",
+        actorId: actor(c).id,
+        body: payload.reason?.trim() || null,
+        data: { quantity: payload.lines.reduce((sum, line) => sum + line.quantity, 0) },
+    });
+    return created(c, result);
 });
 app.openapi(approveRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
@@ -274,6 +279,15 @@ app.openapi(receiveRoute, async (c) => {
         c.get("db"), id, returnId, { ...payload, commandKey } as ReceiveOrderReturnInput, actor(c),
     );
     await postReceiptSideEffects(c, result);
+    await recordOrderEvent(c.get("db"), {
+        orderId: id,
+        kind: "return_received",
+        actorId: actor(c).id,
+        data: {
+            received: (payload as ReceiveOrderReturnInput).lines.reduce((sum, line) => sum + line.receivedQuantity, 0),
+            restocked: result.restockedQuantity,
+        },
+    });
     const { availabilityTransitionVariantIds: _cacheSignal, ...response } = result;
     return ok(c, response);
 });

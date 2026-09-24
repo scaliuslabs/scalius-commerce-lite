@@ -31,6 +31,8 @@ export function OrderReturnRow({
     && orderReturn.lines.every((line) => line.receivedQuantity === 0);
   const canReceive = (orderReturn.status === "approved" || orderReturn.status === "receiving")
     && orderReturn.lines.some((line) => getOutstandingReceiptQuantity(line) > 0);
+  const trackedLineIds = new Set(orderReturn.lines.filter((line) => line.inventoryTracked).map((line) => line.id));
+  const courierReturn = orderReturn.source === "cod_return_to_sender";
 
   return (
     <li className="space-y-2 py-3">
@@ -38,7 +40,7 @@ export function OrderReturnRow({
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={statusBadgeVariant(orderReturn.status)}>{t(`return.status.${orderReturn.status}`)}</Badge>
-            <span className="font-medium">{orderReturn.reason}</span>
+            <span className="font-medium">{courierReturn ? t("returns.courierReturn") : orderReturn.reason}</span>
           </div>
           <p className="text-muted-foreground">{formatOrderTimestamp(orderReturn.requestedAt ?? orderReturn.createdAt)}</p>
         </div>
@@ -71,7 +73,7 @@ export function OrderReturnRow({
               type="button"
               size="sm"
               variant="outline"
-              disabled={resumeMutation.isPending}
+              loading={resumeMutation.isPending}
               onClick={() => resumeMutation.mutate({ orderId: orderReturn.orderId, returnId: orderReturn.id })}
             >
               {t("returns.resume")}
@@ -87,11 +89,12 @@ export function OrderReturnRow({
             <p className="text-muted-foreground">
               {[
                 t("returns.qtyRequested", { count: line.requestedQuantity }),
-                t("returns.qtyApproved", { count: line.approvedQuantity }),
-                t("returns.qtyReceived", { count: line.receivedQuantity }),
+                orderReturn.status === "requested" ? null : t("returns.qtyApproved", { count: line.approvedQuantity }),
+                line.receivedQuantity > 0 ? t("returns.qtyReceived", { count: line.receivedQuantity }) : null,
                 line.restockQuantity > 0 ? t("returns.qtyRestocked", { count: line.restockQuantity }) : null,
-                line.damagedQuantity > 0 ? t("returns.qtyDamaged", { count: line.damagedQuantity }) : null,
-                line.reason,
+                // Untracked items are received, never "damaged": their stock isn't counted.
+                line.inventoryTracked && line.damagedQuantity > 0 ? t("returns.qtyDamaged", { count: line.damagedQuantity }) : null,
+                !courierReturn && line.reason && line.reason !== orderReturn.reason ? line.reason : null,
               ].filter(Boolean).join(" · ")}
             </p>
           </li>
@@ -101,11 +104,13 @@ export function OrderReturnRow({
         <ul className="space-y-1 text-muted-foreground">
           {orderReturn.receipts.map((receipt) => (
             <li key={receipt.id}>
-              {formatOrderTimestamp(receipt.createdAt)} · {t("returns.receipt", {
-                received: receipt.receivedQuantity,
-                restocked: receipt.restockQuantity,
-                damaged: receipt.damagedQuantity,
-              })}
+              {formatOrderTimestamp(receipt.createdAt)} · {trackedLineIds.has(receipt.returnLineId)
+                ? t("returns.receipt", {
+                    received: receipt.receivedQuantity,
+                    restocked: receipt.restockQuantity,
+                    damaged: receipt.damagedQuantity,
+                  })
+                : t("returns.qtyReceived", { count: receipt.receivedQuantity })}
             </li>
           ))}
         </ul>

@@ -55,7 +55,9 @@ export class ConflictError extends AppError {
 
 export class RateLimitError extends AppError {
   constructor(message = "Too many requests", public readonly retryAfterSeconds?: number) {
-    super(429, "RATE_LIMIT", message);
+    // The wait travels in the body (details) and the Retry-After header so
+    // buyers see an honest countdown instead of "try again later".
+    super(429, "RATE_LIMIT", message, retryAfterSeconds ? { retryAfterSeconds } : undefined);
     this.name = "RateLimitError";
   }
 }

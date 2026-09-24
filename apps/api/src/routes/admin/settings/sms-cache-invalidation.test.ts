@@ -46,6 +46,7 @@ describe("SMS settings cache invalidation", () => {
       gennetApiToken: "raw-gennet-token-must-not-leak",
       gennetBaseUrl: `https://${"a".repeat(100_000)}`,
       gennetSid: "g".repeat(100_000),
+      revision: 3,
     });
     app.use("*", async (c, next) => {
       c.set("db", { id: "db" } as never);
@@ -68,6 +69,7 @@ describe("SMS settings cache invalidation", () => {
     expect(responseText).not.toContain("raw-token-must-not-leak");
     expect(responseText).not.toContain("raw-api-key-must-not-leak");
     expect(body.data.activeProviderError).toHaveLength(1_000);
+    expect(body.data.revision).toBe(3);
   });
 
   it("invalidates public checkout readiness after a provider save", async () => {
@@ -78,7 +80,22 @@ describe("SMS settings cache invalidation", () => {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
     const db = { id: "db" };
 
-    mocks.saveSmsSettings.mockResolvedValue(undefined);
+    mocks.saveSmsSettings.mockResolvedValue({ revision: 3 });
+    mocks.getSmsSettings.mockResolvedValue({
+      activeProvider: "bdbulksms",
+      activeProviderConfigured: true,
+      activeProviderError: null,
+      bdbulksmsToken: "••••••••••••",
+      mimsmsUsername: "",
+      mimsmsApiKey: "",
+      mimsmsSenderName: "",
+      smsnetbdApiKey: "",
+      smsnetbdSenderId: "",
+      gennetApiToken: "",
+      gennetBaseUrl: "",
+      gennetSid: "",
+      revision: 3,
+    });
     mocks.clearNotificationProviderBlocks.mockResolvedValue(undefined);
     mocks.bumpCacheGeneration.mockResolvedValue(undefined);
 
@@ -93,12 +110,25 @@ describe("SMS settings cache invalidation", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ activeProvider: "bdbulksms" }),
+        body: JSON.stringify({ activeProvider: "bdbulksms", expectedRevision: 2 }),
       },
       env,
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
+    expect(mocks.saveSmsSettings).toHaveBeenCalledWith(db, { activeProvider: "bdbulksms" }, "credential-key", { expectedRevision: 2 });
+    expect((await response.json() as { data: { revision: number } }).data.revision).toBe(3);
+
+    const withoutRevision = await app.request(
+      "/api/v1/admin/settings/sms",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activeProvider: "bdbulksms" }),
+      },
+      env,
+    );
+    expect(withoutRevision.status).toBe(400);
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.objectContaining({ env }),
     );
   });

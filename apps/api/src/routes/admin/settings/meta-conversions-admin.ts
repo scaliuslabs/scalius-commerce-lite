@@ -20,7 +20,13 @@ import {
 
 import { ok, created } from "../../../utils/api-response";
 import { ValidationError } from "../../../utils/api-error";
-import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
+import {
+    successEnvelope,
+    messageResponse,
+    conflictResponse,
+    errorResponses,
+    serviceUnavailableResponse,
+} from "../../../schemas/responses";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { META_CAPI_BROWSER_CIRCUIT_KEY } from "../../meta-conversions";
@@ -70,7 +76,8 @@ const metaConversionsSettingsSchema = z.object({
     accessToken: z.string().max(4096).optional(),
     testEventCode: z.string().max(200).optional(),
     isEnabled: z.boolean().optional(),
-    logRetentionDays: z.number().int().min(1).max(365).optional()
+    logRetentionDays: z.number().int().min(1).max(365).optional(),
+    expectedRevision: z.number().int().nonnegative(),
 });
 
 // ── Get Settings ──
@@ -127,6 +134,7 @@ const getSettingsRoute = createRoute({
         200: { description: "Settings", content: { "application/json": { schema: successEnvelope(z.object({
             settings: metaConversionsSettingsResponseSchema.nullable(),
             pixelParity: metaPixelParityResponseSchema,
+            revision: z.number().int().nonnegative(),
         })) } } },
         ...errorResponses,
     }
@@ -145,10 +153,15 @@ app.openapi(getSettingsRoute, (async (c) => {
     return ok(c, {
         settings: stored.stored ? maskedSettings(stored.value, stored.accessTokenStored) : null,
         pixelParity,
+        revision: stored.revision,
     });
 }) as AppRouteHandler<typeof getSettingsRoute>);
 
 // ── Save Settings ──
+
+const savedMetaConversionsSchema = metaConversionsSettingsResponseSchema.extend({
+    revision: z.number().int().nonnegative(),
+});
 
 const saveSettingsRoute = createRoute({
     method: "post",
@@ -156,11 +169,12 @@ const saveSettingsRoute = createRoute({
     operationId: "dashboard.meta_conversions.update",
     tags: ["Admin - Meta Conversions"],
     summary: "Save Meta Conversions API settings",
-    request: { body: { content: { "application/json": { schema: metaConversionsSettingsSchema } } } },
+    request: { body: { required: true, content: { "application/json": { schema: metaConversionsSettingsSchema } } } },
     responses: {
-        200: { description: "Settings saved", content: { "application/json": { schema: successEnvelope(metaConversionsSettingsResponseSchema) } } },
-        201: { description: "Settings created", content: { "application/json": { schema: successEnvelope(metaConversionsSettingsResponseSchema) } } },
+        200: { description: "Settings saved", content: { "application/json": { schema: successEnvelope(savedMetaConversionsSchema) } } },
+        201: { description: "Settings created", content: { "application/json": { schema: successEnvelope(savedMetaConversionsSchema) } } },
         ...errorResponses,
+        409: conflictResponse,
         503: serviceUnavailableResponse,
     }
 });
@@ -231,14 +245,17 @@ app.openapi(saveSettingsRoute, (async (c: AppRouteContext<typeof saveSettingsRou
         encryptionKey: accessToken
             ? requireEncryptionKey(c.env as unknown as Record<string, unknown>)
             : getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
-    });
+    }, { expectedRevision: validation.expectedRevision });
 
     await clearMetaCapiBrowserCircuit(c.env);
     await bumpCacheGeneration(c);
-    const maskedResult = maskedSettings(
-        saved.value,
-        accessToken === undefined ? hasStoredAccessToken : Boolean(accessToken),
-    );
+    const maskedResult = {
+        ...maskedSettings(
+            saved.value,
+            accessToken === undefined ? hasStoredAccessToken : Boolean(accessToken),
+        ),
+        revision: saved.revision,
+    };
     return existing.stored ? ok(c, maskedResult) : created(c, maskedResult);
 }) as unknown as AppRouteHandler<typeof saveSettingsRoute>);
 

@@ -15,7 +15,7 @@ import {
 import { and, sql, eq, inArray, isNull, ne, not } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { z } from "zod";
-import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
+import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import { checkAndAlertLowStock } from "../inventory/alerts";
 import { fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
 import { presentCatalogPrice, readStoreDecimalPlaces } from "./products.money";
@@ -65,6 +65,79 @@ export function rethrowProductVariantIdentityConstraint(error: unknown): never {
     throw error;
 }
 
+/** A submitted SKU is already another product's; `details` names that product for the editor. */
+export class SkuTakenError extends AppError {
+    constructor(details: { field: string; sku: string; productId: string; productName: string }) {
+        super(409, "SKU_TAKEN", `SKU ${details.sku} is already used by ${details.productName}.`, details);
+        this.name = "SkuTakenError";
+    }
+}
+
+/**
+ * Fails with SkuTakenError when a submitted SKU already belongs to another
+ * product (identity is lower(trim(sku)), as the unique index). `field` is the
+ * request path the editor marks, e.g. `optionMatrix.variants.2.sku`.
+ */
+export async function assertSkusFree(
+    db: Database,
+    submitted: Array<{ sku: string; field: string }>,
+    ownProductId?: string,
+): Promise<void> {
+    const byKey = new Map(submitted.map((entry) => [entry.sku.trim().toLowerCase(), entry]));
+    if (byKey.size === 0) return;
+    const taken = await db
+        .select({ sku: productVariants.sku, productId: products.id, productName: products.name })
+        .from(productVariants)
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(and(
+            sql`lower(trim(${productVariants.sku})) IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify([...byKey.keys()])}))`,
+            ownProductId ? ne(productVariants.productId, ownProductId) : undefined,
+        ))
+        .limit(1)
+        .get();
+    if (!taken) return;
+    const entry = byKey.get(taken.sku.trim().toLowerCase());
+    throw new SkuTakenError({
+        field: entry?.field ?? "sku",
+        sku: entry?.sku.trim() ?? taken.sku,
+        productId: taken.productId,
+        productName: taken.productName,
+    });
+}
+
+/** One SKU write: fails with SkuTakenError when any other SKU row has this identity. */
+async function assertSkuKeyFree(db: Database, sku: string, skuKey: string, ownVariantId?: string): Promise<void> {
+    const taken = await db
+        .select({ productId: products.id, productName: products.name })
+        .from(productVariants)
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(and(
+            sql`lower(trim(${productVariants.sku})) = ${skuKey}`,
+            ownVariantId ? ne(productVariants.id, ownVariantId) : undefined,
+        ))
+        .get();
+    if (taken) throw new SkuTakenError({ field: "sku", sku, ...taken });
+}
+
+/**
+ * A readable SKU for a product without options, made from its title the way
+ * variant SKUs are (COTTON-TEE, then COTTON-TEE-2 …), never an internal id.
+ */
+export async function readableDefaultSku(db: Database, productName: string): Promise<string> {
+    const base = productName.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+    const stem = base.length >= 3 ? base : "SKU";
+    const rows = await db
+        .select({ sku: productVariants.sku })
+        .from(productVariants)
+        .where(sql`lower(trim(${productVariants.sku})) = ${stem.toLowerCase()} OR lower(trim(${productVariants.sku})) LIKE ${`${stem.toLowerCase()}-%`}`);
+    const used = new Set(rows.map((row) => row.sku.trim().toLowerCase()));
+    if (stem !== "SKU" && !used.has(stem.toLowerCase())) return stem;
+    for (let suffix = 2; ; suffix += 1) {
+        const candidate = `${stem}-${suffix}`;
+        if (!used.has(candidate.toLowerCase())) return candidate;
+    }
+}
+
 async function executeProductAggregateMutationBatch(
     ...args: Parameters<typeof executeProductAggregateMutationBatchRaw>
 ): ReturnType<typeof executeProductAggregateMutationBatchRaw> {
@@ -87,7 +160,6 @@ const ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT = [
     OrderStatus.CANCELLED,
     OrderStatus.RETURNED,
     OrderStatus.REFUNDED,
-    OrderStatus.PARTIALLY_REFUNDED,
 ];
 
 export function assertConsistentVariantOptionAxes(
@@ -458,15 +530,7 @@ export async function createVariant(
 
     await assertSelectableVariantImage(db, productId, data.imageId);
 
-    const existingVariant = await db
-        .select({ id: productVariants.id })
-        .from(productVariants)
-        .where(sql`lower(trim(${productVariants.sku})) = ${skuKey}`)
-        .get();
-
-    if (existingVariant) {
-        throw new ConflictError("A variant with this SKU already exists");
-    }
+    await assertSkuKeyFree(db, sku, skuKey);
 
     const variantValues = {
         id: variantId,
@@ -615,15 +679,7 @@ export async function updateVariant(
 
     const sku = normalizeSku(data.sku);
     const skuKey = normalizedSkuKey(sku);
-    const existingSkuVariant = await db
-        .select({ id: productVariants.id })
-        .from(productVariants)
-        .where(sql`lower(trim(${productVariants.sku})) = ${skuKey} AND ${productVariants.id} != ${variantId}`)
-        .get();
-
-    if (existingSkuVariant) {
-        throw new ConflictError("A variant with this SKU already exists");
-    }
+    await assertSkuKeyFree(db, sku, skuKey, variantId);
 
     const barcodeIdentity = normalizeVariantBarcode(
         data.barcode === undefined ? existingVariant.barcode : data.barcode,

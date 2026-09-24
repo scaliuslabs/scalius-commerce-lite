@@ -382,12 +382,9 @@ async function sha256Hex(value: string): Promise<string> {
         .join("");
 }
 
+/** A partial refund is a payment fact only; the order keeps its lifecycle status. */
 function getOrderStatusAfterRefund(currentStatus: string, isFullRefund: boolean): string | undefined {
-    if (!isFullRefund) {
-        return canTransitionTo("order", currentStatus, OrderStatus.PARTIALLY_REFUNDED)
-            ? OrderStatus.PARTIALLY_REFUNDED
-            : undefined;
-    }
+    if (!isFullRefund) return undefined;
 
     if (canTransitionTo("order", currentStatus, OrderStatus.REFUNDED)) {
         return OrderStatus.REFUNDED;
@@ -430,12 +427,23 @@ function computePaymentStateFromLedger(params: {
         .reduce((sum, payment) => sum + payment.amountMinor, 0);
     const isFullRefund = capturedAmount > 0 && refundedAmount >= capturedAmount;
 
+    // Money given back from a fully paid order never turns into money owed:
+    // the customer has no balance due and the payment reads "(partially)
+    // refunded". "Partly paid" stays reserved for a real under-payment.
     if (isFullRefund) {
         return {
             isFullRefund,
             paidAmountMinor: 0,
-            balanceDueMinor: params.totalAmountMinor,
+            balanceDueMinor: 0,
             paymentStatus: PaymentStatus.REFUNDED,
+        };
+    }
+    if (refundedAmount > 0 && capturedAmount >= params.totalAmountMinor) {
+        return {
+            isFullRefund,
+            paidAmountMinor: capturedAmount - refundedAmount,
+            balanceDueMinor: 0,
+            paymentStatus: PaymentStatus.PARTIALLY_REFUNDED,
         };
     }
 

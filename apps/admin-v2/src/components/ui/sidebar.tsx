@@ -74,8 +74,11 @@ SidebarProvider.displayName = "SidebarProvider";
  * Shopify's left navigation: a 240px column in the page flow on desktop, below
  * the top bar, its top corner rounded into the near-black frame; a sheet on phones.
  */
-const Sidebar = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"> & { side?: "left" | "right" }>(
-  ({ side = "left", className, children, ...props }, ref) => {
+const Sidebar = React.forwardRef<
+  HTMLElement,
+  React.ComponentProps<"nav"> & { side?: "left" | "right"; "aria-label": string; closeLabel: string }
+>(
+  ({ side = "left", className, children, closeLabel, ...props }, ref) => {
     const { isMobile, open, openMobile, setOpenMobile } = useSidebar();
     const [hasLoadedMobileSheet, setHasLoadedMobileSheet] = React.useState(false);
 
@@ -88,7 +91,13 @@ const Sidebar = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"> & {
 
       return (
         <React.Suspense fallback={null}>
-          <SidebarMobileSheet open={openMobile} onOpenChange={setOpenMobile} side={side}>
+          <SidebarMobileSheet
+            open={openMobile}
+            onOpenChange={setOpenMobile}
+            side={side}
+            label={props["aria-label"]}
+            closeLabel={closeLabel}
+          >
             {children}
           </SidebarMobileSheet>
         </React.Suspense>
@@ -96,7 +105,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"> & {
     }
 
     return (
-      <div
+      <nav
         ref={ref}
         data-sidebar="sidebar"
         data-state={open ? "expanded" : "collapsed"}
@@ -108,7 +117,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"> & {
         {...props}
       >
         {children}
-      </div>
+      </nav>
     );
   },
 );

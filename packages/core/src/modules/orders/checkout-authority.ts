@@ -36,10 +36,9 @@ import {
 } from "./cart-validation";
 import {
     resolveStorefrontDeliveryPreflightFromRows,
-    selectActiveStorefrontShippingMethodRowsByIds,
     type StorefrontDeliveryPreflightResult,
-    type StorefrontShippingMethodRow,
 } from "./orders.storefront";
+import { selectDeliveryRateRowsByIds, type DeliveryRateRow } from "../delivery/zones";
 import {
     selectActiveDeliveryLocationRowsByIds,
     type ActiveDeliveryLocationRow,
@@ -189,7 +188,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         selectStorefrontCartVariantRows(db, productIds, variantIds),
         selectCheckoutProductMediaProjectionRows(db, productIds, variantIds),
         selectActiveDeliveryLocationRowsByIds(db, locationIds),
-        selectActiveStorefrontShippingMethodRowsByIds(db, shippingMethodIds),
+        selectDeliveryRateRowsByIds(db, shippingMethodIds),
         db.select({
             revision: checkoutAuthority.revision,
             hasActiveAdminPushTarget: sql<number>`EXISTS(
@@ -246,7 +245,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 ? results[5] as ActiveDeliveryLocationRow[]
                 : [];
             const shippingRows = Array.isArray(results[6])
-                ? results[6] as StorefrontShippingMethodRow[]
+                ? results[6] as DeliveryRateRow[]
                 : [];
             const sideEffectRows = Array.isArray(results[7])
                 ? results[7] as CheckoutSideEffectSettingsRow[]
@@ -254,6 +253,9 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             const sideEffectSettings = sideEffectRows[0];
             const orderCreatedChannels = notificationsRead.value.orderChannels.order_created ?? [];
             const adminOrderCreatedChannels = notificationsRead.value.adminChannels.order_created ?? [];
+            // Staff order emails go to the notification settings' recipient list.
+            const staffEmailRecipients = (notificationsRead.value as { staffEmailRecipients?: unknown[] })
+                .staffEmailRecipients ?? [];
             const allowedCountries = countriesRead.value;
             let activePaymentMethods: PaymentMethodsConfig;
             try {
@@ -343,7 +345,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                             channel === "sms" || channel === "whatsapp"
                                         ))
                                     || (Number(sideEffectSettings?.hasActiveAdminPushTarget) === 1
-                                        && adminOrderCreatedChannels.includes("push")),
+                                        && adminOrderCreatedChannels.includes("push"))
+                                    || staffEmailRecipients.length > 0,
                                 ),
                                 metaPurchase: metaPurchaseEnabled,
                             },

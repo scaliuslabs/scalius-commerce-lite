@@ -70,6 +70,7 @@ const customerHistoryEntrySchema = z.object({
 
 const customerHistoryOrderSchema = z.object({
     id: z.string(),
+    orderNumber: z.number().int().nullable(),
     totalAmount: z.number(),
     status: z.string(),
     createdAt: timestampSchema,
@@ -375,6 +376,7 @@ app.openapi(getHistoryRoute, async (c) => {
         db
             .select({
                 id: orders.id,
+                orderNumber: orders.orderNumber,
                 totalAmountMinor: orders.totalAmountMinor,
                 currencyDecimalPlaces: orders.currencyDecimalPlaces,
                 status: orders.status,

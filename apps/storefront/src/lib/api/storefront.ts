@@ -69,12 +69,6 @@ export interface HomepageData {
     };
     trustStrip: {
       enabled: boolean;
-      items: Array<{
-        kind: "delivery" | "returns";
-        title: string;
-        detail: string;
-        href?: string;
-      }>;
     };
   };
 }
@@ -120,13 +114,26 @@ export interface LayoutData {
   };
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains?: string;
+  /** Published policy pages linked in Settings -> Policies, in kind order. */
+  policies?: Array<{
+    kind: "refund" | "privacy" | "terms" | "shipping" | "contact";
+    title: string;
+    path: string;
+  }>;
   /** Product call-to-action copy from the active checkout language. */
   storefrontCopy?: {
     languageCode: string;
     addToCartText: string;
     buyNowText: string;
-    selectOptionsText: string;
     unavailableText: string;
+    chooseOptionText: string;
+    fromPriceText: string;
+    quantityLabelText: string;
+    quantityLimitText: string;
+    saleOfferText: string;
+    saleOfferSpendText: string;
+    freeBenefitText: string;
+    percentBenefitText: string;
   };
 }
 

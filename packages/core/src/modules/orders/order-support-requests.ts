@@ -195,11 +195,11 @@ const REFUND_REQUEST_STATUSES = new Set<string>([
   OrderStatus.DELIVERED,
   OrderStatus.COMPLETED,
   OrderStatus.RETURNED,
-  OrderStatus.PARTIALLY_REFUNDED,
 ]);
 const REFUNDABLE_PAYMENT_STATUSES = new Set<string>([
   PaymentStatus.PAID,
   PaymentStatus.PARTIAL,
+  PaymentStatus.PARTIALLY_REFUNDED,
 ]);
 
 function timestampToIso(timestamp: number | null | undefined): string | null {

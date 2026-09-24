@@ -112,7 +112,7 @@ describe("finalizeAcceptedRefundAttemptIds", () => {
     expect(updateSets[0]).toMatchObject({ status: PaymentRecordStatus.REFUNDED });
     expect(updateSets[1]).toMatchObject({
       paidAmountMinor: 0,
-      balanceDueMinor: 10_000,
+      balanceDueMinor: 0,
       paymentStatus: PaymentStatus.REFUNDED,
       status: OrderStatus.CANCELLED,
     });

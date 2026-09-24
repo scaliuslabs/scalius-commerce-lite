@@ -62,15 +62,12 @@ describe("ProductShortcode normalized options", () => {
     productData.variants[0]!.imageId = "pmed_digital";
     productData.variants[1]!.stock = 10;
 
+    // The first available SKU is preselected, so its exact image shows at once.
     await act(async () => root.render(<ProductShortcode productData={productData} />));
-    expect(host.querySelector<HTMLImageElement>('img[alt="Guide"]')?.src).toContain("primary.jpg");
+    expect(host.querySelector<HTMLImageElement>('img[alt="Guide"]')?.src).toContain("digital.jpg");
     expect([...host.querySelectorAll<HTMLImageElement>("button img")].every((image) => (
       image.classList.contains("object-contain")
     ))).toBe(true);
-
-    const digital = [...host.querySelectorAll("button")].find((button) => button.textContent === "Digital");
-    await act(async () => digital?.click());
-    expect(host.querySelector<HTMLImageElement>('img[alt="Guide"]')?.src).toContain("digital.jpg");
     const add = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Add to Cart"));
     await act(async () => add?.click());
     expect(addToCart).toHaveBeenCalledWith(expect.objectContaining({

@@ -9,7 +9,14 @@ import {
   PaymentMethod,
   InventoryPool
 } from "@scalius/database/schema";
-import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
+import { quoteStorefrontDiscount, type StorefrontDiscountQuote } from "@scalius/core/modules/promotions";
+import {
+  appliedDiscountLineSchema,
+  discountCodesSchema,
+  discountOfferSchema,
+  presentStorefrontDiscountQuote,
+  rejectedDiscountCodeSchema,
+} from "../schemas/storefront-discounts";
 import {
   getCheckoutGatewayPrecommitIssue,
   getPaymentMethodCurrencyIssue,
@@ -21,6 +28,8 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
 import { getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/customers/customers.service";
+import { issueAccountOwnerReceipt } from "@scalius/core/modules/customers/order-account-claim";
+import { sendOrderLookupOtp, verifyOrderLookupOtp } from "@scalius/core/modules/orders/order-lookup";
 import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/order-money";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
@@ -550,7 +559,14 @@ const receiptSupportRequestActionSchema = z.object({
 
 const orderReceiptSchema = z.object({
   id: z.string(),
+  /** Short per-store order number shown as "#1001"; null only for orders placed before numbering. */
+  orderNumber: z.number().int().nullable(),
   customerName: z.string(),
+  /** The phone the courier calls. The receipt is proof-gated, so the buyer sees their own contact. */
+  customerPhone: z.string(),
+  customerEmail: z.string().nullable(),
+  /** True when the order is saved to a customer account. */
+  accountLinked: z.boolean(),
   shippingAddress: z.string(),
   totalAmount: z.number(),
   shippingCharge: z.number(),
@@ -753,6 +769,111 @@ app.openapi(verifyOrderPaymentRecoveryOtpRoute, async (c) => {
   return ok(c, result);
 });
 
+// ─── Track your order (public lookup) ──────────────────────────────────────
+
+const orderLookupBodySchema = z.object({
+  reference: z.string().trim().min(1).max(64).openapi({ description: 'Order number ("#1001") or order id' }),
+  phone: z.string().trim().min(1).max(32).openapi({ description: "Phone number used for the order" }),
+}).strict();
+
+const sendOrderLookupOtpRoute = createRoute({
+  method: "post",
+  path: "/lookup/send-otp",
+  tags: ["Orders"],
+  summary: "Send a code to the contact saved on an order (never reveals whether it matched)",
+  request: {
+    body: { required: true, content: { "application/json": { schema: orderLookupBodySchema } } },
+  },
+  responses: {
+    200: {
+      description: "Request accepted",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({ message: z.string(), resendAfterSeconds: z.number().int() })),
+        },
+      },
+    },
+    503: serviceUnavailableResponse,
+    ...errorResponses,
+  },
+});
+
+app.openapi(sendOrderLookupOtpRoute, async (c) => {
+  const db = c.get("db");
+  const body = c.req.valid("json");
+  const env = c.env as unknown as Record<string, unknown>;
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+
+  const result = await sendOrderLookupOtp(db, {
+    reference: body.reference,
+    phone: body.phone,
+    ip: getTrustedClientIp(c),
+    emailEnv: env,
+    encryptionKey: getCredentialEncryptionKey(env),
+    credentialEncryptionKey: getCredentialEncryptionKey(env),
+  });
+  if (result.queuePayload) {
+    try {
+      await c.env.JOBS_QUEUE.send(result.queuePayload);
+    } catch (error) {
+      if (result.challengeKey && result.deliveryKey) {
+        await deleteOrderPaymentRecoveryChallenge(db, {
+          challengeKey: result.challengeKey,
+          deliveryKey: result.deliveryKey,
+        }).catch(() => undefined);
+      }
+      console.error("[Orders] Failed to enqueue order lookup code:", error instanceof Error ? error.name : typeof error);
+      throw new ServiceUnavailableError("We couldn't send the code. Please try again.");
+    }
+  }
+  return ok(c, { message: result.message, resendAfterSeconds: result.resendAfterSeconds });
+});
+
+const verifyOrderLookupOtpRoute = createRoute({
+  method: "post",
+  path: "/lookup/verify-otp",
+  tags: ["Orders"],
+  summary: "Verify an order lookup code and issue a private receipt proof",
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: orderLookupBodySchema.extend({ code: z.string().trim().min(4).max(12) }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Verified",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            orderId: z.string(),
+            receiptToken: z.string(),
+            expiresAt: z.number(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+app.use("/lookup/verify-otp", authMiddleware);
+app.openapi(verifyOrderLookupOtpRoute, async (c) => {
+  const body = c.req.valid("json");
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  const result = await verifyOrderLookupOtp(c.get("db"), {
+    reference: body.reference,
+    phone: body.phone,
+    code: body.code,
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+  });
+  return ok(c, result);
+});
+
 const getOrderReceiptRoute = createRoute({
   method: "get",
   path: "/receipt/{id}",
@@ -793,8 +914,12 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   const order = await db
     .select({
       id: orders.id,
+      orderNumber: orders.orderNumber,
       customerId: orders.customerId,
       customerName: orders.customerName,
+      customerPhone: orders.customerPhone,
+      customerEmail: orders.customerEmail,
+      accountOwnerCustomerId: orders.accountOwnerCustomerId,
       shippingAddress: orders.shippingAddress,
       ...orderMoneySelection(orders),
       currencyCode: orders.currencyCode,
@@ -855,7 +980,11 @@ app.openapi(getOrderReceiptRoute, async (c) => {
   return ok(c, {
     order: {
       id: order.id,
+      orderNumber: order.orderNumber ?? null,
       customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      customerEmail: order.customerEmail,
+      accountLinked: order.accountOwnerCustomerId !== null,
       shippingAddress: order.shippingAddress,
       totalAmount: money.totalAmount,
       shippingCharge: money.shippingCharge,
@@ -901,6 +1030,50 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       supportRequestIntro: supportState.supportRequestIntro,
     },
   });
+});
+
+const createOwnerReceiptProofRoute = createRoute({
+  method: "post",
+  path: "/receipt/{id}/owner-proof",
+  tags: ["Orders"],
+  summary: "Issue a private receipt proof to the signed-in account that owns the order",
+  request: {
+    params: z.object({ id: z.string().trim().min(1).max(128) }),
+    headers: z.object({ [CUSTOMER_SESSION_HEADER]: z.string().optional() }),
+  },
+  responses: {
+    200: {
+      description: "Receipt proof for the account owner",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            orderId: z.string(),
+            receiptToken: z.string(),
+            expiresAt: z.number(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+// Storefront-server only (service JWT): the storefront keeps the proof in its
+// httpOnly receipt cookie. Ownership is the account order page's rule.
+app.use("/receipt/:id/owner-proof", authMiddleware);
+app.openapi(createOwnerReceiptProofRoute, async (c) => {
+  const db = c.get("db");
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  const sessionToken = getCustomerSessionTokenFromRequest(c);
+  const session = sessionToken
+    ? await getCustomerBySession(db, sessionToken, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))
+    : null;
+  if (!session?.customerId) throw new UnauthorizedError("Sign in to open this receipt.");
+
+  return ok(c, await issueAccountOwnerReceipt(db, {
+    customerId: session.customerId,
+    orderId: c.req.valid("param").id,
+  }));
 });
 
 const createReceiptSupportRequestRoute = createRoute({
@@ -1053,8 +1226,14 @@ const taxQuoteResponseSchema = z.object({
   totalMinor: z.number().int(),
   totalAmount: z.number(),
   shippingMethod: storefrontShippingMethodSnapshotSchema,
-  discountOffers: z.array(z.string().max(160)).max(3).openapi({
-    description: "Automatic Buy X get Y discounts the buyer has earned but not claimed: the free item is not in the cart yet.",
+  discounts: z.array(appliedDiscountLineSchema).openapi({
+    description: "One line per applied discount (automatic and code), with its own amount.",
+  }),
+  offers: z.array(discountOfferSchema).max(3).openapi({
+    description: "Automatic Buy X get Y discounts the buyer has earned but not claimed: the items to get are not in the cart yet.",
+  }),
+  rejectedCodes: z.array(rejectedDiscountCodeSchema).openapi({
+    description: "Submitted codes that do not apply right now, with the reason. They add nothing to the totals.",
   }),
   items: z.array(z.object({
     cartKey: z.string().nullable().optional(),
@@ -1088,7 +1267,7 @@ const taxQuoteRoute = createRoute({
             zone: z.string().min(1).max(180),
             area: z.string().max(180).optional().nullable(),
             shippingMethodId: z.string().min(1).max(180),
-            discountCode: z.string().trim().max(100).optional().nullable(),
+            discountCodes: discountCodesSchema,
             customerPhone: phoneNumberSchema.optional().nullable(),
           }).strict(),
         },
@@ -1203,7 +1382,7 @@ type TaxQuoteDeliveryResult = Awaited<ReturnType<typeof validateStorefrontDelive
 async function resolveAuthoritativeTaxQuote(
   db: Database,
   input: {
-    discountCode?: string | null;
+    discountCodes: string[];
     customerPhone?: string | null;
     customerId?: string | null;
   },
@@ -1211,14 +1390,10 @@ async function resolveAuthoritativeTaxQuote(
   delivery: TaxQuoteDeliveryResult,
   destination: { city: string; zone: string; area?: string | null },
   currencyCode: string,
-): Promise<{ quote: TaxQuote; offers: string[] }> {
-  const discountCode = input.discountCode?.trim() || null;
-  if (discountCode && !input.customerPhone) {
-    throw new ValidationError("A customer phone number is required to quote this discount.");
-  }
+): Promise<{ quote: TaxQuote; discount: StorefrontDiscountQuote }> {
   const decimalPlaces = getDecimalPlaces(currencyCode);
   const discount = await quoteStorefrontDiscount(db, {
-    code: discountCode,
+    codes: input.discountCodes,
     customerId: input.customerId,
     customerPhone: input.customerPhone,
     cart: {
@@ -1255,14 +1430,14 @@ async function resolveAuthoritativeTaxQuote(
     promotionDiscountAllocation: discount.taxAllocation,
     currency: { code: currencyCode, decimalPlaces },
   });
-  return { quote, offers: discount.offers };
+  return { quote, discount };
 }
 
 app.openapi(taxQuoteRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
   const customerSessionToken = getCustomerSessionTokenFromRequest(c);
-  const sessionCustomer = customerSessionToken && data.discountCode?.trim()
+  const sessionCustomer = customerSessionToken && data.discountCodes.length > 0
     ? await getCustomerBySession(
         db,
         customerSessionToken,
@@ -1285,10 +1460,10 @@ app.openapi(taxQuoteRoute, async (c) => {
     area: data.area,
     shippingMethodId: data.shippingMethodId,
   }, cartValidation);
-  const { quote, offers } = await resolveAuthoritativeTaxQuote(
+  const { quote, discount } = await resolveAuthoritativeTaxQuote(
     db,
     {
-      discountCode: data.discountCode,
+      discountCodes: data.discountCodes,
       customerPhone: data.customerPhone,
       customerId: sessionCustomer?.customerId ?? null,
     },
@@ -1321,7 +1496,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     totalMinor: quote.totalMinor,
     totalAmount: toAmount(quote.totalMinor),
     shippingMethod: delivery.shippingMethod,
-    discountOffers: offers,
+    ...presentStorefrontDiscountQuote(discount, quote.decimalPlaces),
     items: cartValidation.items.map((item) => ({
       cartKey: item.cartKey ?? null,
       productId: item.productId,
@@ -1378,11 +1553,7 @@ const createOrderSchema = z.object({
       variantLabel: z.string().optional().nullable()
     }),
   ).min(1, "At least one item is required"),
-  discountAmount: z
-    .number()
-    .min(0, "Discount must be greater than or equal to 0")
-    .nullable(),
-  discountCode: z.string().optional().nullable(),
+  discountCodes: discountCodesSchema,
   shippingCharge: z
     .number()
     .min(0, "Shipping charge must be greater than or equal to 0"),

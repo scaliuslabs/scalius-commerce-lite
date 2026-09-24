@@ -23,6 +23,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
   patchApiV1AdminInventoryAlerts: vi.fn(),
   postApiV1AdminInventoryByVariantIdAdjust: vi.fn(),
   postApiV1AdminInventoryStockSet: vi.fn(),
+  putApiV1AdminInventoryByVariantIdAlertLevel: vi.fn(),
   getApiV1AdminInventory: async ({ query }: { query: { section: string } }) => query.section === "alerts"
     ? {
         alerts: [{
@@ -90,7 +91,7 @@ describe("inventory actions follow stock permissions", () => {
 
   it.each([true, false])("alerts: Mark as seen is shown only with stock permission (%s)", async (canEdit) => {
     mocks.canEdit = canEdit;
-    await render(<AlertsTab filters={{ q: "", alert: "active" }} onFiltersChange={() => undefined} onReview={() => undefined} />);
+    await render(<AlertsTab filters={{ q: "", alert: "active" }} onFiltersChange={() => undefined} onReview={() => undefined} onSetAlertLevels={() => undefined} />);
     expect(buttonNamed(review)).toBeDefined();
     const button = buttonNamed(markSeen);
     if (canEdit) {

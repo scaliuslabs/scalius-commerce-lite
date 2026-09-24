@@ -1,7 +1,7 @@
 import Currency from "currency.js";
 
 import { getDecimalPlaces } from "./currency";
-import { calculateDiscountedPriceAtPrecision } from "./price-utils";
+import { calculateDiscountedPrice } from "./price-utils";
 
 export type CatalogFeedDiscountType = "percentage" | "flat" | null | undefined;
 
@@ -43,14 +43,12 @@ export function calculateCatalogFeedDiscountedAmount(
   discountAmount: number | null | undefined,
   currencyCode: string,
 ): number {
-  const calculationPrecision = getDecimalPlaces(currencyCode);
-  const normalizedDiscountType = normalizeCatalogFeedDiscountType(discountType);
-  const effectivePrice = calculateDiscountedPriceAtPrecision(
+  const effectivePrice = calculateDiscountedPrice(
     price,
-    normalizedDiscountType,
+    normalizeCatalogFeedDiscountType(discountType),
     discountPercentage,
     discountAmount,
-    calculationPrecision,
+    currencyCode,
   );
 
   return quantizeCatalogFeedAmount(effectivePrice, currencyCode);

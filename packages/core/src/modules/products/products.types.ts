@@ -10,17 +10,37 @@ import type {
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { ProductMediaProjection } from "./products.media";
 import type { BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
+import {
+    MAX_PRODUCT_PRICE,
+    MAX_SKU_STOCK,
+    MAX_SKU_WEIGHT_GRAMS,
+} from "@scalius/shared/product-options";
 
 // ─────────────────────────────────────────
 // Variant Validation Schemas
 // ─────────────────────────────────────────
 
-export const MAX_PRODUCT_PRICE = 1_000_000_000_000;
+export { MAX_PRODUCT_PRICE, MAX_SKU_STOCK, MAX_SKU_WEIGHT_GRAMS };
 
-const variantPriceSchema = z
+/** A catalog price or amount in major units, inside the supported range. */
+export const catalogMoneySchema = z
     .number()
-    .min(0, "Price must be greater than or equal to 0")
-    .max(MAX_PRODUCT_PRICE, `Price must be at most ${MAX_PRODUCT_PRICE}`);
+    .min(0, "Enter 0 or more.")
+    .max(MAX_PRODUCT_PRICE, `Enter ${MAX_PRODUCT_PRICE} or less.`);
+
+/** An on-hand quantity. */
+export const skuStockSchema = z.number()
+    .int("Enter a whole number.")
+    .min(0, "Enter 0 or more.")
+    .max(MAX_SKU_STOCK, `Enter ${MAX_SKU_STOCK} or less.`);
+
+/** A SKU weight in grams. */
+export const skuWeightSchema = z.number()
+    .min(0, "Enter 0 or more.")
+    .max(MAX_SKU_WEIGHT_GRAMS, `Enter ${MAX_SKU_WEIGHT_GRAMS} or less.`)
+    .describe("Weight in grams.");
+
+const variantPriceSchema = catalogMoneySchema;
 
 export const expectedProductAggregateRevisionSchema = z
     .number()
@@ -32,18 +52,16 @@ const variantMutationSchema = z.object({
     imageId: z.string().trim().min(10).max(80)
         .regex(/^pmed_[A-Za-z0-9_-]+$/u)
         .nullable(),
-    weight: z.number().min(0).nullable().describe("Weight in grams."),
-    sku: z.string().min(3, "SKU must be at least 3 characters"),
+    weight: skuWeightSchema.nullable(),
+    sku: z.string().min(3, "SKU must be at least 3 characters").max(100),
     price: variantPriceSchema,
-    stock: z.number()
-        .int("Stock must be a whole number")
-        .min(0, "Stock must be greater than or equal to 0"),
+    stock: skuStockSchema,
     trackInventory: z.boolean().optional(),
     barcode: z.string().max(50).optional().nullable(),
     barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "code128", "custom"]).optional().nullable(),
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullable().optional(),
-    discountAmount: z.number().min(0).nullable().optional(),
+    discountAmount: catalogMoneySchema.nullable().optional(),
 });
 
 export const createVariantSchema = variantMutationSchema.extend({
@@ -109,6 +127,9 @@ export interface ProductListItem {
         name: string;
     };
     variantCount: number;
+    onHand: number | null;
+    hasVariantDiscount: boolean;
+    hasStockHistory: boolean;
     mediaCount: number;
     primaryImage: string | null;
     sku?: string;
@@ -119,12 +140,14 @@ export interface StorefrontProductFilterInput {
     search?: string;
     page?: number;
     limit?: number;
-    sort?: "newest" | "price-asc" | "price-desc" | "name-asc" | "name-desc" | "discount";
+    /** Defaults to "relevance" when `search` is set, otherwise "newest". */
+    sort?: "relevance" | "newest" | "price-asc" | "price-desc" | "name-asc" | "name-desc" | "discount";
     minPrice?: number;
     maxPrice?: number;
     freeDelivery?: "true" | "false";
     hasDiscount?: "true" | "false";
     ids?: string;
+    /** Filterable attributes by slug, and product option axes as `option.<axis>` (e.g. `option.size`). */
     attributeFilters?: Array<{
         id: string;
         name: string;

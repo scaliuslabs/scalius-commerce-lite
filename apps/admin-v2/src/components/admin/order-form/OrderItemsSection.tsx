@@ -1,35 +1,34 @@
 import React from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { Loader2, X } from "lucide-react";
+import type { getApiV1AdminOrdersCatalogProducts } from "@scalius/api-client/sdk";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useOrderForm } from "./OrderFormContext";
 import { ProductSearch } from "./ProductSearch";
 import { ItemSelection } from "./ItemSelection";
 import { OrderItemsTable } from "./OrderItemsTable";
 import { productVariantsQueryOptions } from "@/lib/api-query-options/products";
 import { orderCatalogProductsQueryOptions } from "@/lib/api-query-options/orders";
+import type { ApiResult } from "@/lib/api";
 import { useDebounce } from "@/hooks/use-debounce";
-import type { ProductListItemDto } from "@/lib/api-query-options/products";
 import type { Product } from "./types";
 import {
   exceededStockMessage,
   remainingStockForNewOrderLine,
 } from "./manual-order-stock";
-import { discountedUnitPrice } from "./order-item-presentation";
+import { discountedUnitPrice, orderItemVariantLabel } from "./order-item-presentation";
 import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
 
 const ORDER_CATALOG_PAGE_SIZE = 10;
 const ORDER_CATALOG_SEARCH_DEBOUNCE_MS = 300;
 type ProductVariant = Product["variants"][number];
+type CatalogProduct = ApiResult<typeof getApiV1AdminOrdersCatalogProducts>["products"][number];
 type RawProductVariant = Omit<ProductVariant, "weight"> & {
   weight: number | string | null;
   deletedAt?: unknown;
 };
-
-interface ProductVariantsResult {
-  variants?: RawProductVariant[];
-}
 
 function normalizeVariant(variant: RawProductVariant): ProductVariant {
   return {
@@ -53,12 +52,12 @@ function normalizeVariant(variant: RawProductVariant): ProductVariant {
 }
 
 function normalizeVariants(result: unknown): ProductVariant[] {
-  const variants = (result as ProductVariantsResult | null)?.variants;
+  const variants = (result as { variants?: RawProductVariant[] } | null)?.variants;
   if (!Array.isArray(variants)) return [];
   return variants.filter((variant) => !variant.deletedAt).map(normalizeVariant);
 }
 
-function normalizeCatalogProduct(product: ProductListItemDto): Product {
+function normalizeCatalogProduct(product: CatalogProduct): Product {
   return {
     id: product.id,
     name: product.name,
@@ -67,6 +66,8 @@ function normalizeCatalogProduct(product: ProductListItemDto): Product {
     discountType: product.discountType ?? null,
     discountAmount: product.discountAmount ?? null,
     variantCount: product.variantCount ?? 0,
+    primaryImage: product.primaryImage,
+    availableStock: product.availableStock,
     variants: [],
   };
 }
@@ -108,15 +109,15 @@ export function OrderItemsSection() {
   const [selectedVariant, setSelectedVariant] = React.useState<string>("");
   const [isLoadingVariants, setIsLoadingVariants] = React.useState(false);
   const [quantity, setQuantity] = React.useState<number>(1);
-  // Lazy-loaded rows kept beside the form lines so an added line shows its
-  // product name and options even when the route did not load them.
+  // Why the last pick couldn't be added (out of stock, variants failed).
+  const [pickerMessage, setPickerMessage] = React.useState<string | null>(null);
+  // Loaded variants, kept so quantity edits on added lines respect their stock.
   const [resolvedVariantsById, setResolvedVariantsById] = React.useState<
     Record<string, ProductVariant>
   >({});
-  const [resolvedProductsById, setResolvedProductsById] = React.useState<
-    Record<string, Product>
-  >({});
   const variantLoadTokenRef = React.useRef(0);
+  const itemsError = form.formState.errors.items;
+  const itemsErrorMessage = itemsError?.message ?? itemsError?.root?.message;
 
   const clearProductSelection = () => {
     variantLoadTokenRef.current += 1;
@@ -124,7 +125,7 @@ export function OrderItemsSection() {
     setSelectedProduct(null);
     setSelectedVariant("");
     setQuantity(1);
-    refs.productSearchButtonRef.current?.focus();
+    refs.productSearchInputRef.current?.focus();
   };
 
   /** Adds one line unless it would exceed the tracked stock. */
@@ -134,10 +135,10 @@ export function OrderItemsSection() {
       ? null
       : remainingStockForNewOrderLine(variant, currentItems);
     if (remainingStock !== null && lineQuantity > remainingStock) {
-      toast.error(exceededStockMessage(remainingStock));
+      setPickerMessage(`${product.name}: ${exceededStockMessage(remainingStock)}`);
       return false;
     }
-    setResolvedProductsById((current) => ({ ...current, [product.id]: product }));
+    setPickerMessage(null);
     setResolvedVariantsById((current) => ({ ...current, [variant.id]: variant }));
     form.setValue("items", [
       ...currentItems,
@@ -146,12 +147,19 @@ export function OrderItemsSection() {
         variantId: variant.id,
         quantity: lineQuantity,
         price: discountedUnitPrice(product, variant),
+        name: product.name,
+        variantLabel: orderItemVariantLabel(variant),
       },
     ], { shouldDirty: true, shouldValidate: true });
     return true;
   };
 
   const showVariants = (product: Product, variants: ProductVariant[]) => {
+    if (variants.length === 0) {
+      setPickerMessage(`${product.name}: ${t("noActiveVariant")}`);
+      clearProductSelection();
+      return;
+    }
     // One variant: add it straight away at quantity 1, as Shopify does.
     if (variants.length === 1) {
       addLine(product, variants[0]!, 1);
@@ -167,6 +175,7 @@ export function OrderItemsSection() {
   const selectProduct = (product: Product) => {
     const loadToken = variantLoadTokenRef.current + 1;
     variantLoadTokenRef.current = loadToken;
+    setPickerMessage(null);
     const knownVariants = product.variants || [];
     if (knownVariants.length > 0 || (product.variantCount ?? 0) === 0) {
       showVariants(product, knownVariants);
@@ -182,10 +191,9 @@ export function OrderItemsSection() {
         setIsLoadingVariants(false);
         showVariants(product, normalizeVariants(result));
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (variantLoadTokenRef.current !== loadToken) return;
-        console.error("Error loading product variants:", error);
-        toast.error(t("variantsFailed"));
+        setPickerMessage(t("variantsFailed"));
         clearProductSelection();
       });
   };
@@ -194,7 +202,7 @@ export function OrderItemsSection() {
     if (!selectedProduct) return;
     const variant = selectedProduct.variants.find((v) => v.id === selectedVariant);
     if (!variant) {
-      toast.error(t(selectedProduct.variants.length === 0 ? "noActiveVariant" : "chooseVariantFirst"));
+      setPickerMessage(t("chooseVariantFirst"));
       return;
     }
     if (addLine(selectedProduct, variant, quantity)) clearProductSelection();
@@ -206,39 +214,62 @@ export function OrderItemsSection() {
         <CardTitle>{t("products")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <ProductSearch
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          displayedProducts={displayedProducts}
-          hasMore={Boolean(productQuery.hasNextPage)}
-          loadMoreProducts={() => void productQuery.fetchNextPage()}
-          totalProducts={totalProducts}
-          isLoading={isInitialProductLoading}
-          isError={isInitialProductError}
-          isLoadingMore={productQuery.isFetchingNextPage}
-          isLoadMoreError={productQuery.isFetchNextPageError}
-          retry={() => void productQuery.refetch()}
-          selectedProduct={selectedProduct}
-          isLoadingVariants={isLoadingVariants}
-          selectProduct={selectProduct}
-          clearProductSelection={clearProductSelection}
-        />
-
-        {selectedProduct && !isLoadingVariants ? (
-          <ItemSelection
-            selectedProduct={selectedProduct}
-            selectedVariant={selectedVariant}
-            setSelectedVariant={setSelectedVariant}
-            quantity={quantity}
-            setQuantity={setQuantity}
-            handleAddItem={handleAddItem}
+        <div className="space-y-2">
+          <ProductSearch
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            displayedProducts={displayedProducts}
+            hasMore={Boolean(productQuery.hasNextPage)}
+            loadMoreProducts={() => void productQuery.fetchNextPage()}
+            totalProducts={totalProducts}
+            isLoading={isInitialProductLoading}
+            isError={isInitialProductError}
+            isLoadingMore={productQuery.isFetchingNextPage}
+            isLoadMoreError={productQuery.isFetchNextPageError}
+            retry={() => void productQuery.refetch()}
+            selectProduct={selectProduct}
+            invalid={Boolean(itemsErrorMessage || pickerMessage)}
           />
+          {pickerMessage || itemsErrorMessage ? (
+            <p className="text-body text-destructive" role="alert">
+              {pickerMessage ?? itemsErrorMessage}
+            </p>
+          ) : null}
+        </div>
+
+        {selectedProduct ? (
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex items-center gap-2">
+              <p className="min-w-0 flex-1 truncate text-body font-medium">{selectedProduct.name}</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={clearProductSelection}
+                aria-label={t("clearProduct")}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+            {isLoadingVariants ? (
+              <p className="flex items-center gap-2 text-body text-muted-foreground" role="status">
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                {t("loadingVariants")}
+              </p>
+            ) : (
+              <ItemSelection
+                selectedProduct={selectedProduct}
+                selectedVariant={selectedVariant}
+                setSelectedVariant={setSelectedVariant}
+                quantity={quantity}
+                setQuantity={setQuantity}
+                handleAddItem={handleAddItem}
+              />
+            )}
+          </div>
         ) : null}
 
-        <OrderItemsTable
-          resolvedProductsById={resolvedProductsById}
-          resolvedVariantsById={resolvedVariantsById}
-        />
+        <OrderItemsTable resolvedVariantsById={resolvedVariantsById} />
       </CardContent>
     </Card>
   );

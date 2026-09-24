@@ -221,10 +221,13 @@ describe("performIdentityHandoff", () => {
   });
 
   it("a demoting handoff evicts the cached permission set the admin guard reads", async () => {
+    // Refunds need "View orders"; a permission without its prerequisite grants nothing.
     sqlite.exec(`
       INSERT INTO permissions (id, name, display_name, resource, action, category)
-        VALUES ('perm_refund', 'orders.refund', 'Refund orders', 'orders', 'refund', 'orders');
-      INSERT INTO role_permissions (id, role_id, permission_id) VALUES ('rp_1', 'role_manager', 'perm_refund');
+        VALUES ('perm_view', 'orders.view', 'View orders', 'orders', 'view', 'orders'),
+               ('perm_refund', 'orders.refund', 'Refund orders', 'orders', 'refund', 'orders');
+      INSERT INTO role_permissions (id, role_id, permission_id)
+        VALUES ('rp_0', 'role_manager', 'perm_view'), ('rp_1', 'role_manager', 'perm_refund');
     `);
     // One KV namespace: the handoff plugin and admin-auth both receive env.CACHE.
     const store = new Map<string, string>();
@@ -238,7 +241,7 @@ describe("performIdentityHandoff", () => {
     } as unknown as KVNamespace;
 
     const { userId } = await performIdentityHandoff(db, { claims: await claims(), config: CONFIG, request: REQUEST, now: () => NOW });
-    expect([...await getUserPermissions(db, userId, cache)]).toEqual(["orders.refund"]);
+    expect([...await getUserPermissions(db, userId, cache)].sort()).toEqual(["orders.refund", "orders.view"]);
 
     await performIdentityHandoff(db, {
       claims: await claims({ role: "sales_rep" }),

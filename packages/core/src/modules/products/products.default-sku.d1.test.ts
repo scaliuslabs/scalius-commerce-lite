@@ -116,10 +116,10 @@ describe("simple product default SKU inventory on D1 storage", () => {
     expect(movementQuantities(id)).toEqual([7]);
   });
 
-  it("keeps the untracked generated SKU when no inventory is sent", async () => {
+  it("generates a readable untracked SKU from the title when no inventory is sent", async () => {
     const { id } = await createProduct(db, createProductSchema.parse(productInput));
 
-    expect(defaultSku(id)).toEqual({ sku: `SIMPLE-${id}`, stock: 0, stock_version: 1, track_inventory: 0 });
+    expect(defaultSku(id)).toEqual({ sku: "SIMPLE-MUG", stock: 0, stock_version: 1, track_inventory: 0 });
     expect(movementQuantities(id)).toEqual([]);
   });
 

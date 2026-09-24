@@ -74,7 +74,7 @@ describe("ChangePasswordForm", () => {
   });
 
   it("marks a wrong current password on its field and keeps what was typed", async () => {
-    changePassword.mockRejectedValueOnce(new AdminApiResponseError("Current password is incorrect", 400));
+    changePassword.mockRejectedValueOnce(new AdminApiResponseError("Current password is incorrect", 400, "PASSWORD_INCORRECT"));
     type("current", CURRENT);
     type("next", NEXT);
     type("confirm", NEXT);
@@ -83,6 +83,26 @@ describe("ChangePasswordForm", () => {
     expect(input("current").getAttribute("aria-invalid")).toBe("true");
     expect(host.textContent).toContain("Your current password is wrong.");
     expect(input("next").value).toBe(NEXT);
+  });
+
+  it("refuses the current password as the new one before calling the API", async () => {
+    type("current", CURRENT);
+    type("next", CURRENT);
+    type("confirm", CURRENT);
+    await submit();
+    expect(host.textContent).toContain("Choose a password you haven't used here.");
+    expect(input("next").getAttribute("aria-invalid")).toBe("true");
+    expect(changePassword).not.toHaveBeenCalled();
+  });
+
+  it("shows a plain sentence, never the status, when the server fails", async () => {
+    changePassword.mockRejectedValueOnce(new AdminApiResponseError("Internal Server Error", 500));
+    type("current", CURRENT);
+    type("next", NEXT);
+    type("confirm", NEXT);
+    await submit();
+    expect(host.textContent).toContain("Something went wrong on our side. Try again in a moment.");
+    expect(host.textContent).not.toContain("Internal Server Error");
   });
 
   it("sends the passwords only in the request body and clears them after saving", async () => {

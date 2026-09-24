@@ -1,15 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
-import { permissionMessages } from "~/i18n/settings-users";
+import { builtInRoleMessages, permissionMessages } from "~/i18n/settings-users";
 import {
+  BUILT_IN_ROLES,
   PERMISSION_GROUPS,
   accessChanges,
+  builtInRole,
+  canGrantRole,
   effectivePermissions,
   getStaffStatus,
+  lockedReason,
   roleKey,
   sameAccess,
+  setAccessPermissions,
   setPermission,
   staffActions,
+  togglePermissions,
   type StaffAccess,
 } from "./staff-access";
 
@@ -29,7 +35,7 @@ describe("staff status", () => {
 });
 
 describe("staff actions", () => {
-  const nothing = { editAccess: false, resendInvite: false, cancelInvite: false, restore: false, suspend: false };
+  const nothing = { editAccess: false, resendInvite: false, cancelInvite: false, restore: false, suspend: false, remove: false };
 
   it("never lets anyone change their own access or the store owner's", () => {
     expect(staffActions({ id: "me", isSuperAdmin: false, status: "ready" }, viewer)).toEqual(nothing);
@@ -37,22 +43,66 @@ describe("staff actions", () => {
   });
 
   it("suspends signed-up staff, cancels invites and restores suspended staff", () => {
-    expect(staffActions({ id: "a", isSuperAdmin: false, status: "ready" }, viewer)).toEqual({ ...nothing, editAccess: true, suspend: true });
+    expect(staffActions({ id: "a", isSuperAdmin: false, status: "ready" }, viewer)).toEqual({ ...nothing, editAccess: true, suspend: true, remove: true });
     expect(staffActions({ id: "a", isSuperAdmin: false, status: "invite_expired" }, viewer)).toEqual({
       ...nothing,
       editAccess: true,
       resendInvite: true,
       cancelInvite: true,
     });
-    expect(staffActions({ id: "a", isSuperAdmin: false, status: "suspended" }, viewer)).toEqual({ ...nothing, editAccess: true, restore: true });
-    expect(staffActions({ id: "a", isSuperAdmin: false, status: "password_setup" }, viewer)).toEqual({ ...nothing, editAccess: true });
+    expect(staffActions({ id: "a", isSuperAdmin: false, status: "suspended" }, viewer)).toEqual({ ...nothing, editAccess: true, restore: true, remove: true });
+    expect(staffActions({ id: "a", isSuperAdmin: false, status: "password_setup" }, viewer)).toEqual({ ...nothing, editAccess: true, remove: true });
   });
 
   it("splits staff management from role management", () => {
     const target = { id: "a", isSuperAdmin: false, status: "ready" as const };
-    expect(staffActions(target, { ...viewer, canManageRoles: false })).toEqual({ ...nothing, suspend: true });
+    expect(staffActions(target, { ...viewer, canManageRoles: false })).toEqual({ ...nothing, suspend: true, remove: true });
     expect(staffActions(target, { ...viewer, canManageStaff: false })).toEqual({ ...nothing, editAccess: true });
     expect(staffActions(target, { id: "me", canManageStaff: false, canManageRoles: false })).toEqual(nothing);
+  });
+
+  it("explains only the rows that are fixed for everyone", () => {
+    expect(lockedReason({ id: "me", isSuperAdmin: false }, viewer)).toBe("self");
+    expect(lockedReason({ id: "owner", isSuperAdmin: true }, viewer)).toBe("owner");
+    expect(lockedReason({ id: "a", isSuperAdmin: false }, viewer)).toBeNull();
+  });
+});
+
+describe("permission prerequisites in the checklist", () => {
+  it("ticks what a permission needs and unticks what depends on it", () => {
+    const edit = togglePermissions(new Set(), [PERMISSIONS.PRODUCTS_EDIT], true);
+    expect(edit).toEqual(new Set([PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_VIEW]));
+    expect(togglePermissions(edit, [PERMISSIONS.PRODUCTS_VIEW], false)).toEqual(new Set());
+    expect(togglePermissions(edit, [PERMISSIONS.PRODUCTS_EDIT], false)).toEqual(new Set([PERMISSIONS.PRODUCTS_VIEW]));
+  });
+
+  it("selects a whole section with its prerequisites", () => {
+    const home = PERMISSION_GROUPS.find((group) => group.group === "home")!.permissions;
+    expect(togglePermissions(new Set(), home, true)).toEqual(new Set(home));
+    expect(togglePermissions(new Set(home), home, false)).toEqual(new Set());
+  });
+});
+
+describe("who can hand out a role", () => {
+  const viewerPermissions = new Set<string>([PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_EDIT]);
+
+  it("follows the server: only access you have, and the owner role only from the owner", () => {
+    const orders = { name: "orders", permissions: [PERMISSIONS.ORDERS_VIEW] };
+    const manager = { name: "manager", permissions: [PERMISSIONS.ORDERS_VIEW, PERMISSIONS.ORDERS_REFUND] };
+    const owner = { name: "super_admin", permissions: [] };
+    expect(canGrantRole(orders, { isOwner: false, permissions: viewerPermissions })).toBe(true);
+    expect(canGrantRole(manager, { isOwner: false, permissions: viewerPermissions })).toBe(false);
+    expect(canGrantRole(owner, { isOwner: false, permissions: viewerPermissions })).toBe(false);
+    expect(canGrantRole(manager, { isOwner: true, permissions: new Set() })).toBe(true);
+  });
+
+  it("names every built-in role in both languages and leaves custom names alone", () => {
+    for (const role of BUILT_IN_ROLES) {
+      expect(builtInRoleMessages.en[role]).toBeTruthy();
+      expect(builtInRoleMessages.bn[role]).toBeTruthy();
+    }
+    expect(builtInRole("sales_rep")).toBe("sales_rep");
+    expect(builtInRole("packers")).toBeNull();
   });
 });
 
@@ -71,6 +121,18 @@ describe("staff access edits", () => {
     expect([...effectivePermissions(granted, roles)].sort()).toEqual([PERMISSIONS.ORDERS_VIEW, PERMISSIONS.PRODUCTS_VIEW].sort());
     // Ticking back to what the role gives clears the override.
     expect(sameAccess(setPermission(denied, roles, PERMISSIONS.ORDERS_EDIT, true), saved)).toBe(true);
+  });
+
+  it("treats a denied view as denying what depends on it, like the server", () => {
+    const denied = setPermission(saved, roles, PERMISSIONS.ORDERS_VIEW, false);
+    expect(effectivePermissions(denied, roles)).toEqual(new Set());
+  });
+
+  it("turns a whole new permission set into the smallest overrides", () => {
+    const next = new Set<string>([PERMISSIONS.ORDERS_VIEW, PERMISSIONS.PRODUCTS_VIEW]);
+    const draft = setAccessPermissions(saved, roles, next);
+    expect(draft).toEqual({ roleIds: ["r_orders"], grants: [PERMISSIONS.PRODUCTS_VIEW], denials: [PERMISSIONS.ORDERS_EDIT] });
+    expect(effectivePermissions(draft, roles)).toEqual(next);
   });
 
   it("adds roles before removing any, then sets and clears overrides", () => {

@@ -46,10 +46,8 @@ vi.mock(".", () => ({
   useMediaUpload: () => ({
     queue: [],
     uploadFiles: vi.fn(),
-    pause: vi.fn(),
-    resume: vi.fn(),
-    cancel: vi.fn(),
-    clearFinished: vi.fn(),
+    retry: vi.fn(),
+    dismiss: vi.fn(),
   }),
 }));
 
