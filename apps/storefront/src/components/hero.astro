@@ -1,44 +1,226 @@
 ---
 // src/components/hero.astro
-// Homepage banners per viewport; phones fall back to the desktop banners.
+// The homepage hero in its layout (SYNTHESIS.md 2.3), from the merchant's
+// banners; phones fall back to the desktop banners.
+// - contained-banners: today's contained carousel (Star Tech), with up to
+//   two side banners beside it when the section names them.
+// - app-panel: the contained carousel with the store's delivery facts
+//   beside it on computers (Daraz's panel, without an app to push).
+// - full-bleed: edge to edge at 2.6:1 on computers, 5:3 on phones (Fabrilife).
+// - full-screen: the first screen on phones (Aarong), tall on computers.
+// - split: the first two banners side by side on computers (Dawn).
+// - story-cards: a scroll-snap rail of portrait cards (Amazon).
+// Only the first banner is the LCP image: high priority, and preloaded by
+// pages/index.astro from heroLeadCandidates() when the hero leads.
 import CustomCarousel from "./sliders/CustomCarousel.astro";
+import StoryCards from "./sliders/StoryCards.astro";
+import HeroPicture from "./sliders/HeroPicture.astro";
 import { HERO_SLIDE_PRESENTATION } from "@scalius/shared/hero-slider";
-import type { ResolvedHomepageHero } from "@/lib/homepage-hero";
+import type { ResolvedHomepageHero, StorefrontHeroLayout } from "@/lib/homepage-hero";
+import type { HomepageMediaAsset } from "@/lib/api/storefront";
+import type { DeliveryFact } from "@/lib/delivery-facts";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+
+export interface HeroSideBanner {
+  asset: HomepageMediaAsset;
+  alt: string;
+  href: string | null;
+}
 
 interface Props {
   hero: ResolvedHomepageHero;
   /** The banner leads the page (the LCP): its first slide gets high priority. */
   priority?: boolean;
+  layout?: StorefrontHeroLayout;
+  /** contained-banners: up to two images beside the banner. */
+  sideBanners?: HeroSideBanner[];
+  /** app-panel: the facts listed beside the banner. */
+  panelFacts?: DeliveryFact[];
 }
 
-const { hero, priority = true } = Astro.props;
+const {
+  hero,
+  priority = true,
+  layout = "contained-banners",
+  sideBanners = [],
+  panelFacts = [],
+} = Astro.props;
+const hasBanners = hero.desktop.length > 0 || hero.mobile.length > 0;
+const sides = layout === "contained-banners" ? sideBanners.slice(0, 2) : [];
+const panel = layout === "app-panel" ? panelFacts.slice(0, 4) : [];
+const contained = layout === "contained-banners" || layout === "app-panel";
+
+// Edge-to-edge frames follow the viewport: 2.6:1 on computers (1440x548)
+// and 5:3 on phones (390x234); full-screen fills the first screen below
+// the header (svh never changes while scrolling, so nothing shifts).
+const FRAME_HEIGHT = {
+  "full-bleed": { desktop: "clamp(18rem, 38vw, 42rem)", mobile: "60vw" },
+  "full-screen": {
+    desktop: "clamp(26rem, calc(100svh - var(--header-height, 3.5rem)), 56vw)",
+    mobile: "max(26rem, calc(100svh - var(--header-height, 3.5rem)))",
+  },
+} as const;
+const frame = layout === "full-bleed" || layout === "full-screen" ? FRAME_HEIGHT[layout] : null;
+const split = layout === "split" ? hero.desktop.slice(0, 2) : [];
 ---
 
-{
-  (hero.desktop.length > 0 || hero.mobile.length > 0) && (
-    <div class="relative w-full">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 md:pt-4">
-        {hero.desktop.length > 0 && (
-          <div class="hidden md:block relative">
-            <CustomCarousel
-              images={hero.desktop}
-              height={HERO_SLIDE_PRESENTATION.desktop.height}
-              type="desktop"
-              priority={priority}
-            />
+{hasBanners && layout === "story-cards" && (
+  <StoryCards slides={hero.desktop.length > 0 ? hero.desktop : hero.mobile} priority={priority} />
+)}
+
+{hasBanners && layout === "split" && (
+  <div class="relative w-full" data-hero-layout="split">
+    {split.length > 0 && (
+      <div class:list={["hidden md:grid", split.length > 1 ? "grid-cols-2" : "grid-cols-1"]}>
+        {split.map((slide, index) => (
+          <HeroPicture slide={slide} viewport="desktop" layout="split" index={index} priority={priority} frameClass="hero-split-frame" />
+        ))}
+      </div>
+    )}
+    {hero.mobile[0] && (
+      <div class="md:hidden">
+        <HeroPicture slide={hero.mobile[0]} viewport="mobile" layout="split" index={0} priority={priority} frameClass="hero-split-frame" />
+      </div>
+    )}
+  </div>
+)}
+
+{hasBanners && frame && (
+  <div class="relative w-full" data-hero-layout={layout}>
+    {hero.desktop.length > 0 && (
+      <div class="hidden md:block relative">
+        <CustomCarousel
+          images={hero.desktop}
+          height={HERO_SLIDE_PRESENTATION.desktop.height}
+          type="desktop"
+          priority={priority}
+          layout={layout}
+          frameHeight={frame.desktop}
+          rounded={false}
+        />
+      </div>
+    )}
+    {hero.mobile.length > 0 && (
+      <div class="md:hidden relative">
+        <CustomCarousel
+          images={hero.mobile}
+          height={HERO_SLIDE_PRESENTATION.mobile.height}
+          type="mobile"
+          priority={priority}
+          layout={layout}
+          frameHeight={frame.mobile}
+          rounded={false}
+        />
+      </div>
+    )}
+  </div>
+)}
+
+{hasBanners && contained && sides.length === 0 && panel.length === 0 && (
+  <div class="relative w-full">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 md:pt-4">
+      {hero.desktop.length > 0 && (
+        <div class="hidden md:block relative">
+          <CustomCarousel
+            images={hero.desktop}
+            height={HERO_SLIDE_PRESENTATION.desktop.height}
+            type="desktop"
+            priority={priority}
+          />
+        </div>
+      )}
+      {hero.mobile.length > 0 && (
+        <div class="md:hidden relative">
+          <CustomCarousel
+            images={hero.mobile}
+            height={HERO_SLIDE_PRESENTATION.mobile.height}
+            type="mobile"
+            priority={priority}
+          />
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
+{hasBanners && contained && (sides.length > 0 || panel.length > 0) && (
+  <div class="relative w-full" data-hero-layout={layout}>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-2 md:pt-4">
+      <div class:list={["grid gap-3 md:gap-4", sides.length > 0 ? "md:grid-cols-[minmax(0,1fr)_18.75rem]" : "md:grid-cols-[minmax(0,1fr)_15rem]"]}>
+        <div class="min-w-0">
+          {hero.desktop.length > 0 && (
+            <div class="hidden md:block relative">
+              <CustomCarousel
+                images={hero.desktop}
+                height={HERO_SLIDE_PRESENTATION.desktop.height}
+                type="desktop"
+                priority={priority}
+              />
+            </div>
+          )}
+          {hero.mobile.length > 0 && (
+            <div class="md:hidden relative">
+              <CustomCarousel
+                images={hero.mobile}
+                height={HERO_SLIDE_PRESENTATION.mobile.height}
+                type="mobile"
+                priority={priority}
+              />
+            </div>
+          )}
+        </div>
+
+        {sides.length > 0 && (
+          <div class="grid grid-cols-2 gap-3 md:grid-cols-1 md:grid-rows-2 md:gap-4" data-hero-side-banners>
+            {sides.map(({ asset, alt, href }) => {
+              const Frame = href ? "a" : "div";
+              return (
+                <Frame
+                  href={href ?? undefined}
+                  data-astro-prefetch={href ? getStorefrontPrefetchAttribute(href, Astro.url) : undefined}
+                  class="relative block aspect-[5/4] overflow-hidden rounded-xl bg-muted md:aspect-auto md:h-full"
+                >
+                  <img
+                    src={mediaImageUrl(asset.url, 640)}
+                    srcset={mediaImageSrcSet(asset.url)}
+                    sizes="(max-width: 767px) calc(50vw - 1.5rem), 300px"
+                    alt={alt || asset.alt}
+                    width={asset.width ?? 600}
+                    height={asset.height ?? 480}
+                    loading="lazy"
+                    decoding="async"
+                    class="absolute inset-0 h-full w-full object-cover"
+                  />
+                </Frame>
+              );
+            })}
           </div>
         )}
-        {hero.mobile.length > 0 && (
-          <div class="md:hidden relative">
-            <CustomCarousel
-              images={hero.mobile}
-              height={HERO_SLIDE_PRESENTATION.mobile.height}
-              type="mobile"
-              priority={priority}
-            />
-          </div>
+
+        {panel.length > 0 && (
+          <aside class="hidden md:flex flex-col justify-center gap-1 rounded-xl border border-border bg-card p-4" aria-label="Why shop here" data-hero-panel>
+            <ul class="divide-y divide-border">
+              {panel.map((fact) => (
+                <li class="py-3">
+                  <span class="block text-sm font-semibold text-foreground">{fact.title}</span>
+                  {fact.detail && <span class="block text-sm leading-relaxed text-muted-foreground">{fact.detail}</span>}
+                </li>
+              ))}
+            </ul>
+          </aside>
         )}
       </div>
     </div>
-  )
-}
+  </div>
+)}
+
+<style>
+  /* Dawn's split banner: two portrait halves, never taller than the first
+     screen below the header. */
+  :global(.hero-split-frame) {
+    aspect-ratio: 4 / 5;
+    max-height: calc(100svh - var(--header-height, 3.5rem));
+    width: 100%;
+  }
+</style>

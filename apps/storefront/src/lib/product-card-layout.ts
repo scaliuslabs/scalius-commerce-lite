@@ -136,7 +136,15 @@ export function productGridFluidCss(grid: ThemeGrid): { cardMin: string; gap: st
   };
 }
 
-export type ProductGridContext = "grid" | "beside-filters" | "rail";
+/**
+ * `rail` is a homepage collection carousel (72% of a phone, then 3, 4 and 5
+ * across); `shelf` a homepage product rail (2.2 on a phone, then 3.3, 4.4
+ * and 5.3 across: the next card always peeks in).
+ */
+export type ProductGridContext = "grid" | "beside-filters" | "rail" | "shelf";
+
+/** Shelf card widths (components/homepage/ProductRail.astro) as image `sizes`. */
+export const SHELF_CARD_SIZES = "(max-width: 639px) 44vw, (max-width: 1023px) 30vw, (max-width: 1279px) 23vw, 19vw";
 /**
  * How a listing grid lays cards out in a container narrower than the tablet
  * step: the density's columns, or one card per row with the photo beside
@@ -158,7 +166,7 @@ function pageGutter(viewport: number): number {
 export function productGridWidth(
   viewport: number,
   containerMaxPx: number,
-  context: Exclude<ProductGridContext, "rail">,
+  context: Exclude<ProductGridContext, "rail" | "shelf">,
 ): number {
   const gutter = pageGutter(viewport);
   const content = Math.min(viewport, containerMaxPx) - 2 * gutter;
@@ -172,7 +180,7 @@ const sizesCache = new Map<string, string>();
  * one media condition per viewport range with the same column count and
  * gutter, each `100vw / columns` minus the gutters and gaps (the widest card
  * of the range), then the fixed width once the container cap is reached.
- * `rail` is the horizontal collection rail (collection2.astro). With the
+ * `rail` and `shelf` are the homepage rails (ProductRail.astro). With the
  * `list-row` phone layout, a grid narrower than the tablet step shows one
  * card per row with a fixed-width photo.
  */
@@ -185,6 +193,7 @@ export function productCardImageSizes(
   if (context === "rail") {
     return "(max-width: 639px) 72vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw";
   }
+  if (context === "shelf") return SHELF_CARD_SIZES;
   const key = `${JSON.stringify(grid)}|${containerWidth}|${context}|${phoneLayout}`;
   const cached = sizesCache.get(key);
   if (cached) return cached;

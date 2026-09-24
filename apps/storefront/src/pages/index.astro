@@ -3,23 +3,20 @@ import Layout from "../layouts/Layout.astro";
 import "../styles/global.css";
 import HomepageSections from "@/components/homepage/HomepageSections.astro";
 import {
-  getAllProducts,
   getCheckoutConfig,
   getHomepageData,
+  getHomepageSectionData,
   getShippingMethods,
 } from "@/lib/api";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { buildDeliveryFacts } from "@/lib/delivery-facts";
 import { formatMoney } from "@/lib/currency";
 import { resolveStoreDisplayName } from "@/lib/store-identity";
+import { heroLeadCandidates } from "@/lib/homepage-hero";
 import {
-  heroImageCandidate,
-  resolveHomepageHero,
-  type HeroImageCandidate,
-} from "@/lib/homepage-hero";
-import {
-  collectionShowsProducts,
+  homepageContent,
   homepageLeadSection,
+  homepageSectionRenders,
 } from "@/lib/homepage-sections";
 import {
   buildAbsoluteStorefrontSeoUrl,
@@ -29,11 +26,12 @@ import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-
 import { mediaImageUrl } from "@/lib/media-url";
 import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { storefrontSectionRenderer } from "@scalius/shared/storefront-theme";
+import { homeSectionRequests } from "@scalius/shared/storefront-theme";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 
-// One batch: layout, homepage, and the delivery facts the trust strip shows
-// (on by default; read speculatively so the strip adds no second round trip).
+// One batch: layout, homepage (with every section's products and images),
+// and the delivery facts the trust strip shows (read speculatively so the
+// strip adds no second round trip).
 const shippingMethodsPromise = getShippingMethods();
 const checkoutConfigPromise = getCheckoutConfig();
 const { layoutData, pageData: homepageData } = await loadPageWithLayout(() =>
@@ -52,18 +50,6 @@ const seo = homepageData?.seo ?? {
   homepageTitle: null as string | null,
   homepageMetaDescription: null as string | null,
 };
-// Phones fall back to the desktop banners when no phone banners exist.
-const hero = resolveHomepageHero(homepageData.hero);
-const firstDesktopHero = hero.desktop[0] ?? null;
-const firstMobileHero = hero.mobile[0] ?? null;
-// The same candidate the first slide's <source> offers (CustomCarousel), so
-// the preload is the file the banner paints: a phone-sized rendition on
-// phones instead of the full-size original.
-const heroPreloads = [
-  firstMobileHero ? heroImageCandidate(firstMobileHero.url, "mobile") : null,
-  firstDesktopHero ? heroImageCandidate(firstDesktopHero.url, "desktop") : null,
-].filter((candidate): candidate is HeroImageCandidate => Boolean(candidate?.src));
-const activeCollections = homepageData?.collections || [];
 const presentation = homepageData.presentation;
 
 const storeName = resolveStoreDisplayName(
@@ -78,14 +64,8 @@ const homepageHeading = storeName || homepageTitle || "Shop";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 
-// A store with products never shows a blank homepage: without merchant
-// sections, buyers get the newest products. Delivery facts come from the
-// same live data product pages use.
-const needsProductFallback = activeCollections.length === 0;
-const [fallbackProducts, shippingMethods, checkoutConfig] = await Promise.all([
-  needsProductFallback
-    ? getAllProducts({ limit: 8, sort: "newest" }).then((page) => page?.data ?? [])
-    : Promise.resolve([]),
+// Delivery facts come from the same live data product pages use.
+const [shippingMethods, checkoutConfig] = await Promise.all([
   presentation.trustStrip.enabled ? shippingMethodsPromise : Promise.resolve(null),
   presentation.trustStrip.enabled ? checkoutConfigPromise : Promise.resolve(null),
 ]);
@@ -98,17 +78,29 @@ const deliveryFacts = presentation.trustStrip.enabled
     })
   : [];
 
-// Theme -> Homepage: the theme document's sections, in order.
-const { resolved: resolvedTheme } = await resolveRequestTheme(Astro, layoutData);
-const homeSections = resolvedTheme.pages.home;
-const leadSection = homepageLeadSection(homeSections, {
-  hero: hero.desktop.length > 0 || hero.mobile.length > 0,
-  collections: activeCollections.some(collectionShowsProducts) || fallbackProducts.length > 0,
-  categories: presentation.categoryRail.enabled && presentation.categoryRail.categories.length > 0,
-  delivery: deliveryFacts.length > 0,
-});
-// Preload the banner only when it is the first thing buyers see.
-const heroFirst = leadSection !== null && storefrontSectionRenderer(leadSection) === "hero";
+// Theme -> Homepage: the theme document's sections, in order. The homepage
+// read carries the published theme's section data; a dashboard preview of
+// a draft reads its own (a second read, only under the preview cookie).
+const requestTheme = await resolveRequestTheme(Astro, layoutData);
+const homeSections = requestTheme.resolved.pages.home;
+let sectionData = homepageData.sections ?? { lists: [], media: [] };
+if (requestTheme.preview) {
+  const requests = homeSectionRequests(homeSections);
+  sectionData = requests.lists.length > 0 || requests.mediaIds.length > 0
+    ? (await getHomepageSectionData(requests)) ?? { lists: [], media: [] }
+    : { lists: [], media: [] };
+}
+const content = homepageContent({ ...homepageData, sections: sectionData }, deliveryFacts);
+const hero = content.hero;
+const firstDesktopHero = hero.desktop[0] ?? null;
+const firstMobileHero = hero.mobile[0] ?? null;
+const leadSection = homepageLeadSection(homeSections, content);
+// Preload the banner only when it is the first thing buyers see: the same
+// candidates the hero's first slide offers, so the preload is the file the
+// banner paints (a phone-sized rendition on phones).
+const heroPreloads = leadSection?.type === "hero" && homepageSectionRenders(leadSection, content)
+  ? heroLeadCandidates(hero, leadSection.settings.layout)
+  : [];
 
 // --- SEO: canonical URL for homepage ---
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
@@ -128,7 +120,7 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
 >
   <Fragment slot="preload">
     {
-      heroFirst && heroPreloads.map((candidate) => (
+      heroPreloads.map((candidate) => (
         // With renditions, href is left out so a browser without
         // imagesrcset support can't fetch a second, different file.
         <link
@@ -148,12 +140,8 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
 
   <HomepageSections
     sections={homeSections}
+    content={content}
     leadSectionId={leadSection?.id ?? null}
-    hero={hero}
-    collections={activeCollections}
-    fallbackProducts={fallbackProducts}
-    categoryRail={presentation.categoryRail}
-    deliveryFacts={deliveryFacts}
     currencySymbol={currencySymbol}
     currencyCode={currencyCode}
   />

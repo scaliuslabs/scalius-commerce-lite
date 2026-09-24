@@ -1,0 +1,162 @@
+---
+// A product grid section in the store's card and density.
+// - `collection`: a homepage grid collection, markup for markup the classic
+//   store's (title, subtitle, category pills, "View collection").
+// - otherwise: a titled grid with "View all" (Star Tech 5x4, Daraz 6xN,
+//   Dawn 4x2). `maxColumns` caps the fluid grid on computers, so a 4x2
+//   section is 4 across even where the density fits 6.
+import type { Product } from "@/lib/api";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
+import SectionHeader from "./SectionHeader.astro";
+import { ArrowRight } from "lucide-react";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+
+interface Props {
+  title: string;
+  products: Product[];
+  href: string | null;
+  hrefLabel?: string;
+  currencySymbol?: string;
+  currencyCode?: string;
+  aboveFold?: boolean;
+  headingId?: string;
+  /** The classic homepage collection grid. */
+  collection?: {
+    subtitle: string;
+    categories: Array<{ id?: string; name: string; slug: string }>;
+  };
+  /** Most columns on a computer (the section's `columns` setting). */
+  maxColumns?: number;
+  /** The newest-products grid of a store without homepage collections keeps its classic spacing. */
+  classicSpacing?: boolean;
+}
+
+const {
+  title,
+  products,
+  href,
+  hrefLabel = "View all",
+  currencySymbol = DEFAULT_CURRENCY.symbol,
+  currencyCode = DEFAULT_CURRENCY.code,
+  aboveFold = false,
+  headingId,
+  collection,
+  maxColumns,
+  classicSpacing = false,
+} = Astro.props;
+---
+
+{products.length > 0 && collection && (
+  <section class="w-full py-2 md:py-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Header -->
+      <div
+        class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-3 md:mb-5"
+      >
+        <div class="space-y-1">
+          <h2 class="section-heading text-foreground">
+            {title}
+          </h2>
+          {collection.subtitle && <p class="text-muted-foreground text-xs max-w-xl line-clamp-1">{collection.subtitle}</p>}
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* Category pills for multi-category collections */}
+          {
+            collection.categories.length > 0 &&
+              collection.categories.map((cat) => (
+                <a
+                  href={`/categories/${cat.slug}`}
+                  class="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full bg-muted hover:bg-accent transition-colors sm:min-h-0"
+                >
+                  {cat.name}
+                </a>
+              ))
+          }
+
+          {href && (
+            <a
+              href={href}
+              class="group hidden sm:inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary/80 transition-colors"
+            >
+              View collection
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </a>
+          )}
+        </div>
+      </div>
+
+      <!-- Products Grid -->
+      <ProductGrid>
+        {products.map((product, index) => (
+          <ProductCard
+            product={product}
+            currencySymbol={currencySymbol}
+            currencyCode={currencyCode}
+            index={index}
+            aboveFold={aboveFold}
+          />
+        ))}
+      </ProductGrid>
+
+      {href && (
+        <div class="mt-4 flex justify-center sm:hidden">
+          <a
+            href={href}
+            class="inline-flex min-h-11 items-center gap-2 px-6 py-2.5 text-sm font-semibold text-foreground bg-muted hover:bg-accent rounded-full transition-colors"
+          >
+            View collection
+            <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
+      )}
+    </div>
+  </section>
+)}
+
+{products.length > 0 && !collection && (
+  <section class={classicSpacing ? "w-full py-2 md:py-6" : "home-section w-full"} aria-labelledby={headingId}>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <SectionHeader id={headingId} title={title} href={href} hrefLabel={hrefLabel} classic={classicSpacing} />
+      {maxColumns ? (
+        <div class="home-grid-capped" style={`--home-grid-columns: ${maxColumns};`}>
+          <ProductGrid>
+            {products.map((product, index) => (
+              <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} index={index} aboveFold={aboveFold} />
+            ))}
+          </ProductGrid>
+        </div>
+      ) : (
+        <ProductGrid>
+          {products.map((product, index) => (
+            <ProductCard
+              product={product}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+              index={index}
+              aboveFold={aboveFold}
+            />
+          ))}
+        </ProductGrid>
+      )}
+    </div>
+  </section>
+)}
+
+<style>
+  /* At most N columns: each column is at least the density's minimum card
+     width and at least 1/N of the row, so auto-fill never makes more. */
+  .home-grid-capped :global(.product-grid) {
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(
+        max(
+          min(var(--card-min), 100%),
+          calc((100% - (var(--home-grid-columns) - 1) * var(--theme-grid-gap-desktop, 1.5rem)) / var(--home-grid-columns))
+        ),
+        1fr
+      )
+    );
+  }
+</style>

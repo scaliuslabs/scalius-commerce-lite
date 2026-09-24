@@ -1,0 +1,30 @@
+---
+// Long store copy below the page's products (Star Tech, Apple Gadgets):
+// real headings and paragraphs, not text baked into images. A paragraph
+// whose first line starts with "## " opens with that line as a subheading.
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import { seoTextBlocks } from "@/lib/homepage-sections";
+
+interface Props {
+  section: StorefrontSectionOf<"seo-text">;
+}
+
+const { section } = Astro.props;
+const heading = section.settings.heading.trim();
+const headingId = `home-${section.id}-title`;
+const blocks = seoTextBlocks(section.settings.body);
+---
+
+<section class="home-section w-full" aria-labelledby={heading ? headingId : undefined} aria-label={heading ? undefined : "About the store"}>
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="max-w-4xl text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+      {heading && <h2 id={headingId} class="mb-3 text-lg font-semibold text-foreground md:text-xl">{heading}</h2>}
+      {blocks.map((block) => (
+        <Fragment>
+          {block.heading && <h3 class="mt-5 text-base font-semibold text-foreground">{block.heading}</h3>}
+          {block.text && <p class="mt-2 whitespace-pre-line">{block.text}</p>}
+        </Fragment>
+      ))}
+    </div>
+  </div>
+</section>

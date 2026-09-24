@@ -1,6 +1,6 @@
 ---
 // Optimized carousel component for best performance and LCP
-import { heroImageCandidate } from "@/lib/homepage-hero";
+import { heroImageCandidate, type StorefrontHeroLayout } from "@/lib/homepage-hero";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import {
   HERO_SLIDE_DEFAULT_FOCAL_POINT,
@@ -17,6 +17,16 @@ interface Props {
   interval?: number;
   /** The first slide is the page's LCP (high fetch priority, sync decode). */
   priority?: boolean;
+  /** The hero layout the banner sits in (its image `sizes`). */
+  layout?: StorefrontHeroLayout;
+  /**
+   * The frame's CSS height when it is not the fixed `height` in px: a
+   * full-bleed or full-screen hero follows the viewport (vw / svh values
+   * that never change after the first paint, so nothing shifts).
+   */
+  frameHeight?: string;
+  /** Rounded corners (a contained banner); edge-to-edge heroes are square. */
+  rounded?: boolean;
 }
 
 // Slides advance every 6 s (WCAG 2.2.2 needs a pause control, provided below).
@@ -27,7 +37,11 @@ const {
   autoRotate = true,
   interval = 6000,
   priority = true,
+  layout = "contained-banners",
+  frameHeight,
+  rounded = true,
 } = Astro.props;
+const corner = rounded ? " rounded-xl" : "";
 const canRotate = autoRotate && images.length > 1;
 const presentation = HERO_SLIDE_PRESENTATION[type];
 const transparentPixel =
@@ -38,8 +52,8 @@ if (images.length === 0) return;
 ---
 
 <div
-  class={`${type}-carousel relative w-full overflow-hidden rounded-xl`}
-  style={`height: ${height}px;`}
+  class={`${type}-carousel relative w-full overflow-hidden${corner}`}
+  style={`height: ${frameHeight ?? `${height}px`};`}
   role="region"
   aria-roledescription="carousel"
   aria-label="Featured"
@@ -62,7 +76,7 @@ if (images.length === 0) return;
           // as the LCP preload in pages/index.astro, so the browser picks one
           // candidate for both. The <source> media keeps the other viewport's
           // banner (display:none) from downloading at all.
-          const candidate = heroImageCandidate(image.url, type);
+          const candidate = heroImageCandidate(image.url, type, layout);
           const source = candidate.srcset ?? candidate.src;
           return (
             <div
@@ -77,7 +91,7 @@ if (images.length === 0) return;
               <SlideFrame
                 href={image.link || undefined}
                 data-astro-prefetch={getStorefrontPrefetchAttribute(image.link, Astro.url)}
-                class={`slide-link group relative block h-full w-full rounded-xl ${image.link ? "cursor-pointer" : "cursor-default"}`}
+                class={`slide-link group relative block h-full w-full${corner} ${image.link ? "cursor-pointer" : "cursor-default"}`}
                 aria-label={image.link && !headline && !image.title ? `Slide ${index + 1}` : undefined}
                 target={isExternal ? "_blank" : undefined}
                 rel={isExternal ? "noopener noreferrer" : undefined}
