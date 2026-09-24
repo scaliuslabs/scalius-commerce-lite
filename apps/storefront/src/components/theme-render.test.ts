@@ -369,6 +369,8 @@ describe("storefront theme render matrix", () => {
     const body = page.body;
     expect(body.dataset.themeDensity).toBe(layout.density);
     expect(body.dataset.themeCardStyle).toBe(theme.tokens.components.cards);
+    // The type pairing (editorial section headings step up on computers).
+    expect(body.dataset.themeTypography).toBe(theme.tokens.typography);
     expect(body.hasAttribute("data-theme-grid-desktop")).toBe(false);
     // The density's grid tokens and fluid steps reach :root.
     const themeCss = Array.from(page.querySelectorAll("style"))
