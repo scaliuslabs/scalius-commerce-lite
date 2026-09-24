@@ -26,6 +26,7 @@ import { AttributeValueEditor } from "~/components/admin/attributes-manager/comp
 import { AttributeValuesViewer } from "~/components/admin/attributes-manager/components/AttributeValuesViewer";
 import { formatNumber, translate, useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
+import { dataTableMessages } from "~/i18n/data-table";
 
 const validateAttributeSearch = createListSearchValidator(
   ["name", "slug", "filterable", "updatedAt"] as const,
@@ -58,6 +59,7 @@ function AttributesPage() {
   const search = Route.useSearch();
   const [term] = useListSearch("attributes");
   const t = useMessages(catalogMessages);
+  const tableCopy = useMessages(dataTableMessages);
   const { attributes: can } = useCatalogActionPermissions();
   const [editing, setEditingState] = useState<AttributeDto | "new" | null>(null);
   // The dialog stays mounted so it can animate closed; each opening gets a
@@ -120,6 +122,7 @@ function AttributesPage() {
     <>
       <ResourceListPage<AttributeDto>
         title={t("attributes")}
+        defaultSortLabel={tableCopy("nameAZ")}
         actions={can.canCreate ? <Button onClick={() => setEditing("new")}>{t("addAttribute")}</Button> : null}
         search={search}
         list="attributes"

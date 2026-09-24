@@ -38,3 +38,16 @@ export function orderEditState(readiness: { items: EditState; details: EditState
     canEditDetails: readiness.details.allowed,
   };
 }
+
+/**
+ * The edit form's delivery method. The form data carries none, so the order's
+ * saved method is preselected (and named even when no longer offered), never
+ * "Custom charge" for an order placed with a named method.
+ */
+export function savedDeliveryMethod(order: { shippingMethodId: string | null; shippingMethodName: string | null }) {
+  if (!order.shippingMethodId) return { shippingMethodId: null, savedShippingMethod: null };
+  return {
+    shippingMethodId: order.shippingMethodId,
+    savedShippingMethod: { id: order.shippingMethodId, name: order.shippingMethodName ?? order.shippingMethodId },
+  };
+}

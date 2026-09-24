@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Alert } from "~/components/ui/alert";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -47,8 +47,10 @@ export function CreateReturnDialog({
   const [errors, setErrors] = useState<{ reason?: string; quantity?: string }>({});
   const mutation = useCreateOrderReturn();
   const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));
+  // With one returnable line, the whole returnable amount is the likely answer (R3-ORD-14).
+  const quantityOf = (itemId: string) => quantities[itemId] ?? (eligibleItems.length === 1 ? remaining.get(itemId) ?? 0 : 0);
   const lines = eligibleItems
-    .map((item) => ({ orderItemId: item.id, quantity: quantities[item.id] ?? 0 }))
+    .map((item) => ({ orderItemId: item.id, quantity: quantityOf(item.id) }))
     .filter((line) => line.quantity > 0);
 
   const submit = () => {
@@ -85,7 +87,7 @@ export function CreateReturnDialog({
           <DialogDescription>{t("returns.newHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
+          {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <div className="space-y-2">
             <Label htmlFor="return-reason">{t("returns.reason")}</Label>
             <Input
@@ -118,7 +120,7 @@ export function CreateReturnDialog({
                       aria-label={t("returns.returnQty", { name })}
                       aria-invalid={Boolean(errors.quantity) || undefined}
                       aria-describedby={errors.quantity ? "return-qty-error" : undefined}
-                      value={quantities[item.id] ?? 0}
+                      value={quantityOf(item.id)}
                       onValueChange={(value) => {
                         setQuantities((current) => ({ ...current, [item.id]: clampQuantity(value, max) }));
                         setErrors((current) => ({ ...current, quantity: undefined }));

@@ -17,6 +17,41 @@ describe("order list Back target", () => {
     expect(orderListReturnHref()).toBe("/admin/orders/abandoned");
   });
 
+  it("keeps every list view, filter set and the abandoned tab", () => {
+    for (const href of [
+      "/admin/orders",
+      "/admin/orders?view=unpaid",
+      "/admin/orders?view=returned",
+      "/admin/orders?view=delivery_failed&page=3",
+      "/admin/orders?status=pending&paymentStatus=unpaid&startDate=2026-09-01&endDate=2026-09-24&sort=total",
+      "/admin/orders/abandoned",
+      "/admin/orders/abandoned?page=2",
+    ]) {
+      rememberOrderListHref(href);
+      expect(orderListReturnHref()).toBe(href);
+    }
+  });
+
+  it("never keeps an order page, so Back and Previous/Next never point at an order", () => {
+    rememberOrderListHref("/admin/orders?view=returned");
+    for (const href of [
+      "/admin/orders/AGD5658QQXD0S0HA",
+      "/admin/orders/AGD5658QQXD0S0HA?tab=timeline",
+      "/admin/orders/AGD5658QQXD0S0HA/edit",
+      "/admin/orders/new",
+      "/admin/orders/abandoned/chk_123",
+      "//admin/orders",
+    ]) {
+      rememberOrderListHref(href);
+      expect(orderListReturnHref()).toBe("/admin/orders?view=returned");
+    }
+  });
+
+  it("rejects an order page already stored by an older build", () => {
+    window.sessionStorage.setItem("admin.orders.returnHref", "/admin/orders/AGD5658QQXD0S0HA");
+    expect(orderListReturnHref()).toBe("/admin/orders");
+  });
+
   it("never keeps a phone, email, search term or another page", () => {
     rememberOrderListHref("/admin/orders?view=unpaid");
     for (const href of [

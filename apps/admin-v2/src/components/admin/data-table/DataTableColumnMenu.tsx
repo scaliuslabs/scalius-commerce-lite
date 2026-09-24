@@ -1,5 +1,5 @@
 import { createContext, useContext, type KeyboardEvent, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, Eye, EyeOff, GripVertical, Lock } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Eye, EyeClosed, EyeOff, GripVertical, Lock } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
@@ -25,6 +25,12 @@ export function useColumnMenu(): ReactNode {
   return useContext(ColumnMenuContext);
 }
 
+/** The list's column layout, for the column header menus ("Hide {name}"). */
+export const ColumnLayoutContext = createContext<Pick<ColumnLayout<TableRowData>, "toggle" | "isHiddenByChoice"> | null>(null);
+
+/** The sort the list uses when none is chosen (radio value). */
+const DEFAULT_SORT = "__default";
+
 /**
  * Shopify's list menu: "Sort by" (field and direction) and "Columns" (show or
  * hide with the eye, reorder by drag or with the arrow keys on the handle),
@@ -33,15 +39,21 @@ export function useColumnMenu(): ReactNode {
 export function DataTableColumnMenu<TData extends TableRowData>({
   table,
   layout,
+  defaultSortLabel,
 }: {
   table: Table<TData>;
   layout: ColumnLayout<TData>;
+  /**
+   * What the list is sorted by when no sort is chosen, e.g. "Recently updated";
+   * `false` when the list always sorts by one of its columns.
+   */
+  defaultSortLabel?: string | false;
 }) {
   const t = useMessages(dataTableMessages);
   const sortable = table.getAllLeafColumns().filter((column) => column.getCanSort() && column.getIsVisible());
   const sorting = table.state.sorting[0];
-  const sortColumn = sorting ? table.getColumn(sorting.id) : undefined;
-  const hiddenCount = layout.autoHidden.size;
+  // A sort on a field that is not a column here (e.g. the route's "updatedAt") is the list's default order.
+  const sortColumn = sorting ? sortable.find((column) => column.id === sorting.id) : undefined;
   // The title column is always first and always shown: a fixed row above the
   // sortable list, so neither drag nor arrow keys can put a column above it.
   const title = layout.arrangeable.find(isPrimaryColumn);
@@ -66,16 +78,25 @@ export function DataTableColumnMenu<TData extends TableRowData>({
           <ArrowUpDown />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="flex w-80 flex-col overflow-hidden p-0">
+      {/* As tall as the screen allows (not the popover's 24rem): every column in view. */}
+      <PopoverContent align="end" className="flex max-h-(--radix-popover-content-available-height) w-80 flex-col overflow-hidden p-0">
         <div data-slot="column-menu-body" className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-3">
           {sortable.length > 0 ? (
             <section className="space-y-2" aria-labelledby="table-sort-heading">
               <h2 id="table-sort-heading" className="text-body font-medium">{t("sortBy")}</h2>
               <RadioGroup
                 aria-label={t("sortField")}
-                value={sortColumn?.id ?? ""}
-                onValueChange={(id) => table.getColumn(id)?.toggleSorting(sorting?.desc ?? false)}
+                value={sortColumn?.id ?? (defaultSortLabel === false ? "" : DEFAULT_SORT)}
+                onValueChange={(id) =>
+                  id === DEFAULT_SORT ? table.setSorting([]) : table.getColumn(id)?.toggleSorting(sorting?.desc ?? false)}
               >
+                {/* The list's own order, so the current sort is always one of the choices. */}
+                {defaultSortLabel === false ? null : (
+                  <div className="flex min-h-9 items-center gap-2">
+                    <RadioGroupItem value={DEFAULT_SORT} id="table-sort-default" />
+                    <Label htmlFor="table-sort-default">{defaultSortLabel ?? t("defaultSort")}</Label>
+                  </div>
+                )}
                 {sortable.map((column) => (
                   <div key={column.id} className="flex min-h-9 items-center gap-2">
                     <RadioGroupItem value={column.id} id={`table-sort-${column.id}`} />
@@ -123,6 +144,8 @@ export function DataTableColumnMenu<TData extends TableRowData>({
               renderItem={({ id, column }, sortableProps) => {
                 const name = columnLabel(column);
                 const hidden = layout.isHiddenByChoice(id);
+                // Shown by choice, but stepped aside because the table is narrower than its columns.
+                const squeezed = !hidden && layout.autoHidden.has(id);
                 const index = items.findIndex((item) => item.id === id);
                 return (
                   <div
@@ -140,26 +163,33 @@ export function DataTableColumnMenu<TData extends TableRowData>({
                     >
                       <GripVertical className="size-4" aria-hidden />
                     </button>
-                    <span className={cn("min-w-0 flex-1 truncate text-body", hidden && "text-muted-foreground")}>{name}</span>
+                    <span className="min-w-0 flex-1">
+                      <span data-muted={hidden || squeezed || undefined} className="block truncate text-body data-[muted]:text-muted-foreground">
+                        {name}
+                      </span>
+                      {squeezed ? (
+                        <span id={`column-squeezed-${id}`} className="block truncate text-caption text-muted-foreground">
+                          {t("hiddenToFitColumn")}
+                        </span>
+                      ) : null}
+                    </span>
+                    {/* One name, its state in aria-pressed: "Show Status, pressed" means shown. */}
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon-sm"
                       aria-pressed={!hidden}
-                      aria-label={t(hidden ? "showColumn" : "hideColumn", { name })}
+                      aria-label={t("showColumn", { name })}
+                      aria-describedby={squeezed ? `column-squeezed-${id}` : undefined}
+                      title={t(hidden ? "columnHidden" : squeezed ? "hiddenToFitColumn" : "columnShown")}
                       onClick={() => layout.toggle(id)}
                     >
-                      {hidden ? <EyeOff aria-hidden /> : <Eye aria-hidden />}
+                      {hidden ? <EyeOff aria-hidden /> : squeezed ? <EyeClosed aria-hidden /> : <Eye aria-hidden />}
                     </Button>
                   </div>
                 );
               }}
             />
-            {hiddenCount > 0 ? (
-              <p className="text-body text-muted-foreground" aria-live="polite">
-                {hiddenCount === 1 ? t("hiddenToFitOne") : t("hiddenToFit", { count: hiddenCount })}
-              </p>
-            ) : null}
           </section>
         </div>
 

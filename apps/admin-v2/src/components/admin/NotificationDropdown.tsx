@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useFirebaseInit } from "@/hooks/use-firebase-init";
 import { formatDateTime, useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
-import { TOP_BAR_BUTTON } from "./layout/top-bar";
+import { TOP_BAR_BUTTON, useTopBarMenuOffset } from "./layout/top-bar";
 
 interface AdminNotification {
   id: string;
@@ -47,6 +47,7 @@ function saveNotifications(notifications: AdminNotification[]) {
 
 export function NotificationDropdown({ userId }: { userId: string }) {
   const t = useMessages(shellMessages);
+  const menuOffset = useTopBarMenuOffset();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<AdminNotification[]>(loadNotifications);
   const { status: pushStatus, enablePushNotifications } = useFirebaseInit(userId);
@@ -91,7 +92,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
           {unread > 0 ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive" aria-hidden /> : null}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={8} className="w-80 p-0">
+      <PopoverContent align="end" sideOffset={menuOffset} className="w-80 p-0">
         <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
           <h2 className="text-body font-semibold">{t("notifications")}</h2>
           {unread > 0 ? (

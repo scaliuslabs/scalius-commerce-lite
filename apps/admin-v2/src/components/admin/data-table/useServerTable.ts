@@ -67,7 +67,8 @@ export interface UseServerTableOptions<TData extends TableRowData> {
   currentSort?: string;
   currentOrder?: "asc" | "desc";
   onPaginationChange: (page: number, limit: number) => void;
-  onSortingChange: (sort: string, order: "asc" | "desc") => void;
+  /** `sort` is undefined for the list's default order. */
+  onSortingChange: (sort: string | undefined, order: "asc" | "desc" | undefined) => void;
   // Options
   enableRowSelection?: boolean | ((row: Row<TData>) => boolean);
   enableSorting?: boolean;
@@ -178,9 +179,7 @@ export function useServerTable<TData extends TableRowData>({
       const next =
         typeof updater === "function" ? updater(sortingState) : updater;
       const col = next[0];
-      if (col) {
-        onSortingChange(col.id, col.desc ? "desc" : "asc");
-      }
+      onSortingChange(col?.id, col ? (col.desc ? "desc" : "asc") : undefined);
     },
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,

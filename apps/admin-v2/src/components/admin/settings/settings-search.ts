@@ -80,6 +80,20 @@ export function matches(query: string[], entry: string[]): boolean {
   return query.every((term) => entry.some((word) => word.startsWith(term)));
 }
 
+/** How many query words are whole words of the entry: "cod" ranks Payment methods (cod) above a prefix hit. */
+export function exactness(query: string[], entry: string[]): number {
+  // A plural counts as the word itself ("zone" is a whole word of "zones").
+  return query.filter((term) => entry.some((word) => word === term || word === `${term}s` || word === `${term}es`)).length;
+}
+
+/** Stable: stronger (whole-word) matches first, list order otherwise. */
+function byExactness<T>(items: readonly T[], query: string[], wordsOf: (item: T) => string[]): T[] {
+  return items
+    .map((item, index) => ({ item, index, score: exactness(query, wordsOf(item)) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(({ item }) => item);
+}
+
 const PAGE_WORDS = new Map(
   SETTINGS_NAV.map(({ key }) => [
     key,
@@ -113,8 +127,16 @@ export function searchSettings(query: string): {
   const terms = words(query);
   if (terms.length === 0) return { pages: SETTINGS_NAV.map((item) => item.key), cards: [], shortcuts: [] };
   return {
-    pages: SETTINGS_NAV.filter(({ key }) => matches(terms, PAGE_WORDS.get(key)!)).map((item) => item.key),
-    cards: SETTINGS_CARDS.filter(({ card }) => matches(terms, CARD_WORDS.get(card)!)),
-    shortcuts: SEARCH_SHORTCUTS.filter(({ card }) => matches(terms, CARD_WORDS.get(card)!)),
+    pages: byExactness(
+      SETTINGS_NAV.filter(({ key }) => matches(terms, PAGE_WORDS.get(key)!)),
+      terms,
+      ({ key }) => PAGE_WORDS.get(key)!,
+    ).map((item) => item.key),
+    cards: byExactness(SETTINGS_CARDS.filter(({ card }) => matches(terms, CARD_WORDS.get(card)!)), terms, ({ card }) => CARD_WORDS.get(card)!),
+    shortcuts: byExactness(
+      SEARCH_SHORTCUTS.filter(({ card }) => matches(terms, CARD_WORDS.get(card)!)),
+      terms,
+      ({ card }) => CARD_WORDS.get(card)!,
+    ),
   };
 }

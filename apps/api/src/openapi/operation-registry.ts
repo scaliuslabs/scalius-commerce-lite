@@ -869,6 +869,13 @@ export const OPERATIONS = {
     openWorld: true,
     batch: "forbidden",
   },
+  "dashboard.orders.mark_delivered": {
+    openWorld: true,
+    batch: "forbidden",
+  },
+  "dashboard.orders.parcel_returned": {
+    batch: "forbidden",
+  },
 
   "dashboard.payments.methods_get": {},
   "dashboard.payments.methods_update": { revision: "required" },

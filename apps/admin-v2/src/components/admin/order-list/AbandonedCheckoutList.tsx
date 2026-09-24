@@ -51,6 +51,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderListMessages, pluralKey } from "~/i18n/order-list";
 import { buildOrderPrefill, checkoutReference, writeOrderPrefill } from "./abandoned-checkout-prefill";
+import { abandonedStage } from "./abandoned-stage";
 import { ListDate } from "./ListDate";
 
 const selectCheckouts = createDataSelector<AbandonedCheckout>("checkouts");
@@ -76,13 +77,13 @@ function Reference({ checkout }: { checkout: AbandonedCheckout }) {
 
 function StageBadge({ checkout }: { checkout: AbandonedCheckout }) {
   const t = useMessages(orderListMessages);
-  const display = displayOf(checkout);
+  const stage = abandonedStage(displayOf(checkout));
   return (
     <Badge
-      variant={display.variant}
-      title={display.stage === "paymentNotFinished" ? t("paymentNotFinishedHelp") : undefined}
+      variant={stage.variant}
+      title={stage.label === "paymentNotFinished" ? t("paymentNotFinishedHelp") : undefined}
     >
-      {t(`stage.${display.stage}`)}
+      {t(`stage.${stage.label}`)}
     </Badge>
   );
 }

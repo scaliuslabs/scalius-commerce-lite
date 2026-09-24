@@ -40,6 +40,7 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
   const issuedAt = unixToDate(document.issuedAt ?? order.createdAt);
   const businessName = invoiceBusinessName(document);
   const refunded = Number(order.refundedAmount ?? 0);
+  const refundedSinceIssue = Number(document.refundedSinceIssue ?? 0);
   const businessLines = [
     businessInfo.companyName && businessInfo.legalName ? businessInfo.legalName : null,
     businessInfo.addressLine1,
@@ -165,16 +166,23 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
           <dd>{saved ? minor(saved.totalMinor) : money(order.totalAmount)}</dd>
         </div>
         {refunded > 0 ? (
-          <>
-            <div>
-              <dt>{t("payment.refunded")}</dt>
-              <dd>−{money(refunded)}</dd>
-            </div>
-            <div className="strong">
-              <dt>{t("payment.net")}</dt>
-              <dd>{money(Math.max(0, order.totalAmount - refunded))}</dd>
-            </div>
-          </>
+          <div>
+            <dt>{t("payment.refunded")}</dt>
+            <dd>−{money(refunded)}</dd>
+          </div>
+        ) : null}
+        {/* An issued invoice stays as issued; later refunds follow it as their own line. */}
+        {refundedSinceIssue > 0 ? (
+          <div>
+            <dt>{t("invoice.refundedSinceIssue")}</dt>
+            <dd>−{money(refundedSinceIssue)}</dd>
+          </div>
+        ) : null}
+        {refunded + refundedSinceIssue > 0 ? (
+          <div className="strong">
+            <dt>{t("invoice.netPaid")}</dt>
+            <dd>{money(Math.max(0, order.totalAmount - refunded - refundedSinceIssue))}</dd>
+          </div>
         ) : null}
       </dl>
 

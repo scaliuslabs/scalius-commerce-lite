@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, MessageCircle, Phone } from "lucide-react";
+import { Archive, ChevronLeft, ChevronRight, MessageCircle, MoreHorizontal, Phone } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Alert } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
@@ -17,7 +23,9 @@ import {
   orderStatusLabel,
   paymentStatusLabel,
 } from "~/i18n/orders";
-import { useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
+import { useMarkOrderDelivered, useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
+import { orderSkipReason } from "./order-list/order-bulk-actions";
+import { useArchiveOrdersWithUndo } from "./order-list/use-order-list-mutations";
 import { clearOrderNotice, useOrderNotice } from "~/lib/order-notice";
 import { useOrderListReturnHref } from "~/lib/order-list-return";
 import { editLockMessageKey } from "~/routes/admin/orders/-order-form-route-state";
@@ -56,6 +64,8 @@ export function OrderView({ order }: { order: Order }) {
   const actions = useOrderActionPermissions();
   const statusMutation = useUpdateOrderStatus();
   const restoreMutation = useRestoreOrder();
+  const deliveredMutation = useMarkOrderDelivered();
+  const archiveMutation = useArchiveOrdersWithUndo({ canUndo: actions.canRestoreOrders });
   const notice = useOrderNotice(order.id);
   const [request, setRequest] = useState<OrderActionRequest | null>(null);
   const cancelRequest = useCancelRequestGuard(order);
@@ -69,6 +79,8 @@ export function OrderView({ order }: { order: Order }) {
   const contact = customerContactLinks(order.customerPhone);
   const name = formatOrderNumber(order.orderNumber, order.id);
   const archived = Boolean(order.archivedAt);
+  // Finished orders (delivered, cancelled, returned, refunded) leave the working list (R3-ORD-11).
+  const canArchive = actions.canBulkDeleteOrders && !archived && orderSkipReason(order, "archive") === null;
   const itemsLock = order.editReadiness.items;
   const editBlockedReason = order.activeRefundOperation?.active
     ? t("locked.refund")
@@ -87,6 +99,8 @@ export function OrderView({ order }: { order: Order }) {
     clearOrderNotice(order.id);
     if (primary === "confirm") {
       cancelRequest.guard("confirm", () => statusMutation.mutate({ orderId: order.id, status: "confirmed" }));
+    } else if (primary === "markDelivered") {
+      deliveredMutation.mutate({ orderId: order.id });
     } else if (primary === "bookCourier" || primary === "sendOwnCourier") {
       cancelRequest.guard("send", () => setRequest({ action: primary, id: Date.now() }));
     } else {
@@ -94,8 +108,10 @@ export function OrderView({ order }: { order: Order }) {
     }
   };
 
+  const primaryPending = (primary === "confirm" && statusMutation.isPending)
+    || (primary === "markDelivered" && deliveredMutation.isPending);
   const primaryButton = primary ? (
-    <Button onClick={runPrimary} loading={primary === "confirm" && statusMutation.isPending}>
+    <Button onClick={runPrimary} loading={primaryPending}>
       {primaryLabel}
     </Button>
   ) : null;
@@ -165,7 +181,25 @@ export function OrderView({ order }: { order: Order }) {
                     {t("unarchive")}
                   </Button>
                 ) : null}
-                {primaryButton ? <span className="hidden lg:inline-flex">{primaryButton}</span> : null}
+                {canArchive ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" aria-label={t("moreActions")} title={t("moreActions")}>
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={archiveMutation.isPending}
+                        onSelect={() => archiveMutation.mutate({ orders: [{ id: order.id, version: order.version }], skipped: 0 })}
+                      >
+                        <span className="flex h-lh items-center"><Archive className="size-4" /></span>
+                        {t("archive")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
+                {primaryButton ?<span className="hidden lg:inline-flex">{primaryButton}</span> : null}
                 <div className="hidden lg:flex">
                   <NeighbourLink orderId={neighbours?.previous ?? null} label={t("nav.previous")}><ChevronLeft className="size-4" /></NeighbourLink>
                   <NeighbourLink orderId={neighbours?.next ?? null} label={t("nav.next")}><ChevronRight className="size-4" /></NeighbourLink>
@@ -219,7 +253,7 @@ export function OrderView({ order }: { order: Order }) {
             </Button>
           ) : null}
           {primary ? (
-            <Button className="flex-1" size="lg" onClick={runPrimary} loading={primary === "confirm" && statusMutation.isPending}>
+            <Button className="flex-1" size="lg" onClick={runPrimary} loading={primaryPending}>
               {primaryLabel}
             </Button>
           ) : null}

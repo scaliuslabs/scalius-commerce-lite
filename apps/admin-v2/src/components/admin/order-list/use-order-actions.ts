@@ -8,6 +8,7 @@ import { useMessages } from "~/i18n";
 import { orderListMessages, pluralKey } from "~/i18n/order-list";
 import { planOrderBulkAction, type OrderBulkAction, type OrderBulkOutcome } from "./order-bulk-actions";
 import type { BulkRunExtras } from "./BulkOrdersDialog";
+import type { CancelReason } from "./CancelOrderDialog";
 import { useArchiveOrdersWithUndo, useOrderBulkRun } from "./use-order-list-mutations";
 
 /** The current table selection; read when an action runs, so handlers stay stable. */
@@ -39,16 +40,17 @@ export function useOrderActions(
   const [outcome, setOutcome] = useState<OrderBulkOutcome | null>(null);
 
   const changeStatus = useCallback(
-    (order: OrderListItem, nextStatus: string, confirmed = false) => {
+    (order: OrderListItem, nextStatus: string, options: { confirmed?: boolean; reason?: CancelReason } = {}) => {
       const status = nextStatus.toLowerCase();
       if (!isAdminOrderStatus(status) || !orderActions.canChangeOrderStatus) return;
-      if (status === "cancelled" && !confirmed) {
+      // Cancelling asks first, with the same dialog as the order page.
+      if (status === "cancelled" && !options.confirmed) {
         setCancelOrder(order);
         return;
       }
       setUpdatingStatusIds((prev) => new Set(prev).add(order.id));
       statusMutation.mutate(
-        { orderId: order.id, status },
+        { orderId: order.id, status, ...(status === "cancelled" && options.reason ? { reason: options.reason } : {}) },
         {
           // The list has no order banner, so a refused change is said here.
           onError: (error) => toast.error(orderErrorMessage(error)),

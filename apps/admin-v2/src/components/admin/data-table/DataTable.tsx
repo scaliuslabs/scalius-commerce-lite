@@ -16,7 +16,7 @@ import {
   type TableRowData,
 } from "./table-config";
 import { ACTIONS_COLUMN, SELECT_COLUMN, isPrimaryColumn, useColumnLayout, useElementWidth } from "./column-layout";
-import { ColumnMenuContext, DataTableColumnMenu } from "./DataTableColumnMenu";
+import { ColumnLayoutContext, ColumnMenuContext, DataTableColumnMenu } from "./DataTableColumnMenu";
 import { AlertTriangle } from "lucide-react";
 import {
   Table as UITable,
@@ -82,6 +82,8 @@ interface DataTableProps<TData extends TableRowData> {
   layoutKey?: string;
   /** False for a list that shows every row at once (no page footer). */
   paginate?: boolean;
+  /** What the list is sorted by when no sort is chosen (the column menu's first choice); false for none. */
+  defaultSortLabel?: string | false;
 }
 
 export function DataTable<TData extends TableRowData>({
@@ -102,6 +104,7 @@ export function DataTable<TData extends TableRowData>({
   getRowHref,
   layoutKey,
   paginate = true,
+  defaultSortLabel,
 }: DataTableProps<TData>) {
   const t = useMessages(resourceMessages);
   const navigate = useNavigate();
@@ -145,7 +148,8 @@ export function DataTable<TData extends TableRowData>({
       return cell ? [cell] : [];
     });
   };
-  const columnMenu = <DataTableColumnMenu table={table} layout={layout} />;
+  const columnMenu = <DataTableColumnMenu table={table} layout={layout} defaultSortLabel={defaultSortLabel} />;
+  const headerLayout = { toggle: layout.toggle, isHiddenByChoice: layout.isHiddenByChoice };
 
   const renderErrorState = () => (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -250,6 +254,7 @@ export function DataTable<TData extends TableRowData>({
   const mobileCard = mobileCardRenderer ?? defaultMobileCard;
 
   return (
+    <ColumnLayoutContext.Provider value={headerLayout}>
     <div className={cn(isCard && "overflow-clip rounded-xl bg-card shadow-card", className)}>
       <ColumnMenuContext.Provider value={columnMenu}>{toolbar}</ColumnMenuContext.Provider>
 
@@ -312,6 +317,7 @@ export function DataTable<TData extends TableRowData>({
         />
       )}
     </div>
+    </ColumnLayoutContext.Provider>
   );
 }
 

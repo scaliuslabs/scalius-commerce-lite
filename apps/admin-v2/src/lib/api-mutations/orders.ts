@@ -12,6 +12,7 @@ import {
   postApiV1AdminOrdersByIdAmendments,
   postApiV1AdminOrdersByIdCod,
   postApiV1AdminOrdersByIdFulfill,
+  postApiV1AdminOrdersByIdMarkDelivered,
   postApiV1AdminOrdersByIdNotificationsByOutboxIdResend,
   postApiV1AdminOrdersByIdNotificationsByOutboxIdRetry,
   postApiV1AdminOrdersByIdPaymentRecoveryLink,
@@ -27,6 +28,7 @@ import {
   postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile,
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown,
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup,
+  postApiV1AdminOrdersByIdShipmentsByShipmentIdReturned,
   postApiV1AdminOrdersByIdTimeline,
   putApiV1AdminOrdersByIdDetails,
   putApiV1AdminOrdersByIdStatus,
@@ -71,10 +73,7 @@ const msg = (key: OrderDetailMessageKey, vars?: Record<string, string | number>)
 
 /** Toast per status the merchant can pick: noun + past verb (ORD-35). */
 const STATUS_TOASTS: Partial<Record<string, OrderDetailMessageKey>> = {
-  processing: "toast.status.processing",
   confirmed: "toast.status.confirmed",
-  shipped: "toast.status.shipped",
-  delivered: "toast.status.delivered",
   completed: "toast.status.completed",
   cancelled: "toast.status.cancelled",
   pending: "toast.status.pending",
@@ -122,13 +121,15 @@ function cachedOrderVersion(queryClient: QueryClient, orderId: string): number |
  * order moved on elsewhere. Reload every card of the order, and when it did
  * change, say so in the page banner instead of leaving old actions on screen.
  * Actions without their own dialog also show the reason in the banner;
- * dialogs show `mutation.error` inline instead.
+ * dialogs show `mutation.error` inline instead. `explainConflict` keeps the
+ * server's reason for a 409 ("…already recorded as collected by Kamal.")
+ * in the banner instead of the generic "This order changed".
  */
 async function onOrderError(
   queryClient: QueryClient,
   orderId: string,
   error: unknown,
-  { banner, refresh = false }: { banner: boolean; refresh?: boolean },
+  { banner, refresh = false, explainConflict = false }: { banner: boolean; refresh?: boolean; explainConflict?: boolean },
 ): Promise<void> {
   if (banner) showOrderNotice(orderId, orderErrorMessage(error));
   const status = errorStatus(error);
@@ -137,9 +138,16 @@ async function onOrderError(
   const before = cachedOrderVersion(queryClient, orderId);
   await invalidateOrder(queryClient, orderId);
   const after = cachedOrderVersion(queryClient, orderId);
-  if (status === 409 || (refused && before !== undefined && after !== undefined && after !== before)) {
+  if (status === 409 && explainConflict) {
+    showOrderNotice(orderId, orderErrorMessage(error));
+  } else if (status === 409 ||(refused && before !== undefined && after !== undefined && after !== before)) {
     showOrderNotice(orderId, msg("error.orderChanged"));
   }
+}
+
+/** The action was already done elsewhere (another tab or staff member). */
+export function isOrderConflict(error: unknown): boolean {
+  return errorStatus(error) === 409;
 }
 
 /** Plain words for a failed order action; transport and server faults read "Couldn't reach the server". */
@@ -296,6 +304,37 @@ export function useCreateFulfillmentShipment() {
   });
 }
 
+/** A shipped, fully sent, already-paid order reached the buyer (Delivery card and next step). */
+export function useMarkOrderDelivered() {
+  const queryClient = useQueryClient();
+  return useSingleFlightMutation({
+    mutationFn: ({ orderId }: { orderId: string }) =>
+      apiData(postApiV1AdminOrdersByIdMarkDelivered({ path: { id: orderId } })),
+    onSuccess: (_data, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      toast.success(msg("toast.status.delivered"));
+    },
+    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true }),
+  });
+}
+
+/**
+ * An own-courier parcel of a part-sent order came back undelivered: its units
+ * are unsent again (still reserved, so stock doesn't move).
+ */
+export function useMarkParcelReturned() {
+  const queryClient = useQueryClient();
+  return useSingleFlightMutation({
+    mutationFn: ({ orderId, shipmentId }: OrderShipmentRef) =>
+      apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdReturned({ path: { id: orderId, shipmentId } })),
+    onSuccess: (_data, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      toast.success(msg("toast.parcelReturned"));
+    },
+    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true }),
+  });
+}
+
 /** Refund dialog; a failure stays inside the dialog. */
 export function useRefundOrder() {
   const queryClient = useQueryClient();
@@ -419,8 +458,9 @@ export function useUpdateOrderCod() {
           : variables.action === "failed" ? "toast.codFailed" : "toast.codReturned",
       ));
     },
+    // Already recorded in another tab: the dialog closes and the banner says by whom (R3-ORD-10).
     onError: (err, variables) => {
-      void onOrderError(queryClient, variables.orderId, err, { banner: false });
+      void onOrderError(queryClient, variables.orderId, err, { banner: false, explainConflict: true });
       if (variables.action === "collected") invalidateOrderInventoryQueries(queryClient);
     },
   });

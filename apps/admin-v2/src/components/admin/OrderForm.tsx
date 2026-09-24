@@ -144,6 +144,7 @@ export function OrderForm({
   defaultValues,
   orderLabel,
   cashToCollect = null,
+  savedShippingMethod = null,
 }: OrderFormProps) {
   const isEdit = mode === "amend";
   const t = useMessages(orderFormMessages);
@@ -501,6 +502,7 @@ export function OrderForm({
             form={form}
             products={products}
             isEdit={isEdit}
+            savedShippingMethod={savedShippingMethod}
             localTotals={localTotals}
             manualQuote={manualQuote}
           >

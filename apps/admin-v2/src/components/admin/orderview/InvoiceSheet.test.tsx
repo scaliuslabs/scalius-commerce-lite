@@ -47,7 +47,22 @@ describe("InvoiceSheet", () => {
     expect(host.querySelector("td")?.textContent).toContain(en["items.returned"].replace("{count}", "2"));
     const totals = [...host.querySelectorAll(".invoice-totals div")].map((row) => row.textContent);
     expect(totals).toContain(`${en["payment.refunded"]}−1,600`);
-    expect(totals).toContain(`${en["payment.net"]}880`);
+    expect(totals).toContain(`${en["invoice.netPaid"]}880`);
+  });
+
+  it("keeps an issued invoice as issued and adds refunds made after it (R3-ORD-07)", async () => {
+    const issued = {
+      ...document_,
+      status: "issued",
+      invoiceNumber: "INV-0007",
+      refundedSinceIssue: 800,
+      order: { ...document_.order, totalAmount: 1680, refundedAmount: 0 },
+    } as unknown as InvoiceDocument;
+    await act(async () => root.render(<InvoiceSheet document={issued} />));
+    const totals = [...host.querySelectorAll(".invoice-totals div")].map((row) => row.textContent);
+    expect(totals).not.toContain(`${en["payment.refunded"]}−0`);
+    expect(totals).toContain(`${en["invoice.refundedSinceIssue"]}−800`);
+    expect(totals).toContain(`${en["invoice.netPaid"]}880`);
   });
 
   it("prints delivery savings on the delivery line and item savings as Discount · Title (CODE)", async () => {

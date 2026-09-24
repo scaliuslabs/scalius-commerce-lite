@@ -31,6 +31,7 @@ vi.mock("~/lib/api-mutations/orders", () => ({
   useUpdateOrderCod: () => ({ mutate: mocks.mutate, reset: vi.fn(), isPending: false }),
   useRefundOrder: () => ({ mutate: mocks.refund, reset: vi.fn(), isPending: mocks.refundPending }),
   orderErrorMessage: (error: Error) => error.message,
+  isOrderConflict: (error: { status?: number }) => error?.status === 409,
   useReconcileRefundAttempt: () => ({ mutate: mocks.mutate, isPending: false }),
   useIssueOrderPaymentRecoveryLink: () => ({ mutateAsync: mocks.issue, isPending: false }),
 }));
@@ -303,7 +304,9 @@ describe("PaymentCard", () => {
       });
       await act(async () => document.querySelector<HTMLButtonElement>("#manualSettlementConfirmed")!.click());
       const submit = [...document.querySelectorAll('[role="dialog"] button')]
-        .find((candidate) => candidate.textContent === en["refund.recordCashAmount"].replace("{amount}", "৳3000")) as HTMLButtonElement;
+        .find((candidate) => candidate.textContent === en["refund.recordCash"]) as HTMLButtonElement;
+      // An invalid amount is never echoed on the button (R3-ORD-16).
+      expect(document.body.textContent).not.toContain(en["refund.recordCashAmount"].replace("{amount}", "৳3000"));
       await act(async () => submit.click());
       expect(mocks.refund).not.toHaveBeenCalled();
       expect(amount.getAttribute("aria-invalid")).toBe("true");
@@ -385,6 +388,56 @@ describe("PaymentCard", () => {
         { orderId: "order_cod", action: "collected", collectedBy: "Rider Karim", collectedAmount: 1800 },
         expect.anything(),
       );
+    });
+
+    const riderParcel = (id: string, courierName: string, createdAt: number) => ({
+      id, orderId: "order_cod", providerId: null, providerType: "manual", courierName, externalId: null,
+      trackingId: null, status: "in_transit", rawStatus: null, createdAt,
+    });
+
+    it("pre-fills Collected by with the rider of the latest parcel, still editable (R3-ORD-08)", async () => {
+      mocks.permissions.canUpdateOrderCod = true;
+      mocks.cod.mockResolvedValue({ tracking: null });
+      await render({
+        ...codOrder, status: "shipped", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800,
+        shipments: [riderParcel("s1", "R3 Rider Jamal", 1_783_000_000), riderParcel("s2", "R3 Rider Kamal", 1_783_000_500)],
+      });
+      await act(async () => button(en["cod.markCollected"])!.click());
+      const input = document.querySelector<HTMLInputElement>("#collectedBy")!;
+      expect(input.value).toBe("R3 Rider Kamal");
+      expect(input.disabled).toBe(false);
+      await act(async () => button(en["cod.collectAmount"].replace("{amount}", "৳1800"))!.click());
+      expect(mocks.mutate).toHaveBeenCalledWith(
+        { orderId: "order_cod", action: "collected", collectedBy: "R3 Rider Kamal", collectedAmount: 1800 },
+        expect.anything(),
+      );
+    });
+
+    it("closes the collect dialog without success when another tab already collected (R3-ORD-10)", async () => {
+      mocks.permissions.canUpdateOrderCod = true;
+      mocks.cod.mockResolvedValue({ tracking: null });
+      mocks.mutate.mockImplementationOnce((_body, options: { onError?: (error: unknown) => void }) => {
+        options.onError?.({ status: 409, message: "Cash for this order was already recorded as collected by Kamal." });
+      });
+      await render({
+        ...codOrder, status: "shipped", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800,
+        shipments: [riderParcel("s1", "R3 Rider Kamal", 1_783_000_000)],
+      });
+      await act(async () => button(en["cod.markCollected"])!.click());
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      await act(async () => button(en["cod.collectAmount"].replace("{amount}", "৳1800"))!.click());
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+    });
+
+    it("offers Record failed delivery, not collection, on a part-sent order (R3-ORD-04)", async () => {
+      mocks.permissions.canUpdateOrderCod = true;
+      mocks.cod.mockResolvedValue({ tracking: null });
+      await render({
+        ...codOrder, status: "confirmed", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800,
+        items: [{ id: "i1", quantity: 2, shippedQuantity: 1 }] as Order["items"],
+      });
+      expect(button(en["cod.recordFailure"])).toBeDefined();
+      expect(button(en["cod.markCollected"])).toBeUndefined();
     });
   });
 });

@@ -57,6 +57,8 @@ export interface OrderFormProps {
   /** Amend only: "#1001" and the cash still to collect before the change. */
   orderLabel?: string;
   cashToCollect?: number | null;
+  /** Amend only: the order's saved delivery method. */
+  savedShippingMethod?: { id: string; name: string } | null;
 }
 
 /** Validation messages are read when validation runs, so they follow the dashboard language. */
