@@ -4,7 +4,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { ADMIN_SETUP_TOKEN_HEADER } from "@scalius/shared/setup-token";
-import { and, desc, eq, gt, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, like, ne, or, sql } from "drizzle-orm";
 import { getCookies, parseSetCookieHeader, splitSetCookieHeader } from "better-auth/cookies";
 import {
     buildBatchGuard,
@@ -51,6 +51,7 @@ import {
     verifyPendingTotpCode,
     type ClaimedAdminSetup,
 } from "@scalius/core/auth";
+import { RESET_TOKEN_MARKER_TTL_MS, liveResetToken, resetTokenMarkerIdentifier } from "@scalius/core/auth/reset-token-markers";
 import { createScannerTokenClaim } from "@scalius/core/auth/scanner-token-claims";
 import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 
@@ -690,7 +691,27 @@ app.openapi(deleteUserRoute, async (c) => {
         if (adminCount.length <= 1) throw new ValidationError("Cannot delete the last admin user");
 
         const revokedAt = new Date();
+        // The invite's links now say "cancelled" rather than "expired".
+        const liveLinks = (await db.select({ id: verification.id, identifier: verification.identifier })
+            .from(verification)
+            .where(and(eq(verification.value, userId), like(verification.identifier, "reset-password:%"))))
+            .flatMap((row) => {
+                const token = liveResetToken(row.identifier);
+                return token ? [{ id: row.id, token }] : [];
+            });
+        const cancelledMarkers = await Promise.all(liveLinks.map(async ({ token }) => ({
+            id: crypto.randomUUID(),
+            identifier: await resetTokenMarkerIdentifier("cancelled", token),
+            value: userToDelete.invitationId!,
+            expiresAt: new Date(revokedAt.getTime() + RESET_TOKEN_MARKER_TTL_MS),
+            createdAt: revokedAt,
+            updatedAt: revokedAt,
+        })));
         await safeBatch(db, [
+            ...(liveLinks.length ? [
+                db.delete(verification).where(inArray(verification.id, liveLinks.map(({ id }) => id))),
+                db.insert(verification).values(cancelledMarkers),
+            ] : []),
             db.update(adminInvitations)
                 .set({
                     status: "revoked",
