@@ -1,8 +1,10 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Search, X } from "lucide-react";
+import { ImageIcon, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
 
 import type { Scope, ScopeKind } from "./discount-form";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -15,8 +17,9 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { useCurrency } from "~/hooks/use-currency";
 import { useDebounce } from "~/hooks/use-debounce";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
 import { discountsMessages } from "~/i18n/discounts";
 import {
   collectionPickerOptionsQueryOptions,
@@ -30,6 +33,9 @@ const LIMIT = 90;
 interface Option {
   id: string;
   name: string;
+  price?: number;
+  primaryImage?: string | null;
+  isActive?: boolean;
 }
 
 function useOptions(kind: ScopeKind, search: string, enabled: boolean) {
@@ -48,16 +54,36 @@ function useOptions(kind: ScopeKind, search: string, enabled: boolean) {
   return { query, options };
 }
 
-function useNames(kind: ScopeKind, ids: string[]): Map<string, string> {
+/** The picked products or collections, by id (name, and price for products). */
+export function useScopeItems(scope: Scope): Map<string, Option> {
+  const { kind, ids } = scope;
   const products = useQuery({ ...productsByIdsQueryOptions(ids), enabled: kind === "products" && ids.length > 0 });
   const collections = useQuery({ ...collectionsByIdsQueryOptions(ids), enabled: kind === "collections" && ids.length > 0 });
   const rows: Option[] = kind === "products" ? products.data?.products ?? [] : collections.data?.collections ?? [];
-  return new Map(rows.map((row) => [row.id, row.name]));
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+/** "Panjabi, Attar and 1 more"; "3 products" until the names load. */
+export function useScopeLabel(): (scope: Scope, items: Map<string, Option>) => string {
+  const t = useMessages(discountsMessages);
+  return (scope, items) => {
+    const names = scope.ids.map((id) => items.get(id)?.name).filter((name): name is string => Boolean(name));
+    if (names.length < scope.ids.length) {
+      const count = scope.ids.length;
+      return scope.kind === "products"
+        ? count === 1 ? t("countProduct") : t("countProducts", { count: formatNumber(count) })
+        : count === 1 ? t("countCollection") : t("countCollections", { count: formatNumber(count) });
+    }
+    return names.length <= 2
+      ? names.join(", ")
+      : t("namesMore", { names: names.slice(0, 2).join(", "), count: formatNumber(names.length - 2) });
+  };
 }
 
 /**
- * "Applies to" / "Any items from": pick products or collections through a
- * search dialog; the choices show as removable chips under the field.
+ * "Applies to" / "Any items from": pick products or collections in a
+ * resource picker (thumbnail, price, "N selected" and Add); the choices show
+ * as removable chips under the field.
  */
 export function ScopeField({
   scope,
@@ -71,14 +97,19 @@ export function ScopeField({
   disabled?: boolean;
 }) {
   const t = useMessages(discountsMessages);
+  const { fmt } = useCurrency();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [staged, setStaged] = useState<Map<string, string>>(new Map());
   const debounced = useDebounce(search.trim(), 300);
   const { query, options } = useOptions(scope.kind, debounced, open);
-  const savedNames = useNames(scope.kind, scope.ids);
-  const names = useMemo(() => new Map([...savedNames, ...staged]), [savedNames, staged]);
+  const saved = useScopeItems(scope);
+  const names = useMemo(
+    () => new Map([...[...saved].map(([id, row]) => [id, row.name] as const), ...staged]),
+    [saved, staged],
+  );
   const isProducts = scope.kind === "products";
+  const unchanged = staged.size === scope.ids.length && scope.ids.every((id) => staged.has(id));
 
   function openPicker(initialSearch = "") {
     setSearch(initialSearch);
@@ -153,10 +184,11 @@ export function ScopeField({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t(isProducts ? "addProducts" : "addCollections")}</DialogTitle>
-            <DialogDescription>{t("selectedCount", { count: staged.size })}</DialogDescription>
+            <DialogDescription className="sr-only">{t(isProducts ? "searchProducts" : "searchCollections")}</DialogDescription>
           </DialogHeader>
           <Input
             autoFocus
+            type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t(isProducts ? "searchProducts" : "searchCollections")}
@@ -167,15 +199,26 @@ export function ScopeField({
               <p className="p-4 text-body text-muted-foreground">{t("loadFailed")}</p>
             ) : options.length === 0 ? (
               <p className="p-4 text-body text-muted-foreground" aria-live="polite">
-                {t(query.isFetching ? "loading" : "noResults")}
+                {t(query.isPending || query.isFetching ? "loading" : "noResults")}
               </p>
             ) : (
               <ul className="divide-y">
                 {options.map((option) => (
                   <li key={option.id}>
-                    <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-body hover:bg-muted">
+                    <label className="flex min-h-14 cursor-pointer items-center gap-3 px-3 py-2 text-body hover:bg-muted">
                       <Checkbox checked={staged.has(option.id)} onCheckedChange={() => toggle(option)} />
-                      <span className="truncate">{option.name}</span>
+                      {isProducts ? (
+                        <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+                          {option.primaryImage ? (
+                            <img src={mediaImageUrl(option.primaryImage, 160)} alt="" className="size-full object-contain" loading="lazy" decoding="async" />
+                          ) : (
+                            <ImageIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                          )}
+                        </span>
+                      ) : null}
+                      <span className="min-w-0 flex-1 truncate">{option.name}</span>
+                      {option.isActive === false ? <Badge variant="attention">{t("statusDraft")}</Badge> : null}
+                      {option.price !== undefined ? <span className="shrink-0 tabular-nums text-muted-foreground">{fmt(option.price)}</span> : null}
                     </label>
                   </li>
                 ))}
@@ -189,10 +232,14 @@ export function ScopeField({
               </div>
             ) : null}
           </div>
-          <DialogFooter>
+          <DialogFooter className="sm:items-center">
+            <p className="text-body text-muted-foreground sm:mr-auto" aria-live="polite">
+              {t("selectedCount", { count: formatNumber(staged.size) })}
+            </p>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t("cancel")}</Button>
             <Button
               type="button"
+              disabled={unchanged}
               onClick={() => {
                 onChange({ ...scope, ids: [...staged.keys()] });
                 setOpen(false);

@@ -179,7 +179,8 @@ export function sanitizeHtml(html: string): string {
   });
 
   const children = sanitizeNodes(document.children);
-  return DomUtils.getOuterHTML(children);
+  // Keep text as UTF-8: only markup characters are escaped, so Bangla stays readable (and small) when stored.
+  return DomUtils.getOuterHTML(children, { encodeEntities: "utf8" });
 }
 
 /**

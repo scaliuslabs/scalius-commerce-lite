@@ -7,6 +7,7 @@ import {
   getApiV1AdminSettingsHeader,
   getApiV1AdminSettingsHeroSliders,
   getApiV1AdminSettingsHomepagePresentation,
+  getApiV1AdminSettingsSeoFeedDiagnostics,
   getApiV1AdminSettingsTheme,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiResult } from "../api";
@@ -22,6 +23,7 @@ export type FooterDocument = ApiResult<typeof getApiV1AdminSettingsFooter>;
 export type HeroSliderDocument = ApiResult<typeof getApiV1AdminSettingsHeroSliders>[number];
 /** The menu detail is the stored row: no item or placement counts. */
 export type NavigationMenuRecord = Omit<NavigationMenuSummary, "itemCount" | "placementCount">;
+export type FeedDiagnostics = ApiResult<typeof getApiV1AdminSettingsSeoFeedDiagnostics>;
 export type HomepageSectionsDocument = ApiResult<
   typeof getApiV1AdminSettingsHomepagePresentation
 >;
@@ -77,4 +79,11 @@ export const navigationPlacementsQueryOptions = () =>
     queryFn: async () =>
       (await apiData(getApiV1AdminNavigationPlacementSettings()))
         .placements as unknown as NavigationPlacementSetting[],
+  });
+
+/** Which products the feed leaves out and why; under the SEO key, so a save refreshes it. */
+export const feedDiagnosticsQueryOptions = () =>
+  queryOptions({
+    queryKey: [...queryKeys.settings.seo(), "feed-diagnostics"] as const,
+    queryFn: () => apiData(getApiV1AdminSettingsSeoFeedDiagnostics({ query: { sampleLimit: 3 } })),
   });

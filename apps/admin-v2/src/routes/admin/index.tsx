@@ -1,8 +1,13 @@
 import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, CreditCard, Inbox, Package, Palette, Store, Truck } from "lucide-react";
-import { getApiV1AdminInventoryAlerts, getApiV1AdminOrders } from "@scalius/api-client/sdk";
+import { ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, Palette, Store, Truck } from "lucide-react";
+import {
+  getApiV1AdminInventoryAlerts,
+  getApiV1AdminOrders,
+  getApiV1AdminSettingsSeoFeedDiagnostics,
+} from "@scalius/api-client/sdk";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -17,6 +22,7 @@ import { apiData } from "~/lib/api";
 import { canAccessAdminPath } from "~/lib/admin-access";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { dashboardActivityQueryOptions, dashboardSummaryQueryOptions } from "~/lib/api-query-options/dashboard-home";
+import { navigationPlacementsQueryOptions } from "~/lib/api-query-options/online-store";
 import { formatDateTime, formatNumber, translate, useMessages } from "~/i18n";
 import { homeMessages } from "~/i18n/home";
 
@@ -30,9 +36,12 @@ export const Route = createFileRoute("/admin/")({
   component: HomePage,
 });
 
-/** Today's date in store time (Asia/Dhaka) as YYYY-MM-DD, matching the activity feed. */
 type HomeKey = keyof (typeof homeMessages)["en"];
 
+/** Feed exclusions a merchant fixes on the product (not a deliberate setting). */
+const FIXABLE_FEED_REASONS = new Set(["missing_image", "non_positive_price", "no_buyer_sku", "inconsistent_option_axes"]);
+
+/** Today's date in store time (Asia/Dhaka) as YYYY-MM-DD, matching the activity feed. */
 const storeToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
 
 function HomePage() {
@@ -45,7 +54,7 @@ function HomePage() {
   const activity = useQuery(dashboardActivityQueryOptions());
   const openOrders = useQuery({
     queryKey: ["home", "open-orders"],
-    queryFn: () => apiData(getApiV1AdminOrders({ query: { statusGroup: "open", limit: 1 } })),
+    queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "unfulfilled", limit: 1 } })),
     enabled: canOpen("/admin/orders"),
   });
   const lowStock = useQuery({
@@ -53,6 +62,15 @@ function HomePage() {
     queryFn: () => apiData(getApiV1AdminInventoryAlerts({ query: { status: "active" } })),
     enabled: canOpen("/admin/inventory"),
   });
+  // Store readiness (Shopify's Home tasks): products the product feed leaves
+  // out for a fixable reason, and a storefront header without a menu.
+  const feed = useQuery({
+    queryKey: ["home", "feed-diagnostics"],
+    queryFn: () => apiData(getApiV1AdminSettingsSeoFeedDiagnostics()),
+    enabled: canOpen("/admin/online-store/preferences"),
+    staleTime: 5 * 60_000,
+  });
+  const placements = useQuery({ ...navigationPlacementsQueryOptions(), enabled: canOpen("/admin/online-store/navigation") });
 
   if (summary.isError) {
     return (
@@ -77,6 +95,12 @@ function HomePage() {
   const month = stats.currentMonth;
   const openCount = openOrders.data?.pagination.total ?? 0;
   const lowCount = lowStock.data?.alerts.length ?? 0;
+  const feedGaps = feed.data?.policy.productCatalogEnabled
+    ? feed.data.reasons.filter((entry) => FIXABLE_FEED_REASONS.has(entry.reason)).reduce((sum, entry) => sum + entry.products, 0)
+    : 0;
+  const needsHeaderMenu = placements.data !== undefined && !placements.data.some(({ placement, menuDeletedAt, publicationItemCount }) =>
+    placement.surface === "header" && placement.isEnabled && !menuDeletedAt && (publicationItemCount ?? 0) > 0);
+  const caughtUp = openCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu;
 
   return (
     <div className="space-y-4 pb-8">
@@ -89,8 +113,9 @@ function HomePage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="space-y-1">
           <CardTitle>{t("salesChart")}</CardTitle>
+          <p className="text-body text-muted-foreground">{t("grossHelp")}</p>
         </CardHeader>
         <CardContent>
           {days.some((day) => day.revenue > 0) ? (
@@ -101,8 +126,9 @@ function HomePage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      {/* Cards keep their own height: a short to-do list doesn't stretch to the orders list. */}
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <Card className="min-w-0 lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>{t("recentOrders")}</CardTitle>
             {canOpen("/admin/orders") ? (
@@ -126,7 +152,9 @@ function HomePage() {
                         className="flex min-h-11 items-center gap-3 px-4 py-2 text-body hover:bg-muted md:min-h-10"
                       >
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">{order.customerName}</span>
+                          <span className="block truncate font-medium">
+                            {formatOrderNumber(order.orderNumber, order.id)} · {order.customerName}
+                          </span>
                           <span className="block text-muted-foreground">
                             {placed ? formatDateTime(placed, { dateStyle: "medium", timeStyle: "short" }) : null}
                           </span>
@@ -157,7 +185,17 @@ function HomePage() {
                 {lowCount === 1 ? t("lowStockOne") : t("lowStock", { count: lowCount })}
               </TodoLink>
             ) : null}
-            {openCount === 0 && lowCount === 0 ? <p className="text-body text-muted-foreground">{t("allDone")}</p> : null}
+            {feedGaps > 0 ? (
+              <TodoLink to="/admin/online-store/preferences" icon={<ImageOff className="h-4 w-4" />}>
+                {feedGaps === 1 ? t("notInFeedOne") : t("notInFeed", { count: feedGaps })}
+              </TodoLink>
+            ) : null}
+            {needsHeaderMenu ? (
+              <TodoLink to="/admin/online-store/navigation" icon={<Menu className="h-4 w-4" />}>
+                {t("addHeaderMenu")}
+              </TodoLink>
+            ) : null}
+            {caughtUp ? <p className="text-body text-muted-foreground">{t("allDone")}</p> : null}
           </CardContent>
         </Card>
       </div>
@@ -183,7 +221,7 @@ function Metric({ label, value, change }: { label: string; value: string; change
   );
 }
 
-function TodoLink({ to, search, icon, children }: { to: string; search: Record<string, string>; icon: ReactNode; children: ReactNode }) {
+function TodoLink({ to, search, icon, children }: { to: string; search?: Record<string, string>; icon: ReactNode; children: ReactNode }) {
   return (
     <Link to={to} search={search as never} className="flex min-h-11 items-center gap-3 rounded-md px-2 text-body font-medium hover:bg-muted">
       {icon}

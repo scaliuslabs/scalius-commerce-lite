@@ -30,6 +30,9 @@ interface FormContainerProps<
   onSave: (values: TTransformedValues) => Promise<unknown>;
   children: React.ReactNode;
   formClassName?: string;
+  /** Save bar and toast wording for a new record ("Unsaved customer", "Customer created"). */
+  unsavedMessage?: string;
+  savedMessage?: string;
 }
 
 function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends FieldValues>({
@@ -99,10 +102,12 @@ export function FormContainer<
   onSave,
   children,
   formClassName = "pb-6",
+  unsavedMessage,
+  savedMessage,
 }: FormContainerProps<TFieldValues, TTransformedValues>) {
   return (
     <ErrorBoundary>
-      <SaveBarProvider>
+      <SaveBarProvider unsavedMessage={unsavedMessage} savedMessage={savedMessage}>
         <Form {...form}>
           <EditorForm
             form={form}

@@ -10,6 +10,9 @@ import type { GlobalSearchProps } from "./GlobalSearchDialog";
 const GlobalSearchDialog = lazy(() =>
   import("./GlobalSearchDialog").then((module) => ({ default: module.GlobalSearchDialog })),
 );
+const ShortcutsDialog = lazy(() =>
+  import("./GlobalSearchDialog").then((module) => ({ default: module.ShortcutsDialog })),
+);
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 const SEQUENCE_MS = 1000;
@@ -21,13 +24,15 @@ function typingIn(target: EventTarget | null) {
 
 /**
  * Top-bar search. ⌘K / Ctrl+K or S opens it; G then H, O, P, C, D or S jumps
- * to a section (Shopify's sequences). Shortcuts never fire while typing.
+ * to a section (Shopify's sequences); ? lists the shortcuts. Shortcuts never
+ * fire while typing.
  */
 export function GlobalSearch(props: GlobalSearchProps) {
   const { canOpen } = props;
   const t = useMessages(shellMessages);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
     let goPressedAt = 0;
@@ -49,7 +54,10 @@ export function GlobalSearch(props: GlobalSearchProps) {
         return;
       }
       if (key === "g") goPressedAt = Date.now();
-      else if (key === "s") {
+      else if (event.key === "?") {
+        event.preventDefault();
+        setHelpOpen(true);
+      } else if (key === "s") {
         event.preventDefault();
         setOpen(true);
       }
@@ -76,6 +84,7 @@ export function GlobalSearch(props: GlobalSearchProps) {
       </button>
       <Suspense fallback={null}>
         <GlobalSearchDialog {...props} open={open} setOpen={setOpen} />
+        <ShortcutsDialog open={helpOpen} setOpen={setHelpOpen} />
       </Suspense>
     </>
   );

@@ -36,13 +36,9 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
   const queueRef = useRef<UploadQueueItem[]>([]);
   const activeCountRef = useRef(0);
   const controllersRef = useRef(new Map<string, AbortController>());
-  const mountedRef = useRef(true);
   const pumpRef = useRef<() => void>(() => undefined);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    controllersRef.current.forEach((controller) => controller.abort());
-  }, []);
+  useEffect(() => () => controllersRef.current.forEach((controller) => controller.abort()), []);
 
   useEffect(() => {
     if (!queue.some((item) => UNFINISHED_UPLOAD_STATUSES.has(item.status))) return;
@@ -59,9 +55,16 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
     return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
   }, [queue]);
 
+  // Never gate these on a "mounted" ref: React's development double mount
+  // leaves such a ref false, and progress stopped rendering at "Waiting".
   const mutate = useCallback((id: string, update: Partial<UploadQueueItem>) => {
     queueRef.current = queueRef.current.map((item) => item.id === id ? { ...item, ...update } : item);
-    if (mountedRef.current) setQueue(queueRef.current);
+    setQueue(queueRef.current);
+  }, []);
+
+  const dismiss = useCallback((id: string) => {
+    queueRef.current = queueRef.current.filter((item) => item.id !== id);
+    setQueue(queueRef.current);
   }, []);
 
   const runItem = useCallback(async (id: string) => {
@@ -162,7 +165,9 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
           }
         }
       }
-      mutate(id, { status: "complete", progress: 100, result: file, warning });
+      // The file is in the library now; only a warning keeps its row up.
+      if (warning) mutate(id, { status: "complete", progress: 100, result: file, warning });
+      else dismiss(id);
       onUploadComplete?.([file]);
     } catch (error) {
       controllersRef.current.delete(id);
@@ -178,7 +183,7 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
         error: error instanceof Error ? error.message : t("uploadFailed"),
       });
     }
-  }, [folderId, mutate, onUploadComplete]);
+  }, [dismiss, folderId, mutate, onUploadComplete]);
 
   const pump = useCallback(() => {
     while (activeCountRef.current < MAX_CONCURRENT_FILES) {

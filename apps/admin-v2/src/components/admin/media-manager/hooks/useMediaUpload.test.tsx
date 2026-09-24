@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMediaUpload } from "./useMediaUpload";
@@ -34,8 +34,10 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 type HookValue = ReturnType<typeof useMediaUpload>;
 let latest: HookValue;
 
+const uploaded = vi.fn();
+
 function Harness() {
-  latest = useMediaUpload({ capability: "both", folderId: null });
+  latest = useMediaUpload({ capability: "both", folderId: null, onUploadComplete: uploaded });
   return null;
 }
 
@@ -63,7 +65,9 @@ describe("useMediaUpload initiation races", () => {
     api.abortUpload.mockResolvedValue(undefined);
     metadata.readIntrinsicMediaMetadata.mockReset().mockResolvedValue(null);
     encoder.encodeMediaVariants.mockReset().mockResolvedValue(null);
-    act(() => root.render(<Harness />));
+    uploaded.mockReset();
+    // The dashboard runs under StrictMode, which mounts every effect twice in development.
+    act(() => root.render(<StrictMode><Harness /></StrictMode>));
   });
 
   afterEach(() => {
@@ -161,12 +165,10 @@ describe("useMediaUpload initiation races", () => {
       height: 1080,
       durationMs: 23_567,
     });
-    expect(latest.queue[0]).toMatchObject({
-      status: "complete",
-      progress: 100,
-      warning: null,
-      result: { width: 1920, height: 1080, durationMs: 23_567, version: 2 },
-    });
+    expect(uploaded).toHaveBeenCalledWith([
+      expect.objectContaining({ width: 1920, height: 1080, durationMs: 23_567, version: 2 }),
+    ]);
+    expect(latest.queue).toEqual([]);
   });
 
   function imageSession(id: string) {
@@ -192,7 +194,8 @@ describe("useMediaUpload initiation races", () => {
     expect(api.completeUpload).toHaveBeenCalledWith("upload_session_5", "client");
     expect(api.saveVariants).toHaveBeenCalledWith("media_5", variants);
     expect(api.updateFile).not.toHaveBeenCalled();
-    expect(latest.queue[0]).toMatchObject({ status: "complete", warning: null, result: { version: 2 } });
+    expect(uploaded).toHaveBeenCalledWith([expect.objectContaining({ version: 2 })]);
+    expect(latest.queue).toEqual([]);
   });
 
   it("lets the server render when this browser cannot encode WebP", async () => {
@@ -208,6 +211,42 @@ describe("useMediaUpload initiation races", () => {
 
     expect(api.completeUpload).toHaveBeenCalledWith("upload_session_6", "server");
     expect(api.saveVariants).not.toHaveBeenCalled();
-    expect(latest.queue[0]).toMatchObject({ status: "complete", result: { width: 800, height: 600 } });
+    expect(uploaded).toHaveBeenCalledWith([expect.objectContaining({ width: 800, height: 600 })]);
+  });
+
+  it("shows progress, then clears the row and the leave warning once the server confirms", async () => {
+    const completion = deferred<{ id: string; version: number }>();
+    api.initiateUpload.mockResolvedValue(imageSession("upload_session_7"));
+    api.uploadPart.mockResolvedValue(undefined);
+    api.completeUpload.mockReturnValue(completion.promise);
+    api.saveVariants.mockResolvedValue({ id: "media_7", version: 2 });
+
+    const image = new File([new Uint8Array(16)], "photo.jpg", { type: "image/jpeg" });
+    await act(async () => { await latest.uploadFiles([image]); });
+    await flush();
+    expect(latest.queue[0]).toMatchObject({ status: "completing", progress: 97 });
+
+    completion.resolve({ id: "media_7", version: 1 });
+    await flush();
+    expect(latest.queue).toEqual([]);
+    expect(latest.isUploading).toBe(false);
+    const leaving = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leaving);
+    expect(leaving.defaultPrevented).toBe(false);
+  });
+
+  it("keeps a finished upload's row while it carries a warning", async () => {
+    encoder.encodeMediaVariants.mockResolvedValue({ width: 10, height: 10, files: new Map() });
+    api.initiateUpload.mockResolvedValue(imageSession("upload_session_8"));
+    api.uploadPart.mockResolvedValue(undefined);
+    api.completeUpload.mockResolvedValue({ id: "media_8", version: 1 });
+    api.saveVariants.mockRejectedValue(new Error("offline"));
+
+    const image = new File([new Uint8Array(16)], "photo.jpg", { type: "image/jpeg" });
+    await act(async () => { await latest.uploadFiles([image]); });
+    await flush();
+
+    expect(latest.queue[0]).toMatchObject({ status: "complete", progress: 100, warning: expect.any(String) });
+    expect(latest.isUploading).toBe(false);
   });
 });

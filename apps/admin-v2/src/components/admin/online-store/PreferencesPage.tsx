@@ -1,5 +1,6 @@
-import { useMemo } from "react";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { Fragment, useMemo } from "react";
+import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { postApiV1AdminSettingsSeo } from "@scalius/api-client/sdk";
@@ -17,6 +18,7 @@ import {
 } from "~/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { apiData } from "~/lib/api";
+import { feedDiagnosticsQueryOptions, type FeedDiagnostics } from "~/lib/api-query-options/online-store";
 import { seoSettingsQueryOptions } from "~/lib/api-query-options/settings";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
@@ -55,6 +57,50 @@ function FeedLink({ id, label, url }: { id: string; label: string; url: string }
         </Button>
       </div>
     </div>
+  );
+}
+
+type FeedReason = FeedDiagnostics["reasons"][number]["reason"];
+/** Products that are off the storefront too: leaving them out of the feed is expected. */
+const EXPECTED_REASONS = new Set<FeedReason>(["feed_disabled", "inactive_deleted_unpublished"]);
+
+/** One line with the number of products the feed leaves out; reasons and examples on demand. */
+function FeedLeftOut() {
+  const t = useMessages(onlineStoreMessages);
+  const { data } = useQuery(feedDiagnosticsQueryOptions());
+  if (!data) return null;
+  const reasons = data.reasons.filter(({ reason, products }) => products > 0 && !EXPECTED_REASONS.has(reason));
+  if (!reasons.length) return null;
+  const expected = data.reasons.reduce((total, { reason, products }) => total + (EXPECTED_REASONS.has(reason) ? products : 0), 0);
+  const count = data.totals.productsWithIssues - expected;
+  return (
+    <details className="text-body">
+      <summary className="cursor-pointer">{t(count === 1 ? "feedLeftOutOne" : "feedLeftOut", { count })}</summary>
+      <ul className="mt-2 space-y-2 pl-4">
+        {reasons.map(({ reason, products, samples }) => (
+          <li key={reason}>
+            <p>
+              {t(`feedReason_${reason as Exclude<FeedReason, "feed_disabled" | "inactive_deleted_unpublished">}`)}
+              <span className="text-muted-foreground"> · {t(products === 1 ? "oneProduct" : "productCount", { count: products })}</span>
+            </p>
+            <p className="text-muted-foreground">
+              {samples.map((sample, index) => (
+                <Fragment key={sample.id}>
+                  {index ? ", " : null}
+                  <Link to="/admin/products/$productId/edit" params={{ productId: sample.id }} className="text-link hover:underline">
+                    {sample.name}
+                  </Link>
+                </Fragment>
+              ))}
+              {products > samples.length ? ` ${t("andMore", { count: products - samples.length })}` : null}
+            </p>
+          </li>
+        ))}
+      </ul>
+      {data.scan.truncated ? (
+        <p className="mt-2 text-muted-foreground">{t("feedScanLimit", { count: data.scan.limit })}</p>
+      ) : null}
+    </details>
   );
 }
 
@@ -174,6 +220,7 @@ function PreferencesCards() {
             </div>
             {origin ? (
               <div className="space-y-3">
+                <FeedLeftOut />
                 <FeedLink id="preferences-facebook-feed" label={t("facebookFeed")} url={`${origin}/api/facebook-feed.xml`} />
                 <FeedLink id="preferences-google-feed" label={t("googleFeed")} url={`${origin}/api/product-feed.xml`} />
               </div>

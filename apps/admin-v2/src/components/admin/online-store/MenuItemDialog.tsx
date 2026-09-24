@@ -191,7 +191,7 @@ function ItemForm({
           type={target.resourceType}
           value={target.resourceId}
           fallbackLabel={editing ? draft.label : undefined}
-          onValueChange={(resourceId, name) => setDraft((current) => ({
+          onValueChange={({ id: resourceId, name }) => setDraft((current) => ({
             ...current,
             ...(current.label.trim() ? {} : { label: name, labelMode: "resource" as const }),
             target: { ...target, resourceId },
@@ -211,21 +211,25 @@ function ItemForm({
         </Select>
       ) : null}
       {target.type === "internal_path" ? (
-        <Input
-          aria-label={t("link_internal_path")}
-          placeholder="/search"
-          value={target.path}
-          onChange={(event) => setTarget({ type: "internal_path", path: event.target.value })}
-        />
+        <Field id="menu-item-path" label={t("link_internal_path")}>
+          <Input
+            id="menu-item-path"
+            placeholder="/search"
+            value={target.path}
+            onChange={(event) => setTarget({ type: "internal_path", path: event.target.value })}
+          />
+        </Field>
       ) : null}
       {target.type === "external_url" ? (
-        <Input
-          type="url"
-          inputMode="url"
-          aria-label={t("link_external_url")}
-          value={target.url}
-          onChange={(event) => setTarget({ type: "external_url", url: event.target.value })}
-        />
+        <Field id="menu-item-url" label={t("link_external_url")}>
+          <Input
+            id="menu-item-url"
+            type="url"
+            inputMode="url"
+            value={target.url}
+            onChange={(event) => setTarget({ type: "external_url", url: event.target.value })}
+          />
+        </Field>
       ) : null}
       <div className="rounded-lg border">
         <div className="flex items-center justify-between gap-3 px-3 py-2">
