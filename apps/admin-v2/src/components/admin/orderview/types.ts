@@ -2,6 +2,7 @@ import type {
   DeliveryProviderRecord,
 } from "~/lib/api-query-options/delivery";
 import type { OrderOperationalReadState } from "@/lib/order-operational-read-state";
+import type { OrderShipmentRecoveryReason } from "@scalius/core/modules/orders/orders.types";
 
 export type OrderTimestamp = Date | string | number;
 export type ShipmentMetadata = Record<string, unknown> | string | null;
@@ -36,8 +37,6 @@ export interface OrderRefundAttempt {
   providerStatus: string | null;
   active: boolean;
   severity: "info" | "success" | "warning" | "danger";
-  label: string;
-  message: string;
   createdAt: OrderTimestamp | null;
   updatedAt: OrderTimestamp | null;
   nextProbeAt: OrderTimestamp | null;
@@ -61,8 +60,6 @@ export interface ActiveRefundOperation {
   active: true;
   status: string;
   severity: "info" | "success" | "warning" | "danger";
-  label: string;
-  message: string;
   amount: number;
   currency: string;
   gateway: string;
@@ -80,10 +77,10 @@ export interface ActiveRefundOperation {
 
 export interface ShipmentRecovery {
   state: "none" | "creating" | "needs_attention" | "failed";
+  /** Stable code the dashboard words in its own language (see `shipmentRecoveryCopy`). */
+  reason: OrderShipmentRecoveryReason;
   severity: "info" | "warning" | "danger";
   activeLock: boolean;
-  label: string;
-  message: string | null;
   shipmentId: string | null;
   status: string | null;
   providerType: string | null;
@@ -96,8 +93,6 @@ export interface ShipmentRecovery {
 
 export interface PaymentRecovery {
   state: "none" | "awaiting_payment" | "processing" | "needs_attention";
-  label: string;
-  message: string | null;
   gateway: string | null;
   paymentType: string | null;
   status: string | null;

@@ -62,6 +62,16 @@ describe("ManualFulfillmentDialog", () => {
     expect(payload.requestKey).toEqual(expect.any(String));
   });
 
+  it("reads a quantity and delivery cost typed in Bangla digits", async () => {
+    await act(async () => root.render(<ManualFulfillmentDialog order={order} open onOpenChange={() => undefined} />));
+    await act(async () => setValue(quantity("Kurta")!, "\u09e7"));
+    await act(async () => setValue(document.querySelector<HTMLInputElement>("#fulfill-amount")!, "\u09ec\u09e6"));
+    await act(async () => submit().click());
+    const [payload] = mocks.mutate.mock.calls[0]!;
+    expect(payload.items).toEqual([{ itemId: "i1", quantity: 1 }]);
+    expect(payload.shipmentAmount).toBe(60);
+  });
+
   it("repeats the same request key on a second click so the server replays the first shipment", async () => {
     await act(async () => root.render(<ManualFulfillmentDialog order={order} open onOpenChange={() => undefined} />));
     await act(async () => submit().click());

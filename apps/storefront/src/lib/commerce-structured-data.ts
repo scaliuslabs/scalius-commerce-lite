@@ -1,4 +1,5 @@
 import type { ShippingMethod } from "@/lib/api/types";
+import { splitDeliveryRates } from "@/lib/delivery-facts";
 
 export interface StorefrontBusinessInfo {
   companyName?: string | null;
@@ -392,6 +393,13 @@ export function buildMerchantReturnPolicyJsonLd({
   return policy;
 }
 
+/**
+ * OfferShippingDetails claim a rate for the whole country, so they are
+ * emitted only when that is true for every buyer: a free-delivery product
+ * (one zero rate), or store-wide delivery rates with no delivery zones.
+ * Zone-priced stores and local pickup emit nothing rather than a rate that
+ * does not apply to every address.
+ */
 export function buildOfferShippingDetails({
   shippingMethods,
   currencyCode,
@@ -403,31 +411,24 @@ export function buildOfferShippingDetails({
   freeDelivery: boolean;
   country?: string | null;
 }) {
-  const addressCountry = normalizeSchemaCountryCode(country);
-  const details = (shippingMethods ?? [])
-    .filter((method) => method.isActive !== false)
-    .map((method) => {
-      const fee = Number(method.fee);
-      if (!Number.isFinite(fee) || fee < 0) return null;
-      const value = freeDelivery ? 0 : fee;
-
-      return {
-        "@type": "OfferShippingDetails",
-        ...(cleanString(method.name) ? { name: cleanString(method.name) } : {}),
-        shippingDestination: {
-          "@type": "DefinedRegion",
-          addressCountry,
-        },
-        shippingRate: {
-          "@type": "MonetaryAmount",
-          value: value.toFixed(2),
-          currency: currencyCode,
-        },
-      };
-    })
-    .filter((detail): detail is Exclude<typeof detail, null> => Boolean(detail));
-
-  return details;
+  const { delivery, zoned } = splitDeliveryRates(shippingMethods);
+  if (delivery.length === 0 || (zoned && !freeDelivery)) return [];
+  const detail = (value: number, name?: string | null) => ({
+    "@type": "OfferShippingDetails",
+    ...(cleanString(name) ? { name: cleanString(name) } : {}),
+    shippingDestination: {
+      "@type": "DefinedRegion",
+      addressCountry: normalizeSchemaCountryCode(country),
+    },
+    shippingRate: {
+      "@type": "MonetaryAmount",
+      value: value.toFixed(2),
+      currency: currencyCode,
+    },
+  });
+  return freeDelivery
+    ? [detail(0)]
+    : delivery.map((method) => detail(method.fee, method.name));
 }
 
 export function gtinPropertyForBarcodeType(type: VariantBarcodeType): string | null {

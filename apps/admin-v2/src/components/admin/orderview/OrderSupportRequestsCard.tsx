@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Textarea } from "~/components/ui/textarea";
@@ -29,7 +29,7 @@ import {
   type OrderReturnDto,
 } from "~/lib/order-return-workflow";
 import { formatOrderTimestamp } from "./formatters";
-import { createReturnCommandKey, getOrderItemName, parseReturnQuantity } from "./order-returns/shared";
+import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./order-returns/shared";
 import { restockedUnits } from "./OrderStatusCard";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order, OrderSupportRequest } from "./types";
@@ -174,15 +174,12 @@ function ResolveDialog({
                         <p className="font-medium">{name}</p>
                         <p className="text-muted-foreground">{t("returns.available", { count: max })}</p>
                       </div>
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        max={max}
+                      <NumberInput
+                        integer
                         className="w-20 shrink-0"
                         aria-label={t("returns.returnQty", { name })}
                         value={quantities[item.id] ?? 0}
-                        onChange={(e) => setQuantities((current) => ({ ...current, [item.id]: parseReturnQuantity(e.target.value, max) }))}
+                        onValueChange={(value) => setQuantities((current) => ({ ...current, [item.id]: clampQuantity(value, max) }))}
                       />
                     </li>
                   );

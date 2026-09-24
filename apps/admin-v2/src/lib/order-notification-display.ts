@@ -12,6 +12,8 @@ export type NotificationIssue =
 
 /** Missing a recipient or a channel setup: sending again can't help. */
 const UNSENDABLE_ISSUES = new Set<NotificationIssue>(["noEmail", "noPhone", "smsNotSetUp", "whatsappNotSetUp"]);
+/** The store never set this channel up, so nothing was tried on it. */
+const CHANNEL_NOT_SET_UP = new Set<NotificationIssue>(["smsNotSetUp", "whatsappNotSetUp"]);
 
 const SUCCESSFUL = new Set(["accepted", "delivered"]);
 
@@ -33,12 +35,33 @@ export function notificationIssue(value: string | null | undefined): Notificatio
   return "other";
 }
 
-/** One status for the whole message, from what each channel recorded. */
+function receiptIssue(receipt: OrderNotificationReceiptDto): NotificationIssue | null {
+  return SUCCESSFUL.has(receipt.status) ? null : notificationIssue(receipt.lastError ?? receipt.providerStatus);
+}
+
+/**
+ * The customer's channels this message could actually use. Staff push devices
+ * aren't the customer, and a channel the store never set up, or one with no
+ * address for this customer, wasn't tried, so neither counts as a failure.
+ */
+function attemptedCustomerReceipts(receipts: readonly OrderNotificationReceiptDto[]): OrderNotificationReceiptDto[] {
+  return receipts.filter((receipt) => {
+    if (receipt.channel === "push") return false;
+    const issue = receiptIssue(receipt);
+    return !issue || !UNSENDABLE_ISSUES.has(issue);
+  });
+}
+
+/** One status for the whole message, from what each channel it was sent on recorded. */
 export function summarizeNotificationDelivery(
   outbox: Pick<OrderNotificationOutboxDto, "status" | "receipts">,
 ): string {
-  const statuses = outbox.receipts.map((receipt) => receipt.status);
-  if (statuses.length === 0) return outbox.status;
+  const customerReceipts = outbox.receipts.filter((receipt) => receipt.channel !== "push");
+  if (customerReceipts.length === 0) return outbox.status;
+  const attempted = attemptedCustomerReceipts(customerReceipts);
+  // Nothing could be tried: no channel set up, or no address on any of them.
+  if (attempted.length === 0) return "skipped";
+  const statuses = attempted.map((receipt) => receipt.status);
   const all = (predicate: (status: string) => boolean) => statuses.every(predicate);
   const some = (...values: string[]) => statuses.some((status) => values.includes(status));
   if (all((status) => status === "delivered")) return "delivered";
@@ -62,12 +85,16 @@ export interface NotificationChannelLine {
   issue: NotificationIssue | null;
 }
 
-/** One line per channel and outcome, e.g. "Email · r***@mail.com · Sent". Staff push devices are left out. */
+/**
+ * One line per channel and outcome, e.g. "Email · r***@mail.com · Sent".
+ * Staff push devices and channels the store never set up are left out.
+ */
 export function notificationChannelLines(receipts: readonly OrderNotificationReceiptDto[]): NotificationChannelLine[] {
   const lines = new Map<string, NotificationChannelLine>();
   for (const receipt of receipts) {
     if (receipt.channel === "push") continue;
-    const issue = SUCCESSFUL.has(receipt.status) ? null : notificationIssue(receipt.lastError ?? receipt.providerStatus);
+    const issue = receiptIssue(receipt);
+    if (issue && CHANNEL_NOT_SET_UP.has(issue)) continue;
     const key = [receipt.channel, receipt.status, issue ?? ""].join("|");
     // "missing-email" is the server's placeholder when there is no recipient.
     const recipient = receipt.recipientMasked?.startsWith("missing-") ? null : receipt.recipientMasked;
@@ -87,10 +114,9 @@ export function notificationChannelLines(receipts: readonly OrderNotificationRec
  * lacks a recipient or isn't set up.
  */
 export function canSendNotificationAgain(outbox: Pick<OrderNotificationOutboxDto, "lastError" | "receipts">): boolean {
-  const lines = notificationChannelLines(outbox.receipts);
-  if (lines.length === 0) {
+  if (!outbox.receipts.some((receipt) => receipt.channel !== "push")) {
     const issue = notificationIssue(outbox.lastError);
     return !issue || !UNSENDABLE_ISSUES.has(issue);
   }
-  return lines.some((line) => !line.issue || !UNSENDABLE_ISSUES.has(line.issue));
+  return attemptedCustomerReceipts(outbox.receipts).length > 0;
 }

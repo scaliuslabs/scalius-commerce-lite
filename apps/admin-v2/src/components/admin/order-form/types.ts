@@ -129,8 +129,8 @@ export const orderFormSchema = z.object({
       }),
     )
     .min(1, msg("itemsRequired")),
-  discountAmount: z.coerce.number<number>().min(0, msg("discountNegative")).nullable(),
-  shippingCharge: z.coerce.number<number>().min(0, msg("deliveryChargeNegative")),
+  discountAmount: z.number(msg("amountNotNumber")).min(0, msg("discountNegative")).nullable(),
+  shippingCharge: z.number(msg("amountNotNumber")).min(0, msg("deliveryChargeNegative")),
 });
 
 export type OrderFormInput = z.input<typeof orderFormSchema>;

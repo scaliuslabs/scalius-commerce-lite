@@ -34459,6 +34459,10 @@
                                   "pickup"
                                 ]
                               },
+                              "everywhereElse": {
+                                "type": "boolean",
+                                "description": "True for a rate that applies outside every delivery zone (the store's default rates); false for a rate of one delivery zone."
+                              },
                               "pickupAddress": {
                                 "type": "string",
                                 "nullable": true,
@@ -34495,6 +34499,7 @@
                               "fee",
                               "freeOver",
                               "kind",
+                              "everywhereElse",
                               "pickupAddress",
                               "pickupHours",
                               "description",
@@ -153137,6 +153142,17 @@
                                       "failed"
                                     ]
                                   },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "courier_unconfirmed",
+                                      "reconcile_required",
+                                      "creating",
+                                      "claim_expired",
+                                      "failed"
+                                    ]
+                                  },
                                   "severity": {
                                     "type": "string",
                                     "enum": [
@@ -153185,6 +153201,7 @@
                                 },
                                 "required": [
                                   "state",
+                                  "reason",
                                   "severity",
                                   "activeLock",
                                   "label",
@@ -154646,6 +154663,17 @@
                                       "failed"
                                     ]
                                   },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "courier_unconfirmed",
+                                      "reconcile_required",
+                                      "creating",
+                                      "claim_expired",
+                                      "failed"
+                                    ]
+                                  },
                                   "severity": {
                                     "type": "string",
                                     "enum": [
@@ -154694,6 +154722,7 @@
                                 },
                                 "required": [
                                   "state",
+                                  "reason",
                                   "severity",
                                   "activeLock",
                                   "label",
@@ -159493,6 +159522,17 @@
                                 "failed"
                               ]
                             },
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "courier_unconfirmed",
+                                "reconcile_required",
+                                "creating",
+                                "claim_expired",
+                                "failed"
+                              ]
+                            },
                             "severity": {
                               "type": "string",
                               "enum": [
@@ -159541,6 +159581,7 @@
                           },
                           "required": [
                             "state",
+                            "reason",
                             "severity",
                             "activeLock",
                             "label",
@@ -161357,6 +161398,15 @@
                                   "manual_reconciliation"
                                 ]
                               },
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "manual_reconciliation",
+                                  "stale",
+                                  "dead_letter",
+                                  "failed"
+                                ]
+                              },
                               "message": {
                                 "type": "string"
                               },
@@ -161388,6 +161438,7 @@
                               "provider",
                               "eventType",
                               "status",
+                              "reason",
                               "message",
                               "error",
                               "queueType",
