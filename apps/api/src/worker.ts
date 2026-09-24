@@ -26,6 +26,8 @@ import {
 import {
   decoratePublicApiResponse,
   getPublicApiCachePolicy,
+  isCacheLayerServerError,
+  logCacheLayerFallback,
   withCacheGeneration,
   withoutCacheGeneration,
 } from "./public-cache-policy";
@@ -176,10 +178,15 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
         normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
         ?? await readCacheGeneration(this.env, this.ctx);
       if (generation) {
-        return this.ctx.exports.PublicApi.fetch(new Request(
+        const cached = await this.ctx.exports.PublicApi.fetch(new Request(
           withCacheGeneration(cachePolicy.canonicalUrl, generation),
           request,
         ));
+        // The cache is a hint: a server error from the cache layer itself (a
+        // stuck entry answers an empty platform 500) is rendered directly.
+        if (!isCacheLayerServerError(cached)) return cached;
+        await cached.body?.cancel();
+        logCacheLayerFallback(request.url, request, cached.status);
       }
     }
 

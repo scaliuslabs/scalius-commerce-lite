@@ -64,6 +64,29 @@ export function withoutCacheGeneration(request: Request): Request {
   return new Request(url.toString(), request);
 }
 
+/**
+ * A server error the Workers Cache layer produced itself, not this Worker:
+ * every response of ours carries the baseline security headers
+ * (`applyBaselineSecurityHeaders`), and a stuck cache entry answers an empty
+ * 500 without them. Such a read is rendered directly instead; our own 5xx
+ * passes through so an outage never doubles the database load.
+ */
+export function isCacheLayerServerError(response: Response): boolean {
+  return response.status >= 500 && !response.headers.has("X-Content-Type-Options");
+}
+
+/**
+ * One masked line per cache-layer fallback: the read's path and the colo of
+ * the incoming request, never query values.
+ */
+export function logCacheLayerFallback(readUrl: string, incoming: Request, status: number): void {
+  const colo = (incoming as Request & { cf?: { colo?: unknown } }).cf?.colo;
+  console.warn(
+    `[PublicCache] cache layer answered ${status} for ${new URL(readUrl).pathname}` +
+      `${typeof colo === "string" ? ` at ${colo}` : ""}; rendering it directly`,
+  );
+}
+
 export function decoratePublicApiResponse(response: Response): Response {
   if (!response.ok || response.headers.get("Cache-Control")?.includes("no-store")) {
     return response;
