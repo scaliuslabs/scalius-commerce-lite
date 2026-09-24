@@ -1,11 +1,11 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
-import { DISCOUNT_SORTS, DISCOUNT_TABS, DiscountList, type DiscountSort, type DiscountTab } from "~/components/admin/discounts/DiscountList";
-import { translate } from "~/i18n";
-import { discountsMessages } from "~/i18n/discounts";
+import { DiscountList } from "~/components/admin/discounts/DiscountList";
+import { DISCOUNT_SORTS, DISCOUNT_TABS, type DiscountSort, type DiscountTab } from "~/components/admin/discounts/discount-kinds";
 import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { pageHead } from "~/i18n/page-titles";
 
 interface DiscountListSearch {
   tab?: DiscountTab;
@@ -22,7 +22,7 @@ export function validateDiscountListSearch(search: Record<string, unknown>): Dis
 export const Route = createFileRoute("/admin/discounts/")({
   validateSearch: validateDiscountListSearch,
   loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(discountsQueryOptions()),
-  head: () => ({ meta: [{ title: `${translate(discountsMessages, "pageTitle")} | Scalius Admin` }] }),
+  head: () => pageHead("discounts"),
   errorComponent: RouteErrorComponent,
   component: DiscountsPage,
 });

@@ -1,6 +1,6 @@
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, type FieldErrors } from "react-hook-form";
+import { useForm, useWatch, type FieldErrors, type UseFormReturn } from "react-hook-form";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown } from "lucide-react";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -298,7 +298,6 @@ function ProductEditor({
     return () => subscription.unsubscribe();
   }, [form, isEdit]);
 
-  const slug = form.watch("slug");
   const affectedCount = mediaRemovalConflict?.affectedCount ?? 0;
   const productId = defaultValues?.id;
   const productName = defaultValues?.name ?? "";
@@ -377,22 +376,7 @@ function ProductEditor({
                     }
                   }}
                 >
-                  {optionManager({
-                    skuImages: form.watch("media")
-                      .filter((item) => item.kind === "image")
-                      .map((item) => ({
-                        id: item.id,
-                        url: item.url,
-                        altText: item.effectiveAltText,
-                        isPrimary: item.isPrimary,
-                        sortOrder: item.sortOrder,
-                        status: item.status,
-                      })),
-                    productName: form.watch("name"),
-                    productPrice: Number.isFinite(form.watch("price")) ? form.watch("price") ?? 0 : 0,
-                    isActive: form.watch("isActive"),
-                    onPricesChange: setVariantPrices,
-                  })}
+                  <ProductVariants form={form} optionManager={optionManager} onPricesChange={setVariantPrices} />
                 </CardContent>
               </Card>
               <AdditionalSectionsCard form={form} readOnly={readOnly} />
@@ -402,10 +386,7 @@ function ProductEditor({
             {/* On phones the status comes first; the rest of the side column follows the main cards. */}
             <div className="min-w-0 space-y-4 max-lg:contents">
               <div className="max-lg:order-first">
-                <StatusCard
-                  form={form}
-                  storefrontUrl={isEdit && slug ? getStorefrontPath(`/products/${slug}`) : undefined}
-                />
+                <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} />
               </div>
               <OrganizationCard form={form} categories={categories} />
             </div>
@@ -471,5 +452,49 @@ function ProductEditor({
         }}
       />
     </>
+  );
+}
+
+// The editor's root must not re-render while the merchant types: these two
+// read the fields they show with useWatch, so a keystroke in the title
+// re-renders them, not the whole page.
+
+function ProductStatusCard({ form, isEdit, getStorefrontPath }: {
+  form: UseFormReturn<ProductFormValues>;
+  isEdit: boolean;
+  getStorefrontPath: (path: string) => string;
+}) {
+  const slug = useWatch({ control: form.control, name: "slug" });
+  return (
+    <StatusCard
+      form={form}
+      storefrontUrl={isEdit && slug ? getStorefrontPath(`/products/${slug}`) : undefined}
+    />
+  );
+}
+
+function ProductVariants({ form, optionManager, onPricesChange }: {
+  form: UseFormReturn<ProductFormValues>;
+  optionManager: ProductFormProps["optionManager"];
+  onPricesChange: (range: VariantPriceRange | null) => void;
+}) {
+  const [media, name, price, isActive] = useWatch({ control: form.control, name: ["media", "name", "price", "isActive"] });
+  const skuImages = React.useMemo(() => (media ?? [])
+    .filter((item) => item.kind === "image")
+    .map((item) => ({
+      id: item.id,
+      url: item.url,
+      altText: item.effectiveAltText,
+      isPrimary: item.isPrimary,
+      sortOrder: item.sortOrder,
+      status: item.status,
+    })), [media]);
+  // The title and price only seed unsaved variants' SKUs and prices: the
+  // variant table catches up after the keystroke has painted.
+  const productName = React.useDeferredValue(name ?? "");
+  const productPrice = React.useDeferredValue(Number.isFinite(price) ? price ?? 0 : 0);
+  return React.useMemo(
+    () => optionManager({ skuImages, productName, productPrice, isActive: Boolean(isActive), onPricesChange }),
+    [optionManager, skuImages, productName, productPrice, isActive, onPricesChange],
   );
 }

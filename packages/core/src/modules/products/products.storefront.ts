@@ -1283,11 +1283,13 @@ export async function getStorefrontCategoryProducts(
     });
 }
 
-export async function getStorefrontCollectionProducts(
-    db: Database,
-    membership: { productIds?: string[]; categoryIds?: string[] },
-    params: StorefrontProductFilterInput,
-) {
+interface StorefrontCollectionMembership {
+    productIds?: string[];
+    categoryIds?: string[];
+}
+
+/** A collection's members: its picked products and every product in its published categories. */
+function storefrontCollectionMembership(membership: StorefrontCollectionMembership) {
     const productIds = Array.from(new Set(
         (membership.productIds ?? []).map((id) => id.trim()).filter(Boolean),
     )).slice(0, STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE);
@@ -1299,7 +1301,7 @@ export async function getStorefrontCollectionProducts(
         ...categoryIds.map((id) => ({ kind: "category", id })),
     ];
     const membershipJson = JSON.stringify(membershipEntries);
-    const membershipCondition = membershipEntries.length > 0
+    const condition = membershipEntries.length > 0
         ? sql`EXISTS (
             SELECT 1
             FROM json_each(${membershipJson}) AS collection_membership
@@ -1313,9 +1315,31 @@ export async function getStorefrontCollectionProducts(
             )
         )`
         : sql`0 = 1`;
+    return { productIds, membershipJson, condition };
+}
+
+/**
+ * How many of a collection's products buyers see: the storefront catalog's
+ * own count (public products with a buyer-resolvable SKU), for batching.
+ */
+export function storefrontCollectionVisibleCountQuery(db: Database, membership: StorefrontCollectionMembership) {
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
+    return db
+        .select({ count: sql<number>`count(*)` })
+        .from(products)
+        .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
+        .where(and(...publicProductBaseConditions(), storefrontCollectionMembership(membership).condition));
+}
+
+export async function getStorefrontCollectionProducts(
+    db: Database,
+    membership: StorefrontCollectionMembership,
+    params: StorefrontProductFilterInput,
+) {
+    const { productIds, membershipJson, condition } = storefrontCollectionMembership(membership);
 
     return readStorefrontCatalogPage(db, params, {
-        condition: membershipCondition,
+        condition,
         orderBy: productIds.length > 0 && (!params.sort || params.sort === "newest")
             ? (buyerPricing) => sql`COALESCE((
                 SELECT CAST(key AS INTEGER)
@@ -1385,6 +1409,32 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
+    const variantRowsPromise = db.select({
+        id: productVariants.id,
+        productId: productVariants.productId,
+        optionCombinationKey: productVariants.optionCombinationKey,
+        imageId: productVariants.imageId,
+        weight: productVariants.weight,
+        sku: productVariants.sku,
+        priceMinor: productVariants.priceMinor,
+        stock: productVariants.stock,
+        reservedStock: productVariants.reservedStock,
+        isDefault: productVariants.isDefault,
+        trackInventory: productVariants.trackInventory,
+        lowStockThreshold: effectiveLowStockThresholdSql(),
+        barcode: productVariants.barcode,
+        barcodeType: productVariants.barcodeType,
+        discountType: productVariants.discountType,
+        discountBps: productVariants.discountBps,
+        discountAmountMinor: productVariants.discountAmountMinor,
+        createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
+        updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
+        deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
+    }).from(productVariants)
+        .where(and(eq(productVariants.productId, product.id), isNull(productVariants.deletedAt)))
+        .orderBy(productVariants.createdAt, productVariants.id)
+        .all();
+
     const promises: Promise<{ type: string; data: unknown }>[] = [
         mediaMapPromise.then((mediaMap) => ({
             type: "media",
@@ -1392,31 +1442,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             data: (mediaMap.get(product.id) ?? []).map(({ filename: _filename, ...item }) => item),
         })),
 
-        db.select({
-            id: productVariants.id,
-            productId: productVariants.productId,
-            optionCombinationKey: productVariants.optionCombinationKey,
-            imageId: productVariants.imageId,
-            weight: productVariants.weight,
-            sku: productVariants.sku,
-            priceMinor: productVariants.priceMinor,
-            stock: productVariants.stock,
-            reservedStock: productVariants.reservedStock,
-            isDefault: productVariants.isDefault,
-            trackInventory: productVariants.trackInventory,
-            lowStockThreshold: effectiveLowStockThresholdSql(),
-            barcode: productVariants.barcode,
-            barcodeType: productVariants.barcodeType,
-            discountType: productVariants.discountType,
-            discountBps: productVariants.discountBps,
-            discountAmountMinor: productVariants.discountAmountMinor,
-            createdAt: sql<number>`CAST(${productVariants.createdAt} AS INTEGER)`,
-            updatedAt: sql<number>`CAST(${productVariants.updatedAt} AS INTEGER)`,
-            deletedAt: sql<number | null>`CAST(${productVariants.deletedAt} AS INTEGER)`,
-        }).from(productVariants)
-            .where(and(eq(productVariants.productId, product.id), isNull(productVariants.deletedAt)))
-            .orderBy(productVariants.createdAt, productVariants.id)
-            .all().then((res) => ({ type: "variants", data: res })),
+        variantRowsPromise.then((res) => ({ type: "variants", data: res })),
 
         db.select({
             id: productRichContent.id,
@@ -1455,7 +1481,17 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         }).then((data) => ({ type: "recommendations", data })),
     );
 
-    const results = await Promise.all(promises);
+    // Options need only the product id, so they join this wave; selected
+    // options follow the SKU read while recommendations are still loading,
+    // so neither adds a wave of its own.
+    const optionMapPromise = loadProductOptions(db, [product.id]);
+    const selectedOptionMapPromise = variantRowsPromise.then((rows) =>
+        loadVariantSelectedOptions(db, rows.map((variant) => variant.id)));
+    const [results, optionMap, selectedOptionMap] = await Promise.all([
+        Promise.all(promises),
+        optionMapPromise,
+        selectedOptionMapPromise,
+    ]);
 
     const mediaItems = (results.find((r) => r.type === "media")?.data as ProductMediaProjection[]) || [];
     const variants = (results.find((r) => r.type === "variants")?.data as unknown[]) || [];
@@ -1487,10 +1523,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         variant.isDefault !== true && Boolean(variant.optionCombinationKey?.trim()),
     );
 
-    const [optionMap, selectedOptionMap] = await Promise.all([
-        loadProductOptions(db, [product.id]),
-        loadVariantSelectedOptions(db, typedVariants.map((variant) => variant.id)),
-    ]);
     const formattedVariants = typedVariants.map((variant) => {
         const v = maskPublicBuyerAvailability(normalizeDefaultSkuOptions(
             presentCatalogPrice(variant, decimalPlaces),

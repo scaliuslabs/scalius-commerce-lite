@@ -13,7 +13,7 @@ import { CustomerActivity } from "./CustomerActivity";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { AdminPhoneInput } from "@/components/admin/shared/AdminPhoneInput";
 import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
-import { customerFormSchema, type CustomerFormValues } from "@/lib/form-schemas";
+import { customerFormSchema, type CustomerFormValues } from "@/lib/customer-form-schema";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";

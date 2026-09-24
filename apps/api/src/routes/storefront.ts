@@ -11,6 +11,22 @@ import {
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings/site-settings.service";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
 import { NotFoundError } from "../utils/api-error";
+import {
+  CACHE_GENERATION_HEADER,
+  normalizeCacheGeneration,
+} from "@scalius/shared/cache-generation";
+import {
+  MAX_STOREFRONT_BATCH_PARTS,
+  STOREFRONT_BATCH_PART_PARAM,
+} from "@scalius/shared/public-api-cache-routes";
+import { serveStorefrontBatch } from "../storefront-batch";
+import {
+  getPublicApiCachePolicy,
+  isCacheLayerServerError,
+  logCacheLayerFallback,
+  withCacheGeneration,
+} from "../public-cache-policy";
+import { readCacheGeneration } from "../utils/cache-generation";
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
@@ -103,6 +119,7 @@ const navigationLeafSchema = z.object({
   id: z.string().optional(),
   title: z.string(),
   href: z.string().optional(),
+  imageUrl: z.string().optional(),
   openInNewTab: z.boolean().optional(),
 });
 const navigationChildSchema = navigationLeafSchema.extend({
@@ -320,6 +337,70 @@ app.openapi(layoutRoute, async (c) => {
       mediaUrl: platform.mediaUrl,
     },
   } as unknown as LayoutData);
+});
+
+// GET /storefront/batch — one storefront page render's public reads
+const batchPartSchema = z.object({
+  status: z.number().int(),
+  contentType: z.string(),
+  body: z.string().openapi({ description: "The part's response body, exactly as its own GET returns it" }),
+});
+const batchRoute = createRoute({
+  method: "get",
+  path: "/batch",
+  operationId: "storefront.batch.get",
+  tags: ["Storefront"],
+  summary: "Read several public storefront resources in one request",
+  description:
+    `Answers each \`${STOREFRONT_BATCH_PART_PARAM}\` part (the /api/v1 path and query of a public, generation-cached read such as the layout, a product, shipping methods or checkout settings) exactly as its own GET would, in order, from the same generation-keyed cache. At most ${MAX_STOREFRONT_BATCH_PARTS} parts and no cookies or credentials. The storefront renders each page from one batch. The batch itself is never cached; its parts are, and a failed part fails only that part.`,
+  request: {
+    query: z.object({
+      [STOREFRONT_BATCH_PART_PARAM]: z.union([
+        z.string().max(2_048),
+        z.array(z.string().max(2_048)).max(MAX_STOREFRONT_BATCH_PARTS),
+      ]).openapi({ description: "Part path and query, repeated once per part" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Each part's status and body, in request order",
+      content: { "application/json": { schema: successEnvelope(z.object({ parts: z.array(batchPartSchema) })) } },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(batchRoute, async (c) => {
+  const request = c.req.raw;
+  let ctx: ExecutionContext | undefined;
+  try {
+    ctx = c.executionCtx as ExecutionContext;
+  } catch {
+    ctx = undefined;
+  }
+  const response = await serveStorefrontBatch(request, {
+    // A render pins its reads to its page's generation. Generations are
+    // unguessable, so a caller-supplied one can only select existing entries.
+    readGeneration: async () =>
+      normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
+      ?? await readCacheGeneration(c.env, ctx),
+    fetchPart: async (part, generation) => {
+      const cachePolicy = getPublicApiCachePolicy(part);
+      const publicApi = ctx?.exports?.PublicApi;
+      if (cachePolicy && generation && publicApi) {
+        const cached = await publicApi.fetch(new Request(withCacheGeneration(cachePolicy.canonicalUrl, generation), part));
+        // The cache is a hint: a server error from the cache layer itself (a
+        // stuck entry answers an empty platform 500) is rendered directly.
+        if (!isCacheLayerServerError(cached)) return cached;
+        await cached.body?.cancel();
+        logCacheLayerFallback(part.url, request, cached.status);
+      }
+      const { fetchRuntimeApiApp } = await import("../runtime/fetch-runtime-app");
+      return fetchRuntimeApiApp(part, c.env, ctx as ExecutionContext);
+    },
+  });
+  return response as never;
 });
 
 const resolveThemePreviewRoute = createRoute({

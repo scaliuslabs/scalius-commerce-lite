@@ -1,4 +1,5 @@
 import { PUBLIC_CACHE_MAX_AGE_SECONDS } from "@scalius/shared/cache-generation";
+import { isPublicApiCacheRoute } from "@scalius/shared/public-api-cache-routes";
 
 /**
  * Anonymous public API reads served through the `PublicApi` Workers Cache
@@ -10,67 +11,8 @@ export interface PublicApiCachePolicy {
   canonicalUrl: string;
 }
 
-interface PublicApiRoutePolicy {
-  path: string;
-  exact?: boolean;
-  isEligible?: (url: URL) => boolean;
-}
-
 /** Internal query parameter carrying the cache generation into the key. */
 export const CACHE_GENERATION_QUERY_PARAM = "__cg";
-
-const MAX_PUBLIC_CACHE_QUERY_ENTRIES = 30;
-const MAX_PUBLIC_CACHE_QUERY_KEY_LENGTH = 64;
-const MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH = 512;
-
-function hasBoundedPublicQuery(url: URL): boolean {
-  const entries = [...url.searchParams.entries()];
-  return (
-    entries.length <= MAX_PUBLIC_CACHE_QUERY_ENTRIES &&
-    entries.every(
-      ([key, value]) =>
-        key.length <= MAX_PUBLIC_CACHE_QUERY_KEY_LENGTH &&
-        value.length <= MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH,
-    )
-  );
-}
-
-function isHeroRequestEligible(url: URL): boolean {
-  const pathname = url.pathname.replace(/\/$/, "");
-  if (!pathname.endsWith("/hero/sliders")) {
-    return url.searchParams.size === 0;
-  }
-
-  return (
-    url.searchParams.size === 1 &&
-    ["desktop", "mobile"].includes(url.searchParams.get("type") ?? "")
-  );
-}
-
-const PUBLIC_API_ROUTE_POLICIES: readonly PublicApiRoutePolicy[] = [
-  { path: "/api/v1/products" },
-  { path: "/api/v1/categories" },
-  { path: "/api/v1/collections" },
-  { path: "/api/v1/storefront/homepage", exact: true },
-  { path: "/api/v1/checkout/config", exact: true },
-  { path: "/api/v1/shipping-methods" },
-  { path: "/api/v1/locations" },
-  { path: "/api/v1/attributes" },
-  { path: "/api/v1/pages" },
-  { path: "/api/v1/articles" },
-  { path: "/api/v1/hero", isEligible: isHeroRequestEligible },
-  { path: "/api/v1/seo" },
-  { path: "/api/v1/header" },
-  { path: "/api/v1/navigation" },
-  { path: "/api/v1/footer" },
-  { path: "/api/v1/storefront/pages/slug" },
-  { path: "/api/v1/storefront/layout", exact: true },
-] as const;
-
-function routeMatches(pathname: string, policy: PublicApiRoutePolicy): boolean {
-  if (policy.exact) return pathname === policy.path;
-  return pathname === policy.path || pathname.startsWith(`${policy.path}/`);
-}
 
 function hasPrivateRequestSignals(request: Request): boolean {
   return (
@@ -100,14 +42,7 @@ export function getPublicApiCachePolicy(
 
   const url = new URL(request.url);
   if (url.searchParams.has(CACHE_GENERATION_QUERY_PARAM)) return null;
-  if (!hasBoundedPublicQuery(url)) return null;
-  const pathname = url.pathname.replace(/\/$/, "") || "/";
-  const policy = PUBLIC_API_ROUTE_POLICIES.find(
-    (candidate) =>
-      routeMatches(pathname, candidate) &&
-      (!candidate.isEligible || candidate.isEligible(url)),
-  );
-  if (!policy) return null;
+  if (!isPublicApiCacheRoute(url)) return null;
 
   return {
     canonicalUrl: new URL(buildPublicApiCacheKey(url), url.origin).toString(),
@@ -127,6 +62,29 @@ export function withoutCacheGeneration(request: Request): Request {
   if (!url.searchParams.has(CACHE_GENERATION_QUERY_PARAM)) return request;
   url.searchParams.delete(CACHE_GENERATION_QUERY_PARAM);
   return new Request(url.toString(), request);
+}
+
+/**
+ * A server error the Workers Cache layer produced itself, not this Worker:
+ * every response of ours carries the baseline security headers
+ * (`applyBaselineSecurityHeaders`), and a stuck cache entry answers an empty
+ * 500 without them. Such a read is rendered directly instead; our own 5xx
+ * passes through so an outage never doubles the database load.
+ */
+export function isCacheLayerServerError(response: Response): boolean {
+  return response.status >= 500 && !response.headers.has("X-Content-Type-Options");
+}
+
+/**
+ * One masked line per cache-layer fallback: the read's path and the colo of
+ * the incoming request, never query values.
+ */
+export function logCacheLayerFallback(readUrl: string, incoming: Request, status: number): void {
+  const colo = (incoming as Request & { cf?: { colo?: unknown } }).cf?.colo;
+  console.warn(
+    `[PublicCache] cache layer answered ${status} for ${new URL(readUrl).pathname}` +
+      `${typeof colo === "string" ? ` at ${colo}` : ""}; rendering it directly`,
+  );
 }
 
 export function decoratePublicApiResponse(response: Response): Response {

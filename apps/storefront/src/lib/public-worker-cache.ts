@@ -118,6 +118,21 @@ function isPublicCachePath(pathname: string): boolean {
   );
 }
 
+/**
+ * HTML pages that start their layout read together with their own reads (one
+ * API batch) and use no platform origin before that read resolves. Every
+ * other route gets the layout, and so the origins, before it runs.
+ */
+export function isLayoutBatchedPagePath(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    /^\/(?:products|categories|collections)\/[^/]+\/?$/.test(pathname) ||
+    /^\/(?:search|cart|checkout)\/?$/.test(pathname) ||
+    /^\/blog(?:\/[^/]+)?\/?$/.test(pathname) && !pathname.endsWith(".xml") ||
+    isCmsPagePath(pathname)
+  );
+}
+
 function hasBoundedPublicQuery(url: URL): boolean {
   const entries = [...url.searchParams.entries()];
   return (

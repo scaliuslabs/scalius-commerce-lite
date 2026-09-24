@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CustomerForm } from "~/components/admin/CustomerForm";
-import { translate } from "~/i18n";
-import { customersMessages } from "~/i18n/customers";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/customers/new")({
-  head: () => ({ meta: [{ title: translate(customersMessages, "newCustomer") }] }),
+  head: () => pageHead("newCustomer"),
   component: () => <CustomerForm />,
 });

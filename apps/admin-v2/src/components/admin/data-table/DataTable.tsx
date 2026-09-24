@@ -68,6 +68,8 @@ interface DataTableProps<TData extends TableRowData> {
   sortable?: boolean;
   /** Called after a drag-and-drop reorder with old and new index. */
   onReorder?: (oldIndex: number, newIndex: number) => void;
+  /** Names a row for its reorder handle ("Reorder Eid picks"). */
+  getRowLabel?: (row: TData) => string;
   /**
    * "card": one bordered card holding toolbar, rows and pagination.
    * "bare": no frame of its own, for a table placed inside the caller's card.
@@ -109,6 +111,7 @@ export function DataTable<TData extends TableRowData>({
   className,
   sortable = false,
   onReorder,
+  getRowLabel,
   variant = "default",
   getRowHref,
   layoutKey,
@@ -316,6 +319,7 @@ export function DataTable<TData extends TableRowData>({
               showInitialLoading={showInitialLoading}
               emptyState={emptyState}
               onReorder={onReorder}
+              getRowLabel={getRowLabel as ((row: TableRowData) => string) | undefined}
             />
           </Suspense>
         ) : (

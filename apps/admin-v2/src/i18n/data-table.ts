@@ -25,6 +25,8 @@ export const dataTableMessages = defineMessages({
     resetColumns: "Reset to default",
     copy: "Copy {value}",
     copied: "Copied",
+    reorderRow: "Reorder {name}",
+    reorderRowNumber: "Reorder row {number}",
   },
   bn: {
     columnMenu: "সাজানো ও কলাম",
@@ -49,5 +51,7 @@ export const dataTableMessages = defineMessages({
     resetColumns: "আগের মতো করুন",
     copy: "{value} কপি করুন",
     copied: "কপি হয়েছে",
+    reorderRow: "{name} এর ক্রম বদলান",
+    reorderRowNumber: "সারি {number} এর ক্রম বদলান",
   },
 });

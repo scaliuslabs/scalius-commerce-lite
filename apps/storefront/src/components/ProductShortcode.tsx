@@ -18,7 +18,7 @@ import {
   shouldShowStartingVariantPrice,
   type VariantSelection,
 } from "@/components/product/lib/variant-state-machine";
-import { getProductImageUrl, hasProductImage, PRODUCT_IMAGE_FALLBACK } from "@/lib/product-media";
+import { getProductImageUrl, hasProductImage, PRODUCT_IMAGE_FALLBACK, productImageSources } from "@/lib/product-media";
 import { isVariantAvailable, resolveBuyerVariants } from "@/lib/product-sellable-variants";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 
@@ -51,6 +51,11 @@ export default function ProductShortcode({ productData }: { productData: Product
   const [selection, setSelection] = useState<VariantSelection>(() => createInitialSelection(options, buyerVariants));
   const [currentImage, setCurrentImage] = useState(primaryImage);
   const [currentImageMediaId, setCurrentImageMediaId] = useState(primaryImageMediaId);
+  // Half of the two-column card from lg, full width below.
+  const currentImageSources = productImageSources(currentImage, {
+    width: 640,
+    sizes: "(min-width: 1024px) 50vw, 100vw",
+  });
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const matchingVariant = resolveExactVariantSelection(buyerVariants, selection)?.variant;
   const compatibleVariants = filterVariantsBySelection(buyerVariants, selection);
@@ -115,7 +120,17 @@ export default function ProductShortcode({ productData }: { productData: Product
       <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
         <div>
           <div className="aspect-square overflow-hidden rounded-lg border border-border bg-muted/40">
-            <img src={getProductImageUrl(currentImage, 600)} alt={product.name} className="h-full w-full object-contain" loading="lazy" />
+            <img
+              src={currentImageSources.src}
+              srcSet={currentImageSources.srcset}
+              sizes={currentImageSources.sizes}
+              alt={product.name}
+              width={600}
+              height={600}
+              className="h-full w-full object-contain"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
           {images.filter((image) => hasProductImage(image.url)).length > 1 ? (
             <div className="mt-3 flex gap-2 overflow-x-auto pb-2">

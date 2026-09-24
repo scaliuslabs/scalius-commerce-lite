@@ -1,0 +1,60 @@
+---
+// The `sidebar` navigation style: on computers the header menu is a column
+// beside the page content (grocery / catalogue stores), sticky under the
+// header. Layout.astro renders it inside `.site-shell[data-site-shell="sidebar"]`
+// next to <main>, so every full-bleed section stays within the content column.
+// Phones use the drawer or the tab bar instead.
+import type { NavigationItem } from "@/lib/api";
+import NavTree from "./NavTree.astro";
+
+interface Props {
+  navigation: NavigationItem[];
+}
+
+const { navigation } = Astro.props;
+---
+
+<nav id="sidebar-nav" class="sidebar-nav" aria-label="Main navigation">
+  <NavTree items={navigation} idPrefix="sidebar-nav" variant="sidebar" />
+</nav>
+
+<style is:global>
+  @media (min-width: 64rem) {
+    /* Aligned with the header: the column starts under the logo and the
+       content keeps its own gutter, so the right edge matches the cart. */
+    .site-shell[data-site-shell="sidebar"] {
+      display: grid;
+      grid-template-columns: 15rem minmax(0, 1fr);
+      align-items: start;
+      width: 100%;
+      max-width: var(--theme-container-width, 80rem);
+      margin-inline: auto;
+      padding-left: 2rem;
+    }
+
+    /* The divider belongs to the content column, so it runs the page's full
+       height instead of stopping where the sticky menu ends. */
+    .site-shell[data-site-shell="sidebar"] > main {
+      border-left: 1px solid var(--border);
+    }
+  }
+</style>
+
+<style>
+  .sidebar-nav {
+    display: none;
+  }
+
+  @media (min-width: 64rem) {
+    .sidebar-nav {
+      display: block;
+      position: sticky;
+      top: var(--header-height, 7rem);
+      max-height: calc(100dvh - var(--header-height, 7rem));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      padding: 1.5rem 0.75rem 2rem 0;
+    }
+  }
+</style>

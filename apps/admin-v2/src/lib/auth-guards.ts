@@ -40,16 +40,55 @@ export type AdminRouteContext = {
   hasAdminAccess: boolean;
 };
 
-export async function readDashboardSession(): Promise<DashboardSessionState> {
-  const response = await fetch(withDashboardBasePath("/api/auth/dashboard-session"), {
-    credentials: "same-origin",
-    cache: "no-store",
-    headers: { Accept: "application/json" },
-  });
+declare global {
+  interface Window {
+    /** The session read index.html starts before the app has downloaded. */
+    __scaliusSession?: Promise<Response>;
+  }
+}
+
+async function parseDashboardSession(pending: Promise<Response>): Promise<DashboardSessionState> {
+  const response = await pending;
   // The server answered: carry its status, so a 502 reads as "Scalius isn't
   // responding" rather than as the merchant's connection being down.
   if (!response.ok) throw new AdminApiResponseError("Dashboard session is unavailable", response.status);
   return response.json() as Promise<DashboardSessionState>;
+}
+
+function fetchDashboardSession(): Promise<Response> {
+  return fetch(withDashboardBasePath("/api/auth/dashboard-session"), {
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+}
+
+let booting = false;
+let bootSession: Promise<DashboardSessionState> | null = null;
+
+/**
+ * The first page load answers every guard, including a redirect to sign-in,
+ * from one session read: the one index.html started while the app was still
+ * downloading. Every later navigation reads the session afresh.
+ */
+export function beginBootSessionRead(): void {
+  booting = true;
+}
+
+export function endBootSessionRead(): void {
+  booting = false;
+  bootSession = null;
+  if (typeof window !== "undefined") delete window.__scaliusSession;
+}
+
+export function readDashboardSession(): Promise<DashboardSessionState> {
+  if (!booting) return parseDashboardSession(fetchDashboardSession());
+  if (!bootSession) {
+    const early = typeof window === "undefined" ? undefined : window.__scaliusSession;
+    if (typeof window !== "undefined") delete window.__scaliusSession;
+    bootSession = parseDashboardSession(early ?? fetchDashboardSession());
+  }
+  return bootSession;
 }
 
 /** Signed in, password set, 2FA enrolled when required and verified. */

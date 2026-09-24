@@ -29,6 +29,7 @@ import {
   resolveOrderOperationalReadState,
   type OrderOperationalReadState,
 } from "~/lib/order-operational-read-state";
+import { titleHead } from "~/i18n/page-titles";
 
 function toOrderShipment(shipment: OrderShipmentDto, fallbackTimestamp: OrderTimestamp): OrderShipment {
   const raw = shipment as Record<string, unknown>;
@@ -104,9 +105,7 @@ export const Route = createFileRoute("/admin/orders/$orderId/")({
     });
     return { name: formatOrderNumber(order.orderNumber, order.id) };
   },
-  head: ({ loaderData }) => ({
-    meta: [{ title: `${loaderData?.name ?? ""} | Scalius` }],
-  }),
+  head: ({ loaderData }) => titleHead(loaderData?.name ?? ""),
   errorComponent: OrderDetailErrorComponent,
   component: OrderViewPage,
 });

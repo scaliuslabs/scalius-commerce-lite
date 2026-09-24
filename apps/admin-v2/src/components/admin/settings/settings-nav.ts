@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { translate } from "~/i18n";
 import { settingsNavMessages } from "~/i18n/settings";
+import { titleHead } from "~/i18n/page-titles";
 
 /**
  * Shopify-style settings list, in themed groups. Labels come from
@@ -40,5 +41,5 @@ export type SettingsNavKey = (typeof SETTINGS_NAV)[number]["key"];
 
 /** Route `head` for a settings page, in the dashboard language. */
 export function settingsHead(key: SettingsNavKey) {
-  return { meta: [{ title: `${translate(settingsNavMessages, key)} | Scalius Admin` }] };
+  return titleHead(translate(settingsNavMessages, key));
 }

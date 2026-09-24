@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { INTENT_PREFETCH_MOUNT_GRACE_MS } from "~/lib/route-query-warming";
 import {
   type ColumnDef,
   type PaginationState,
@@ -32,7 +33,6 @@ const defaultPagination: ServerTablePagination = {
   totalPages: 0,
 };
 
-export const INTENT_PREFETCH_MOUNT_GRACE_MS = 5_000;
 
 export function shouldRefetchServerTableOnMount(query: {
   state: { dataUpdatedAt: number; isInvalidated: boolean };

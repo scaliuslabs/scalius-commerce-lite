@@ -10,11 +10,12 @@ import {
   invoiceBusinessName,
   type InvoiceDocument,
 } from "~/components/admin/orderview/InvoiceSheet";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
 import { apiData } from "~/lib/api";
 import { getAdminRouteContext } from "~/lib/admin-route-context";
+import { pageHead } from "~/i18n/page-titles";
 
 /** At most one list page of orders prints at once. */
 const MAX_BULK_INVOICES = 90;
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/invoices")({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: `${translate(orderDetailMessages, "invoice.bulkTitle")} | Scalius` },
+      ...pageHead("invoices").meta,
     ],
   }),
   errorComponent: InvoicesError,

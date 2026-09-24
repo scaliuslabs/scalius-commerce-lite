@@ -25,6 +25,8 @@ export interface NavigationResourceSnapshot {
         NavigationReadiness,
         "ready" | "resource_draft_or_internal" | "resource_trashed"
     >;
+    /** Category photo for mega-menu panels; set only when non-empty. */
+    imageUrl?: string;
 }
 
 export type NavigationResourceSnapshotMap = ReadonlyMap<
@@ -127,10 +129,12 @@ export async function loadNavigationResourceSnapshots(
             name: categories.name,
             slug: categories.slug,
             canonicalPath: categories.canonicalPath,
+            imageUrl: categories.imageUrl,
             status: categories.status,
             deletedAt: categories.deletedAt,
         }).from(categories).where(inArray(categories.id, ids));
         for (const row of rows) {
+            const imageUrl = row.imageUrl?.trim();
             snapshots.set(resourceKey("category", row.id), {
                 id: row.id,
                 resourceType: "category",
@@ -142,6 +146,7 @@ export async function loadNavigationResourceSnapshots(
                     : row.status === "published"
                         ? "ready"
                         : "resource_draft_or_internal",
+                ...(imageUrl ? { imageUrl } : {}),
             });
         }
     }
@@ -201,6 +206,17 @@ export async function loadNavigationResourceSnapshots(
 function appendQuery(route: string, value: string | undefined): string {
     const query = parseNavigationQuery(value);
     return query.ok && query.query ? `${route}${query.query}` : route;
+}
+
+/** The photo of a category an item links to, for mega-menu panels. */
+function categoryImageUrl(
+    item: NavigationTargetItem,
+    resources: NavigationResourceSnapshotMap,
+): string | undefined {
+    if (item.target.type !== "resource" || item.target.resourceType !== "category") {
+        return undefined;
+    }
+    return resources.get(resourceKey("category", item.target.resourceId))?.imageUrl;
 }
 
 function resolveItem(
@@ -289,10 +305,12 @@ export function resolveNavigationItemsForPublic(
             continue;
         }
 
+        const imageUrl = categoryImageUrl(item, resources);
         result.push({
             id: item.id,
             title: resolution.title,
             ...(resolution.href ? { href: resolution.href } : {}),
+            ...(imageUrl ? { imageUrl } : {}),
             ...(item.openInNewTab === true ? { openInNewTab: true } : {}),
             ...(children.length ? { subMenu: children } : {}),
         });

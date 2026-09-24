@@ -8,10 +8,12 @@ import {
 } from "@scalius/shared/storefront-theme";
 import {
   applyStylePreset,
+  closestStylePreset,
   colorFieldForPath,
   moveSection,
   sameThemeLook,
   selectedStylePreset,
+  cardForBackground,
   setThemeColor,
   themeContrastProblems,
   themeDraftInvalid,
@@ -89,19 +91,50 @@ describe("theme styles", () => {
     expect(selectedStylePreset({ ...applied, layout: { ...applied.layout, density: "compact" } })).toBeNull();
     expect(selectedStylePreset({ ...applied, sections: moveSection(applied.sections, "delivery", -1) })).toBeNull();
     expect(selectedStylePreset(setThemeColor(applied, "background", "#fafafa"))).toBeNull();
+    expect(selectedStylePreset({ ...applied, layout: { ...applied.layout, navigation: "sidebar" } })).toBeNull();
+    expect(selectedStylePreset({ ...applied, layout: { ...applied.layout, mobileNavigation: "tabs" } })).toBeNull();
+  });
+
+  it("tells apart Styles that differ only in navigation, and names the one a tuned theme started from", () => {
+    const marketplace = storefrontStylePresetTheme("marketplace");
+    const daily = storefrontStylePresetTheme("daily");
+    // Same header, footer, cards, density and product page; the menu differs.
+    const { navigation: _m, ...marketplaceLayout } = marketplace.layout;
+    const { navigation: _d, ...dailyLayout } = daily.layout;
+    expect(marketplaceLayout).toEqual(dailyLayout);
+    expect(sameThemeLook(marketplace, { ...marketplace, layout: daily.layout })).toBe(false);
+
+    // Daily's colours and order with Marketplace's menu still started from Daily.
+    const tuned = { ...daily, layout: { ...daily.layout, navigation: marketplace.layout.navigation } };
+    expect(selectedStylePreset(tuned)).toBeNull();
+    expect(closestStylePreset(tuned)).toBe("daily");
   });
 });
 
 describe("theme colors", () => {
   it("a colour role writes every token of that role", () => {
-    const theme = setThemeColor(DEFAULT_STOREFRONT_THEME, "background", "#fffbeb");
-    expect([theme.tokens.colors.background, theme.tokens.colors.card, theme.tokens.colors.popover])
-      .toEqual(["#fffbeb", "#fffbeb", "#fffbeb"]);
-    expect(DEFAULT_STOREFRONT_THEME.tokens.colors.background).toBe("#ffffff");
+    const theme = setThemeColor(DEFAULT_STOREFRONT_THEME, "text", "#111827");
+    expect([theme.tokens.colors.foreground, theme.tokens.colors["card-foreground"], theme.tokens.colors["popover-foreground"]])
+      .toEqual(["#111827", "#111827", "#111827"]);
+  });
+
+  it("moves the card by the Style's own card-to-page step instead of flattening it", () => {
+    // Retail: white cards (#ffffff) on warm paper (#fbfaf7), a step of (+4, +5, +8).
+    const retail = setThemeColor(storefrontStylePresetTheme("classic"), "background", "#f0ebe3");
+    expect(retail.tokens.colors.background).toBe("#f0ebe3");
+    expect(retail.tokens.colors.card).toBe("#f4f0eb");
+    expect(retail.tokens.colors.popover).toBe("#f4f0eb");
+    // Midnight: raised panels (#141416) over the page (#0a0a0b) keep their lift.
+    const midnight = setThemeColor(storefrontStylePresetTheme("midnight"), "background", "#101014");
+    expect(midnight.tokens.colors.card).toBe("#1a1a1f");
+    // A Style whose card is its page keeps them equal.
+    const fresh = setThemeColor(storefrontStylePresetTheme("daily"), "background", "#fdfdf8");
+    expect(fresh.tokens.colors.card).toBe("#fdfdf8");
+    expect(cardForBackground(storefrontStylePresetTheme("classic"), "#ffffff")).toBe("#ffffff");
   });
 
   it("names unreadable text in plain words on the field that can fix it, and blocks saving", () => {
-    const theme = setThemeColor(DEFAULT_STOREFRONT_THEME, "buttonText", "#7ad08f");
+    const theme = setThemeColor(DEFAULT_STOREFRONT_THEME, "buttonText", "#5a5a5a");
     const problems = themeContrastProblems(theme.tokens.colors);
     expect(problems.map(({ message, role }) => ({ message, role })))
       .toEqual([{ message: "contrastButtonText", role: "buttonText" }]);

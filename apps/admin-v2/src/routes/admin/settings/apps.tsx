@@ -1,18 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AiAccessCard, aiAccessQuery } from "~/components/admin/agent-access/AiAccessCard";
+import { AiAccessCard } from "~/components/admin/agent-access/AiAccessCard";
 import {
   FacebookCard,
   FraudCheckCard,
   ScannerCard,
   TrackingCard,
-  metaQuery,
-  trackingQuery,
 } from "~/components/admin/settings/AppsSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { fraudCheckerProvidersQueryOptions } from "~/lib/api-query-options/fraud-checker";
+import { aiAccessQuery, metaQuery, trackingQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/apps")({

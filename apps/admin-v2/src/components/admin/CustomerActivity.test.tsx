@@ -4,7 +4,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 
 const sdk = vi.hoisted(() => ({ getApiV1AdminCustomersByIdHistory: vi.fn() }));
 vi.mock("@scalius/api-client/sdk", () => sdk);

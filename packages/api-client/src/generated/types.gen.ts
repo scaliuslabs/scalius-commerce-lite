@@ -7,7 +7,7 @@ export type ClientOptions = {
 export type NullableTimestamp = string | number | null;
 
 export type StorefrontThemeDocument = {
-    version: 2;
+    version: 3;
     mode: 'configured' | 'custom';
     tokens: {
         colors: {
@@ -31,11 +31,9 @@ export type StorefrontThemeDocument = {
             input: string;
             ring: string;
         };
-        typography: {
-            heading: 'system' | 'modern' | 'editorial';
-            body: 'system' | 'modern' | 'humanist';
-        };
+        typography: 'retail' | 'market' | 'editorial' | 'fresh' | 'beauty' | 'heritage' | 'tech';
         radius: 'square' | 'subtle' | 'rounded';
+        buttonShape: 'radius' | 'pill';
         containerWidth: 'standard' | 'wide';
         components: {
             buttons: 'solid' | 'outline';
@@ -49,6 +47,8 @@ export type StorefrontThemeDocument = {
         card: 'standard' | 'portrait' | 'quick';
         density: 'compact' | 'comfortable';
         productPage: 'gallery' | 'filmstrip' | 'stacked';
+        navigation: 'menu' | 'mega' | 'pills' | 'sidebar';
+        mobileNavigation: 'drawer' | 'tabs';
     };
     sections: Array<{
         id: string;
@@ -1633,16 +1633,19 @@ export type GetApiV1NavigationMenusByMenuIdResponses = {
                 id: string;
                 title: string;
                 href?: string;
+                imageUrl?: string;
                 openInNewTab?: boolean;
                 subMenu?: Array<{
                     id: string;
                     title: string;
                     href?: string;
+                    imageUrl?: string;
                     openInNewTab?: boolean;
                     subMenu?: Array<{
                         id: string;
                         title: string;
                         href?: string;
+                        imageUrl?: string;
                         openInNewTab?: boolean;
                     }>;
                 }>;
@@ -1710,6 +1713,7 @@ export type GetApiV1NavigationMenusByMenuIdItemsResponses = {
                 id: string;
                 title: string;
                 href?: string;
+                imageUrl?: string;
                 openInNewTab?: boolean;
                 position: number;
                 childCount: number;
@@ -1771,16 +1775,19 @@ export type GetApiV1NavigationByIdResponses = {
                     id: string;
                     title: string;
                     href?: string;
+                    imageUrl?: string;
                     openInNewTab?: boolean;
                     subMenu?: Array<{
                         id: string;
                         title: string;
                         href?: string;
+                        imageUrl?: string;
                         openInNewTab?: boolean;
                         subMenu?: Array<{
                             id: string;
                             title: string;
                             href?: string;
+                            imageUrl?: string;
                             openInNewTab?: boolean;
                         }>;
                     }>;
@@ -2926,16 +2933,19 @@ export type GetApiV1StorefrontLayoutResponses = {
                 id?: string;
                 title: string;
                 href?: string;
+                imageUrl?: string;
                 openInNewTab?: boolean;
                 subMenu?: Array<{
                     id?: string;
                     title: string;
                     href?: string;
+                    imageUrl?: string;
                     openInNewTab?: boolean;
                     subMenu?: Array<{
                         id?: string;
                         title: string;
                         href?: string;
+                        imageUrl?: string;
                         openInNewTab?: boolean;
                     }>;
                 }>;
@@ -2959,16 +2969,19 @@ export type GetApiV1StorefrontLayoutResponses = {
                         id?: string;
                         title: string;
                         href?: string;
+                        imageUrl?: string;
                         openInNewTab?: boolean;
                         subMenu?: Array<{
                             id?: string;
                             title: string;
                             href?: string;
+                            imageUrl?: string;
                             openInNewTab?: boolean;
                             subMenu?: Array<{
                                 id?: string;
                                 title: string;
                                 href?: string;
+                                imageUrl?: string;
                                 openInNewTab?: boolean;
                             }>;
                         }>;
@@ -3061,6 +3074,66 @@ export type GetApiV1StorefrontLayoutResponses = {
 };
 
 export type GetApiV1StorefrontLayoutResponse = GetApiV1StorefrontLayoutResponses[keyof GetApiV1StorefrontLayoutResponses];
+
+export type GetApiV1StorefrontBatchData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Part path and query, repeated once per part
+         */
+        r: string | Array<string>;
+    };
+    url: '/api/v1/storefront/batch';
+};
+
+export type GetApiV1StorefrontBatchErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontBatchError = GetApiV1StorefrontBatchErrors[keyof GetApiV1StorefrontBatchErrors];
+
+export type GetApiV1StorefrontBatchResponses = {
+    /**
+     * Each part's status and body, in request order
+     */
+    200: {
+        success: true;
+        data: {
+            parts: Array<{
+                status: number;
+                contentType: string;
+                /**
+                 * The part's response body, exactly as its own GET returns it
+                 */
+                body: string;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1StorefrontBatchResponse = GetApiV1StorefrontBatchResponses[keyof GetApiV1StorefrontBatchResponses];
 
 export type PostApiV1StorefrontThemePreviewResolveData = {
     body?: {
@@ -15024,6 +15097,10 @@ export type GetApiV1AdminCollectionsProductOptionsResponses = {
                 total: number;
                 totalPages: number;
             };
+            /**
+             * With categoryIds: how many of their products buyers see on the storefront. Null without categories.
+             */
+            visibleOnline: number | null;
         };
     };
 };

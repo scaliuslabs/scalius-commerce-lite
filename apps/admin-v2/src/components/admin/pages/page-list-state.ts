@@ -3,6 +3,13 @@ import {
   normalizeOptionalEnumSearchParam,
   type SearchValidatorInput,
 } from "~/lib/list-helpers";
+import { readListSearch } from "~/lib/list-search";
+import { pagesQueryOptions } from "~/lib/api-query-options/pages";
+
+export type ContentType = "page" | "article";
+
+/** The list's session search key (list-search.ts). */
+export const contentListName = (type: ContentType) => (type === "article" ? "articles" : "pages");
 
 export const PAGE_STATUS_FILTERS = ["draft", "scheduled", "published"] as const;
 export type PageStatusFilter = (typeof PAGE_STATUS_FILTERS)[number];
@@ -29,4 +36,12 @@ export function pageListQueryParams(deps: ReturnType<typeof validatePageSearch>,
     trashed: deps.trashed ? ("true" as const) : undefined,
     status: deps.trashed ? undefined : deps.status,
   };
+}
+
+export function contentListQuery(
+  type: ContentType,
+  search: ReturnType<typeof validatePageSearch>,
+  term = readListSearch(contentListName(type)),
+) {
+  return pagesQueryOptions({ ...pageListQueryParams(search, term), contentType: type === "article" ? "article" : undefined });
 }

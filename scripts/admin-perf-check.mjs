@@ -1,668 +1,333 @@
 #!/usr/bin/env node
+// Dashboard performance gate.
+//
+// Default: builds the dashboard into a temporary directory, maps every route
+// to the JavaScript its first render needs (the entry chunk, plus the lazy
+// component chunks of the route and its layouts, plus everything those import
+// statically) and checks each against a Brotli budget. It fails when a heavy
+// library (rich-text editor, QR scanner, PDF; phone metadata or drag and drop
+// on the everyday screens) becomes part of a route's first download, or when
+// anything grows past its budget.
+//
+// --runtime: times first load and route transitions against a running local
+// stack in headless Chrome (see scripts/admin-perf-runtime.mjs).
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { brotliCompressSync, constants as zlibConstants } from "node:zlib";
 
-import { existsSync, readFileSync, readdirSync, statSync } from "fs";
-import { dirname, extname, join, relative, resolve } from "path";
-import { fileURLToPath } from "url";
-import {
-  ADMIN_IMMUTABLE_ASSET_DIR,
-  inspectAdminStaticAssets,
-} from "./admin-static-assets.mjs";
+const scriptDirectory = dirname(fileURLToPath(import.meta.url));
+const defaultRootDir = resolve(scriptDirectory, "..");
+const ADMIN_DIR = "apps/admin-v2";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const defaultRootDir = resolve(__dirname, "..");
+/**
+ * Brotli KiB budgets. `entry` is what index.html loads before any route; each
+ * route is its full first-render JavaScript (entry included). Budgets sit a
+ * little above today's sizes: raise one only with a reason in the commit.
+ */
+export const BUNDLE_BUDGETS = {
+  entry: 138,
+  css: 17,
+  // Editors (rich text preview, forms, validation) sit near 290-350.
+  routeDefault: 360,
+  routes: {
+    "auth/login.tsx": 168,
+    "admin/index.tsx": 206,
+    "admin/orders/_list/index.tsx": 290,
+    "admin/orders/$orderId/index.tsx": 284,
+    "admin/products/index.tsx": 290,
+    "admin/products/$productId/edit.tsx": 364,
+    "admin/inventory/index.tsx": 255,
+    "admin/customers/index.tsx": 245,
+    "admin/settings/store.tsx": 291,
+  },
+};
 
-const adminSourceDir = "apps/admin-v2/src";
-const sourceExtensions = new Set([".ts", ".tsx"]);
-const ignoredDirectories = new Set([
-  ".git",
-  ".turbo",
-  ".vite",
-  "dist",
-  "node_modules",
-]);
-
-const majorListRoutes = [
-  "apps/admin-v2/src/routes/admin/products/index.tsx",
-  "apps/admin-v2/src/routes/admin/orders/index.tsx",
-  "apps/admin-v2/src/routes/admin/customers/index.tsx",
-  "apps/admin-v2/src/routes/admin/categories/index.tsx",
-  "apps/admin-v2/src/routes/admin/collections/index.tsx",
-  "apps/admin-v2/src/routes/admin/discounts/index.tsx",
-  "apps/admin-v2/src/routes/admin/pages/index.tsx",
+/** The screens merchants live in: they must never pay for another screen's tools. */
+const HOT_ROUTES = [
+  "admin/index.tsx",
+  "admin/orders/_list/index.tsx",
+  "admin/orders/$orderId/index.tsx",
+  "admin/products/index.tsx",
+  "admin/products/$productId/edit.tsx",
+  "admin/inventory/index.tsx",
+  "admin/customers/index.tsx",
 ];
 
-const dndMarkers = [
-  "@dnd-kit",
-  "useSortable",
-  "DndContext",
-  "SortableContext",
-  "sortableKeyboardCoordinates",
+/**
+ * Libraries that load on demand, never as part of a route's first render
+ * (module path patterns). `allow`: routes whose own job needs it first
+ * (the scanner's QR engine). `only`: forbidden on these routes alone (phone
+ * metadata belongs to phone forms; drag and drop to reordering screens).
+ */
+export const LAZY_ONLY_MODULES = [
+  { name: "Tiptap / ProseMirror", pattern: /node_modules\/(?:@tiptap|prosemirror-)/ },
+  { name: "html5-qrcode", pattern: /node_modules\/html5-qrcode\//, allow: ["scanner.tsx"] },
+  { name: "html2pdf", pattern: /node_modules\/html2pdf/ },
+  { name: "@dnd-kit", pattern: /node_modules\/@dnd-kit\//, only: HOT_ROUTES },
+  { name: "libphonenumber-js metadata", pattern: /node_modules\/libphonenumber-js\/.*metadata/, only: HOT_ROUTES },
 ];
 
-const productFormTiptapInternals = [
-  "<TiptapEditor",
-  "React.lazy(() => import(",
-  "useEditor",
-  "EditorContent",
-  "prosemirror",
-  "@tiptap",
-];
+// ── Route tree ─────────────────────────────────────────────────────────────
 
-function toPosixPath(value) {
-  return value.split("\\").join("/");
+/** Route file (relative to src/routes, with .tsx) → its parent's route file, or null at the root. */
+export function parseRouteTree(source) {
+  const fileByImport = new Map();
+  for (const match of source.matchAll(/import \{ Route as (\w+)Import \} from '\.\/routes\/([^']+)'/g)) {
+    fileByImport.set(match[1], `${match[2]}.tsx`);
+  }
+  const parentByFile = new Map();
+  for (const file of fileByImport.values()) parentByFile.set(file, null);
+  for (const match of source.matchAll(/const (\w+) =\s*(\w+)Import\.update\(\{[\s\S]*?getParentRoute: \(\) => (\w+),/g)) {
+    const file = fileByImport.get(match[2]);
+    const parentFile = fileByImport.get(match[3]);
+    if (file) parentByFile.set(file, parentFile && parentFile !== "__root.tsx" ? parentFile : null);
+  }
+  return parentByFile;
 }
 
-function resolveFromRoot(rootDir, relativePath) {
-  return resolve(rootDir, relativePath);
+export function routeAncestry(routeFile, parentByFile) {
+  const chain = [];
+  for (let file = routeFile; file; file = parentByFile.get(file) ?? null) chain.unshift(file);
+  return chain;
 }
 
-function relativeFromRoot(rootDir, absolutePath) {
-  return toPosixPath(relative(rootDir, absolutePath));
-}
+// ── Bundle graph ───────────────────────────────────────────────────────────
 
-function readFile(rootDir, relativePath) {
-  return readFileSync(resolveFromRoot(rootDir, relativePath), "utf8");
-}
-
-function lineNumberAt(source, index) {
-  return source.slice(0, index).split(/\r\n|\r|\n/).length;
-}
-
-function collectSourceFiles(directory) {
-  const found = [];
-  if (!existsSync(directory)) return found;
-
-  for (const entry of readdirSync(directory)) {
-    if (ignoredDirectories.has(entry)) continue;
-
-    const absolutePath = join(directory, entry);
-    const stat = statSync(absolutePath);
-    if (stat.isDirectory()) {
-      found.push(...collectSourceFiles(absolutePath));
-      continue;
-    }
-    if (stat.isFile() && sourceExtensions.has(extname(entry))) {
-      found.push(absolutePath);
+/**
+ * `chunks`: [{ fileName, isEntry, imports, moduleIds }]. Returns the chunk
+ * file names that carry each route file's lazy page component.
+ */
+export function componentChunksByRoute(chunks, routesDir) {
+  const byRoute = new Map();
+  const prefix = `${routesDir.split("\\").join("/")}/`;
+  for (const chunk of chunks) {
+    for (const id of chunk.moduleIds) {
+      const normalized = id.split("\\").join("/");
+      if (!normalized.startsWith(prefix) || !normalized.endsWith("?tsr-split=component")) continue;
+      const routeFile = normalized.slice(prefix.length, -"?tsr-split=component".length);
+      const list = byRoute.get(routeFile) ?? [];
+      list.push(chunk.fileName);
+      byRoute.set(routeFile, list);
     }
   }
-
-  return found.sort();
+  return byRoute;
 }
 
-function collectMatchingFiles(directory, predicate) {
-  const found = [];
-  if (!existsSync(directory)) return found;
-
-  for (const entry of readdirSync(directory)) {
-    const absolutePath = join(directory, entry);
-    const stat = statSync(absolutePath);
-    if (stat.isDirectory()) {
-      found.push(...collectMatchingFiles(absolutePath, predicate));
-      continue;
-    }
-    if (stat.isFile() && predicate(entry)) found.push(absolutePath);
+/** The chunks plus everything they import statically. */
+export function staticClosure(fileNames, chunkByName) {
+  const seen = new Set();
+  const pending = [...fileNames];
+  while (pending.length > 0) {
+    const name = pending.pop();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    for (const imported of chunkByName.get(name)?.imports ?? []) pending.push(imported);
   }
-
-  return found.sort();
+  return seen;
 }
 
-function staticImportSpecifiers(source) {
-  const specifiers = [];
-  const pattern =
-    /\b(?:import|export)\s+(?:type\s+)?(?:[^'"]*?\s+from\s*)?["']([^"']+)["']/g;
-  for (const match of source.matchAll(pattern)) {
-    specifiers.push({
-      specifier: match[1],
-      index: match.index ?? 0,
-    });
-  }
-  return specifiers;
-}
-
-function dynamicImportSpecifiers(source) {
-  const specifiers = [];
-  const pattern = /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g;
-  for (const match of source.matchAll(pattern)) {
-    specifiers.push({
-      specifier: match[1],
-      index: match.index ?? 0,
-    });
-  }
-  return specifiers;
-}
-
-function allImportSpecifiers(source) {
-  return [
-    ...staticImportSpecifiers(source).map((item) => ({ ...item, dynamic: false })),
-    ...dynamicImportSpecifiers(source).map((item) => ({ ...item, dynamic: true })),
-  ].sort((a, b) => a.index - b.index);
-}
-
-function isApiQueriesSpecifier(specifier) {
-  const normalized = specifier
-    .replace(/\?(.*)$/, "")
-    .replace(/\.(?:m?[jt]sx?)$/, "")
-    .replace(/\\/g, "/");
-
-  if (!normalized.endsWith("api.queries")) return false;
-  return (
-    normalized.startsWith(".") ||
-    normalized.startsWith("~/") ||
-    normalized.startsWith("@/") ||
-    normalized.includes("/lib/api.queries") ||
-    normalized.endsWith("/api.queries")
-  );
-}
-
-function linesContaining(source, pattern) {
-  const regex = typeof pattern === "string" ? null : pattern;
-  return source
-    .split(/\r\n|\r|\n/)
-    .map((line, index) => ({ line, number: index + 1 }))
-    .filter(({ line }) => (regex ? regex.test(line) : line.includes(pattern)));
-}
-
-function hasPattern(source, pattern) {
-  return typeof pattern === "string" ? source.includes(pattern) : pattern.test(source);
-}
-
-function addResult(context, status, label, detail) {
-  context.results.push({ status, label, detail });
-}
-
-function pass(context, label, detail) {
-  addResult(context, "PASS", label, detail);
-}
-
-function skip(context, label, detail) {
-  addResult(context, "SKIP", label, detail);
-}
-
-function fail(context, group, message) {
-  context.failures.push({ group, message });
-}
-
-function runCheck(context, label, callback) {
-  const failureCount = context.failures.length;
-  callback();
-  if (context.failures.length === failureCount) pass(context, label);
-}
-
-function requireFile(context, relativePath, group) {
-  const absolutePath = resolveFromRoot(context.rootDir, relativePath);
-  if (existsSync(absolutePath)) return true;
-  fail(context, group, `${relativePath} is missing.`);
-  return false;
-}
-
-function requireContains(context, relativePath, pattern, group, message) {
-  if (!requireFile(context, relativePath, group)) return false;
-  const source = readFile(context.rootDir, relativePath);
-  if (hasPattern(source, pattern)) return true;
-  fail(context, group, `${relativePath}: ${message}`);
-  return false;
-}
-
-function requireLacksMarkers(context, relativePath, markers, group, messagePrefix) {
-  if (!requireFile(context, relativePath, group)) return false;
-  const source = readFile(context.rootDir, relativePath);
-  const bad = markers.filter((marker) => source.includes(marker));
-  if (bad.length === 0) return true;
-  fail(context, group, `${relativePath}: ${messagePrefix}: ${bad.join(", ")}`);
-  return false;
-}
-
-function requireNoStaticImports(context, relativePath, blockedPattern, group, messagePrefix) {
-  if (!requireFile(context, relativePath, group)) return false;
-  const source = readFile(context.rootDir, relativePath);
-  const bad = staticImportSpecifiers(source).filter(({ specifier }) =>
-    blockedPattern.test(specifier),
-  );
-  if (bad.length === 0) return true;
-  fail(
-    context,
-    group,
-    `${relativePath}: ${messagePrefix}: ${bad.map((item) => item.specifier).join(", ")}`,
-  );
-  return false;
-}
-
-function checkDeletedApiQueriesBarrel(context) {
-  runCheck(context, "source: deleted api.queries barrel is absent", () => {
-    const barrel = "apps/admin-v2/src/lib/api.queries.ts";
-    if (existsSync(resolveFromRoot(context.rootDir, barrel))) {
-      fail(context, "source", `${barrel} exists; the broad query barrel must stay deleted.`);
-    }
-  });
-}
-
-function checkNoApiQueriesImports(context) {
-  runCheck(context, "source: no api.queries imports remain", () => {
-    const srcDir = resolveFromRoot(context.rootDir, adminSourceDir);
-    if (!existsSync(srcDir)) {
-      fail(context, "source", `${adminSourceDir} is missing.`);
-      return;
-    }
-
-    const matches = [];
-    for (const file of collectSourceFiles(srcDir)) {
-      const source = readFileSync(file, "utf8");
-      for (const item of allImportSpecifiers(source)) {
-        if (!isApiQueriesSpecifier(item.specifier)) continue;
-        matches.push(
-          `${relativeFromRoot(context.rootDir, file)}:${lineNumberAt(source, item.index)} imports ${item.specifier}`,
-        );
+/** Per-route first-render JavaScript: file names, Brotli bytes and the lazy-only modules it pulls in. */
+export function measureRoutes({ chunks, parentByFile, routesDir, brotliBytes }) {
+  const chunkByName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]));
+  const entry = staticClosure(chunks.filter((chunk) => chunk.isEntry).map((chunk) => chunk.fileName), chunkByName);
+  const componentChunks = componentChunksByRoute(chunks, routesDir);
+  const sizeOf = (files) => [...files].reduce((sum, file) => sum + brotliBytes(file), 0);
+  const lazyOnlyIn = (files, routeFile) => {
+    const found = new Set();
+    for (const file of files) {
+      for (const id of chunkByName.get(file)?.moduleIds ?? []) {
+        const normalized = id.split("\\").join("/");
+        for (const rule of LAZY_ONLY_MODULES) {
+          const applies = rule.only ? rule.only.includes(routeFile) || routeFile === "" : !rule.allow?.includes(routeFile);
+          if (applies && rule.pattern.test(normalized)) found.add(rule.name);
+        }
       }
     }
-
-    if (matches.length > 0) {
-      fail(
-        context,
-        "source",
-        `Deleted broad api.queries barrel is imported:\n    ${matches.join("\n    ")}`,
-      );
-    }
-  });
-}
-
-function checkApiQueryOptionsReferences(context) {
-  runCheck(context, "source: api-query-options do not reference api.queries", () => {
-    const dir = resolveFromRoot(context.rootDir, "apps/admin-v2/src/lib/api-query-options");
-    if (!existsSync(dir)) {
-      fail(context, "source", "apps/admin-v2/src/lib/api-query-options is missing.");
-      return;
-    }
-
-    const matches = [];
-    for (const file of collectSourceFiles(dir)) {
-      const source = readFileSync(file, "utf8");
-      for (const { number } of linesContaining(source, "api.queries")) {
-        matches.push(`${relativeFromRoot(context.rootDir, file)}:${number}`);
-      }
-    }
-
-    if (matches.length > 0) {
-      fail(
-        context,
-        "source",
-        `api-query-options still reference api.queries: ${matches.join(", ")}`,
-      );
-    }
-  });
-}
-
-function checkWarmRouteQueries(context) {
-  runCheck(context, "source: major list routes warm route queries", () => {
-    for (const route of majorListRoutes) {
-      requireContains(
-        context,
-        route,
-        /\bwarmRouteQuery\s*\(/,
-        "source",
-        "expected a warmRouteQuery(...) call for non-blocking list navigation.",
-      );
-    }
-  });
-}
-
-function checkUseServerTableFreshness(context) {
-  runCheck(context, "source: useServerTable preserves rows and stale-aware mount freshness", () => {
-    const file = "apps/admin-v2/src/components/admin/data-table/useServerTable.ts";
-    if (!requireFile(context, file, "source")) return;
-    const source = readFile(context.rootDir, file);
-
-    if (!/placeholderData:\s*keepPreviousData\b/.test(source)) {
-      fail(context, "source", `${file}: expected placeholderData: keepPreviousData.`);
-    }
-    if (!/refetchOnMount\s*:\s*shouldRefetchServerTableOnMount\b/.test(source)) {
-      fail(
-        context,
-        "source",
-        `${file}: expected the bounded intent-prefetch mount policy.`,
-      );
-    }
-    for (const marker of [
-      "INTENT_PREFETCH_MOUNT_GRACE_MS = 5_000",
-      "query.state.isInvalidated",
-      "query.state.dataUpdatedAt",
-      "query.isStale()",
-      'return "always"',
-    ]) {
-      if (!source.includes(marker)) {
-        fail(context, "source", `${file}: missing mount freshness marker ${marker}.`);
-      }
-    }
-    if (/staleTime\s*:\s*(?:Infinity|Number\.POSITIVE_INFINITY)\b/.test(source)) {
-      fail(context, "source", `${file}: infinite staleTime would suppress mount freshness.`);
-    }
-  });
-}
-
-function checkDataTableDndBoundary(context) {
-  runCheck(context, "source: DataTable DnD stays in sortable lazy path", () => {
-    requireLacksMarkers(
-      context,
-      "apps/admin-v2/src/components/admin/data-table/DataTable.tsx",
-      dndMarkers,
-      "source",
-      "hot DataTable path must not contain drag-and-drop markers",
-    );
-
-    const sortableFile =
-      "apps/admin-v2/src/components/admin/data-table/SortableDataTableContent.tsx";
-    for (const marker of dndMarkers) {
-      requireContains(
-        context,
-        sortableFile,
-        marker,
-        "source",
-        `expected sortable lazy content to own ${marker}.`,
-      );
-    }
-  });
-}
-
-function checkProductFormTiptapBoundary(context) {
-  runCheck(context, "source: ProductForm uses deferred Tiptap boundary", () => {
-    requireLacksMarkers(
-      context,
-      "apps/admin-v2/src/components/admin/ProductForm.tsx",
-      productFormTiptapInternals,
-      "source",
-      "ProductForm must not directly render/import Tiptap internals",
-    );
-    requireContains(
-      context,
-      "apps/admin-v2/src/components/admin/product-form/TitleDescriptionSection.tsx",
-      "DeferredTiptapEditor",
-      "source",
-      "expected the product description section to use DeferredTiptapEditor.",
-    );
-  });
-}
-
-function checkProductImagesBoundary(context) {
-  runCheck(context, "source: product media stays bounded without drag tooling", () => {
-    const file = "apps/admin-v2/src/components/admin/product-form/ProductImagesSection.tsx";
-    requireLacksMarkers(
-      context,
-      file,
-      [...dndMarkers, "DraggableImageGallery"],
-      "source",
-      "product media must keep the direct, accessible reorder controls instead of restoring drag tooling",
-    );
-    requireContains(
-      context,
-      file,
-      /field\.value\.slice\(0,\s*12\)/,
-      "source",
-      "expected the product media grid to cap its initial rendered tiles at 12.",
-    );
-    requireContains(
-      context,
-      file,
-      /loading=["']lazy["']/,
-      "source",
-      "expected product media previews to use native lazy loading.",
-    );
-  });
-}
-
-function checkVariantToolBoundaries(context) {
-  runCheck(context, "source: option matrix is lazy and bounded", () => {
-    const routes = [
-      "apps/admin-v2/src/routes/admin/products/new.tsx",
-      "apps/admin-v2/src/routes/admin/products/$productId/edit.tsx",
-    ];
-    const matrix = "apps/admin-v2/src/components/admin/product-form/variants/OptionMatrixEditor.tsx";
-    for (const route of routes) {
-      requireContains(
-        context,
-        route,
-        /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']~\/components\/admin\/product-form\/variants\/OptionMatrixEditor["']\)/,
-        "source",
-        "expected OptionMatrixEditor to be lazy-loaded.",
-      );
-      requireNoStaticImports(
-        context,
-        route,
-        /(?:^|\/)OptionMatrixEditor$/,
-        "source",
-        "product routes must not statically import the option matrix",
-      );
-    }
-    requireContains(context, matrix, /const pageSize = 30;/, "source", "expected bounded matrix pagination.");
-    requireContains(context, matrix, /filteredVariants\.slice\(/, "source", "expected the matrix to render one page at a time.");
-    requireNoStaticImports(
-      context,
-      matrix,
-      /(?:bulk-generator|VariantSortModal|VariantImportExport|csvHelpers|MediaManager)$/,
-      "source",
-      "option matrix must not restore deleted heavy variant tools",
-    );
-  });
-}
-
-function checkGeneralSettingsBoundary(context) {
-  runCheck(context, "source: GeneralSettings header/footer builders are lazy", () => {
-    const file = "apps/admin-v2/src/components/admin/settings/GeneralSettingsPage.tsx";
-    requireContains(
-      context,
-      file,
-      /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']\.\.\/header-builder["']\)/,
-      "source",
-      "expected HeaderBuilder to be lazy-loaded.",
-    );
-    requireContains(
-      context,
-      file,
-      /lazy\s*\(\s*\(\)\s*=>\s*[\s\n]*import\(["']\.\.\/footer-builder["']\)/,
-      "source",
-      "expected FooterBuilder to be lazy-loaded.",
-    );
-    requireNoStaticImports(
-      context,
-      file,
-      /^\.\.\/(?:header-builder|footer-builder)$/,
-      "source",
-      "GeneralSettingsPage must not statically import builder modules",
-    );
-  });
-}
-
-function checkOrderViewBoundary(context) {
-  runCheck(context, "source: OrderView keeps deterministic route-owned panels", () => {
-    const file = "apps/admin-v2/src/components/admin/OrderView.tsx";
-    requireContains(
-      context,
-      file,
-      /import\s*\{\s*OrderSupportRequestsCard\s*\}\s*from\s*["']\.\/orderview\/OrderSupportRequestsCard["']/,
-      "source",
-      "expected the route-owned support requests card to render deterministically.",
-    );
-    requireContains(
-      context,
-      file,
-      /import\s*\{\s*OrderNotificationsCard\s*\}\s*from\s*["']\.\/orderview\/OrderNotificationsCard["']/,
-      "source",
-      "expected the route-owned notification history card to render deterministically.",
-    );
-    requireLacksMarkers(
-      context,
-      file,
-      ["lazy(", "<Suspense"],
-      "source",
-      "OrderView must not restore the hydration-unstable lazy panel boundary",
-    );
-  });
-}
-
-function checkProductFormClientChunk(context) {
-  const assetsPath = `apps/admin-v2/dist/${ADMIN_IMMUTABLE_ASSET_DIR}`;
-  const absoluteAssetsPath = resolveFromRoot(context.rootDir, assetsPath);
-  if (!existsSync(absoluteAssetsPath)) {
-    skip(context, "dist: ProductForm client chunk", `${assetsPath} not found`);
-    return;
-  }
-
-  const files = collectMatchingFiles(
-    absoluteAssetsPath,
-    (file) => /^ProductForm-.*\.js$/.test(file),
-  );
-  if (files.length === 0) {
-    fail(
-      context,
-      "dist",
-      `${assetsPath}: expected a ProductForm-*.js artifact once the client build exists.`,
-    );
-    return;
-  }
-
-  const failureCount = context.failures.length;
-  const bad = [];
-  for (const file of files) {
-    const source = readFileSync(file, "utf8");
-    const imports = staticImportSpecifiers(source).map((item) => item.specifier);
-    const forbiddenStatic = imports.filter(
-      (specifier) =>
-        /sortable|AdditionalInfoManager|TiptapEditor|prosemirror/i.test(
-          specifier,
-        ) && !/DeferredTiptapEditor/i.test(specifier),
-    );
-    const obsoleteGalleryImports = allImportSpecifiers(source)
-      .map((item) => item.specifier)
-      .filter((specifier) => /DraggableImageGallery/i.test(specifier));
-    const forbidden = [...new Set([...forbiddenStatic, ...obsoleteGalleryImports])];
-    if (forbidden.length > 0) {
-      bad.push(`${relativeFromRoot(context.rootDir, file)}: ${forbidden.join(", ")}`);
-    }
-  }
-
-  if (bad.length > 0) {
-    fail(
-      context,
-      "dist",
-      `ProductForm chunk has forbidden static imports:\n    ${bad.join("\n    ")}`,
-    );
-  }
-
-  if (context.failures.length === failureCount) {
-    pass(context, "dist: ProductForm client chunk", `${files.length} chunk(s)`);
-  }
-}
-
-function checkStaticAssetCaching(context) {
-  const report = inspectAdminStaticAssets({ rootDir: context.rootDir });
-  const failureCount = context.failures.length;
-
-  for (const error of report.errors) {
-    fail(context, "static-assets", error);
-  }
-
-  if (context.failures.length !== failureCount) return;
-
-  if (!report.distPresent) {
-    pass(context, "static assets: narrow immutable cache policy", "source policy");
-    return;
-  }
-
-  pass(
-    context,
-    "static assets: narrow immutable cache policy",
-    `${report.scripts} hashed JS, ${report.styles} hashed CSS, ${report.copiedPublicScriptsAndStyles} public script/style preserved`,
-  );
-}
-
-export function runAdminPerfCheck({ rootDir = defaultRootDir } = {}) {
-  const context = {
-    rootDir: resolve(rootDir),
-    results: [],
-    failures: [],
+    return [...found];
   };
 
-  checkDeletedApiQueriesBarrel(context);
-  checkNoApiQueriesImports(context);
-  checkApiQueryOptionsReferences(context);
-  checkWarmRouteQueries(context);
-  checkUseServerTableFreshness(context);
-  checkDataTableDndBoundary(context);
-  checkProductFormTiptapBoundary(context);
-  checkProductImagesBoundary(context);
-  checkVariantToolBoundaries(context);
-  checkGeneralSettingsBoundary(context);
-  checkOrderViewBoundary(context);
-  checkStaticAssetCaching(context);
-  checkProductFormClientChunk(context);
-
+  const routes = [];
+  for (const routeFile of [...parentByFile.keys()].sort()) {
+    const own = routeAncestry(routeFile, parentByFile).flatMap((file) => componentChunks.get(file) ?? []);
+    const files = new Set([...entry, ...staticClosure(own, chunkByName)]);
+    routes.push({
+      route: routeFile,
+      fileNames: [...files].sort((a, b) => brotliBytes(b) - brotliBytes(a)),
+      files: files.size,
+      brotliBytes: sizeOf(files),
+      lazyOnly: lazyOnlyIn(files, routeFile),
+    });
+  }
   return {
-    rootDir: context.rootDir,
-    ok: context.failures.length === 0,
-    results: context.results,
-    failures: context.failures,
+    entry: { files: entry.size, brotliBytes: sizeOf(entry), lazyOnly: lazyOnlyIn(entry, "") },
+    routes,
   };
 }
 
-export function formatAdminPerfCheckReport(report) {
-  const lines = report.results.map(({ status, label, detail }) =>
-    detail ? `${status} ${label} - ${detail}` : `${status} ${label}`,
-  );
-
-  if (report.failures.length === 0) {
-    return lines;
+export function validateBundleReport(report, budgets = BUNDLE_BUDGETS) {
+  const failures = [];
+  const kib = (bytes) => bytes / 1024;
+  if (kib(report.entry.brotliBytes) > budgets.entry) {
+    failures.push(`entry chunk is ${kib(report.entry.brotliBytes).toFixed(1)} KiB Brotli (budget ${budgets.entry} KiB)`);
   }
-
-  lines.push("FAIL admin performance confidence gate");
-  const grouped = new Map();
-  for (const failure of report.failures) {
-    const group = grouped.get(failure.group) ?? [];
-    group.push(failure.message);
-    grouped.set(failure.group, group);
+  if (report.entry.lazyOnly.length > 0) failures.push(`entry chunk loads ${report.entry.lazyOnly.join(", ")}`);
+  if (report.css && kib(report.css.brotliBytes) > budgets.css) {
+    failures.push(`stylesheet is ${kib(report.css.brotliBytes).toFixed(1)} KiB Brotli (budget ${budgets.css} KiB)`);
   }
-
-  for (const [group, messages] of grouped) {
-    lines.push(`FAIL ${group}`);
-    for (const message of messages) {
-      lines.push(`  - ${message}`);
+  for (const route of report.routes) {
+    const budget = budgets.routes[route.route] ?? budgets.routeDefault;
+    if (kib(route.brotliBytes) > budget) {
+      failures.push(`${route.route} needs ${kib(route.brotliBytes).toFixed(1)} KiB Brotli to render (budget ${budget} KiB)`);
     }
+    if (route.lazyOnly.length > 0) failures.push(`${route.route} loads ${route.lazyOnly.join(", ")} before it renders`);
   }
+  for (const route of Object.keys(budgets.routes)) {
+    if (!report.routes.some((entry) => entry.route === route)) failures.push(`budgeted route ${route} no longer exists`);
+  }
+  return failures;
+}
 
+// ── Build ──────────────────────────────────────────────────────────────────
+
+/** Builds the dashboard into `outDir` and returns its chunk graph (the build's own config, plus a reporter). */
+export async function buildAdminBundle(rootDir, outDir) {
+  const adminDir = join(rootDir, ADMIN_DIR);
+  const requireFromAdmin = createRequire(join(adminDir, "package.json"));
+  const { build } = await import(pathToFileURL(requireFromAdmin.resolve("vite")).href);
+  let chunks = [];
+  let cssFiles = [];
+  await build({
+    root: adminDir,
+    configFile: join(adminDir, "vite.config.ts"),
+    logLevel: "silent",
+    build: { outDir, emptyOutDir: true },
+    plugins: [{
+      name: "scalius-admin-perf-report",
+      generateBundle(_options, bundle) {
+        chunks = Object.values(bundle)
+          .filter((item) => item.type === "chunk")
+          .map((chunk) => ({
+            fileName: chunk.fileName,
+            isEntry: chunk.isEntry,
+            imports: chunk.imports,
+            moduleIds: chunk.moduleIds ?? Object.keys(chunk.modules),
+          }));
+        cssFiles = Object.values(bundle)
+          .filter((item) => item.type === "asset" && item.fileName.endsWith(".css"))
+          .map((item) => item.fileName);
+      },
+    }],
+  });
+  return { chunks, cssFiles, routesDir: join(adminDir, "src/routes") };
+}
+
+function brotliSize(file) {
+  return brotliCompressSync(readFileSync(file), {
+    params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 },
+  }).length;
+}
+
+export async function runBundleCheck({ rootDir = defaultRootDir } = {}) {
+  const outDir = mkdtempSync(join(tmpdir(), "scalius-admin-perf-build-"));
+  try {
+    const { chunks, cssFiles, routesDir } = await buildAdminBundle(rootDir, outDir);
+    const parentByFile = parseRouteTree(readFileSync(join(rootDir, ADMIN_DIR, "src/routeTree.gen.ts"), "utf8"));
+    const cache = new Map();
+    const brotliBytes = (fileName) => {
+      if (!cache.has(fileName)) cache.set(fileName, brotliSize(join(outDir, fileName)));
+      return cache.get(fileName);
+    };
+    const report = measureRoutes({ chunks, parentByFile, routesDir, brotliBytes });
+    report.css = {
+      files: cssFiles.length,
+      brotliBytes: cssFiles.reduce((sum, file) => sum + brotliBytes(file), 0),
+      rawBytes: cssFiles.reduce((sum, file) => sum + statSync(join(outDir, file)).size, 0),
+    };
+    report.largestChunks = chunks
+      .map((chunk) => ({ file: chunk.fileName, brotliBytes: brotliBytes(chunk.fileName) }))
+      .sort((a, b) => b.brotliBytes - a.brotliBytes)
+      .slice(0, 8);
+    report.brotliByFile = Object.fromEntries(cache);
+    return report;
+  } finally {
+    rmSync(outDir, { recursive: true, force: true });
+  }
+}
+
+export function formatBundleReport(report, budgets = BUNDLE_BUDGETS) {
+  const kib = (bytes) => (bytes / 1024).toFixed(1);
+  const lines = [
+    `entry: ${kib(report.entry.brotliBytes)} KiB Brotli in ${report.entry.files} file(s) (budget ${budgets.entry})`,
+  ];
+  if (report.css) lines.push(`stylesheet: ${kib(report.css.brotliBytes)} KiB Brotli (budget ${budgets.css})`);
+  const budgeted = report.routes.filter((route) => budgets.routes[route.route] !== undefined);
+  const heaviest = report.routes
+    .filter((route) => budgets.routes[route.route] === undefined)
+    .sort((a, b) => b.brotliBytes - a.brotliBytes)
+    .slice(0, 6);
+  for (const route of [...budgeted, ...heaviest]) {
+    const budget = budgets.routes[route.route] ?? budgets.routeDefault;
+    lines.push(`${route.route.padEnd(44)} ${kib(route.brotliBytes).padStart(6)} KiB in ${String(route.files).padStart(2)} file(s) (budget ${budget})`);
+  }
+  if (report.largestChunks) {
+    lines.push(`largest chunks: ${report.largestChunks.map((chunk) => `${chunk.file.split("/").at(-1)} ${kib(chunk.brotliBytes)}`).join(", ")}`);
+  }
+  for (const route of report.routes.filter((entry) => entry.route === report.explain)) {
+    lines.push(`${route.route} first-render files (Brotli KiB):`);
+    for (const file of route.fileNames) lines.push(`  ${kib(report.brotliByFile[file]).padStart(6)}  ${file.split("/").at(-1)}`);
+  }
   return lines;
 }
 
+// ── CLI ────────────────────────────────────────────────────────────────────
+
 export function parseAdminPerfCheckArgs(rawArgs) {
-  const options = {};
+  const options = { runtime: false, check: true };
+  const valueOptions = new Map([
+    ["--root", "rootDir"], ["--admin", "admin"], ["--cpu", "cpu"], ["--rtt", "latencyMs"],
+    ["--mbps", "downloadMbps"], ["--cdp-port", "cdpPort"], ["--explorer", "explorer"],
+    ["--typing-product", "typingProduct"], ["--json", "json"], ["--runs", "runs"], ["--explain", "explain"],
+  ]);
+  const numeric = new Set(["cpu", "latencyMs", "downloadMbps", "cdpPort", "runs"]);
   for (let index = 0; index < rawArgs.length; index += 1) {
     const arg = rawArgs[index];
-    if (arg === "-h" || arg === "--help") {
-      options.help = true;
-      continue;
-    }
-    if (arg === "--root") {
+    if (arg === "-h" || arg === "--help") options.help = true;
+    else if (arg === "--runtime") options.runtime = true;
+    else if (arg === "--report-only") options.check = false;
+    else if (valueOptions.has(arg)) {
       const value = rawArgs[index + 1];
-      if (!value || value.startsWith("--")) {
-        throw new Error("Option --root requires a path.");
-      }
-      options.rootDir = value;
+      if (!value || value.startsWith("--")) throw new Error(`Option ${arg} requires a value.`);
+      const key = valueOptions.get(arg);
+      options[key] = numeric.has(key) ? Number(value) : value;
       index += 1;
-      continue;
+    } else throw new Error(`Unknown option: ${arg}`);
+  }
+  if (options.admin) {
+    const url = new URL(options.admin);
+    if (!["localhost", "127.0.0.1"].includes(url.hostname)) {
+      throw new Error("--admin must be a local dashboard (localhost): the runtime smoke never drives production.");
     }
-    if (arg.startsWith("--root=")) {
-      options.rootDir = arg.slice("--root=".length);
-      continue;
-    }
-    throw new Error(`Unknown option: ${arg}`);
   }
   return options;
 }
 
-function printHelp() {
-  console.log(`Usage: node scripts/admin-perf-check.mjs [--root <path>]
+const HELP = `Usage:
+  node scripts/admin-perf-check.mjs [--report-only]
+      Build the dashboard to a temp dir and check per-route Brotli budgets.
+  node scripts/admin-perf-check.mjs --runtime --admin http://localhost:4323
+      [--cpu 4] [--rtt 40] [--mbps 25] [--cdp-port 9396] [--runs 3]
+      [--explorer http://localhost:8787] [--typing-product <productId>]
+      [--json <file>] [--report-only]
+  node scripts/admin-perf-check.mjs --explain admin/orders/_list/index.tsx
+      Also list the files one route downloads before it renders.
+      Time first load, route transitions and product-editor typing in
+      headless Chrome against a running local stack (signed in with the
+      local dev admin); --report-only skips the runtime budgets.`;
 
-Runs a read-only admin performance confidence gate over local source and, when
-present, apps/admin-v2/dist artifacts.`);
-}
-
-function main() {
+async function main() {
   let options;
   try {
     options = parseAdminPerfCheckArgs(process.argv.slice(2));
@@ -670,24 +335,37 @@ function main() {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
-
   if (options.help) {
-    printHelp();
+    console.log(HELP);
     return;
   }
 
-  const report = runAdminPerfCheck({ rootDir: options.rootDir });
-  const lines = formatAdminPerfCheckReport(report);
-  const firstFailureIndex = lines.findIndex((line) => line.startsWith("FAIL "));
-  const resultLines = firstFailureIndex === -1 ? lines : lines.slice(0, firstFailureIndex);
-  const failureLines = firstFailureIndex === -1 ? [] : lines.slice(firstFailureIndex);
+  if (options.runtime) {
+    if (!options.admin) {
+      console.error("--runtime needs --admin <local dashboard URL>.");
+      process.exit(1);
+    }
+    const runtime = await import("./admin-perf-runtime.mjs");
+    const report = await runtime.runAdminPerfRuntime(options);
+    for (const line of runtime.formatRuntimeReport(report)) console.log(line);
+    if (options.json) writeFileSync(options.json, `${JSON.stringify(report, null, 2)}\n`);
+    const failures = options.check ? runtime.validateRuntimeReport(report) : [];
+    for (const failure of failures) console.error(`FAIL ${failure}`);
+    if (failures.length > 0) process.exit(1);
+    return;
+  }
 
-  for (const line of resultLines) console.log(line);
-  for (const line of failureLines) console.error(line);
-
-  if (!report.ok) process.exit(1);
+  const rootDir = resolve(options.rootDir ?? defaultRootDir);
+  const report = await runBundleCheck({ rootDir });
+  report.explain = options.explain;
+  for (const line of formatBundleReport(report)) console.log(line);
+  if (options.json) writeFileSync(options.json, `${JSON.stringify(report, null, 2)}\n`);
+  const failures = options.check ? validateBundleReport(report) : [];
+  for (const failure of failures) console.error(`FAIL ${failure}`);
+  if (failures.length > 0) process.exit(1);
+  console.log(`Admin bundle budgets: OK (${relative(process.cwd(), join(rootDir, ADMIN_DIR)) || "."})`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main();
+  await main();
 }
