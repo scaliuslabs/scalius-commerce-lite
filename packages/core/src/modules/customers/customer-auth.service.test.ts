@@ -7,11 +7,11 @@ import type { Database } from "@scalius/database/client";
 import { createMigratedSqlite, createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { ConflictError, RateLimitError, ValidationError } from "../../errors";
 import { saveSmsSettings } from "../../integrations/sms";
-import { getOrderDetails } from "../orders/orders.admin";
+import { getOrderDetails } from "../orders/admin/detail";
 import { getOfferedCustomerAuthPolicy } from "../settings/checkout-readiness";
-import { createAtomicCheckoutAttempt } from "../orders/checkout-attempts";
-import { commitStorefrontOrderPayload } from "../orders/orders.ingest";
-import type { StorefrontOrderCommitPayload } from "../orders/orders.types";
+import { createAtomicCheckoutAttempt } from "../checkout/attempts";
+import { commitStorefrontOrderPayload } from "../checkout/commit";
+import type { StorefrontOrderCommitPayload } from "../orders/types";
 import {
   createCustomer,
   deleteCustomer,

@@ -14,7 +14,7 @@ import {
   paymentMethodsDocument,
   sslcommerzDocument,
 } from "@scalius/core/modules/settings/documents";
-import { recordOrderReceipt } from "@scalius/core/modules/orders/order-receipts";
+import { recordOrderReceipt } from "@scalius/core/modules/orders/receipts";
 import type { PaymentEvent } from "@scalius/core/modules/payments/gateways/port";
 import { registerFakeGateway, type FakeGatewayState } from "@scalius/core/modules/payments/gateways/testing";
 

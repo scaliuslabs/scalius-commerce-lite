@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/d1";
 import { sql } from "drizzle-orm";
-import { buildBatchGuard, isBatchGuardError } from "../src/batch-helper";
+import { buildBatchGuard, chunkRowsForD1, isBatchGuardError } from "../src/batch-helper";
 import { compileSqliteStatementForPostgres } from "../src/postgres-sqlite-profile";
 
 describe("D1 batch guards", () => {
@@ -58,5 +58,22 @@ describe("D1 batch guards", () => {
       code: "22P02",
       message: "invalid input syntax for type integer",
     }, "TEST_GUARD")).toBe(false);
+  });
+});
+
+describe("D1 multi-row insert chunking", () => {
+  it("keeps every statement below the 100-parameter ceiling", () => {
+    const rows = Array.from({ length: 99 }, (_, index) => index);
+
+    for (const parametersPerRow of [13, 18]) {
+      const chunks = chunkRowsForD1(rows, parametersPerRow);
+      expect(chunks.flat()).toEqual(rows);
+      expect(Math.max(...chunks.map((chunk) => chunk.length * parametersPerRow)))
+        .toBeLessThan(100);
+    }
+  });
+
+  it("rejects an invalid parameter estimate", () => {
+    expect(() => chunkRowsForD1([1], 0)).toThrow(RangeError);
   });
 });

@@ -29,7 +29,7 @@ import {
 } from "@scalius/core/modules/orders/order-support-requests";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
-import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/order-money";
+import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/money";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
   ConflictError,

@@ -1,5 +1,28 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import * as OrdersService from "@scalius/core/modules/orders";
+import {
+    ORDER_COMMENT_MAX_LENGTH,
+    ORDER_EVENT_KINDS,
+    ORDER_LIST_VIEWS,
+    addOrderComment,
+    archiveOrders,
+    bulkConfirmOrders,
+    confirmManualOrderAmendment,
+    createOrder,
+    deleteOrderComment,
+    getOrderDetails,
+    getOrderEditReadiness,
+    listOrderTimeline,
+    listOrders,
+    loadOrderExportDetails,
+    previewManualOrderAmendment,
+    previewOrderPaymentRecoveryLink,
+    quoteManualOrder,
+    recordOrderEvent,
+    restoreOrder,
+    updateOrderDetails,
+    type OrderPaymentRecoveryPreview,
+} from "@scalius/core/modules/orders";
+import { bulkFulfillOrders, bulkShipOrders } from "@scalius/core/modules/fulfilment";
 import * as ProductsAdmin from "@scalius/core/modules/products/products.admin";
 import { loadVariantSelectedOptions } from "@scalius/core/modules/products";
 import { presentCatalogPrice, readStoreDecimalPlaces } from "@scalius/core/modules/products/products.money";
@@ -13,7 +36,7 @@ import {
     archiveOrdersSchema,
     restoreOrderSchema,
     bulkShipOrderSchema
-} from "@scalius/core/modules/orders/orders.validation";
+} from "@scalius/core/modules/orders/validation";
 import {
     FulfillmentStatus,
     PaymentStatus,
@@ -85,7 +108,7 @@ import {
     createOrdersCsvArtifactBuilder,
     createPaymentRecoveryCsvArtifactBuilder,
     ORDER_CSV_ARTIFACT_MAX_BYTES,
-} from "@scalius/core/modules/orders/order-csv-export";
+} from "@scalius/core/modules/orders/csv-export";
 import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
 import { projectOrderListResult } from "./order-list-projection";
 
@@ -104,7 +127,7 @@ const paymentStatusQuerySchema = z.enum([
     PaymentStatus.FAILED,
 ]);
 
-const orderListViewQuerySchema = z.enum(OrdersService.ORDER_LIST_VIEWS).openapi({
+const orderListViewQuerySchema = z.enum(ORDER_LIST_VIEWS).openapi({
     description: "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
 });
 
@@ -177,7 +200,7 @@ function resolveStorefrontUrl(env: Env): URL {
 
 function buildPaymentRecoveryUrl(
     storefrontUrl: URL,
-    result: OrdersService.OrderPaymentRecoveryPreview,
+    result: OrderPaymentRecoveryPreview,
 ): string {
     const url = new URL("/payment-recovery", storefrontUrl);
     url.searchParams.set("orderId", result.orderId);
@@ -481,7 +504,7 @@ app.openapi(listOrdersRoute, async (c) => {
     const query = c.req.valid("query");
     const effectiveSort: OrderListSort = query.sort
         ?? (query.search?.trim() ? "relevance" : "createdAt");
-    const result = await OrdersService.listOrders(db, {
+    const result = await listOrders(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || "",
@@ -564,7 +587,7 @@ app.openapi(exportOrdersRoute, async (c) => {
     let total = 0;
 
     exportPages: while (exportedRows < maxRows) {
-        const result = await OrdersService.listOrders(db, {
+        const result = await listOrders(db, {
             page,
             limit: ORDER_EXPORT_PAGE_SIZE,
             ids,
@@ -583,7 +606,7 @@ app.openapi(exportOrdersRoute, async (c) => {
             endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
         });
         total = result.pagination.total;
-        const details = await OrdersService.loadOrderExportDetails(db, result.orders.map((order) => order.id));
+        const details = await loadOrderExportDetails(db, result.orders.map((order) => order.id));
         for (const order of result.orders) {
             const detail = details.get(order.id);
             const row = {
@@ -668,7 +691,7 @@ app.openapi(paymentRecoveryListRoute, async (c) => {
     const query = c.req.valid("query");
     const effectiveSort: OrderListSort = query.sort
         ?? (query.search?.trim() ? "relevance" : "updatedAt");
-    const result = await OrdersService.listOrders(db, {
+    const result = await listOrders(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || "",
@@ -737,7 +760,7 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
     let total = 0;
 
     exportPages: while (exportedRows < maxRows) {
-        const result = await OrdersService.listOrders(db, {
+        const result = await listOrders(db, {
             page,
             limit: PAYMENT_RECOVERY_EXPORT_PAGE_SIZE,
             search: query.search || "",
@@ -843,7 +866,7 @@ const quoteManualOrderRoute = createRoute({
 });
 
 app.openapi(quoteManualOrderRoute, async (c) => {
-    const quote = await OrdersService.quoteManualOrder(c.get("db"), c.req.valid("json"));
+    const quote = await quoteManualOrder(c.get("db"), c.req.valid("json"));
     return ok(c, quote);
 });
 
@@ -868,7 +891,7 @@ const previewManualOrderAmendmentRoute = createRoute({
 });
 
 app.openapi(previewManualOrderAmendmentRoute, async (c) => {
-    const result = await OrdersService.previewManualOrderAmendment(
+    const result = await previewManualOrderAmendment(
         c.get("db"),
         c.req.valid("param").id,
         c.req.valid("json"),
@@ -905,7 +928,7 @@ app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
         "requestKey",
     );
     const user = c.get("user") as { id?: string } | undefined;
-    const result = await OrdersService.confirmManualOrderAmendment(
+    const result = await confirmManualOrderAmendment(
         c.get("db"),
         c.req.valid("param").id,
         { ...payload, requestKey },
@@ -950,7 +973,7 @@ app.openapi(createOrderRoute, async (c) => {
     );
     const data = { ...payload, requestKey };
     const user = c.get("user") as { id?: string } | undefined;
-    const result = await OrdersService.createOrder(db, data, user?.id ?? null);
+    const result = await createOrder(db, data, user?.id ?? null);
     const availabilityTransitionVariantIds =
         await findCheckoutReservationAvailabilityTransitions(
             db,
@@ -988,9 +1011,9 @@ app.openapi(archiveOrdersRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
-    await OrdersService.archiveOrders(db, data.orders);
+    await archiveOrders(db, data.orders);
     for (const order of data.orders) {
-        await OrdersService.recordOrderEvent(db, { orderId: order.id, kind: "archived", actorId: user?.id ?? null });
+        await recordOrderEvent(db, { orderId: order.id, kind: "archived", actorId: user?.id ?? null });
     }
     return noContent(c);
 });
@@ -1019,7 +1042,7 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
     const db = c.get("db");
     const data = c.req.valid("json");
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const results = await OrdersService.bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey);
+    const results = await bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey);
     const successCount = results.filter((r) => r.success).length;
     const newlyShippedResults = results.filter(isNewShipmentResult);
     const availabilityTransitionVariantIds = results.flatMap((result) =>
@@ -1041,7 +1064,7 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
 
     const shipUser = c.get("user") as { id?: string } | undefined;
     for (const result of newlyShippedResults) {
-        await OrdersService.recordOrderEvent(db, {
+        await recordOrderEvent(db, {
             orderId: result.orderId,
             kind: "shipment_created",
             actorId: shipUser?.id ?? null,
@@ -1115,7 +1138,7 @@ app.openapi(bulkConfirmRoute, async (c) => {
     const db = c.get("db");
     const { orderIds, requestKey } = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
-    const results = await OrdersService.bulkConfirmOrders(db, orderIds, { requestKey, actorId: user?.id ?? null });
+    const results = await bulkConfirmOrders(db, orderIds, { requestKey, actorId: user?.id ?? null });
     let bumped = false;
     for (const result of results) {
         if (!result.success || !result.update) continue;
@@ -1173,13 +1196,13 @@ app.openapi(bulkFulfillRoute, async (c) => {
     const db = c.get("db");
     const { orderIds, courierName, note, requestKey } = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
-    const results = await OrdersService.bulkFulfillOrders(db, orderIds, { courierName, note, requestKey });
+    const results = await bulkFulfillOrders(db, orderIds, { courierName, note, requestKey });
     if (results.some((result) => (result.shipment?.availabilityTransitionVariantIds.length ?? 0) > 0)) {
         await bumpCacheGeneration(c);
     }
     for (const result of results) {
         if (!result.success || !result.shipment) continue;
-        await OrdersService.recordOrderEvent(db, {
+        await recordOrderEvent(db, {
             orderId: result.orderId,
             kind: "shipment_created",
             actorId: user?.id ?? null,
@@ -1210,7 +1233,7 @@ app.openapi(bulkFulfillRoute, async (c) => {
 
 const timelineEventSchema = z.object({
     id: z.string(),
-    kind: z.enum(OrdersService.ORDER_EVENT_KINDS),
+    kind: z.enum(ORDER_EVENT_KINDS),
     body: z.string().nullable(),
     data: z.record(z.string(), z.unknown()).nullable(),
     actorName: z.string().nullable(),
@@ -1236,7 +1259,7 @@ const getTimelineRoute = createRoute({
 
 app.openapi(getTimelineRoute, (async (c: AdminRouteContext<typeof getTimelineRoute>) => {
     const user = c.get("user") as { id?: string } | undefined;
-    const events = await OrdersService.listOrderTimeline(c.get("db"), c.req.valid("param").id, user?.id ?? null);
+    const events = await listOrderTimeline(c.get("db"), c.req.valid("param").id, user?.id ?? null);
     return ok(c, { events: events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })) });
 }) as unknown as AdminRouteHandler<typeof getTimelineRoute>);
 
@@ -1253,7 +1276,7 @@ const addCommentRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         body: z.string().trim().min(1, "Write a comment first.")
-                            .max(OrdersService.ORDER_COMMENT_MAX_LENGTH),
+                            .max(ORDER_COMMENT_MAX_LENGTH),
                         requestKey: bulkRequestKeySchema.openapi({
                             description: "One key per comment draft. Posting it again returns the first comment.",
                         }),
@@ -1273,7 +1296,7 @@ const addCommentRoute = createRoute({
 
 app.openapi(addCommentRoute, (async (c: AdminRouteContext<typeof addCommentRoute>) => {
     const user = c.get("user") as { id?: string } | undefined;
-    const event = await OrdersService.addOrderComment(
+    const event = await addOrderComment(
         c.get("db"),
         c.req.valid("param").id,
         c.req.valid("json").body,
@@ -1302,7 +1325,7 @@ const deleteCommentRoute = createRoute({
 app.openapi(deleteCommentRoute, (async (c: AdminRouteContext<typeof deleteCommentRoute>) => {
     const user = c.get("user") as { id?: string } | undefined;
     const { id, eventId } = c.req.valid("param");
-    await OrdersService.deleteOrderComment(c.get("db"), id, eventId, user?.id ?? null);
+    await deleteOrderComment(c.get("db"), id, eventId, user?.id ?? null);
     return ok(c, { deleted: true as const });
 }) as unknown as AdminRouteHandler<typeof deleteCommentRoute>);
 
@@ -1331,7 +1354,7 @@ app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const storefrontUrl = resolveStorefrontUrl(c.env);
-    const recoveryLink = await OrdersService.previewOrderPaymentRecoveryLink(db, orderId);
+    const recoveryLink = await previewOrderPaymentRecoveryLink(db, orderId);
     const url = buildPaymentRecoveryUrl(storefrontUrl, recoveryLink);
 
     return created(c, {
@@ -1370,7 +1393,7 @@ const getOrderRoute = createRoute({
 app.openapi(getOrderRoute, (async (c: AdminRouteContext<typeof getOrderRoute>) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
-    const result = await OrdersService.getOrderDetails(db, orderId);
+    const result = await getOrderDetails(db, orderId);
     if (!result) throw new NotFoundError("Order not found");
     return ok(c, result);
 }) as unknown as AdminRouteHandler<typeof getOrderRoute>);
@@ -1404,9 +1427,9 @@ app.openapi(updateOrderDetailsRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const user = c.get("user") as { id?: string } | undefined;
-    const result = await OrdersService.updateOrderDetails(db, orderId, c.req.valid("json"));
+    const result = await updateOrderDetails(db, orderId, c.req.valid("json"));
     if (result.changedFields.length > 0) {
-        await OrdersService.recordOrderEvent(db, {
+        await recordOrderEvent(db, {
             orderId,
             kind: "details_edited",
             actorId: user?.id ?? null,
@@ -1439,8 +1462,8 @@ app.openapi(restoreOrderRoute, async (c) => {
     const orderId = c.req.valid("param").id;
     const data = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
-    await OrdersService.restoreOrder(db, orderId, data.expectedVersion);
-    await OrdersService.recordOrderEvent(db, { orderId, kind: "unarchived", actorId: user?.id ?? null });
+    await restoreOrder(db, orderId, data.expectedVersion);
+    await recordOrderEvent(db, { orderId, kind: "unarchived", actorId: user?.id ?? null });
     return noContent(c);
 });
 
@@ -1822,7 +1845,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
         shippingCharge: orderAmount(shippingAmountMinor),
     };
 
-    const editReadiness = await OrdersService.getOrderEditReadiness(db, orderId);
+    const editReadiness = await getOrderEditReadiness(db, orderId);
     if (!editReadiness) throw new NotFoundError("Order not found");
 
     const items = await db

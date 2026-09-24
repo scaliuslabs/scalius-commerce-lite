@@ -21,8 +21,8 @@ import {
   createTrustedStorefrontCheckoutPolicySnapshot,
   loadStorefrontCheckoutAuthority,
   resolveExistingCheckoutAttempt,
-  type StorefrontOrderCommitPayload,
-} from "@scalius/core/modules/orders";
+} from "@scalius/core/modules/checkout";
+import { type StorefrontOrderCommitPayload } from "@scalius/core/modules/orders";
 import {
   getCheckoutGatewayPrecommitIssue,
   getPaymentMethodCurrencyIssue,

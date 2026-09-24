@@ -7,12 +7,12 @@ const mocks = vi.hoisted(() => ({
     getInvoiceDocument: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/orders/invoice.service", async (importOriginal) => ({
-    ...await importOriginal<typeof import("@scalius/core/modules/orders/invoice.service")>(),
+vi.mock("@scalius/core/modules/orders/invoices/service", async (importOriginal) => ({
+    ...await importOriginal<typeof import("@scalius/core/modules/orders/invoices/service")>(),
     issueInvoice: mocks.issueInvoice,
     getInvoiceDocument: mocks.getInvoiceDocument,
 }));
-vi.mock("@scalius/core/modules/orders/invoice-printable-artifact", () => ({
+vi.mock("@scalius/core/modules/orders/invoices/printable-artifact", () => ({
     renderPrintableInvoice: () => "<p>Buyer <script>é</script></p>",
 }));
 

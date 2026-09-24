@@ -34,11 +34,11 @@ vi.mock("@scalius/core/modules/inventory", () => ({
   releaseExpiredReservations: mocks.releaseExpiredReservations,
 }));
 
-vi.mock("@scalius/core/modules/orders/abandoned-checkout-cleanup", () => ({
+vi.mock("@scalius/core/modules/checkout/abandoned/cleanup", () => ({
   cleanupStaleAbandonedCheckouts: mocks.cleanupStaleAbandonedCheckouts,
 }));
 
-vi.mock("@scalius/core/modules/orders/stale-incomplete-orders", () => ({
+vi.mock("@scalius/core/modules/orders/stale-incomplete", () => ({
   archiveStaleIncompleteOrders: mocks.archiveStaleIncompleteOrders,
 }));
 

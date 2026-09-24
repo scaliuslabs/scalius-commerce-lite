@@ -32,7 +32,7 @@ interface Env {
   // firebase/admin.ts FCM token cache, middleware-helper/csp-handler).
   CACHE: KVNamespace;
 
-  // Order notification fan-out (modules/orders/orders.ingest.ts).
+  // Order notification fan-out (modules/checkout/post-commit.ts).
   JOBS_QUEUE: Queue;
 
   // Passed through to `getDb(env)` / `resolveDatabaseConfiguration(env)`.

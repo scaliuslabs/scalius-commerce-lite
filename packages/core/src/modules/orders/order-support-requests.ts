@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { recordOrderEvent } from "./order-timeline";
+import { recordOrderEvent } from "./timeline";
 import type { Database } from "@scalius/database/client";
 import {
   deliveryShipments,

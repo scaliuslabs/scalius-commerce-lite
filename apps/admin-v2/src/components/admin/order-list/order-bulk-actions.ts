@@ -1,4 +1,4 @@
-import { isOrderArchiveStatusEligible } from "@scalius/core/modules/orders/order-archive-policy";
+import { isOrderArchiveStatusEligible } from "@scalius/core/modules/orders/archive-policy";
 
 /** confirm: bulk Confirm · send: own courier "Mark as sent" · ship: book a courier · archive. */
 export type OrderBulkAction = "confirm" | "send" | "ship" | "archive";
