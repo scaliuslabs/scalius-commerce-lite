@@ -1,96 +1,132 @@
 ---
-// The `tabs` phone navigation: a bottom tab bar below `lg` (Home,
-// Categories, Search, Cart, Account), as marketplace apps have. The buttons
-// reuse the header's openers (header.astro binds `[data-mobile-menu-open]`
-// and `[data-cart-open]`, HeaderLayout binds `[data-search-open]` and
-// `[data-account-link]`), and the cart badge is the header's
-// `#mobile-cart-count`. The page reserves the bar's height in CSS, so nothing
-// sits under it. On product pages the phone buy bar replaces the tab bar
-// while it shows (one bar in thumb reach, never two stacked).
+// The `bottom-tabs` phone navigation: a bottom tab bar below `lg` with the
+// tabs the theme chose (4-5 of Home, Categories, Offers, Search, Compare,
+// Cart, Account; Star Tech 61px, Apple Gadgets 60px, Fabrilife 56px). A tab
+// without a destination yet (Compare, until the compare page lands) is left
+// out rather than linking nowhere. The tabs reuse the header's openers
+// (header.astro binds `[data-mobile-menu-open]` and `[data-cart-open]`,
+// HeaderLayout binds `[data-search-open]` and `[data-account-link]`), and
+// each is a real link first (the menu drawer's :target, /search, /cart), so
+// the bar works before hydration. The cart badge is `#mobile-cart-count`.
+// The page reserves the bar's height in CSS, so nothing sits under it. On
+// product pages the phone buy bar replaces the tab bar while it shows.
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { STOREFRONT_MOBILE_TABS } from "@scalius/shared/storefront-theme";
 
+type Tab = (typeof STOREFRONT_MOBILE_TABS)[number];
+
+interface Props {
+  tabs?: readonly Tab[];
+}
+
+const DEFAULT_TABS: readonly Tab[] = ["home", "categories", "search", "cart", "account"];
+/** Tabs with a page to go to today. */
+const AVAILABLE = new Set<Tab>(["home", "categories", "offers", "search", "cart", "account"]);
+const OFFERS_HREF = "/search?hasDiscount=true";
+
+const { tabs = DEFAULT_TABS } = Astro.props;
+const shown = tabs.filter((tab) => AVAILABLE.has(tab));
 const path = Astro.url.pathname;
+const offers = path === "/search" && Astro.url.searchParams.get("hasDiscount") === "true";
 const active = {
   home: path === "/",
   categories: /^\/(categories|collections)\//.test(path),
-  search: path === "/search" || path.startsWith("/search/"),
+  search: !offers && (path === "/search" || path.startsWith("/search/")),
+  offers,
   account: path === "/account" || path.startsWith("/account/"),
 };
 ---
 
 <nav id="mobile-tab-bar" class="mobile-tab-bar" aria-label="Shortcuts">
-  <ul>
-    <li>
-      <a href="/" class="mobile-tab" aria-current={active.home ? "page" : undefined}>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
-          <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-        </svg>
-        <span>Home</span>
-      </a>
-    </li>
-    <li>
-      <button
-        type="button"
-        class="mobile-tab"
-        aria-current={active.categories ? "true" : undefined}
-        aria-haspopup="dialog"
-        aria-controls="mobile-menu-panel"
-        aria-expanded="false"
-        data-mobile-menu-open
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect width="7" height="7" x="3" y="3" rx="1.5" />
-          <rect width="7" height="7" x="14" y="3" rx="1.5" />
-          <rect width="7" height="7" x="14" y="14" rx="1.5" />
-          <rect width="7" height="7" x="3" y="14" rx="1.5" />
-        </svg>
-        <span>Categories</span>
-      </button>
-    </li>
-    <li>
-      <button
-        type="button"
-        class="mobile-tab"
-        aria-current={active.search ? "true" : undefined}
-        aria-haspopup="dialog"
-        data-search-open
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
-        </svg>
-        <span>Search</span>
-      </button>
-    </li>
-    <li>
-      <button type="button" class="mobile-tab" aria-haspopup="dialog" data-cart-open>
-        <span class="mobile-tab-icon">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="8" cy="21" r="1" />
-            <circle cx="19" cy="21" r="1" />
-            <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
-          </svg>
-          <span id="mobile-cart-count" class="mobile-tab-badge scale-0 opacity-0" aria-hidden="true">0</span>
-        </span>
-        <span>Cart</span>
-      </button>
-    </li>
-    <li>
-      <a
-        href="/account"
-        class="mobile-tab"
-        aria-current={active.account ? "page" : undefined}
-        data-account-link
-        data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)}
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M20 21a8 8 0 0 0-16 0" />
-        </svg>
-        <span>Account</span>
-      </a>
-    </li>
+  <ul style={`--mobile-tab-count: ${shown.length}`}>
+    {
+      shown.map((tab) => (
+        <li>
+          {tab === "home" && (
+            <a href="/" class="mobile-tab" aria-current={active.home ? "page" : undefined}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+                <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              </svg>
+              <span>Home</span>
+            </a>
+          )}
+          {tab === "categories" && (
+            <a
+              href="#mobile-menu-panel"
+              role="button"
+              class="mobile-tab"
+              aria-current={active.categories ? "true" : undefined}
+              aria-haspopup="dialog"
+              aria-controls="mobile-menu-panel"
+              aria-expanded="false"
+              data-mobile-menu-open
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect width="7" height="7" x="3" y="3" rx="1.5" />
+                <rect width="7" height="7" x="14" y="3" rx="1.5" />
+                <rect width="7" height="7" x="14" y="14" rx="1.5" />
+                <rect width="7" height="7" x="3" y="14" rx="1.5" />
+              </svg>
+              <span>Categories</span>
+            </a>
+          )}
+          {tab === "offers" && (
+            <a href={OFFERS_HREF} class="mobile-tab" aria-current={active.offers ? "page" : undefined} data-astro-prefetch="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z" />
+                <circle cx="7.5" cy="7.5" r="1.5" />
+              </svg>
+              <span>Offers</span>
+            </a>
+          )}
+          {tab === "search" && (
+            <a
+              href="/search"
+              role="button"
+              class="mobile-tab"
+              aria-current={active.search ? "true" : undefined}
+              aria-haspopup="dialog"
+              data-search-open
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              <span>Search</span>
+            </a>
+          )}
+          {tab === "cart" && (
+            <a href="/cart" role="button" class="mobile-tab" aria-haspopup="dialog" data-cart-open data-astro-prefetch="false">
+              <span class="mobile-tab-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="8" cy="21" r="1" />
+                  <circle cx="19" cy="21" r="1" />
+                  <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+                </svg>
+                <span id="mobile-cart-count" class="mobile-tab-badge scale-0 opacity-0" aria-hidden="true">0</span>
+              </span>
+              <span>Cart</span>
+            </a>
+          )}
+          {tab === "account" && (
+            <a
+              href="/account"
+              class="mobile-tab"
+              aria-current={active.account ? "page" : undefined}
+              data-account-link
+              data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M20 21a8 8 0 0 0-16 0" />
+              </svg>
+              <span>Account</span>
+            </a>
+          )}
+        </li>
+      ))
+    }
   </ul>
 </nav>
 
@@ -145,7 +181,7 @@ const active = {
 
   ul {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--mobile-tab-count, 5), minmax(0, 1fr));
     height: var(--mobile-tabs-height);
     max-width: 40rem;
     margin-inline: auto;

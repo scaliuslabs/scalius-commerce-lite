@@ -1,0 +1,232 @@
+---
+// The drill-in menu inside a drawer (Amazon 365px, Target 304px; 44px rows):
+// one level at a time. A row with children is a <details>; opening it lays
+// its level over the current one, with the row itself (the <summary>) as the
+// "back" bar on top, so the pattern works without JavaScript and scales to
+// any depth. Each level starts with "All <parent>" when the parent links a
+// page. nav-menus.ts adds arrow keys (Right drills in, Left goes back) and
+// Escape one level at a time; the drawer closes on Escape at the top level.
+//
+// Levels are `position: fixed` inside `.drill` (which contains layout), so
+// every level fills the drawer's menu area whatever the scroll position of
+// the level under it.
+import type { NavigationItem } from "@/lib/api";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import {
+  ariaCurrent,
+  navigationChildren,
+  navigationCurrent,
+  navigationLinkAttributes,
+} from "./navigation-state";
+
+interface Props {
+  items: NavigationItem[];
+  /** Unique per drawer: names the exclusive level groups. */
+  idPrefix: string;
+  depth?: number;
+  parent?: NavigationItem;
+}
+
+const { items = [], idPrefix, depth = 0, parent } = Astro.props;
+const visible = items.filter((item) => item?.title);
+const link = (item: NavigationItem) => ({
+  href: item.href,
+  "aria-current": ariaCurrent(navigationCurrent(item, Astro.url)),
+  "data-astro-prefetch": getStorefrontPrefetchAttribute(item.href, Astro.url),
+  ...navigationLinkAttributes(item),
+});
+const Wrapper = depth === 0 ? "div" : Fragment;
+const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data-drill": "" } : {};
+---
+
+<Wrapper {...wrapperProps}>
+<ul class="drill-list" data-menu-list data-depth={depth}>
+  {parent?.href && (
+    <li class="drill-row">
+      <a class="drill-link drill-link--all" {...link(parent)}>
+        All {parent.title}
+      </a>
+    </li>
+  )}
+  {visible.map((item, index) => {
+    const children = navigationChildren(item);
+    if (children.length === 0) {
+      return (
+        <li class="drill-row">
+          {item.href ? (
+            <a class="drill-link" {...link(item)}>
+              {item.title}
+            </a>
+          ) : (
+            <span class="drill-link">{item.title}</span>
+          )}
+        </li>
+      );
+    }
+    return (
+      <li class="drill-row">
+        <details class="drill-node" data-menu="drill" name={`${idPrefix}-${depth}`} style={`--drill-depth: ${depth + 1}`}>
+          <summary class="drill-link drill-next" data-drill-index={index}>
+            <svg class="drill-back-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="m10 4-4 4 4 4" />
+            </svg>
+            <span>{item.title}</span>
+            <svg class="drill-next-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="m6 4 4 4-4 4" />
+            </svg>
+          </summary>
+          <div class="drill-level" data-menu-panel>
+            <Astro.self items={children} idPrefix={idPrefix} depth={depth + 1} parent={item} />
+          </div>
+        </details>
+      </li>
+    );
+  })}
+</ul>
+</Wrapper>
+
+<style>
+  /* The root wrapper is a dynamic element (no scope attribute): global selector. */
+  :global(.drill[data-drill]) {
+    position: relative;
+    height: 100%;
+    min-height: 0;
+    contain: layout;
+  }
+
+  :global(.drill[data-drill]) > .drill-list {
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .drill-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem 0.75rem 1rem;
+  }
+
+  .drill-row {
+    display: block;
+  }
+
+  .drill-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-height: 2.75rem;
+    padding-inline: 0.75rem;
+    border-radius: var(--radius);
+    color: inherit;
+    font-size: 0.9375rem;
+    text-align: start;
+    overflow-wrap: anywhere;
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .drill-list[data-depth="0"] > .drill-row > .drill-link,
+  .drill-list[data-depth="0"] > .drill-row > .drill-node > .drill-next {
+    font-weight: 600;
+  }
+
+  .drill-link--all {
+    font-weight: 600;
+  }
+
+  .drill-next::-webkit-details-marker {
+    display: none;
+  }
+
+  .drill-next > span {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .drill-link svg {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .drill-back-icon {
+    display: none;
+  }
+
+  a.drill-link:hover,
+  .drill-next:hover {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .drill-link:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+  }
+
+  .drill-link[aria-current="page"] {
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font-weight: 600;
+  }
+
+  /* An open row becomes the level's "back" bar on top; its level fills the rest. */
+  .drill-node[open] > .drill-next {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: calc(var(--drill-depth) * 2 + 1);
+    height: 3rem;
+    padding-inline: 1.25rem;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--card);
+    color: var(--card-foreground);
+    font-weight: 700;
+  }
+
+  .drill-node[open] > .drill-next .drill-back-icon {
+    display: block;
+  }
+
+  .drill-node[open] > .drill-next .drill-next-icon {
+    display: none;
+  }
+
+  .drill-level {
+    position: fixed;
+    inset: 3rem 0 0;
+    z-index: calc(var(--drill-depth) * 2);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--card);
+    color: var(--card-foreground);
+    animation: drill-in 200ms ease-out;
+  }
+
+  @keyframes drill-in {
+    from {
+      transform: translateX(1.5rem);
+      opacity: 0;
+    }
+  }
+
+  /* Covered rows leave the tab order (the open row's summary is the back bar). */
+  .drill-list:has(> .drill-row > .drill-node[open]) > .drill-row:not(:has(> .drill-node[open])),
+  .drill-node[open]:has(.drill-node[open]) > .drill-next {
+    visibility: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drill-level {
+      animation: none;
+    }
+  }
+</style>

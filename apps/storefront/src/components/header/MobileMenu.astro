@@ -1,62 +1,115 @@
 ---
+// A menu drawer from the start edge: the phone menu (`mobile-menu`, the
+// accordion tree or the drill-in levels) and, for the drill-in desktop menu,
+// the computer's "All" drawer (`nav-drawer`, or the phone drawer itself when
+// both use drill-in). drawer.ts owns the dialog behaviour; without
+// JavaScript it opens as the URL's :target from the <noscript> links.
 import type { NavigationItem, SocialLink } from "@/lib/api";
 import { X, Phone, ChevronRight } from "lucide-react";
 import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { telHref } from "@/lib/store-identity";
 import NavTree from "./NavTree.astro";
+import DrillDrawer from "./DrillDrawer.astro";
 
 interface Props {
   navigation: NavigationItem[];
   contact: { phone: string; text: string };
   social?: SocialLink[];
+  /** Id base: `${id}-panel`, `${id}-overlay`, `${id}-close`. */
+  id?: string;
+  tree?: "accordion" | "drill";
+  /** phone: below `lg` only; all: every width (the drill-in "All" drawer). */
+  screens?: "phone" | "all";
+  title?: string;
 }
 
-const { navigation = [], contact, social = [] } = Astro.props;
+const {
+  navigation = [],
+  contact,
+  social = [],
+  id = "mobile-menu",
+  tree = "accordion",
+  screens = "phone",
+  title = "Menu",
+} = Astro.props;
 const phoneHref = telHref(contact.phone);
+const phoneOnly = screens === "phone";
+const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
 ---
 
 <div
-  id="mobile-menu-overlay"
-  class="pointer-events-none invisible fixed inset-0 z-60 bg-black/60 opacity-0 backdrop-blur-sm transition-opacity duration-300 lg:hidden"
+  id={`${id}-overlay`}
+  class:list={[
+    "pointer-events-none invisible fixed inset-0 z-60 bg-black/60 opacity-0 backdrop-blur-sm transition-opacity duration-300",
+    phoneOnly && "lg:hidden",
+  ]}
   aria-hidden="true"
+  data-drawer-overlay={id}
 >
 </div>
 
 <div
-  id="mobile-menu-panel"
-  class="invisible fixed left-0 top-0 z-70 flex h-dvh w-[90vw] max-w-[380px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)] lg:hidden"
+  id={`${id}-panel`}
+  class:list={[
+    "nav-drawer invisible fixed left-0 top-0 z-70 flex h-dvh w-[90vw] max-w-[380px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.19,1,0.22,1)]",
+    phoneOnly && "lg:hidden",
+  ]}
   role="dialog"
   aria-modal="true"
-  aria-label="Mobile menu"
-  aria-hidden="true"
-  inert
+  aria-label={phoneOnly ? "Mobile menu" : title}
+  data-drawer={id}
+  data-drawer-screens={screens}
 >
   <div
     class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03)] z-10"
   >
-    <h2 class="text-base font-bold tracking-tight text-foreground">Menu</h2>
+    <h2 class="text-base font-bold tracking-tight text-foreground">{title}</h2>
     <button
-      id="mobile-menu-close"
+      id={`${id}-close`}
       type="button"
       class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
       aria-label="Close menu"
     >
       <X className="h-5 w-5 stroke-[1.5]" />
     </button>
+    <noscript>
+      <a
+        href="#"
+        class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground"
+        aria-label="Close menu"
+      >
+        <X className="h-5 w-5 stroke-[1.5]" />
+      </a>
+      <style>{`#${id}-close { display: none !important; }`}</style>
+    </noscript>
   </div>
 
   <nav
-    class="flex-1 overflow-y-auto overscroll-contain px-3 py-3 scrollbar-hide relative"
-    id="mobile-nav-container"
-    aria-label="Mobile navigation"
+    class:list={[
+      "flex-1 overscroll-contain scrollbar-hide relative",
+      tree === "drill" ? "flex min-h-0 flex-col" : "overflow-y-auto px-3 py-3",
+    ]}
+    id={navId}
+    aria-label={phoneOnly ? "Mobile navigation" : title}
   >
-    <NavTree items={navigation} idPrefix="mobile-nav" variant="drawer" />
+    {
+      tree === "drill" ? (
+        <div class="min-h-0 flex-1">
+          <DrillDrawer items={navigation} idPrefix={`${id}-drill`} />
+        </div>
+      ) : (
+        <NavTree items={navigation} idPrefix={id === "mobile-menu" ? "mobile-nav" : `${id}-tree`} variant="drawer" />
+      )
+    }
 
     <a
       href="/track-order"
       data-astro-prefetch="false"
-      class="mt-4 flex min-h-11 items-center border-t border-border px-3 pt-3 text-sm font-semibold text-foreground transition-colors hover:text-primary"
+      class:list={[
+        "mt-4 flex min-h-11 items-center border-t border-border px-3 pt-3 text-sm font-semibold text-foreground transition-colors hover:text-primary",
+        tree === "drill" && "mx-3 shrink-0",
+      ]}
     >
       Track your order
     </a>
@@ -137,3 +190,17 @@ const phoneHref = telHref(contact.phone);
     )
   }
 </div>
+
+<style>
+  /* Without JavaScript the drawer opens as the URL's target (the <noscript>
+     menu links) and closes through its <noscript> close link. */
+  .nav-drawer:target {
+    visibility: visible;
+    translate: none;
+  }
+
+  [data-drawer-overlay]:has(+ .nav-drawer:target) {
+    visibility: visible;
+    opacity: 1;
+  }
+</style>

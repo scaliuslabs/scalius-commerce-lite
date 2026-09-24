@@ -1,0 +1,141 @@
+---
+// The departments rail (desktop menu `departments-rail`, open "home"; Game
+// Ghor): an "All departments" tab (270px) in the menu row whose list of
+// departments (35px rows, fly-outs for their children) hangs over the page.
+// On the home page it renders open over the hero; elsewhere it opens on hover
+// or press. It is a native <details>: it works without JavaScript, and
+// nav-menus.ts adds hover, arrow keys and Escape. The open-on-home list
+// closes once the page scrolls (HeaderLayout), so it never rides the sticky
+// header over the content. The "always" rail (Chaldal) is the column beside
+// the page: SidebarNav.astro.
+import type { NavigationItem } from "@/lib/api";
+import FlyoutList from "./FlyoutList.astro";
+
+interface Props {
+  navigation: NavigationItem[];
+}
+
+const { navigation } = Astro.props;
+const onHome = Astro.url.pathname === "/";
+---
+
+<nav class="drail" aria-label="All departments" data-menu-root>
+  <details
+    class="drail-menu"
+    data-menu={onHome ? "rail" : "popup"}
+    data-menu-hover={onHome ? undefined : ""}
+    data-menu-home-open={onHome ? "" : undefined}
+    open={onHome}
+  >
+    <summary class="drail-tab">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+      <span>All departments</span>
+      <svg class="drail-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+    </summary>
+    <div class="drail-panel" data-menu-panel>
+      <FlyoutList items={navigation} mode="cascade" />
+    </div>
+  </details>
+</nav>
+
+<style>
+  /* The tab sits at the start of its row, whatever the row's alignment. */
+  .drail {
+    display: none;
+    flex-shrink: 0;
+    margin-inline-end: auto;
+  }
+
+  @media (min-width: 64rem) {
+    .drail {
+      display: block;
+    }
+  }
+
+  .drail-menu {
+    position: relative;
+  }
+
+  .drail-tab {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 16.875rem;
+    height: 2.75rem;
+    padding-inline: 1rem;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 0.875rem;
+    font-weight: 700;
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .drail-tab::-webkit-details-marker {
+    display: none;
+  }
+
+  .drail-tab svg {
+    width: 1.125rem;
+    height: 1.125rem;
+    flex-shrink: 0;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .drail-tab span {
+    flex: 1;
+  }
+
+  .drail-chevron {
+    transition: transform 200ms ease;
+  }
+
+  .drail-menu[open] .drail-chevron {
+    transform: rotate(180deg);
+  }
+
+  .drail-tab:focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 2px;
+  }
+
+  /* The list hangs from the tab, the tab's width, over the page (the hero on home). */
+  .drail-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 60;
+    width: 16.875rem;
+    border: 1px solid var(--border);
+    border-top: 0;
+    border-radius: 0 0 var(--radius) var(--radius);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    box-shadow: 0 16px 40px -16px rgb(0 0 0 / 0.25);
+  }
+
+  .drail-panel :global(.fly-list) {
+    min-width: 0;
+  }
+
+  .drail-panel :global(.fly-link) {
+    min-height: 2.1875rem;
+  }
+
+  /* Scrolled past the hero: the open-on-home list steps aside (HeaderLayout
+     also closes it, so its state stays truthful). */
+  :global(#main-header.is-scrolled) .drail-menu[data-menu-home-open] > .drail-panel {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drail-chevron {
+      transition: none;
+    }
+  }
+</style>

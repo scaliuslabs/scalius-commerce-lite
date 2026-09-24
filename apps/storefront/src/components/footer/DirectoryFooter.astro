@@ -1,0 +1,146 @@
+---
+// directory (Daraz, Amazon): customer care first, then a dense directory of
+// the store's footer menus (each link and its children) for large
+// catalogues. Capped at about 60 curated links: Daraz ships 431, which is
+// heavy; the fit rule only offers it with 8 or more top categories.
+import type { FooterModel } from "./footer-model";
+import { directoryLinks } from "./footer-model";
+
+interface Props {
+  model: FooterModel;
+}
+
+const { model } = Astro.props;
+const { brandName, tagline, phoneHref, chatHref, storePhone, storeEmail } = model;
+const directory = directoryLinks(model.menus);
+---
+
+<div class="directory-footer">
+  <section class="directory-care" aria-labelledby="footer-care-title">
+    <h2 id="footer-care-title" class="footer-heading">Customer care</h2>
+    {brandName && <p class="directory-brand">{brandName}</p>}
+    {tagline && <p>{tagline}</p>}
+    <ul class="directory-care-links">
+      {
+        phoneHref && (
+          <li>
+            <a href={phoneHref} data-footer-contact>
+              Call {storePhone}
+            </a>
+          </li>
+        )
+      }
+      {
+        chatHref && (
+          <li>
+            <a href={chatHref} target="_blank" rel="noopener noreferrer">
+              WhatsApp
+            </a>
+          </li>
+        )
+      }
+      {
+        storeEmail && (
+          <li>
+            <a href={`mailto:${storeEmail}`}>{storeEmail}</a>
+          </li>
+        )
+      }
+    </ul>
+  </section>
+
+  {
+    directory.length > 0 && (
+      <nav class="directory-links" aria-label="Store directory">
+        {directory.map((menu) => (
+          <section>
+            <h2 class="footer-heading">{menu.title}</h2>
+            <ul>
+              {menu.links.map((link) => (
+                <li>
+                  <a href={link.href} {...(link.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+                    {link.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </nav>
+    )
+  }
+</div>
+
+<style>
+  .directory-footer {
+    display: grid;
+    gap: 1.75rem;
+    padding-block: 0.75rem 0.5rem;
+  }
+
+  @media (min-width: 64rem) {
+    .directory-footer {
+      grid-template-columns: minmax(14rem, 1fr) minmax(0, 3fr);
+      gap: 3rem;
+    }
+  }
+
+  .footer-heading {
+    margin-bottom: 0.625rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .directory-brand {
+    font-weight: 700;
+  }
+
+  .directory-care {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+  }
+
+  .directory-care-links a,
+  .directory-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    overflow-wrap: anywhere;
+  }
+
+  /* A dense directory on computers (13px rows); phones keep 44px targets. */
+  @media (min-width: 40rem) {
+    .directory-care-links a,
+    .directory-links a {
+      min-height: 1.75rem;
+    }
+  }
+
+  .directory-links {
+    columns: 11rem;
+    column-gap: 2rem;
+  }
+
+  .directory-links section {
+    break-inside: avoid;
+    margin-bottom: 1.25rem;
+  }
+
+  .directory-links a {
+    font-size: 0.8125rem;
+  }
+
+  .directory-footer a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .directory-footer a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+</style>
