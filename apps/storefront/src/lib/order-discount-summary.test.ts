@@ -43,11 +43,11 @@ describe("order discount summary", () => {
     expect(summarizeOrderDiscounts({ discounts: [], shipping: 60, discount: 150, discountText: "Discount" }).lines)
       .toEqual([{ label: "Discount", amount: 150 }]);
     expect(summarizeOrderDiscounts({
-      discounts: [discount({ title: "Eid", code: "EID", amount: 100.1 })],
+      discounts: [discount({ title: "Eid", code: "EID10", amount: 100.1 })],
       shipping: 0,
       discount: 150.3,
       discountText: "Discount",
-    }).lines).toEqual([{ label: "Discount · Eid (EID)", amount: 100.1 }, { label: "Discount", amount: 50.2 }]);
+    }).lines).toEqual([{ label: "Discount · Eid (EID10)", amount: 100.1 }, { label: "Discount", amount: 50.2 }]);
   });
 
   it("strikes through a waived fee: the method's fee stands, nothing is charged", () => {

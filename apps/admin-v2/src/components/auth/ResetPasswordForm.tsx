@@ -10,11 +10,11 @@ import { authFailureMessage, newPasswordError, readAuthFailure, type AuthMessage
 import { AuthAlert, AuthHeader, Field, PasswordInput, describedBy, linkClassName } from "./auth-ui";
 import { handOffTwoFactorSetup } from "./two-factor-setup-handoff";
 
-type Step = "checking" | "form" | "expired" | "used" | "done";
+type Step = "checking" | "form" | "expired" | "used" | "cancelled" | "done";
 type Purpose = "invite" | "reset";
 
 interface LinkCheck {
-  step: "form" | "expired" | "used";
+  step: "form" | "expired" | "used" | "cancelled";
   purpose: Purpose;
 }
 
@@ -40,7 +40,12 @@ function exchangeLinkProof(): Promise<LinkCheck> {
     .then(async (response) => {
       const body = (await response.json().catch(() => null)) as { purpose?: unknown; code?: unknown } | null;
       // A used link: the person already has a password and only needs to sign in.
-      if (!response.ok) return body?.code === "TOKEN_USED" ? { ...fallback, step: "used" as const } : fallback;
+      if (!response.ok) {
+        if (body?.code === "TOKEN_USED") return { ...fallback, step: "used" as const };
+        // Only invites are cancelled (the owner revoked it).
+        if (body?.code === "TOKEN_CANCELLED") return { step: "cancelled" as const, purpose: "invite" as const };
+        return fallback;
+      }
       return { step: "form", purpose: body?.purpose === "invite" ? "invite" : "reset" } satisfies LinkCheck;
     })
     .catch(() => fallback);
@@ -168,6 +173,17 @@ export function ResetPasswordForm() {
         <Button asChild className="w-full">
           <Link to="/auth/forgot-password">{t("requestNewLink")}</Link>
         </Button>
+        <Link to="/auth/login" className={linkClassName}>
+          {t("backToSignIn")}
+        </Link>
+      </div>
+    );
+  }
+
+  if (step === "cancelled") {
+    return (
+      <div className="flex flex-col gap-6">
+        <AuthHeader title={t("inviteCancelledTitle")} description={t("inviteCancelledBody")} />
         <Link to="/auth/login" className={linkClassName}>
           {t("backToSignIn")}
         </Link>

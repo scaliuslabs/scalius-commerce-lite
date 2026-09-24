@@ -18,7 +18,8 @@ interface MessageCopy {
   subtotal: string;
   shipping: string;
   /** One discount line: the promotion name and its code, or just "Discount". */
-  discountLine: (name: string | null, code: string | null) => string;
+  /** One discount line's word; the name follows via the shared discount name rule. */
+  discount: string;
   /** Delivery that cost the buyer nothing. */
   free: string;
   /** The fee a waiver or free-delivery discount replaced, in the text part. */
@@ -81,7 +82,7 @@ const EN: MessageCopy = {
   quantity: (quantity) => `Quantity: ${quantity}`,
   subtotal: "Subtotal",
   shipping: "Delivery",
-  discountLine: (name, code) => (name ? `Discount · ${name}${code ? ` (${code})` : ""}` : "Discount"),
+  discount: "Discount",
   free: "Free",
   was: (amount) => `(was ${amount})`,
   tax: "Tax",
@@ -145,7 +146,7 @@ const BN: MessageCopy = {
   quantity: (quantity) => `পরিমাণ: ${quantity}`,
   subtotal: "সাবটোটাল",
   shipping: "ডেলিভারি চার্জ",
-  discountLine: (name, code) => (name ? `ছাড় · ${name}${code ? ` (${code})` : ""}` : "ছাড়"),
+  discount: "ছাড়",
   free: "ফ্রি",
   was: (amount) => `(আগে ছিল ${amount})`,
   tax: "ট্যাক্স",

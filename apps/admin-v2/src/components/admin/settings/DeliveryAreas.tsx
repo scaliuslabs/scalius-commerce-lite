@@ -277,6 +277,8 @@ export function DeliveryAreasManager() {
       .map(descendantsOf)
       .reduce((sum, next) => ({ zones: sum.zones + next.zones, areas: sum.areas + next.areas }), { zones: 0, areas: 0 }),
   );
+  // One place is named, like its own Delete; several are counted.
+  const onlySelected = selected.length === 1 ? locations.find((location) => location.id === selected[0]) : undefined;
   const total = list.data?.pagination.total ?? 0;
   const totalPages = list.data?.pagination.totalPages ?? 1;
 
@@ -429,7 +431,7 @@ export function DeliveryAreasManager() {
                   <span className="flex-1">{selected.length ? t("selectedCount", { count: selected.length }) : t(level)}</span>
                   {selected.length ? (
                     <Button type="button" variant="destructive" size="sm" onClick={() => setConfirm("selected")}>
-                      {t("deleteSelected", { count: selected.length })}
+                      {t("deleteSelected")}
                     </Button>
                   ) : null}
                 </li>
@@ -489,13 +491,19 @@ export function DeliveryAreasManager() {
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(open) => !open && setConfirm(null)}
-        title={confirm === "import" ? t("importConfirmTitle") : t("deleteSelected", { count: selected.length })}
+        title={
+          confirm === "import"
+            ? t("importConfirmTitle")
+            : onlySelected
+              ? common("deleteNamed", { name: onlySelected.name })
+              : t("deleteSelectedTitle", { count: selected.length })
+        }
         description={
           confirm === "import"
             ? t("importConfirmBody")
-            : selectedUnder
-              ? t("deleteSelectedWithChildren", { count: selected.length, places: selectedUnder })
-              : t("deleteSelectedConfirm", { count: selected.length })
+            : onlySelected
+              ? selectedUnder ? t("deleteWithChildren", { name: onlySelected.name, places: selectedUnder }) : t("deleteLocationConfirm")
+              : selectedUnder ? t("deleteSelectedWithChildren", { places: selectedUnder }) : t("deleteLocationConfirm")
         }
         confirmLabel={confirm === "import" ? t("import") : common("delete")}
         cancelLabel={common("cancel")}
