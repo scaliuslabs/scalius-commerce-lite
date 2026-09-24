@@ -51,7 +51,7 @@ function productPagePayload() {
     media: [],
     variants: [],
     variantImageMappings: [],
-    relatedProducts: [],
+    recommendations: { reason: "similar", products: [] },
   };
 }
 

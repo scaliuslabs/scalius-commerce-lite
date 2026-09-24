@@ -74,6 +74,53 @@ export const STOREFRONT_THEME_CARD_STYLES = [
   "flat",
 ] as const;
 
+/**
+ * Curated storefront layouts. A small, fixed set of variants the storefront
+ * renders server-side; they combine freely with colours and typography.
+ */
+export const STOREFRONT_HEADER_STYLES = ["classic", "centered", "marketplace"] as const;
+export const STOREFRONT_FOOTER_STYLES = ["columns", "compact", "contact"] as const;
+export const STOREFRONT_CARD_IMAGE_RATIOS = ["square", "portrait"] as const;
+export const STOREFRONT_CARD_BADGE_PLACEMENTS = ["image", "price"] as const;
+export const STOREFRONT_GRID_DESKTOP_COLUMNS = [2, 3, 4] as const;
+export const STOREFRONT_GRID_MOBILE_COLUMNS = [1, 2] as const;
+export const STOREFRONT_PRODUCT_GALLERY_LAYOUTS = ["beside", "stacked"] as const;
+export const STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS = ["beside", "below"] as const;
+/** The homepage sections a merchant can reorder (each appears exactly once). */
+export const STOREFRONT_HOMEPAGE_SECTIONS = ["hero", "collections", "categories", "delivery"] as const;
+
+export type StorefrontHeaderStyle = (typeof STOREFRONT_HEADER_STYLES)[number];
+export type StorefrontFooterStyle = (typeof STOREFRONT_FOOTER_STYLES)[number];
+export type StorefrontCardImageRatio = (typeof STOREFRONT_CARD_IMAGE_RATIOS)[number];
+export type StorefrontCardBadgePlacement = (typeof STOREFRONT_CARD_BADGE_PLACEMENTS)[number];
+export type StorefrontGridDesktopColumns = (typeof STOREFRONT_GRID_DESKTOP_COLUMNS)[number];
+export type StorefrontGridMobileColumns = (typeof STOREFRONT_GRID_MOBILE_COLUMNS)[number];
+export type StorefrontProductGalleryLayout = (typeof STOREFRONT_PRODUCT_GALLERY_LAYOUTS)[number];
+export type StorefrontProductThumbnailPlacement = (typeof STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS)[number];
+export type StorefrontHomepageSection = (typeof STOREFRONT_HOMEPAGE_SECTIONS)[number];
+
+export interface StorefrontThemeLayout {
+  header: StorefrontHeaderStyle;
+  footer: StorefrontFooterStyle;
+  productCard: {
+    imageRatio: StorefrontCardImageRatio;
+    /** Show the product's second photo on hover (pointer devices only). */
+    hoverImage: boolean;
+    /** A "Buy now" button on cards of in-stock products without options. */
+    quickBuy: boolean;
+    badge: StorefrontCardBadgePlacement;
+  };
+  grid: {
+    desktop: StorefrontGridDesktopColumns;
+    mobile: StorefrontGridMobileColumns;
+  };
+  productPage: {
+    gallery: StorefrontProductGalleryLayout;
+    thumbnails: StorefrontProductThumbnailPlacement;
+  };
+  homepage: StorefrontHomepageSection[];
+}
+
 export type StorefrontThemeHeadingFont =
   (typeof STOREFRONT_THEME_HEADING_FONTS)[number];
 export type StorefrontThemeBodyFont =
@@ -109,7 +156,17 @@ export interface StorefrontThemeSettings {
     inputs: StorefrontThemeInputStyle;
     cards: StorefrontThemeCardStyle;
   };
+  layout: StorefrontThemeLayout;
 }
+
+export const DEFAULT_STOREFRONT_THEME_LAYOUT: StorefrontThemeLayout = {
+  header: "classic",
+  footer: "columns",
+  productCard: { imageRatio: "square", hoverImage: false, quickBuy: false, badge: "image" },
+  grid: { desktop: 4, mobile: 2 },
+  productPage: { gallery: "beside", thumbnails: "beside" },
+  homepage: [...STOREFRONT_HOMEPAGE_SECTIONS],
+};
 
 /**
  * These values mirror the buyer storefront before semantic theme settings.
@@ -130,6 +187,7 @@ export const DEFAULT_STOREFRONT_THEME_SETTINGS: StorefrontThemeSettings = {
     inputs: "outlined",
     cards: "bordered",
   },
+  layout: DEFAULT_STOREFRONT_THEME_LAYOUT,
 };
 
 export const DEFAULT_STOREFRONT_THEME_COLORS: Readonly<Record<string, string>> = {
@@ -256,6 +314,30 @@ export const STOREFRONT_THEME_COLOR_PALETTES: Readonly<
       ring: "#be123c",
     },
   },
+  Marketplace: {
+    label: "Marketplace",
+    colors: {
+      background: "#ffffff",
+      foreground: "#1c1917",
+      card: "#ffffff",
+      "card-foreground": "#1c1917",
+      popover: "#ffffff",
+      "popover-foreground": "#1c1917",
+      primary: "#c2410c",
+      "primary-foreground": "#ffffff",
+      secondary: "#fff7ed",
+      "secondary-foreground": "#7c2d12",
+      muted: "#f5f5f4",
+      "muted-foreground": "#57534e",
+      accent: "#ffedd5",
+      "accent-foreground": "#7c2d12",
+      destructive: "#b91c1c",
+      "destructive-foreground": "#ffffff",
+      border: "#e7e5e4",
+      input: "#d6d3d1",
+      ring: "#c2410c",
+    },
+  },
   Midnight: {
     label: "Midnight",
     colors: {
@@ -284,6 +366,7 @@ export const STOREFRONT_THEME_COLOR_PALETTES: Readonly<
 };
 
 const DOCUMENT_KEYS = new Set([
+  "layout",
   "colors",
   "typography",
   "cornerStyle",
@@ -293,6 +376,85 @@ const DOCUMENT_KEYS = new Set([
 ]);
 const TYPOGRAPHY_KEYS = new Set(["heading", "body", "scale"]);
 const COMPONENT_KEYS = new Set(["buttons", "inputs", "cards"]);
+const LAYOUT_KEYS = new Set(["header", "footer", "productCard", "grid", "productPage", "homepage"]);
+const PRODUCT_CARD_KEYS = new Set(["imageRatio", "hoverImage", "quickBuy", "badge"]);
+const GRID_KEYS = new Set(["desktop", "mobile"]);
+const PRODUCT_PAGE_KEYS = new Set(["gallery", "thumbnails"]);
+
+/** A permutation of every homepage section; anything else falls back to the default order. */
+function sanitizeHomepageOrder(value: unknown): StorefrontHomepageSection[] {
+  if (!isHomepageOrder(value)) return [...DEFAULT_STOREFRONT_THEME_LAYOUT.homepage];
+  return [...value];
+}
+
+function isHomepageOrder(value: unknown): value is StorefrontHomepageSection[] {
+  return Array.isArray(value) &&
+    value.length === STOREFRONT_HOMEPAGE_SECTIONS.length &&
+    new Set(value).size === value.length &&
+    value.every((section) => includes(STOREFRONT_HOMEPAGE_SECTIONS, section));
+}
+
+function numberValue<const Values extends readonly number[]>(
+  value: unknown,
+  values: Values,
+  fallback: Values[number],
+): Values[number] {
+  return typeof value === "number" && values.includes(value) ? (value as Values[number]) : fallback;
+}
+
+export function sanitizeStorefrontThemeLayout(value: unknown): StorefrontThemeLayout {
+  const layout = asRecord(value);
+  const card = asRecord(layout.productCard);
+  const grid = asRecord(layout.grid);
+  const page = asRecord(layout.productPage);
+  const fallback = DEFAULT_STOREFRONT_THEME_LAYOUT;
+  return {
+    header: enumValue(layout.header, STOREFRONT_HEADER_STYLES, fallback.header),
+    footer: enumValue(layout.footer, STOREFRONT_FOOTER_STYLES, fallback.footer),
+    productCard: {
+      imageRatio: enumValue(card.imageRatio, STOREFRONT_CARD_IMAGE_RATIOS, fallback.productCard.imageRatio),
+      hoverImage: typeof card.hoverImage === "boolean" ? card.hoverImage : fallback.productCard.hoverImage,
+      quickBuy: typeof card.quickBuy === "boolean" ? card.quickBuy : fallback.productCard.quickBuy,
+      badge: enumValue(card.badge, STOREFRONT_CARD_BADGE_PLACEMENTS, fallback.productCard.badge),
+    },
+    grid: {
+      desktop: numberValue(grid.desktop, STOREFRONT_GRID_DESKTOP_COLUMNS, fallback.grid.desktop),
+      mobile: numberValue(grid.mobile, STOREFRONT_GRID_MOBILE_COLUMNS, fallback.grid.mobile),
+    },
+    productPage: {
+      gallery: enumValue(page.gallery, STOREFRONT_PRODUCT_GALLERY_LAYOUTS, fallback.productPage.gallery),
+      thumbnails: enumValue(page.thumbnails, STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS, fallback.productPage.thumbnails),
+    },
+    homepage: sanitizeHomepageOrder(layout.homepage),
+  };
+}
+
+function listInvalidStorefrontThemeLayoutEntries(value: unknown): string[] {
+  const layout = asRecord(value);
+  const invalid: string[] = [];
+  const unknownKeys = (record: Record<string, unknown>, keys: Set<string>, prefix: string) => {
+    for (const key of Object.keys(record)) if (!keys.has(key)) invalid.push(`${prefix}${key}`);
+  };
+  unknownKeys(layout, LAYOUT_KEYS, "layout.");
+  const card = asRecord(layout.productCard);
+  const grid = asRecord(layout.grid);
+  const page = asRecord(layout.productPage);
+  unknownKeys(card, PRODUCT_CARD_KEYS, "layout.productCard.");
+  unknownKeys(grid, GRID_KEYS, "layout.grid.");
+  unknownKeys(page, PRODUCT_PAGE_KEYS, "layout.productPage.");
+  if (!includes(STOREFRONT_HEADER_STYLES, layout.header)) invalid.push("layout.header");
+  if (!includes(STOREFRONT_FOOTER_STYLES, layout.footer)) invalid.push("layout.footer");
+  if (!includes(STOREFRONT_CARD_IMAGE_RATIOS, card.imageRatio)) invalid.push("layout.productCard.imageRatio");
+  if (typeof card.hoverImage !== "boolean") invalid.push("layout.productCard.hoverImage");
+  if (typeof card.quickBuy !== "boolean") invalid.push("layout.productCard.quickBuy");
+  if (!includes(STOREFRONT_CARD_BADGE_PLACEMENTS, card.badge)) invalid.push("layout.productCard.badge");
+  if (!(STOREFRONT_GRID_DESKTOP_COLUMNS as readonly unknown[]).includes(grid.desktop)) invalid.push("layout.grid.desktop");
+  if (!(STOREFRONT_GRID_MOBILE_COLUMNS as readonly unknown[]).includes(grid.mobile)) invalid.push("layout.grid.mobile");
+  if (!includes(STOREFRONT_PRODUCT_GALLERY_LAYOUTS, page.gallery)) invalid.push("layout.productPage.gallery");
+  if (!includes(STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS, page.thumbnails)) invalid.push("layout.productPage.thumbnails");
+  if (!isHomepageOrder(layout.homepage)) invalid.push("layout.homepage");
+  return invalid;
+}
 
 const FONT_FAMILIES = {
   heading: {
@@ -410,6 +572,7 @@ export function sanitizeStorefrontThemeSettings(
         DEFAULT_STOREFRONT_THEME_SETTINGS.components.cards,
       ),
     },
+    layout: sanitizeStorefrontThemeLayout(record.layout),
   };
 }
 
@@ -472,6 +635,7 @@ export function listInvalidStorefrontThemeSettingsEntries(value: unknown): strin
   if (!includes(STOREFRONT_THEME_BUTTON_STYLES, components.buttons)) invalid.push("components.buttons");
   if (!includes(STOREFRONT_THEME_INPUT_STYLES, components.inputs)) invalid.push("components.inputs");
   if (!includes(STOREFRONT_THEME_CARD_STYLES, components.cards)) invalid.push("components.cards");
+  invalid.push(...listInvalidStorefrontThemeLayoutEntries(record.layout));
 
   return [...new Set(invalid)];
 }
@@ -523,4 +687,118 @@ function hasControlOrStyleBreakoutChar(value: string): boolean {
     }
   }
   return false;
+}
+
+/**
+ * One-click "Style" starting points: every theme choice at once (colours,
+ * fonts, shape and layout). Merchants fine-tune individual options after.
+ * Patterned on Shopify Dawn/Horizon settings and the layouts Bangladeshi
+ * shoppers know (Daraz/Othoba marketplaces, Chaldal daily needs, Aarong).
+ */
+export const STOREFRONT_STYLE_PRESETS = [
+  {
+    key: "classic",
+    palette: "Current",
+    theme: {
+      typography: { heading: "system", body: "system", scale: "standard" },
+      cornerStyle: "subtle", density: "comfortable", containerWidth: "wide",
+      components: { buttons: "solid", inputs: "outlined", cards: "bordered" },
+      layout: DEFAULT_STOREFRONT_THEME_LAYOUT,
+    },
+  },
+  {
+    key: "marketplace",
+    palette: "Marketplace",
+    theme: {
+      typography: { heading: "system", body: "system", scale: "compact" },
+      cornerStyle: "subtle", density: "compact", containerWidth: "wide",
+      components: { buttons: "solid", inputs: "filled", cards: "elevated" },
+      layout: {
+        header: "marketplace", footer: "contact",
+        productCard: { imageRatio: "square", hoverImage: false, quickBuy: true, badge: "image" },
+        grid: { desktop: 4, mobile: 2 },
+        productPage: { gallery: "beside", thumbnails: "below" },
+        homepage: ["hero", "categories", "collections", "delivery"],
+      },
+    },
+  },
+  {
+    key: "boutique",
+    palette: "Zinc",
+    theme: {
+      typography: { heading: "editorial", body: "modern", scale: "standard" },
+      cornerStyle: "square", density: "airy", containerWidth: "standard",
+      components: { buttons: "outline", inputs: "outlined", cards: "flat" },
+      layout: {
+        header: "centered", footer: "compact",
+        productCard: { imageRatio: "portrait", hoverImage: true, quickBuy: false, badge: "price" },
+        grid: { desktop: 3, mobile: 2 },
+        productPage: { gallery: "beside", thumbnails: "beside" },
+        homepage: ["hero", "collections", "categories", "delivery"],
+      },
+    },
+  },
+  {
+    key: "daily",
+    palette: "Emerald",
+    theme: {
+      typography: { heading: "modern", body: "humanist", scale: "standard" },
+      cornerStyle: "rounded", density: "compact", containerWidth: "wide",
+      components: { buttons: "solid", inputs: "filled", cards: "bordered" },
+      layout: {
+        header: "marketplace", footer: "contact",
+        productCard: { imageRatio: "square", hoverImage: false, quickBuy: true, badge: "price" },
+        grid: { desktop: 4, mobile: 2 },
+        productPage: { gallery: "beside", thumbnails: "below" },
+        homepage: ["categories", "hero", "collections", "delivery"],
+      },
+    },
+  },
+  {
+    key: "editorial",
+    palette: "Rose",
+    theme: {
+      typography: { heading: "editorial", body: "humanist", scale: "generous" },
+      cornerStyle: "square", density: "airy", containerWidth: "wide",
+      components: { buttons: "solid", inputs: "outlined", cards: "flat" },
+      layout: {
+        header: "centered", footer: "columns",
+        productCard: { imageRatio: "portrait", hoverImage: true, quickBuy: false, badge: "image" },
+        grid: { desktop: 3, mobile: 1 },
+        productPage: { gallery: "stacked", thumbnails: "below" },
+        homepage: ["hero", "collections", "delivery", "categories"],
+      },
+    },
+  },
+  {
+    key: "midnight",
+    palette: "Midnight",
+    theme: {
+      typography: { heading: "modern", body: "modern", scale: "standard" },
+      cornerStyle: "subtle", density: "comfortable", containerWidth: "wide",
+      components: { buttons: "solid", inputs: "filled", cards: "elevated" },
+      layout: {
+        header: "classic", footer: "columns",
+        productCard: { imageRatio: "square", hoverImage: true, quickBuy: false, badge: "image" },
+        grid: { desktop: 4, mobile: 2 },
+        productPage: { gallery: "beside", thumbnails: "beside" },
+        homepage: ["hero", "collections", "categories", "delivery"],
+      },
+    },
+  },
+] as const satisfies ReadonlyArray<{
+  key: string;
+  palette: keyof typeof STOREFRONT_THEME_COLOR_PALETTES;
+  theme: Omit<StorefrontThemeSettings, "colors">;
+}>;
+
+export type StorefrontStylePresetKey = (typeof STOREFRONT_STYLE_PRESETS)[number]["key"];
+
+/** The complete theme document a Style preset stands for. */
+export function storefrontStylePresetTheme(key: StorefrontStylePresetKey): StorefrontThemeSettings {
+  const preset = STOREFRONT_STYLE_PRESETS.find((candidate) => candidate.key === key)!;
+  const colors = preset.palette === "Current"
+    ? {}
+    : { ...STOREFRONT_THEME_COLOR_PALETTES[preset.palette]!.colors };
+  return sanitizeStorefrontThemeSettings({ ...structuredClone(preset.theme), colors });
 }

@@ -1,9 +1,20 @@
 ---
 import ErrorPageState from "@/components/ErrorPageState.astro";
+import ProductCard from "@/components/cards/ProductCard.astro";
 import Layout from "@/layouts/Layout.astro";
+import { getLayoutData, getProductRecommendations } from "@/lib/api";
+import { recommendationTitle } from "@/lib/recommendations";
+
+// A way back into the catalog: the store's popular products, or its newest
+// when there is not enough order history (the title says which).
+const [layoutData, suggestions] = await Promise.all([
+  getLayoutData().catch(() => null),
+  getProductRecommendations([], 4).catch(() => null),
+]);
+const products = suggestions?.products ?? [];
 ---
 
-<Layout title="Page not found" noindex>
+<Layout title="Page not found" noindex layoutData={layoutData}>
   <ErrorPageState
     code="404"
     title="Page not found"
@@ -13,4 +24,20 @@ import Layout from "@/layouts/Layout.astro";
     secondaryHref="/search"
     secondaryLabel="Search products"
   />
+  {suggestions && products.length > 0 && (
+    <section aria-labelledby="not-found-suggestions" class="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
+      <h2 id="not-found-suggestions" class="mb-4 text-lg font-semibold text-foreground">
+        {recommendationTitle(suggestions.reason)}
+      </h2>
+      <div class="product-grid">
+        {products.map((product) => (
+          <ProductCard
+            product={product}
+            currencySymbol={layoutData?.currency?.symbol}
+            currencyCode={layoutData?.currency?.code}
+          />
+        ))}
+      </div>
+    </section>
+  )}
 </Layout>

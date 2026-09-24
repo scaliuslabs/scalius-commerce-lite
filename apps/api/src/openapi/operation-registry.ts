@@ -1631,6 +1631,7 @@ export const OPERATIONS = {
   },
   "storefront.products.get_section": { limits: { request: 16_384, response: 61_440 } },
   "storefront.products.list": { limits: { request: 16_384 } },
+  "storefront.products.list_recommendations": { limits: { request: 16_384 } },
   "storefront.products.search_legacy": {
     exposure: "excluded",
     limits: { request: 16_384 },

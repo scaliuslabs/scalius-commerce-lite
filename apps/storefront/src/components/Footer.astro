@@ -15,8 +15,10 @@ import {
   applyStorefrontPrefetchPolicyToHtml,
   getStorefrontPrefetchAttribute,
 } from "@/lib/prefetch-policy";
-import { telHref } from "@/lib/store-identity";
+import { telHref, whatsappHref } from "@/lib/store-identity";
 import { TRACK_ORDER_PATH, placeTrackOrderLink } from "@/lib/footer-links";
+import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
+import type { StorefrontFooterStyle } from "@scalius/shared/storefront-theme";
 
 interface Props {
   footerData: FooterData;
@@ -26,13 +28,33 @@ interface Props {
   social: SocialLink[];
   /** Policy pages from Settings -> Policies. */
   policies: Array<{ title: string; path: string }>;
+  /**
+   * columns: logo, text and menu columns. compact: one band of links.
+   * contact: menus plus a help block (call, WhatsApp, email, address).
+   */
+  variant: StorefrontFooterStyle;
+  business: StorefrontBusinessInfo | null | undefined;
 }
 
-const { footerData, storeName, storePhone, social: storeSocial, policies } = Astro.props;
+const {
+  footerData,
+  storeName,
+  storePhone,
+  social: storeSocial,
+  policies,
+  variant,
+  business,
+} = Astro.props;
 
 const logo = footerData?.logo || { src: "", alt: "" };
 const brandName = storeName || logo.alt || footerData?.copyrightText || "";
 const phoneHref = telHref(storePhone);
+const chatHref = whatsappHref(storePhone);
+const storeEmail = business?.email?.trim() || null;
+const storeAddress = [business?.addressLine1, business?.addressLine2, business?.city]
+  .map((part) => part?.trim())
+  .filter(Boolean)
+  .join(", ");
 const tagline = footerData?.tagline || "";
 const description = footerData?.description || "";
 const optimizedDescription = applyStorefrontPrefetchPolicyToHtml(
@@ -109,6 +131,12 @@ const policyLinks = policies
   .map((policy) => ({ title: policy.title, href: policy.path }))
   .filter((link) => !linkedHrefs.has(link.href));
 
+// The compact footer lists every top-level link in one band.
+const compactLinks = [
+  ...menus.flatMap((menu) => menu.links.filter((link) => link.href)),
+  ...policyLinks.map((link) => ({ title: link.title, href: link.href })),
+];
+
 const menuCount = menus.length;
 let menuGridCols = "grid-cols-2"; // Default to 2 columns on mobile
 if (menuCount >= 3) menuGridCols = "grid-cols-2 lg:grid-cols-3";
@@ -118,6 +146,31 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
 
 <footer class="relative bg-primary text-primary-foreground overflow-hidden">
   <div class="relative mx-auto w-full max-w-7xl px-4 sm:px-6 py-5 lg:py-6">
+    {variant === "compact" ? (
+      <div class="flex flex-col items-center gap-4 text-center lg:flex-row lg:justify-between lg:text-left">
+        {brandName && (
+          <a href="/" class="text-lg font-bold">{brandName}</a>
+        )}
+        {compactLinks.length > 0 && (
+          <nav aria-label="Footer">
+            <ul class="flex flex-wrap justify-center gap-x-5 gap-y-1">
+              {compactLinks.map((link) => (
+                <li>
+                  <a href={link.href} class="inline-flex min-h-11 items-center underline-offset-4 hover:underline">
+                    {link.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
+        {phoneHref && (
+          <a href={phoneHref} class="inline-flex min-h-11 items-center font-semibold underline underline-offset-4">
+            {storePhone}
+          </a>
+        )}
+      </div>
+    ) : (
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-5">
       <div class="lg:col-span-4">
         {/* No logo and no store name: no empty link to tab onto. */}
@@ -152,13 +205,37 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
         }
 
         {
-          phoneHref && (
-            <p class="mt-3 text-base">
-              Call us:{" "}
-              <a href={phoneHref} class="font-semibold underline underline-offset-4">
-                {storePhone}
-              </a>
-            </p>
+          variant === "contact" ? (
+            <div class="mt-4 space-y-3">
+              <h2 class="text-base font-semibold">Need help ordering?</h2>
+              <div class="flex flex-wrap gap-2">
+                {phoneHref && (
+                  <a href={phoneHref} class="inline-flex min-h-11 items-center rounded-lg bg-primary-foreground px-4 text-sm font-semibold text-primary">
+                    Call {storePhone}
+                  </a>
+                )}
+                {chatHref && (
+                  <a href={chatHref} target="_blank" rel="noopener noreferrer" class="inline-flex min-h-11 items-center rounded-lg border border-primary-foreground/60 px-4 text-sm font-semibold">
+                    Chat on WhatsApp
+                  </a>
+                )}
+              </div>
+              {storeEmail && (
+                <p class="text-base">
+                  <a href={`mailto:${storeEmail}`} class="underline underline-offset-4">{storeEmail}</a>
+                </p>
+              )}
+              {storeAddress && <address class="text-base not-italic">{storeAddress}</address>}
+            </div>
+          ) : (
+            phoneHref && (
+              <p class="mt-3 text-base">
+                Call us:{" "}
+                <a href={phoneHref} class="font-semibold underline underline-offset-4">
+                  {storePhone}
+                </a>
+              </p>
+            )
           )
         }
 
@@ -190,12 +267,13 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
       </div>
 
     </div>
+    )}
 
     <div class="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-primary-foreground/20">
       <div class="flex flex-col sm:flex-row items-center justify-between gap-6">
         <div class="flex flex-col items-center gap-2 text-sm sm:items-start">
           {
-            policyLinks.length > 0 && (
+            variant !== "compact" && policyLinks.length > 0 && (
               <nav aria-label="Store policies">
                 <ul class="flex flex-wrap justify-center gap-x-4 gap-y-1 sm:justify-start">
                   {policyLinks.map((link) => (

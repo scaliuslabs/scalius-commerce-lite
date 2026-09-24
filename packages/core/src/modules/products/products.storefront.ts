@@ -65,10 +65,16 @@ import {
 } from "../categories/categories.publication";
 import {
     loadProductMediaProjections,
+    resolveProductCardImages,
     resolveProductImageRepresentation,
     resolveSkuImageRepresentation,
     type ProductMediaProjection,
 } from "./products.media";
+import {
+    DEFAULT_RECOMMENDATION_LIMIT,
+    getStorefrontProductRecommendations,
+    type ProductRecommendations,
+} from "./products.recommendations";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
@@ -950,8 +956,8 @@ async function readStorefrontCatalogResults(
                 .map((product) => product.categoryId)
                 .filter((id): id is string => Boolean(id)),
         )];
-    const [imageMap, categoriesData] = await Promise.all([
-        readPrimaryProductImageMap(db, productIds),
+    const [mediaMap, categoriesData] = await Promise.all([
+        loadProductMediaProjections(db, productIds),
         categoryIds.length > 0
             ? db
                 .select({ id: categories.id, name: categories.name, slug: categories.slug })
@@ -969,7 +975,6 @@ async function readStorefrontCatalogResults(
         availableForSale,
         ...product
     }: StorefrontProductListRowWithVariants) => {
-        const image = imageMap.get(product.id);
         const category = scope.fixedCategory ?? (
             product.categoryId ? categoryMap.get(product.categoryId) ?? null : null
         );
@@ -978,9 +983,7 @@ async function readStorefrontCatalogResults(
             categoryId: category?.id ?? null,
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
-            imageUrl: image?.url ?? null,
-            imageMediaId: image?.mediaId ?? null,
-            imageAlt: image?.alt ?? null,
+            ...resolveProductCardImages(mediaMap.get(product.id) ?? []),
             category,
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() ?? null,
@@ -1380,7 +1383,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     if (!productRow) return null;
     const { category, storeCurrencyCode, ...product } = productRow;
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
     const promises: Promise<{ type: string; data: unknown }>[] = [
@@ -1446,55 +1448,19 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             .then((res: Array<{ name: string; value: string; slug: string }>) => ({ type: "attributes", data: res })),
     ];
 
-    if (product.categoryId) {
-        promises.push(
-            (async () => {
-                const relatedProds = await db.select({
-                    id: products.id, name: products.name,
-                    ...buyerPricingSelection(buyerPricing),
-                    slug: products.slug,
-                    hasVariants: buyerPricing.hasCustomerOptions,
-                    availableForSale: buyerPricing.availableForSale,
-                    freeDelivery: products.freeDelivery,
-                }).from(products)
-                    .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-                    .where(and(
-                        eq(products.categoryId, product.categoryId!),
-                        eq(products.isActive, true),
-                        isNull(products.deletedAt),
-                        publicProductHasBuyerResolvableSku(),
-                        sql`${products.id} != ${product.id}`,
-                    )).limit(6).all();
-
-                if (relatedProds.length === 0) return { type: "relatedProducts", data: [] };
-
-                const relatedIds = relatedProds.map((p) => p.id);
-                const relatedImageMap = await readPrimaryProductImageMap(db, relatedIds);
-
-                return {
-                    type: "relatedProducts",
-                    data: relatedProds.map((rp) => {
-                        const imgData = relatedImageMap.get(rp.id);
-                        return {
-                            ...presentBuyerPricing(rp, decimalPlaces),
-                            hasVariants: Boolean(rp.hasVariants),
-                            availableForSale: Boolean(rp.availableForSale),
-                            imageUrl: imgData?.url || null,
-                            imageMediaId: imgData?.mediaId ?? null,
-                            imageAlt: imgData?.alt || null,
-                        };
-                    }),
-                };
-            })(),
-        );
-    }
+    promises.push(
+        getStorefrontProductRecommendations(db, {
+            productIds: [product.id],
+            limit: DEFAULT_RECOMMENDATION_LIMIT,
+        }).then((data) => ({ type: "recommendations", data })),
+    );
 
     const results = await Promise.all(promises);
 
     const mediaItems = (results.find((r) => r.type === "media")?.data as ProductMediaProjection[]) || [];
     const variants = (results.find((r) => r.type === "variants")?.data as unknown[]) || [];
     const additionalInfo = (results.find((r) => r.type === "additionalInfo")?.data as unknown[]) || [];
-    const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as unknown[]) || [];
+    const recommendations = results.find((r) => r.type === "recommendations")!.data as ProductRecommendations;
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
     const offers = (results.find((r) => r.type === "offers")?.data as unknown[]) || [];
 
@@ -1564,7 +1530,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         category,
         media: publicMedia,
         variants: formattedVariants,
-        relatedProducts,
+        recommendations,
     };
 }
 

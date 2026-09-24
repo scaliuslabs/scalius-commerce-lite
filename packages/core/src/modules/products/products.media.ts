@@ -135,6 +135,36 @@ export function resolveProductImageRepresentation(
     };
 }
 
+export type ProductCardImages = {
+    imageUrl: string | null;
+    imageMediaId: string | null;
+    imageAlt: string | null;
+    /** The next photo in gallery order, for the card's hover swap. Videos are never used. */
+    secondaryImageUrl: string | null;
+};
+
+/**
+ * The images a product card shows: the same primary representation as every
+ * other image-only surface, plus the first other photo in gallery order.
+ */
+export function resolveProductCardImages(items: readonly ProductMediaProjection[]): ProductCardImages {
+    const primary = resolveProductImageRepresentation(items);
+    const secondary = primary
+        ? ordered(items).find((item) =>
+            item.kind === "image"
+            && item.url
+            && item.id !== primary.productMediaId
+            && item.mediaId !== primary.mediaId
+        )
+        : undefined;
+    return {
+        imageUrl: primary?.url ?? null,
+        imageMediaId: primary?.mediaId ?? null,
+        imageAlt: primary?.altText ?? null,
+        secondaryImageUrl: secondary?.url ?? null,
+    };
+}
+
 /** Exact SKU image wins; NULL or a missing/corrupt exact row uses the product image. */
 export function resolveSkuImageRepresentation(
     items: readonly ProductMediaProjection[],

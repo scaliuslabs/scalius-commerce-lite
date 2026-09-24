@@ -170,12 +170,27 @@ export interface Product {
   imageUrl?: string | null;
   imageMediaId?: string | null;
   imageAlt?: string | null;
+  /** Listing cards only: the next gallery photo, shown on hover. Never a video. */
+  secondaryImageUrl?: string | null;
   category?: CategorySummary;
   hasVariants: boolean;
   availableForSale?: boolean;
   variants?: ProductVariant[];
   /** Automatic Buy X get Y discounts this product counts toward (product page only). */
   offers?: ProductBuyGetOffer[];
+}
+
+/**
+ * What a recommendation list mostly is, so its title stays honest:
+ * "Customers also bought" only for `also_bought` (real co-purchases by two or
+ * more buyers), "You might also like" for `similar`, "Popular right now" and
+ * "New arrivals" for lists without source products.
+ */
+export type ProductRecommendationReason = "also_bought" | "similar" | "popular" | "new_arrivals";
+
+export interface ProductRecommendations {
+  reason: ProductRecommendationReason;
+  products: Product[];
 }
 
 export interface ProductBuyGetOffer {
