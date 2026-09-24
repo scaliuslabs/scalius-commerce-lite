@@ -370,6 +370,9 @@ const productDetailDataSchema = z.object({
     offers: z.array(z.object({
       promotionId: z.string(),
       title: z.string(),
+      role: z.enum(["buy", "get"]).openapi({
+        description: "\"buy\": this product counts toward the offer and `products` are what the buyer gets; \"get\": this product is what the buyer gets and `products` are what to buy.",
+      }),
       buyQuantity: z.number().int().nullable(),
       buyAmount: z.number().nullable(),
       getQuantity: z.number().int(),
@@ -382,7 +385,7 @@ const productDetailDataSchema = z.object({
         variantId: z.string().nullable(),
         price: z.number().nullable(),
       })),
-    })).openapi({ description: "Active automatic Buy X get Y discounts this product counts toward." }),
+    })).openapi({ description: "Active automatic Buy X get Y discounts this product counts toward or is given by." }),
   }),
   category: productCategoryDetailSchema.nullable(),
   media: z.array(productMediaSchema),

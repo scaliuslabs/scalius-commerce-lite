@@ -933,7 +933,7 @@ describe("authoritative tax quote", () => {
       applied: {},
       snapshot: {},
       taxAllocation,
-      discounts: [{ promotionId: "promo_50", title: "Half off", code: "PRODUCT50", amountMinor: 5_000 }],
+      discounts: [{ promotionId: "promo_50", title: "Half off", code: "PRODUCT50", amountMinor: 5_000, shippingAmountMinor: 0 }],
       offers: [offer],
       rejectedCodes: [{ code: "EXTRA", reason: "minimum_quantity", message: "Add 1 more item to use EXTRA.", shortfallQuantity: 1 }],
     });

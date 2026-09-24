@@ -7906,8 +7906,7 @@
                     "type": "number",
                     "minimum": 0,
                     "maximum": 99999999,
-                    "default": 0,
-                    "description": "Delivery charge"
+                    "description": "Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing."
                   },
                   "customerPhone": {
                     "type": "string",
@@ -7956,14 +7955,20 @@
                                 "nullable": true
                               },
                               "amount": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Off the items: shown as a discount line."
+                              },
+                              "shippingAmount": {
+                                "type": "number",
+                                "description": "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line."
                               }
                             },
                             "required": [
                               "promotionId",
                               "title",
                               "code",
-                              "amount"
+                              "amount",
+                              "shippingAmount"
                             ]
                           }
                         },
@@ -8065,6 +8070,8 @@
                                   "buy_items",
                                   "not_combinable",
                                   "lower_savings",
+                                  "needs_delivery",
+                                  "delivery_discount_applied",
                                   "unavailable"
                                 ]
                               },
@@ -10473,6 +10480,12 @@
                             "saleOfferSpendText": {
                               "type": "string"
                             },
+                            "saleOfferGetText": {
+                              "type": "string"
+                            },
+                            "saleOfferGetSpendText": {
+                              "type": "string"
+                            },
                             "freeBenefitText": {
                               "type": "string"
                             },
@@ -10491,6 +10504,8 @@
                             "quantityLimitText",
                             "saleOfferText",
                             "saleOfferSpendText",
+                            "saleOfferGetText",
+                            "saleOfferGetSpendText",
                             "freeBenefitText",
                             "percentBenefitText"
                           ]
@@ -38071,6 +38086,14 @@
                                   "title": {
                                     "type": "string"
                                   },
+                                  "role": {
+                                    "type": "string",
+                                    "enum": [
+                                      "buy",
+                                      "get"
+                                    ],
+                                    "description": "\"buy\": this product counts toward the offer and `products` are what the buyer gets; \"get\": this product is what the buyer gets and `products` are what to buy."
+                                  },
                                   "buyQuantity": {
                                     "type": "integer",
                                     "nullable": true
@@ -38126,6 +38149,7 @@
                                 "required": [
                                   "promotionId",
                                   "title",
+                                  "role",
                                   "buyQuantity",
                                   "buyAmount",
                                   "getQuantity",
@@ -38134,7 +38158,7 @@
                                   "products"
                                 ]
                               },
-                              "description": "Active automatic Buy X get Y discounts this product counts toward."
+                              "description": "Active automatic Buy X get Y discounts this product counts toward or is given by."
                             }
                           },
                           "required": [
@@ -42880,6 +42904,54 @@
                               "type": "integer",
                               "nullable": true
                             },
+                            "discounts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "promotionId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "amount": {
+                                    "type": "number",
+                                    "description": "Off the items: shown as a discount line."
+                                  },
+                                  "shippingAmount": {
+                                    "type": "number",
+                                    "description": "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line."
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "buy_x_get_y",
+                                      "product",
+                                      "order",
+                                      "shipping"
+                                    ],
+                                    "description": "The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind."
+                                  }
+                                },
+                                "required": [
+                                  "promotionId",
+                                  "title",
+                                  "code",
+                                  "amount",
+                                  "shippingAmount",
+                                  "kind"
+                                ]
+                              }
+                            },
+                            "notes": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "taxAmountMinor": {
                               "type": "integer"
                             },
@@ -43158,6 +43230,8 @@
                             "shippingMethodBaseAmountMinor",
                             "shippingFeeWaived",
                             "discountAmountMinor",
+                            "discounts",
+                            "notes",
                             "taxAmountMinor",
                             "totalAmountMinor",
                             "taxLabel",
@@ -44860,14 +44934,20 @@
                                 "nullable": true
                               },
                               "amount": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Off the items: shown as a discount line."
+                              },
+                              "shippingAmount": {
+                                "type": "number",
+                                "description": "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line."
                               }
                             },
                             "required": [
                               "promotionId",
                               "title",
                               "code",
-                              "amount"
+                              "amount",
+                              "shippingAmount"
                             ]
                           },
                           "description": "One line per applied discount (automatic and code), with its own amount."
@@ -44972,6 +45052,8 @@
                                   "buy_items",
                                   "not_combinable",
                                   "lower_savings",
+                                  "needs_delivery",
+                                  "delivery_discount_applied",
                                   "unavailable"
                                 ]
                               },
@@ -159258,7 +159340,19 @@
                                   "code"
                                 ]
                               },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "buy_x_get_y",
+                                  "product",
+                                  "order",
+                                  "shipping"
+                                ]
+                              },
                               "amount": {
+                                "type": "number"
+                              },
+                              "shippingAmount": {
                                 "type": "number"
                               }
                             },
@@ -159267,7 +159361,9 @@
                               "name",
                               "code",
                               "method",
-                              "amount"
+                              "kind",
+                              "amount",
+                              "shippingAmount"
                             ]
                           }
                         },

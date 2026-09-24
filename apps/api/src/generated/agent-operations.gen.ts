@@ -35063,7 +35063,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "code"
                     ]
                   },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "buy_x_get_y",
+                      "product",
+                      "order",
+                      "shipping"
+                    ]
+                  },
                   "amount": {
+                    "type": "number"
+                  },
+                  "shippingAmount": {
                     "type": "number"
                   }
                 },
@@ -35072,7 +35084,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "name",
                   "code",
                   "method",
-                  "amount"
+                  "kind",
+                  "amount",
+                  "shippingAmount"
                 ]
               }
             },
@@ -72906,6 +72920,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "saleOfferSpendText": {
                   "type": "string"
                 },
+                "saleOfferGetText": {
+                  "type": "string"
+                },
+                "saleOfferGetSpendText": {
+                  "type": "string"
+                },
                 "freeBenefitText": {
                   "type": "string"
                 },
@@ -72924,6 +72944,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "quantityLimitText",
                 "saleOfferText",
                 "saleOfferSpendText",
+                "saleOfferGetText",
+                "saleOfferGetSpendText",
                 "freeBenefitText",
                 "percentBenefitText"
               ]

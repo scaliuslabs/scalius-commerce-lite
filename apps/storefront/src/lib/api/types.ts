@@ -180,6 +180,8 @@ export interface Product {
 export interface ProductBuyGetOffer {
   promotionId: string;
   title: string;
+  /** "buy": `products` are what the buyer gets; "get": this product is given and `products` are what to buy. */
+  role: "buy" | "get";
   buyQuantity: number | null;
   buyAmount: number | null;
   getQuantity: number;
@@ -477,6 +479,16 @@ export interface OrderReceiptSupportRequestAction {
   disabledReason: string | null;
 }
 
+export interface OrderReceiptDiscount {
+  promotionId: string;
+  title: string;
+  code: string | null;
+  /** The discount's main effect; delivery savings are in `shippingAmount` whatever the kind. */
+  kind: "buy_x_get_y" | "product" | "order" | "shipping";
+  amount: number;
+  shippingAmount: number;
+}
+
 export interface OrderReceipt {
   id: string;
   /** Short per-store number ("#1001"); absent until every order has one. */
@@ -501,6 +513,10 @@ export interface OrderReceipt {
   shippingMethodBaseAmountMinor?: number | null;
   shippingFeeWaived?: boolean | null;
   discountAmountMinor?: number | null;
+  /** Each discount used: `amount` off the items, `shippingAmount` off delivery. */
+  discounts?: OrderReceiptDiscount[];
+  /** The buyer's order note. */
+  notes?: string | null;
   taxAmountMinor?: number;
   totalAmountMinor?: number | null;
   taxLabel?: string | null;
