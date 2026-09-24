@@ -1,0 +1,151 @@
+// @vitest-environment happy-dom
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
+import { readOrderLookupInput } from "./order-lookup";
+import { enhanceOrderCodeForm } from "./order-lookup-form";
+
+function renderForm() {
+  document.body.innerHTML = `
+    <form data-order-code-form data-send-url="/api/order-lookup/send-code" data-verify-url="/api/order-lookup/verify">
+      <input name="reference" value="#1001" />
+      <input name="phone" value="01712345678" />
+      <div data-order-code-step hidden><input name="code" /></div>
+      <p data-order-code-message></p>
+      <button type="submit" name="intent" value="send" data-order-code-submit>Send code</button>
+      <button type="submit" name="intent" value="resend" data-order-code-resend hidden>Send a new code</button>
+    </form>`;
+  const form = document.querySelector<HTMLFormElement>("form")!;
+  enhanceOrderCodeForm(form, copy, {
+    verifyCode: "View order",
+    codeSent: copy.trackOrderCodeSentText,
+    unavailable: copy.trackOrderUnavailableText,
+    validate: (fields) => (readOrderLookupInput(fields.reference ?? "", fields.phone ?? "").ok
+      ? null
+      : copy.trackOrderPhoneInvalidText),
+  });
+  const submit = form.querySelector<HTMLButtonElement>("[data-order-code-submit]")!;
+  const resend = form.querySelector<HTMLButtonElement>("[data-order-code-resend]")!;
+  return {
+    form,
+    submit,
+    resend,
+    message: () => form.querySelector("[data-order-code-message]")!.textContent,
+    codeStepHidden: () => form.querySelector<HTMLElement>("[data-order-code-step]")!.hidden,
+    setCode: (code: string) => { form.querySelector<HTMLInputElement>("input[name='code']")!.value = code; },
+  };
+}
+
+function reply(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+}
+
+async function submitWith(form: HTMLFormElement, button: HTMLButtonElement) {
+  form.dispatchEvent(Object.assign(new Event("submit", { cancelable: true }), { submitter: button }));
+  for (let index = 0; index < 5; index += 1) await vi.advanceTimersByTimeAsync(0);
+}
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  document.body.innerHTML = "";
+});
+
+describe("order code form", () => {
+  it("sends the code without a page load, then counts down to a resend", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(reply({ success: true, resendAfterSeconds: 45 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const view = renderForm();
+
+    await submitWith(view.form, view.submit);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/order-lookup/send-code", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ reference: "#1001", phone: "01712345678", code: "" }),
+    }));
+    expect(view.codeStepHidden()).toBe(false);
+    expect(view.message()).toBe(copy.trackOrderCodeSentText);
+    expect(view.submit.textContent).toBe("View order");
+    expect(view.resend.hidden).toBe(false);
+    expect(view.resend.disabled).toBe(true);
+    expect(view.resend.textContent).toBe("Send a new code in 0:45");
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(view.resend.textContent).toBe("Send a new code in 0:30");
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(view.resend.disabled).toBe(false);
+    expect(view.resend.textContent).toBe("Send a new code");
+  });
+
+  it("checks the fields before sending anything", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const view = renderForm();
+    view.form.querySelector<HTMLInputElement>("input[name='phone']")!.value = "123";
+
+    await submitWith(view.form, view.submit);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(view.message()).toBe(copy.trackOrderPhoneInvalidText);
+  });
+
+  it("says how many attempts are left, and offers a new code when none are", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(reply({ success: true, resendAfterSeconds: 60 }))
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "VALIDATION_ERROR", attemptsLeft: 1 }, 400))
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "VALIDATION_ERROR", attemptsLeft: 0 }, 400));
+    vi.stubGlobal("fetch", fetchMock);
+    const view = renderForm();
+    await submitWith(view.form, view.submit);
+    view.setCode("111111");
+
+    await submitWith(view.form, view.submit);
+    expect(fetchMock.mock.calls[1]![0]).toBe("/api/order-lookup/verify");
+    expect(view.message()).toBe("That code isn't right. 1 attempt left.");
+    expect(view.resend.disabled).toBe(true);
+
+    await submitWith(view.form, view.submit);
+    expect(view.message()).toBe("This code can't be used anymore. Send a new code.");
+    expect(view.resend.disabled).toBe(false);
+    expect(view.submit.disabled).toBe(false);
+  });
+
+  it("counts down a rate limit and then lets the buyer try again", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      reply({ success: false, errorCode: "RATE_LIMIT", retryAfterSeconds: 120 }, 429),
+    ));
+    const view = renderForm();
+
+    await submitWith(view.form, view.submit);
+    expect(view.message()).toBe("Try again in 2:00");
+    expect(view.submit.disabled).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(75_000);
+    expect(view.message()).toBe("Try again in 0:45");
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(view.submit.disabled).toBe(false);
+    expect(view.message()).toBe("");
+  });
+
+  it("opens the receipt after a correct code, and only the receipt", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(reply({ success: true, resendAfterSeconds: 60 }))
+      .mockResolvedValueOnce(reply({ success: true, redirectUrl: "https://evil.example/order-success?orderId=1" }))
+      .mockResolvedValueOnce(reply({ success: true, redirectUrl: "/order-success?orderId=JJEHCFQ3C1JJ35GX" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const view = renderForm();
+    await submitWith(view.form, view.submit);
+    view.setCode("123456");
+
+    await submitWith(view.form, view.submit);
+    expect(assign).not.toHaveBeenCalled();
+    expect(view.message()).toBe(copy.paymentRecoveryVerificationFailedText);
+
+    await submitWith(view.form, view.submit);
+    expect(assign).toHaveBeenCalledWith("/order-success?orderId=JJEHCFQ3C1JJ35GX");
+  });
+});

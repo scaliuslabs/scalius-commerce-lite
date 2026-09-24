@@ -52,6 +52,7 @@ describe("payment recovery storefront proxies", () => {
     expect(json).toEqual({
       success: true,
       resultCode: "PAYMENT_RECOVERY_CODE_REQUEST_ACCEPTED",
+      resendAfterSeconds: 60,
     });
     expect(JSON.stringify(json)).not.toContain("01775528888");
     expect(JSON.stringify(json)).not.toContain("chk_");
@@ -161,6 +162,38 @@ describe("payment recovery storefront proxies", () => {
     expect(response.status).toBe(400);
     expect(json).toEqual({ success: false, errorCode: "VALIDATION_ERROR" });
     expect(JSON.stringify(json)).not.toContain("could not be verified");
+  });
+
+  it("passes the wait and the attempts left, never the backend copy", async () => {
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      success: false,
+      error: { code: "RATE_LIMIT", message: "Too many codes.", details: { retryAfterSeconds: 45 } },
+    }), { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "45" } }));
+    mocks.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      success: false,
+      error: { code: "VALIDATION_ERROR", message: "That code isn't right.", details: { attemptsLeft: 1 } },
+    }), { status: 400, headers: { "Content-Type": "application/json" } }));
+
+    const limited = await sendCode({
+      request: new Request("https://storefront.example.test/api/payment-recovery/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", channel: "sms" }),
+      }),
+    } as never);
+    const wrong = await verifyCode({
+      request: new Request("https://storefront.example.test/api/payment-recovery/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: "order_1", channel: "sms", code: "000000" }),
+      }),
+    } as never);
+
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("Retry-After")).toBe("45");
+    expect(await limited.json()).toEqual({ success: false, errorCode: "RATE_LIMIT", retryAfterSeconds: 45 });
+    expect(wrong.status).toBe(400);
+    expect(await wrong.json()).toEqual({ success: false, errorCode: "VALIDATION_ERROR", attemptsLeft: 1 });
   });
 
   it("rejects cross-origin cookie writes before backend work", async () => {

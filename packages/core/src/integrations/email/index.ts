@@ -36,7 +36,6 @@ registerEmailProvider("resend", new ResendEmailProvider());
 import type { EmailRuntimeContext, EmailRuntimeSettings, SendEmailOptions, SendEmailResult } from "./provider";
 import { getEmailProvider } from "./provider";
 import { getEmailRuntimeSettings } from "./settings";
-import { escapeHtml } from "@scalius/shared/html-escape";
 
 function maskEmailForLog(value: string | undefined): string {
   if (!value) return "unset";
@@ -107,74 +106,4 @@ export async function sendEmail(
   }
 
   return logEmailFallback(options, settings);
-}
-
-/**
- * Send a verification email.
- */
-export async function sendVerificationEmail(
-  email: string,
-  name: string,
-  verificationUrl: string,
-  context?: EmailRuntimeContext,
-): Promise<void> {
-  await sendEmail({
-    to: email,
-    subject: "Verify your email for Scalius Commerce",
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Verify your email</h2>
-        <p>Hi ${escapeHtml(name)},</p>
-        <p>Please click the button below to verify your email address:</p>
-        <p style="margin: 30px 0;">
-          <a href="${verificationUrl}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            Verify Email
-          </a>
-        </p>
-        <p>Or copy and paste this link in your browser:</p>
-        <p style="color: #666; word-break: break-all;">${verificationUrl}</p>
-        <p>This link expires in 24 hours.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-        <p style="color: #999; font-size: 12px;">
-          If you didn't request this email, you can safely ignore it.
-        </p>
-      </div>
-    `,
-    text: `Hi ${name},\n\nPlease verify your email: ${verificationUrl}\n\nExpires in 24 hours.`,  // Plain text: no HTML escaping needed
-  }, context);
-}
-
-/**
- * Send a password reset email.
- */
-export async function sendPasswordResetEmail(
-  email: string,
-  name: string,
-  resetUrl: string,
-  context?: EmailRuntimeContext,
-): Promise<void> {
-  await sendEmail({
-    to: email,
-    subject: "Reset your password for Scalius Commerce",
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Reset your password</h2>
-        <p>Hi ${escapeHtml(name)},</p>
-        <p>Click the button below to create a new password:</p>
-        <p style="margin: 30px 0;">
-          <a href="${resetUrl}" style="background-color: #000; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-            Reset Password
-          </a>
-        </p>
-        <p>Or copy and paste this link in your browser:</p>
-        <p style="color: #666; word-break: break-all;">${resetUrl}</p>
-        <p>This link expires in 1 hour.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-        <p style="color: #999; font-size: 12px;">
-          For security reasons, this link can only be used once.
-        </p>
-      </div>
-    `,
-    text: `Hi ${name},\n\nReset your password: ${resetUrl}\n\nExpires in 1 hour.`,
-  }, context);
 }

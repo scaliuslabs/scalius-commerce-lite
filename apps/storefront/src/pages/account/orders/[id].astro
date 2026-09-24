@@ -2,1165 +2,149 @@
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { formatBdMobile } from "@scalius/shared/phone-input";
 
 const layoutData = await getLayoutData();
 const orderId = Astro.params.id ?? "";
+const storePhone = layoutData?.business?.phone?.trim() || "";
+const storeEmail = layoutData?.business?.email?.trim() || "";
+const accountPrefetch = getStorefrontPrefetchAttribute("/account", Astro.url);
+const card = "rounded-xl border border-border bg-card p-5";
+const heading = "mb-4 text-base font-semibold text-foreground";
 ---
 
-<Layout title="Order Details" layoutData={layoutData}>
+<Layout title="Order" layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <section class="container mx-auto max-w-4xl px-4 py-8" data-order-detail-page data-order-id={orderId}>
+  <section class="container mx-auto max-w-5xl px-4 py-8" data-order-detail-page data-order-id={orderId}>
     <div id="orderLoading" class="flex min-h-[360px] items-center justify-center">
-      <div class="text-center">
-        <div class="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary"></div>
-        <p class="text-sm text-muted-foreground">Loading order details...</p>
+      <p class="text-sm text-muted-foreground">Loading your order…</p>
+    </div>
+
+    <div id="orderUnauthenticated" class="hidden">
+      <div class="mx-auto max-w-md py-16 text-center">
+        <h1 class="mb-3 text-2xl font-semibold text-foreground">Sign in to see this order</h1>
+        <a href="/account" data-astro-prefetch={accountPrefetch} class="inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Sign in</a>
       </div>
     </div>
 
-    <section id="orderUnauthenticated" class="hidden min-h-[360px] items-center justify-center">
-      <div class="mx-auto max-w-md text-center">
-        <h1 class="mb-3 text-2xl font-bold text-foreground">Sign in to view this order</h1>
-        <p class="mb-6 text-muted-foreground">Your order timeline is protected by your customer account.</p>
-        <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Open Account</a>
-      </div>
-    </section>
-
-    <section id="orderError" class="hidden min-h-[360px] items-center justify-center">
-      <div class="mx-auto max-w-md text-center">
-        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
-          <svg class="h-7 w-7 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path></svg>
-        </div>
-        <h1 id="orderErrorTitle" class="mb-2 text-2xl font-bold text-foreground">Order details unavailable</h1>
-        <p id="orderErrorMessage" class="mb-6 text-muted-foreground">We could not load this order right now.</p>
+    <div id="orderError" class="hidden">
+      <div class="mx-auto max-w-md py-16 text-center" role="alert">
+        <h1 id="orderErrorTitle" class="mb-2 text-2xl font-semibold text-foreground"></h1>
+        <p id="orderErrorMessage" class="mb-6 text-muted-foreground"></p>
         <div class="flex flex-col justify-center gap-3 sm:flex-row">
-          <button type="button" id="orderRetry" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">Try Again</button>
-          <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Back to Account</a>
+          <button type="button" id="orderRetry" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Retry</button>
+          <a href="/account" data-astro-prefetch={accountPrefetch} class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 text-sm font-medium text-foreground hover:bg-muted">Back to account</a>
         </div>
       </div>
-    </section>
+    </div>
 
-    <section id="orderContent" class="hidden space-y-6" aria-live="polite">
-      <div class="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="mb-3 inline-flex text-sm font-semibold text-primary hover:text-primary/80">Back to account</a>
-          <h1 id="orderTitle" class="text-3xl font-bold text-foreground">Order Details</h1>
-          <p id="orderSubtitle" class="mt-2 text-sm text-muted-foreground"></p>
+    <div id="orderContent" class="hidden space-y-6">
+      <div>
+        <a href="/account" data-astro-prefetch={accountPrefetch} class="mb-3 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+          Account
+        </a>
+        <div class="flex flex-wrap items-center gap-3">
+          <h1 id="orderTitle" class="break-all text-2xl font-semibold text-foreground sm:text-3xl"></h1>
+          <span id="orderStatus" class="rounded-md bg-muted px-2 py-0.5 text-sm font-medium text-foreground"></span>
         </div>
-        <div class="flex flex-wrap gap-2" id="orderBadges"></div>
+        <p id="orderSubtitle" class="mt-1 text-sm text-muted-foreground"></p>
       </div>
 
-      <div id="orderPaymentReturnNotice" class="hidden rounded-xl border p-4 text-sm"></div>
-      <div id="orderRefundNotice" class="hidden rounded-xl border p-4 text-sm"></div>
+      <div id="orderPaymentReturnNotice" role="status" class="hidden rounded-xl border border-border bg-muted/30 p-4 text-sm text-foreground"></div>
+      <div id="orderRefundNotice" role="status" class="hidden rounded-xl border border-border bg-muted/30 p-4 text-sm text-foreground"></div>
 
-      <div class="grid gap-4 md:grid-cols-3">
-        <div class="rounded-xl border border-border bg-card p-4">
-          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
-          <p id="orderTotal" class="mt-2 text-2xl font-bold text-foreground"></p>
-        </div>
-        <div class="rounded-xl border border-border bg-card p-4">
-          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Payment</p>
-          <p id="orderPayment" class="mt-2 text-lg font-bold text-foreground"></p>
-          <p id="orderBalance" class="mt-1 text-xs text-muted-foreground"></p>
-        </div>
-        <div class="rounded-xl border border-border bg-card p-4">
-          <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Fulfillment</p>
-          <p id="orderFulfillment" class="mt-2 text-lg font-bold capitalize text-foreground"></p>
-          <p id="orderExpectedDelivery" class="mt-1 text-xs text-muted-foreground"></p>
-        </div>
-      </div>
-
-      <section id="orderSupportSection" class="rounded-xl border border-border bg-card p-5">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 class="text-lg font-bold text-foreground">Order Help</h2>
-            <p id="orderSupportIntro" class="mt-1 text-sm text-muted-foreground">Request help with cancellation, return, or refund review.</p>
-          </div>
-          <div id="orderSupportActions" class="grid gap-2 sm:grid-cols-3"></div>
-        </div>
-        <div id="orderSupportRequests" class="mt-4 space-y-3"></div>
-        <div id="orderSupportForm" class="mt-4 hidden rounded-xl border border-border bg-muted/20 p-4">
-          <h3 id="orderSupportFormTitle" class="font-semibold text-foreground">Submit request</h3>
-          <label class="mt-3 block text-sm font-medium text-foreground" for="orderSupportReason">Reason</label>
-          <textarea id="orderSupportReason" class="mt-2 min-h-24 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" maxlength="500" required></textarea>
-          <label class="mt-3 block text-sm font-medium text-foreground" for="orderSupportMessage">Details</label>
-          <textarea id="orderSupportMessage" class="mt-2 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" maxlength="1000"></textarea>
-          <p id="orderSupportFormError" class="mt-2 hidden text-sm text-destructive"></p>
-          <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <button type="button" id="orderSupportCancel" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted">Cancel</button>
-            <button type="button" id="orderSupportSubmit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60">Submit request</button>
-          </div>
-        </div>
+      <section class={card} aria-label="Order status">
+        <div id="orderProgress"></div>
+        <p id="orderExpectedDelivery" class="mt-3 hidden text-sm text-muted-foreground"></p>
+        <h2 class="mb-3 mt-6 text-sm font-semibold text-foreground">Updates</h2>
+        <ol id="orderTimeline" class="space-y-3 border-l border-border pl-4"></ol>
       </section>
 
-      <section class="space-y-3">
-        <h2 class="text-xl font-bold text-foreground">Timeline</h2>
-        <div id="orderTimeline" class="space-y-3"></div>
-      </section>
-
-      <section class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div class="space-y-6">
-          <section class="rounded-xl border border-border bg-card p-5">
-            <h2 class="mb-4 text-lg font-bold text-foreground">Order summary</h2>
-            <div id="orderSummary" class="space-y-2 text-sm"></div>
-          </section>
-
-          <section class="rounded-xl border border-border bg-card p-5">
-            <h2 class="mb-4 text-lg font-bold text-foreground">Items</h2>
-            <div id="orderItems" class="space-y-4"></div>
-          </section>
-
-          <section class="rounded-xl border border-border bg-card p-5">
-            <h2 class="mb-4 text-lg font-bold text-foreground">Delivery</h2>
-            <div id="orderShipments" class="space-y-4"></div>
-          </section>
-        </div>
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <section class={card} aria-labelledby="summaryHeading">
+          <h2 id="summaryHeading" class={heading}>Order summary</h2>
+          <ul id="orderItems" class="divide-y divide-border"></ul>
+          <dl id="orderSummary" class="mt-4 space-y-2 border-t border-border pt-4 text-sm"></dl>
+        </section>
 
         <div class="space-y-6">
-          <section class="rounded-xl border border-border bg-card p-5">
-            <h2 class="mb-4 text-lg font-bold text-foreground">Payment</h2>
-            <div id="orderPayments" class="space-y-4"></div>
-            <div id="orderPaymentRecovery" class="mt-4 hidden rounded-xl border border-primary/30 bg-primary/5 p-4">
-              <div class="flex flex-col gap-3">
-                <div>
-                  <h3 id="orderPaymentRecoveryTitle" class="font-semibold text-foreground"></h3>
-                  <p id="orderPaymentRecoveryDescription" class="mt-1 text-sm text-muted-foreground"></p>
-                </div>
-                <div id="orderPaymentRecoveryMethods" class="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Payment method"></div>
-                <div id="accountStripeSection" class="hidden space-y-2">
-                  <div id="accountStripeCardElement" class="rounded-lg border border-input bg-background p-3"></div>
-                  <div id="accountStripeError" class="hidden text-xs text-destructive"></div>
-                </div>
-                <p id="orderPaymentRecoveryMessage" class="hidden text-sm"></p>
-                <button type="button" id="orderPaymentRecoveryButton" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"></button>
+          <section class={card} aria-labelledby="deliveryHeading">
+            <h2 id="deliveryHeading" class={heading}>Shipping address</h2>
+            <div id="orderAddress" class="space-y-0.5 break-words text-sm text-muted-foreground"></div>
+            <div id="orderShipments" class="mt-4 space-y-3"></div>
+          </section>
+
+          <section class={card} aria-labelledby="paymentHeading">
+            <h2 id="paymentHeading" class={heading}>Payment</h2>
+            <div id="orderPayment" class="space-y-1 text-sm"></div>
+            <div id="orderPaymentRecovery" class="mt-4 hidden space-y-3 rounded-lg border border-border p-4">
+              <div>
+                <h3 id="orderPaymentRecoveryTitle" class="text-sm font-semibold text-foreground"></h3>
+                <p id="orderPaymentRecoveryDescription" class="mt-1 text-sm text-muted-foreground"></p>
               </div>
+              <div id="orderPaymentRecoveryMethods" class="grid gap-2" role="radiogroup" aria-label="Payment method"></div>
+              <div id="accountStripeSection" class="hidden space-y-2">
+                <div id="accountStripeCardElement" class="rounded-lg border border-input bg-background p-3"></div>
+                <p id="accountStripeError" class="hidden text-sm text-destructive"></p>
+              </div>
+              <p id="orderPaymentRecoveryMessage" role="status" class="hidden text-sm"></p>
+              <button type="button" id="orderPaymentRecoveryButton" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"></button>
             </div>
           </section>
 
-          <section class="rounded-xl border border-border bg-card p-5">
-            <h2 class="mb-4 text-lg font-bold text-foreground">Updates Sent</h2>
-            <div id="orderNotifications" class="space-y-3"></div>
-          </section>
-
-          <section class="rounded-xl border border-border bg-card p-5">
-            <h2 class="mb-4 text-lg font-bold text-foreground">Shipping Address</h2>
-            <div id="orderAddress" class="space-y-1 text-sm text-muted-foreground"></div>
+          <section class={card} aria-labelledby="helpHeading">
+            <h2 id="helpHeading" class="text-base font-semibold text-foreground">Order help</h2>
+            <p id="orderSupportIntro" class="mt-1 text-sm text-muted-foreground"></p>
+            <div id="orderSupportActions" class="mt-4 grid gap-2"></div>
+            <div id="orderSupportRequests" class="mt-4 space-y-3 empty:hidden"></div>
+            <div id="orderSupportForm" class="mt-4 hidden rounded-lg border border-border p-4">
+              <h3 id="orderSupportFormTitle" class="text-sm font-semibold text-foreground"></h3>
+              <fieldset class="mt-3">
+                <legend class="text-sm font-medium text-foreground">Reason</legend>
+                <div id="orderSupportReasons" class="mt-1"></div>
+              </fieldset>
+              <label class="mt-3 block text-sm font-medium text-foreground" for="orderSupportMessage">Note (optional)</label>
+              <textarea id="orderSupportMessage" class="mt-1.5 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" maxlength="1000"></textarea>
+              <p id="orderSupportFormError" role="alert" class="mt-2 hidden text-sm text-destructive"></p>
+              <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button type="button" id="orderSupportCancel" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium text-foreground hover:bg-muted">Cancel</button>
+                <button type="button" id="orderSupportSubmit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60">Submit request</button>
+              </div>
+            </div>
+            {(storePhone || storeEmail) && (
+              <p class="mt-4 text-sm text-muted-foreground">
+                Contact the store:
+                {storePhone && <a href={`tel:${storePhone}`} class="font-medium text-primary hover:underline">{formatBdMobile(storePhone)}</a>}
+                {storePhone && storeEmail && " · "}
+                {storeEmail && <a href={`mailto:${storeEmail}`} class="break-all font-medium text-primary hover:underline">{storeEmail}</a>}
+              </p>
+            )}
           </section>
         </div>
-      </section>
-    </section>
+      </div>
+    </div>
   </section>
 
 <script>
-  import {
-    createCustomerOrderSupportRequest,
-    createCustomerOrderPaymentSession,
-    getCustomerOrderDetail,
-    getCustomerSession,
-    type CustomerOrderDetail,
-    type CustomerOrderPaymentSession,
-    type CustomerOrderShipment,
-    type CustomerOrderSupportRequestAction,
-    type CustomerOrderSupportRequestType,
-  } from "@/lib/api/customer-auth";
-  import {
-    getCheckoutConfig,
-    type CheckoutConfig,
-    type GatewayConfig,
-  } from "@/lib/api/checkout";
-  import {
-    getAccountPaymentRecoveryAction,
-    getAccountPaymentReturnNotice,
-    normalizeHostedGatewayUrl,
-    type AccountPaymentRecoveryAction,
-    type AccountPaymentReturnNotice,
-  } from "@/lib/account-payment-recovery";
-  import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-  import { escapeHtml } from "@scalius/shared/html-escape";
-  import { getProductImageUrl } from "@/lib/product-media";
-  import { getOrderPaymentPresentation, formatOrderSuccessPaymentMethod } from "@/lib/order-success-state";
-  import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
-  import { getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
-  import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
-  import {
-    formatSavedMinorAmount,
-    resolveSavedOrderLineMoney,
-    resolveSavedOrderMoneySummary,
-  } from "@/lib/order-tax-presentation";
+  import { bindOrderDetailPage, loadOrderDetail } from "@/lib/account-order-detail";
 
-  interface StripeInstance {
-    elements(): StripeElements;
-    confirmCardPayment(
-      clientSecret: string,
-      data: { payment_method: { card: StripeCardElement } },
-    ): Promise<{
-      error?: { message?: string };
-      paymentIntent?: { status: string };
-    }>;
-  }
-
-  interface StripeElements {
-    create(
-      type: "card",
-      options?: { style?: Record<string, Record<string, string>> },
-    ): StripeCardElement;
-  }
-
-  interface StripeCardElement {
-    mount(selector: string): void;
-    on(event: string, handler: (e: { error?: { message: string } }) => void): void;
-    unmount?(): void;
-  }
-
-  type DetailWindow = Window & {
-    Stripe?: (key: string) => StripeInstance;
-    __CURRENCY_SYMBOL__?: string;
-    __scaliusOrderDetailBound?: boolean;
-    __scaliusOrderDetailRun?: number;
-    __scaliusLoadOrderDetail?: () => Promise<void>;
-  };
+  type DetailWindow = Window & { __scaliusOrderDetailBound?: boolean };
   const detailWindow = window as DetailWindow;
-  /** An online gateway id; "stripe" is the card flow, every other gateway redirects. */
-  type OnlineRecoveryGateway = string;
-  let currentDetail: CustomerOrderDetail | null = null;
-  let currentCheckoutConfig: CheckoutConfig | null = null;
-  let recoveryAction: AccountPaymentRecoveryAction | null = null;
-  let selectedRecoveryGateway: OnlineRecoveryGateway | null = null;
-  let recoveryLoading = false;
-  let supportRequestLoading = false;
-  let selectedSupportRequestType: CustomerOrderSupportRequestType | null = null;
-  let accountStripeInstance: StripeInstance | null = null;
-  let accountStripeCard: StripeCardElement | null = null;
-  let accountStripeClientSecret: string | null = null;
-  let accountStripeOrderId: string | null = null;
-  let stripeScriptPromise: Promise<void> | null = null;
-
-  function currentOrderId(): string {
-    const pageRoot = document.querySelector("[data-order-detail-page]") as HTMLElement | null;
-    return pageRoot?.dataset.orderId || "";
-  }
-
-  function formatDate(value: string | null): string {
-    if (!value) return "Pending";
-    return new Date(value).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "Asia/Dhaka" });
-  }
-
-  function formatDateTime(value: string | null): string {
-    if (!value) return "Pending";
-    return new Date(value).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Dhaka" });
-  }
-
-  function formatMoney(amount: unknown): string {
-    const symbol = detailWindow.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
-    const numeric = typeof amount === "number" ? amount : Number(amount);
-    return `${symbol}${Number.isFinite(numeric) ? numeric.toFixed(0) : "0"}`;
-  }
-
-  function label(value: string): string {
-    return value.replace(/_/g, " ");
-  }
-
-  function isSupportRequestType(value: string | undefined): value is CustomerOrderSupportRequestType {
-    return value === "cancel_pre_shipment" || value === "return" || value === "refund";
-  }
-
-  function badge(value: string): string {
-    const base = "inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide";
-    if (["cancelled", "failed", "returned", "refunded"].includes(value)) return `${base} bg-destructive/10 text-destructive`;
-    if (["paid", "confirmed", "succeeded", "delivered", "completed", "complete"].includes(value)) return `${base} bg-primary/15 text-primary`;
-    return `${base} bg-muted text-muted-foreground`;
-  }
-
-  function safeUrl(url: string | null | undefined): string | null {
-    if (!url) return null;
-    try {
-      const parsed = new URL(url, window.location.origin);
-      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
-      return parsed.href;
-    } catch {
-      return null;
-    }
-  }
-
-  function setRecoveryMessage(message: string | null, tone: "muted" | "error" | "success" = "muted"): void {
-    const el = document.getElementById("orderPaymentRecoveryMessage");
-    if (!el) return;
-    if (!message) {
-      el.textContent = "";
-      el.className = "hidden text-sm";
-      return;
-    }
-    el.textContent = message;
-    el.className = [
-      "text-sm",
-      tone === "error" ? "text-destructive" : tone === "success" ? "text-primary" : "text-muted-foreground",
-    ].join(" ");
-  }
-
-  function setStripeError(message: string | null): void {
-    const el = document.getElementById("accountStripeError");
-    if (!el) return;
-    if (!message) {
-      el.textContent = "";
-      el.classList.add("hidden");
-      return;
-    }
-    el.textContent = message;
-    el.classList.remove("hidden");
-  }
-
-  function setRecoveryButton(labelText: string, disabled = false): void {
-    const button = document.getElementById("orderPaymentRecoveryButton") as HTMLButtonElement | null;
-    if (!button) return;
-    button.textContent = labelText;
-    button.disabled = disabled;
-  }
-
-  function isOnlineRecoveryGateway(value: string): value is OnlineRecoveryGateway {
-    return /^[a-z][a-z0-9_-]{0,63}$/.test(value) && value !== "cod";
-  }
-
-  function recoveryGatewayMarkup(gateway: OnlineRecoveryGateway): string {
-    const presentation = getGatewayPresentation(gateway, gateway);
-    const lightMark = presentation.markSrc
-      ? `<img src="${escapeHtml(presentation.markSrc)}" alt="" aria-hidden="true" class="h-5 w-auto max-w-24 object-contain ${presentation.darkMarkSrc ? "dark:hidden" : ""}">`
-      : "";
-    const darkMark = presentation.darkMarkSrc
-      ? `<img src="${escapeHtml(presentation.darkMarkSrc)}" alt="" aria-hidden="true" class="hidden h-5 w-auto max-w-24 object-contain dark:block">`
-      : "";
-    const mark = lightMark || darkMark
-      ? `<span class="flex min-w-20 shrink-0 items-center justify-start">${lightMark}${darkMark}</span>`
-      : "";
-    return `<span class="flex items-center gap-3">${mark}<span class="min-w-0"><span class="block font-semibold">${escapeHtml(presentation.buyerLabel)}</span>${presentation.description ? `<span class="mt-0.5 block text-xs text-muted-foreground">${escapeHtml(presentation.description)}</span>` : ""}</span></span>`;
-  }
-
-  function availableRecoveryGateways(): OnlineRecoveryGateway[] {
-    if (currentDetail?.paymentRecovery.paymentType === "balance") {
-      if (!recoveryAction) return [];
-      if (!currentCheckoutConfig || currentCheckoutConfig.unavailable) {
-        return [recoveryAction.gateway];
-      }
-      const configuredGateway = currentCheckoutConfig.gateways.find(
-        (gateway) => gateway.id === recoveryAction?.gateway,
-      );
-      const currencyCode = currentDetail.order.currencyCode
-        ?? currentCheckoutConfig.currency?.code
-        ?? DEFAULT_CURRENCY.code;
-      return configuredGateway && isGatewayEligibleForPaymentAmount(
-        configuredGateway,
-        recoveryAction.amountDue,
-        currencyCode,
-      ) ? [recoveryAction.gateway] : [];
-    }
-    const configured = (currentCheckoutConfig?.gateways ?? [])
-      .filter((gateway: GatewayConfig) => isGatewayEligibleForPaymentAmount(
-        gateway,
-        recoveryAction?.amountDue ?? 0,
-        currentDetail?.order.currencyCode
-          ?? currentCheckoutConfig?.currency?.code
-          ?? DEFAULT_CURRENCY.code,
-      ))
-      .map((gateway: GatewayConfig) => gateway.id)
-      .filter(isOnlineRecoveryGateway);
-    if (configured.length > 0) return [...new Set(configured)];
-    return currentCheckoutConfig?.unavailable && recoveryAction
-      ? [recoveryAction.gateway]
-      : [];
-  }
-
-  function recoveryButtonLabelFor(gateway: OnlineRecoveryGateway): string {
-    if (gateway === "stripe") return "Enter card details";
-    if (currentDetail?.paymentRecovery.paymentType === "balance") return "Pay balance";
-    const name = currentCheckoutConfig?.gateways?.find((candidate) => candidate.id === gateway)?.name;
-    return `Continue with ${getGatewayPresentation(gateway, name ?? gateway).providerLabel ?? name ?? gateway}`;
-  }
-
-  function selectRecoveryGateway(gateway: OnlineRecoveryGateway): void {
-    if (recoveryLoading || selectedRecoveryGateway === gateway) return;
-    selectedRecoveryGateway = gateway;
-    resetAccountStripeState();
-    const methodButtons = document.querySelectorAll<HTMLButtonElement>("[data-recovery-gateway]");
-    methodButtons.forEach((button) => {
-      const selected = button.dataset.recoveryGateway === gateway;
-      button.setAttribute("aria-checked", selected ? "true" : "false");
-      button.className = `min-h-11 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${selected
-        ? "border-primary bg-primary/10 text-foreground"
-        : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted"}`;
-    });
-    setRecoveryMessage(null);
-    setRecoveryButton(recoveryButtonLabelFor(gateway));
-  }
-
-  function resetAccountStripeState(): void {
-    accountStripeCard?.unmount?.();
-    accountStripeInstance = null;
-    accountStripeCard = null;
-    accountStripeClientSecret = null;
-    accountStripeOrderId = null;
-    setStripeError(null);
-    document.getElementById("accountStripeSection")?.classList.add("hidden");
-  }
-
-  function renderPaymentReturnNotice(): void {
-    const noticeEl = document.getElementById("orderPaymentReturnNotice");
-    if (!noticeEl) return;
-    const params = new URLSearchParams(window.location.search);
-    const notice: AccountPaymentReturnNotice = getAccountPaymentReturnNotice(
-      params.get("payment"),
-      params.get("result"),
-    );
-    if (!notice) {
-      noticeEl.className = "hidden rounded-xl border p-4 text-sm";
-      noticeEl.innerHTML = "";
-      return;
-    }
-
-    const toneClass = notice.tone === "warning"
-      ? "border-amber-500/30 bg-amber-500/10 text-amber-800"
-      : notice.tone === "success"
-        ? "border-primary/30 bg-primary/10 text-primary"
-        : "border-border bg-muted/30 text-foreground";
-    noticeEl.className = `rounded-xl border p-4 text-sm ${toneClass}`;
-    noticeEl.innerHTML = `
-      <p class="font-semibold">${escapeHtml(notice.title)}</p>
-      <p class="mt-1">${escapeHtml(notice.message)}</p>
-    `;
-  }
-
-  function renderPaymentRecovery(detail: CustomerOrderDetail): void {
-    const container = document.getElementById("orderPaymentRecovery");
-    const methods = document.getElementById("orderPaymentRecoveryMethods");
-    if (!container) return;
-
-    if (detail.activeRefundOperation) {
-      recoveryAction = null;
-      selectedRecoveryGateway = null;
-      container.classList.add("hidden");
-      if (methods) methods.innerHTML = "";
-      resetAccountStripeState();
-      return;
-    }
-
-    recoveryAction = getAccountPaymentRecoveryAction(detail.paymentRecovery);
-    if (!recoveryAction) {
-      selectedRecoveryGateway = null;
-      container.classList.add("hidden");
-      if (methods) methods.innerHTML = "";
-      resetAccountStripeState();
-      return;
-    }
-
-    const gateways = availableRecoveryGateways();
-    if (gateways.length === 0) {
-      selectedRecoveryGateway = null;
-      container.classList.add("hidden");
-      if (methods) methods.innerHTML = "";
-      resetAccountStripeState();
-      return;
-    }
-    if (!selectedRecoveryGateway || !gateways.includes(selectedRecoveryGateway)) {
-      selectedRecoveryGateway = gateways.includes(recoveryAction.gateway)
-        ? recoveryAction.gateway
-        : gateways[0] ?? null;
-      resetAccountStripeState();
-    }
-
-    const title = document.getElementById("orderPaymentRecoveryTitle");
-    const description = document.getElementById("orderPaymentRecoveryDescription");
-    if (title) title.textContent = recoveryAction.title;
-    if (description) {
-      description.textContent = `${recoveryAction.description} Amount due: ${formatMoney(recoveryAction.amountDue)}. ${detail.paymentRecovery.paymentType === "balance" ? "Continue with the order's existing payment method." : "Choose any available online payment method; this order will be reused."}`;
-    }
-    if (methods) {
-      methods.innerHTML = gateways.map((gateway) => {
-        const selected = gateway === selectedRecoveryGateway;
-        return `<button type="button" role="radio" aria-checked="${selected ? "true" : "false"}" data-recovery-gateway="${escapeHtml(gateway)}" class="min-h-11 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${selected ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted"}">
-          ${recoveryGatewayMarkup(gateway)}
-          <span class="mt-1 block text-xs text-muted-foreground">${gateway === detail.order.paymentMethod ? "Current method" : "Change method"}</span>
-        </button>`;
-      }).join("");
-    }
-    container.classList.remove("hidden");
-    document.getElementById("accountStripeSection")?.classList.toggle("hidden", !accountStripeClientSecret);
-    if (!accountStripeClientSecret && selectedRecoveryGateway) {
-      setRecoveryMessage(null);
-      setRecoveryButton(recoveryButtonLabelFor(selectedRecoveryGateway), recoveryLoading);
-    }
-  }
-
-  function supportRequestTone(severity: string): string {
-    if (severity === "success") return "border-primary/30 bg-primary/10 text-primary";
-    if (severity === "warning") return "border-amber-500/30 bg-amber-500/10 text-amber-900";
-    if (severity === "danger") return "border-destructive/30 bg-destructive/10 text-destructive";
-    return "border-border bg-muted/30 text-foreground";
-  }
-
-  function setSupportFormError(message: string | null): void {
-    const el = document.getElementById("orderSupportFormError");
-    if (!el) return;
-    if (!message) {
-      el.textContent = "";
-      el.classList.add("hidden");
-      return;
-    }
-    el.textContent = message;
-    el.classList.remove("hidden");
-  }
-
-  function setSupportSubmitButton(labelText: string, disabled = false): void {
-    const button = document.getElementById("orderSupportSubmit") as HTMLButtonElement | null;
-    if (!button) return;
-    button.textContent = labelText;
-    button.disabled = disabled;
-  }
-
-  function hideSupportRequestForm(): void {
-    selectedSupportRequestType = null;
-    supportRequestLoading = false;
-    setSupportFormError(null);
-    setSupportSubmitButton("Submit request");
-    const panel = document.getElementById("orderSupportForm");
-    const reason = document.getElementById("orderSupportReason") as HTMLTextAreaElement | null;
-    const message = document.getElementById("orderSupportMessage") as HTMLTextAreaElement | null;
-    if (reason) reason.value = "";
-    if (message) message.value = "";
-    panel?.classList.add("hidden");
-  }
-
-  function selectedSupportAction(): CustomerOrderSupportRequestAction | null {
-    if (!currentDetail || !selectedSupportRequestType) return null;
-    return currentDetail.supportRequestActions.find((action) => action.type === selectedSupportRequestType) ?? null;
-  }
-
-  function selectSupportRequestAction(type: CustomerOrderSupportRequestType): void {
-    if (!currentDetail || supportRequestLoading) return;
-    const action = currentDetail.supportRequestActions.find((item) => item.type === type);
-    if (!action?.eligible) return;
-
-    selectedSupportRequestType = type;
-    setSupportFormError(null);
-    setSupportSubmitButton("Submit request");
-    const title = document.getElementById("orderSupportFormTitle");
-    const reason = document.getElementById("orderSupportReason") as HTMLTextAreaElement | null;
-    const message = document.getElementById("orderSupportMessage") as HTMLTextAreaElement | null;
-    if (title) title.textContent = action.label;
-    if (reason) reason.value = "";
-    if (message) message.value = "";
-    const panel = document.getElementById("orderSupportForm");
-    panel?.classList.remove("hidden");
-    reason?.focus();
-  }
-
-  function renderSupportRequests(detail: CustomerOrderDetail): void {
-    const requestsEl = document.getElementById("orderSupportRequests");
-    const actionsEl = document.getElementById("orderSupportActions");
-    const requests = detail.supportRequests || [];
-    const actions = detail.supportRequestActions || [];
-    const activeRequest = requests.find((request) => request.active);
-    const introEl = document.getElementById("orderSupportIntro");
-    if (introEl) {
-      introEl.textContent = detail.supportRequestIntro;
-    }
-
-    if (requestsEl) {
-      if (requests.length > 0) {
-        requestsEl.innerHTML = requests.map((request) => `
-          <article class="rounded-xl border p-4 text-sm ${supportRequestTone(request.severity)}">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h3 class="font-semibold">${escapeHtml(request.label)}</h3>
-                <p class="mt-1">${escapeHtml(request.reason)}</p>
-                ${request.message ? `<p class="mt-2 text-xs opacity-80">${escapeHtml(request.message)}</p>` : ""}
-              </div>
-              <time class="text-xs opacity-75" datetime="${escapeHtml(request.submittedAt || request.createdAt || "")}">${escapeHtml(formatDateTime(request.submittedAt || request.createdAt))}</time>
-            </div>
-          </article>
-        `).join("");
-      } else if (actions.length > 0) {
-        requestsEl.innerHTML = `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">No support requests submitted for this order.</p>`;
-      } else {
-        requestsEl.innerHTML = `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">No request actions are available for this order right now.</p>`;
-      }
-    }
-
-    if (actionsEl) {
-      actionsEl.innerHTML = actions.map((action) => `
-        <button type="button" data-support-request-type="${escapeHtml(action.type)}" ${action.eligible ? "" : "disabled"} class="min-h-11 rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors ${action.eligible ? "text-foreground hover:border-primary/40 hover:bg-muted" : "cursor-not-allowed bg-muted/30 text-muted-foreground opacity-75"}">
-          <span class="font-semibold">${escapeHtml(action.label)}</span>
-          <span class="mt-1 block text-xs text-muted-foreground">${escapeHtml(action.description)}</span>
-          ${!action.eligible && action.disabledReason ? `<span class="mt-1.5 block text-xs text-foreground/70">${escapeHtml(action.disabledReason)}</span>` : ""}
-        </button>
-      `).join("");
-    }
-
-    if (activeRequest || !selectedSupportAction()?.eligible) {
-      hideSupportRequestForm();
-    }
-  }
-
-  async function submitSupportRequest(event?: Event): Promise<void> {
-    event?.preventDefault();
-    if (!currentDetail || supportRequestLoading) return;
-    const action = selectedSupportAction();
-    if (!action?.eligible || !selectedSupportRequestType) {
-      setSupportFormError("Select a request action first.");
-      return;
-    }
-
-    const reasonEl = document.getElementById("orderSupportReason") as HTMLTextAreaElement | null;
-    const messageEl = document.getElementById("orderSupportMessage") as HTMLTextAreaElement | null;
-    const reason = reasonEl?.value.trim() || "";
-    const message = messageEl?.value.trim() || null;
-
-    if (reason.length < 3) {
-      setSupportFormError("Add a short reason before submitting.");
-      reasonEl?.focus();
-      return;
-    }
-
-    supportRequestLoading = true;
-    setSupportFormError(null);
-    setSupportSubmitButton("Submitting...", true);
-
-    try {
-      const result = await createCustomerOrderSupportRequest(currentDetail.order.id, {
-        type: selectedSupportRequestType,
-        reason,
-        message,
-      });
-      if (!result.success) {
-        throw new Error(result.error || "Request could not be submitted.");
-      }
-      hideSupportRequestForm();
-      setSupportSubmitButton("Refreshing...", true);
-      await detailWindow.__scaliusLoadOrderDetail?.();
-    } catch (error: unknown) {
-      setSupportFormError(error instanceof Error ? error.message : "Request could not be submitted.");
-      setSupportSubmitButton("Submit request");
-    } finally {
-      supportRequestLoading = false;
-    }
-  }
-
-  async function loadStripeScript(): Promise<void> {
-    if (detailWindow.Stripe) return;
-    if (stripeScriptPromise) return stripeScriptPromise;
-    stripeScriptPromise = new Promise<void>((resolve, reject) => {
-      const existing = document.querySelector('script[src="https://js.stripe.com/v3/"]') as HTMLScriptElement | null;
-      if (existing) {
-        existing.addEventListener("load", () => resolve(), { once: true });
-        existing.addEventListener("error", () => reject(new Error("Failed to load Stripe.js")), { once: true });
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.src = "https://js.stripe.com/v3/";
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("Failed to load Stripe.js"));
-      document.head.appendChild(script);
-    });
-    return stripeScriptPromise;
-  }
-
-  async function prepareAccountStripeForm(session: CustomerOrderPaymentSession): Promise<void> {
-    const stripe = session.stripe;
-    if (!stripe?.publishableKey || !stripe.clientSecret) {
-      throw new Error("Card payment could not be initialized. Please try again.");
-    }
-
-    await loadStripeScript();
-    if (!detailWindow.Stripe) {
-      throw new Error("Card payment form is unavailable. Please refresh and try again.");
-    }
-
-    accountStripeClientSecret = stripe.clientSecret;
-    accountStripeOrderId = currentDetail?.order.id ?? null;
-    if (!accountStripeCard) {
-      accountStripeInstance = detailWindow.Stripe(stripe.publishableKey);
-      const elements = accountStripeInstance.elements();
-      accountStripeCard = elements.create("card", {
-        style: {
-          base: { fontSize: "15px", color: "#111", fontFamily: "sans-serif" },
-          invalid: { color: "#e53e3e" },
-        },
-      });
-      accountStripeCard.mount("#accountStripeCardElement");
-      accountStripeCard.on("change", (event) => {
-        setStripeError(event.error?.message ?? null);
-      });
-    }
-
-    document.getElementById("accountStripeSection")?.classList.remove("hidden");
-    setRecoveryMessage("Enter your card details, then confirm payment.", "muted");
-    setRecoveryButton("Confirm card payment");
-  }
-
-  async function confirmAccountStripePayment(): Promise<void> {
-    if (!accountStripeInstance || !accountStripeCard || !accountStripeClientSecret) {
-      setRecoveryMessage("Payment form is not ready yet.", "error");
-      return;
-    }
-
-    recoveryLoading = true;
-    setRecoveryButton("Confirming...", true);
-    setRecoveryMessage("Confirming card payment...", "muted");
-
-    try {
-      const { error, paymentIntent } = await accountStripeInstance.confirmCardPayment(accountStripeClientSecret, {
-        payment_method: { card: accountStripeCard },
-      });
-      if (error) throw new Error(error.message || "Card payment failed");
-
-      if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "requires_capture") {
-        setRecoveryMessage("Payment submitted. Refreshing the order status...", "success");
-        setRecoveryButton("Refreshing...", true);
-        window.setTimeout(() => void detailWindow.__scaliusLoadOrderDetail?.(), 1500);
-        return;
-      }
-
-      throw new Error("Payment was not completed.");
-    } catch (error: unknown) {
-      setRecoveryMessage(error instanceof Error ? error.message : "Payment could not be completed.", "error");
-      setRecoveryButton("Confirm card payment");
-    } finally {
-      recoveryLoading = false;
-    }
-  }
-
-  async function startAccountPaymentRecovery(): Promise<void> {
-    if (!currentDetail || !recoveryAction || !selectedRecoveryGateway || recoveryLoading) return;
-
-    if (
-      selectedRecoveryGateway === "stripe" &&
-      accountStripeClientSecret &&
-      accountStripeOrderId === currentDetail.order.id
-    ) {
-      await confirmAccountStripePayment();
-      return;
-    }
-
-    recoveryLoading = true;
-    setRecoveryButton("Preparing payment...", true);
-    setRecoveryMessage("Preparing secure payment...", "muted");
-    setStripeError(null);
-
-    try {
-      const result = await createCustomerOrderPaymentSession(currentDetail.order.id, {
-        gateway: selectedRecoveryGateway,
-        replaceExistingAttempt: currentDetail.paymentRecovery.paymentType !== "balance",
-        onProcessing: (event) => {
-          setRecoveryMessage(`${event.message} Retrying in ${event.retryAfterSeconds}s...`, "muted");
-        },
-      });
-      if (!result.success || !result.session) {
-        throw new Error(result.error || "Payment could not be prepared.");
-      }
-
-      if (result.session.gateway === "stripe") {
-        selectedRecoveryGateway = "stripe";
-        await prepareAccountStripeForm(result.session);
-        return;
-      }
-
-      const gatewayUrl = normalizeHostedGatewayUrl(result.session.hosted?.gatewayUrl);
-      if (!gatewayUrl) {
-        throw new Error("Payment gateway did not return a checkout URL. Please try again.");
-      }
-      setRecoveryButton("Redirecting...", true);
-      setRecoveryMessage("Redirecting to the payment gateway...", "muted");
-      window.location.assign(gatewayUrl);
-    } catch (error: unknown) {
-      setRecoveryMessage(error instanceof Error ? error.message : "Payment could not be prepared.", "error");
-      setRecoveryButton(recoveryButtonLabelFor(selectedRecoveryGateway));
-    } finally {
-      recoveryLoading = false;
-    }
-  }
-
-  function trackingUrl(shipment: CustomerOrderShipment): string | null {
-    const explicitUrl = safeUrl(shipment.trackingUrl);
-    if (explicitUrl) return explicitUrl;
-    if (!shipment.trackingId) return null;
-    if (shipment.providerType === "pathao") return `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(shipment.trackingId)}`;
-    if (shipment.providerType === "steadfast") return `https://steadfast.com.bd/t/${encodeURIComponent(shipment.trackingId)}`;
-    return null;
-  }
-
-  function showOnly(state: "loading" | "unauth" | "error" | "content"): void {
-    document.getElementById("orderLoading")?.classList.toggle("hidden", state !== "loading");
-    document.getElementById("orderUnauthenticated")?.classList.toggle("hidden", state !== "unauth");
-    document.getElementById("orderError")?.classList.toggle("hidden", state !== "error");
-    document.getElementById("orderContent")?.classList.toggle("hidden", state !== "content");
-    document.getElementById("orderUnauthenticated")?.classList.toggle("flex", state === "unauth");
-    document.getElementById("orderError")?.classList.toggle("flex", state === "error");
-  }
-
-  function renderDetail(detail: CustomerOrderDetail): void {
-    currentDetail = detail;
-    const { order } = detail;
-    const paymentPresentation = getOrderPaymentPresentation(order, ENGLISH_CHECKOUT_LANGUAGE_DATA);
-    const savedMoneySummary = resolveSavedOrderMoneySummary(order);
-    const title = document.getElementById("orderTitle");
-    const subtitle = document.getElementById("orderSubtitle");
-    const badges = document.getElementById("orderBadges");
-    const total = document.getElementById("orderTotal");
-    const payment = document.getElementById("orderPayment");
-    const balance = document.getElementById("orderBalance");
-    const fulfillment = document.getElementById("orderFulfillment");
-    const expectedDelivery = document.getElementById("orderExpectedDelivery");
-
-    if (title) title.textContent = `Order #${order.invoiceNumber ?? order.id}`;
-    if (subtitle) subtitle.textContent = `Placed ${formatDate(order.createdAt)}${order.updatedAt ? ` • Last updated ${formatDate(order.updatedAt)}` : ""}`;
-    if (badges) {
-      badges.innerHTML = `
-        <span class="${badge(order.status)}">${escapeHtml(label(order.status))}</span>
-        <span class="inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${paymentPresentation.badgeClass}">${escapeHtml(paymentPresentation.statusLabel)}</span>
-      `;
-    }
-    if (total) total.textContent = formatMoney(order.totalAmount);
-    if (payment) payment.textContent = paymentPresentation.methodLabel;
-    if (balance) balance.textContent = paymentPresentation.balanceDue > 0
-      ? `${formatMoney(paymentPresentation.balanceDue)} ${paymentPresentation.balanceLabel.toLowerCase()}`
-      : ENGLISH_CHECKOUT_LANGUAGE_DATA.orderReceiptPaymentStatusNoPaymentDueText;
-    if (fulfillment) fulfillment.textContent = label(order.fulfillmentStatus);
-    if (expectedDelivery) expectedDelivery.textContent = order.expectedDelivery ? `Expected ${order.expectedDelivery}` : "No delivery estimate yet";
-
-    const summary = document.getElementById("orderSummary");
-    if (summary) {
-      const deliveryLabel = order.shippingMethodName
-        ? `Delivery · ${order.shippingMethodName}`
-        : "Delivery";
-      if (savedMoneySummary) {
-        const savedAmount = (amountMinor: number) => escapeHtml(
-          formatSavedMinorAmount(amountMinor, savedMoneySummary),
-        );
-        const deliveryDetails = order.shippingMethodName
-          ? [
-              order.shippingMethodDescription,
-              order.shippingFeeWaived && order.shippingMethodBaseAmountMinor != null
-                ? `${formatSavedMinorAmount(order.shippingMethodBaseAmountMinor, savedMoneySummary)} fee waived`
-                : null,
-            ].filter(Boolean).join(" · ")
-          : "Delivery method was not recorded for this order.";
-        summary.innerHTML = `
-          <dl class="space-y-2">
-            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Subtotal</dt><dd class="font-medium text-foreground">${savedAmount(savedMoneySummary.subtotalMinor)}</dd></div>
-            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">${escapeHtml(deliveryLabel)}</dt><dd class="font-medium text-foreground">${savedAmount(savedMoneySummary.shippingMinor)}</dd></div>
-            ${deliveryDetails ? `<div class="text-xs text-muted-foreground">${escapeHtml(deliveryDetails)}</div>` : ""}
-            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Discount</dt><dd class="font-medium text-primary">${savedMoneySummary.discountMinor > 0 ? "−" : ""}${savedAmount(savedMoneySummary.discountMinor)}</dd></div>
-            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">${escapeHtml(savedMoneySummary.taxLabel)}${savedMoneySummary.pricesIncludeTax ? " (included)" : ""}</dt><dd class="font-medium text-foreground">${savedAmount(savedMoneySummary.taxMinor)}</dd></div>
-            <div class="flex justify-between gap-4 border-t border-border pt-2"><dt class="font-semibold text-foreground">Total</dt><dd class="font-semibold text-foreground">${savedAmount(savedMoneySummary.totalMinor)}</dd></div>
-          </dl>
-          <p class="mt-3 text-xs text-muted-foreground">Amounts saved in ${escapeHtml(savedMoneySummary.currencyCode)} when this order was placed.${savedMoneySummary.pricesIncludeTax ? ` ${escapeHtml(savedMoneySummary.taxLabel)} is already included in the prices above.` : ""}</p>
-        `;
-      } else {
-        const discount = Number.isFinite(order.discountAmount) ? order.discountAmount ?? 0 : 0;
-        const shipping = Number.isFinite(order.shippingCharge) ? order.shippingCharge : 0;
-        const totalAmount = Number.isFinite(order.totalAmount) ? order.totalAmount : 0;
-        const subtotal = totalAmount - shipping + discount;
-        const deliveryDetails = order.shippingMethodName
-          ? order.shippingMethodDescription || ""
-          : "Delivery method was not recorded for this order.";
-        summary.innerHTML = `
-          <dl class="space-y-2">
-            <div class="flex justify-between gap-4"><dt class="text-muted-foreground">Subtotal</dt><dd class="font-medium text-foreground">${escapeHtml(formatMoney(subtotal))}</dd></div>
-            ${shipping > 0 || order.shippingMethodName ? `<div class="flex justify-between gap-4"><dt class="text-muted-foreground">${escapeHtml(deliveryLabel)}</dt><dd class="font-medium text-foreground">${escapeHtml(formatMoney(shipping))}</dd></div>` : ""}
-            ${deliveryDetails ? `<div class="text-xs text-muted-foreground">${escapeHtml(deliveryDetails)}</div>` : ""}
-            ${discount > 0 ? `<div class="flex justify-between gap-4"><dt class="text-muted-foreground">Discount</dt><dd class="font-medium text-primary">−${escapeHtml(formatMoney(discount))}</dd></div>` : ""}
-            <div class="flex justify-between gap-4 border-t border-border pt-2"><dt class="font-semibold text-foreground">Total</dt><dd class="font-semibold text-foreground">${escapeHtml(formatMoney(totalAmount))}</dd></div>
-          </dl>
-        `;
-      }
-    }
-
-    const refundNotice = document.getElementById("orderRefundNotice");
-    if (refundNotice) {
-      const activeRefund = detail.activeRefundOperation;
-      if (activeRefund) {
-        const tone = activeRefund.severity === "danger"
-          ? "border-destructive/30 bg-destructive/10 text-destructive"
-          : activeRefund.severity === "success"
-            ? "border-primary/30 bg-primary/10 text-primary"
-            : "border-amber-500/30 bg-amber-500/10 text-amber-900";
-        refundNotice.className = `rounded-xl border p-4 text-sm ${tone}`;
-        refundNotice.innerHTML = `
-          <p class="font-semibold">${escapeHtml(activeRefund.label)}</p>
-          <p class="mt-1">${escapeHtml(activeRefund.message)}</p>
-          <p class="mt-2 text-xs">${escapeHtml(formatMoney(activeRefund.amount))} refund in progress. No action is needed.</p>
-        `;
-      } else {
-        refundNotice.className = "hidden rounded-xl border p-4 text-sm";
-        refundNotice.innerHTML = "";
-      }
-    }
-
-    renderSupportRequests(detail);
-
-    const timeline = document.getElementById("orderTimeline");
-    if (timeline) {
-      timeline.innerHTML = detail.timeline.length
-        ? detail.timeline.map((event, index) => `
-          <article class="flex gap-3 rounded-xl border border-border bg-card p-4" ${index === detail.timeline.length - 1 ? "aria-current=\"step\"" : ""}>
-            <div class="mt-1 h-3 w-3 shrink-0 rounded-full bg-primary"></div>
-            <div class="min-w-0">
-              <h3 class="font-semibold text-foreground">${escapeHtml(event.label)}</h3>
-              <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(event.details || label(event.status))}</p>
-              ${event.happenedAt ? `<time class="mt-1 block text-xs text-muted-foreground" datetime="${escapeHtml(event.happenedAt)}">${escapeHtml(formatDateTime(event.happenedAt))}</time>` : ""}
-            </div>
-          </article>
-        `).join("")
-        : `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">Timeline updates will appear here as the merchant processes the order.</p>`;
-    }
-
-    const items = document.getElementById("orderItems");
-    if (items) {
-      items.innerHTML = detail.items.map((item) => {
-        const imageUrl = getProductImageUrl(item.productImage, 128);
-        const savedLine = resolveSavedOrderLineMoney(item, savedMoneySummary);
-        const unitPrice = savedLine && savedMoneySummary
-          ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedMoneySummary)
-          : formatMoney(item.unitPrice);
-        const lineTotal = savedLine && savedMoneySummary
-          ? formatSavedMinorAmount(savedLine.totalMinor, savedMoneySummary)
-          : formatMoney(item.lineTotal);
-        return `<article class="flex gap-3 border-b border-border pb-4 last:border-0 last:pb-0">
-          ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="" class="h-16 w-16 rounded-lg bg-muted object-contain object-center">` : `<div class="h-16 w-16 rounded-lg bg-muted"></div>`}
-          <div class="min-w-0 flex-1">
-            <h3 class="font-semibold text-foreground">${escapeHtml(item.productName || "Product unavailable")}</h3>
-            <p class="mt-1 text-xs text-muted-foreground">${escapeHtml(item.variantLabel || "Standard")}</p>
-            <p class="mt-1 text-sm text-muted-foreground">Qty ${item.quantity} × ${escapeHtml(unitPrice)}</p>
-            ${savedLine && savedMoneySummary && savedLine.discountMinor > 0 ? `<p class="mt-1 text-xs text-muted-foreground">Item discount: −${escapeHtml(formatSavedMinorAmount(savedLine.discountMinor, savedMoneySummary))}</p>` : ""}
-            ${savedLine && savedMoneySummary && savedLine.taxMinor > 0 ? `<p class="mt-1 text-xs text-muted-foreground">${escapeHtml(savedMoneySummary.taxLabel)}${savedMoneySummary.pricesIncludeTax ? " included" : " added"}: ${escapeHtml(formatSavedMinorAmount(savedLine.taxMinor, savedMoneySummary))}</p>` : ""}
-          </div>
-          <div class="shrink-0 text-right">${savedLine ? `<p class="text-xs text-muted-foreground">Line total</p>` : ""}<p class="font-semibold text-foreground">${escapeHtml(lineTotal)}</p></div>
-        </article>`;
-      }).join("");
-    }
-
-    const shipments = document.getElementById("orderShipments");
-    if (shipments) {
-      shipments.innerHTML = detail.shipments.length
-        ? detail.shipments.map((shipment) => {
-          const url = trackingUrl(shipment);
-          return `<article class="rounded-xl border border-border bg-muted/20 p-4">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h3 class="font-semibold capitalize text-foreground">${escapeHtml(label(shipment.status))}</h3>
-                <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(shipment.providerName || shipment.courierName || shipment.providerType)}</p>
-                ${shipment.note ? `<p class="mt-2 text-sm text-muted-foreground">${escapeHtml(shipment.note)}</p>` : ""}
-              </div>
-              ${shipment.trackingId ? `<div class="text-left sm:text-right">
-                <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tracking ID</p>
-                <p class="mt-1 font-mono text-sm text-foreground">${escapeHtml(shipment.trackingId)}</p>
-                ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" data-astro-prefetch="false" class="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:text-primary/80">Open courier tracking</a>` : ""}
-              </div>` : ""}
-            </div>
-            <p class="mt-3 text-xs text-muted-foreground">Updated ${escapeHtml(formatDateTime(shipment.lastChecked || shipment.updatedAt || shipment.createdAt))}</p>
-          </article>`;
-        }).join("")
-        : `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">Tracking appears after the merchant creates a shipment.</p>`;
-    }
-
-    const payments = document.getElementById("orderPayments");
-    if (payments) {
-      const refundRows = (detail.refundAttempts || []).map((row) => `
-        <article class="rounded-xl border border-border bg-muted/20 p-4">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <h3 class="font-semibold text-foreground">${escapeHtml(row.label)}</h3>
-              <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(row.message)}</p>
-            </div>
-            <p class="font-semibold text-foreground">${formatMoney(row.amount)}</p>
-          </div>
-          <p class="mt-3 text-xs text-muted-foreground">${escapeHtml(formatDateTime(row.refundedAt || row.failedAt || row.updatedAt || row.createdAt))}</p>
-        </article>
-      `).join("");
-      const paymentRows = detail.payments.map((row) => `
-        <article class="rounded-xl border border-border bg-muted/20 p-4">
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <h3 class="font-semibold capitalize text-foreground">${escapeHtml(label(row.status))}</h3>
-              <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(formatOrderSuccessPaymentMethod(row.paymentMethod, ENGLISH_CHECKOUT_LANGUAGE_DATA))} ${escapeHtml(label(row.paymentType))}</p>
-            </div>
-            <p class="font-semibold text-foreground">${formatMoney(row.amount)}</p>
-          </div>
-          <p class="mt-3 text-xs text-muted-foreground">${escapeHtml(formatDateTime(row.updatedAt || row.createdAt))}</p>
-        </article>
-      `).join("");
-      const plan = detail.paymentPlan
-        ? `<article class="rounded-xl border border-border bg-muted/20 p-4">
-            <h3 class="font-semibold capitalize text-foreground">Payment plan ${escapeHtml(label(detail.paymentPlan.status))}</h3>
-            <p class="mt-1 text-sm text-muted-foreground">Deposit ${formatMoney(detail.paymentPlan.depositAmount)}${paymentPresentation.balanceDue > 0 ? ` • ${escapeHtml(paymentPresentation.balanceLabel)} ${formatMoney(paymentPresentation.balanceDue)}` : ""}</p>
-          </article>`
-        : "";
-      const cod = detail.cod
-        ? `<article class="rounded-xl border border-border bg-muted/20 p-4">
-            <h3 class="font-semibold text-foreground">${escapeHtml(ENGLISH_CHECKOUT_LANGUAGE_DATA.cashOnDeliveryText)}</h3>
-            <p class="mt-1 text-sm text-muted-foreground">${paymentPresentation.balanceDue > 0 ? `${formatMoney(paymentPresentation.balanceDue)} ${escapeHtml(paymentPresentation.balanceLabel.toLowerCase())}` : escapeHtml(paymentPresentation.statusLabel)}</p>
-            ${detail.cod.collectedAmount ? `<p class="mt-1 text-sm text-muted-foreground">${formatMoney(detail.cod.collectedAmount)} collected</p>` : ""}
-          </article>`
-        : "";
-      payments.innerHTML = refundRows || paymentRows || plan || cod ? `${refundRows}${paymentRows}${plan}${cod}` : `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">Payment updates will appear here.</p>`;
-    }
-
-    const notifications = document.getElementById("orderNotifications");
-    if (notifications) {
-      notifications.innerHTML = detail.notifications.length
-        ? detail.notifications.map((row) => `
-          <article class="rounded-xl border border-border bg-muted/20 p-4">
-            <h3 class="font-semibold capitalize text-foreground">${escapeHtml(label(row.channel))} ${escapeHtml(label(row.status))}</h3>
-            <p class="mt-1 text-sm text-muted-foreground">${escapeHtml(label(row.notificationType))}</p>
-            <p class="mt-2 text-xs text-muted-foreground">${escapeHtml(formatDateTime(row.deliveredAt || row.acceptedAt || row.failedAt || row.skippedAt || row.updatedAt || row.createdAt))}</p>
-          </article>
-        `).join("")
-        : `<p class="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">Customer notification receipts will appear after updates are sent.</p>`;
-    }
-
-    const address = document.getElementById("orderAddress");
-    if (address) {
-      address.innerHTML = `
-        <p>${escapeHtml(order.shippingAddress)}</p>
-        <p>${escapeHtml([order.areaName || order.area, order.zoneName || order.zone, order.cityName || order.city].filter(Boolean).join(", "))}</p>
-      `;
-    }
-
-    renderPaymentReturnNotice();
-    renderPaymentRecovery(detail);
-  }
-
-  async function loadOrder(): Promise<void> {
-    const run = (detailWindow.__scaliusOrderDetailRun ?? 0) + 1;
-    detailWindow.__scaliusOrderDetailRun = run;
-    showOnly("loading");
-    const orderId = currentOrderId();
-
-    if (!orderId) {
-      currentDetail = null;
-      recoveryAction = null;
-      resetAccountStripeState();
-      const title = document.getElementById("orderErrorTitle");
-      const message = document.getElementById("orderErrorMessage");
-      if (title) title.textContent = "Order not found";
-      if (message) message.textContent = "This order link is incomplete.";
-      showOnly("error");
-      return;
-    }
-
-    const session = await getCustomerSession();
-    if (detailWindow.__scaliusOrderDetailRun !== run) return;
-    if (session.unavailable) {
-      currentDetail = null;
-      recoveryAction = null;
-      resetAccountStripeState();
-      const title = document.getElementById("orderErrorTitle");
-      const message = document.getElementById("orderErrorMessage");
-      if (title) title.textContent = "Account temporarily unavailable";
-      if (message) message.textContent = session.error || "We could not verify your account right now. Please try again.";
-      showOnly("error");
-      return;
-    }
-
-    if (!session.authenticated) {
-      currentDetail = null;
-      recoveryAction = null;
-      resetAccountStripeState();
-      showOnly("unauth");
-      return;
-    }
-
-    const [result, checkoutConfig] = await Promise.all([
-      getCustomerOrderDetail(orderId),
-      getCheckoutConfig(),
-    ]);
-    if (detailWindow.__scaliusOrderDetailRun !== run) return;
-    currentCheckoutConfig = checkoutConfig;
-    if (!result.success || !result.detail) {
-      currentDetail = null;
-      recoveryAction = null;
-      resetAccountStripeState();
-      if (result.status === 401) {
-        showOnly("unauth");
-        return;
-      }
-      const title = document.getElementById("orderErrorTitle");
-      const message = document.getElementById("orderErrorMessage");
-      if (title) title.textContent = result.status === 404
-        ? "Order not found"
-        : result.unavailable
-          ? "Order details temporarily unavailable"
-          : "Order details unavailable";
-      if (message) message.textContent = result.status === 404
-        ? "We could not find this order in your account."
-        : result.error || "We could not load this order right now. Please try again.";
-      showOnly("error");
-      return;
-    }
-
-    try {
-      renderDetail(result.detail);
-      showOnly("content");
-    } catch (error) {
-      console.error("[customer-order-detail] render failed", error);
-      currentDetail = null;
-      recoveryAction = null;
-      resetAccountStripeState();
-      const title = document.getElementById("orderErrorTitle");
-      const message = document.getElementById("orderErrorMessage");
-      if (title) title.textContent = "Order details temporarily unavailable";
-      if (message) message.textContent = "We could not render this order right now. Please try again.";
-      showOnly("error");
-    }
-  }
-
-  detailWindow.__scaliusLoadOrderDetail = loadOrder;
+  const start = () => {
+    bindOrderDetailPage();
+    void loadOrderDetail();
+  };
 
   if (!detailWindow.__scaliusOrderDetailBound) {
     detailWindow.__scaliusOrderDetailBound = true;
-    document.addEventListener("astro:page-load", () => void detailWindow.__scaliusLoadOrderDetail?.());
-  }
-
-  const retryButton = document.getElementById("orderRetry");
-  if (retryButton) retryButton.onclick = () => void detailWindow.__scaliusLoadOrderDetail?.();
-
-  const recoveryButton = document.getElementById("orderPaymentRecoveryButton");
-  if (recoveryButton) {
-    (recoveryButton as HTMLButtonElement).onclick = () => void startAccountPaymentRecovery();
-  }
-
-  const recoveryMethods = document.getElementById("orderPaymentRecoveryMethods");
-  if (recoveryMethods) {
-    recoveryMethods.onclick = (event) => {
-      const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-recovery-gateway]");
-      const gateway = button?.dataset.recoveryGateway;
-      if (gateway && isOnlineRecoveryGateway(gateway)) selectRecoveryGateway(gateway);
-    };
-  }
-
-  const supportActions = document.getElementById("orderSupportActions");
-  if (supportActions) {
-    supportActions.onclick = (event) => {
-      const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-support-request-type]");
-      const type = button?.dataset.supportRequestType;
-      if (isSupportRequestType(type)) {
-        selectSupportRequestAction(type);
-      }
-    };
-  }
-
-  const supportCancel = document.getElementById("orderSupportCancel");
-  if (supportCancel) {
-    (supportCancel as HTMLButtonElement).onclick = () => hideSupportRequestForm();
-  }
-
-  const supportSubmit = document.getElementById("orderSupportSubmit");
-  if (supportSubmit) {
-    (supportSubmit as HTMLButtonElement).onclick = () => void submitSupportRequest();
+    document.addEventListener("astro:page-load", start);
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => void detailWindow.__scaliusLoadOrderDetail?.(), { once: true });
+    document.addEventListener("DOMContentLoaded", start, { once: true });
   } else {
-    void detailWindow.__scaliusLoadOrderDetail?.();
+    start();
   }
 </script>
 </Layout>

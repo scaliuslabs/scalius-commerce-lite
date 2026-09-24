@@ -1,5 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import type { DatabaseSync } from "node:sqlite";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Database } from "@scalius/database/client";
 import { customerSessions, customers, OrderStatus, PaymentStatus } from "@scalius/database/schema";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 
 import {
@@ -7,15 +10,16 @@ import {
   buildCustomerOrderMetricsProjection,
   buildCustomerOrderItemDetailProjection,
   customerAccountOrderVisibilityCondition,
-  buildCustomerOrderBaseTimelineEvents,
-  buildCustomerOrderNotificationTimelineEvents,
+  buildCustomerOrderTracking,
+  customerOrderStatusLabel,
   decodeCustomerOrdersCursor,
   deleteCustomer,
   encodeCustomerOrdersCursor,
+  getCustomerOrderDetail,
+  getCustomerOrders,
   getCustomerVisibleBalanceDueMinor,
   listCustomers,
   permanentlyDeleteCustomer,
-  projectCustomerOrderNotifications,
 } from "./customers.service";
 
 interface CapturedListQuery {
@@ -322,125 +326,133 @@ describe("customer account order history pagination and timeline", () => {
     expect(() => decodeCustomerOrdersCursor("0~order_1")).toThrow("Invalid order-history cursor.");
   });
 
-  it("keeps order-created timeline copy immutable and adds current status separately", () => {
-    expect(buildCustomerOrderBaseTimelineEvents({
-      id: "order_1",
-      status: OrderStatus.DELIVERED,
-      createdAt: 1_780_000_000,
-      updatedAt: 1_780_003_600,
-    })).toEqual([
-      {
-        id: "order-created:order_1",
-        type: "order",
-        status: "placed",
-        label: "Order placed",
-        happenedAt: "2026-05-28T20:26:40.000Z",
-        details: "We received your order.",
-      },
-      {
-        id: "order-status:order_1:delivered",
-        type: "order",
-        status: OrderStatus.DELIVERED,
-        label: "Current status: Delivered",
-        happenedAt: "2026-05-28T21:26:40.000Z",
-        details: "Order is currently Delivered.",
-      },
+  it("tracks an order in buyer words: one step tracker and a dated list, newest first", () => {
+    const at = (timestamp: number) => new Date(timestamp * 1000).toISOString();
+    const { progress, timeline } = buildCustomerOrderTracking({
+      order: { id: "order_1", status: OrderStatus.SHIPPED, createdAt: 1_780_000_000 },
+      statusEvents: [
+        { notificationType: "order_created", createdAt: 1_780_000_000 },
+        { notificationType: "order_confirmed", createdAt: 1_780_000_600 },
+        { notificationType: "order_processing", createdAt: 1_780_000_900 },
+        { notificationType: "order_shipped", createdAt: 1_780_003_600 },
+        { notificationType: "support_request_submitted", createdAt: 1_780_000_700 },
+      ],
+      shipments: [{ createdAt: at(1_780_003_000), providerName: "Steadfast", courierName: null }],
+      payments: [
+        { id: "pay_pending", status: "pending", createdAt: at(1_780_000_000), updatedAt: null },
+        { id: "pay_ok", status: "confirmed", createdAt: at(1_780_000_100), updatedAt: at(1_780_000_200) },
+      ],
+      refunds: [],
+      requests: [],
+    });
+
+    expect(progress).toEqual({
+      steps: [
+        { key: "placed", label: "Order placed", done: true, happenedAt: at(1_780_000_000) },
+        { key: "confirmed", label: "Confirmed", done: true, happenedAt: at(1_780_000_600) },
+        { key: "shipped", label: "On its way", done: true, happenedAt: at(1_780_003_600) },
+        { key: "delivered", label: "Delivered", done: false, happenedAt: null },
+      ],
+      outcome: null,
+    });
+    expect(timeline.map(({ label, details, happenedAt }) => ({ label, details, happenedAt }))).toEqual([
+      { label: "On its way", details: "With Steadfast.", happenedAt: at(1_780_003_600) },
+      { label: "Confirmed", details: "The store confirmed your order.", happenedAt: at(1_780_000_600) },
+      { label: "Payment received", details: null, happenedAt: at(1_780_000_200) },
+      { label: "Order placed", details: "We received your order.", happenedAt: at(1_780_000_000) },
+    ]);
+    expect(JSON.stringify(timeline)).not.toMatch(/notification|Accepted|Current status/i);
+  });
+
+  it("replaces the tracker with the outcome of a cancelled order and keeps reached steps", () => {
+    const at = (timestamp: number) => new Date(timestamp * 1000).toISOString();
+    const { progress, timeline } = buildCustomerOrderTracking({
+      order: { id: "order_2", status: OrderStatus.CANCELLED, createdAt: 1_780_000_000 },
+      statusEvents: [
+        { notificationType: "order_confirmed", createdAt: 1_780_000_600 },
+        { notificationType: "order_cancelled", createdAt: 1_780_001_200 },
+      ],
+      shipments: [],
+      payments: [],
+      refunds: [],
+      requests: [{
+        id: "req_1",
+        status: "approved",
+        label: "Cancellation request approved",
+        reason: "Ordered by mistake",
+        submittedAt: at(1_780_000_900),
+        updatedAt: null,
+        createdAt: null,
+      }],
+    });
+
+    expect(progress.outcome).toEqual({ key: "cancelled", label: "Cancelled", happenedAt: at(1_780_001_200) });
+    expect(progress.steps.map((step) => step.done)).toEqual([true, true, false, false]);
+    expect(timeline.map((event) => event.label)).toEqual([
+      "Cancelled",
+      "Cancellation request approved",
+      "Confirmed",
+      "Order placed",
+    ]);
+    expect(customerOrderStatusLabel(OrderStatus.PROCESSING)).toBe("Confirmed");
+    expect(customerOrderStatusLabel(OrderStatus.COMPLETED)).toBe("Delivered");
+    expect(customerOrderStatusLabel(OrderStatus.INCOMPLETE)).toBe("Awaiting payment");
+  });
+});
+
+describe("customer account order reads (SQLite)", () => {
+  let sqlite: DatabaseSync;
+  let db: Database;
+
+  beforeEach(async () => {
+    ({ sqlite, db } = createSqliteD1Database());
+    await db.insert(customers).values({ id: "account_1", name: "Buyer", email: "buyer@example.com", phone: "+8801722222222" });
+    sqlite.exec(`
+      INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, city_name, zone_name,
+        total_amount_minor, balance_due_minor, status, account_owner_customer_id, created_at, updated_at)
+      VALUES
+        ('order_open', 'Recipient Name', '+8801711111111', 'House 1, Road 2', 'city_1', 'zone_1', 'Dhaka', 'Mirpur',
+          58000, 58000, 'confirmed', 'account_1', 1780000000, 1780000600),
+        ('order_quiet', 'Buyer', '+8801722222222', 'House 3', 'city_1', 'zone_1', 'Dhaka', 'Mirpur',
+          50000, 50000, 'pending', 'account_1', 1780000100, 1780000100);
+      INSERT INTO order_notification_outbox (id, dedupe_key, order_id, notification_type, source, payload, created_at, updated_at)
+      VALUES ('outbox_1', 'dedupe_1', 'order_open', 'order_confirmed', 'test', '{}', 1780000600, 1780000600);
+      INSERT INTO order_notification_delivery_receipts (id, receipt_key, outbox_id, order_id, notification_type, channel,
+        provider, recipient_hash, status, accepted_at, created_at, updated_at)
+      VALUES ('receipt_1', 'receipt_key_1', 'outbox_1', 'order_open', 'order_confirmed', 'email', 'resend', 'hash',
+        'accepted', 1780000610, 1780000610, 1780000610);
+      INSERT INTO order_support_requests (id, order_id, customer_id, type, status, reason, active_key)
+      VALUES ('req_open', 'order_open', 'account_1', 'cancel_pre_shipment', 'submitted', 'Ordered by mistake', 'order:order_open');
+    `);
+  });
+
+  afterEach(() => sqlite.close());
+
+  it("flags an open request and labels each order in buyer words", async () => {
+    const { orders: rows } = await getCustomerOrders(db, "account_1");
+    expect(rows.map(({ id, statusLabel, openSupportRequestType }) => ({ id, statusLabel, openSupportRequestType }))).toEqual([
+      { id: "order_quiet", statusLabel: "Order placed", openSupportRequestType: null },
+      { id: "order_open", statusLabel: "Confirmed", openSupportRequestType: "cancel_pre_shipment" },
     ]);
   });
 
-  it("surfaces post-sale notification receipts as customer account timeline events", () => {
-    const iso = (timestamp: number) => new Date(timestamp * 1000).toISOString();
-    const notifications = projectCustomerOrderNotifications([
-      {
-        id: "receipt_balance",
-        notificationType: "payment_balance_paid",
-        channel: "email",
-        status: "accepted",
-        provider: "resend",
-        providerStatus: null,
-        acceptedAt: 1_780_004_000,
-        deliveredAt: null,
-        failedAt: null,
-        skippedAt: null,
-        updatedAt: 1_780_003_990,
-        createdAt: 1_780_003_980,
-      },
-      {
-        id: "receipt_refund",
-        notificationType: "order_refunded",
-        channel: "sms",
-        status: "delivered",
-        provider: "sms_net_bd",
-        providerStatus: "sent",
-        acceptedAt: 1_780_005_000,
-        deliveredAt: 1_780_005_015,
-        failedAt: null,
-        skippedAt: null,
-        updatedAt: 1_780_005_010,
-        createdAt: 1_780_004_990,
-      },
-      {
-        id: "receipt_partial_refund",
-        notificationType: "order_partially_refunded",
-        channel: "whatsapp",
-        status: "skipped",
-        provider: "meta",
-        providerStatus: "template_paused",
-        acceptedAt: null,
-        deliveredAt: null,
-        failedAt: null,
-        skippedAt: 1_780_006_000,
-        updatedAt: 1_780_005_990,
-        createdAt: 1_780_005_980,
-      },
+  it("returns the recipient, the step tracker and status history without provider delivery receipts", async () => {
+    const detail = await getCustomerOrderDetail(db, "account_1", "order_open");
+    expect(detail.order).toMatchObject({
+      customerName: "Recipient Name",
+      customerPhone: "+8801711111111",
+      statusLabel: "Confirmed",
+    });
+    expect(detail.progress.steps.map((step) => [step.key, step.done])).toEqual([
+      ["placed", true], ["confirmed", true], ["shipped", false], ["delivered", false],
     ]);
-
-    expect(notifications).toMatchObject([
-      {
-        id: "receipt_balance",
-        notificationType: "payment_balance_paid",
-        acceptedAt: iso(1_780_004_000),
-        updatedAt: iso(1_780_003_990),
-      },
-      {
-        id: "receipt_refund",
-        notificationType: "order_refunded",
-        deliveredAt: iso(1_780_005_015),
-        providerStatus: "sent",
-      },
-      {
-        id: "receipt_partial_refund",
-        notificationType: "order_partially_refunded",
-        skippedAt: iso(1_780_006_000),
-        providerStatus: "template_paused",
-      },
+    expect(detail.progress.steps[1]?.happenedAt).toBe(new Date(1_780_000_600 * 1000).toISOString());
+    expect(detail.timeline.map((event) => event.label)).toEqual([
+      "Cancellation request submitted",
+      "Confirmed",
+      "Order placed",
     ]);
-
-    expect(buildCustomerOrderNotificationTimelineEvents(notifications)).toEqual([
-      {
-        id: "notification:receipt_balance",
-        type: "notification",
-        status: "accepted",
-        label: "Email notification Accepted",
-        happenedAt: iso(1_780_004_000),
-        details: "Payment Balance Paid",
-      },
-      {
-        id: "notification:receipt_refund",
-        type: "notification",
-        status: "delivered",
-        label: "SMS notification Delivered",
-        happenedAt: iso(1_780_005_015),
-        details: "Order Refunded",
-      },
-      {
-        id: "notification:receipt_partial_refund",
-        type: "notification",
-        status: "skipped",
-        label: "WhatsApp notification Skipped",
-        happenedAt: iso(1_780_006_000),
-        details: "Order Partially Refunded",
-      },
-    ]);
+    expect(detail).not.toHaveProperty("notifications");
+    expect(JSON.stringify(detail)).not.toMatch(/Accepted|resend/);
   });
 });

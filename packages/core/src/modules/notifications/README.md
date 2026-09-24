@@ -58,32 +58,17 @@ Sends FCM push notifications to all active admin devices about a new order.
 - Returns per-target outcomes; receipt-mode retryable failures keep the parent outbox retryable instead of marking it sent
 - All catch blocks use typed `error: unknown` with `instanceof Error` checks
 
-### `sendOrderNotificationEmail(email, name, orderId, type, data?, db?, options?)`
+### `sendOrderNotificationEmail(email, name, orderId, type, data, db, options?)`
 
 Sends transactional order emails to customers. Connected via queue.
 
-**Channel Preference Checking**: When a `db` parameter is provided, the function checks notification channel preferences via `getNotificationChannels()` from the settings service before sending. If the email channel is disabled for the given event, the email is silently skipped. If the check fails, it defaults to sending email.
+**Channel Preference Checking**: the function checks notification channel preferences via `getNotificationChannels()` before sending. If the email channel is disabled for the given event, the email is silently skipped. If the check fails, it defaults to sending email.
 
-**Supported order notification types** (15 total):
-- `order_created` -- "We've received your order"
-- `order_confirmed` -- "Your order has been confirmed"
-- `order_processing` -- "Your order is being processed"
-- `order_shipped` -- "Your order is on its way" (includes tracking ID if provided in `data.trackingId`)
-- `order_delivered` -- "Your order has been delivered"
-- `order_completed` -- "Your order is complete"
-- `order_cancelled` -- "Your order has been cancelled"
-- `order_returned` -- "Your order return has been processed"
-- `refund_processing` -- "Your refund is being processed"
-- `refund_failed` -- "Your refund could not be completed"
-- `order_refunded` -- "Your refund has been processed"
-- `order_partially_refunded` -- "A partial refund has been processed"
-- `payment_balance_paid` -- "Your remaining payment has been received"
-- `support_request_submitted` -- "Your support request has been received"
-- `support_request_status_updated` -- "Your support request status changed"
+**Email content** (`order-email.ts`, copy in `message-copy.ts`): 15 order notification types, each with a sentence-case subject naming the order ("Order #1001 confirmed", "We received your cancellation request for order #1001"). The email is written in Bangla when the active checkout language's base code is `bn`, otherwise English. It is sent from the store name (Business `companyName`, else `legalName`) and shows the header logo when it is an absolute URL, else the store name (`store-messages.ts`). It lists saved items, totals and payment state, the delivery address and method from the order snapshot, the support contact, and one order link: account orders get "View your order" (`/account/orders/<id>`), guests get "Track your order" (`/track-order?order=<number>`). Phone and email never go into URLs.
 
-Support-request notification defaults are intentionally sparse to control merchant costs. Customer channels default to no send for `support_request_submitted`, because the customer just submitted the request; admin Push defaults on for that event so merchants can react. Customer email defaults on for `support_request_status_updated`; SMS and WhatsApp remain opt-in and still require provider readiness. Support notification payloads carry only order id, request id, request type label, and status label. Free-form customer reasons, customer messages, and admin notes stay out of provider payloads.
+Every customer notification type defaults to email, including the `support_request_submitted` acknowledgement; SMS and WhatsApp remain opt-in and still require provider readiness. Admin Push defaults on for new orders, cancellations and support request submissions. Support notification payloads carry only order id, request id, request type and status. Free-form customer reasons, customer messages, and admin notes stay out of provider payloads.
 
-Uses inline HTML templates with basic responsive styling. Customer names and tracking IDs are XSS-escaped via `escapeHtml()` from `@scalius/shared/html-escape`. Sends via the active email provider (Cloudflare Email by default, Resend fallback). Receipt-mode email sends pass the deterministic receipt key to Resend as `Idempotency-Key`; Cloudflare Email returns `messageId`, which is stored on the receipt.
+Every interpolated value is escaped with `escapeHtml()` and the plain-text part is always sent. Sends via the active email provider (Cloudflare Email by default, Resend fallback). Receipt-mode email sends pass the deterministic receipt key to Resend as `Idempotency-Key`; Cloudflare Email returns `messageId`, which is stored on the receipt.
 
 **SMS channel dispatch**: When SMS is enabled for an event, the function dynamically imports `getActiveSmsProvider()` from `@scalius/core/integrations/sms` and sends via the active provider. 4 SMS providers are supported: smsnetbd, bdbulksms, mimsms, gennet. Receipt-mode SMS stores provider refs; GenNet receives a deterministic receipt-derived `csms_id` so provider retries can dedupe. SMS readiness rejects missing, undecryptable, or obvious placeholder credentials before provider work. Provider credential/configuration failures such as invalid API keys, authorization failures, missing/invalid sender IDs, suspended accounts, or exhausted balance are marked as skipped receipts instead of retryable failures; 408/409/425/429, 5xx, timeout, temporary, gateway, and network-style responses remain retryable. Credential/config/account failures that prove the active provider setup is bad also pause future external calls for that provider until SMS settings are saved, including capped historical receipts whose last provider response still classifies as a setup failure. If SMS provider resolution throws a merchant-fixable setup/decrypt/config/auth error before a recipient receipt exists, receipt mode records a terminal `sms-setup:*` skipped receipt so the parent outbox does not keep retrying bad settings.
 
@@ -118,7 +103,8 @@ Delivery notification enqueue is intentionally API-local because it depends on t
   - Failed transient attempts retry using the receipt backoff schedule; busy receipts retry around the D1 `nextAttemptAt`/claim lease instead of burning fixed 30-second queue retries
   - Accepted provider responses retry the D1 receipt write briefly; if D1 still cannot persist, a short-lived KV hint stores only delivery key/channel/provider acceptance metadata so the next queue or DLQ attempt repairs the D1 receipt before provider work
   - `jobs-dlq` handling of `auth.send_otp` never calls email/SMS/WhatsApp providers; it creates or updates the D1 receipt as `skipped` with redacted evidence, or as `accepted` when a provider-accepted recovery hint exists, then ACKs the DLQ message
-  - `purpose: "order_payment_recovery"` -- Uses payment-recovery copy while preserving the same D1 delivery receipt, provider-health, idempotency, and redacted logging behavior. It must not create customer sessions or expose receipt proof.
+  - Copy comes from `composeAuthOtpMessage()` in `store-messages.ts`: the subject starts with the code ("123456 is your <Store> code"), the sender and body name the store, and the language follows the active checkout language. Sign-in and sign-up share one wording.
+  - `purpose: "order_payment_recovery"` / `"order_lookup"` -- Read the delivery target from `order_payment_recovery_challenges` and use "finish paying" / "view your order" copy while preserving the same D1 delivery receipt, provider-health, idempotency, and redacted logging behavior. They must not create customer sessions or expose receipt proof.
   - `method: "email"` -- Sends OTP code via email provider. Resend receives `deliveryKey` as `Idempotency-Key`; Cloudflare Email stores the returned `messageId`.
   - `method: "phone"` + `allowedMethod: "whatsapp_otp"` -- Sends OTP via WhatsApp Business API template and stores Meta message IDs when returned
   - `method: "phone"` + other -- Sends OTP via active SMS provider (`getActiveSmsProvider()`); GenNet receives a deterministic receipt-derived client reference as `csms_id`
@@ -127,6 +113,9 @@ Delivery notification enqueue is intentionally API-local because it depends on t
 
 - `index.ts` -- barrel exports: `sendOrderNotification`, `sendOrderNotificationEmail`
 - `notifications.service.ts` -- both functions
+- `order-email.ts` -- order email composition from the saved order snapshot
+- `store-messages.ts` -- store name/logo/language for buyer messages and the one-time-code message
+- `message-copy.ts` -- the English and Bangla copy table
 - `notification-provider-health.ts` -- D1-backed provider pause markers and receipt-derived recovery for merchant-actionable setup failures
 - `order-notification-outbox.ts` -- parent queue handoff/replay state
 - `order-notification-delivery-receipts.ts` -- per-channel receipt claims and accepted/failed/skipped marks

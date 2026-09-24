@@ -1,0 +1,180 @@
+---
+// Track your order: order number + the phone used, proven by a code sent to
+// the contact saved on the order. Works without JavaScript (the form posts
+// here); phone, email and code only ever travel in POST bodies.
+import Layout from "@/layouts/Layout.astro";
+import {
+  getActiveCheckoutLanguage,
+  getLayoutData,
+  type CheckoutLanguageData,
+  type LayoutData,
+} from "@/lib/api";
+import {
+  getOrderCodeFailureText,
+  formatCountdown,
+  normalizeOrderReference,
+  readOrderLookupInput,
+} from "@/lib/order-lookup";
+import {
+  readOrderCodeFields,
+  sendOrderLookupCode,
+  verifiedReceiptResponse,
+  verifyOrderLookupCode,
+  type VerifiedOrderReceipt,
+} from "@/lib/order-lookup-api";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import {
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  checkoutLanguageBaseCode,
+  formatCheckoutLanguageText,
+} from "@scalius/shared/checkout-language";
+
+const isPost = Astro.request.method === "POST";
+if (isPost && shouldRejectCrossOriginCookieRequest(Astro.request)) {
+  return new Response(null, { status: 403 });
+}
+
+const [layoutData, checkoutLanguage]: [LayoutData | null, CheckoutLanguageData | null] = await Promise.all([
+  getLayoutData(),
+  getActiveCheckoutLanguage(),
+]);
+const copy = checkoutLanguage?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
+
+// Emails link /track-order?order=1001; an order number is not personal data.
+let reference = normalizeOrderReference(Astro.url.searchParams.get("order")) ?? "";
+let phone = "";
+let codeSent = false;
+let message = "";
+let failed = false;
+let resendAfterSeconds = 0;
+let verified: VerifiedOrderReceipt | null = null;
+
+if (isPost) {
+  const fields = (await readOrderCodeFields(Astro.request)) ?? {};
+  reference = fields.reference ?? "";
+  phone = fields.phone ?? "";
+  codeSent = fields.intent === "verify" || fields.intent === "resend";
+  const input = readOrderLookupInput(reference, phone);
+  failed = true;
+  if (!input.ok) {
+    codeSent = false;
+    message = input.field === "reference" ? copy.trackOrderNumberInvalidText : copy.trackOrderPhoneInvalidText;
+  } else if (fields.intent === "verify") {
+    if (!fields.code) {
+      message = copy.paymentRecoveryEnterCodeText;
+    } else {
+      const result = await verifyOrderLookupCode({ reference: input.reference, phone: input.phone, code: fields.code });
+      if (result.ok) verified = result.data;
+      else message = getOrderCodeFailureText(copy, result.failure, "verify", copy.trackOrderUnavailableText);
+    }
+  } else {
+    const result = await sendOrderLookupCode({ reference: input.reference, phone: input.phone });
+    if (result.ok) {
+      codeSent = true;
+      failed = false;
+      message = copy.trackOrderCodeSentText;
+      resendAfterSeconds = result.data.resendAfterSeconds;
+    } else {
+      message = getOrderCodeFailureText(copy, result.failure, "send", copy.trackOrderUnavailableText);
+    }
+  }
+}
+
+// A correct code: store the receipt proof and open the receipt (303).
+const verifiedRedirect = verified ? verifiedReceiptResponse(verified, "redirect") : null;
+if (verifiedRedirect) return verifiedRedirect;
+
+const fieldClass =
+  "min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20";
+const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
+---
+
+<Layout
+  title={copy.trackOrderText}
+  layoutData={layoutData}
+  documentLanguage={checkoutLanguageBaseCode(checkoutLanguage?.code)}
+>
+  <meta slot="head" name="robots" content="noindex,nofollow" />
+  <section class="container mx-auto px-4 py-10">
+    <div class="mx-auto w-full max-w-md">
+      <h1 class="text-2xl font-semibold text-foreground">{copy.trackOrderText}</h1>
+      <p class="mt-2 text-sm text-muted-foreground">{copy.trackOrderIntroText}</p>
+
+      <form
+        method="post"
+        action="/track-order"
+        class="mt-6 space-y-4"
+        data-order-code-form
+        data-send-url="/api/order-lookup/send-code"
+        data-verify-url="/api/order-lookup/verify"
+        data-code-sent={codeSent ? "true" : undefined}
+      >
+        <div class="grid gap-2">
+          <label for="trackOrderReference" class="text-sm font-medium text-foreground">{copy.orderReceiptOrderNumberText}</label>
+          <input id="trackOrderReference" name="reference" value={reference} placeholder="#1001" autocomplete="off" required maxlength="40" class={fieldClass} />
+        </div>
+        <div class="grid gap-2">
+          <label for="trackOrderPhone" class="text-sm font-medium text-foreground">{copy.customerPhoneLabel}</label>
+          <div class="flex items-center gap-2">
+            <span class="shrink-0 text-base text-muted-foreground" aria-hidden="true">+880</span>
+            <input id="trackOrderPhone" name="phone" value={phone} type="tel" inputmode="tel" autocomplete="tel-national" placeholder="01XXXXXXXXX" required maxlength="20" class={fieldClass} />
+          </div>
+        </div>
+        <div class="grid gap-2" data-order-code-step hidden={!codeSent}>
+          <label for="trackOrderCode" class="text-sm font-medium text-foreground">{copy.paymentRecoveryVerificationCodeText}</label>
+          <input id="trackOrderCode" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" class={`${fieldClass} font-mono tracking-[0.3em]`} autofocus={codeSent} />
+        </div>
+
+        <p data-order-code-message aria-live="polite" class={`min-h-5 text-sm ${failed ? "text-destructive" : "text-muted-foreground"}`}>{message}</p>
+
+        <button
+          type="submit"
+          name="intent"
+          value={codeSent ? "verify" : "send"}
+          data-order-code-submit
+          class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {codeSent ? copy.orderReceiptViewOrderText : copy.paymentRecoverySendCodeText}
+        </button>
+        <button
+          type="submit"
+          name="intent"
+          value="resend"
+          data-order-code-resend
+          data-resend-after={resendAfterSeconds || undefined}
+          hidden={!codeSent}
+          class="inline-flex min-h-11 w-full items-center justify-center rounded-lg px-4 text-sm font-medium text-foreground underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
+        >
+          {resendAfterSeconds
+            ? formatCheckoutLanguageText(copy.orderCodeResendInText, { time: formatCountdown(resendAfterSeconds) })
+            : copy.orderCodeSendNewText}
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <script is:inline set:html={`window.__CHECKOUT_LANGUAGE__=${serializedCopy};`}></script>
+</Layout>
+
+<script>
+  import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
+  import { readOrderLookupInput } from "@/lib/order-lookup";
+  import { enhanceOrderCodeForm } from "@/lib/order-lookup-form";
+
+  // The page always inlines its copy above this module.
+  const copy = (window.__CHECKOUT_LANGUAGE__ as { languageData: CheckoutLanguageData }).languageData;
+  const form = document.querySelector<HTMLFormElement>("[data-order-code-form]");
+  if (form) {
+    enhanceOrderCodeForm(form, copy, {
+      verifyCode: copy.orderReceiptViewOrderText,
+      codeSent: copy.trackOrderCodeSentText,
+      unavailable: copy.trackOrderUnavailableText,
+      validate: (fields) => {
+        const input = readOrderLookupInput(fields.reference ?? "", fields.phone ?? "");
+        if (input.ok) return null;
+        return input.field === "reference" ? copy.trackOrderNumberInvalidText : copy.trackOrderPhoneInvalidText;
+      },
+    });
+  }
+</script>

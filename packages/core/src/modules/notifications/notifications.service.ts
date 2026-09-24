@@ -82,11 +82,6 @@ interface DeliverySendResult {
     retryable?: boolean;
 }
 
-function defaultCustomerChannelsForNotification(type: OrderNotificationType): string[] {
-    if (type === "support_request_submitted") return [];
-    return ["email"];
-}
-
 const EMPTY_DISPATCH_RESULT: OrderNotificationDispatchResult = {
     outcomes: [],
     hasRetryableFailure: false,
@@ -513,21 +508,19 @@ export async function sendOrderNotificationEmail(
     name: string,
     orderId: string,
     type: OrderNotificationType,
-    data?: Record<string, unknown>,
-    db?: Database,
+    data: Record<string, unknown> | undefined,
+    db: Database,
     options: OrderNotificationOptions = {},
 ): Promise<OrderNotificationDispatchResult> {
     const outcomes: OrderNotificationChannelOutcome[] = [];
-    let enabledChannels = defaultCustomerChannelsForNotification(type);
-
-    if (db) {
-        try {
-            const { getNotificationChannels } = await import("../settings/settings.service");
-            const channels = await getNotificationChannels(db);
-            enabledChannels = channels[type] ?? defaultCustomerChannelsForNotification(type);
-        } catch (channelError: unknown) {
-            console.warn("[Notifications] Failed to check channel preferences, defaulting to safe channels:", channelError);
-        }
+    // Every buyer notification, including the support-request acknowledgement,
+    // defaults to email; the merchant's saved channels override it.
+    let enabledChannels = ["email"];
+    try {
+        const { getNotificationChannels } = await import("../settings/settings.service");
+        enabledChannels = (await getNotificationChannels(db))[type] ?? enabledChannels;
+    } catch (channelError: unknown) {
+        console.warn("[Notifications] Failed to check channel preferences, defaulting to email:", channelError);
     }
 
     const supportRequestTypeLabel = data?.supportRequestTypeLabel
@@ -561,7 +554,7 @@ export async function sendOrderNotificationEmail(
 
     if (enabledChannels.includes("email")) {
         const composeEmail = () => composeOrderEmail({
-            orderId, name, type, data,
+            orderId, type, data,
             storefrontUrl: typeof options.env?.STOREFRONT_URL === "string" ? options.env.STOREFRONT_URL : undefined,
         }, db);
 

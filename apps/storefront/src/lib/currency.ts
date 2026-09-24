@@ -6,6 +6,7 @@ export {
   getDecimalPlaces,
   formatPrice,
   formatPriceShort,
+  formatMoney,
   type CurrencyConfig,
   DEFAULT_CURRENCY,
 } from "@scalius/shared/currency";

@@ -22,8 +22,6 @@ export const customers = sqliteTable("customers", {
     phoneVerifiedAt: integer("phone_verified_at", { mode: "timestamp" }),
     emailVerifiedAt: integer("email_verified_at", { mode: "timestamp" }),
     lastAuthenticatedAt: integer("last_authenticated_at", { mode: "timestamp" }),
-    profileCompletionRequiredAt: integer("profile_completion_required_at", { mode: "timestamp" }),
-    profileCompletedAt: integer("profile_completed_at", { mode: "timestamp" }),
     totalOrders: integer("total_orders").notNull().default(0),
     lastOrderAt: integer("last_order_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
@@ -67,14 +65,13 @@ export const customerAuthOtpChallenges = sqliteTable("customer_auth_otp_challeng
     deliveryKey: text("delivery_key").notNull(),
     method: text("method", { enum: ["email", "phone"] }).notNull(),
     channel: text("channel", { enum: ["email", "sms", "whatsapp"] }).notNull(),
-    intent: text("intent", { enum: ["sign_in", "sign_up"] }).notNull().default("sign_in"),
     identifierHash: text("identifier_hash").notNull(),
     identifierMasked: text("identifier_masked").notNull(),
     deliveryTargetEncrypted: text("delivery_target_encrypted"),
     deliveryNameEncrypted: text("delivery_name_encrypted"),
-    contactEmailEncrypted: text("contact_email_encrypted"),
-    phoneEncrypted: text("phone_encrypted"),
     codeHash: text("code_hash").notNull(),
+    /** The code this challenge replaced on resend, so it can say "a newer code was sent". */
+    previousCodeHash: text("previous_code_hash"),
     status: text("status", { enum: ["pending", "consumed", "locked"] }).notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
     maxAttempts: integer("max_attempts").notNull().default(5),
@@ -105,7 +102,7 @@ export const customerSessions = sqliteTable("customer_sessions", {
 
 export const customerAuthOtpRateLimits = sqliteTable("customer_auth_otp_rate_limits", {
     key: text("key").primaryKey(),
-    scope: text("scope", { enum: ["ip"] }).notNull().default("ip"),
+    scope: text("scope", { enum: ["ip", "identifier"] }).notNull().default("ip"),
     attempts: integer("attempts").notNull().default(0),
     windowExpiresAt: integer("window_expires_at").notNull(),
     createdAt: integer("created_at").notNull().default(UNIX_NOW),

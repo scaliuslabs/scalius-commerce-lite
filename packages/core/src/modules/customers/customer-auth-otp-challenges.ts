@@ -4,27 +4,25 @@ import { and, eq, gt, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { maskOtpIdentifier } from "./otp-delivery-receipts";
 import {
-    decryptCredentials,
     encodeEncryptedCredential,
-    ENCRYPTED_CREDENTIAL_PREFIX,
     encryptCredentials,
 } from "../../utils/credential-encryption";
 
 export type CustomerAuthOtpMethod = "email" | "phone";
 export type CustomerAuthOtpChannel = "email" | "sms" | "whatsapp";
-export type CustomerAuthOtpIntent = "sign_in" | "sign_up";
+
+/** How long a proven code stays usable while a new buyer adds their name and phone. */
+const ACCOUNT_DETAILS_WINDOW_SECONDS = 10 * 60;
+
+export const OTP_LOCKED_MESSAGE = "Too many wrong codes. Send a new code to try again.";
 
 export interface PersistCustomerAuthOtpChallengeInput {
     otpKey: string;
     deliveryKey: string;
     method: CustomerAuthOtpMethod;
     channel: CustomerAuthOtpChannel;
-    intent: CustomerAuthOtpIntent;
     identifier: string;
     deliveryTarget: string;
-    deliveryName?: string;
-    contactEmail?: string;
-    phone?: string;
     code: string;
     encryptionKey?: string;
     contactEncryptionKey?: string;
@@ -37,6 +35,7 @@ export interface PersistedCustomerAuthOtpChallenge {
     otpKey: string;
     deliveryKey: string;
     expiresAt: number;
+    resendAvailableAt: number;
 }
 
 export interface ClaimCustomerAuthOtpChallengeInput {
@@ -46,20 +45,18 @@ export interface ClaimCustomerAuthOtpChallengeInput {
     identifier: string;
     code: string;
     encryptionKey?: string;
-    contactEncryptionKey?: string;
+    /**
+     * False checks the code without using it up (a new buyer still has to add
+     * their details); the code then stays valid for the details step.
+     */
+    consume?: boolean;
 }
 
 export interface ClaimedCustomerAuthOtpChallenge {
     otpKey: string;
     method: CustomerAuthOtpMethod;
     channel: CustomerAuthOtpChannel;
-    intent: CustomerAuthOtpIntent;
     identifier: string;
-    contactEmail?: string;
-    phone?: string;
-    expiresAt: number;
-    attempts: number;
-    maxAttempts: number;
 }
 
 export interface CleanupExpiredCustomerAuthOtpChallengesResult {
@@ -84,27 +81,18 @@ export async function persistCustomerAuthOtpChallenge(
         input.contactEncryptionKey,
         "Customer OTP delivery target",
     );
-    const deliveryNameEncrypted = await encryptPinnedContact(
-        input.deliveryName,
-        input.contactEncryptionKey,
-        "Customer OTP delivery name",
-    );
-    const contactEmailEncrypted = await encryptPinnedContact(input.contactEmail, input.contactEncryptionKey, "Customer OTP email");
-    const phoneEncrypted = await encryptPinnedContact(input.phone, input.contactEncryptionKey, "Customer OTP phone");
 
     const values = {
         otpKey: input.otpKey,
         deliveryKey: input.deliveryKey,
         method: input.method,
         channel: input.channel,
-        intent: input.intent,
         identifierHash,
         identifierMasked,
         deliveryTargetEncrypted,
-        deliveryNameEncrypted,
-        contactEmailEncrypted,
-        phoneEncrypted,
+        deliveryNameEncrypted: null,
         codeHash,
+        previousCodeHash: null,
         status: "pending" as const,
         attempts: 0,
         maxAttempts: input.maxAttempts,
@@ -123,14 +111,12 @@ export async function persistCustomerAuthOtpChallenge(
                 deliveryKey: values.deliveryKey,
                 method: values.method,
                 channel: values.channel,
-                intent: values.intent,
                 identifierHash: values.identifierHash,
                 identifierMasked: values.identifierMasked,
                 deliveryTargetEncrypted: values.deliveryTargetEncrypted,
-                deliveryNameEncrypted: values.deliveryNameEncrypted,
-                contactEmailEncrypted: values.contactEmailEncrypted,
-                phoneEncrypted: values.phoneEncrypted,
+                deliveryNameEncrypted: null,
                 codeHash: values.codeHash,
+                previousCodeHash: sql`${customerAuthOtpChallenges.codeHash}`,
                 status: "pending",
                 attempts: 0,
                 maxAttempts: values.maxAttempts,
@@ -150,13 +136,18 @@ export async function persistCustomerAuthOtpChallenge(
             otpKey: customerAuthOtpChallenges.otpKey,
             deliveryKey: customerAuthOtpChallenges.deliveryKey,
             expiresAt: customerAuthOtpChallenges.expiresAt,
+            resendAvailableAt: customerAuthOtpChallenges.resendAvailableAt,
         });
 
     const row = rows[0];
     if (!row) {
+        const current = await db.select({ resendAvailableAt: customerAuthOtpChallenges.resendAvailableAt })
+            .from(customerAuthOtpChallenges)
+            .where(eq(customerAuthOtpChallenges.otpKey, input.otpKey))
+            .get();
         throw new RateLimitError(
-            "A verification code was recently sent. Please wait a moment before requesting a new one.",
-            input.resendCooldownSeconds,
+            "A code was just sent. Please wait before asking for another.",
+            Math.max(1, (current?.resendAvailableAt ?? resendAvailableAt) - now),
         );
     }
 
@@ -171,13 +162,16 @@ export async function claimCustomerAuthOtpChallenge(
     const codeHash = await hashOtpCode(input.code, input.otpKey, input.encryptionKey);
     const identifierHash = await hashCustomerAuthOtpIdentifier(input.identifier, input.encryptionKey);
 
+    const consume = input.consume !== false;
     const consumedRows = await db.update(customerAuthOtpChallenges)
-        .set({
-            status: "consumed",
-            attempts: sql`${customerAuthOtpChallenges.attempts} + 1`,
-            consumedAt: now,
-            updatedAt: now,
-        })
+        .set(consume
+            ? {
+                status: "consumed",
+                attempts: sql`${customerAuthOtpChallenges.attempts} + 1`,
+                consumedAt: now,
+                updatedAt: now,
+            }
+            : { expiresAt: now + ACCOUNT_DETAILS_WINDOW_SECONDS, updatedAt: now })
         .where(and(
             eq(customerAuthOtpChallenges.otpKey, input.otpKey),
             eq(customerAuthOtpChallenges.method, input.method),
@@ -192,16 +186,10 @@ export async function claimCustomerAuthOtpChallenge(
             otpKey: customerAuthOtpChallenges.otpKey,
             method: customerAuthOtpChallenges.method,
             channel: customerAuthOtpChallenges.channel,
-            intent: customerAuthOtpChallenges.intent,
-            contactEmailEncrypted: customerAuthOtpChallenges.contactEmailEncrypted,
-            phoneEncrypted: customerAuthOtpChallenges.phoneEncrypted,
-            expiresAt: customerAuthOtpChallenges.expiresAt,
-            attempts: customerAuthOtpChallenges.attempts,
-            maxAttempts: customerAuthOtpChallenges.maxAttempts,
         });
 
     const consumed = consumedRows[0];
-    if (consumed) return normalizeClaimedChallenge(consumed, input);
+    if (consumed) return { ...consumed, identifier: input.identifier };
 
     const wrongRows = await db.update(customerAuthOtpChallenges)
         .set({
@@ -223,16 +211,19 @@ export async function claimCustomerAuthOtpChallenge(
             attempts: customerAuthOtpChallenges.attempts,
             maxAttempts: customerAuthOtpChallenges.maxAttempts,
             status: customerAuthOtpChallenges.status,
+            previousCodeHash: customerAuthOtpChallenges.previousCodeHash,
         });
 
     const wrong = wrongRows[0];
     if (wrong) {
-        if (wrong.status === "locked" || wrong.attempts >= wrong.maxAttempts) {
-            throw new RateLimitError("Too many failed attempts. Please request a new code.");
+        const attemptsLeft = Math.max(0, wrong.maxAttempts - wrong.attempts);
+        if (wrong.status === "locked" || attemptsLeft === 0) {
+            throw new ValidationError(OTP_LOCKED_MESSAGE, { attemptsLeft: 0 });
         }
-        throw new ValidationError("Incorrect code. Please try again.", {
-            attemptsLeft: wrong.maxAttempts - wrong.attempts,
-        });
+        if (wrong.previousCodeHash === codeHash) {
+            throw new ValidationError("That code was replaced by a newer one. Enter the latest code we sent.", { attemptsLeft });
+        }
+        throw new ValidationError("That code isn't right. Check it and try again.", { attemptsLeft });
     }
 
     const existing = await db.select()
@@ -240,27 +231,25 @@ export async function claimCustomerAuthOtpChallenge(
         .where(eq(customerAuthOtpChallenges.otpKey, input.otpKey))
         .get();
 
-    if (!existing) {
-        throw new ValidationError("No verification code found. Please request a new one.");
-    }
     if (
+        !existing ||
         existing.method !== input.method ||
         existing.channel !== input.channel ||
         existing.identifierHash !== identifierHash
     ) {
-        throw new ValidationError("Verification code does not match the requested contact. Please request a new code.");
-    }
-    if (existing.expiresAt <= now) {
-        throw new ValidationError("Verification code has expired. Please request a new one.");
-    }
-    if (existing.status === "locked" || existing.attempts >= existing.maxAttempts) {
-        throw new RateLimitError("Too many failed attempts. Please request a new code.");
+        throw new ValidationError("There's no active code for this contact. Send a new code.", { attemptsLeft: 0 });
     }
     if (existing.status === "consumed") {
-        throw new ValidationError("Verification code has already been used. Please request a new code.");
+        throw new ValidationError("That code was already used. Send a new code.", { attemptsLeft: 0 });
+    }
+    if (existing.status === "locked" || existing.attempts >= existing.maxAttempts) {
+        throw new ValidationError(OTP_LOCKED_MESSAGE, { attemptsLeft: 0 });
+    }
+    if (existing.expiresAt <= now) {
+        throw new ValidationError("That code has expired. Send a new code.", { attemptsLeft: 0 });
     }
 
-    throw new ValidationError("Verification code could not be verified. Please request a new code.");
+    throw new ValidationError("That code couldn't be checked. Send a new code.", { attemptsLeft: 0 });
 }
 
 export async function deleteCustomerAuthOtpChallenge(
@@ -372,50 +361,10 @@ async function encryptPinnedContact(
     return encodeEncryptedCredential(await encryptCredentials(trimmed, key));
 }
 
-async function decryptPinnedContact(
-    value: string | null | undefined,
-    encryptionKey: string | undefined,
-    label: string,
-): Promise<string | undefined> {
-    const trimmed = value?.trim();
-    if (!trimmed) return undefined;
-    const key = requirePinnedContactEncryptionKey(encryptionKey, label);
-    const encrypted = trimmed.startsWith(ENCRYPTED_CREDENTIAL_PREFIX)
-        ? trimmed.slice(ENCRYPTED_CREDENTIAL_PREFIX.length)
-        : trimmed;
-
-    try {
-        return await decryptCredentials(encrypted, key);
-    } catch {
-        throw new ServiceUnavailableError(`${label} could not be decrypted with the configured credential key.`);
-    }
-}
-
 function requirePinnedContactEncryptionKey(encryptionKey: string | undefined, label: string): string {
     const key = encryptionKey?.trim();
     if (!key) {
         throw new ServiceUnavailableError(`${label} encryption key is not configured.`);
     }
     return key;
-}
-
-async function normalizeClaimedChallenge(
-    row: Pick<
-        typeof customerAuthOtpChallenges.$inferSelect,
-        "otpKey" | "method" | "channel" | "intent" | "contactEmailEncrypted" | "phoneEncrypted" | "expiresAt" | "attempts" | "maxAttempts"
-    >,
-    input: ClaimCustomerAuthOtpChallengeInput,
-): Promise<ClaimedCustomerAuthOtpChallenge> {
-    return {
-        otpKey: row.otpKey,
-        method: row.method,
-        channel: row.channel,
-        intent: row.intent,
-        identifier: input.identifier,
-        contactEmail: await decryptPinnedContact(row.contactEmailEncrypted, input.contactEncryptionKey, "Customer OTP email"),
-        phone: await decryptPinnedContact(row.phoneEncrypted, input.contactEncryptionKey, "Customer OTP phone"),
-        expiresAt: row.expiresAt,
-        attempts: row.attempts,
-        maxAttempts: row.maxAttempts,
-    };
 }
