@@ -27,6 +27,13 @@ check it. The release-wide evidence lives in
      makes each read go on its own, so a storefront deployed before the API
      keeps working. Authenticated, private, write and non-cached reads are
      never batched.
+   - Public reads on a public API URL get a 2 s service-binding deadline and
+     then one HTTPS retry. A read addressed to the internal service origin,
+     which includes every render's first batch because the platform API URL
+     arrives with the layout, has no public URL to retry. It keeps its full
+     deadline, because a short one would turn a slow cold read into a 503.
+     Before this change, that turned a cold layout read at HKG into a 503 home
+     page.
 3. **The batch in the API** (`routes/storefront.ts` `storefront.batch.get`,
    `storefront-batch.ts`). Only public generation-cached routes can be parts
    (`@scalius/shared/public-api-cache-routes`, the same list the API cache
