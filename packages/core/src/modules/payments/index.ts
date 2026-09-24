@@ -3,6 +3,8 @@
 export * from "./browser";
 export * from "./gateways/port";
 export * from "./gateways/correlation";
+export * from "./payable-order";
+export * from "./payment-state";
 
 export type { PaymentType, PaymentResult, ProcessPaymentParams } from "./types";
 export type {

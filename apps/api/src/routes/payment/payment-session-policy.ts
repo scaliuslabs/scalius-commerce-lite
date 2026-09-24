@@ -2,9 +2,8 @@ import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { PaymentPlanStatus, PaymentStatus, paymentPlans } from "@scalius/database/schema";
 import { checkoutDocument } from "@scalius/core/modules/settings";
+import { getUnpayableOrderReason, type PayableOrderState } from "@scalius/core/modules/payments";
 import {
-    getUnpayableOrderReason,
-    type PayableOrderState,
     resolveOrderCurrencySnapshot,
     type OrderCurrencySnapshot,
 } from "@scalius/core/modules/payments/browser";

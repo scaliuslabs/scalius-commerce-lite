@@ -4,8 +4,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { and, eq } from "drizzle-orm";
 import { deliveryShipments } from "@scalius/database/schema";
-import { mapProviderStatus } from "@scalius/core/modules/delivery/browser";
-import { updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
+import { mapProviderStatus, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
 import { verifyDeliveryWebhook } from "../../middleware/webhook-auth";
 import {
     buildWebhookEventId,
