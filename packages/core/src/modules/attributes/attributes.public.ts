@@ -74,38 +74,33 @@ export async function resolvePublicAttributeFilters(
     if (attributeRequests.length === 0) return optionFilters;
 
     const requestedJson = JSON.stringify(attributeRequests);
-    const matchedValues = await db
-        .selectDistinct({
-            id: productAttributes.id,
-            name: productAttributes.name,
-            slug: productAttributes.slug,
-            value: productAttributeValues.value,
-        })
-        .from(productAttributes)
-        .innerJoin(
-            productAttributeValues,
-            eq(productAttributeValues.attributeId, productAttributes.id),
-        )
-        .innerJoin(
-            products,
-            and(
-                eq(productAttributeValues.productId, products.id),
-                eq(products.isActive, true),
-                isNull(products.deletedAt),
-                publicProductHasBuyerResolvableSku(),
-            ),
-        )
-        .where(and(
-            eq(productAttributes.filterable, true),
-            isNull(productAttributes.deletedAt),
-            sql`EXISTS (
-                SELECT 1
-                FROM json_each(${requestedJson}) AS requested_filter
-                CROSS JOIN json_each(json_extract(requested_filter.value, '$.values')) AS requested_value
-                WHERE CAST(json_extract(requested_filter.value, '$.slug') AS TEXT) = ${productAttributes.slug}
-                  AND CAST(requested_value.value AS TEXT) = ${productAttributeValues.value}
-            )`,
-        ));
+    // Starts from the requested (slug, value) pairs and stops at the first
+    // public product carrying each one (product_attribute_values_attr_value_
+    // product_idx). Joining every value row of every filterable attribute to
+    // its product first read 1.2M rows per filtered listing at 30k products.
+    const matchedValues = await db.all<{ id: string; name: string; slug: string; value: string }>(sql`
+        SELECT DISTINCT
+            ${productAttributes.id} AS id,
+            ${productAttributes.name} AS name,
+            ${productAttributes.slug} AS slug,
+            CAST(requested_value.value AS TEXT) AS value
+        FROM json_each(${requestedJson}) AS requested_filter
+        CROSS JOIN json_each(json_extract(requested_filter.value, '$.values')) AS requested_value
+        CROSS JOIN ${productAttributes}
+        WHERE ${productAttributes.slug} = CAST(json_extract(requested_filter.value, '$.slug') AS TEXT)
+          AND ${productAttributes.filterable} = 1
+          AND ${productAttributes.deletedAt} IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM ${productAttributeValues}
+              INNER JOIN ${products} ON ${products.id} = ${productAttributeValues.productId}
+              WHERE ${productAttributeValues.attributeId} = ${productAttributes.id}
+                AND ${productAttributeValues.value} = CAST(requested_value.value AS TEXT)
+                AND ${products.isActive} = 1
+                AND ${products.deletedAt} IS NULL
+                AND ${publicProductHasBuyerResolvableSku()}
+          )
+    `);
 
     const matchedBySlug = new Map<string, PublicAttributeQueryFilter>();
     for (const row of matchedValues) {

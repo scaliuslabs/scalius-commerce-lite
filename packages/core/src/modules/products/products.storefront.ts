@@ -938,8 +938,17 @@ async function readStorefrontCatalogResults(
         : undefined;
     if (rankJoin) query = query.leftJoin(rankJoin.table, rankJoin.on);
 
+    // Without a price filter the price range reads exactly the count's rows,
+    // so one statement answers both instead of evaluating the catalogue's
+    // eligibility and pricing twice.
+    const hasPriceFilter = priceBounds.minPriceMinor !== undefined || priceBounds.maxPriceMinor !== undefined;
     let countQuery = db
-        .select({ count: sql<number>`count(*)`, storeCurrencyCode: storeCurrencyCodeSql() })
+        .select({
+            count: sql<number>`count(*)`,
+            storeCurrencyCode: storeCurrencyCodeSql(),
+            min: sql<number | null>`MIN(${buyerPricing.effectivePriceMinor})`,
+            max: sql<number | null>`MAX(${buyerPricing.maxBuyerPriceMinor})`,
+        })
         .from(products)
         .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
         .where(and(...conditions));
@@ -986,14 +995,15 @@ async function readStorefrontCatalogResults(
         attributeFilters,
         optionFilters,
     );
-    const [productsList, totalCount, rawPriceRange, facetRows, optionFacetRows] = await Promise.all([
+    const [productsList, totalCount, filteredPriceRange, facetRows, optionFacetRows] = await Promise.all([
         query.orderBy(...orderBy, products.id).limit(limit).offset(offset).all(),
         countQuery.get(),
-        priceRangeQuery.get(),
+        hasPriceFilter ? priceRangeQuery.get() : Promise.resolve(null),
         facetQuery.all() as Promise<PublicProductFacetRow[]>,
         optionFacetQuery.all() as Promise<PublicProductFacetRow[]>,
     ]);
     const decimalPlaces = storeDecimalPlacesFromCode(totalCount?.storeCurrencyCode);
+    const rawPriceRange = hasPriceFilter ? filteredPriceRange : totalCount;
 
     const productIds = productsList.map((product) => product.id);
     const categoryIds = scope.fixedCategory

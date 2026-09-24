@@ -2,6 +2,7 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { resolvePublicAttributeFilters } from "../attributes/attributes.public";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { search } from "../../search";
 import { getProductsByIds, listProducts } from "./products.admin";
@@ -146,6 +147,22 @@ describe("catalogue-scale query plans", () => {
         expect(pagePlan).toContain("products_public_newest_idx");
         expect(pagePlan).not.toContain("buyer_ranked_skus");
         for (const plan of plans(joinsPricing)) expect(plan).not.toMatch(/SCAN buyer_pricing_sku/);
+    });
+
+    it("resolves attribute filters from the requested values, not from every value row", async () => {
+        const { db, plans } = setup();
+        sqlite!.exec(`
+            INSERT INTO product_attributes (id, name, slug, filterable) VALUES ('attr_brand', 'Brand', 'brand', 1);
+            INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES
+                ('val_a', 'prod_a', 'attr_brand', 'Asus'),
+                ('val_b', 'prod_b', 'attr_brand', 'Lenovo');
+        `);
+
+        await expect(resolvePublicAttributeFilters(db, { brand: ["Asus", "Dell"] }, []))
+            .resolves.toEqual([{ id: "attr_brand", name: "Brand", slug: "brand", values: ["Asus"] }]);
+        const [plan] = plans((sql) => sql.includes("requested_filter"));
+        expect(plan).toContain("product_attribute_values_attr_value_product_idx");
+        expect(plan).not.toMatch(/SCAN product_attribute_values/);
     });
 
     it("looks SKUs up by their identity index", async () => {
