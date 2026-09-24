@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import {
   MAX_SUBMITTED_DISCOUNT_CODES,
+  type OrderDiscountLine,
   type StorefrontDiscountOffer,
   type StorefrontDiscountQuote,
 } from "@scalius/core/modules/promotions";
@@ -27,6 +28,18 @@ export const orderDiscountLineSchema = appliedDiscountLineSchema.extend({
     description: "The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind.",
   }),
 });
+
+/** An order's discount lines in the decimal HTTP contract (receipt and account order page). */
+export function presentOrderDiscountLines(lines: OrderDiscountLine[], decimalPlaces: number) {
+  return lines.map((line) => ({
+    promotionId: line.promotionId,
+    title: line.title,
+    code: line.code,
+    kind: line.kind,
+    amount: fromMinor(line.amountMinor, decimalPlaces),
+    shippingAmount: fromMinor(line.shippingAmountMinor, decimalPlaces),
+  }));
+}
 
 export const discountOfferSchema = z.object({
   promotionId: z.string(),

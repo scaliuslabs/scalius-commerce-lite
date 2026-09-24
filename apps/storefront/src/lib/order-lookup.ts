@@ -10,6 +10,9 @@ import { normalizeBdMobile, toLatinDigits } from "@scalius/shared/phone-input";
 /** The API's resend wait when a response doesn't say (core OTP cooldown). */
 export const DEFAULT_RESEND_AFTER_SECONDS = 60;
 
+/** The order has no email and the store can't text: say so and show the store's contact. */
+export const NO_CODE_CHANNEL = "NO_CODE_CHANNEL";
+
 /** What a failed send/verify tells the page; never the receipt token. */
 export interface OrderCodeFailure {
   status: number;
@@ -38,6 +41,20 @@ export function readOrderLookupInput(reference: string, phone: string): OrderLoo
   return { ok: true, reference: normalizedReference, phone: normalizedPhone };
 }
 
+export type OrderLookupFieldErrors = Partial<Record<"reference" | "phone", string>>;
+
+/** Each lookup field's own message, so the form shows every problem at once. */
+export function getOrderLookupFieldErrors(
+  copy: Pick<CheckoutLanguageData, "trackOrderNumberInvalidText" | "trackOrderPhoneInvalidText">,
+  reference: string,
+  phone: string,
+): OrderLookupFieldErrors {
+  return {
+    ...(normalizeOrderReference(reference) ? {} : { reference: copy.trackOrderNumberInvalidText }),
+    ...(normalizeBdMobile(phone) ? {} : { phone: copy.trackOrderPhoneInvalidText }),
+  };
+}
+
 /** 45 → "0:45", 120 → "2:00". */
 export function formatCountdown(totalSeconds: number): string {
   const seconds = Math.max(0, Math.ceil(totalSeconds));
@@ -51,19 +68,24 @@ export function positiveSeconds(value: unknown): number | undefined {
 }
 
 /**
- * Buyer copy for a failed send or verify, in the active checkout language.
- * Waits and remaining attempts are said plainly; the API's prose is not shown.
+ * Buyer copy for a failed send or verify. Waits and remaining attempts come
+ * from the active checkout language; the API's own sentence is shown only
+ * where it says something the page can't: why a send was refused (no such
+ * order, no way to reach the buyer, too many codes).
  */
 export function getOrderCodeFailureText(
   copy: CheckoutLanguageData,
-  failure: Pick<OrderCodeFailure, "status" | "retryAfterSeconds" | "attemptsLeft">,
+  failure: Pick<OrderCodeFailure, "status" | "message" | "retryAfterSeconds" | "attemptsLeft">,
   operation: "send" | "verify",
   unavailableText: string,
 ): string {
   if (failure.status === 429) {
-    return failure.retryAfterSeconds
-      ? formatCheckoutLanguageText(copy.orderCodeTryAgainInText, { time: formatCountdown(failure.retryAfterSeconds) })
-      : copy.paymentRecoveryRateLimitedText;
+    if (!failure.retryAfterSeconds) return failure.message || copy.paymentRecoveryRateLimitedText;
+    const wait = formatCheckoutLanguageText(copy.orderCodeTryAgainInText, { time: formatCountdown(failure.retryAfterSeconds) });
+    return failure.message ? `${failure.message} ${wait}.` : wait;
+  }
+  if (operation === "send" && failure.message && (failure.status === 404 || failure.status === 409)) {
+    return failure.message;
   }
   if (operation === "verify" && typeof failure.attemptsLeft === "number") {
     if (failure.attemptsLeft <= 0) return copy.orderCodeExpiredText;

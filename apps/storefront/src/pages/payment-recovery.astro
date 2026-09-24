@@ -1,18 +1,20 @@
 ---
 // Finish paying: the merchant-sendable link (/payment-recovery?orderId=…)
 // opens nothing by itself. A code sent to the contact saved on the order
-// proves the buyer, then the receipt reopens with the payment choices. Works
-// without JavaScript: the form posts back here.
+// proves the buyer, then the receipt reopens with the payment choices. A
+// signed-in owner goes straight to the receipt. Works without JavaScript: the
+// form posts back here.
 import Layout from "@/layouts/Layout.astro";
+import StoreContact from "@/components/StoreContact.astro";
 import {
   getActiveCheckoutLanguage,
   getLayoutData,
   type CheckoutLanguageData,
   type LayoutData,
 } from "@/lib/api";
-import { getCheckoutConfig } from "@/lib/api/checkout";
-import { formatCountdown, getOrderCodeFailureText } from "@/lib/order-lookup";
+import { NO_CODE_CHANNEL, formatCountdown, getOrderCodeFailureText } from "@/lib/order-lookup";
 import {
+  accountOwnerReceiptRedirect,
   readOrderCodeFields,
   sendPaymentRecoveryCode,
   verifiedReceiptResponse,
@@ -21,6 +23,7 @@ import {
 } from "@/lib/order-lookup-api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
@@ -33,58 +36,49 @@ if (isPost && shouldRejectCrossOriginCookieRequest(Astro.request)) {
   return new Response(null, { status: 403 });
 }
 
-const orderId = Astro.url.searchParams.get("orderId")?.trim() ?? "";
-const [layoutData, checkoutConfig, checkoutLanguage]: [
-  LayoutData | null,
-  Awaited<ReturnType<typeof getCheckoutConfig>>,
-  CheckoutLanguageData | null,
-] = await Promise.all([
+const requestedOrderId = Astro.url.searchParams.get("orderId")?.trim() ?? "";
+const orderId = /^[A-Za-z0-9_-]{1,128}$/.test(requestedOrderId) ? requestedOrderId : "";
+
+const ownerRedirect = await accountOwnerReceiptRedirect(orderId, Astro.request.headers.get("cookie"), Astro.url.searchParams);
+if (ownerRedirect) return ownerRedirect;
+
+const [layoutData, checkoutLanguage]: [LayoutData | null, CheckoutLanguageData | null] = await Promise.all([
   getLayoutData(),
-  getCheckoutConfig(),
   getActiveCheckoutLanguage(),
 ]);
 const copy = checkoutLanguage?.languageData ?? ENGLISH_CHECKOUT_LANGUAGE_DATA;
-const recoveryChannelLabels = {
-  sms: copy.paymentRecoverySmsChannelText,
-  whatsapp: copy.paymentRecoveryWhatsappChannelText,
-  email: copy.paymentRecoveryEmailChannelText,
-} as const;
-type RecoveryChannel = keyof typeof recoveryChannelLabels;
-const recoveryChannels = (checkoutConfig.customerAuthPolicy?.otpChannels ?? [])
-  .filter((channel): channel is RecoveryChannel => channel in recoveryChannelLabels);
-const defaultRecoveryChannel = checkoutConfig.customerAuthPolicy?.defaultOtpChannel;
-const orderedRecoveryChannels = defaultRecoveryChannel && recoveryChannels.includes(defaultRecoveryChannel)
-  ? [defaultRecoveryChannel, ...recoveryChannels.filter((channel) => channel !== defaultRecoveryChannel)]
-  : recoveryChannels;
 
-let channel: string = orderedRecoveryChannels[0] ?? "";
 let codeSent = false;
 let message = "";
 let failed = false;
+let noCodeChannel = false;
+let orderNumber: number | null = null;
 let resendAfterSeconds = 0;
 let verified: VerifiedOrderReceipt | null = null;
 
-if (isPost && orderId && channel) {
+if (isPost && orderId) {
   const fields = (await readOrderCodeFields(Astro.request)) ?? {};
-  if (orderedRecoveryChannels.some((option) => option === fields.channel)) channel = fields.channel!;
   codeSent = fields.intent === "verify" || fields.intent === "resend";
   failed = true;
   if (fields.intent === "verify") {
     if (!fields.code) {
       message = copy.paymentRecoveryEnterCodeText;
     } else {
-      const result = await verifyPaymentRecoveryCode({ orderId, channel, code: fields.code });
+      const result = await verifyPaymentRecoveryCode({ orderId, code: fields.code });
       if (result.ok) verified = result.data;
       else message = getOrderCodeFailureText(copy, result.failure, "verify", copy.paymentRecoveryCodesUnavailableText);
     }
   } else {
-    const result = await sendPaymentRecoveryCode({ orderId, channel });
+    const result = await sendPaymentRecoveryCode({ orderId });
     if (result.ok) {
-      codeSent = true;
+      // A neutral answer (nothing to pay online, or no such order) sends nothing.
+      codeSent = result.data.sent;
       failed = false;
-      message = copy.paymentRecoveryCodeRequestedText;
+      message = result.data.message || copy.paymentRecoveryCodeRequestedText;
+      orderNumber = result.data.orderNumber;
       resendAfterSeconds = result.data.resendAfterSeconds;
     } else {
+      noCodeChannel = result.failure.errorCode === NO_CODE_CHANNEL;
       message = getOrderCodeFailureText(copy, result.failure, "send", copy.paymentRecoveryCodesUnavailableText);
     }
   }
@@ -109,7 +103,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
     <div class="mx-auto w-full max-w-md">
       <h1 class="text-2xl font-semibold text-foreground">{copy.paymentRecoveryFinishTitleText}</h1>
 
-      {orderId && channel ? (
+      {orderId ? (
         <>
           <p class="mt-2 text-sm text-muted-foreground">{copy.paymentRecoveryCodeIntroText}</p>
           <form
@@ -122,28 +116,17 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
             data-code-sent={codeSent ? "true" : undefined}
           >
             <input type="hidden" name="orderId" value={orderId} />
-            <p class="text-sm">
-              <span class="text-muted-foreground">{copy.paymentRecoveryOrderReferenceText}</span>
-              <span class="ml-2 break-all font-mono font-medium text-foreground">{orderId}</span>
+            <p class="text-sm" data-order-code-order hidden={orderNumber === null}>
+              <span class="text-muted-foreground">{copy.orderReceiptOrderNumberText}</span>
+              <span data-order-number class="ml-2 font-medium text-foreground">{orderNumber !== null ? formatOrderNumber(orderNumber, "") : ""}</span>
             </p>
-            {orderedRecoveryChannels.length > 1 ? (
-              <div class="grid gap-2">
-                <label for="paymentRecoveryChannel" class="text-sm font-medium text-foreground">{copy.paymentRecoverySendCodeByText}</label>
-                <select id="paymentRecoveryChannel" name="channel" class={fieldClass}>
-                  {orderedRecoveryChannels.map((option) => (
-                    <option value={option} selected={option === channel}>{recoveryChannelLabels[option]}</option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <input type="hidden" name="channel" value={channel} />
-            )}
             <div class="grid gap-2" data-order-code-step hidden={!codeSent}>
               <label for="paymentRecoveryCode" class="text-sm font-medium text-foreground">{copy.paymentRecoveryVerificationCodeText}</label>
               <input id="paymentRecoveryCode" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" class={`${fieldClass} font-mono tracking-[0.3em]`} autofocus={codeSent} />
             </div>
 
             <p data-order-code-message aria-live="polite" class={`min-h-5 text-sm ${failed ? "text-destructive" : "text-muted-foreground"}`}>{message}</p>
+            <StoreContact layoutData={layoutData} hidden={!noCodeChannel} />
 
             <button
               type="submit"
@@ -170,9 +153,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
           </form>
         </>
       ) : (
-        <p class="mt-2 text-sm text-muted-foreground">
-          {orderId ? copy.paymentRecoveryCodesUnavailableText : copy.paymentRecoveryLinkIncompleteText}
-        </p>
+        <p class="mt-2 text-sm text-muted-foreground">{copy.paymentRecoveryLinkIncompleteText}</p>
       )}
 
       <div class="mt-6 flex flex-wrap gap-x-4 gap-y-2 border-t border-border pt-4 text-sm">

@@ -36,6 +36,7 @@ import type {
 } from "@scalius/api-client/types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type { ProductCondition } from "@scalius/shared/product-condition";
+import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./customer-auth";
 
 export type {
   GetProductsResponse,
@@ -538,6 +539,19 @@ export interface OrderReceipt {
   supportRequests: OrderReceiptSupportRequest[];
   supportRequestActions: OrderReceiptSupportRequestAction[];
   supportRequestIntro: string;
+  /** Where the order is: the same tracker and dated updates as the account order page. */
+  tracking?: OrderReceiptTracking | null;
+}
+
+export interface OrderReceiptTracking {
+  progress: CustomerOrderProgress;
+  timeline: CustomerOrderTimelineEvent[];
+  shipments: Array<{
+    statusLabel: string;
+    courierName: string | null;
+    trackingId: string | null;
+    trackingUrl: string | null;
+  }>;
 }
 
 export type CreateOrderPayload = OrderPostRequest;

@@ -26244,7 +26244,6 @@
                   }
                 },
                 "required": [
-                  "channel",
                   "code"
                 ],
                 "additionalProperties": false
@@ -27369,6 +27368,10 @@
                       "email": {
                         "type": "string",
                         "maxLength": 254
+                      },
+                      "saveOrderAddress": {
+                        "type": "boolean",
+                        "description": "Save the delivery address of the latest order placed with the proven contact (from `suggestion.address`)."
                       }
                     },
                     "required": [
@@ -27466,6 +27469,48 @@
                         },
                         "isNewUser": {
                           "type": "boolean"
+                        },
+                        "suggestion": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "phone": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "email": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "address": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "orderNumber": {
+                                  "type": "integer",
+                                  "nullable": true
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "orderNumber",
+                                "text"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "phone",
+                            "email",
+                            "address"
+                          ],
+                          "description": "With needs_account_details: what the latest order placed with the proven contact says, to pre-fill."
                         }
                       },
                       "required": [
@@ -30739,6 +30784,50 @@
                             ]
                           }
                         },
+                        "discounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "promotionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "amount": {
+                                "type": "number",
+                                "description": "Off the items: shown as a discount line."
+                              },
+                              "shippingAmount": {
+                                "type": "number",
+                                "description": "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line."
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "buy_x_get_y",
+                                  "product",
+                                  "order",
+                                  "shipping"
+                                ],
+                                "description": "The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind."
+                              }
+                            },
+                            "required": [
+                              "promotionId",
+                              "title",
+                              "code",
+                              "amount",
+                              "shippingAmount",
+                              "kind"
+                            ]
+                          }
+                        },
                         "paymentRecovery": {
                           "type": "object",
                           "properties": {
@@ -30810,6 +30899,7 @@
                         "cod",
                         "progress",
                         "timeline",
+                        "discounts",
                         "paymentRecovery"
                       ]
                     }
@@ -41395,6 +41485,16 @@
                       "properties": {
                         "message": {
                           "type": "string"
+                        },
+                        "destination": {
+                          "type": "string"
+                        },
+                        "orderNumber": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "resendAfterSeconds": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -41721,14 +41821,6 @@
                     "minLength": 1,
                     "maxLength": 128
                   },
-                  "channel": {
-                    "type": "string",
-                    "enum": [
-                      "email",
-                      "sms",
-                      "whatsapp"
-                    ]
-                  },
                   "code": {
                     "type": "string",
                     "minLength": 4,
@@ -41737,7 +41829,6 @@
                 },
                 "required": [
                   "orderId",
-                  "channel",
                   "code"
                 ],
                 "additionalProperties": false
@@ -42129,7 +42220,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Send a code to the contact saved on an order (never reveals whether it matched)",
+        "summary": "Send a code to the contact saved on an order (order number + its phone)",
         "requestBody": {
           "required": true,
           "content": {
@@ -42161,7 +42252,7 @@
         },
         "responses": {
           "200": {
-            "description": "Request accepted",
+            "description": "Code sent; says where",
             "content": {
               "application/json": {
                 "schema": {
@@ -42179,12 +42270,25 @@
                         "message": {
                           "type": "string"
                         },
+                        "destination": {
+                          "type": "string"
+                        },
+                        "channel": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms",
+                            "whatsapp"
+                          ]
+                        },
                         "resendAfterSeconds": {
                           "type": "integer"
                         }
                       },
                       "required": [
                         "message",
+                        "destination",
+                        "channel",
                         "resendAfterSeconds"
                       ]
                     }
@@ -42313,6 +42417,44 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -42992,6 +43134,147 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "tracking": {
+                              "type": "object",
+                              "properties": {
+                                "progress": {
+                                  "type": "object",
+                                  "properties": {
+                                    "steps": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "key": {
+                                            "type": "string",
+                                            "enum": [
+                                              "placed",
+                                              "confirmed",
+                                              "shipped",
+                                              "delivered"
+                                            ]
+                                          },
+                                          "label": {
+                                            "type": "string"
+                                          },
+                                          "done": {
+                                            "type": "boolean"
+                                          },
+                                          "happenedAt": {
+                                            "$ref": "#/components/schemas/NullableTimestamp"
+                                          }
+                                        },
+                                        "required": [
+                                          "key",
+                                          "label",
+                                          "done",
+                                          "happenedAt"
+                                        ]
+                                      }
+                                    },
+                                    "outcome": {
+                                      "type": "object",
+                                      "nullable": true,
+                                      "properties": {
+                                        "key": {
+                                          "type": "string"
+                                        },
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "happenedAt": {
+                                          "$ref": "#/components/schemas/NullableTimestamp"
+                                        }
+                                      },
+                                      "required": [
+                                        "key",
+                                        "label",
+                                        "happenedAt"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "steps",
+                                    "outcome"
+                                  ]
+                                },
+                                "timeline": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      },
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "order",
+                                          "payment",
+                                          "refund",
+                                          "request"
+                                        ]
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "happenedAt": {
+                                        "$ref": "#/components/schemas/NullableTimestamp"
+                                      },
+                                      "details": {
+                                        "type": "string",
+                                        "nullable": true
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "type",
+                                      "status",
+                                      "label",
+                                      "happenedAt"
+                                    ]
+                                  }
+                                },
+                                "shipments": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "statusLabel": {
+                                        "type": "string"
+                                      },
+                                      "courierName": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "trackingId": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "trackingUrl": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "description": "http(s) courier tracking link"
+                                      }
+                                    },
+                                    "required": [
+                                      "statusLabel",
+                                      "courierName",
+                                      "trackingId",
+                                      "trackingUrl"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "progress",
+                                "timeline",
+                                "shipments"
+                              ]
+                            },
                             "taxAmountMinor": {
                               "type": "integer"
                             },
@@ -43272,6 +43555,7 @@
                             "discountAmountMinor",
                             "discounts",
                             "notes",
+                            "tracking",
                             "taxAmountMinor",
                             "totalAmountMinor",
                             "taxLabel",

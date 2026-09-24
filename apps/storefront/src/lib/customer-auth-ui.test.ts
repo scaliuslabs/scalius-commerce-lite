@@ -24,7 +24,7 @@ describe("customer sign-in UI model", () => {
     expect(ui.showMethodSwitcher).toBe(false);
     expect(ui.newAccount).toEqual({ phone: "hidden", email: "required" });
     expect(checkNewAccount(ui, { name: "Rahim", phone: "", email: "" })).toEqual({
-      ok: false, field: "email", message: "Enter your email address.",
+      ok: false, errors: [{ field: "email", message: "Enter your email address." }],
     });
   });
 
@@ -40,8 +40,16 @@ describe("customer sign-in UI model", () => {
 
   it("validates the new-account details for an email sign-up", () => {
     const ui = resolveCustomerAuthUi("email");
-    expect(checkNewAccount(ui, { name: " ", phone: "01712345678", email: "" })).toMatchObject({ field: "name" });
-    expect(checkNewAccount(ui, { name: "Rahim", phone: "", email: "" })).toMatchObject({ field: "phone" });
+    expect(checkNewAccount(ui, { name: " ", phone: "", email: "" })).toEqual({
+      ok: false,
+      errors: [
+        { field: "name", message: "Enter your name." },
+        { field: "phone", message: "Enter your phone number." },
+      ],
+    });
+    expect(checkNewAccount(ui, { name: "Rahim", phone: "0171", email: "" })).toEqual({
+      ok: false, errors: [{ field: "phone", message: "Enter a Bangladeshi mobile number (01XXXXXXXXX)." }],
+    });
     expect(checkNewAccount(ui, { name: " Rahim ", phone: "01712-345678", email: "" })).toEqual({
       ok: true, account: { name: "Rahim", phone: "+8801712345678" },
     });

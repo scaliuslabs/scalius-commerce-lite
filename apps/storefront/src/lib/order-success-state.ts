@@ -288,6 +288,19 @@ export function getOrderSuccessViewState(
   };
 }
 
+/**
+ * A receipt opened by tracking (`view=status`), or reopened after the store
+ * moved the order on, is a status page. The confirmation right after
+ * checkout or a payment return stays a confirmation.
+ */
+export function isOrderStatusView(
+  kind: OrderSuccessStateKind,
+  opened: { requestedView: string | null; freshCheckout: boolean },
+): boolean {
+  if (opened.requestedView === "status") return true;
+  return kind === "order_updated" && !opened.freshCheckout;
+}
+
 // "2-3 days", "24 hours", "৩-৫ কার্যদিবস": only a duration the merchant wrote.
 const DELIVERY_ESTIMATE =
   /[0-9০-৯]+(?:\s*[-–]\s*[0-9০-৯]+)?\s*(?:(?:business|working)\s+)?(?:days?|hours?|কার্যদিবস|দিন|ঘণ্টা)/i;

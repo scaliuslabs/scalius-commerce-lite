@@ -27,11 +27,15 @@ describe("one-time code messages", () => {
   it("names the action for recovery and lookup codes and escapes the store name", () => {
     const unsafe = { ...store, name: '<img src=x onerror="alert(1)">' };
     const recovery = composeAuthOtpMessage(unsafe, { purpose: "order_payment_recovery", code: "123456", name: "Rahim" });
-    const lookup = composeAuthOtpMessage(store, { purpose: "order_lookup", code: "123456", name: "Rahim" });
+    const lookup = composeAuthOtpMessage(store, { purpose: "order_lookup", code: "123456", name: "Rahim", orderNumber: 1057 });
+    const bnLookup = composeAuthOtpMessage({ ...store, language: "bn" }, { purpose: "order_lookup", code: "123456", name: "", orderNumber: 1057 });
+    const unnumbered = composeAuthOtpMessage(store, { purpose: "order_lookup", code: "123456", name: "" });
     expect(recovery.html).not.toMatch(/<img\b/);
     expect(recovery.text).toContain("Hi Rahim,");
     expect(recovery.text).toContain("finish paying for your order");
-    expect(lookup.text).toContain("Use this code to view your order at River & Loom.");
+    expect(lookup.text).toContain("Use this code to view order #1057 at River & Loom.");
+    expect(bnLookup.text).toContain("অর্ডার #1057 দেখতে");
+    expect(unnumbered.text).toContain("Use this code to view your order at River & Loom.");
     expect(lookup.text).toContain("This code expires in 5 minutes.");
   });
 });
