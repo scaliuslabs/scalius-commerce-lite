@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { hasPageAccess } from "./page-permissions";
-import { PERMISSIONS } from "./permissions";
-import { getRoutePermission } from "./route-permissions";
+import { hasPageAccess } from "../page-permissions";
+import { PERMISSIONS } from "../permissions";
+import { getRoutePermission, ROUTE_PERMISSION_MAPS } from ".";
 
 /** Whether a signed-in staff member with exactly these permissions may make the call. */
 function allowed(permissions: string[], path: string, method: "GET" | "POST" | "PUT" | "DELETE" = "GET") {
@@ -381,5 +381,36 @@ describe("page permissions", () => {
     expect(can([PERMISSIONS.TEAM_MANAGE], "/admin/settings/users/user_2")).toBe(true);
     expect(can([PERMISSIONS.TEAM_VIEW], "/admin/settings/users/user_2")).toBe(false);
     expect(can([PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW], "/admin/settings/shipping/areas")).toBe(true);
+  });
+});
+
+describe("per-domain route maps", () => {
+  const patterns = ROUTE_PERMISSION_MAPS.flatMap((map, index) => Object.keys(map).map((pattern) => ({ pattern, index })));
+
+  it("defines every path pattern in exactly one domain map", () => {
+    const counts = new Map<string, number>();
+    for (const { pattern } of patterns) counts.set(pattern, (counts.get(pattern) ?? 0) + 1);
+    expect([...counts].filter(([, count]) => count > 1).map(([pattern]) => pattern)).toEqual([]);
+  });
+
+  it("never needs the map merge order to choose between two domains", () => {
+    // Lookups sort by segment count, then wildcard count; only equally specific
+    // patterns that can match the same path fall back to key order.
+    const segments = (pattern: string) => pattern.split("/");
+    const wildcards = (pattern: string) => pattern.split("*").length - 1;
+    const overlap = (a: string, b: string) => {
+      const x = segments(a);
+      const y = segments(b);
+      return x.length === y.length && x.every((segment, i) => segment === y[i] || segment === "*" || y[i] === "*");
+    };
+    const ties: string[] = [];
+    for (const a of patterns) {
+      for (const b of patterns) {
+        if (a.index < b.index && wildcards(a.pattern) === wildcards(b.pattern) && overlap(a.pattern, b.pattern)) {
+          ties.push(`${a.pattern} <> ${b.pattern}`);
+        }
+      }
+    }
+    expect(ties).toEqual([]);
   });
 });

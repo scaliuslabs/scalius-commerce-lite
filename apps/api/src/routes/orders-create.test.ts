@@ -138,7 +138,7 @@ vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
   quoteStorefrontDiscount: mocks.quoteStorefrontDiscount,
 }));
 
-import { orderRoutes } from "./orders";
+import { orderRoutes } from "./storefront-orders";
 
 const DEFAULT_TAX_QUOTE = {
   schemaVersion: 1 as const,

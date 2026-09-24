@@ -31,7 +31,7 @@ vi.mock("../middleware/auth", async () => {
 });
 
 import { errorResponseFromError } from "../utils/api-response";
-import { orderRoutes } from "./orders";
+import { orderRoutes } from "./storefront-orders";
 
 const db = { id: "db" };
 

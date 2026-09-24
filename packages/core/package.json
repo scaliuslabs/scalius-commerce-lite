@@ -35,6 +35,7 @@
     "./auth/admin-setup": "./src/auth/admin-setup.ts",
     "./auth/reset-token-markers": "./src/auth/reset-token-markers.ts",
     "./auth/scanner-token-claims": "./src/auth/scanner-token-claims.ts",
+    "./auth/rbac/route-permissions": "./src/auth/rbac/route-permissions/index.ts",
     "./auth/rbac/*": "./src/auth/rbac/*.ts",
     "./integrations/sms": "./src/integrations/sms/index.ts",
     "./integrations/sms/providers/*": "./src/integrations/sms/providers/*.ts",

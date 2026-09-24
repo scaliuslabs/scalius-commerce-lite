@@ -1,6 +1,7 @@
 import { createAdminRuntimeApiApp } from "./admin-base-app";
 import { adminCustomerRoutes } from "../routes/admin/customers";
 import { adminDiscountRoutes } from "../routes/admin/discounts";
+import { adminConversationRoutes } from "../routes/admin/conversations";
 import { adminOrdersRoutes } from "../routes/admin/orders";
 import { adminShipmentRoutes } from "../routes/admin/shipments";
 import { adminTaxRoutes } from "../routes/admin/taxes";
@@ -10,6 +11,7 @@ app.route("/admin/customers", adminCustomerRoutes);
 app.route("/admin/discounts", adminDiscountRoutes);
 app.route("/admin/shipments", adminShipmentRoutes);
 app.route("/admin/orders", adminOrdersRoutes);
+app.route("/admin/conversations", adminConversationRoutes);
 app.route("/admin/taxes", adminTaxRoutes);
 
 export default app;

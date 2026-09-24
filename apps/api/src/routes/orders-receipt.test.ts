@@ -4,7 +4,7 @@ import { checkoutAttempts, orderItems, orderReceipts, orders } from "@scalius/da
 
 import { errorResponseFromError } from "../utils/api-response";
 import { getReceiptTokenKvKey } from "../utils/order-receipt-token";
-import { orderRoutes } from "./orders";
+import { orderRoutes } from "./storefront-orders";
 
 const orderSupportMocks = vi.hoisted(() => ({
   createReceiptOrderSupportRequest: vi.fn(),
