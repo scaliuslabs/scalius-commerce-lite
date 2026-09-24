@@ -7845,8 +7845,8 @@
         "tags": [
           "Discounts"
         ],
-        "summary": "Validate a discount code against the cart",
-        "description": "Evaluates the code together with active automatic discounts. `discountAmount` is the cart's total savings when the code applies.",
+        "summary": "Preview the cart's discounts before delivery is chosen",
+        "description": "Evaluates the applied codes together with active automatic discounts. Codes that do not apply are listed with the reason and add nothing.",
         "requestBody": {
           "required": true,
           "content": {
@@ -7854,11 +7854,16 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "code": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 50,
-                    "description": "Discount code to validate"
+                  "codes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 50
+                    },
+                    "maxItems": 5,
+                    "default": [],
+                    "description": "Discount codes the buyer applied. Codes of different discount classes combine when either allows it."
                   },
                   "items": {
                     "type": "array",
@@ -7910,17 +7915,14 @@
                     "maxLength": 16,
                     "description": "Customer phone for per-customer limits"
                   }
-                },
-                "required": [
-                  "code"
-                ]
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Discount validation result",
+            "description": "Cart discount preview",
             "content": {
               "application/json": {
                 "schema": {
@@ -7935,48 +7937,242 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "valid": {
-                          "type": "boolean"
-                        },
-                        "discount": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "type": "string"
-                            },
-                            "code": {
-                              "type": "string"
-                            },
-                            "type": {
-                              "type": "string",
-                              "enum": [
-                                "code"
-                              ]
-                            },
-                            "discountValue": {
-                              "type": "number"
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "code",
-                            "type",
-                            "discountValue"
-                          ]
-                        },
-                        "discountAmount": {
+                        "totalDiscount": {
                           "type": "number"
                         },
-                        "error": {
-                          "type": "string"
+                        "discounts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "promotionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "amount": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "promotionId",
+                              "title",
+                              "code",
+                              "amount"
+                            ]
+                          }
                         },
-                        "requiresCustomerPhone": {
-                          "type": "boolean",
-                          "description": "The code has a per-customer limit: ask for the phone number."
+                        "offers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "promotionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "get",
+                                  "buy"
+                                ]
+                              },
+                              "percentOff": {
+                                "type": "number",
+                                "description": "100 means the items are free."
+                              },
+                              "quantity": {
+                                "type": "integer"
+                              },
+                              "shortfallAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "products": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "slug": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "variantId": {
+                                      "type": "string",
+                                      "nullable": true,
+                                      "description": "Set for simple products, which can be added in one tap."
+                                    },
+                                    "price": {
+                                      "type": "number",
+                                      "nullable": true
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "slug",
+                                    "name",
+                                    "variantId",
+                                    "price"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "promotionId",
+                              "title",
+                              "code",
+                              "kind",
+                              "percentOff",
+                              "quantity",
+                              "shortfallAmount",
+                              "products"
+                            ]
+                          }
+                        },
+                        "rejectedCodes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "not_found",
+                                  "needs_phone",
+                                  "minimum_subtotal",
+                                  "minimum_quantity",
+                                  "get_items",
+                                  "buy_items",
+                                  "not_combinable",
+                                  "lower_savings",
+                                  "unavailable"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "shortfallAmount": {
+                                "type": "number"
+                              },
+                              "shortfallQuantity": {
+                                "type": "integer"
+                              },
+                              "conflictsWith": {
+                                "type": "string"
+                              },
+                              "offer": {
+                                "type": "object",
+                                "properties": {
+                                  "promotionId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "get",
+                                      "buy"
+                                    ]
+                                  },
+                                  "percentOff": {
+                                    "type": "number",
+                                    "description": "100 means the items are free."
+                                  },
+                                  "quantity": {
+                                    "type": "integer"
+                                  },
+                                  "shortfallAmount": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "products": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "slug": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "variantId": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "description": "Set for simple products, which can be added in one tap."
+                                        },
+                                        "price": {
+                                          "type": "number",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "slug",
+                                        "name",
+                                        "variantId",
+                                        "price"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "promotionId",
+                                  "title",
+                                  "code",
+                                  "kind",
+                                  "percentOff",
+                                  "quantity",
+                                  "shortfallAmount",
+                                  "products"
+                                ]
+                              },
+                              "requiresCustomerPhone": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "reason",
+                              "message"
+                            ]
+                          }
                         }
                       },
                       "required": [
-                        "valid"
+                        "totalDiscount",
+                        "discounts",
+                        "offers",
+                        "rejectedCodes"
                       ]
                     }
                   },
@@ -10227,10 +10423,31 @@
                             "buyNowText": {
                               "type": "string"
                             },
-                            "selectOptionsText": {
+                            "unavailableText": {
                               "type": "string"
                             },
-                            "unavailableText": {
+                            "chooseOptionText": {
+                              "type": "string"
+                            },
+                            "fromPriceText": {
+                              "type": "string"
+                            },
+                            "quantityLabelText": {
+                              "type": "string"
+                            },
+                            "quantityLimitText": {
+                              "type": "string"
+                            },
+                            "saleOfferText": {
+                              "type": "string"
+                            },
+                            "saleOfferSpendText": {
+                              "type": "string"
+                            },
+                            "freeBenefitText": {
+                              "type": "string"
+                            },
+                            "percentBenefitText": {
                               "type": "string"
                             }
                           },
@@ -10238,8 +10455,15 @@
                             "languageCode",
                             "addToCartText",
                             "buyNowText",
-                            "selectOptionsText",
-                            "unavailableText"
+                            "unavailableText",
+                            "chooseOptionText",
+                            "fromPriceText",
+                            "quantityLabelText",
+                            "quantityLimitText",
+                            "saleOfferText",
+                            "saleOfferSpendText",
+                            "freeBenefitText",
+                            "percentBenefitText"
                           ]
                         }
                       },
@@ -37703,6 +37927,82 @@
                                   "content"
                                 ]
                               }
+                            },
+                            "offers": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "promotionId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "buyQuantity": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "buyAmount": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "getQuantity": {
+                                    "type": "integer"
+                                  },
+                                  "percentOff": {
+                                    "type": "number",
+                                    "description": "100 means the items to get are free."
+                                  },
+                                  "endsAtEpochSeconds": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "products": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "slug": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "variantId": {
+                                          "type": "string",
+                                          "nullable": true
+                                        },
+                                        "price": {
+                                          "type": "number",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "slug",
+                                        "name",
+                                        "variantId",
+                                        "price"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "promotionId",
+                                  "title",
+                                  "buyQuantity",
+                                  "buyAmount",
+                                  "getQuantity",
+                                  "percentOff",
+                                  "endsAtEpochSeconds",
+                                  "products"
+                                ]
+                              },
+                              "description": "Active automatic Buy X get Y discounts this product counts toward."
                             }
                           },
                           "required": [
@@ -37733,7 +38033,8 @@
                             "options",
                             "features",
                             "attributes",
-                            "additionalInfo"
+                            "additionalInfo",
+                            "offers"
                           ]
                         },
                         "category": {
@@ -43952,10 +44253,16 @@
                     "minLength": 1,
                     "maxLength": 180
                   },
-                  "discountCode": {
-                    "type": "string",
-                    "nullable": true,
-                    "maxLength": 100
+                  "discountCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 50
+                    },
+                    "maxItems": 5,
+                    "default": [],
+                    "description": "Discount codes the buyer applied. Codes of different discount classes combine when either allows it."
                   },
                   "customerPhone": {
                     "type": "string",
@@ -44083,14 +44390,236 @@
                             "feeWaived"
                           ]
                         },
-                        "discountOffers": {
+                        "discounts": {
                           "type": "array",
                           "items": {
-                            "type": "string",
-                            "maxLength": 160
+                            "type": "object",
+                            "properties": {
+                              "promotionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "amount": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "promotionId",
+                              "title",
+                              "code",
+                              "amount"
+                            ]
+                          },
+                          "description": "One line per applied discount (automatic and code), with its own amount."
+                        },
+                        "offers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "promotionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "code": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "get",
+                                  "buy"
+                                ]
+                              },
+                              "percentOff": {
+                                "type": "number",
+                                "description": "100 means the items are free."
+                              },
+                              "quantity": {
+                                "type": "integer"
+                              },
+                              "shortfallAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "products": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "slug": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "variantId": {
+                                      "type": "string",
+                                      "nullable": true,
+                                      "description": "Set for simple products, which can be added in one tap."
+                                    },
+                                    "price": {
+                                      "type": "number",
+                                      "nullable": true
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "slug",
+                                    "name",
+                                    "variantId",
+                                    "price"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "promotionId",
+                              "title",
+                              "code",
+                              "kind",
+                              "percentOff",
+                              "quantity",
+                              "shortfallAmount",
+                              "products"
+                            ]
                           },
                           "maxItems": 3,
-                          "description": "Automatic Buy X get Y discounts the buyer has earned but not claimed: the free item is not in the cart yet."
+                          "description": "Automatic Buy X get Y discounts the buyer has earned but not claimed: the items to get are not in the cart yet."
+                        },
+                        "rejectedCodes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "not_found",
+                                  "needs_phone",
+                                  "minimum_subtotal",
+                                  "minimum_quantity",
+                                  "get_items",
+                                  "buy_items",
+                                  "not_combinable",
+                                  "lower_savings",
+                                  "unavailable"
+                                ]
+                              },
+                              "message": {
+                                "type": "string"
+                              },
+                              "shortfallAmount": {
+                                "type": "number"
+                              },
+                              "shortfallQuantity": {
+                                "type": "integer"
+                              },
+                              "conflictsWith": {
+                                "type": "string"
+                              },
+                              "offer": {
+                                "type": "object",
+                                "properties": {
+                                  "promotionId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "code": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "get",
+                                      "buy"
+                                    ]
+                                  },
+                                  "percentOff": {
+                                    "type": "number",
+                                    "description": "100 means the items are free."
+                                  },
+                                  "quantity": {
+                                    "type": "integer"
+                                  },
+                                  "shortfallAmount": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "products": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "slug": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "variantId": {
+                                          "type": "string",
+                                          "nullable": true,
+                                          "description": "Set for simple products, which can be added in one tap."
+                                        },
+                                        "price": {
+                                          "type": "number",
+                                          "nullable": true
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "slug",
+                                        "name",
+                                        "variantId",
+                                        "price"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "promotionId",
+                                  "title",
+                                  "code",
+                                  "kind",
+                                  "percentOff",
+                                  "quantity",
+                                  "shortfallAmount",
+                                  "products"
+                                ]
+                              },
+                              "requiresCustomerPhone": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "reason",
+                              "message"
+                            ]
+                          },
+                          "description": "Submitted codes that do not apply right now, with the reason. They add nothing to the totals."
                         },
                         "items": {
                           "type": "array",
@@ -44152,7 +44681,9 @@
                         "totalMinor",
                         "totalAmount",
                         "shippingMethod",
-                        "discountOffers",
+                        "discounts",
+                        "offers",
+                        "rejectedCodes",
                         "items"
                       ]
                     }
@@ -44388,14 +44919,16 @@
                     },
                     "minItems": 1
                   },
-                  "discountAmount": {
-                    "type": "number",
-                    "nullable": true,
-                    "minimum": 0
-                  },
-                  "discountCode": {
-                    "type": "string",
-                    "nullable": true
+                  "discountCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 50
+                    },
+                    "maxItems": 5,
+                    "default": [],
+                    "description": "Discount codes the buyer applied. Codes of different discount classes combine when either allows it."
                   },
                   "shippingCharge": {
                     "type": "number",
@@ -44436,7 +44969,6 @@
                   "area",
                   "notes",
                   "items",
-                  "discountAmount",
                   "shippingCharge"
                 ]
               }
@@ -58828,7 +59360,8 @@
                                 "type": "string"
                               },
                               "orderNumber": {
-                                "type": "integer"
+                                "type": "integer",
+                                "nullable": true
                               },
                               "totalAmount": {
                                 "type": "number"
@@ -94310,7 +94843,8 @@
                                 "maxLength": 128
                               },
                               "orderNumber": {
-                                "type": "integer"
+                                "type": "integer",
+                                "nullable": true
                               },
                               "customerName": {
                                 "type": "string",
@@ -94662,7 +95196,8 @@
                                 "maxLength": 128
                               },
                               "orderNumber": {
-                                "type": "integer"
+                                "type": "integer",
+                                "nullable": true
                               },
                               "customerName": {
                                 "type": "string",
@@ -94977,7 +95512,8 @@
                                 "maxLength": 128
                               },
                               "orderNumber": {
-                                "type": "integer"
+                                "type": "integer",
+                                "nullable": true
                               },
                               "customerName": {
                                 "type": "string",
