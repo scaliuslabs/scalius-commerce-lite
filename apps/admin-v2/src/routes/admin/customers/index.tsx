@@ -22,9 +22,10 @@ import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
 import { DateText, sortHeader } from "~/components/admin/resource/columns";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
 import { CustomerCell } from "~/components/admin/CustomerCell";
+import { pageHead } from "~/i18n/page-titles";
 
 type Customer = CustomersListPayload["customers"][number];
 
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/admin/customers/")({
   validateSearch: validateCustomerSearch,
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("customers", deps), deps.q))),
-  head: () => ({ meta: [{ title: translate(customersMessages, "customers") }] }),
+  head: () => pageHead("customers"),
   component: CustomersPage,
   errorComponent: RouteErrorComponent,
 });

@@ -6,7 +6,7 @@
  * and contact details, and for the shipping policy its saved shipping zones
  * and charges, fill the text so it matches what checkout does.
  */
-import type { DeliveryZones } from "./DeliveryZones";
+import type { DeliveryZones } from "~/lib/api-query-options/settings-screens";
 
 export type PolicyKind = "refund" | "privacy" | "terms" | "shipping" | "contact";
 

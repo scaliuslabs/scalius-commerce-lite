@@ -5,12 +5,12 @@ import {
   TaxGroupsCard,
   TaxOverridesCard,
   TaxRatesCard,
-  firstTaxOverridesQuery,
 } from "~/components/admin/taxes/TaxesSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import {
+  firstTaxOverridesQuery,
   taxConfigurationQueryOptions,
   taxSettingsQueryOptions,
 } from "~/lib/api-query-options/taxes";

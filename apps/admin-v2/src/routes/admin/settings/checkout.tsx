@@ -3,15 +3,17 @@ import {
   CheckoutTextCard,
   CustomerContactCard,
   CustomerRequestsCard,
-  checkoutReadinessQuery,
-  customerRequestsQuery,
-  languagesQuery,
 } from "~/components/admin/settings/CheckoutSettings";
-import { checkoutFlowQuery } from "~/components/admin/settings/PaymentsSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import {
+  checkoutFlowQuery,
+  checkoutReadinessQuery,
+  customerRequestsQuery,
+  languagesQuery,
+} from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/checkout")({

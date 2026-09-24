@@ -47,7 +47,6 @@
     "check:env": "node scripts/check-worker-env.mjs",
     "check:admin-perf": "node scripts/admin-perf-check.mjs",
     "perf:storefront": "node scripts/storefront-perf.mjs",
-    "check:admin-client-bundle": "node scripts/admin-client-bundle-report.mjs --check",
     "check:dist-secrets": "node scripts/clean-dist-env-files.mjs --check",
     "generate:agent-contract": "pnpm --dir apps/api exec tsx src/openapi/generate-agent-operation-manifest-cli.ts",
     "generate:sdk": "pnpm generate:agent-contract && node scripts/turbo-run.mjs generate --filter=@scalius/api-client",

@@ -4,7 +4,6 @@ import { Link } from "@tanstack/react-router";
 import { Braces } from "lucide-react";
 import { toast } from "sonner";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
-import type { MessageLanguage } from "@scalius/core/modules/notifications/message-copy";
 import {
   TEMPLATE_LIMITS,
   defaultNotificationTemplates,
@@ -13,7 +12,6 @@ import {
   sampleOrderEmail,
   sampleVariables,
   variablesForEvent,
-  type EmailStore,
   type EmailTemplate,
   type NotificationTemplates,
 } from "@scalius/core/modules/notifications/notification-templates";
@@ -44,35 +42,20 @@ import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiClient, apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  TEMPLATES_URL,
+  customerRulesQuery,
+  templatesQuery,
+  type TemplatesData,
+} from "~/lib/api-query-options/settings-screens";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
-import {
-  notificationEventMessages,
-  notificationTemplateMessages,
-  notificationsMessages,
-} from "~/i18n/settings-notifications";
-import { customerRulesQuery } from "./NotificationSettings";
+import { notificationEventMessages } from "~/i18n/notification-events";
+import { notificationTemplateMessages, notificationsMessages } from "~/i18n/settings-notifications";
 import { SettingsCard, SettingsCardLoading, SettingsField } from "./SettingsPage";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 
-interface TemplatesData {
-  templates: NotificationTemplates;
-  revision: number;
-  /** The checkout language: the defaults' and the email frame's. */
-  language: MessageLanguage;
-  /** The store as its emails show it; `nameFromAddress` when no business name is set. */
-  store: EmailStore & { storefrontUrl: string | null; nameFromAddress: boolean };
-}
-
-// Stopgap until `pnpm generate:sdk` adds the notification template operations.
-const TEMPLATES_URL = "/api/v1/admin/settings/notification-channels/templates";
 const JSON_HEADERS = { "Content-Type": "application/json" };
-
-export const templatesQuery = {
-  queryKey: [...queryKeys.settings.notificationChannels(), "templates"] as const,
-  queryFn: async () => (await apiData(apiClient.get({ url: TEMPLATES_URL }))) as TemplatesData,
-};
 
 const sendTest = (body: Record<string, string>) =>
   apiData(apiClient.post({ url: `${TEMPLATES_URL}/test`, headers: JSON_HEADERS, body }));

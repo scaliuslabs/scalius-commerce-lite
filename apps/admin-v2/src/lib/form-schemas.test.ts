@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setLocale } from "~/i18n";
-import {
-  categoryFormSchema,
-  customerFormSchema,
-  pageFormSchema,
-} from "./form-schemas";
+import { categoryFormSchema, pageFormSchema } from "./form-schemas";
+import { customerFormSchema } from "./customer-form-schema";
 
 const category = {
   status: "draft",

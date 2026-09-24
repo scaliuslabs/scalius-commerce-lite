@@ -3,9 +3,9 @@ import {
   ECourierFraudCheckProvider,
   FraudBdCheckProvider,
   FraudGuardCheckProvider,
-  getFraudCheckProviderDefinition,
   getFraudCheckProvider,
 } from "./provider";
+import { getFraudCheckProviderDefinition } from "./provider-definitions";
 
 function mockJsonResponse(payload: unknown) {
   return vi.spyOn(globalThis, "fetch").mockResolvedValue(

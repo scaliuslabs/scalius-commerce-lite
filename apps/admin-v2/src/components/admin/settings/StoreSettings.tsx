@@ -3,9 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ImageIcon, Search, X } from "lucide-react";
 import { z } from "zod";
 import {
-  getApiV1AdminSettingsAllowedCountries,
   getApiV1AdminSettingsBusiness,
-  getApiV1AdminSettingsCurrency,
   getApiV1AdminSettingsPlatform,
   postApiV1AdminSettingsBusiness,
   postApiV1AdminSettingsCurrency,
@@ -35,6 +33,13 @@ import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
 import { normalizeCurrencySettingsInput, type CurrencySettingsPayload } from "~/lib/api-query-options/currency";
+import {
+  businessQuery,
+  countriesQuery,
+  currencyQuery,
+  platformQuery,
+  type CountryPolicy,
+} from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { getLocale, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
@@ -47,36 +52,8 @@ import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardL
 
 type Business = Omit<ApiResult<typeof getApiV1AdminSettingsBusiness>, "revision">;
 type Platform = Omit<ApiResult<typeof getApiV1AdminSettingsPlatform>, "revision">;
-type Country = ReturnType<typeof getCountries>[number];
-type CountryMode = "include" | "exclude";
-interface CountryPolicy {
-  allowedCountries: Country[];
-  allowedCountriesMode: CountryMode;
-}
-
-export const businessQuery = {
-  queryKey: queryKeys.settings.business(),
-  queryFn: () => apiData(getApiV1AdminSettingsBusiness()),
-};
-export const platformQuery = {
-  queryKey: queryKeys.settings.platform(),
-  queryFn: () => apiData(getApiV1AdminSettingsPlatform()),
-};
-export const currencyQuery = {
-  queryKey: queryKeys.settings.currency(),
-  queryFn: () => apiData(getApiV1AdminSettingsCurrency()),
-};
-export const countriesQuery = {
-  queryKey: queryKeys.settings.allowedCountries(),
-  queryFn: async (): Promise<CountryPolicy & { revision: number }> => {
-    const data = await apiData(getApiV1AdminSettingsAllowedCountries());
-    return {
-      allowedCountries: (Array.isArray(data.allowedCountries) ? data.allowedCountries : []) as Country[],
-      allowedCountriesMode: data.allowedCountriesMode === "exclude" ? "exclude" : "include",
-      revision: data.revision,
-    };
-  },
-};
+type Country = CountryPolicy["allowedCountries"][number];
+type CountryMode = CountryPolicy["allowedCountriesMode"];
 
 const BUSINESS_DEFAULTS: Business = {
   companyName: "",

@@ -1,8 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { TwoFactorForm } from "~/components/auth/TwoFactorForm";
-import { translate } from "~/i18n";
-import { authMessages } from "~/i18n/auth";
 import { readDashboardSession } from "~/lib/auth-guards";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/auth/two-factor")({
   beforeLoad: async () => {
@@ -12,6 +11,6 @@ export const Route = createFileRoute("/auth/two-factor")({
       throw redirect({ to: "/admin" });
     }
   },
-  head: () => ({ meta: [{ title: `${translate(authMessages, "twoFactorTitle")} · Scalius` }] }),
+  head: () => pageHead("twoFactor"),
   component: TwoFactorForm,
 });

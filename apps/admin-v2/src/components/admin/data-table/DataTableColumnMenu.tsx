@@ -1,11 +1,11 @@
-import { createContext, useContext, type KeyboardEvent, type ReactNode } from "react";
+import { Suspense, createContext, lazy, useContext, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Columns3, Eye, EyeClosed, EyeOff, GripVertical, Lock } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { SortableList } from "~/components/admin/shared/SortableList";
+import type { SortableListProps } from "~/components/admin/shared/SortableList";
 import { useMessages } from "~/i18n";
 import { dataTableMessages } from "~/i18n/data-table";
 import { isPrimaryColumn, type ColumnLayout } from "./column-layout";
@@ -27,6 +27,13 @@ export function useColumnMenu(): ReactNode {
 
 /** The list's column layout, for the column header menus ("Hide {name}"). */
 export const ColumnLayoutContext = createContext<Pick<ColumnLayout<TableRowData>, "toggle" | "isHiddenByChoice"> | null>(null);
+
+// Drag and drop is only needed once the menu is open: it loads then (or on
+// hover of the button), never with the list itself.
+const loadSortableList = () => import("~/components/admin/shared/SortableList");
+const SortableList = lazy(() => loadSortableList().then((module) => ({ default: module.SortableList }))) as <T extends { id: string }>(
+  props: SortableListProps<T>,
+) => ReactNode;
 
 /** The sort the list uses when none is chosen (radio value). */
 const DEFAULT_SORT = "__default";
@@ -76,7 +83,7 @@ export function DataTableColumnMenu<TData extends TableRowData>({
     <Popover>
       <PopoverTrigger asChild>
         {/* Says what it holds: "Sort and columns" when the list sorts, else "Columns" (text from sm up). */}
-        <Button type="button" variant="outline" aria-label={menuName} title={menuName}>
+        <Button type="button" variant="outline" aria-label={menuName} title={menuName} onPointerEnter={() => void loadSortableList()} onFocus={() => void loadSortableList()}>
           <Columns3 aria-hidden />
           <span className="max-sm:sr-only">{menuName}</span>
         </Button>
@@ -137,62 +144,64 @@ export function DataTableColumnMenu<TData extends TableRowData>({
                 <span className="min-w-0 flex-1 truncate text-body">{columnLabel(title)}</span>
               </div>
             ) : null}
-            <SortableList
-              items={items}
-              className="space-y-0.5"
-              onReorder={(next) => {
-                const moved = next.find((item, index) => item.id !== items[index]?.id);
-                if (moved) layout.move(moved.id, next.indexOf(moved) + offset);
-              }}
-              renderItem={({ id, column }, sortableProps) => {
-                const name = columnLabel(column);
-                const hidden = layout.isHiddenByChoice(id);
-                // Shown by choice, but stepped aside because the table is narrower than its columns.
-                const squeezed = !hidden && layout.autoHidden.has(id);
-                const index = items.findIndex((item) => item.id === id);
-                return (
-                  <div
-                    ref={sortableProps.ref}
-                    style={sortableProps.style}
-                    className="flex min-h-9 items-center gap-1 rounded-md bg-popover"
-                  >
-                    <button
-                      type="button"
-                      data-column-handle={id}
-                      aria-label={t("moveColumn", { name })}
-                      className="flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
-                      {...sortableProps.dragHandleProps}
-                      onKeyDown={(event) => moveBy(event, id, index)}
+            <Suspense fallback={null}>
+              <SortableList
+                items={items}
+                className="space-y-0.5"
+                onReorder={(next) => {
+                  const moved = next.find((item, index) => item.id !== items[index]?.id);
+                  if (moved) layout.move(moved.id, next.indexOf(moved) + offset);
+                }}
+                renderItem={({ id, column }, sortableProps) => {
+                  const name = columnLabel(column);
+                  const hidden = layout.isHiddenByChoice(id);
+                  // Shown by choice, but stepped aside because the table is narrower than its columns.
+                  const squeezed = !hidden && layout.autoHidden.has(id);
+                  const index = items.findIndex((item) => item.id === id);
+                  return (
+                    <div
+                      ref={sortableProps.ref}
+                      style={sortableProps.style}
+                      className="flex min-h-9 items-center gap-1 rounded-md bg-popover"
                     >
-                      <GripVertical className="size-4" aria-hidden />
-                    </button>
-                    <span className="min-w-0 flex-1">
-                      <span data-muted={hidden || squeezed || undefined} className="block truncate text-body data-[muted]:text-muted-foreground">
-                        {name}
-                      </span>
-                      {squeezed ? (
-                        <span id={`column-squeezed-${id}`} className="block truncate text-caption text-muted-foreground">
-                          {t("hiddenToFitColumn")}
+                      <button
+                        type="button"
+                        data-column-handle={id}
+                        aria-label={t("moveColumn", { name })}
+                        className="flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                        {...sortableProps.dragHandleProps}
+                        onKeyDown={(event) => moveBy(event, id, index)}
+                      >
+                        <GripVertical className="size-4" aria-hidden />
+                      </button>
+                      <span className="min-w-0 flex-1">
+                        <span data-muted={hidden || squeezed || undefined} className="block truncate text-body data-[muted]:text-muted-foreground">
+                          {name}
                         </span>
-                      ) : null}
-                    </span>
-                    {/* One name, its state in aria-pressed: "Show Status, pressed" means shown. */}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-pressed={!hidden}
-                      aria-label={t("showColumn", { name })}
-                      aria-describedby={squeezed ? `column-squeezed-${id}` : undefined}
-                      title={t(hidden ? "columnHidden" : squeezed ? "hiddenToFitColumn" : "columnShown")}
-                      onClick={() => layout.toggle(id)}
-                    >
-                      {hidden ? <EyeOff aria-hidden /> : squeezed ? <EyeClosed aria-hidden /> : <Eye aria-hidden />}
-                    </Button>
-                  </div>
-                );
-              }}
-            />
+                        {squeezed ? (
+                          <span id={`column-squeezed-${id}`} className="block truncate text-caption text-muted-foreground">
+                            {t("hiddenToFitColumn")}
+                          </span>
+                        ) : null}
+                      </span>
+                      {/* One name, its state in aria-pressed: "Show Status, pressed" means shown. */}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-pressed={!hidden}
+                        aria-label={t("showColumn", { name })}
+                        aria-describedby={squeezed ? `column-squeezed-${id}` : undefined}
+                        title={t(hidden ? "columnHidden" : squeezed ? "hiddenToFitColumn" : "columnShown")}
+                        onClick={() => layout.toggle(id)}
+                      >
+                        {hidden ? <EyeOff aria-hidden /> : squeezed ? <EyeClosed aria-hidden /> : <Eye aria-hidden />}
+                      </Button>
+                    </div>
+                  );
+                }}
+              />
+            </Suspense>
           </section>
         </div>
 

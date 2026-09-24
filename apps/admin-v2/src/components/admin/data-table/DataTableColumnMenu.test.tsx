@@ -57,6 +57,10 @@ describe("column menu and width-aware columns", () => {
   const render = (width: number) => act(async () => root.render(<Harness width={width} />));
   const openMenu = async () => {
     await act(async () => button("Sort and columns")!.click());
+    // The draggable column list loads when the menu opens.
+    for (let attempt = 0; attempt < 50 && !document.querySelector("[data-column-handle]"); attempt += 1) {
+      await act(() => new Promise((resolve) => setTimeout(resolve, 10)));
+    }
   };
 
   beforeEach(() => {

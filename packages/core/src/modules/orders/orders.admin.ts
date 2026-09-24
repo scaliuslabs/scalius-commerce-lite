@@ -1950,7 +1950,9 @@ async function getOrderDetailsOnce(
     db: Database,
     id: string,
 ): Promise<OrderDetails | null> {
-    const order = await db
+    // Every read is keyed by the order id, so they all go out in one wave
+    // rather than waiting for the order row first.
+    const orderRead = db
         .select({
             id: orders.id,
             customerName: orders.customerName,
@@ -1985,15 +1987,21 @@ async function getOrderDetailsOnce(
             paymentRecoveryApplicable: paymentRecoveryLifecycleCondition(),
             ...orderEditEvidenceSelection(),
             ...orderListFactsSelection(),
+            // The record the order is filed under: its title can differ from the order's own name.
+            recordId: customers.id,
+            recordName: customers.name,
+            recordPhone: customers.phone,
+            recordAccountClaimedAt: customers.accountClaimedAt,
+            recordOrigin: customers.origin,
         })
         .from(orders)
         .leftJoin(codTracking, eq(codTracking.orderId, orders.id))
+        .leftJoin(customers, eq(customers.id, orders.customerId))
         .where(eq(orders.id, id))
         .get();
 
-    if (!order) return null;
-
-    const [items, latestShipments, refundAttemptViews, supportRequests, promotionRows, paymentAttempts, customerRecord] = await Promise.all([
+    const [orderRow, items, latestShipments, refundAttemptViews, supportRequests, promotionRows, paymentAttempts] = await Promise.all([
+        orderRead,
         db
             .select({
                 id: orderItems.id,
@@ -2043,17 +2051,13 @@ async function getOrderDetailsOnce(
         listOrderSupportRequests(db, id),
         listOrderDiscountLines(db, id),
         listOrderPaymentSessionAttempts(db, id),
-        // The record the order is filed under: its title can differ from the order's own name.
-        order.customerId
-            ? db.select({
-                id: customers.id,
-                name: customers.name,
-                phone: customers.phone,
-                accountClaimedAt: customers.accountClaimedAt,
-                origin: customers.origin,
-            }).from(customers).where(eq(customers.id, order.customerId)).get()
-            : Promise.resolve(undefined),
     ]);
+
+    if (!orderRow) return null;
+    const { recordId, recordName, recordPhone, recordAccountClaimedAt, recordOrigin, ...order } = orderRow;
+    const customerRecord = recordId && recordName !== null && recordPhone !== null
+        ? { id: recordId, name: recordName, phone: recordPhone, accountClaimedAt: recordAccountClaimedAt, origin: recordOrigin }
+        : undefined;
 
     const formattedItems = items.map((item) => ({
         id: item.id,

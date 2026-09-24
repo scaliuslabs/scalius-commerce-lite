@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CategoryForm } from "~/components/admin/CategoryForm";
-import { translate } from "~/i18n";
-import { categoryFormMessages } from "~/i18n/category-form";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/categories/new")({
-  head: () => ({ meta: [{ title: translate(categoryFormMessages, "addCategory") }] }),
+  head: () => pageHead("addCategory"),
   component: NewCategoryPage,
 });
 

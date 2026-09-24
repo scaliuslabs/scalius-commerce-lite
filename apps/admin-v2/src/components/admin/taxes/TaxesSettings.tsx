@@ -28,6 +28,7 @@ import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData } from "~/lib/api";
 import {
+  OVERRIDES_PAGE_SIZE,
   fetchTaxSettings,
   taxClassificationsQueryOptions,
   taxConfigurationQueryOptions,
@@ -58,14 +59,8 @@ import {
 } from "./tax-form";
 
 const NONE = "__none__";
-const OVERRIDES_PAGE_SIZE = 25;
 const configurationQuery = taxConfigurationQueryOptions();
 const taxSettingsQuery = taxSettingsQueryOptions();
-export const firstTaxOverridesQuery = taxClassificationsQueryOptions({
-  kind: "product",
-  page: 1,
-  limit: OVERRIDES_PAGE_SIZE,
-});
 
 function useCanManageTaxes() {
   return useHasPermission(ADMIN_PERMISSIONS.TAXES_MANAGE);

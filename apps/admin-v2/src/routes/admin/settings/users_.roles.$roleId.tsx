@@ -26,7 +26,6 @@ import { SettingsCard, SettingsCardLoading, SettingsField, SettingsPage } from "
 import {
   PermissionChecklist,
   failure,
-  rolesQuery,
   saveFailure,
   useAccessRefresh,
   useRoleName,
@@ -35,10 +34,12 @@ import {
 import { roleKey } from "~/components/admin/settings/staff-access";
 import { apiData } from "~/lib/api";
 import type { RbacRole } from "~/lib/api-query-options/rbac";
+import { rolesQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { usersMessages } from "~/i18n/settings-users";
+import { pageHead } from "~/i18n/page-titles";
 
 const NEW_ROLE = "new";
 
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/admin/settings/users_/roles/$roleId")({
   validateSearch: (search: Record<string, unknown>): { from?: string } =>
     typeof search.from === "string" ? { from: search.from } : {},
   loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(rolesQuery).catch(() => undefined),
-  head: () => ({ meta: [{ title: `${translate(usersMessages, "rolesTitle")} | Scalius Admin` }] }),
+  head: () => pageHead("roles"),
   errorComponent: RouteErrorComponent,
   component: RolePage,
 });

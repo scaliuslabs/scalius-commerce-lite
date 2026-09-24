@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { BD_MOBILE_REQUIRED_MESSAGE, formatBdMobile, normalizeBdMobile, toLatinDigits } from "./phone-input";
+import { BD_MOBILE_REQUIRED_MESSAGE, formatBdMobile, formatPhoneForDisplay, normalizeBdMobile, toLatinDigits } from "./phone-input";
 import { validateAndFormatPhone } from "./customer-utils";
 
 describe("phone input rules", () => {
@@ -45,5 +45,13 @@ describe("phone input rules", () => {
 
   it("lets the server accept a number typed in Bangla digits", () => {
     expect(validateAndFormatPhone("০১৭১২৩৪৫৬৭৮")).toBe("+8801712345678");
+  });
+
+  it("shows stored numbers for reading without phone metadata", () => {
+    expect(formatPhoneForDisplay("+8801712345678")).toBe("+880 1712 345678");
+    expect(formatPhoneForDisplay("+447700900123")).toBe("+44 7700900123");
+    expect(formatPhoneForDisplay("+14155552671")).toBe("+1 4155552671");
+    expect(formatPhoneForDisplay("+97150123456")).toBe("+971 50123456");
+    expect(formatPhoneForDisplay("not a phone")).toBe("not a phone");
   });
 });

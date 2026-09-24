@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Archive, Undo } from "lucide-react";
 import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Badge } from "~/components/ui/badge";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";

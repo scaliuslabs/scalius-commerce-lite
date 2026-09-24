@@ -315,6 +315,8 @@ pnpm release:check
 pnpm ops:check --queues
 ```
 
+`pnpm check:admin-perf` builds the dashboard to a temporary directory and holds the entry chunk and every route's first-render JavaScript to Brotli budgets (`BUNDLE_BUDGETS` in `scripts/admin-perf-check.mjs`), and fails when Tiptap, the QR engine, drag and drop or phone metadata join a route's first download; `--explain <route file>` lists what a route downloads. With a local stack running, `pnpm check:admin-perf --runtime --admin http://localhost:4323 --cpu 4 --rtt 40 --mbps 25` times first load, cold and warm route transitions and product-editor typing in headless Chrome (`--typing-product <id>`, `--explorer <api origin>` for D1 calls per transition).
+
 The authenticated admin read smoke additionally covers inventory, orders, order detail/form, all browser routes, and session cleanup. Browser verification covers sign-out/sign-in, desktop/mobile dashboard navigation, inventory and orders, storefront search, product option selection, add/remove cart restoration, checkout form readiness, and validation failure states without placing an order or charging a payment method.
 
 Final deployed versions verified on 2026-08-09:

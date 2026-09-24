@@ -15,7 +15,7 @@
  * `bn` must define every `en` key (checked by the type). Numbers, money and
  * dates are formatted with `Intl` for the active locale.
  */
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 export type Locale = "en" | "bn";
 
@@ -97,7 +97,12 @@ export function translate<K extends string>(catalog: MessageCatalog<K>, key: K, 
 /** Returns `t(key, vars)` for one catalog; re-renders when the locale changes. */
 export function useMessages<K extends string>(catalog: MessageCatalog<K>): (key: K, vars?: Vars) => string {
   const locale = useLocale();
-  return (key, vars) => interpolate(catalog[locale][key] ?? catalog.en[key], vars);
+  // Stable per catalog and language, so memoised columns and callbacks that
+  // use it survive re-renders.
+  return useCallback(
+    (key: K, vars?: Vars) => interpolate(catalog[locale][key] ?? catalog.en[key], vars),
+    [catalog, locale],
+  );
 }
 
 // Bangladesh groups digits in lakhs (12,34,567) in both languages; "en-IN"

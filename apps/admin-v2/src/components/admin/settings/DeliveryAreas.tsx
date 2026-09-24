@@ -45,6 +45,7 @@ import {
   type DeliveryLocation,
   type PathaoImportProgress,
 } from "~/lib/api-query-options/delivery";
+import { areaCountsQuery } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { formatNumber, useMessages } from "~/i18n";
 import { toLatinDigits } from "@scalius/shared/phone-input";
@@ -53,7 +54,6 @@ import { shippingMessages } from "~/i18n/settings-shipping";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsCard, SettingsDialog, SettingsField } from "./SettingsPage";
-import { areaCountsQuery } from "./ShippingSettings";
 
 type Level = "city" | "zone" | "area";
 const PARENT: Record<Exclude<Level, "city">, Level> = { zone: "city", area: "zone" };

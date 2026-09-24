@@ -2,15 +2,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   PaymentMethodsCard,
   PaymentOptionsCard,
-  checkoutFlowQuery,
-  gatewayQuery,
-  paymentMethodsQuery,
 } from "~/components/admin/settings/PaymentsSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
-import { currencyQuery, platformQuery } from "~/components/admin/settings/StoreSettings";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import {
+  checkoutFlowQuery,
+  currencyQuery,
+  gatewayQuery,
+  paymentMethodsQuery,
+  platformQuery,
+} from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/payments")({
