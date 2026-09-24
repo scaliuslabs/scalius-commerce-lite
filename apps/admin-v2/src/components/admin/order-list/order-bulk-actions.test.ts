@@ -68,10 +68,11 @@ describe("bulk action eligibility", () => {
         order("b", { status: "cancelled" }),
         order("c", { status: "pending" }),
         order("d", { status: "returned", activeRefundOperation: refunding }),
+        order("e", { status: "delivered" }),
       ],
       "archive",
     );
-    expect(ids(plan.eligible)).toEqual(["a", "b"]);
+    expect(ids(plan.eligible)).toEqual(["a", "b", "e"]);
     expect(plan.skipped).toEqual([
       { kind: "status", status: "pending", count: 1 },
       { kind: "block", reason: "refund", count: 1 },

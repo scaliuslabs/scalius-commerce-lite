@@ -48,4 +48,19 @@ describe("order timeline wording", () => {
     expect(describe_("request_resolved", { type: "cancel_pre_shipment", status: "completed" }).text)
       .toBe("Cancellation requested · Done");
   });
+
+  it("names who created a manual order, and keeps storefront orders as placed (R3-ORD-17)", () => {
+    expect(describeTimelineEvent({ kind: "placed", data: null, body: null, actorName: "Rina" }, t, o, money).text)
+      .toBe("Order created by Rina");
+    expect(describe_("placed").text).toBe("Order placed");
+  });
+
+  it("logs return approval and the damaged part of a receipt (R3-ORD-14)", () => {
+    expect(describe_("return_approved", { approved: 2, rejected: 0 })).toEqual({ text: "Return approved (2 items)", detail: null });
+    expect(describe_("return_approved", { approved: 1, rejected: 1 })).toEqual({ text: "Return approved (1 item)", detail: "1 not approved" });
+    expect(describe_("return_approved", { approved: 0, rejected: 2 }).text).toBe("Return rejected");
+    expect(describe_("return_received", { received: 2, restocked: 1, damaged: 1 }).text).toBe("Returned items received (2 · 1 damaged)");
+    expect(describe_("return_received", { received: 2, restocked: 2, damaged: 0 }).text).toBe("Returned items received (2)");
+    expect(describe_("parcel_returned", { quantity: 2 }).text).toBe("Parcel came back: 2 items are unsent again");
+  });
 });

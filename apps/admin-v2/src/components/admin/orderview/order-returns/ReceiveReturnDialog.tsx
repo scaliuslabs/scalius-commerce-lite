@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Alert } from "~/components/ui/alert";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -108,7 +108,7 @@ export function ReceiveReturnDialog({
           <DialogDescription>{t("returns.receiveHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
+          {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <ul className="divide-y rounded-lg border">
             {orderReturn.lines.map((line) => {
               const outstanding = getOutstandingReceiptQuantity(line);
@@ -168,9 +168,14 @@ export function ReceiveReturnDialog({
                       </Label>
                       <div className="grid gap-1 font-medium">
                         <span>{t("returns.damaged")}</span>
-                        <p className="py-2 font-normal tabular-nums" aria-label={t("returns.damagedQty", { count: Math.max(0, current.received - current.restock) })}>
-                          {formatNumber(Math.max(0, current.received - current.restock))}
-                        </p>
+                        {/* Derived from valid quantities only: nothing to show next to an error (R3-ORD-16). */}
+                        {receivedError || restockError ? (
+                          <p className="py-2 font-normal text-muted-foreground">—</p>
+                        ) : (
+                          <p className="py-2 font-normal tabular-nums" aria-label={t("returns.damagedQty", { count: current.received - current.restock })}>
+                            {formatNumber(current.received - current.restock)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -200,7 +205,7 @@ export function ReceiveReturnDialog({
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>
           <Button type="button" onClick={submit} disabled={lines.length === 0 || tooMany} loading={mutation.isPending}>
-            {received > 0 ? t("returns.receiveCount", { count: received }) : t("returns.receiveSubmit")}
+            {received > 0 && !tooMany ? t("returns.receiveCount", { count: received }) : t("returns.receiveSubmit")}
           </Button>
         </DialogFooter>
       </DialogContent>

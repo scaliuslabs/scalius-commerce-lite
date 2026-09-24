@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { orderFormMessages } from "~/i18n/order-form";
-import { editLockMessageKey, orderEditState } from "./-order-form-route-state";
+import { editLockMessageKey, orderEditState, savedDeliveryMethod } from "./-order-form-route-state";
 
 const allowed = { allowed: true, reason: null };
 const locked = (reason: string | null) => ({ allowed: false, reason });
@@ -32,5 +32,19 @@ describe("edit order state", () => {
     }
     expect(editLockMessageKey("something_new")).toBe("lockUnknown");
     expect(editLockMessageKey(null)).toBe("lockUnknown");
+  });
+});
+
+describe("edit order delivery method", () => {
+  it("preselects the method the order was placed with", () => {
+    expect(savedDeliveryMethod({ shippingMethodId: "rate_ops006", shippingMethodName: "OPS006 Standard Delivery" })).toEqual({
+      shippingMethodId: "rate_ops006",
+      savedShippingMethod: { id: "rate_ops006", name: "OPS006 Standard Delivery" },
+    });
+  });
+
+  it("keeps a custom charge custom", () => {
+    expect(savedDeliveryMethod({ shippingMethodId: null, shippingMethodName: null }))
+      .toEqual({ shippingMethodId: null, savedShippingMethod: null });
   });
 });

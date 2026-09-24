@@ -22,6 +22,23 @@ export interface InvoiceOrderSource extends InvoiceOrderSnapshot {
   deletedAt: number | null;
 }
 
+/** Money given back on the order so far (major units), for invoices issued before a refund. */
+export async function readOrderRefundedAmount(db: Database, orderId: string): Promise<number> {
+  const row = await db
+    .select({
+      refundedMinor: sql<number>`COALESCE(SUM(${orderPayments.amountMinor}), 0)`,
+      decimals: sql<number>`(SELECT ${orders.currencyDecimalPlaces} FROM ${orders} WHERE ${orders.id} = ${orderId})`,
+    })
+    .from(orderPayments)
+    .where(and(
+      eq(orderPayments.orderId, orderId),
+      eq(orderPayments.paymentType, "refund"),
+      eq(orderPayments.status, PaymentRecordStatus.REFUNDED),
+    ))
+    .get();
+  return fromMinor(Number(row?.refundedMinor) || 0, Number(row?.decimals ?? 2));
+}
+
 export async function readInvoiceOrderSource(
   db: Database,
   orderId: string,

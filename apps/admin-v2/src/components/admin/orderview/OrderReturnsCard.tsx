@@ -23,7 +23,8 @@ import { ReceiveReturnDialog } from "./order-returns/ReceiveReturnDialog";
 
 type DialogType = "create" | ReturnDialogAction["type"];
 const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
-const RETURNABLE_ORDER_STATUSES = new Set(["shipped", "delivered", "completed"]);
+// A parcel still out is "Mark returned", not a return request (R3-ORD-14).
+const RETURNABLE_ORDER_STATUSES = new Set(["delivered", "completed"]);
 
 export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: () => void }) {
   const t = useMessages(orderDetailMessages);

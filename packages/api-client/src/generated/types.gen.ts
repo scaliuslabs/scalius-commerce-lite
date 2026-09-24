@@ -39970,6 +39970,176 @@ export type PutApiV1AdminOrdersByIdStatusResponses = {
 
 export type PutApiV1AdminOrdersByIdStatusResponse = PutApiV1AdminOrdersByIdStatusResponses[keyof PutApiV1AdminOrdersByIdStatusResponses];
 
+export type PostApiV1AdminOrdersByIdMarkDeliveredData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/mark-delivered';
+};
+
+export type PostApiV1AdminOrdersByIdMarkDeliveredErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdMarkDeliveredError = PostApiV1AdminOrdersByIdMarkDeliveredErrors[keyof PostApiV1AdminOrdersByIdMarkDeliveredErrors];
+
+export type PostApiV1AdminOrdersByIdMarkDeliveredResponses = {
+    /**
+     * Order delivered
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdMarkDeliveredResponse = PostApiV1AdminOrdersByIdMarkDeliveredResponses[keyof PostApiV1AdminOrdersByIdMarkDeliveredResponses];
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedData = {
+    body?: never;
+    path: {
+        id: string;
+        shipmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/returned';
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedError = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedErrors[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedErrors];
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponses = {
+    /**
+     * Parcel back; its items can be sent again or the order cancelled
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            shipmentId: string;
+            quantity: number;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponse = PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponses[keyof PostApiV1AdminOrdersByIdShipmentsByShipmentIdReturnedResponses];
+
 export type GetApiV1AdminOrdersByIdCodData = {
     body?: never;
     path: {
@@ -41483,6 +41653,7 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
             contentHash: string | null;
             renderVersion: 'invoice-v1';
             orderVersion: number;
+            refundedSinceIssue?: number;
         };
     };
 };
@@ -41698,6 +41869,7 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
             contentHash: string | null;
             renderVersion: 'invoice-v1';
             orderVersion: number;
+            refundedSinceIssue?: number;
         };
     };
 };
@@ -44444,7 +44616,7 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
@@ -44545,7 +44717,7 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_approved' | 'return_received' | 'parcel_returned' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
             body: string | null;
             data: {
                 [key: string]: unknown;
