@@ -30,7 +30,10 @@ describe("heroImageCandidate", () => {
     expect(candidate.srcset).toBe([160, 320, 480, 640, 960, 1080]
       .map((width) => `https://cdn.example/media/hero.webp/${width}.webp ${width}w`)
       .join(", "));
-    expect(candidate.sizes).toBe("calc(100vw - 2rem)");
+    // The home LCP: DPR 2.5+ phones are asked for about 2x pixels.
+    expect(candidate.sizes).toBe(
+      "(min-resolution: 2.5dppx) calc((100vw - 2rem) * 0.667), calc(100vw - 2rem)",
+    );
     expect(candidate.media).toBe("(max-width: 767px)");
     expect(candidate.src).toBe("https://cdn.example/media/hero.webp/640.webp");
   });

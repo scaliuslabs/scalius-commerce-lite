@@ -4,6 +4,7 @@ import {
 } from "@scalius/shared/hero-slider";
 import type { HeroSliderImage, HomepageHero } from "./api/storefront";
 import { mediaImageSrcSet, mediaImageUrl } from "./media-url";
+import { capSizesDensity } from "./responsive-image";
 
 /**
  * Rendered banner width per viewport: hero.astro's max-w-7xl (80rem)
@@ -41,7 +42,8 @@ export function heroImageCandidate(
   return {
     src: mediaImageUrl(url, HERO_SLIDE_PRESENTATION[viewport].width),
     srcset: mediaImageSrcSet(url),
-    sizes: HERO_IMAGE_SIZES[viewport],
+    // The banner is the home LCP: DPR 3 phones fetch about 2x pixels.
+    sizes: capSizesDensity(HERO_IMAGE_SIZES[viewport]),
     media: HERO_VIEWPORT_MEDIA[viewport],
   };
 }

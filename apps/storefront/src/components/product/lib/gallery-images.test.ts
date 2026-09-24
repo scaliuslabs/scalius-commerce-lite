@@ -9,21 +9,35 @@ import {
   type ProductGalleryLayout,
 } from "./gallery-images";
 
-/** The width a browser takes from `sizes` at a viewport (px, DPR-free). */
-function evaluateSizes(sizes: string, viewport: number): number {
-  for (const entry of sizes.split(/,\s*(?![^()]*\))/)) {
-    const match = /^(?:\((max|min)-width: (\d+)px\)\s+)?(.+)$/.exec(entry.trim());
+/** A `sizes` length at a viewport, in CSS px. */
+function evaluateLength(length: string, viewport: number): number {
+  const scaled = /^calc\(\((.+)\) \* ([\d.]+)\)$/.exec(length);
+  if (scaled) return evaluateLength(scaled[1]!, viewport) * Number(scaled[2]);
+  const expression = /^calc\((.+)\)$/.exec(length)?.[1] ?? length;
+  const difference = /^([\d.]+)vw - (\d+)px$/.exec(expression);
+  if (difference) return (Number(difference[1]) * viewport) / 100 - Number(difference[2]);
+  const vw = /^([\d.]+)vw$/.exec(expression);
+  if (vw) return (Number(vw[1]) * viewport) / 100;
+  const px = /^(\d+)px$/.exec(expression);
+  if (px) return Number(px[1]);
+  throw new Error(`Unparsed length: ${length}`);
+}
+
+/** The width a browser takes from `sizes` at a viewport and device pixel ratio. */
+function evaluateSizes(sizes: string, viewport: number, dppx = 1): number {
+  for (const raw of sizes.split(/,\s*(?![^()]*\))/)) {
+    let entry = raw.trim();
+    const density = /^\(min-resolution: ([\d.]+)dppx\)(?: and )?\s*/.exec(entry);
+    if (density) {
+      if (dppx < Number(density[1])) continue;
+      entry = entry.slice(density[0].length);
+    }
+    const match = /^(?:\((max|min)-width: (\d+)px\)\s+)?(.+)$/.exec(entry);
     if (!match) throw new Error(`Unparsed size: ${entry}`);
     const [, kind, limit, length] = match;
     if (kind === "max" && viewport > Number(limit)) continue;
     if (kind === "min" && viewport < Number(limit)) continue;
-    const calc = /^calc\(([\d.]+)vw - (\d+)px\)$/.exec(length!);
-    if (calc) return (Number(calc[1]) * viewport) / 100 - Number(calc[2]);
-    const vw = /^([\d.]+)vw$/.exec(length!);
-    if (vw) return (Number(vw[1]) * viewport) / 100;
-    const px = /^(\d+)px$/.exec(length!);
-    if (px) return Number(px[1]);
-    throw new Error(`Unparsed length: ${length}`);
+    return evaluateLength(length!, viewport);
   }
   throw new Error("No size matched");
 }
@@ -82,11 +96,14 @@ describe("product gallery image slots", () => {
     }
   }
 
-  it("serves a DPR 3 phone a sharp photo and a laptop no more than it shows", () => {
+  it("serves a DPR 2 phone its full density, a DPR 3 phone about 2x, and a laptop no more than it shows", () => {
     const { sizes } = productGalleryMainSlot(STOREFRONT_PRODUCT_PAGE_SPECS.gallery, true);
-    // 390px phone: the full 366px row (thumbnails in a strip below), ~1100 device px at DPR 3.
-    expect(evaluateSizes(sizes, 390)).toBe(366);
-    expect(evaluateSizes(sizes, 390) * 3).toBeGreaterThan(1000);
+    // 390px phone: the full 366px row (thumbnails in a strip below).
+    expect(evaluateSizes(sizes, 390, 2)).toBe(366);
+    // DPR 3 asks for ~2x pixels (~730 device px: the 960w rendition, not 1600w).
+    const dpr3 = evaluateSizes(sizes, 390, 3) * 3;
+    expect(dpr3).toBeGreaterThan(2 * 366 - 5);
+    expect(dpr3).toBeLessThan(960);
     // 1440px desktop: the 468px column, not the viewport.
     expect(evaluateSizes(sizes, 1440)).toBe(468);
   });

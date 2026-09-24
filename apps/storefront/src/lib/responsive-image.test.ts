@@ -4,7 +4,32 @@ import { describe, expect, it } from "vitest";
 
 import { requestRuntime } from "./api/runtime";
 import { productImageSources, PRODUCT_IMAGE_FALLBACK } from "./product-media";
-import { responsiveImageSources } from "./responsive-image";
+import { capSizesDensity, responsiveImageSources } from "./responsive-image";
+
+describe("capSizesDensity", () => {
+  it("repeats every entry first for DPR 2.5+ screens at 2/3 of the width", () => {
+    expect(capSizesDensity("calc(100vw - 2rem)")).toBe(
+      "(min-resolution: 2.5dppx) calc((100vw - 2rem) * 0.667), calc(100vw - 2rem)",
+    );
+    expect(capSizesDensity("(max-width: 407px) calc(100vw - 24px), (max-width: 1023px) 384px, 468px")).toBe([
+      "(min-resolution: 2.5dppx) and (max-width: 407px) calc((100vw - 24px) * 0.667)",
+      "(min-resolution: 2.5dppx) and (max-width: 1023px) calc((384px) * 0.667)",
+      "(min-resolution: 2.5dppx) calc((468px) * 0.667)",
+      "(max-width: 407px) calc(100vw - 24px)",
+      "(max-width: 1023px) 384px",
+      "468px",
+    ].join(", "));
+  });
+
+  it("keeps compound conditions and nested math intact", () => {
+    expect(capSizesDensity("(min-width: 64rem) and (max-width: 80rem) calc(100vw - 4rem), min(50vw, 30rem)")).toBe([
+      "(min-resolution: 2.5dppx) and (min-width: 64rem) and (max-width: 80rem) calc((100vw - 4rem) * 0.667)",
+      "(min-resolution: 2.5dppx) calc((min(50vw, 30rem)) * 0.667)",
+      "(min-width: 64rem) and (max-width: 80rem) calc(100vw - 4rem)",
+      "min(50vw, 30rem)",
+    ].join(", "));
+  });
+});
 
 const MASTER = "https://cdn.example.test/media/bag.jpg/1600.webp";
 const at = (width: number) => `https://cdn.example.test/media/bag.jpg/${width}.webp`;
