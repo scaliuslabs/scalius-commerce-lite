@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
-import { orderEvents, orders, user } from "@scalius/database/schema";
+import { adminOrderCreateAttempts, orderEvents, orders, user } from "@scalius/database/schema";
 import { ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "./admin-order-create-attempts";
 
@@ -18,7 +18,9 @@ export const ORDER_EVENT_KINDS = [
     "cod_returned",
     "refund_recorded",
     "return_created",
+    "return_approved",
     "return_received",
+    "parcel_returned",
     "request_submitted",
     "request_resolved",
     "archived",
@@ -171,7 +173,10 @@ export async function listOrderTimeline(
     orderId: string,
     viewerId?: string | null,
 ): Promise<OrderTimelineEvent[]> {
-    const order = await db.select({ createdAt: orders.createdAt }).from(orders)
+    // A manual order was created by a staff member: the timeline names them.
+    const order = await db.select({ createdAt: orders.createdAt, creatorName: user.name }).from(orders)
+        .leftJoin(adminOrderCreateAttempts, eq(adminOrderCreateAttempts.orderId, orders.id))
+        .leftJoin(user, eq(user.id, adminOrderCreateAttempts.actorId))
         .where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     const rows = await db.select({
@@ -203,7 +208,7 @@ export async function listOrderTimeline(
             kind: "placed" as const,
             body: null,
             data: null,
-            actorName: null,
+            actorName: order.creatorName ?? null,
             own: false,
             createdAt: order.createdAt,
         },

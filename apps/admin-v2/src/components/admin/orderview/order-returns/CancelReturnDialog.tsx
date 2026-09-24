@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Alert } from "~/components/ui/alert";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -52,7 +52,7 @@ export function CancelReturnDialog({
           <DialogTitle>{t("returns.cancelTitle")}</DialogTitle>
           <DialogDescription>{t("returns.cancelHelp")}</DialogDescription>
         </DialogHeader>
-        {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
+        {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
         <div className="space-y-2">
           <Label htmlFor={`cancel-return-notes-${orderReturn.id}`}>{t("returns.reason")}</Label>
           <Textarea id={`cancel-return-notes-${orderReturn.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />

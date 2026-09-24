@@ -784,7 +784,7 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
-  it("compares a duplicate KWD COD collection at the order's immutable precision", async () => {
+  it("refuses a repeat KWD COD collection on a delivered order instead of recording it again", async () => {
     const { db } = createDbMock({
       selectedOrder: {
         status: OrderStatus.DELIVERED,
@@ -812,22 +812,15 @@ describe("orders fulfillment side-effect ordering", () => {
       updateResults: [],
     });
 
+    // A second collect on a delivered order (a stale tab) records nothing and says so.
     await expect(processCodAction(db as never, "order_1", {
       action: "collected",
       collectedBy: "Courier A",
       collectedAmount: 1.2346,
-    })).resolves.toEqual({
-      message: "COD collection recorded",
-      availabilityTransitionVariantIds: [],
-    });
+    })).rejects.toThrow("already recorded as collected by Courier A");
 
     expect(mocks.validateCODCollectionDetails).not.toHaveBeenCalled();
-    expect(mocks.recordCODCollection).toHaveBeenCalledWith(db, {
-      orderId: "order_1",
-      collectedBy: "Courier A",
-      collectedAmountMinor: 1_235,
-      receiptUrl: undefined,
-    });
+    expect(mocks.recordCODCollection).not.toHaveBeenCalled();
   });
 
   it("retries COD collection inventory reconciliation when the order is already delivered", async () => {
@@ -1148,7 +1141,7 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(updates[0]).toMatchObject({ inventoryAction: "deducted" });
   });
 
-  it("rejects generic COD delivery status updates before COD collection is recorded", async () => {
+  it("refuses Delivered as a generic status change, naming the real actions", async () => {
     const { db, updates } = createDbMock({
       selectedOrder: {
         status: OrderStatus.SHIPPED,
@@ -1164,7 +1157,7 @@ describe("orders fulfillment side-effect ordering", () => {
     });
 
     await expect(updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED))
-      .rejects.toThrow("Mark the cash as collected first");
+      .rejects.toThrow("Record the cash as collected, or use Mark delivered");
 
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1189,127 +1182,6 @@ describe("orders fulfillment side-effect ordering", () => {
 
     await expect(updateOrderStatus(db as never, "order_1", OrderStatus.COMPLETED))
       .rejects.toThrow("Mark the cash as collected first");
-
-    expect(updates).toHaveLength(0);
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-  });
-
-  it("rejects generic COD delivery when the payment ledger lacks collected tracking", async () => {
-    const { db, updates } = createDbMock({
-      selectedOrder: {
-        status: OrderStatus.SHIPPED,
-        inventoryAction: "reserved",
-        version: 8,
-        customerName: "Customer",
-        customerEmail: "customer@example.com",
-        paymentMethod: PaymentMethod.COD,
-        paymentStatus: PaymentStatus.PAID,
-        paidAmountMinor: 10_000,
-        balanceDueMinor: 0,
-      },
-      selectedPayment: {
-        id: "pay_1",
-        amountMinor: 10_000,
-        currency: "BDT",
-        paymentMethod: PaymentMethod.COD,
-        status: PaymentRecordStatus.SUCCEEDED,
-      },
-      selectedCodTracking: null,
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED))
-      .rejects.toThrow("Mark the cash as collected first");
-
-    expect(updates).toHaveLength(0);
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-  });
-
-  it("allows generic COD delivery after a successful COD collection ledger exists", async () => {
-    const { db, updates } = createDbMock({
-      selectedOrder: {
-        status: OrderStatus.SHIPPED,
-        inventoryAction: "reserved",
-        version: 8,
-        customerName: "Customer",
-        customerEmail: "customer@example.com",
-        paymentMethod: PaymentMethod.COD,
-        paymentStatus: PaymentStatus.PAID,
-        paidAmountMinor: 10_000,
-        balanceDueMinor: 0,
-      },
-      selectedPayment: {
-        id: "pay_1",
-        amountMinor: 10_000,
-        currency: "BDT",
-        paymentMethod: PaymentMethod.COD,
-        status: PaymentRecordStatus.SUCCEEDED,
-        collectedBy: "Courier A",
-      },
-      selectedCodTracking: {
-        id: "cod_1",
-        codStatus: CodStatus.COLLECTED,
-        collectedBy: "Courier A",
-      },
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    const result = await updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED);
-
-    expect(result).toMatchObject({ message: "Order status updated successfully" });
-    expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED });
-    expect(updates[0]).not.toHaveProperty("paymentStatus");
-    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
-  });
-
-  it("allows non-COD delivery status updates without COD collection evidence", async () => {
-    const { db, updates } = createDbMock({
-      selectedOrder: {
-        status: OrderStatus.SHIPPED,
-        inventoryAction: "reserved",
-        version: 8,
-        customerName: "Customer",
-        customerEmail: "customer@example.com",
-        paymentMethod: PaymentMethod.STRIPE,
-        paymentStatus: PaymentStatus.PAID,
-        totalAmountMinor: 10_000,
-        paidAmountMinor: 10_000,
-        balanceDueMinor: 0,
-      },
-      selectedPayment: null,
-      selectedCodTracking: null,
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    const result = await updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED);
-
-    expect(result).toMatchObject({ message: "Order status updated successfully" });
-    expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED });
-    expect(updates[0]).not.toHaveProperty("paymentStatus");
-    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
-  });
-
-  it("rejects generic delivery while an online deposit still has a cash balance due", async () => {
-    const { db, updates } = createDbMock({
-      selectedOrder: {
-        status: OrderStatus.SHIPPED,
-        inventoryAction: "reserved",
-        version: 8,
-        customerName: "Customer",
-        customerEmail: "customer@example.com",
-        paymentMethod: PaymentMethod.SSLCOMMERZ,
-        paymentStatus: PaymentStatus.PARTIAL,
-        totalAmountMinor: 250_000,
-        paidAmountMinor: 50_000,
-        balanceDueMinor: 200_000,
-      },
-      selectedPayment: null,
-      selectedCodTracking: null,
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED))
-      .rejects.toThrow("Record the rest of the payment first");
 
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1344,7 +1216,7 @@ describe("orders fulfillment side-effect ordering", () => {
   it("canonicalizes direct admin status updates before persistence and notifications", async () => {
     const { db, updates } = createDbMock({
       selectedOrder: {
-        status: OrderStatus.CONFIRMED,
+        status: OrderStatus.PENDING,
         inventoryAction: "reserved",
         version: 8,
         customerName: "Customer",
@@ -1355,16 +1227,15 @@ describe("orders fulfillment side-effect ordering", () => {
       updateResults: [[{ id: "order_1" }]],
     });
 
-    const result = await updateOrderStatus(db as never, "order_1", " SHIPPED ", { trackingId: "TRK-1" });
+    const result = await updateOrderStatus(db as never, "order_1", " CONFIRMED ");
 
     expect(result.notification).toMatchObject({
-      notificationType: "order_shipped",
-      previousStatus: OrderStatus.CONFIRMED,
-      newStatus: OrderStatus.SHIPPED,
-      trackingId: "TRK-1",
+      notificationType: "order_confirmed",
+      previousStatus: OrderStatus.PENDING,
+      newStatus: OrderStatus.CONFIRMED,
     });
-    expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 9 });
-    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
+    expect(updates[0]).toMatchObject({ status: OrderStatus.CONFIRMED, version: 9 });
+    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.CONFIRMED);
   });
 
   it("rejects unknown direct admin status updates before database work", async () => {
@@ -1503,7 +1374,7 @@ describe("orders fulfillment side-effect ordering", () => {
     mocks.applyInventoryForStatusChange.mockRejectedValueOnce(inventoryError);
     const { db, updates } = createDbMock({
       selectedOrder: {
-        status: OrderStatus.CONFIRMED,
+        status: OrderStatus.PENDING,
         inventoryAction: "reserved",
         version: 8,
         customerName: "Customer",
@@ -1514,17 +1385,17 @@ describe("orders fulfillment side-effect ordering", () => {
       updateResults: [[{ id: "order_1" }]],
     });
 
-    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
+    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.CONFIRMED))
       .rejects.toThrow("inventory transition failed");
 
-    expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 9 });
-    expect(updates[1]).toMatchObject({ status: OrderStatus.CONFIRMED });
+    expect(updates[0]).toMatchObject({ status: OrderStatus.CONFIRMED, version: 9 });
+    expect(updates[1]).toMatchObject({ status: OrderStatus.PENDING });
   });
 
   it("rejects admin status updates while a shipment claim is active", async () => {
     const { db } = createDbMock({
       selectedOrder: {
-        status: OrderStatus.CONFIRMED,
+        status: OrderStatus.PENDING,
         inventoryAction: "reserved",
         version: 8,
         customerName: "Customer",
@@ -1537,7 +1408,7 @@ describe("orders fulfillment side-effect ordering", () => {
       updateResults: [],
     });
 
-    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
+    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.CONFIRMED))
       .rejects.toThrow("Shipment creation or recovery is active");
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1546,7 +1417,7 @@ describe("orders fulfillment side-effect ordering", () => {
   it("rejects admin status updates while a refund attempt is active", async () => {
     const { db } = createDbMock({
       selectedOrder: {
-        status: OrderStatus.CONFIRMED,
+        status: OrderStatus.PENDING,
         inventoryAction: "reserved",
         version: 8,
         customerName: "Customer",
@@ -1558,7 +1429,7 @@ describe("orders fulfillment side-effect ordering", () => {
       updateResults: [],
     });
 
-    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
+    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.CONFIRMED))
       .rejects.toThrow("active refund operation");
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1567,7 +1438,7 @@ describe("orders fulfillment side-effect ordering", () => {
   it("rejects admin status updates while hosted payment setup is active", async () => {
     const { db } = createDbMock({
       selectedOrder: {
-        status: OrderStatus.CONFIRMED,
+        status: OrderStatus.PENDING,
         inventoryAction: "reserved",
         version: 8,
         customerName: "Customer",
@@ -1579,7 +1450,7 @@ describe("orders fulfillment side-effect ordering", () => {
       updateResults: [],
     });
 
-    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.SHIPPED))
+    await expect(updateOrderStatus(db as never, "order_1", OrderStatus.CONFIRMED))
       .rejects.toThrow("active hosted payment setup");
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();

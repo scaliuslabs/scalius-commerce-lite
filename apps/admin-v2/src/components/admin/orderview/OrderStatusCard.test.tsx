@@ -119,7 +119,23 @@ describe("OrderStatusCard", () => {
     const oneSent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 }] } as unknown as Order;
     await act(async () => root.render(<OrderStatusCard order={oneSent} />));
     expect((await openOption(o["status.cancelled"]))?.textContent)
-      .toContain("1 item is with the courier. Mark it returned or delivered first.");
+      .toContain("1 item is with the courier. Cancel after it comes back.");
+  });
+
+  it("links a part-sent order's blocked cancel to the parcel action it names", async () => {
+    const partSent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 }] } as unknown as Order;
+    await act(async () => root.render(<OrderStatusCard order={partSent} />));
+    const link = host.querySelector<HTMLAnchorElement>('a[href="#order-shipments"]');
+    expect(link?.textContent).toBe(t["shipments.cameBack"]);
+    expect(link?.parentElement?.textContent).toContain(t["cancel.shippedOne"].replace("{count}", "1"));
+  });
+
+  it("points a shipped cash order's blocked cancel at Mark returned", async () => {
+    const shipped = {
+      ...order, status: "shipped", paymentMethod: "cod", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 2 }],
+    } as unknown as Order;
+    await act(async () => root.render(<OrderStatusCard order={shipped} />));
+    expect(host.querySelector('a[href="#order-payment"]')?.textContent).toBe(t["cod.markReturned"]);
   });
 
   it("shows a paid order's Cancelled as unavailable with the refund reason", async () => {
@@ -130,25 +146,31 @@ describe("OrderStatusCard", () => {
     expect(cancelled?.textContent).toContain(t["status.refundToCancel"]);
   });
 
-  it("says to collect the cash before a cash-on-delivery order can be Delivered", async () => {
-    const shipped = {
-      ...order, status: "shipped", paymentMethod: "cod", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800,
-      items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 2 }],
-    } as unknown as Order;
-    await act(async () => root.render(<OrderStatusCard order={shipped} />));
-    const delivered = await openOption(o["status.delivered"]);
-    expect(delivered?.disabled).toBe(true);
-    expect(delivered?.textContent).toContain(t["statusBlock.cashFirst"]);
-    expect(mocks.mutate).not.toHaveBeenCalled();
+  it("never offers Shipped or Delivered: those come from sending and delivering (R3-ORD-01)", async () => {
+    const confirmed = { ...order, status: "confirmed" } as unknown as Order;
+    await act(async () => root.render(<OrderStatusCard order={confirmed} />));
+    const labels = [...(statusSelect()?.options ?? [])].map((option) => option.textContent);
+    expect(labels).toEqual([o["status.confirmed"], o["status.cancelled"]]);
   });
 
-  it("lets a paid, shipped order be marked Delivered", async () => {
-    const shipped = {
-      ...order, status: "shipped", paymentMethod: "cod", paymentStatus: "paid", paidAmount: 1800, balanceDue: 0,
+  it("lets a Shipped order with nothing actually sent be cancelled", async () => {
+    const stuck = { ...order, status: "shipped" } as unknown as Order;
+    await act(async () => root.render(<OrderStatusCard order={stuck} />));
+    const labels = [...(statusSelect()?.options ?? [])].map((option) => option.textContent);
+    expect(labels).toEqual([o["status.shipped"], o["status.cancelled"]]);
+    await chooseStatus(o["status.cancelled"]);
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(t["cancel.restock"].replace("{count}", "2"));
+  });
+
+  it("says to collect the cash before a delivered cash order can be Completed", async () => {
+    const delivered = {
+      ...order, status: "delivered", paymentMethod: "cod", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 1800,
       items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 2 }],
     } as unknown as Order;
-    await act(async () => root.render(<OrderStatusCard order={shipped} />));
-    expect((await openOption(o["status.delivered"]))?.disabled).toBe(false);
+    await act(async () => root.render(<OrderStatusCard order={delivered} />));
+    const completed = await openOption(o["status.completed"]);
+    expect(completed?.disabled).toBe(true);
+    expect(completed?.textContent).toContain(t["statusBlock.cashFirst"]);
   });
 
   it("asks before confirming an order the customer asked to cancel", async () => {

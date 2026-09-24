@@ -6,21 +6,21 @@ import {
 } from "./admin-status-policy";
 
 describe("generic admin order status policy", () => {
-  it("keeps workflow-owned return and refund states out of the generic editor", () => {
-    for (const target of [
-      OrderStatus.RETURNED,
-      OrderStatus.REFUNDED,
-    ]) {
-      expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.DELIVERED, target)).toBe(false);
-      expect(() => assertGenericAdminOrderStatusTransition(OrderStatus.DELIVERED, target))
-        .toThrow("Use Return or Refund");
-    }
+  it("keeps fulfilment and money states out of the generic editor, naming the real action", () => {
+    expect(() => assertGenericAdminOrderStatusTransition(OrderStatus.CONFIRMED, OrderStatus.SHIPPED))
+      .toThrow("Use Mark as sent or Book courier");
+    expect(() => assertGenericAdminOrderStatusTransition(OrderStatus.SHIPPED, OrderStatus.DELIVERED))
+      .toThrow("Mark delivered");
+    expect(() => assertGenericAdminOrderStatusTransition(OrderStatus.DELIVERED, OrderStatus.RETURNED))
+      .toThrow("Mark returned");
+    expect(() => assertGenericAdminOrderStatusTransition(OrderStatus.DELIVERED, OrderStatus.REFUNDED))
+      .toThrow("Use Refund");
   });
 
-  it("does not let a generic edit move shipped work backwards or cancel courier evidence", () => {
+  it("does not move shipped work backwards; cancelling is guarded by what's with the courier", () => {
     expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.SHIPPED, OrderStatus.CONFIRMED)).toBe(false);
-    expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.SHIPPED, OrderStatus.CANCELLED)).toBe(false);
-    expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.SHIPPED, OrderStatus.DELIVERED)).toBe(true);
+    expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.SHIPPED, OrderStatus.CANCELLED)).toBe(true);
+    expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.PENDING, OrderStatus.PROCESSING)).toBe(false);
   });
 
   it("allows only the intentionally narrow forward and pre-shipment cancellation graph", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getAdminOrderStatusOptions,
   getAdminOrderStatusTransitions,
   isAdminOrderStatus,
 } from "./admin-order-status-policy";
@@ -18,9 +19,21 @@ describe("admin order status policy", () => {
     expect(getAdminOrderStatusTransitions("pending")).not.toContain("refunded");
   });
 
-  it("does not move shipped work backward or cancel it", () => {
-    expect(getAdminOrderStatusTransitions("shipped")).toEqual(["delivered"]);
+  it("never offers a fulfilment status: those come from sending, collecting and returns (R3-ORD-01)", () => {
+    for (const status of ["incomplete", "pending", "processing", "confirmed", "shipped", "delivered"]) {
+      const next = getAdminOrderStatusTransitions(status, { paymentStatus: "unpaid", paidAmount: 0 });
+      expect(next).not.toContain("shipped");
+      expect(next).not.toContain("delivered");
+      expect(next).not.toContain("processing");
+    }
+    expect(getAdminOrderStatusTransitions("confirmed", { paymentStatus: "unpaid", paidAmount: 0 })).toEqual(["cancelled"]);
     expect(getAdminOrderStatusTransitions("delivered")).toEqual(["completed"]);
+  });
+
+  it("offers Cancelled on a Shipped order only when nothing is with the courier", () => {
+    const options = (units: number) => getAdminOrderStatusOptions("shipped", { paymentStatus: "unpaid", paidAmount: 0, unitsWithCourier: units });
+    expect(options(0)).toEqual([{ status: "cancelled", block: null }]);
+    expect(options(2)).toEqual([{ status: "cancelled", block: { code: "with_courier", units: 2 } }]);
   });
 
   it("treats cancelled orders as terminal", () => {
@@ -34,10 +47,7 @@ describe("admin order status policy", () => {
     { paymentStatus: "unpaid", paidAmount: null },
     { paymentStatus: "unpaid", paidAmount: -1 },
   ])("removes generic cancellation when payment value exists or is uncertain %#", (payment) => {
-    expect(getAdminOrderStatusTransitions("pending", payment)).toEqual([
-      "processing",
-      "confirmed",
-    ]);
+    expect(getAdminOrderStatusTransitions("pending", payment)).toEqual(["confirmed"]);
   });
 
   it("keeps cancellation for an unpaid zero-paid order", () => {
