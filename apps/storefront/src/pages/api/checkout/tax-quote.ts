@@ -8,7 +8,11 @@ import {
   TAX_QUOTE_MAX_REQUEST_BYTES,
   TAX_QUOTE_MAX_RESPONSE_BYTES,
 } from "@/lib/checkout/tax-quote-contract";
-import { parseTaxQuoteCartIssues } from "@/lib/checkout/tax-quote-error-contract";
+import {
+  DELIVERY_RATE_UNAVAILABLE_REASON,
+  isDeliveryRateUnavailable,
+  parseTaxQuoteCartIssues,
+} from "@/lib/checkout/tax-quote-error-contract";
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
 
 export const prerender = false;
@@ -145,12 +149,15 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (!upstream.ok) {
       let itemIssues: CartValidationIssue[] = [];
+      let deliveryRateUnavailable = false;
       try {
         const text = await readBoundedBody(
           upstream.body,
           TAX_QUOTE_MAX_RESPONSE_BYTES,
         );
-        itemIssues = parseTaxQuoteCartIssues(JSON.parse(text));
+        const payload = JSON.parse(text);
+        itemIssues = parseTaxQuoteCartIssues(payload);
+        deliveryRateUnavailable = isDeliveryRateUnavailable(payload);
       } catch {
         itemIssues = [];
       }
@@ -158,7 +165,11 @@ export const POST: APIRoute = async ({ request }) => {
         {
           success: false,
           error: "Current checkout total is unavailable",
-          ...(itemIssues.length > 0 ? { details: { itemIssues } } : {}),
+          ...(itemIssues.length > 0
+            ? { details: { itemIssues } }
+            : deliveryRateUnavailable
+              ? { details: { reason: DELIVERY_RATE_UNAVAILABLE_REASON } }
+              : {}),
         },
         safeUpstreamFailureStatus(upstream.status),
       );

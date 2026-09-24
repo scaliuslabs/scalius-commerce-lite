@@ -4,6 +4,7 @@ import {
   buildTaxQuoteRequest,
   fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError,
+  TaxQuoteDeliveryRateError,
   TaxQuoteUnavailableError,
 } from "./tax-quote-client";
 import {
@@ -240,6 +241,17 @@ describe("tax quote client contract", () => {
       .catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(TaxQuoteUnavailableError);
     expect(String(error)).not.toContain("+8801700000000");
+  });
+
+  it("reports a refused delivery rate apart from an unavailable total", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      success: false,
+      error: "Current checkout total is unavailable",
+      details: { reason: "delivery_rate_unavailable" },
+    }), { status: 400 })) as unknown as typeof fetch;
+
+    await expect(fetchAuthoritativeTaxQuote(checkoutData(), fetcher))
+      .rejects.toBeInstanceOf(TaxQuoteDeliveryRateError);
   });
 
   it("preserves only bounded cart-repair issues from a failed quote", async () => {
