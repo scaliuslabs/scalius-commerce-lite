@@ -13,6 +13,14 @@ export const DEFAULT_RESEND_AFTER_SECONDS = 60;
 /** The order has no email and the store can't text: say so and show the store's contact. */
 export const NO_CODE_CHANNEL = "NO_CODE_CHANNEL";
 
+/**
+ * A failure the buyer can't fix on this page (no code channel, codes
+ * unavailable): the page adds the store's contact links, when it has any.
+ */
+export function failureNeedsStoreContact(failure: { status: number; errorCode?: string }): boolean {
+  return failure.errorCode === NO_CODE_CHANNEL || failure.status === 503;
+}
+
 /** What a failed send/verify tells the page; never the receipt token. */
 export interface OrderCodeFailure {
   status: number;

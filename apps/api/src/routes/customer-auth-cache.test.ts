@@ -39,8 +39,7 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
   getSessionCookie: mocks.getSessionCookie,
   getCookieConfig: mocks.getCookieConfig,
   buildSetCookieHeader: mocks.buildSetCookieHeader,
-  listLinkedGuestRecords: vi.fn(async () => []),
-  canSendPhoneProof: vi.fn(async () => false),
+  getAccountPhoneVerificationPrompt: vi.fn(async () => null),
   COOKIE_NAME: "cs_tok",
   SESSION_TTL_SECONDS: 2_592_000,
 }));

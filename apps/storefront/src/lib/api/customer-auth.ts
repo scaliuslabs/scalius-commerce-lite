@@ -44,7 +44,7 @@ interface OrdersData {
   customer?: CustomerInfo;
   summary?: CustomerOrdersSummary;
   pagination?: CustomerOrdersPagination;
-  unclaimedGuestOrders?: unknown;
+  phoneVerification?: unknown;
 }
 
 interface SessionData {
@@ -720,8 +720,8 @@ export async function getCustomerOrders(options: {
   customer?: CustomerInfo;
   summary?: CustomerOrdersSummary;
   pagination?: CustomerOrdersPagination;
-  /** Guest records holding more of this buyer's orders under a contact not yet verified. */
-  unclaimedGuestOrders?: UnclaimedGuestOrders[];
+  /** Set only when the account's own phone is unverified and the store can text it a code. */
+  phoneVerification?: PhoneVerificationPrompt | null;
   error?: string;
   status?: number;
   unavailable?: boolean;
@@ -752,7 +752,7 @@ export async function getCustomerOrders(options: {
       customer: data.customer,
       ...(data.summary ? { summary: data.summary } : {}),
       ...(data.pagination ? { pagination: data.pagination } : {}),
-      unclaimedGuestOrders: readUnclaimedGuestOrders(data.unclaimedGuestOrders),
+      phoneVerification: readPhoneVerification(data.phoneVerification),
     };
   } catch (error: unknown) {
     return {
@@ -765,63 +765,46 @@ export async function getCustomerOrders(options: {
   }
 }
 
-/** Orders placed with a phone the signed-in buyer hasn't verified yet. */
-export interface UnclaimedGuestOrders {
-  /** Opaque guest-record id: the only thing sent back to claim them. */
-  id: string;
-  /** Masked phone ("01•••••011"); the full number never reaches the page. */
-  destination: string;
-  orderCount: number;
-  /** False when the store can't send text or WhatsApp codes. */
-  canVerify: boolean;
+/** The account's own phone, still unverified, when the store can text it a code. */
+export interface PhoneVerificationPrompt {
+  /** E.164 phone of this account ("+8801712345678"); shown formatted, never put in a URL. */
+  phone: string;
 }
 
-function readUnclaimedGuestOrders(value: unknown): UnclaimedGuestOrders[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((entry): UnclaimedGuestOrders[] => {
-    if (!entry || typeof entry !== "object") return [];
-    const raw = entry as Record<string, unknown>;
-    const count = raw.orderCount;
-    if (typeof raw.id !== "string" || !raw.id || typeof raw.destination !== "string" || !raw.destination) return [];
-    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 1) return [];
-    return [{ id: raw.id, destination: raw.destination, orderCount: count, canVerify: raw.canVerify !== false }];
-  });
+function readPhoneVerification(value: unknown): PhoneVerificationPrompt | null {
+  if (!value || typeof value !== "object") return null;
+  const phone = (value as Record<string, unknown>).phone;
+  return typeof phone === "string" && phone.trim() ? { phone: phone.trim() } : null;
 }
 
-export type SendGuestOrdersCodeResult =
-  | { success: true; message: string; destination: string; resendAfterSeconds: number }
+export type SendPhoneVerificationCodeResult =
+  | { success: true; message: string; resendAfterSeconds: number }
   | { success: false; error: string; status: number; retryAfterSeconds?: number };
 
-export type VerifyGuestOrdersResult =
+export type VerifyPhoneResult =
   | { success: true; movedOrders: number; message: string }
   | { success: false; error: string; status: number; attemptsLeft?: number };
 
-function guestOrdersUrl(id: string, action: "send-code" | "verify"): string {
-  return authUrl(`guest-orders/${encodeURIComponent(id)}/${action}`);
-}
-
-/** Server messages as they are, even for 503 ("Text message codes are unavailable…"). */
-function guestOrdersFailure(res: Response, raw: AuthApiEnvelope): string {
+/** Server messages as they are, even for 503 ("Text message codes aren't available right now."). */
+function phoneVerificationFailure(res: Response, raw: AuthApiEnvelope): string {
   return extractError(raw) || (res.status >= 500 ? UNREACHABLE_MESSAGE : "Something went wrong. Please try again.");
 }
 
-/** Text a code to the phone behind a guest record linked to this account. */
-export async function sendGuestOrdersCode(id: string): Promise<SendGuestOrdersCodeResult> {
+/** Text a code to this account's own phone. No body: the server reads the phone from the session. */
+export async function sendPhoneVerificationCode(): Promise<SendPhoneVerificationCodeResult> {
   try {
-    const res = await customerAuthFetch(guestOrdersUrl(id, "send-code"), {
+    const res = await customerAuthFetch(authUrl("phone/send-code"), {
       method: "POST",
       credentials: "include",
     }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
-    const raw = await readEnvelope<{ message?: string; destination?: string; resendAfterSeconds?: number }>(res);
+    const raw = await readEnvelope<{ message?: string; resendAfterSeconds?: number }>(res);
     const data = raw.data;
     if (!res.ok || isFailedEnvelope(raw) || !data) {
-      return { success: false, error: guestOrdersFailure(res, raw), status: res.status, retryAfterSeconds: errorDetails(raw).retryAfterSeconds };
+      return { success: false, error: phoneVerificationFailure(res, raw), status: res.status, retryAfterSeconds: errorDetails(raw).retryAfterSeconds };
     }
-    const destination = data.destination || "";
     return {
       success: true,
-      destination,
-      message: data.message || `We sent a code to ${destination}.`,
+      message: data.message || "We sent a code to your phone.",
       resendAfterSeconds: data.resendAfterSeconds ?? 60,
     };
   } catch (error: unknown) {
@@ -829,10 +812,10 @@ export async function sendGuestOrdersCode(id: string): Promise<SendGuestOrdersCo
   }
 }
 
-/** Prove the phone with its code; the guest record's orders move to this account. */
-export async function verifyGuestOrders(id: string, code: string): Promise<VerifyGuestOrdersResult> {
+/** Prove the account's phone with its code; orders placed with it move to this account. */
+export async function verifyPhone(code: string): Promise<VerifyPhoneResult> {
   try {
-    const res = await customerAuthFetch(guestOrdersUrl(id, "verify"), {
+    const res = await customerAuthFetch(authUrl("phone/verify"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -841,13 +824,13 @@ export async function verifyGuestOrders(id: string, code: string): Promise<Verif
     const raw = await readEnvelope<{ movedOrders?: number; message?: string }>(res);
     const data = raw.data;
     if (!res.ok || isFailedEnvelope(raw) || !data) {
-      return { success: false, error: guestOrdersFailure(res, raw), status: res.status, attemptsLeft: errorDetails(raw).attemptsLeft };
+      return { success: false, error: phoneVerificationFailure(res, raw), status: res.status, attemptsLeft: errorDetails(raw).attemptsLeft };
     }
-    const movedOrders = typeof data.movedOrders === "number" ? data.movedOrders : 0;
+    const movedOrders = typeof data.movedOrders === "number" && data.movedOrders > 0 ? data.movedOrders : 0;
     return {
       success: true,
       movedOrders,
-      message: data.message || (movedOrders === 1 ? "1 order was added to your account." : `${movedOrders} orders were added to your account.`),
+      message: data.message || "Your phone number is verified.",
     };
   } catch (error: unknown) {
     return { success: false, error: networkErrorMessage(error), status: 0 };

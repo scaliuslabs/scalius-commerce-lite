@@ -179,6 +179,8 @@ export interface OrderDetails extends OrderListItem {
     notes: string | null;
     shippingAddress: string;
     customerId: string | null;
+    /** The customer record the order is filed under; its title can differ from the order's own name. */
+    customerRecord: { id: string; name: string; phone: string; kind: "account" | "guest" | "merchant" } | null;
     balanceDue: number | null;
     deletedAt: Date | null;
     currencyCode: string | null;

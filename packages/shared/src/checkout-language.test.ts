@@ -53,6 +53,25 @@ describe("checkout language presets", () => {
     expect(resolveCheckoutLanguageData("en", { customerPhoneLabel: "Phone Number" }).customerPhoneLabel).toBe("Phone number");
   });
 
+  it("never sends a buyer to 'contact the store' without the store's contact beside it", () => {
+    for (const preset of [ENGLISH_CHECKOUT_LANGUAGE_DATA, BANGLA_CHECKOUT_LANGUAGE_DATA]) {
+      for (const key of CHECKOUT_LANGUAGE_KEYS) {
+        if (key === "storeContactLabelText") continue;
+        expect(preset[key], key).not.toMatch(/contact the store|দোকানের (সঙ্গে|সাথে) যোগাযোগ/i);
+      }
+    }
+    // A saved language holding the old dead-end wording follows the new default.
+    const en = resolveCheckoutLanguageData("en", {
+      trackOrderUnavailableText: "Order tracking isn't available right now. Contact the store.",
+      orderReceiptRequestRejectedText: "The store could not accept this request. Contact the store if you still need help.",
+    });
+    expect(en.trackOrderUnavailableText).toBe("Order tracking isn't available right now.");
+    expect(en.orderReceiptRequestRejectedText).toBe("The store could not accept this request.");
+    expect(resolveCheckoutLanguageData("bn", {
+      paymentRecoveryCodesUnavailableText: "এই মুহূর্তে কোড পাঠানো যাচ্ছে না। পেমেন্ট সম্পন্ন করতে দোকানের সাথে যোগাযোগ করুন।",
+    }).paymentRecoveryCodesUnavailableText).toBe("এই মুহূর্তে কোড পাঠানো যাচ্ছে না।");
+  });
+
   it("upgrades untouched English defaults in an older Bangla record", () => {
     const resolved = resolveCheckoutLanguageData("bn", {
       pageTitle: ENGLISH_CHECKOUT_LANGUAGE_DATA.pageTitle,

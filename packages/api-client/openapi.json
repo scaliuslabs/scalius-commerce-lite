@@ -29552,35 +29552,19 @@
                             "nextCursor"
                           ]
                         },
-                        "unclaimedGuestOrders": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string",
-                                "description": "Opaque id for the send-code / verify calls"
-                              },
-                              "destination": {
-                                "type": "string",
-                                "description": "Masked phone the orders were placed with"
-                              },
-                              "orderCount": {
-                                "type": "integer"
-                              },
-                              "canVerify": {
-                                "type": "boolean",
-                                "description": "False when the store can't send a text or WhatsApp code"
-                              }
-                            },
-                            "required": [
-                              "id",
-                              "destination",
-                              "orderCount",
-                              "canVerify"
-                            ]
+                        "phoneVerification": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "phone": {
+                              "type": "string",
+                              "description": "The account's own phone (E.164)"
+                            }
                           },
-                          "description": "Orders on a guest record whose other orders already joined this account, placed with a phone the account hasn't proven."
+                          "required": [
+                            "phone"
+                          ],
+                          "description": "Set when the account's own phone is unverified and a text/WhatsApp code can reach it. Proving it adds orders placed with that phone."
                         },
                         "customer": {
                           "type": "object",
@@ -29635,7 +29619,7 @@
                         "orders",
                         "summary",
                         "pagination",
-                        "unclaimedGuestOrders",
+                        "phoneVerification",
                         "customer"
                       ]
                     }
@@ -29906,24 +29890,12 @@
         }
       }
     },
-    "/api/v1/customer-auth/guest-orders/{id}/send-code": {
+    "/api/v1/customer-auth/phone/send-code": {
       "post": {
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Send a code to the phone a waiting guest order was placed with",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
+        "summary": "Send a code to the signed-in account's own phone",
         "responses": {
           "200": {
             "description": "Code sent",
@@ -29944,16 +29916,12 @@
                         "message": {
                           "type": "string"
                         },
-                        "destination": {
-                          "type": "string"
-                        },
                         "resendAfterSeconds": {
                           "type": "integer"
                         }
                       },
                       "required": [
                         "message",
-                        "destination",
                         "resendAfterSeconds"
                       ]
                     }
@@ -30118,6 +30086,44 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limit exceeded",
             "content": {
@@ -30233,7 +30239,7 @@
             }
           }
         },
-        "operationId": "storefront.customer_auth_guest_orders_send_code.send_code",
+        "operationId": "storefront.customer_auth_phone_send_code.send_code",
         "x-scalius-agent": {
           "surface": "storefront",
           "exposure": "excluded",
@@ -30250,7 +30256,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false,
-          "exclusionReason": "Browser-only phone proof for guest orders waiting on the customer-cookie account; it dispatches an SMS code, so identifiers and OTPs stay outside agent I/O."
+          "exclusionReason": "Browser-only proof of the customer-cookie account's own phone; it dispatches an SMS code, so identifiers and OTPs stay outside agent I/O."
         },
         "x-scalius-rbac": {
           "type": "public"
@@ -30258,24 +30264,12 @@
         "security": []
       }
     },
-    "/api/v1/customer-auth/guest-orders/{id}/verify": {
+    "/api/v1/customer-auth/phone/verify": {
       "post": {
         "tags": [
           "Customer Auth"
         ],
-        "summary": "Prove the phone of waiting guest orders and add them to the account",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
+        "summary": "Prove the signed-in account's own phone and add orders placed with it",
         "requestBody": {
           "content": {
             "application/json": {
@@ -30298,7 +30292,7 @@
         },
         "responses": {
           "200": {
-            "description": "Orders added to the account",
+            "description": "Phone verified",
             "content": {
               "application/json": {
                 "schema": {
@@ -30601,7 +30595,7 @@
             }
           }
         },
-        "operationId": "storefront.customer_auth_guest_orders_verify.verify",
+        "operationId": "storefront.customer_auth_phone_verify.verify",
         "x-scalius-agent": {
           "surface": "storefront",
           "exposure": "excluded",
@@ -30618,7 +30612,7 @@
           "maxRequestBytes": 1048576,
           "sensitiveOutput": true,
           "oneTimeSecretOutput": false,
-          "exclusionReason": "Accepts a raw OTP and moves guest orders into the customer-cookie account; proof must be entered by the buyer in the hosted account page."
+          "exclusionReason": "Accepts a raw OTP, verifies the customer-cookie account's phone and moves orders placed with it; proof must be entered by the buyer in the hosted account page."
         },
         "x-scalius-rbac": {
           "type": "public"
@@ -59740,21 +59734,17 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "linkedAccount": {
-                                "type": "object",
-                                "nullable": true,
-                                "properties": {
-                                  "id": {
-                                    "type": "string"
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": [
-                                  "id",
-                                  "name"
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "account",
+                                  "guest",
+                                  "merchant"
                                 ]
+                              },
+                              "latestOrderName": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "totalOrders": {
                                 "type": "number"
@@ -59786,7 +59776,8 @@
                               "zoneName",
                               "areaName",
                               "accountClaimedAt",
-                              "linkedAccount",
+                              "kind",
+                              "latestOrderName",
                               "totalOrders",
                               "totalSpent",
                               "lastOrderAt",
@@ -60591,6 +60582,18 @@
                         "accountClaimedAt": {
                           "$ref": "#/components/schemas/NullableTimestamp"
                         },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "account",
+                            "guest",
+                            "merchant"
+                          ]
+                        },
+                        "latestOrderName": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "totalOrders": {
                           "type": "number"
                         },
@@ -60622,6 +60625,22 @@
                         },
                         "deletedAt": {
                           "$ref": "#/components/schemas/NullableTimestamp"
+                        },
+                        "mergedInto": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ]
                         }
                       },
                       "required": [
@@ -60637,12 +60656,15 @@
                         "zoneName",
                         "areaName",
                         "accountClaimedAt",
+                        "kind",
+                        "latestOrderName",
                         "totalOrders",
                         "totalSpent",
                         "lastOrderAt",
                         "createdAt",
                         "updatedAt",
-                        "deletedAt"
+                        "deletedAt",
+                        "mergedInto"
                       ]
                     }
                   },
@@ -61578,6 +61600,18 @@
                             "accountClaimedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "account",
+                                "guest",
+                                "merchant"
+                              ]
+                            },
+                            "latestOrderName": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "totalOrders": {
                               "type": "number"
                             },
@@ -61610,7 +61644,7 @@
                             "deletedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
                             },
-                            "linkedAccount": {
+                            "mergedInto": {
                               "type": "object",
                               "nullable": true,
                               "properties": {
@@ -61626,7 +61660,7 @@
                                 "name"
                               ]
                             },
-                            "guestRecords": {
+                            "samePhone": {
                               "type": "array",
                               "items": {
                                 "type": "object",
@@ -61637,14 +61671,23 @@
                                   "name": {
                                     "type": "string"
                                   },
-                                  "orderCount": {
-                                    "type": "integer"
+                                  "phone": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "account",
+                                      "guest",
+                                      "merchant"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "id",
                                   "name",
-                                  "orderCount"
+                                  "phone",
+                                  "kind"
                                 ]
                               }
                             }
@@ -61662,13 +61705,15 @@
                             "zoneName",
                             "areaName",
                             "accountClaimedAt",
+                            "kind",
+                            "latestOrderName",
                             "totalOrders",
                             "totalSpent",
                             "lastOrderAt",
                             "createdAt",
                             "updatedAt",
-                            "linkedAccount",
-                            "guestRecords"
+                            "mergedInto",
+                            "samePhone"
                           ]
                         },
                         "history": {
@@ -61720,7 +61765,38 @@
                               },
                               "changeType": {
                                 "type": "string",
-                                "description": "created, updated, deleted, or order_moved_in / order_moved_out (see `order` and `relatedCustomer`)"
+                                "description": "created, updated, deleted, signed_up, order_linked, or order_moved_in / order_moved_out (see `order`, `relatedCustomer` and `verifiedContact`)"
+                              },
+                              "verifiedContact": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "email",
+                                  "phone",
+                                  null
+                                ]
+                              },
+                              "author": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "staff",
+                                      "buyer",
+                                      "system"
+                                    ]
+                                  },
+                                  "name": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "name"
+                                ]
                               },
                               "order": {
                                 "type": "object",
@@ -61748,11 +61824,24 @@
                                   },
                                   "name": {
                                     "type": "string"
+                                  },
+                                  "phone": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "account",
+                                      "guest",
+                                      "merchant"
+                                    ]
                                   }
                                 },
                                 "required": [
                                   "id",
-                                  "name"
+                                  "name",
+                                  "phone",
+                                  "kind"
                                 ]
                               },
                               "createdAt": {
@@ -61779,6 +61868,8 @@
                               "zoneName",
                               "areaName",
                               "changeType",
+                              "verifiedContact",
+                              "author",
                               "order",
                               "relatedCustomer",
                               "createdAt"
@@ -61796,6 +61887,9 @@
                               "orderNumber": {
                                 "type": "integer",
                                 "nullable": true
+                              },
+                              "customerName": {
+                                "type": "string"
                               },
                               "totalAmount": {
                                 "type": "number"
@@ -61817,6 +61911,7 @@
                             "required": [
                               "id",
                               "orderNumber",
+                              "customerName",
                               "totalAmount",
                               "status",
                               "createdAt"
@@ -161907,6 +162002,35 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "customerRecord": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "phone": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "account",
+                                "guest",
+                                "merchant"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "phone",
+                            "kind"
+                          ]
+                        },
                         "totalAmount": {
                           "type": "number"
                         },
@@ -162816,6 +162940,7 @@
                         "customerPhone",
                         "customerEmail",
                         "customerId",
+                        "customerRecord",
                         "totalAmount",
                         "shippingCharge",
                         "discountAmount",

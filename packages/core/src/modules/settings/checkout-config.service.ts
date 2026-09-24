@@ -24,6 +24,7 @@ import { isCheckoutGatewayUsableForFlow } from "./checkout-flow";
 import {
     CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
     getCheckoutReadiness,
+    getOfferedCustomerAuthPolicy,
     type CheckoutReadiness,
 } from "./checkout-readiness";
 import {
@@ -81,8 +82,10 @@ export async function getCheckoutConfig(
     const localCurrencySymbol = currency.currencySymbol;
     const currencyDecimalPlaces = getDecimalPlaces(localCurrencyCode);
     const { checkoutMode, partialPaymentEnabled, partialPaymentAmount } = checkout;
-    const customerAuthPolicy = customerAuth.policy;
-    const checkoutReadiness = await getCheckoutReadiness(db, { encryptionKey, runtimeEnv });
+    const [customerAuthPolicy, checkoutReadiness] = await Promise.all([
+        getOfferedCustomerAuthPolicy(db, customerAuth.policy, { encryptionKey, runtimeEnv }),
+        getCheckoutReadiness(db, { encryptionKey, runtimeEnv }),
+    ]);
 
     if (!isReady(checkoutReadiness)) {
         return {
