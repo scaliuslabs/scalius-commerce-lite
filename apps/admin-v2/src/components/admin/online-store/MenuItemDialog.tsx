@@ -38,7 +38,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { NavigationResourcePicker } from "./NavigationResourcePicker";
-import { actionErrorText, Field } from "./shared";
+import { actionErrorText, Field, isWebAddress, normalizeWebAddress } from "./shared";
 
 type SystemKey = Extract<NavigationItemDraft["target"], { type: "system" }>["key"];
 const SYSTEM_PAGES: SystemKey[] = ["home", "catalog", "search", "account", "cart", "checkout", "order_lookup"];
@@ -80,7 +80,7 @@ function draftFromRow(item: NavigationMenuItemRow): NavigationItemDraft {
     return { ...custom, target: { type: "internal_path", path: item.targetValue ?? "/" } };
   }
   if (item.targetType === "external_url") {
-    return { ...custom, target: { type: "external_url", url: item.targetValue ?? "https://" } };
+    return { ...custom, target: { type: "external_url", url: item.targetValue ?? "" } };
   }
   return { ...custom, target: { type: "label" } };
 }
@@ -90,7 +90,7 @@ function targetFor(type: LinkType): NavigationItemDraft["target"] {
     return { type: "resource", resourceType: type as NavigationResourceType, resourceId: "" };
   }
   if (type === "system") return { type: "system", key: "home" };
-  if (type === "external_url") return { type: "external_url", url: "https://" };
+  if (type === "external_url") return { type: "external_url", url: "" };
   if (type === "internal_path") return { type: "internal_path", path: "/" };
   return { type: "label" };
 }
@@ -121,21 +121,26 @@ function ItemForm({
   const [error, setError] = useState<string>();
   const target = draft.target;
   const linkType: LinkType = target.type === "resource" ? target.resourceType : target.type;
-  const valid = Boolean(draft.label.trim()) && (target.type !== "resource" || Boolean(target.resourceId));
+  const [urlLeft, setUrlLeft] = useState(false);
+  const urlValid = target.type !== "external_url" || isWebAddress(target.url);
+  const valid = Boolean(draft.label.trim()) && urlValid && (target.type !== "resource" || Boolean(target.resourceId));
   const setTarget = (next: NavigationItemDraft["target"]) => setDraft((current) => ({ ...current, target: next }));
 
   const save = async () => {
     setBusy(true);
     setError(undefined);
+    const body = target.type === "external_url"
+      ? { ...draft, target: { ...target, url: normalizeWebAddress(target.url) } }
+      : draft;
     try {
       await apiData(editing
         ? patchApiV1AdminNavigationMenusByMenuIdItemsByItemId({
             path: { menuId: menu.id, itemId },
-            body: { ...draft, expectedRevision: menu.revision },
+            body: { ...body, expectedRevision: menu.revision },
           })
         : postApiV1AdminNavigationMenusByMenuIdItems({
             path: { menuId: menu.id },
-            body: { ...draft, expectedRevision: menu.revision, parentId: parentId ?? null },
+            body: { ...body, expectedRevision: menu.revision, parentId: parentId ?? null },
           }));
       toast.success(t(editing ? "itemSaved" : "itemAdded"));
       onSaved();
@@ -221,13 +226,20 @@ function ItemForm({
         </Field>
       ) : null}
       {target.type === "external_url" ? (
-        <Field id="menu-item-url" label={t("link_external_url")}>
+        <Field id="menu-item-url" label={t("link_external_url")} error={urlLeft && !urlValid ? t("urlInvalid") : undefined}>
           <Input
             id="menu-item-url"
             type="url"
             inputMode="url"
+            placeholder="https://example.com"
             value={target.url}
-            onChange={(event) => setTarget({ type: "external_url", url: event.target.value })}
+            aria-invalid={urlLeft && !urlValid ? true : undefined}
+            // A pasted address that repeats "https://" is written once.
+            onChange={(event) => setTarget({ type: "external_url", url: event.target.value.replace(/^(?:https?:\/+)+(?=https?:)/i, "") })}
+            onBlur={() => {
+              setUrlLeft(true);
+              setTarget({ type: "external_url", url: normalizeWebAddress(target.url) });
+            }}
           />
         </Field>
       ) : null}

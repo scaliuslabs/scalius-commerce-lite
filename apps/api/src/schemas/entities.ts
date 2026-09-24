@@ -429,7 +429,12 @@ export const orderDetailSchema = z.object({
     name: z.string(),
     code: z.string().nullable(),
     method: z.enum(["automatic", "code"]),
+    /** The discount's main effect; delivery savings are in `shippingAmount` whatever the kind. */
+    kind: z.enum(["buy_x_get_y", "product", "order", "shipping"]),
+    /** Everything this discount saved (items and delivery). */
     amount: z.number(),
+    /** The part off delivery: show it on the delivery line ("Free", fee struck through). */
+    shippingAmount: z.number(),
   })),
   status: z.string(),
   paymentStatus: z.string().nullable(),

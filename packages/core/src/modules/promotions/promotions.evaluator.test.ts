@@ -117,6 +117,12 @@ describe("discount evaluator", () => {
             candidates: [candidate("f", lineEffect(bdt({ amountMinor: 1_050 }), "fixed_amount_off"))],
         });
         expect(fixed.applied?.totalDiscountMinor).toBe(1_050);
+        // 15% of ৳400 over ৳250 + ৳150 lines is ৳60, split ৳38 / ৳22 (never ৳37.50 / ৳22.50).
+        const spread = evaluatePromotionCandidates({
+            cart: cart({ currencyCode: "BDT", lines: [line("a", 25_000, 1), line("b", 15_000, 1)], shippingAmountMinor: 0 }),
+            candidates: [candidate("o15", orderEffect({ basisPoints: 1_500 }))],
+        });
+        expect(lineDiscounts(spread)).toEqual({ a: 3_800, b: 2_200 });
     });
 
     it("limits product discounts to chosen products and collections", () => {

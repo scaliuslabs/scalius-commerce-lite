@@ -16,23 +16,29 @@ export interface LoginFormSignInFacts {
   identityHandoffEnabled: boolean;
 }
 
-export function LoginForm({ signIn }: { signIn?: LoginFormSignInFacts }) {
+export function LoginForm({ signIn, signedOut }: {
+  signIn?: LoginFormSignInFacts;
+  /** Someone else ended this browser's session: say why, before anything is typed. */
+  signedOut?: "access_changed";
+}) {
   const t = useMessages(authMessages);
+  const notice: AuthMessage | null = signedOut ? { key: "accessChanged" } : null;
   if (signIn?.localLoginDisabled) {
     // The operator's identity provider opens the dashboard; there is nothing to type here.
     return (
       <div className="flex flex-col gap-4">
         <AuthHeader title={t("signInTitle")} description={t("ssoDescription")} />
+        <AuthAlert message={notice} />
         <p role="status" className="text-body">
           {t("ssoBody")}
         </p>
       </div>
     );
   }
-  return <PasswordLoginForm />;
+  return <PasswordLoginForm notice={notice} />;
 }
 
-function PasswordLoginForm() {
+function PasswordLoginForm({ notice }: { notice: AuthMessage | null }) {
   const t = useMessages(authMessages);
   const navigate = useNavigate();
   const emailRef = useRef<HTMLInputElement>(null);
@@ -41,7 +47,7 @@ function PasswordLoginForm() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<{ email?: AuthMessageKey | null; password?: AuthMessageKey | null }>({});
-  const [failure, setFailure] = useState<AuthMessage | null>(null);
+  const [failure, setFailure] = useState<AuthMessage | null>(notice);
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {

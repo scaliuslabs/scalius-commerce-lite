@@ -86,6 +86,8 @@ export const GO_SHORTCUTS: Readonly<Record<string, string>> = {
   p: "/admin/products",
   c: "/admin/customers",
   d: "/admin/discounts",
+  t: "/admin/pages",
+  w: "/admin/online-store/theme",
   s: "/admin/settings",
 };
 

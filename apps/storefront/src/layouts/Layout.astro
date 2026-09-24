@@ -22,8 +22,10 @@ import {
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
   buildDocumentTitle,
+  resolveStoreDisplayName,
   resolveStoreName,
   resolveStorePhone,
+  resolveStoreShareImage,
   resolveStoreSocialLinks,
 } from "@/lib/store-identity";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -31,7 +33,6 @@ import {
   buildStorefrontThemeTokens,
   sanitizeStorefrontThemeSettings,
 } from "@scalius/shared/storefront-theme";
-import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import {
   clearThemePreviewCookieHeader,
   readThemePreviewCookie,
@@ -148,8 +149,12 @@ const faviconUrl = headerData?.favicon?.src
 
 // --- SEO: store name, Organization JSON-LD, WebSite JSON-LD (per SEO-05, SEO-06) ---
 const businessInfo = layoutData?.business;
+// Schema identity comes only from Business settings; titles, the header,
+// footer and Open Graph fall back to the Store URL host so they are never blank.
 const storeSchemaName = resolveStoreName(businessInfo);
-const documentTitle = buildDocumentTitle(title, storeSchemaName);
+const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
+const storeDisplayName = resolveStoreDisplayName(businessInfo, storefrontUrl);
+const documentTitle = buildDocumentTitle(title, storeDisplayName);
 const storePhone = resolveStorePhone(businessInfo, headerData.contact.phone);
 const storeSocial = resolveStoreSocialLinks(
   [headerData.social, footerData.social],
@@ -159,7 +164,6 @@ const storeSocial = resolveStoreSocialLinks(
 const ogLocale = `${documentLanguage}_${
   /^(bangladesh|bd)$/i.test(businessInfo?.country?.trim() ?? "") ? "BD" : "US"
 }`;
-const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData?.seo?.returnPolicy,
   storefrontUrl,
@@ -204,14 +208,16 @@ const websiteJsonLd =
       })
     : null;
 
-// Pages without their own image share the store-level social image.
+// Every page shares an image: its own, else the store social image from
+// Preferences, else the page's fallback (first banner/content image), else
+// the store logo.
 const socialImage = layoutData?.seo?.socialImage;
 const absoluteOgImageUrl = toAbsoluteStorefrontSeoUrl(
   ogImage ||
-    (socialImage
-      ? mediaImageUrl(socialImage, MEDIA_DISCOVERY_IMAGE_WIDTH)
-      : undefined) ||
-    fallbackOgImage,
+    (socialImage ? resolveStoreShareImage({ socialImage }) : null) ||
+    fallbackOgImage ||
+    resolveStoreShareImage({ logo: headerData.logo.src }) ||
+    undefined,
 );
 
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
@@ -347,7 +353,7 @@ if (!window.$RefreshReg$) {
     {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
 
     {/* Open Graph tags — per OG-01 through OG-05 */}
-    {storeSchemaName && <meta property="og:site_name" content={storeSchemaName} />}
+    {storeDisplayName && <meta property="og:site_name" content={storeDisplayName} />}
     <meta property="og:locale" content={ogLocale} />
     <meta property="og:type" content={ogType} />
     <meta property="og:title" content={title} />
@@ -411,7 +417,7 @@ if (!window.$RefreshReg$) {
           <Header
             headerData={headerData}
             navigation={navigationData}
-            storeName={storeSchemaName}
+            storeName={storeDisplayName}
             storePhone={storePhone}
             social={storeSocial}
           />
@@ -427,7 +433,7 @@ if (!window.$RefreshReg$) {
         <div class="storefront-deferred-region">
           <Footer
             footerData={footerData}
-            storeName={storeSchemaName}
+            storeName={storeDisplayName}
             storePhone={storePhone}
             social={storeSocial}
             policies={layoutData?.policies ?? []}

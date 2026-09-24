@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "./types";
 import { discountedUnitPrice, orderItemVariantLabel } from "./order-item-presentation";
-import { orderFormMessages } from "~/i18n/order-form";
 
 type ProductVariant = Product["variants"][number];
 
@@ -23,9 +22,8 @@ describe("manual order item variant labels", () => {
     expect(orderItemVariantLabel(variant())).toBe("Color: Navy");
   });
 
-  it("keeps a truthful fallback for default and optionless rows", () => {
-    expect(orderItemVariantLabel(variant({ selectedOptions: [], isDefault: true })))
-      .toBe(orderFormMessages.en.defaultVariant);
+  it("says nothing extra for a simple product's default SKU and falls back to the SKU otherwise", () => {
+    expect(orderItemVariantLabel(variant({ selectedOptions: [], isDefault: true }))).toBe("");
     expect(orderItemVariantLabel(variant({ selectedOptions: [], isDefault: false }))).toBe("VAULT-NAVY");
     expect(orderItemVariantLabel(undefined)).toBe("—");
   });

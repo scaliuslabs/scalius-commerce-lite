@@ -73,6 +73,36 @@ describe("return dialogs", () => {
     expect(payload.lines).toEqual([{ lineId: "line_1", receivedQuantity: 3, restockQuantity: 1, damagedQuantity: 2 }]);
   });
 
+  it("expects every approved unit back in stock, and flags more than expected instead of changing it", async () => {
+    const partlyReceived = {
+      ...orderReturn,
+      lines: [{ ...orderReturn.lines[0]!, receivedQuantity: 1, restockQuantity: 1 }],
+    } as OrderReturnDto;
+    await act(async () => root.render(
+      <ReceiveReturnDialog orderReturn={partlyReceived} itemsById={itemsById} open onOpenChange={() => undefined} />,
+    ));
+    const name = "Shirt · M";
+    const received = input(en["returns.receivedQty"].replace("{name}", name));
+    expect(received.value).toBe("2");
+    expect(input(en["returns.restockQty"].replace("{name}", name)).value).toBe("2");
+
+    await act(async () => setNumber(received, "3"));
+    expect(received.value).toBe("3");
+    expect(received.getAttribute("aria-invalid")).toBe("true");
+    expect(document.body.textContent).toContain(en["returns.receiveTooMany"].replace("{count}", "2"));
+    const submit = button(en["returns.receiveCount"].replace("{count}", "3")) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    await act(async () => submit.click());
+    expect(mocks.receive).not.toHaveBeenCalled();
+
+    // Back to what is expected: back in stock follows and the receipt can be saved.
+    await act(async () => setNumber(received, "1"));
+    expect(input(en["returns.restockQty"].replace("{name}", name)).value).toBe("1");
+    await act(async () => button(en["returns.receiveCount"].replace("{count}", "1")).click());
+    const [payload] = mocks.receive.mock.calls[0]!;
+    expect(payload.lines).toEqual([{ lineId: "line_1", receivedQuantity: 1, restockQuantity: 1, damagedQuantity: 0 }]);
+  });
+
   it("only receives untracked items, never asking to restock them", async () => {
     const untracked = {
       ...orderReturn,

@@ -11,7 +11,10 @@ import { parseStoredHeroSlides } from "@scalius/shared/hero-slider";
 const heroImageSchema = z.object({
   id: z.string(),
   url: z.string().url(),
+  /** Alt text for the image. */
   title: z.string(),
+  heading: z.string(),
+  buttonLabel: z.string(),
   link: z.string(),
   focalPoint: z.object({
     x: z.number().min(0).max(100),

@@ -31,17 +31,32 @@ import {
   isAdminOrderStatus,
 } from "~/lib/admin-order-status-policy";
 import { clearOrderNotice } from "~/lib/order-notice";
+import { useCancelRequestGuard } from "./CancelRequestGuard";
 import { formatOrderTimestamp } from "./formatters";
 import type { Order } from "./types";
 
 type CancelReason = NonNullable<UpdateOrderStatusInput["reason"]>;
 export const CANCEL_REASONS: CancelReason[] = ["customer_changed_mind", "unreachable", "fake_order", "out_of_stock", "other"];
 
-/** Units that go back on sale when the order is cancelled: stock-tracked items only. */
+/** Units that go back on sale when the order is cancelled: unsent, stock-tracked items only. */
 export function restockedUnits(order: Pick<Order, "items">): number {
   return order.items
     .filter((item) => item.inventoryTracked !== false)
-    .reduce((sum, item) => sum + item.quantity - (item.shippedQuantity ?? 0), 0);
+    .reduce((sum, item) => sum + Math.max(0, item.quantity - (item.shippedQuantity ?? 0)), 0);
+}
+
+/** Units with a courier: the order can't be cancelled until they come back or are delivered. */
+export function unitsWithCourier(order: Pick<Order, "items">): number {
+  return order.items.reduce((sum, item) => sum + Math.max(0, item.shippedQuantity ?? 0), 0);
+}
+
+/** Why Cancelled isn't offered, in the merchant's words; null when it can be. */
+export function shippedCancelReason(
+  order: Pick<Order, "items">,
+  t: (key: "cancel.shippedOne" | "cancel.shippedMany", vars: { count: number }) => string,
+): string | null {
+  const count = unitsWithCourier(order);
+  return count === 0 ? null : t(count === 1 ? "cancel.shippedOne" : "cancel.shippedMany", { count });
 }
 
 export function OrderStatusCard({ order }: { order: Order }) {
@@ -50,6 +65,7 @@ export function OrderStatusCard({ order }: { order: Order }) {
   const r = useMessages(resourceMessages);
   const canChangeStatus = useOrderActionPermissions().canChangeOrderStatus;
   const statusMutation = useUpdateOrderStatus();
+  const cancelRequest = useCancelRequestGuard(order);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [reason, setReason] = useState<CancelReason | "">("");
   const status = order.status.toLowerCase();
@@ -57,6 +73,7 @@ export function OrderStatusCard({ order }: { order: Order }) {
   const shipmentLocked = order.shipmentRecovery?.activeLock === true;
   const transitions = getAdminOrderStatusTransitions(status, order);
   const cancelBlocked = getAdminOrderCancellationBlockedReason(status, order) !== null;
+  const shippedReason = transitions.includes("cancelled") ? shippedCancelReason(order, t) : null;
   const placedAt = formatOrderTimestamp(order.createdAt);
   const restock = restockedUnits(order);
   const changeable = canChangeStatus && !refundLocked && !shipmentLocked && !order.archivedAt && transitions.length > 0;
@@ -65,11 +82,14 @@ export function OrderStatusCard({ order }: { order: Order }) {
     if (!isAdminOrderStatus(next)) return;
     clearOrderNotice(order.id);
     if (next === "cancelled") {
+      if (shippedReason) return;
       setReason("");
       setConfirmCancel(true);
       return;
     }
-    statusMutation.mutate({ orderId: order.id, status: next });
+    const run = () => statusMutation.mutate({ orderId: order.id, status: next });
+    if (next === "confirmed" || next === "shipped") cancelRequest.guard(next === "confirmed" ? "confirm" : "send", run);
+    else run();
   };
 
   const help = transitions.length === 0
@@ -82,7 +102,7 @@ export function OrderStatusCard({ order }: { order: Order }) {
           ? t("locked.shipment")
           : cancelBlocked
             ? t("status.refundToCancel")
-            : null;
+            : shippedReason;
 
   return (
     <Card>
@@ -97,7 +117,7 @@ export function OrderStatusCard({ order }: { order: Order }) {
             </SelectTrigger>
             <SelectContent>
               {[status, ...transitions].map((value) => (
-                <SelectItem key={value} value={value}>
+                <SelectItem key={value} value={value} disabled={value === "cancelled" && shippedReason !== null}>
                   {orderStatusLabel(o, value)}
                 </SelectItem>
               ))}
@@ -151,6 +171,7 @@ export function OrderStatusCard({ order }: { order: Order }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {cancelRequest.dialog}
     </Card>
   );
 }

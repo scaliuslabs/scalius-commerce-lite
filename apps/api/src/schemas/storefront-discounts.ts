@@ -17,7 +17,15 @@ export const appliedDiscountLineSchema = z.object({
   promotionId: z.string(),
   title: z.string(),
   code: z.string().nullable(),
-  amount: z.number(),
+  amount: z.number().openapi({ description: "Off the items: shown as a discount line." }),
+  shippingAmount: z.number().openapi({ description: "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line." }),
+});
+
+/** A discount an order used, as receipts and order pages show it. */
+export const orderDiscountLineSchema = appliedDiscountLineSchema.extend({
+  kind: z.enum(["buy_x_get_y", "product", "order", "shipping"]).openapi({
+    description: "The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind.",
+  }),
 });
 
 export const discountOfferSchema = z.object({
@@ -48,6 +56,8 @@ export const rejectedDiscountCodeSchema = z.object({
     "buy_items",
     "not_combinable",
     "lower_savings",
+    "needs_delivery",
+    "delivery_discount_applied",
     "unavailable",
   ]),
   message: z.string(),
@@ -70,9 +80,10 @@ function presentOffer(offer: StorefrontDiscountOffer, decimalPlaces: number) {
 /** The buyer-facing discount facts of a quote, in the decimal HTTP contract. */
 export function presentStorefrontDiscountQuote(quote: StorefrontDiscountQuote, decimalPlaces: number) {
   return {
-    discounts: quote.discounts.map(({ amountMinor, ...line }) => ({
+    discounts: quote.discounts.map(({ amountMinor, shippingAmountMinor, ...line }) => ({
       ...line,
       amount: fromMinor(amountMinor, decimalPlaces),
+      shippingAmount: fromMinor(shippingAmountMinor, decimalPlaces),
     })),
     offers: quote.offers.map((offer) => presentOffer(offer, decimalPlaces)),
     rejectedCodes: quote.rejectedCodes.map(({ shortfallMinor, offer, ...rejection }) => ({

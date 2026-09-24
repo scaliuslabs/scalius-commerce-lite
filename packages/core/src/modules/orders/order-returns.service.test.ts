@@ -179,7 +179,7 @@ describe("order return service", () => {
       gets: [undefined, header, { status: "delivered", version: 10, inventoryPool: "regular" },
         { ...header, activeOrderKey: "order_1", activeCommandKey: input.commandKey, activeCommandHash: requestHash },
         { status: "delivered", version: 11, inventoryPool: "regular" }, { status: "returned" }],
-      alls: [lines, lines, [{ id: "item_1", quantity: 1 }], [{
+      alls: [lines, lines, [{ id: "item_1", quantity: 1, shippedQuantity: 1 }], [{
         returnId: "ret_1", lineId: "line_1", orderItemId: "item_1", receivedQuantity: 0, status: "approved",
       }]],
     });

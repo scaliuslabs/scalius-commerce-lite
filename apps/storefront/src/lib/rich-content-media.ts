@@ -118,6 +118,16 @@ function getImagePlan(isPriorityImage: boolean) {
       };
 }
 
+const H1_TAG_RE = /<(\/?)h1(?=[\s>])/gi;
+
+/**
+ * Merchant rich text renders inside a page that already has its H1 (product,
+ * category, collection), so its own H1s become H2s: one H1 per page.
+ */
+export function demoteRichContentH1(html: string): string {
+  return html.replace(H1_TAG_RE, "<$1h2");
+}
+
 /**
  * The first image in rich HTML at a share-sized rendition: the share image
  * (og:image, BlogPosting image) of content without its own featured image.

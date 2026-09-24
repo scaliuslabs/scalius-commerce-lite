@@ -586,8 +586,8 @@ app.openapi(exportOrdersRoute, async (c) => {
                 ...order,
                 subtotalAmount: fromMinor(order.subtotalAmountMinor ?? 0, order.currencyDecimalPlaces),
                 codStatus: order.cod?.status ?? null,
-                courierName: order.latestShipment?.providerName ?? null,
-                trackingId: order.latestShipment?.trackingId ?? null,
+                courierName: detail?.courierName ?? null,
+                trackingId: detail?.trackingId ?? null,
                 shippingAddress: detail?.shippingAddress ?? "",
                 notes: detail?.notes ?? null,
                 lines: detail?.lines ?? [],
@@ -1081,6 +1081,9 @@ const bulkOrderIdsSchema = z.array(z.string().trim().min(1).max(180))
     .max(90, "Select at most 90 orders at a time")
     .refine((ids) => new Set(ids).size === ids.length, "Each order can appear only once");
 
+/** One key per bulk run: running the same selection again reports what it already did as done. */
+const bulkRequestKeySchema = z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9_-]+$/).optional();
+
 const bulkActionResponseSchema = successEnvelope(z.object({
     results: z.array(z.object({
         orderId: z.string(),
@@ -1096,7 +1099,7 @@ const bulkConfirmRoute = createRoute({
     tags: ["Admin - Orders"],
     summary: "Confirm several new orders",
     request: {
-        body: { content: { "application/json": { schema: z.object({ orderIds: bulkOrderIdsSchema }) } } },
+        body: { content: { "application/json": { schema: z.object({ orderIds: bulkOrderIdsSchema, requestKey: bulkRequestKeySchema }) } } },
     },
     responses: {
         200: { description: "Per-order results", content: { "application/json": { schema: bulkActionResponseSchema } } },
@@ -1106,9 +1109,9 @@ const bulkConfirmRoute = createRoute({
 
 app.openapi(bulkConfirmRoute, async (c) => {
     const db = c.get("db");
-    const { orderIds } = c.req.valid("json");
+    const { orderIds, requestKey } = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
-    const results = await OrdersService.bulkConfirmOrders(db, orderIds);
+    const results = await OrdersService.bulkConfirmOrders(db, orderIds, { requestKey, actorId: user?.id ?? null });
     let bumped = false;
     for (const result of results) {
         if (!result.success || !result.update) continue;
@@ -1116,12 +1119,6 @@ app.openapi(bulkConfirmRoute, async (c) => {
             await bumpCacheGeneration(c);
             bumped = true;
         }
-        await OrdersService.recordOrderEvent(db, {
-            orderId: result.orderId,
-            kind: "status_changed",
-            actorId: user?.id ?? null,
-            data: { from: result.update.notification?.previousStatus ?? null, to: "confirmed" },
-        });
         const notification = result.update.notification;
         if (notification) {
             await enqueueOrderNotificationMessage({
@@ -1156,6 +1153,7 @@ const bulkFulfillRoute = createRoute({
                         orderIds: bulkOrderIdsSchema,
                         courierName: z.string().trim().max(120).optional(),
                         note: z.string().trim().max(500).optional(),
+                        requestKey: bulkRequestKeySchema,
                     }),
                 },
             },
@@ -1169,9 +1167,9 @@ const bulkFulfillRoute = createRoute({
 
 app.openapi(bulkFulfillRoute, async (c) => {
     const db = c.get("db");
-    const { orderIds, courierName, note } = c.req.valid("json");
+    const { orderIds, courierName, note, requestKey } = c.req.valid("json");
     const user = c.get("user") as { id?: string } | undefined;
-    const results = await OrdersService.bulkFulfillOrders(db, orderIds, { courierName, note });
+    const results = await OrdersService.bulkFulfillOrders(db, orderIds, { courierName, note, requestKey });
     if (results.some((result) => (result.shipment?.availabilityTransitionVariantIds.length ?? 0) > 0)) {
         await bumpCacheGeneration(c);
     }
@@ -1181,7 +1179,14 @@ app.openapi(bulkFulfillRoute, async (c) => {
             orderId: result.orderId,
             kind: "shipment_created",
             actorId: user?.id ?? null,
-            data: { courierName: courierName || null, trackingId: null, final: true },
+            requestKey: result.shipment.shipmentId,
+            data: {
+                courierName: courierName || null,
+                trackingId: null,
+                final: true,
+                quantity: result.shipment.lines.reduce((sum, line) => sum + line.quantity, 0),
+                items: result.shipment.lines,
+            },
         });
     }
     await enqueueOrderNotificationsForStatus({
@@ -1205,6 +1210,7 @@ const timelineEventSchema = z.object({
     body: z.string().nullable(),
     data: z.record(z.string(), z.unknown()).nullable(),
     actorName: z.string().nullable(),
+    own: z.boolean().openapi({ description: "The viewer wrote this comment and may delete it." }),
     createdAt: timestampSchema,
 });
 
@@ -1225,7 +1231,8 @@ const getTimelineRoute = createRoute({
 });
 
 app.openapi(getTimelineRoute, (async (c: AdminRouteContext<typeof getTimelineRoute>) => {
-    const events = await OrdersService.listOrderTimeline(c.get("db"), c.req.valid("param").id);
+    const user = c.get("user") as { id?: string } | undefined;
+    const events = await OrdersService.listOrderTimeline(c.get("db"), c.req.valid("param").id, user?.id ?? null);
     return ok(c, { events: events.map((event) => ({ ...event, createdAt: event.createdAt.toISOString() })) });
 }) as unknown as AdminRouteHandler<typeof getTimelineRoute>);
 
@@ -1243,6 +1250,9 @@ const addCommentRoute = createRoute({
                     schema: z.object({
                         body: z.string().trim().min(1, "Write a comment first.")
                             .max(OrdersService.ORDER_COMMENT_MAX_LENGTH),
+                        requestKey: bulkRequestKeySchema.openapi({
+                            description: "One key per comment draft. Posting it again returns the first comment.",
+                        }),
                     }),
                 },
             },
@@ -1264,9 +1274,33 @@ app.openapi(addCommentRoute, (async (c: AdminRouteContext<typeof addCommentRoute
         c.req.valid("param").id,
         c.req.valid("json").body,
         user?.id ?? null,
+        c.req.valid("json").requestKey,
     );
     return created(c, { ...event, createdAt: event.createdAt.toISOString() });
 }) as unknown as AdminRouteHandler<typeof addCommentRoute>);
+
+const deleteCommentRoute = createRoute({
+    operationId: "dashboard.orders.comment_delete",
+    method: "delete",
+    path: "/{id}/timeline/{eventId}",
+    tags: ["Admin - Orders"],
+    summary: "Delete one of your own comments from the order timeline",
+    request: { params: z.object({ id: z.string(), eventId: z.string() }) },
+    responses: {
+        200: {
+            description: "Comment deleted (or already gone)",
+            content: { "application/json": { schema: successEnvelope(z.object({ deleted: z.literal(true) })) } },
+        },
+        ...adminOrderResourceMutationErrorResponses,
+    },
+});
+
+app.openapi(deleteCommentRoute, (async (c: AdminRouteContext<typeof deleteCommentRoute>) => {
+    const user = c.get("user") as { id?: string } | undefined;
+    const { id, eventId } = c.req.valid("param");
+    await OrdersService.deleteOrderComment(c.get("db"), id, eventId, user?.id ?? null);
+    return ok(c, { deleted: true as const });
+}) as unknown as AdminRouteHandler<typeof deleteCommentRoute>);
 
 // ─── POST /:id/payment-recovery-link ─────────────────────────────────────────
 

@@ -28,6 +28,18 @@ export function normalizeBdMobile(raw: string): string | null {
   return match ? `+880${match[1]}` : null;
 }
 
+/** The one buyer-facing reason a Bangladesh number is refused. */
+export const BD_MOBILE_REQUIRED_MESSAGE = "Enter a Bangladeshi mobile number (01XXXXXXXXX)";
+
+/**
+ * A number written as a Bangladesh number: +880/880, or a national number
+ * starting with 0. Only mobile numbers (`01[3-9]` + 8 digits) are accepted for
+ * these; landlines (02…) and 012… are refused with BD_MOBILE_REQUIRED_MESSAGE.
+ */
+export function isBangladeshNumber(raw: string): boolean {
+  return /^(?:\+?880|0)\d/.test(compactPhone(raw));
+}
+
 /** "01712-345678" for a Bangladesh mobile number; any other value unchanged. */
 export function formatBdMobile(phone: string): string {
   const e164 = normalizeBdMobile(phone);

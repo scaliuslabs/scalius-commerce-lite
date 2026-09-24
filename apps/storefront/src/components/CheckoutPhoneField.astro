@@ -16,7 +16,10 @@ interface Props {
   allowedCountries?: string[];
   allowedCountriesMode?: "include" | "exclude";
   requiredMessage: string;
+  /** A number from another country that doesn't validate. */
   invalidMessage: string;
+  /** A Bangladesh number that isn't a mobile number (01[3-9] + 8 digits). */
+  mobileMessage: string;
   countryNotAcceptedMessage: string;
   countrySelectLabel: string;
   languageCode: string;
@@ -30,6 +33,7 @@ const {
   allowedCountriesMode = "include",
   requiredMessage,
   invalidMessage,
+  mobileMessage,
   countryNotAcceptedMessage,
   countrySelectLabel,
   languageCode,
@@ -58,6 +62,7 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
   data-default-country={defaultCountry}
   data-required-message={requiredMessage}
   data-invalid-message={invalidMessage}
+  data-mobile-message={mobileMessage}
   data-country-message={countryNotAcceptedMessage}
   data-country-label={countrySelectLabel}
   data-language={languageCode}

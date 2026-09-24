@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBdMobile, normalizeBdMobile, toLatinDigits } from "./phone-input";
+import { BD_MOBILE_REQUIRED_MESSAGE, formatBdMobile, normalizeBdMobile, toLatinDigits } from "./phone-input";
 import { validateAndFormatPhone } from "./customer-utils";
 
 describe("phone input rules", () => {
@@ -30,6 +30,17 @@ describe("phone input rules", () => {
   it("shows mobile numbers the way buyers read them out", () => {
     expect(formatBdMobile("+8801712345678")).toBe("01712-345678");
     expect(formatBdMobile("+14155550100")).toBe("+14155550100");
+  });
+
+  it.each(["01212345678", "02123456789", "+880 2 9123456", "8802912345678"])(
+    "refuses the non-mobile Bangladesh number %s everywhere with one message",
+    (raw) => {
+      expect(() => validateAndFormatPhone(raw)).toThrow(BD_MOBILE_REQUIRED_MESSAGE);
+    },
+  );
+
+  it("still accepts other countries' numbers", () => {
+    expect(validateAndFormatPhone("+14155550100")).toBe("+14155550100");
   });
 
   it("lets the server accept a number typed in Bangla digits", () => {

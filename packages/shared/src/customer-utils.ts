@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
-import { normalizeBdMobile, toLatinDigits } from "./phone-input";
+import { BD_MOBILE_REQUIRED_MESSAGE, compactPhone, isBangladeshNumber, normalizeBdMobile, toLatinDigits } from "./phone-input";
 
 // Re-exported for browser code that lazy-loads full validation (customer auth,
 // the checkout phone country picker) without its own libphonenumber dependency.
@@ -75,6 +75,32 @@ export function assertPhoneCountryAllowed(input: string, policy: PhoneCountryPol
   assertParsedPhoneCountryAllowed(parsed, policy);
 }
 
+function parseBdLandline(raw: string): ParsedPhoneNumber | null {
+  const compact = compactPhone(raw);
+  if (!compact || normalizeBdMobile(compact)) return null;
+  try {
+    const parsed = parsePhoneNumber(compact, "BD");
+    // National numbers starting with 1 are mobiles; only normalizeBdMobile decides those.
+    return parsed?.isValid() && parsed.country === "BD" && !parsed.nationalNumber.startsWith("1") ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A Bangladesh landline or hotline (02-9876543, 031-714567, 09612-345678) in
+ * any typing, as `+880…`; null for anything else, mobiles included. Only for
+ * the store's own published phone: buyer phones stay mobile-only.
+ */
+export function normalizeBdLandline(raw: string): string | null {
+  return parseBdLandline(raw)?.number ?? null;
+}
+
+/** "02-9876543" for a Bangladesh landline stored as `+880…`; any other value unchanged. */
+export function formatBdLandline(phone: string): string {
+  return phone.startsWith("+880") ? parseBdLandline(phone)?.formatNational() ?? phone : phone;
+}
+
 /**
  * Validate and format a phone number to E.164.
  * Returns the E.164 string or throws with a clear message.
@@ -83,8 +109,11 @@ export function validateAndFormatPhone(
   input: string,
   allowedCountries?: PhoneCountryPolicyInput,
 ): string {
-  const trimmed = normalizeBdMobile(input) ?? toLatinDigits(input).trim();
+  const mobile = normalizeBdMobile(input);
+  const trimmed = mobile ?? toLatinDigits(input).trim();
   if (!trimmed) throw new Error("Phone number is required");
+  // Bangladesh numbers must be mobile numbers: couriers call and codes are sent by SMS.
+  if (!mobile && isBangladeshNumber(trimmed)) throw new Error(BD_MOBILE_REQUIRED_MESSAGE);
 
   if (!isValidPhoneNumber(trimmed)) {
     throw new Error("Invalid phone number format");
@@ -92,6 +121,7 @@ export function validateAndFormatPhone(
 
   const parsed = parsePhoneNumber(trimmed);
   if (!parsed) throw new Error("Could not parse phone number");
+  if (parsed.country === "BD" && !normalizeBdMobile(parsed.number)) throw new Error(BD_MOBILE_REQUIRED_MESSAGE);
 
   assertParsedPhoneCountryAllowed(parsed, allowedCountries);
 

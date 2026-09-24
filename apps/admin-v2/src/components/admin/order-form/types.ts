@@ -51,6 +51,8 @@ export interface OrderItem {
   /** Display only (lines added or prefilled here): never sent to the server. */
   name?: string;
   variantLabel?: string | null;
+  /** New orders: the SKU's sellable stock when the line was added (null = not tracked). */
+  available?: number | null;
 }
 
 /**
@@ -126,11 +128,32 @@ export const orderFormSchema = z.object({
         price: z.number().min(0),
         name: z.string().optional(),
         variantLabel: z.string().nullable().optional(),
+        available: z.number().nullable().optional(),
       }),
     )
-    .min(1, msg("itemsRequired")),
+    .min(1, msg("itemsRequired"))
+    // Lines of one SKU share its stock; the quantity field shows "Only N available" itself.
+    .superRefine((items, context) => {
+      items.forEach((item, index) => {
+        if (item.available == null || !item.variantId) return;
+        const others = items.reduce(
+          (sum, other, otherIndex) => (otherIndex !== index && other.variantId === item.variantId ? sum + other.quantity : sum),
+          0,
+        );
+        const remaining = Math.max(0, item.available - others);
+        if (item.quantity > remaining) {
+          context.addIssue({
+            code: "custom",
+            path: [index, "quantity"],
+            message: translate(orderFormMessages, remaining === 0 ? "outOfStock" : "onlyAvailable", { count: remaining }),
+          });
+        }
+      });
+    }),
   discountAmount: z.number(msg("amountNotNumber")).min(0, msg("discountNegative")).nullable(),
   shippingCharge: z.number(msg("amountNotNumber")).min(0, msg("deliveryChargeNegative")),
+  /** The delivery method picked for the charge; null for a custom charge. */
+  shippingMethodId: z.string().nullable().optional(),
 });
 
 export type OrderFormInput = z.input<typeof orderFormSchema>;

@@ -16,6 +16,7 @@ import type { Product } from "./types";
 import {
   exceededStockMessage,
   remainingStockForNewOrderLine,
+  trackedAvailableStock,
 } from "./manual-order-stock";
 import { discountedUnitPrice, orderItemVariantLabel } from "./order-item-presentation";
 import { useMessages } from "@/i18n";
@@ -149,6 +150,7 @@ export function OrderItemsSection() {
         price: discountedUnitPrice(product, variant),
         name: product.name,
         variantLabel: orderItemVariantLabel(variant),
+        available: isEdit ? null : trackedAvailableStock(variant),
       },
     ], { shouldDirty: true, shouldValidate: true });
     return true;

@@ -57,7 +57,7 @@ export const CHECKOUT_READINESS_SHIPPING_ISSUE: ReadinessIssue = readinessIssue(
 );
 export const CHECKOUT_READINESS_LOCATION_ISSUE: ReadinessIssue = readinessIssue(
     CHECKOUT_READINESS_CODES.deliveryLocation,
-    "Add at least one active city with an active zone before checkout can accept orders.",
+    "Add at least one active city with an active thana before checkout can accept orders.",
 );
 export const CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE: ReadinessIssue = readinessIssue(
     CHECKOUT_READINESS_CODES.customerSignIn,

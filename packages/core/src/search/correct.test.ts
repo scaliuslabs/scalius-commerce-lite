@@ -28,12 +28,30 @@ describe("search query correction", () => {
   it.each([
     ["ব্যাগ", "bag"],
     ["কেতলি", "kettle"],
+    ["কেটলি", "kettle"],
     ["চায়ের কেতলি", "kettle"],
     ["শার্ট", "shirt"],
     ["ক্যামেরা", "camera"],
     ["জুতা", "shoes"],
   ])("maps the Bangla query %s to the English catalog word", (query, expected) => {
     expect(correctSearchQuery(query, CATALOG)).toBe(expected);
+  });
+
+  it("maps Bangla and English shopping synonyms onto the words this catalog uses", () => {
+    const footwearStore = ["Footwear", "Padma Knit Slip-ons", "Canvas Tote Bag", "Wall Clock"];
+
+    expect(correctSearchQuery("জুতা", footwearStore)).toBe("footwear");
+    expect(correctSearchQuery("জুতো", footwearStore)).toBe("footwear");
+    expect(correctSearchQuery("shoes", footwearStore)).toBe("footwear");
+    expect(correctSearchQuery("Sneakers", footwearStore)).toBe("footwear");
+    expect(correctSearchQuery("ঘড়ি", footwearStore)).toBe("clock");
+    expect(correctSearchQuery("footwear", ["Leather Shoes"])).toBe("shoes");
+    expect(correctSearchQuery("জামা", ["Summer Dress", "Linen Dresses"])).toBe("dress");
+  });
+
+  it("never suggests a synonym the catalog does not use", () => {
+    expect(correctSearchQuery("ঘড়ি", ["Canvas Tote Bag"])).toBeNull();
+    expect(correctSearchQuery("জুতা", ["Canvas Tote Bag"])).toBeNull();
   });
 
   it("matches Bangla catalog names typed in another Unicode form or in Latin letters", () => {

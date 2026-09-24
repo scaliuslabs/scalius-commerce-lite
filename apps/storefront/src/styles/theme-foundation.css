@@ -206,8 +206,9 @@ html.dark {
   outline: 2px solid var(--foreground);
 }
 
-/* Surfaces painted with the primary color carry primary-foreground text. */
-.site-root :where(footer, .bg-primary) :focus-visible {
+/* Dark or primary surfaces (footer, the header account/cart pill) carry
+   light text, so the ring takes the text color and stays visible on them. */
+.site-root :where(footer, .bg-primary, .bg-card-foreground) :focus-visible {
   outline-color: currentColor;
 }
 

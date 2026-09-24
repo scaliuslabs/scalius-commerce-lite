@@ -149,7 +149,9 @@ export function OrderListToolbar({
         selectedCount={selectedCount}
         bulkActions={bulkActions}
         filters={
-          <>
+          // With rows selected the bulk actions take this row's place on wide screens
+          // (as in Shopify), so nothing wraps onto a second line.
+          <div className={selectedCount > 0 ? "contents md:hidden" : "contents"}>
             <Button
               variant="outline"
               aria-expanded={filtersOpen}
@@ -186,7 +188,7 @@ export function OrderListToolbar({
               <RefreshCw className="h-4 w-4" />
               {t("autoRefresh")}
             </Button>
-          </>
+          </div>
         }
       />
 

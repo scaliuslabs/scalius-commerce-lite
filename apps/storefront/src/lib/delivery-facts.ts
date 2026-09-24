@@ -74,9 +74,8 @@ function deliveryFact(
       detail: first.pickupAddress?.trim() || first.name,
     };
   }
-  if (freeDelivery) {
-    return { kind: "delivery", title: "Free delivery", detail: pickupNote.join(" · ") };
-  }
+  // The product's "Free Delivery" badge already says it; don't repeat it here.
+  if (freeDelivery) return null;
 
   const fees = delivery.map((method) => method.fee);
   const min = Math.min(...fees);
@@ -93,16 +92,17 @@ function deliveryFact(
     };
   }
 
+  const freeOver = (method: ShippingMethod) =>
+    method.freeOver && method.fee > 0 ? `free over ${formatMoney(method.freeOver)}` : "";
+  // One rate: its fee is the title, so the detail only adds what is new.
+  const detail = delivery.length === 1
+    ? [freeOver(delivery[0]!)].filter(Boolean)
+    : delivery.slice(0, MAX_LISTED_METHODS).map((method) =>
+        [`${method.name} ${fee(method.fee)}`, freeOver(method)].filter(Boolean).join(", "));
   return {
     kind: "delivery",
     title: min === max ? `Delivery ${fee(min)}` : `Delivery ${formatMoney(min)}–${formatMoney(max)}`,
-    detail: [
-      ...delivery.slice(0, MAX_LISTED_METHODS).map((method) =>
-        `${method.name} ${fee(method.fee)}${
-          method.freeOver && method.fee > 0 ? `, free over ${formatMoney(method.freeOver)}` : ""
-        }`),
-      ...pickupNote,
-    ].join(" · "),
+    detail: [...detail, ...pickupNote].join(" · ").replace(/^free/, "Free"),
   };
 }
 

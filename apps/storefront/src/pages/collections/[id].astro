@@ -23,7 +23,9 @@ import {
 import {
   countActiveProductListFilters,
   isIndexableProductListView,
+  isMissingProductListPage,
   productListCanonicalUrl,
+  productListMetaDescription,
   resolveProductListQueryState,
 } from "@/lib/product-list-query";
 import { ArrowLeft, Tags } from "lucide-react";
@@ -63,6 +65,7 @@ if (queryState.redirectPath) return Astro.redirect(queryState.redirectPath);
 const products = collection.products ?? [];
 const facets = collection.facets ?? [];
 const pagination = collection.pagination;
+if (isMissingProductListPage(pagination)) return new Response(null, { status: 404 });
 const currentFilters = queryState.currentFilters;
 const categories = collection.categories ?? [];
 const collectionDescription = collection.description ?? null;
@@ -74,7 +77,7 @@ const plainDescription = htmlToPlainText(collection.description);
 const description =
   collection.metaDescription ||
   plainDescription ||
-  `Browse ${collection.name}.`;
+  productListMetaDescription(collection.name, products.map((product) => product.name));
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const collectionPath = `/collections/${encodeURIComponent(collection.id)}`;
 // Each paginated page is self-canonical; sort, filter and tracking params are stripped.

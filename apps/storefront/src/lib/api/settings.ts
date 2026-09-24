@@ -12,29 +12,8 @@ import {
   getApiV1Seo,
   getApiV1AnalyticsConfigurations,
   getApiV1CheckoutLanguagesActive,
-  getApiV1HeroSliders,
 } from "@scalius/api-client/sdk";
 import { normalizeSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
-import type { HeroSlideFocalPoint } from "@scalius/shared/hero-slider";
-
-/**
- * Defines the structure for the hero slider data, containing separate
- * configurations for desktop and mobile, along with resolved images.
- */
-export interface HeroSliderData {
-  desktop: {
-    id: string;
-    type: "desktop";
-    images: { url: string; title?: string; link: string; id?: string; focalPoint: HeroSlideFocalPoint }[];
-  } | null;
-  mobile: {
-    id: string;
-    type: "mobile";
-    images: { url: string; title?: string; link: string; id?: string; focalPoint: HeroSlideFocalPoint }[];
-  } | null;
-  images: { url: string; title?: string; link: string; id?: string; focalPoint: HeroSlideFocalPoint }[];
-  isMobile: boolean;
-}
 
 /**
  * Fetches the global SEO settings for the site.
@@ -102,28 +81,6 @@ export async function getActiveCheckoutLanguage(): Promise<CheckoutLanguageData 
         return unwrapData<{ language: CheckoutLanguageData }>(data)?.language ?? null;
       } catch (error: unknown) {
         console.error("Error fetching active checkout language:", error);
-        return null;
-      }
-    },
-    { ttlSeconds: CACHE_TTL.LONG },
-  );
-}
-
-/**
- * Fetches hero sliders for the homepage.
- * Coalesced per request; the API caches it by cache generation.
- */
-export async function getHeroSliders(): Promise<HeroSliderData | null> {
-  return withEdgeCache(
-    "homepage_hero_sliders",
-    async () => {
-      try {
-        const { data } = await getApiV1HeroSliders({
-          client: getConfiguredSdkClient(),
-        });
-        return unwrapData<HeroSliderData>(data);
-      } catch (error: unknown) {
-        console.error("Error fetching hero sliders:", error);
         return null;
       }
     },

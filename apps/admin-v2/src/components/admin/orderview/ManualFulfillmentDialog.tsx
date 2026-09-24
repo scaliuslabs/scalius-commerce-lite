@@ -59,7 +59,7 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
   useEffect(() => {
     if (!open) return;
     setQuantities(Object.fromEntries(order.items.map((item) => [item.id, remainingToSend(item)])));
-    setCourierName(t("fulfill.defaultCourier"));
+    setCourierName("");
     setTrackingId("");
     setTrackingUrl("");
     setShipmentAmount(null);
@@ -113,6 +113,8 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
   };
 
   const blur = (field: keyof FieldErrors) => setErrors((current) => ({ ...current, [field]: validate()[field] }));
+  // A corrected field loses its error as soon as it changes.
+  const clearError = (field: keyof FieldErrors) => setErrors((current) => (current[field] ? { ...current, [field]: undefined } : current));
 
   return (
     <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
@@ -157,6 +159,7 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
                             ...current,
                             [item.id]: clampQuantity(value, left),
                           }));
+                          clearError("items");
                         }}
                       />
                     ) : null}
@@ -169,7 +172,7 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="fulfill-courier">{t("shipments.courier")}</Label>
-              <Input id="fulfill-courier" value={courierName} onChange={(e) => setCourierName(e.target.value)} disabled={mutation.isPending} autoComplete="off" maxLength={120} />
+              <Input id="fulfill-courier" value={courierName} placeholder={t("fulfill.defaultCourier")} onChange={(e) => setCourierName(e.target.value)} disabled={mutation.isPending} autoComplete="off" maxLength={120} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="fulfill-tracking">{t("shipments.trackingId")}</Label>
@@ -185,7 +188,10 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
                 value={trackingUrl}
                 aria-invalid={Boolean(errors.trackingUrl) || undefined}
                 aria-describedby={errors.trackingUrl ? "fulfill-trackingUrl-error" : undefined}
-                onChange={(e) => setTrackingUrl(e.target.value)}
+                onChange={(e) => {
+                  setTrackingUrl(e.target.value);
+                  clearError("trackingUrl");
+                }}
                 onBlur={() => blur("trackingUrl")}
                 disabled={mutation.isPending}
                 autoComplete="off"
@@ -199,7 +205,10 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
                 value={shipmentAmount}
                 aria-invalid={Boolean(errors.amount) || undefined}
                 aria-describedby={errors.amount ? "fulfill-amount-error" : "fulfill-amount-help"}
-                onValueChange={setShipmentAmount}
+                onValueChange={(value) => {
+                  setShipmentAmount(value);
+                  clearError("amount");
+                }}
                 onBlur={() => blur("amount")}
                 disabled={mutation.isPending}
               />

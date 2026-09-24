@@ -13288,7 +13288,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.delivery_locations.bulk_delete",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/settings/delivery-locations",
-    "summary": "Bulk soft-delete delivery locations",
+    "summary": "Bulk soft-delete delivery locations with their thanas and areas",
     "tags": [
       "Admin - Delivery Locations"
     ],
@@ -13517,6 +13517,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "descendants": {
+                  "type": "object",
+                  "properties": {
+                    "zones": {
+                      "type": "integer"
+                    },
+                    "areas": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "zones",
+                    "areas"
+                  ]
                 }
               },
               "required": [
@@ -13713,6 +13728,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "displayName": {
               "type": "string"
+            },
+            "descendants": {
+              "type": "object",
+              "properties": {
+                "zones": {
+                  "type": "integer"
+                },
+                "areas": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "zones",
+                "areas"
+              ]
             }
           },
           "required": [
@@ -13884,6 +13914,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "displayName": {
                     "type": "string"
+                  },
+                  "descendants": {
+                    "type": "object",
+                    "properties": {
+                      "zones": {
+                        "type": "integer"
+                      },
+                      "areas": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "zones",
+                      "areas"
+                    ]
                   }
                 },
                 "required": [
@@ -14269,7 +14314,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.delivery_locations.trash",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/settings/delivery-locations/{id}",
-    "summary": "Soft-delete a delivery location",
+    "summary": "Soft-delete a delivery location with its thanas and areas",
     "tags": [
       "Admin - Delivery Locations"
     ],
@@ -14467,6 +14512,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "displayName": {
               "type": "string"
+            },
+            "descendants": {
+              "type": "object",
+              "properties": {
+                "zones": {
+                  "type": "integer"
+                },
+                "areas": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "zones",
+                "areas"
+              ]
             }
           },
           "required": [
@@ -19401,6 +19461,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "minLength": 1,
                         "maxLength": 160
                       },
+                      "heading": {
+                        "type": "string",
+                        "maxLength": 160
+                      },
+                      "buttonLabel": {
+                        "type": "string",
+                        "maxLength": 40
+                      },
                       "link": {
                         "type": "string",
                         "maxLength": 2048
@@ -19490,6 +19558,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -19518,6 +19592,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -19657,6 +19733,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -19685,6 +19767,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -19815,6 +19899,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "minLength": 1,
                       "maxLength": 160
                     },
+                    "heading": {
+                      "type": "string"
+                    },
+                    "buttonLabel": {
+                      "type": "string"
+                    },
                     "link": {
                       "type": "string",
                       "maxLength": 2048
@@ -19843,6 +19933,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "id",
                     "url",
                     "title",
+                    "heading",
+                    "buttonLabel",
                     "link",
                     "focalPoint"
                   ]
@@ -20002,6 +20094,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -20030,6 +20128,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -20156,6 +20256,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "minLength": 1,
                         "maxLength": 160
                       },
+                      "heading": {
+                        "type": "string",
+                        "maxLength": 160
+                      },
+                      "buttonLabel": {
+                        "type": "string",
+                        "maxLength": 40
+                      },
                       "link": {
                         "type": "string",
                         "maxLength": 2048
@@ -20244,6 +20352,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -20272,6 +20386,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -26546,11 +26662,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "childCount": {
                     "type": "integer",
                     "minimum": 0
+                  },
+                  "targetTitle": {
+                    "type": "string",
+                    "nullable": true
                   }
                 },
                 "required": [
                   "item",
-                  "childCount"
+                  "childCount",
+                  "targetTitle"
                 ]
               }
             },
@@ -31068,12 +31189,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "storefrontUrl": {
                   "type": "string",
                   "nullable": true
+                },
+                "nameFromAddress": {
+                  "type": "boolean"
                 }
               },
               "required": [
                 "name",
                 "logoUrl",
-                "storefrontUrl"
+                "storefrontUrl",
+                "nameFromAddress"
               ]
             }
           },
@@ -32355,6 +32480,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "minItems": 1,
                   "maxItems": 90
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
                 }
               },
               "required": [
@@ -32465,6 +32596,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "note": {
                   "type": "string",
                   "maxLength": 500
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
                 }
               },
               "required": [
@@ -33288,6 +33425,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 2000
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "description": "One key per comment draft. Posting it again returns the first comment."
                 }
               },
               "required": [
@@ -33329,6 +33473,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "refund_recorded",
                 "return_created",
                 "return_received",
+                "request_submitted",
                 "request_resolved",
                 "archived",
                 "unarchived",
@@ -33348,6 +33493,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "string",
               "nullable": true
             },
+            "own": {
+              "type": "boolean",
+              "description": "The viewer wrote this comment and may delete it."
+            },
             "createdAt": {
               "anyOf": [
                 {
@@ -33365,7 +33514,88 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "body",
             "data",
             "actorName",
+            "own",
             "createdAt"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.comment_delete",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/orders/{id}/timeline/{eventId}",
+    "summary": "Delete one of your own comments from the order timeline",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.edit"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "eventId",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "deleted": {
+              "type": "boolean",
+              "enum": [
+                true
+              ]
+            }
+          },
+          "required": [
+            "deleted"
           ]
         }
       },
@@ -33513,6 +33743,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "requestKey": {
                   "type": "string",
                   "format": "uuid"
+                },
+                "shippingMethodId": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 180
                 }
               },
               "required": [
@@ -35063,7 +35299,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "code"
                     ]
                   },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "buy_x_get_y",
+                      "product",
+                      "order",
+                      "shipping"
+                    ]
+                  },
                   "amount": {
+                    "type": "number"
+                  },
+                  "shippingAmount": {
                     "type": "number"
                   }
                 },
@@ -35072,7 +35320,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "name",
                   "code",
                   "method",
-                  "amount"
+                  "kind",
+                  "amount",
+                  "shippingAmount"
                 ]
               }
             },
@@ -36240,6 +36490,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "taxAmountMinor": {
                         "type": "number",
                         "nullable": true
+                      },
+                      "returnedQuantity": {
+                        "type": "integer",
+                        "minimum": 0
                       }
                     },
                     "required": [
@@ -36759,6 +37013,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "taxAmountMinor": {
                         "type": "number",
                         "nullable": true
+                      },
+                      "returnedQuantity": {
+                        "type": "integer",
+                        "minimum": 0
                       }
                     },
                     "required": [
@@ -40365,6 +40623,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "manualSettlementConfirmed": {
                   "type": "boolean"
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "description": "One key per refund (per dialog opening). Repeating it returns the first refund."
                 }
               }
             }
@@ -40401,6 +40666,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "boolean"
             },
             "manualSettlementRecorded": {
+              "type": "boolean"
+            },
+            "replayed": {
               "type": "boolean"
             },
             "notificationCount": {
@@ -43710,6 +43978,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "refund_recorded",
                       "return_created",
                       "return_received",
+                      "request_submitted",
                       "request_resolved",
                       "archived",
                       "unarchived",
@@ -43729,6 +43998,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "own": {
+                    "type": "boolean",
+                    "description": "The viewer wrote this comment and may delete it."
+                  },
                   "createdAt": {
                     "anyOf": [
                       {
@@ -43746,6 +44019,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "body",
                   "data",
                   "actorName",
+                  "own",
                   "createdAt"
                 ]
               }
@@ -44432,6 +44706,89 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.payments.sslcommerz_remove",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/settings/sslcommerz",
+    "summary": "Remove the saved SSLCommerz keys and turn SSLCommerz off",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "expectedRevision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "message",
+            "revision"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.payments.sslcommerz_update",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/settings/sslcommerz",
@@ -44592,6 +44949,89 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "publishableKey",
             "webhookSecret",
             "enabled"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.payments.stripe_remove",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/settings/stripe",
+    "summary": "Remove the saved Stripe keys and turn Stripe off",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "expectedRevision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "message",
+            "revision"
           ]
         }
       },
@@ -50004,7 +50444,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 10
+            "maximum": 50
           },
           "required": false,
           "name": "sampleLimit",
@@ -50161,7 +50601,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "reason"
                       ]
                     },
-                    "maxItems": 10
+                    "maxItems": 50
                   }
                 },
                 "required": [
@@ -71119,6 +71559,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71146,6 +71592,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71269,6 +71717,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71296,6 +71750,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71347,6 +71803,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71374,6 +71836,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71425,6 +71889,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71452,6 +71922,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71484,6 +71956,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "title": {
                     "type": "string"
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string"
                   },
@@ -71511,6 +71989,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -72906,6 +73386,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "saleOfferSpendText": {
                   "type": "string"
                 },
+                "saleOfferGetText": {
+                  "type": "string"
+                },
+                "saleOfferGetSpendText": {
+                  "type": "string"
+                },
                 "freeBenefitText": {
                   "type": "string"
                 },
@@ -72924,6 +73410,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "quantityLimitText",
                 "saleOfferText",
                 "saleOfferSpendText",
+                "saleOfferGetText",
+                "saleOfferGetSpendText",
                 "freeBenefitText",
                 "percentBenefitText"
               ]
@@ -87250,6 +87738,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.orders.comment_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.comment_delete"
+        ]
+      },
+      {
         "operationId": "dashboard.orders.create",
         "surface": "dashboard",
         "mode": "operation-fallback",
@@ -87613,6 +88109,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.payments.sslcommerz_remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.sslcommerz_remove"
+        ]
+      },
+      {
         "operationId": "dashboard.payments.sslcommerz_update",
         "surface": "dashboard",
         "mode": "curated",
@@ -87626,6 +88130,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "dashboard.stripe-settings"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.stripe_remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.stripe_remove"
         ]
       },
       {

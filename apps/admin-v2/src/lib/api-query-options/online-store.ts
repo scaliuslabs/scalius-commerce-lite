@@ -81,9 +81,25 @@ export const navigationPlacementsQueryOptions = () =>
         .placements as unknown as NavigationPlacementSetting[],
   });
 
-/** Which products the feed leaves out and why; under the SEO key, so a save refreshes it. */
-export const feedDiagnosticsQueryOptions = () =>
+/**
+ * Which products the feed leaves out and why, with up to `sampleLimit` example
+ * products per reason; under the SEO key, so a save refreshes it.
+ */
+export const feedDiagnosticsQueryOptions = (sampleLimit = 3) =>
   queryOptions({
-    queryKey: [...queryKeys.settings.seo(), "feed-diagnostics"] as const,
-    queryFn: () => apiData(getApiV1AdminSettingsSeoFeedDiagnostics({ query: { sampleLimit: 3 } })),
+    queryKey: [...queryKeys.settings.seo(), "feed-diagnostics", sampleLimit] as const,
+    queryFn: () => apiData(getApiV1AdminSettingsSeoFeedDiagnostics({ query: { sampleLimit } })),
   });
+
+/** The most example products one reason lists (the API's cap). */
+export const FEED_SAMPLE_MAX = 50;
+
+type FeedReason = FeedDiagnostics["reasons"][number]["reason"];
+/** Left out because of something to fix on the product; the other reasons are the merchant's own choice or setup. */
+export const FIXABLE_FEED_REASONS: ReadonlySet<FeedReason> = new Set(["missing_image", "non_positive_price", "no_buyer_sku", "inconsistent_option_axes"]);
+
+/** Products missing from the feed for a fixable reason: Home and Preferences count the same way. */
+export function countFeedGaps(data: FeedDiagnostics | undefined): number {
+  if (!data?.policy.productCatalogEnabled) return 0;
+  return data.reasons.reduce((sum, entry) => sum + (FIXABLE_FEED_REASONS.has(entry.reason) ? entry.products : 0), 0);
+}

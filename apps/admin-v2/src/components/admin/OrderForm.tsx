@@ -48,6 +48,7 @@ import { CustomerInfoSection } from "./order-form/CustomerInfoSection";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
 import { PRODUCT_SEARCH_INPUT_ID } from "./order-form/ProductSearch";
+import { orderLineQuantityId } from "./order-form/OrderItemsTable";
 import { useOrderActionPermissions } from "@/hooks/use-order-action-permissions";
 import {
   clearAdminOrderRequestKey,
@@ -117,6 +118,8 @@ function toCreateOrderInput(values: OrderFormValues, requestKey: string): Create
   return {
     requestKey,
     ...toOrderBaseContentInput(values),
+    // The order keeps the method's name; a custom charge has none.
+    ...(values.shippingMethodId ? { shippingMethodId: values.shippingMethodId } : {}),
     items: values.items.map(({ productId, variantId, quantity }) => ({
       productId,
       variantId,
@@ -193,6 +196,7 @@ export function OrderForm({
       items: [],
       discountAmount: null,
       shippingCharge: 0,
+      shippingMethodId: null,
       ...defaultValues,
     },
   });
@@ -251,7 +255,7 @@ export function OrderForm({
     JSON.stringify(quoteInput) === JSON.stringify(debouncedQuoteInput);
   const hasQuotePrerequisites = Boolean(quoteInput.city && quoteInput.zone)
     && quoteInput.items.length > 0
-    && quoteInput.items.every((item) => Boolean(item.variantId))
+    && quoteInput.items.every((item) => Boolean(item.variantId) && item.quantity >= 1 && item.quantity <= 99)
     && quoteInput.shippingCharge >= 0
     && (quoteInput.discountAmount ?? 0) >= 0;
   const canRequestQuote = hasQuotePrerequisites && quoteInputIsCurrent;
@@ -379,6 +383,11 @@ export function OrderForm({
     if (prefill.customerEmail) form.setValue("customerEmail", prefill.customerEmail, set);
     if (prefill.area) form.setValue("area", prefill.area, set);
     if (prefill.items.length > 0) form.setValue("items", prefill.items, set);
+    // The delivery the buyer saw at checkout, not a custom ৳0.
+    if (prefill.shippingCharge !== null) {
+      form.setValue("shippingCharge", prefill.shippingCharge, set);
+      form.setValue("shippingMethodId", prefill.shippingMethodId, set);
+    }
     if (prefill.city) void loadZones(prefill.city);
     if (prefill.zone) void loadAreas(prefill.zone);
   }, [form, isEdit, loadAreas, loadZones]);
@@ -390,12 +399,15 @@ export function OrderForm({
     const name = item.name ?? product?.name ?? t("unknownProduct");
     const variant = product?.variants.find((candidate) => candidate.id === item.variantId);
     const variantText = item.variantLabel !== undefined ? item.variantLabel : variant ? orderItemVariantLabel(variant) : null;
-    return variantText && variantText !== t("defaultVariant") ? `${name} (${variantText})` : name;
+    return variantText ? `${name} (${variantText})` : name;
   };
 
   const focusFirstError = (errors: FieldErrors<OrderFormInput>) => {
     const first = FIELD_ORDER.find((name) => errors[name]);
-    if (first === "items") document.getElementById(PRODUCT_SEARCH_INPUT_ID)?.focus();
+    // A line whose quantity is over stock: focus that quantity, whose message says why.
+    const line = Array.isArray(errors.items) ? errors.items.findIndex((item) => item?.quantity) : -1;
+    if (first === "items" && line >= 0) document.getElementById(orderLineQuantityId(line))?.focus();
+    else if (first === "items") document.getElementById(PRODUCT_SEARCH_INPUT_ID)?.focus();
     else if (first) form.setFocus(first);
   };
 

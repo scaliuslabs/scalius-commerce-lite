@@ -30,6 +30,11 @@ const pageInput = {
 };
 
 describe("page validation", () => {
+  it("stores titles without surrounding spaces (headlines, breadcrumbs and schema use them as-is)", () => {
+    expect(createPageSchema.parse({ ...pageInput, title: "  My journey " }).title).toBe("My journey");
+    expect(updatePageSchema.parse({ expectedRevision: 1, title: "My journey " }).title).toBe("My journey");
+  });
+
   it("creates pages as drafts by default", () => {
     const parsed = createPageSchema.parse({
       title: "Draft Page",

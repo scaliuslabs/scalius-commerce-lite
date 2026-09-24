@@ -1,7 +1,7 @@
 ---
 import SearchBar from "../search/SearchBar.astro";
 import { Phone, ShoppingCart, Menu, Search } from "lucide-react";
-import type { HeaderData, SocialLink } from "@/lib/api";
+import type { HeaderData } from "@/lib/api";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import {
   getMobileHeaderLogoWidth,
@@ -12,26 +12,19 @@ import { telHref } from "@/lib/store-identity";
 
 interface Props {
   headerData: HeaderData;
+  /** Without a header menu there is no second row (and no second rule). */
+  hasNavigation: boolean;
 }
 
-const { headerData } = Astro.props;
+const { headerData, hasNavigation } = Astro.props;
 const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
-const socialLinks = (headerData.social ?? []).filter(
-  (item): item is SocialLink & { url: string } => Boolean(item.url),
-);
+// Social links live in the footer and the phone menu, so the desktop header
+// reaches My Account and the cart in a few tab stops (logo, search, call).
 const phoneHref =
   headerData.contact.isEnabled !== false ? telHref(headerData.contact.phone) : null;
-const hasDesktopPhone = Boolean(phoneHref);
-const desktopSocialWidth =
-  socialLinks.length > 0
-    ? socialLinks.length * 36 + (socialLinks.length - 1) * 4
-    : 0;
-const expandedActionsLgWidth = desktopSocialWidth;
-const expandedActionsXlWidth =
-  desktopSocialWidth +
-  (desktopSocialWidth > 0 && hasDesktopPhone ? 12 : 0) +
-  (hasDesktopPhone ? 40 : 0);
+const expandedActionsLgWidth = 0;
+const expandedActionsXlWidth = phoneHref ? 40 : 0;
 ---
 
 {
@@ -82,7 +75,8 @@ const expandedActionsXlWidth =
       <div
         class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:translate-x-0 lg:translate-y-0 shrink-0 z-20 flex items-center justify-center lg:justify-start"
       >
-        <a href="/" class="block group" aria-label="Go to homepage">
+        {/* The logo's alt text (the store name) is the link's name. */}
+        <a href="/" class="block group">
           {
             headerData.logo.src ? (
               <img
@@ -95,7 +89,6 @@ const expandedActionsXlWidth =
                 width={240}
                 height={80}
                 loading="eager"
-                fetchpriority="high"
                 decoding="async"
               />
             ) : (
@@ -141,55 +134,6 @@ const expandedActionsXlWidth =
           <div
             class="header-expanded-actions absolute inset-y-0 left-0 flex items-center gap-3"
           >
-            {
-              socialLinks.length > 0 && (
-                <div class="flex items-center gap-1">
-                  {socialLinks.map((item) => {
-                    const displayTitle =
-                      item.label || item.platform || "Social";
-                    const href = item.url.startsWith("http")
-                      ? item.url
-                      : `https://${item.url}`;
-
-                    return (
-                      <a
-                        href={href}
-                        data-astro-prefetch={getStorefrontPrefetchAttribute(
-                          href,
-                          Astro.url,
-                        )}
-                        class="group flex items-center justify-center h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={displayTitle}
-                        title={displayTitle}
-                      >
-                        {item.iconUrl ? (
-                          <img
-                            data-desktop-header-image
-                            data-deferred-src={mediaImageUrl(item.iconUrl, 160)}
-                            alt=""
-                            aria-hidden="true"
-                            class="w-4 h-4 object-contain"
-                            loading="lazy"
-                            decoding="async"
-                            fetchpriority="low"
-                          />
-                        ) : (
-                          <span
-                            aria-hidden="true"
-                            class="w-4 h-4 flex items-center justify-center text-xs font-bold uppercase"
-                          >
-                            {displayTitle.charAt(0)}
-                          </span>
-                        )}
-                      </a>
-                    );
-                  })}
-                </div>
-              )
-            }
-
             {
               phoneHref && (
                 <a
@@ -237,7 +181,7 @@ const expandedActionsXlWidth =
           <button
             type="button"
             id="cart-button"
-            class="relative flex h-11 min-w-11 cursor-pointer items-center gap-2 pl-1.5 outline-none active:scale-[0.98] lg:gap-3 lg:pl-2"
+            class="relative flex h-11 min-w-11 cursor-pointer items-center gap-2 rounded-full pl-1.5 active:scale-[0.98] lg:gap-3 lg:pl-2"
             aria-label="Open shopping cart"
           >
             <span
@@ -267,11 +211,15 @@ const expandedActionsXlWidth =
       </div>
     </div>
 
-    <div class="header-full-nav-row hidden border-t border-border lg:block">
-      <div class="py-2 flex justify-center relative z-50">
-        <slot name="desktop-nav-full" />
-      </div>
-    </div>
+    {
+      hasNavigation && (
+        <div class="header-full-nav-row hidden border-t border-border lg:block">
+          <div class="py-2 flex justify-center relative z-50">
+            <slot name="desktop-nav-full" />
+          </div>
+        </div>
+      )
+    }
   </div>
 </div>
 

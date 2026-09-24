@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   refund: vi.fn(),
   read: vi.fn(),
   cod: vi.fn(),
+  refundPending: false,
 }));
 
 vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ symbol: "৳", fmt: (value: number) => `৳${value}` }) }));
@@ -28,7 +29,7 @@ vi.mock("~/lib/api-query-options/orders", () => ({
 }));
 vi.mock("~/lib/api-mutations/orders", () => ({
   useUpdateOrderCod: () => ({ mutate: mocks.mutate, reset: vi.fn(), isPending: false }),
-  useRefundOrder: () => ({ mutate: mocks.refund, reset: vi.fn(), isPending: false }),
+  useRefundOrder: () => ({ mutate: mocks.refund, reset: vi.fn(), isPending: mocks.refundPending }),
   orderErrorMessage: (error: Error) => error.message,
   useReconcileRefundAttempt: () => ({ mutate: mocks.mutate, isPending: false }),
   useIssueOrderPaymentRecoveryLink: () => ({ mutateAsync: mocks.issue, isPending: false }),
@@ -72,6 +73,7 @@ describe("PaymentCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.permissions = { canEditOrders: true, canRefundOrders: false, canUpdateOrderCod: false };
+    mocks.refundPending = false;
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -212,7 +214,7 @@ describe("PaymentCard", () => {
       id: "order_cod", paymentMethod: "cod", status: "delivered", paymentStatus: "paid", paidAmount: 1800, balanceDue: 0,
     };
 
-    it("pre-fills only what came back and records it after the merchant confirms the money was returned", async () => {
+    it("pre-fills only what came back, as returned items, and records it after the merchant confirms the money was returned", async () => {
       mocks.permissions.canRefundOrders = true;
       mocks.cod.mockResolvedValue({ tracking: null });
       await render({ ...codOrder, refundDue: 600 });
@@ -227,9 +229,63 @@ describe("PaymentCard", () => {
       expect(submit.disabled).toBe(false);
       await act(async () => submit.click());
       expect(mocks.refund).toHaveBeenCalledWith(
-        { orderId: "order_cod", amount: 600, reason: "requested_by_customer", manualSettlementConfirmed: true },
+        { orderId: "order_cod", requestKey: expect.any(String), amount: 600, reason: "returned_items", manualSettlementConfirmed: true },
         expect.anything(),
       );
+    });
+
+    it("gives every opening of the refund dialog its own request key and submits with Enter", async () => {
+      mocks.permissions.canRefundOrders = true;
+      mocks.cod.mockResolvedValue({ tracking: null });
+      await render({ ...codOrder, refundDue: 600 });
+      const submitWithEnter = async () => {
+        await act(async () => document.querySelector<HTMLButtonElement>("#manualSettlementConfirmed")!.click());
+        // Enter in the amount field submits the dialog's form.
+        await act(async () => {
+          document.querySelector("#order-refund")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        });
+      };
+
+      await act(async () => button(en["refund.recordCash"])!.click());
+      await submitWithEnter();
+      await act(async () => button("Cancel")!.click());
+      await act(async () => button(en["refund.recordCash"])!.click());
+      await submitWithEnter();
+
+      expect(mocks.refund).toHaveBeenCalledTimes(2);
+      const [first, second] = mocks.refund.mock.calls.map(([payload]) => payload.requestKey);
+      expect(first).toEqual(expect.any(String));
+      expect(second).toEqual(expect.any(String));
+      expect(second).not.toBe(first);
+    });
+
+    it("keeps the refund button busy while the refund is being recorded", async () => {
+      mocks.permissions.canRefundOrders = true;
+      mocks.cod.mockResolvedValue({ tracking: null });
+      await render({ ...codOrder, refundDue: 600 });
+      await act(async () => button(en["refund.recordCash"])!.click());
+      mocks.refundPending = true;
+      await render({ ...codOrder, refundDue: 600 });
+      const submit = document.querySelector<HTMLButtonElement>('button[form="order-refund"]')!;
+      expect(submit.disabled).toBe(true);
+      expect(submit.getAttribute("aria-busy")).toBe("true");
+      await act(async () => {
+        document.querySelector("#order-refund")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      });
+      expect(mocks.refund).not.toHaveBeenCalled();
+    });
+
+    it("drops the old failed-delivery reason once the cash is collected", async () => {
+      mocks.cod.mockResolvedValue({
+        tracking: {
+          codStatus: "collected", deliveryAttempts: 1, collectedBy: "Rider Karim", collectedAmount: 1800,
+          failureReason: "no_cash", failureNote: "Will pay tomorrow",
+        },
+      });
+      await render(codOrder);
+      expect(host.textContent).toContain("Rider Karim");
+      expect(host.textContent).not.toContain(en["cod.reason.no_cash"]);
+      expect(host.textContent).not.toContain("Will pay tomorrow");
     });
 
     it("never pre-fills the full order and flags more than was paid next to the field", async () => {
@@ -274,7 +330,7 @@ describe("PaymentCard", () => {
         .find((candidate) => candidate.textContent === en["refund.recordCashAmount"].replace("{amount}", "৳500")) as HTMLButtonElement;
       await act(async () => submit.click());
       expect(mocks.refund).toHaveBeenCalledWith(
-        { orderId: "order_cod", amount: 500, reason: "requested_by_customer", manualSettlementConfirmed: true },
+        { orderId: "order_cod", requestKey: expect.any(String), amount: 500, reason: "requested_by_customer", manualSettlementConfirmed: true },
         expect.anything(),
       );
     });

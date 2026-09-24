@@ -8,7 +8,10 @@
 import type { APIRoute, APIContext } from "astro";
 import { getFeedProducts } from "@/lib/api/products";
 import type { Product } from "@/lib/api/types";
-import { getLayoutData, getSeoSettings } from "@/lib/api";
+import { getLayoutData, getSeoSettings, getShippingMethods } from "@/lib/api";
+import type { ShippingMethod } from "@/lib/api/types";
+import { splitDeliveryRates } from "@/lib/delivery-facts";
+import { formatCatalogFeedAmount } from "@scalius/shared/catalog-feed-money";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
@@ -101,12 +104,36 @@ function toCatalogFeedRows(
   }).rows;
 }
 
+interface FeedShipping {
+  service: string;
+  price: string;
+}
+
+/**
+ * Store-wide delivery charges, the same ones Product JSON-LD states: every
+ * active delivery rate when rates don't vary by delivery zone. With zones the
+ * charge depends on the address, so none is claimed (use Merchant Center
+ * account-level shipping), exactly like the product page.
+ */
+function storeFeedShipping(
+  shippingMethods: ShippingMethod[] | null,
+  currencyCode: string,
+): FeedShipping[] {
+  const { delivery, zoned } = splitDeliveryRates(shippingMethods);
+  if (zoned) return [];
+  return delivery.flatMap((method) => {
+    const amount = formatCatalogFeedAmount(method.fee, currencyCode);
+    return amount ? [{ service: method.name, price: `${amount} ${currencyCode}` }] : [];
+  });
+}
+
 /**
  * Generates a single product item for the feed
  */
 function generateProductItem(
   row: CatalogFeedRow,
   format: CatalogFeedFormat,
+  storeShipping: FeedShipping[],
 ): string {
   // Build the item XML
   let item = "  <item>\n";
@@ -171,12 +198,14 @@ function generateProductItem(
     item += `    <g:${attribute.name}>${escapeXml(attribute.value)}</g:${attribute.name}>\n`;
   }
 
-  // Free shipping overlay
-  if (row.shipping) {
+  // A free-delivery product ships free everywhere; other items carry the
+  // store-wide delivery charges.
+  const shipping = row.shipping ? [row.shipping] : storeShipping;
+  for (const rate of shipping) {
     item += `    <g:shipping>\n`;
-    item += `      <g:country>${row.shipping.country}</g:country>\n`;
-    item += `      <g:service>${row.shipping.service}</g:service>\n`;
-    item += `      <g:price>${row.shipping.price}</g:price>\n`;
+    item += `      <g:country>BD</g:country>\n`;
+    item += `      <g:service>${escapeXml(rate.service)}</g:service>\n`;
+    item += `      <g:price>${rate.price}</g:price>\n`;
     item += `    </g:shipping>\n`;
   }
 
@@ -193,6 +222,7 @@ function generateCatalogFeed(
   feedsPolicy: SeoDiscoverySettings["feeds"],
   format: CatalogFeedFormat,
   storeName: string | null,
+  storeShipping: FeedShipping[],
 ): string {
   const title = feedsPolicy.title || storeName || "Product catalog";
   const description =
@@ -209,7 +239,7 @@ function generateCatalogFeed(
   xml += `<description>${escapeXml(description)}</description>\n`;
 
   for (const row of rows) {
-    xml += generateProductItem(row, format);
+    xml += generateProductItem(row, format, storeShipping);
   }
 
   xml += "</channel>\n";
@@ -320,7 +350,10 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         return new Response("Invalid cursor parameter", { status: 400 });
       }
 
-      const layoutData = await getLayoutData();
+      const [layoutData, shippingMethods] = await Promise.all([
+        getLayoutData(),
+        getShippingMethods(),
+      ]);
       if (!layoutData) {
         return xmlDataUnavailableResponse(
           `${feedLabel} is temporarily unavailable`,
@@ -349,6 +382,7 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         feedsPolicy,
         format,
         resolveStoreName(layoutData.business),
+        storeFeedShipping(shippingMethods, currencyCode),
       );
 
       const headers: Record<string, string> = { ...FEED_XML_HEADERS };

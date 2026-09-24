@@ -7,7 +7,7 @@ import {
     listHeroSliders,
     updateHeroSlider,
 } from "@scalius/core/modules/hero-sliders";
-import { HERO_SLIDE_LIMIT, HERO_SLIDE_TITLE_LIMIT } from "@scalius/shared/hero-slider";
+import { HERO_SLIDE_BUTTON_LABEL_LIMIT, HERO_SLIDE_LIMIT, HERO_SLIDE_TITLE_LIMIT } from "@scalius/shared/hero-slider";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse } from "../../../schemas/responses";
@@ -19,7 +19,10 @@ type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>
 const sliderImageSchema = z.object({
     id: z.string().min(1).max(80),
     url: z.string().url().max(2_048),
+    /** Alt text: describes the image; not drawn over the banner. */
     title: z.string().min(1).max(HERO_SLIDE_TITLE_LIMIT),
+    heading: z.string().max(HERO_SLIDE_TITLE_LIMIT).optional(),
+    buttonLabel: z.string().max(HERO_SLIDE_BUTTON_LABEL_LIMIT).optional(),
     link: z.string().max(2_048),
     focalPoint: z.object({
         x: z.number().min(0).max(100),
@@ -28,6 +31,8 @@ const sliderImageSchema = z.object({
 });
 
 const normalizedSliderImageSchema = sliderImageSchema.extend({
+    heading: z.string(),
+    buttonLabel: z.string(),
     focalPoint: z.object({
         x: z.number().min(0).max(100),
         y: z.number().min(0).max(100),

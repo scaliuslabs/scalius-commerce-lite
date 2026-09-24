@@ -1,8 +1,9 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { orderEvents, orders, user } from "@scalius/database/schema";
-import { NotFoundError, ValidationError } from "@scalius/core/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { sha256Hex } from "./admin-order-create-attempts";
 
 /** What happened to an order. The dashboard words each kind; `data` carries the facts. */
 export const ORDER_EVENT_KINDS = [
@@ -18,6 +19,7 @@ export const ORDER_EVENT_KINDS = [
     "refund_recorded",
     "return_created",
     "return_received",
+    "request_submitted",
     "request_resolved",
     "archived",
     "unarchived",
@@ -31,6 +33,8 @@ export interface OrderTimelineEvent {
     body: string | null;
     data: Record<string, unknown> | null;
     actorName: string | null;
+    /** The viewer wrote this comment and may delete it. */
+    own: boolean;
     createdAt: Date;
 }
 
@@ -40,13 +44,36 @@ export interface RecordOrderEventInput {
     actorId?: string | null;
     body?: string | null;
     data?: Record<string, unknown> | null;
+    /**
+     * The request key of the action this line describes. A repeated request
+     * (double click, retry) records the line once.
+     */
+    requestKey?: string | null;
 }
 
 export const ORDER_COMMENT_MAX_LENGTH = 2000;
 
-/** Time-sortable id, so two events in the same second keep their order. */
-function orderEventId(): string {
-    return `oev_${Date.now().toString(36).padStart(9, "0")}${nanoid(8)}`;
+/**
+ * Time-sortable id, so two events in the same second keep their order. With a
+ * request key the id is derived from it instead, so a repeat can't add a line.
+ */
+async function orderEventId(orderId: string, kind: string, requestKey?: string | null): Promise<string> {
+    const key = requestKey?.trim();
+    if (!key) return `oev_${Date.now().toString(36).padStart(9, "0")}${nanoid(8)}`;
+    return `oev_k${(await sha256Hex(`order-event\0${orderId}\0${kind}\0${key}`)).slice(0, 32)}`;
+}
+
+/** Whether the action with this request key already logged its line (so it already happened). */
+export async function hasOrderEvent(
+    db: Database,
+    orderId: string,
+    kind: Exclude<OrderEventKind, "placed">,
+    requestKey: string,
+): Promise<boolean> {
+    const row = await db.select({ id: orderEvents.id }).from(orderEvents)
+        .where(eq(orderEvents.id, await orderEventId(orderId, kind, requestKey)))
+        .get();
+    return Boolean(row);
 }
 
 /** Staff accounts only; an agent or system actor records no name. */
@@ -75,14 +102,14 @@ function parseData(value: string | null): Record<string, unknown> | null {
 export async function recordOrderEvent(db: Database, input: RecordOrderEventInput): Promise<void> {
     try {
         await db.insert(orderEvents).values({
-            id: orderEventId(),
+            id: await orderEventId(input.orderId, input.kind, input.requestKey),
             orderId: input.orderId,
             kind: input.kind,
             body: input.body ?? null,
             data: input.data ? JSON.stringify(input.data) : null,
             actorId: knownStaffId(input.actorId),
             createdAt: sql`unixepoch()`,
-        });
+        }).onConflictDoNothing({ target: orderEvents.id });
     } catch (error: unknown) {
         console.error("[orders.timeline] failed to record an order event", {
             kind: input.kind,
@@ -91,12 +118,13 @@ export async function recordOrderEvent(db: Database, input: RecordOrderEventInpu
     }
 }
 
-/** A staff comment ("Customer confirmed by phone at 3pm"). */
+/** A staff comment ("Customer confirmed by phone at 3pm"). A repeated request key returns the first comment. */
 export async function addOrderComment(
     db: Database,
     orderId: string,
     body: string,
     actorId: string | null,
+    requestKey?: string | null,
 ): Promise<OrderTimelineEvent> {
     const text = body.trim();
     if (!text) throw new ValidationError("Write a comment first.");
@@ -105,7 +133,7 @@ export async function addOrderComment(
     }
     const order = await db.select({ id: orders.id }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
-    const id = orderEventId();
+    const id = await orderEventId(orderId, "comment", requestKey);
     await db.insert(orderEvents).values({
         id,
         orderId,
@@ -113,13 +141,36 @@ export async function addOrderComment(
         body: text,
         actorId: knownStaffId(actorId),
         createdAt: sql`unixepoch()`,
-    });
-    const events = await listOrderTimeline(db, orderId);
+    }).onConflictDoNothing({ target: orderEvents.id });
+    const events = await listOrderTimeline(db, orderId, actorId);
     return events.find((event) => event.id === id)!;
 }
 
-/** Newest first, ending with the order being placed. */
-export async function listOrderTimeline(db: Database, orderId: string): Promise<OrderTimelineEvent[]> {
+/** Staff may delete their own comments; every other line is a record of what happened. */
+export async function deleteOrderComment(
+    db: Database,
+    orderId: string,
+    eventId: string,
+    actorId: string | null,
+): Promise<void> {
+    const event = await db.select({ kind: orderEvents.kind, actorId: orderEvents.actorId })
+        .from(orderEvents)
+        .where(and(eq(orderEvents.id, eventId), eq(orderEvents.orderId, orderId)))
+        .get();
+    // Deleting twice (a double click) is fine: the comment is gone either way.
+    if (!event) return;
+    if (event.kind !== "comment" || !actorId || event.actorId !== actorId) {
+        throw new ForbiddenError("You can delete only your own comments.");
+    }
+    await db.delete(orderEvents).where(and(eq(orderEvents.id, eventId), eq(orderEvents.orderId, orderId)));
+}
+
+/** Newest first, ending with the order being placed. `viewerId` marks the viewer's own comments. */
+export async function listOrderTimeline(
+    db: Database,
+    orderId: string,
+    viewerId?: string | null,
+): Promise<OrderTimelineEvent[]> {
     const order = await db.select({ createdAt: orders.createdAt }).from(orders)
         .where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
@@ -129,6 +180,7 @@ export async function listOrderTimeline(db: Database, orderId: string): Promise<
         body: orderEvents.body,
         data: orderEvents.data,
         actorName: user.name,
+        actorId: orderEvents.actorId,
         createdAt: orderEvents.createdAt,
     }).from(orderEvents)
         .leftJoin(user, eq(user.id, orderEvents.actorId))
@@ -143,6 +195,7 @@ export async function listOrderTimeline(db: Database, orderId: string): Promise<
             body: row.body,
             data: parseData(row.data),
             actorName: row.actorName,
+            own: row.kind === "comment" && Boolean(viewerId) && row.actorId === viewerId,
             createdAt: new Date(Number(row.createdAt) * 1000),
         })),
         {
@@ -151,6 +204,7 @@ export async function listOrderTimeline(db: Database, orderId: string): Promise<
             body: null,
             data: null,
             actorName: null,
+            own: false,
             createdAt: order.createdAt,
         },
     ];

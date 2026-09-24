@@ -5,6 +5,7 @@ import { getLayoutData } from "@/lib/api";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { firstRichContentImageUrl, optimizeRichContentImages } from "@/lib/rich-content-media";
+import { resolveStoreShareImage } from "@/lib/store-identity";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { processShortcodes } from "@/lib/shortcodes";
 import {
@@ -48,9 +49,15 @@ const canonicalUrl = buildResourceCanonicalSeoUrl(
 const featuredImageUrl = article.featuredImage?.url
   ? mediaImageUrl(article.featuredImage.url, 1200)
   : null;
-// Posts without a featured image share their first content image.
+// Posts without a featured image share their first content image, then the
+// store's share image, so BlogPosting always has an image.
 const shareImageUrl =
-  featuredImageUrl || firstRichContentImageUrl(article.content, 1200);
+  featuredImageUrl ||
+  firstRichContentImageUrl(article.content, 1200) ||
+  resolveStoreShareImage({
+    socialImage: layoutData.seo?.socialImage,
+    logo: layoutData.header?.logo?.src,
+  });
 const absoluteImageUrl = toAbsoluteStorefrontSeoUrl(shareImageUrl);
 const featuredImageAlt =
   article.featuredImage?.altText ||
@@ -127,7 +134,7 @@ const breadcrumbJsonLd =
           {
             "@type": "ListItem",
             position: 3,
-            name: article.title,
+            name: article.title.trim(),
             item: canonicalUrl,
           },
         ].filter((item) => item.item),
