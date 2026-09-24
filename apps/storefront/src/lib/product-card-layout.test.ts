@@ -21,6 +21,7 @@ import {
 } from "./product-card-layout";
 
 const css = readFileSync(new URL("../styles/theme-foundation.css", import.meta.url), "utf8");
+const cardCss = readFileSync(new URL("../styles/theme-cards.css", import.meta.url), "utf8");
 const DENSITIES = Object.entries(STOREFRONT_DENSITY_SPECS);
 const CONTAINER_WIDTHS = STOREFRONT_CONTAINERS.map((container) =>
   buildStorefrontThemeTokens({ tokens: { ...DEFAULT_STOREFRONT_THEME.tokens, container } })["theme-container-width"]!);
@@ -33,23 +34,31 @@ describe("fluid product grid", () => {
     expect(css).toContain("repeat(auto-fill, minmax(min(var(--card-min), 100%), 1fr))");
     expect(css).toContain("container: product-grid / inline-size");
     // List rows switch at the same step, with the photo column sizes use.
-    expect(css).toContain(`@container product-grid (width < ${PRODUCT_GRID_STEPS_REM.tablet}rem)`);
-    expect(css).toContain(`--card-row-media: ${LIST_ROW_MEDIA_PX / 16}rem`);
+    expect(cardCss).toContain(`@container product-grid (width < ${PRODUCT_GRID_STEPS_REM.tablet}rem)`);
+    expect(cardCss).toContain(`--card-row-media: ${LIST_ROW_MEDIA_PX / 16}rem`);
+  });
+
+  it("keeps card styles out of the shared foundation (and the product page's critical CSS)", () => {
+    expect(css).not.toMatch(/\.product-card-|card-row-media|\[data-theme-card-style/);
+    const critical = readFileSync(new URL("../styles/product-critical.css", import.meta.url), "utf8");
+    expect(critical).not.toContain("theme-cards");
+    const card = readFileSync(new URL("../components/cards/ProductCard.astro", import.meta.url), "utf8");
+    expect(card).toContain('import "@/styles/theme-cards.css";');
   });
 
   it("keeps cards stable and touchable from CSS alone", () => {
     // The photo box has the token ratio before any photo loads (CLS 0), and
     // a missing photo fills that same box.
-    expect(css).toMatch(/\.product-card-media \{\s*aspect-ratio: var\(--theme-image-ratio, 1 \/ 1\);/);
-    expect(css).toMatch(/\.product-card-placeholder \{\s*position: absolute;\s*inset: 0;/);
+    expect(cardCss).toMatch(/\.product-card-media \{\s*aspect-ratio: var\(--theme-image-ratio, 1 \/ 1\);/);
+    expect(cardCss).toMatch(/\.product-card-placeholder \{\s*position: absolute;\s*inset: 0;/);
     // Actions keep 44px touch targets; only a mouse gets the density's height.
-    expect(css).toMatch(/\.product-card-action \{\s*min-height: 2\.75rem;/);
-    expect(css).toMatch(/\.product-card-round-action \{\s*width: 2\.75rem;\s*height: 2\.75rem;/);
-    expect(css).toMatch(/@media \(hover: hover\) and \(pointer: fine\) \{\s*\.site-root \.product-card-action \{\s*min-height: var\(--theme-control-height/);
+    expect(cardCss).toMatch(/\.product-card-action \{\s*min-height: 2\.75rem;/);
+    expect(cardCss).toMatch(/\.product-card-round-action \{\s*width: 2\.75rem;\s*height: 2\.75rem;/);
+    expect(cardCss).toMatch(/@media \(hover: hover\) and \(pointer: fine\) \{\s*\.site-root \.product-card-action \{\s*min-height: var\(--theme-control-height/);
     // Card titles never drop below 14px, and long words break inside the card.
-    expect(css).toContain("--card-title-size: 0.875rem;");
-    expect(css).not.toMatch(/--card-title-size: 0\.(?:[0-7]\d*|8[0-6]\d*)rem/);
-    expect(css).toMatch(/\.product-card-name \{[^}]*overflow-wrap: anywhere;/);
+    expect(cardCss).toContain("--card-title-size: 0.875rem;");
+    expect(cardCss).not.toMatch(/--card-title-size: 0\.(?:[0-7]\d*|8[0-6]\d*)rem/);
+    expect(cardCss).toMatch(/\.product-card-name \{[^}]*overflow-wrap: anywhere;/);
   });
 
   it.each(DENSITIES)("%s: reaches each density step value at its container width", (_density, grid) => {
