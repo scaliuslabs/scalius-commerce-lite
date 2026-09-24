@@ -1,11 +1,19 @@
+import { mediaImageUrl } from "@scalius/shared/media-variants";
+import {
+  responsiveImageSources,
+  type ResponsiveImageSources,
+} from "@/lib/responsive-image";
+import { GALLERY_IMAGE_WIDTHS } from "../lib/gallery-images";
+import { loadVariantsFromDOM } from "../lib/variant-state-machine";
+
 export type ProductMediaSelectionSource = "initial" | "gallery" | "variant";
 
 export interface ProductMediaChangeDetail {
   kind: "image" | "video";
   productMediaId: string | null;
   mediaId: string | null;
+  /** Image: the CDN URL every slot derives from. Video: the video file. */
   url: string;
-  previewUrl: string | null;
   posterUrl: string | null;
   zoomUrl: string | null;
   altText: string;
@@ -24,13 +32,24 @@ declare global {
   }
 }
 
-interface GalleryItem extends ProductMediaChangeDetail {
-  mobileUrl: string | null;
+interface GalleryItem extends Omit<ProductMediaChangeDetail, "zoomUrl"> {
   thumbnail: HTMLButtonElement | null;
 }
 
-const imageCache = new Map<string, HTMLImageElement>();
-const imagePreloads = new Map<string, Promise<boolean>>();
+/** Longest a switch keeps the current photo while the next one decodes. */
+export const SWITCH_DECODE_TIMEOUT_MS = 500;
+/** Idle warm-up of the other gallery photos: parallel requests. */
+export const PRELOAD_CONCURRENCY = 2;
+/** Idle warm-up: photos per page view (fewer on 3G, none on Save-Data/2G). */
+export const PRELOAD_LIMIT = 8;
+const PRELOAD_LIMIT_3G = 3;
+
+/**
+ * Photos this page view already requested (keyed by srcset, or src without
+ * one); reset per gallery so a later page relies on the HTTP cache.
+ */
+let warmedImages = new Set<string>();
+const selectionTokens = new WeakMap<HTMLElement, number>();
 const mobileZoomBackgroundInertStates = new Map<HTMLElement, boolean>();
 let activeController: AbortController | null = null;
 let videoThemePromise: Promise<void> | null = null;
@@ -68,39 +87,133 @@ function scrollBehavior(): ScrollBehavior {
   return prefersReducedMotion() ? "auto" : "smooth";
 }
 
-function preloadImage(
+/**
+ * The main photo's sources: the slot (`data-main-sizes`) and helper the SSR
+ * markup used, so the mobile and desktop images and every preload agree on
+ * one candidate.
+ */
+export function galleryMainSources(
+  root: HTMLElement,
   url: string,
-  fetchPriority: "high" | "low" | "auto" = "auto",
-): Promise<boolean> {
-  if (!url) return Promise.resolve(false);
-  if (imageCache.has(url)) return Promise.resolve(true);
-  const existing = imagePreloads.get(url);
-  if (existing) return existing;
-  const request = new Promise<boolean>((resolve) => {
-    const image = new Image();
-    image.fetchPriority = fetchPriority;
-    image.onload = async () => {
-      try {
-        await image.decode?.();
-      } catch {
-        // A successful load is still usable when decode() is unavailable or rejects.
-      }
-      imageCache.set(url, image);
-      imagePreloads.delete(url);
-      resolve(true);
-    };
-    image.onerror = () => {
-      imagePreloads.delete(url);
-      resolve(false);
-    };
-    image.src = url;
+): ResponsiveImageSources {
+  return responsiveImageSources(url, {
+    width: GALLERY_IMAGE_WIDTHS.main,
+    sizes: root.dataset.mainSizes || "100vw",
   });
-  imagePreloads.set(url, request);
-  return request;
+}
+
+/** Zoom detail: the 1600 rendition (or the master), never the upload. */
+export function galleryZoomUrl(url: string): string {
+  return mediaImageUrl(url, GALLERY_IMAGE_WIDTHS.zoom) || url;
+}
+
+function sourcesKey(sources: ResponsiveImageSources): string {
+  return sources.srcset || sources.src;
+}
+
+/**
+ * A detached image with the slot's srcset/sizes: the browser selects the
+ * same candidate the visible image would at this viewport and DPR.
+ */
+function requestImage(
+  sources: ResponsiveImageSources,
+  fetchPriority: "high" | "low",
+): HTMLImageElement {
+  const image = new Image();
+  image.decoding = "async";
+  image.fetchPriority = fetchPriority;
+  if (sources.srcset) {
+    image.sizes = sources.sizes ?? "";
+    image.srcset = sources.srcset;
+  }
+  image.src = sources.src;
+  warmedImages.add(sourcesKey(sources));
+  return image;
+}
+
+function settled(image: HTMLImageElement): Promise<void> {
+  return new Promise((resolve) => {
+    image.onload = () => resolve();
+    image.onerror = () => resolve();
+  });
+}
+
+/** Fetch (not decode) a photo so a later switch reads it from cache. */
+function warmImage(
+  sources: ResponsiveImageSources,
+  fetchPriority: "high" | "low",
+): Promise<void> {
+  if (!sources.src || warmedImages.has(sourcesKey(sources)))
+    return Promise.resolve();
+  return settled(requestImage(sources, fetchPriority));
+}
+
+/**
+ * Resolves when the photo is decoded (so swapping it in paints a complete
+ * frame), when it fails, or after `timeoutMs`, whichever comes first.
+ */
+export function decodeBeforeSwap(
+  sources: ResponsiveImageSources,
+  timeoutMs = SWITCH_DECODE_TIMEOUT_MS,
+): Promise<void> {
+  const image = requestImage(sources, "high");
+  const ready =
+    typeof image.decode === "function"
+      ? image.decode().catch(() => undefined)
+      : settled(image);
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(resolve, timeoutMs);
+    void ready.then(() => {
+      window.clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+function sameDocumentUrl(left: string | null, right: string): boolean {
+  if (!left) return false;
+  try {
+    return (
+      new URL(left, document.baseURI).href ===
+      new URL(right, document.baseURI).href
+    );
+  } catch {
+    return left === right;
+  }
+}
+
+function showsSources(
+  image: HTMLImageElement,
+  sources: ResponsiveImageSources,
+): boolean {
+  return (
+    sameDocumentUrl(image.getAttribute("src"), sources.src) &&
+    (image.getAttribute("srcset") || undefined) === sources.srcset
+  );
+}
+
+function applySources(
+  image: HTMLImageElement,
+  sources: ResponsiveImageSources,
+  altText: string,
+): void {
+  if (sources.srcset) {
+    image.setAttribute("sizes", sources.sizes ?? "");
+    image.setAttribute("srcset", sources.srcset);
+  } else {
+    image.removeAttribute("srcset");
+    image.removeAttribute("sizes");
+  }
+  image.setAttribute("src", sources.src);
+  image.alt = altText;
 }
 
 function optional(value: string | undefined): string | null {
   return value?.trim() || null;
+}
+
+function mediaKey(item: GalleryItem): string {
+  return `${item.kind}:${item.productMediaId ?? item.mediaId ?? item.url}`;
 }
 
 function itemFromButton(button: HTMLButtonElement): GalleryItem | null {
@@ -113,11 +226,7 @@ function itemFromButton(button: HTMLButtonElement): GalleryItem | null {
     productMediaId: optional(button.dataset.productMediaId),
     mediaId: optional(button.dataset.mediaId),
     url,
-    mobileUrl:
-      kind === "image" ? optional(button.dataset.mobileMediaUrl) : null,
-    previewUrl: kind === "image" ? optional(button.dataset.previewUrl) : null,
     posterUrl: optional(button.dataset.posterUrl),
-    zoomUrl: kind === "image" ? optional(button.dataset.zoomUrl) : null,
     altText: button.dataset.altText?.trim() || "Product media",
     source: "gallery",
     thumbnail: button,
@@ -129,13 +238,10 @@ function fallbackItem(root: HTMLElement): GalleryItem | null {
   if (!url) return null;
   return {
     kind: "image",
-    productMediaId: optional(root.dataset.fallbackProductMediaId),
+    productMediaId: null,
     mediaId: optional(root.dataset.fallbackMediaId),
     url,
-    mobileUrl: optional(root.dataset.fallbackMobileUrl),
-    previewUrl: null,
     posterUrl: null,
-    zoomUrl: optional(root.dataset.fallbackZoomUrl),
     altText: root.dataset.fallbackAlt?.trim() || "Product image",
     source: "variant",
     thumbnail: null,
@@ -204,7 +310,11 @@ function setMobileZoomBackgroundInert(
   }
 }
 
-function dispatchChange(item: GalleryItem): void {
+function dispatchChange(
+  item: GalleryItem,
+  zoomUrl: string | null,
+  source: ProductMediaSelectionSource,
+): void {
   window.dispatchEvent(
     new CustomEvent<ProductMediaChangeDetail>("product-media-change", {
       detail: {
@@ -212,26 +322,50 @@ function dispatchChange(item: GalleryItem): void {
         productMediaId: item.productMediaId,
         mediaId: item.mediaId,
         url: item.url,
-        previewUrl: item.previewUrl,
         posterUrl: item.posterUrl,
-        zoomUrl: item.zoomUrl,
+        zoomUrl,
         altText: item.altText,
-        source: item.source,
+        source,
       },
     }),
   );
 }
 
-function sameDocumentUrl(left: string | null, right: string): boolean {
-  if (!left) return false;
-  try {
-    return (
-      new URL(left, document.baseURI).href ===
-      new URL(right, document.baseURI).href
-    );
-  } catch {
-    return left === right;
-  }
+function galleryParts(root: HTMLElement) {
+  return {
+    desktopImageStage: root.querySelector<HTMLElement>(
+      "[data-image-stage='desktop']",
+    ),
+    mobileImageStage: root.querySelector<HTMLElement>(
+      "[data-image-stage='mobile']",
+    ),
+    videoStage: root.querySelector<HTMLElement>("[data-video-stage]"),
+    video: root.querySelector<HTMLVideoElement>("[data-product-video]"),
+    placeholder: root.querySelector<HTMLElement>("[data-video-placeholder]"),
+    mobileImage: root.querySelector<HTMLImageElement>(
+      "[data-mobile-main-image]",
+    ),
+    desktopImage: root.querySelector<HTMLImageElement>(
+      "[data-desktop-main-image]",
+    ),
+    mobileTrigger: root.querySelector<HTMLElement>(
+      "[data-mobile-image-trigger]",
+    ),
+  };
+}
+
+type GalleryParts = ReturnType<typeof galleryParts>;
+
+function setActiveData(
+  root: HTMLElement,
+  item: GalleryItem,
+  zoomUrl: string | null,
+): void {
+  root.dataset.activeMediaKey = mediaKey(item);
+  root.dataset.activeMediaUrl = item.url;
+  root.dataset.activeMediaAlt = item.altText;
+  if (zoomUrl) root.dataset.activeMediaZoomUrl = zoomUrl;
+  else delete root.dataset.activeMediaZoomUrl;
 }
 
 /**
@@ -243,153 +377,110 @@ function adoptRenderedInitialItem(
   root: HTMLElement,
   item: GalleryItem,
 ): boolean {
-  const currentKey = `${item.kind}:${item.productMediaId ?? item.mediaId ?? item.url}`;
-
+  const parts = galleryParts(root);
   if (item.kind === "image") {
-    const mobileImage = root.querySelector<HTMLImageElement>(
-      "[data-mobile-main-image]",
-    );
-    const mobileStage = root.querySelector<HTMLElement>(
-      "[data-image-stage='mobile']",
-    );
-    const renderedUrl = item.mobileUrl || item.url;
     if (
-      !mobileImage ||
-      mobileStage?.classList.contains("hidden") ||
-      !sameDocumentUrl(mobileImage.getAttribute("src"), renderedUrl)
+      !parts.mobileImage ||
+      parts.mobileImageStage?.classList.contains("hidden") ||
+      !showsSources(parts.mobileImage, galleryMainSources(root, item.url))
     )
       return false;
-
-    root.dataset.activeMediaKey = currentKey;
-    root.dataset.activeMediaUrl = item.url;
-    root.dataset.activeMediaDisplayUrl = renderedUrl;
-    root.dataset.activeMediaZoomUrl = item.zoomUrl || item.url;
-    root.dataset.activeMediaAlt = item.altText;
-    mobileImage.dataset.zoomUrl = item.zoomUrl || item.url;
+    setActiveData(root, item, galleryZoomUrl(item.url));
     return true;
   }
 
-  const video = root.querySelector<HTMLVideoElement>("[data-product-video]");
-  const videoStage = root.querySelector<HTMLElement>("[data-video-stage]");
   if (
-    !video ||
-    videoStage?.classList.contains("hidden") ||
-    !sameDocumentUrl(video.getAttribute("src"), item.url)
+    !parts.video ||
+    parts.videoStage?.classList.contains("hidden") ||
+    !sameDocumentUrl(parts.video.getAttribute("src"), item.url)
   )
     return false;
-
-  root.dataset.activeMediaKey = currentKey;
-  root.dataset.activeMediaUrl = item.url;
-  root.dataset.activeMediaDisplayUrl = item.url;
-  root.dataset.activeMediaZoomUrl = item.url;
-  root.dataset.activeMediaAlt = item.altText;
-  void enhanceProductVideo(video);
+  setActiveData(root, item, null);
+  void enhanceProductVideo(parts.video);
   return true;
 }
 
+function showVideo(root: HTMLElement, parts: GalleryParts, item: GalleryItem) {
+  const { video, videoStage } = parts;
+  if (!video || !videoStage) return;
+  parts.desktopImageStage?.classList.remove("lg:block");
+  parts.desktopImageStage?.classList.add("hidden", "lg:!hidden");
+  parts.mobileImageStage?.classList.add("hidden");
+  videoStage.classList.remove("hidden");
+  parts.mobileTrigger?.setAttribute("aria-disabled", "true");
+
+  video.pause();
+  video.preload = "metadata";
+  video.setAttribute("aria-label", item.altText);
+  if (item.posterUrl) video.poster = item.posterUrl;
+  else video.removeAttribute("poster");
+  if (video.getAttribute("src") !== item.url) {
+    video.src = item.url;
+    video.load();
+  }
+  void enhanceProductVideo(video);
+  parts.placeholder?.classList.toggle("hidden", Boolean(item.posterUrl));
+  closeMobileZoom(root);
+}
+
+function showImage(
+  parts: GalleryParts,
+  sources: ResponsiveImageSources,
+  altText: string,
+): void {
+  if (parts.video?.getAttribute("src")) clearVideo(parts.video);
+  parts.videoStage?.classList.add("hidden");
+  parts.desktopImageStage?.classList.remove("lg:!hidden");
+  parts.desktopImageStage?.classList.add("hidden", "lg:block");
+  parts.mobileImageStage?.classList.remove("hidden");
+  parts.mobileTrigger?.removeAttribute("aria-disabled");
+  parts.placeholder?.classList.add("hidden");
+  for (const image of [parts.mobileImage, parts.desktopImage]) {
+    if (image) applySources(image, sources, altText);
+  }
+}
+
+/**
+ * Select a photo or video. Thumbnails, state and the change event update at
+ * once; a photo is swapped into both main images (src, srcset, sizes, alt)
+ * only after it decodes, so the slot never shows a blank or half-decoded
+ * frame. A newer selection cancels an older pending swap.
+ */
 function setSelectedItem(
   root: HTMLElement,
   item: GalleryItem,
   source: ProductMediaSelectionSource,
 ): void {
-  const currentKey = `${item.kind}:${item.productMediaId ?? item.mediaId ?? item.url}`;
-  if (root.dataset.activeMediaKey === currentKey && source !== "variant")
+  if (root.dataset.activeMediaKey === mediaKey(item) && source !== "variant")
     return;
-  root.dataset.activeMediaKey = currentKey;
-
-  const desktopImageStage = root.querySelector<HTMLElement>(
-    "[data-image-stage='desktop']",
-  );
-  const mobileImageStage = root.querySelector<HTMLElement>(
-    "[data-image-stage='mobile']",
-  );
-  const videoStage = root.querySelector<HTMLElement>("[data-video-stage]");
-  const video = root.querySelector<HTMLVideoElement>("[data-product-video]");
-  const placeholder = root.querySelector<HTMLElement>(
-    "[data-video-placeholder]",
-  );
-  const mobileImage = root.querySelector<HTMLImageElement>(
-    "[data-mobile-main-image]",
-  );
-  const desktopImage = root.querySelector<HTMLImageElement>(
-    "[data-desktop-main-image]",
-  );
-  const mobileTrigger = root.querySelector<HTMLElement>(
-    "[data-mobile-image-trigger]",
-  );
-
+  const token = (selectionTokens.get(root) ?? 0) + 1;
+  selectionTokens.set(root, token);
+  const parts = galleryParts(root);
   updateActiveThumbnails(root, item.thumbnail ? item.productMediaId : null);
-  root.dataset.activeMediaUrl = item.url;
-  root.dataset.activeMediaZoomUrl = item.zoomUrl || item.url;
-  root.dataset.activeMediaAlt = item.altText;
 
-  if (item.kind === "video" && video && videoStage) {
-    desktopImageStage?.classList.remove("lg:block");
-    desktopImageStage?.classList.add("hidden", "lg:!hidden");
-    mobileImageStage?.classList.add("hidden");
-    videoStage.classList.remove("hidden");
-    mobileTrigger?.setAttribute("aria-disabled", "true");
-
-    video.pause();
-    video.preload = "metadata";
-    video.setAttribute("aria-label", item.altText);
-    if (item.posterUrl) video.poster = item.posterUrl;
-    else video.removeAttribute("poster");
-    if (video.getAttribute("src") !== item.url) {
-      video.src = item.url;
-      video.load();
-    }
-    void enhanceProductVideo(video);
-    placeholder?.classList.toggle("hidden", Boolean(item.posterUrl));
-    closeMobileZoom(root);
-  } else {
-    if (video) clearVideo(video);
-    videoStage?.classList.add("hidden");
-    desktopImageStage?.classList.remove("lg:!hidden");
-    desktopImageStage?.classList.add("hidden", "lg:block");
-    mobileImageStage?.classList.remove("hidden");
-    mobileTrigger?.removeAttribute("aria-disabled");
-    placeholder?.classList.add("hidden");
-
-    const useMobileImage = !window.matchMedia("(min-width: 1024px)").matches;
-    const targetUrl =
-      useMobileImage && item.mobileUrl ? item.mobileUrl : item.url;
-    const shouldUsePreview =
-      source !== "initial" &&
-      Boolean(item.previewUrl) &&
-      !imageCache.has(targetUrl);
-    const displayUrl = shouldUsePreview ? item.previewUrl! : targetUrl;
-    const presentedItem = {
-      ...item,
-      previewUrl: shouldUsePreview ? item.previewUrl : null,
-    };
-    root.dataset.activeMediaDisplayUrl = displayUrl;
-
-    if (mobileImage) {
-      mobileImage.removeAttribute("srcset");
-      mobileImage.removeAttribute("sizes");
-      mobileImage.src = displayUrl;
-      mobileImage.alt = item.altText;
-    }
-    if (desktopImage) {
-      desktopImage.src = displayUrl;
-      desktopImage.alt = item.altText;
-    }
-
-    dispatchChange({ ...presentedItem, source });
-
-    if (shouldUsePreview) {
-      void preloadImage(targetUrl, "high").then((loaded) => {
-        if (!loaded || root.dataset.activeMediaKey !== currentKey) return;
-        root.dataset.activeMediaDisplayUrl = targetUrl;
-        if (mobileImage) mobileImage.src = targetUrl;
-        if (desktopImage) desktopImage.src = item.url;
-      });
-    }
+  if (item.kind === "video") {
+    setActiveData(root, item, null);
+    showVideo(root, parts, item);
+    dispatchChange(item, null, source);
     return;
   }
 
-  dispatchChange({ ...item, source });
+  const sources = galleryMainSources(root, item.url);
+  const zoomUrl = galleryZoomUrl(item.url);
+  setActiveData(root, item, zoomUrl);
+  dispatchChange(item, zoomUrl, source);
+
+  const present = () => {
+    if (selectionTokens.get(root) === token)
+      showImage(parts, sources, item.altText);
+  };
+  const shown =
+    !parts.mobileImageStage?.classList.contains("hidden") &&
+    [parts.mobileImage, parts.desktopImage].every(
+      (image) => !image || showsSources(image, sources),
+    );
+  if (source === "initial" || shown) present();
+  else void decodeBeforeSwap(sources).then(present);
 }
 
 function closeMobileZoom(root: HTMLElement): void {
@@ -409,10 +500,12 @@ function bindThumbnailRail(
     button: HTMLButtonElement,
     source: ProductMediaSelectionSource,
   ) => void,
+  warm: (button: HTMLButtonElement) => void,
 ): void {
   const buttons = Array.from(
     rail.querySelectorAll<HTMLButtonElement>("[data-gallery-thumbnail]"),
   );
+  const hover = window.matchMedia("(hover: hover)").matches;
   buttons.forEach((button, index) => {
     button.addEventListener("click", () => select(button, "gallery"), {
       signal,
@@ -440,17 +533,19 @@ function bindThumbnailRail(
       { signal },
     );
 
-    if (
-      button.dataset.mediaKind === "image" &&
-      window.matchMedia("(hover: hover)").matches
-    ) {
+    if (button.dataset.mediaKind !== "image") return;
+    // Intent: start the fetch before the click lands.
+    button.addEventListener("touchstart", () => warm(button), {
+      passive: true,
+      signal,
+    });
+    button.addEventListener("focus", () => warm(button), { signal });
+    if (hover) {
       let hoverTimer: number | null = null;
       button.addEventListener(
         "mouseenter",
         () => {
-          if (button.dataset.mediaUrl) {
-            void preloadImage(button.dataset.mediaUrl, "high");
-          }
+          warm(button);
           hoverTimer = window.setTimeout(() => select(button, "gallery"), 40);
         },
         { signal },
@@ -464,6 +559,81 @@ function bindThumbnailRail(
       );
     }
   });
+}
+
+/**
+ * Photos worth warming after the page loads, best first and without
+ * duplicates: SKU photos (what a variant switch shows), the product photo
+ * for SKUs without one, then the rest of the gallery. The active photo is
+ * already on screen; videos are never preloaded.
+ */
+export function galleryPreloadQueue(
+  root: HTMLElement,
+  buttons: HTMLButtonElement[],
+  variants: ReadonlyArray<{ imageId: string | null }>,
+): string[] {
+  const queue: string[] = [];
+  const add = (url: string | undefined) => {
+    if (url && url !== root.dataset.activeMediaUrl && !queue.includes(url))
+      queue.push(url);
+  };
+  const images = buttons.filter((button) => button.dataset.mediaKind === "image");
+  const skuImageIds = new Set(variants.map((variant) => variant.imageId));
+  images
+    .filter((button) => skuImageIds.has(button.dataset.productMediaId ?? ""))
+    .forEach((button) => add(button.dataset.mediaUrl));
+  if (skuImageIds.has(null)) add(root.dataset.fallbackUrl);
+  images.forEach((button) => add(button.dataset.mediaUrl));
+  return queue;
+}
+
+function preloadBudget(): number {
+  const connection = (
+    navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }
+  ).connection;
+  if (
+    connection?.saveData ||
+    connection?.effectiveType === "slow-2g" ||
+    connection?.effectiveType === "2g"
+  )
+    return 0;
+  return connection?.effectiveType === "3g" ? PRELOAD_LIMIT_3G : PRELOAD_LIMIT;
+}
+
+/**
+ * Fetch `urls` in the main slot's candidate, `concurrency` at a time, at low
+ * priority. Stops starting new requests once `signal` aborts.
+ */
+export async function preloadGalleryImages(
+  root: HTMLElement,
+  urls: string[],
+  signal: AbortSignal,
+  concurrency = PRELOAD_CONCURRENCY,
+): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (!signal.aborted && next < urls.length) {
+      const url = urls[next++]!;
+      await warmImage(galleryMainSources(root, url), "low");
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, urls.length) }, worker),
+  );
+}
+
+/** Run `task` once the page has loaded and the main thread is idle. */
+function afterPageLoadIdle(signal: AbortSignal, task: () => void): void {
+  const idle = () => {
+    if (signal.aborted) return;
+    if (window.requestIdleCallback)
+      window.requestIdleCallback(task, { timeout: 3000 });
+    else window.setTimeout(task, 200);
+  };
+  if (document.readyState === "complete") idle();
+  else window.addEventListener("load", idle, { once: true, signal });
 }
 
 function bindScrollIndicator(
@@ -550,7 +720,8 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
     const current = root.querySelector<HTMLImageElement>(
       "[data-mobile-main-image]",
     );
-    const detailUrl = current?.dataset.zoomUrl || current?.src;
+    const detailUrl =
+      root.dataset.activeMediaZoomUrl || current?.currentSrc || current?.src;
     if (!detailUrl) return;
     image.src = detailUrl;
     image.alt = current?.alt
@@ -577,21 +748,6 @@ function bindMobileZoom(root: HTMLElement, signal: AbortSignal): void {
         event.preventDefault();
         close.focus();
       }
-    },
-    { signal },
-  );
-
-  window.addEventListener(
-    "product-media-change",
-    (event) => {
-      if (event.detail.kind !== "image") return;
-      const current = root.querySelector<HTMLImageElement>(
-        "[data-mobile-main-image]",
-      );
-      if (current)
-        current.dataset.zoomUrl = event.detail.zoomUrl || event.detail.url;
-      if (image)
-        image.dataset.zoomSrc = event.detail.zoomUrl || event.detail.url;
     },
     { signal },
   );
@@ -685,6 +841,7 @@ export function initProductMediaGallery(
 ): void {
   if (!root) return;
   activeController?.abort();
+  warmedImages = new Set();
   const controller = new AbortController();
   activeController = controller;
   const { signal } = controller;
@@ -700,10 +857,15 @@ export function initProductMediaGallery(
     if (item) setSelectedItem(root, item, source);
   };
 
+  const warmButton = (button: HTMLButtonElement) => {
+    const url = button.dataset.mediaUrl;
+    if (url) void warmImage(galleryMainSources(root, url), "high");
+  };
+
   root
     .querySelectorAll<HTMLElement>("[data-thumbnail-rail]")
     .forEach((rail) => {
-      bindThumbnailRail(rail, signal, selectButton);
+      bindThumbnailRail(rail, signal, selectButton, warmButton);
     });
   for (const rail of ["desktop", "mobile"] as const) {
     bindScrollIndicator(root, rail, "up", signal);
@@ -777,6 +939,14 @@ export function initProductMediaGallery(
     if (fallback) setSelectedItem(root, fallback, "initial");
   }
   bindDesktopZoomWhenEligible(root, signal);
+
+  // Switching must feel instant: once the page has loaded, warm the photos
+  // a switch can show, in the candidate the main slot would pick.
+  afterPageLoadIdle(signal, () => {
+    if (signal.aborted) return;
+    const queue = galleryPreloadQueue(root, buttons, loadVariantsFromDOM());
+    void preloadGalleryImages(root, queue.slice(0, preloadBudget()), signal);
+  });
 }
 
 type DesktopZoomModule = typeof import("./product-desktop-zoom-controller");

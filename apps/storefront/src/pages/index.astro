@@ -31,7 +31,10 @@ import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 
-// Parallel fetch: layout data + homepage data
+// One batch: layout, homepage, and the delivery facts the trust strip shows
+// (on by default; read speculatively so the strip adds no second round trip).
+const shippingMethodsPromise = getShippingMethods();
+const checkoutConfigPromise = getCheckoutConfig();
 const { layoutData, pageData: homepageData } = await loadPageWithLayout(() =>
   getHomepageData(),
 );
@@ -82,8 +85,8 @@ const [fallbackProducts, shippingMethods, checkoutConfig] = await Promise.all([
   needsProductFallback
     ? getAllProducts({ limit: 8, sort: "newest" }).then((page) => page?.data ?? [])
     : Promise.resolve([]),
-  presentation.trustStrip.enabled ? getShippingMethods() : Promise.resolve(null),
-  presentation.trustStrip.enabled ? getCheckoutConfig() : Promise.resolve(null),
+  presentation.trustStrip.enabled ? shippingMethodsPromise : Promise.resolve(null),
+  presentation.trustStrip.enabled ? checkoutConfigPromise : Promise.resolve(null),
 ]);
 const deliveryFacts = presentation.trustStrip.enabled
   ? buildDeliveryFacts({

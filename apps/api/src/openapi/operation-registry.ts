@@ -1438,6 +1438,12 @@ export const OPERATIONS = {
   "storefront.hero_sliders.get": {},
   "storefront.hero_sliders.list": {},
 
+  "storefront.batch.get": {
+    exposure: "excluded",
+    limits: { request: 16_384 },
+    reason: "Storefront render transport; every part is its own public read operation, which agents call directly.",
+  },
+
   "storefront.homepage.get": { limits: { request: 16_384 } },
 
   "storefront.layout.footer_alias": {

@@ -73,8 +73,8 @@ export function bindDesktopZoom(root: HTMLElement, signal: AbortSignal): void {
   const open = () => {
     if (!root.dataset.activeMediaKey?.startsWith("image:")) return;
     const activeKey = root.dataset.activeMediaKey;
-    const displayUrl =
-      root.dataset.activeMediaUrl || image.currentSrc || image.src;
+    // The candidate already on screen stands in until the detail loads.
+    const displayUrl = image.currentSrc || image.src;
     const zoomUrl = root.dataset.activeMediaZoomUrl || displayUrl;
     if (!displayUrl || !zoomUrl) return;
     active = true;
@@ -110,21 +110,6 @@ export function bindDesktopZoom(root: HTMLElement, signal: AbortSignal): void {
   container.addEventListener("mouseenter", open, { signal });
   container.addEventListener("mousemove", move, { signal });
   container.addEventListener("mouseleave", close, { signal });
-  window.addEventListener(
-    "product-media-change",
-    (event) => {
-      close();
-      if (event.detail.kind === "image") {
-        setBackground(event.detail.previewUrl || event.detail.url);
-      }
-    },
-    { signal },
-  );
+  window.addEventListener("product-media-change", close, { signal });
   signal.addEventListener("abort", close, { once: true });
-
-  setBackground(
-    root.dataset.activeMediaUrl ||
-      image.currentSrc ||
-      image.src,
-  );
 }

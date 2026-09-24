@@ -4,15 +4,7 @@
  */
 
 export const GALLERY_CONFIG = {
-  // Pre-generated rendition widths per slot (see @scalius/shared/media-variants).
-  imageWidths: {
-    // Covers a roughly 76–96px thumbnail slot at DPR 2.
-    preview: 160,
-    // The eager mobile LCP image: ~270px slot at DPR 2 stays on the 480 step.
-    mobileDisplay: 480,
-    display: 960,
-    zoom: 1600,
-  },
+  // Image renditions and `sizes` per slot: ./lib/gallery-images.ts.
   // Thumbnail sizes (adjust these to change thumbnail dimensions)
   thumbnails: {
     desktop: {

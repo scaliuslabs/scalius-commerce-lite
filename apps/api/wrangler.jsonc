@@ -11,6 +11,18 @@
   "limits": {
     "cpu_ms": 30000
   },
+  // Run the API's fetch handler next to its D1 primary instead of next to the
+  // visitor. Every storefront page render is one service-binding call here,
+  // and a render's D1 queries come in several dependent waves: from a far
+  // colo each wave costs a full round trip to the database (measured ~200 ms
+  // per wave from Europe, 1-5 ms beside it). This database lives in APAC and
+  // is served from Singapore (`wrangler d1 execute ... --remote --json`
+  // reports `served_by_colo`); change the region if the database moves. The
+  // storefront Worker stays unplaced, so cached pages are still served at the
+  // visitor's edge.
+  "placement": {
+    "region": "aws:ap-southeast-1"
+  },
   "cache": {
     "enabled": true
   },

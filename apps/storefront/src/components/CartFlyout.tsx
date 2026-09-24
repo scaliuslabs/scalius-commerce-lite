@@ -31,7 +31,8 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
 import { formatMoney } from "@/lib/currency";
-import { getProductImageUrl } from "@/lib/product-media";
+import { productImageSources } from "@/lib/product-media";
+import type { ImageSlot } from "@/lib/responsive-image";
 import { previewCartDiscounts } from "@/lib/cart/browser-api";
 import type { CheckoutDiscountFacts } from "@/lib/checkout/tax-quote-contract";
 import type { CartValidationIssue } from "@/lib/api/orders";
@@ -47,6 +48,19 @@ import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-forma
 export const cartOpenState = atom<boolean>(false);
 
 const CART_RECOMMENDATION_LIMIT = 4;
+/** Line photo: h-12 w-12, sm:h-18 sm:w-18. */
+const CART_LINE_IMAGE: ImageSlot = { width: 160, sizes: "(min-width: 640px) 72px, 48px", maxWidth: 320 };
+/** Suggestion photo: a w-28 card minus p-1.5 and its border. */
+const CART_RECOMMENDATION_IMAGE: ImageSlot = { width: 160, sizes: "98px", maxWidth: 320 };
+
+function productImageProps(
+  url: string | null | undefined,
+  slot: ImageSlot,
+): { src: string; srcSet?: string; sizes?: string } {
+  const { src, srcset, sizes } = productImageSources(url, slot);
+  return { src, srcSet: srcset, sizes };
+}
+
 const cartRecommendationCache = new Map<string, ProductRecommendations | null>();
 
 /**
@@ -423,8 +437,11 @@ export default function CartFlyout({ onReady }: Props) {
                     {/* Compact Image */}
                     <div className="h-12 w-12 sm:h-18 sm:w-18 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
                       <img
-                        src={getProductImageUrl(item.image, 96)}
+                        {...productImageProps(item.image, CART_LINE_IMAGE)}
                         alt={item.name}
+                        width={72}
+                        height={72}
+                        decoding="async"
                         className="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-105"
                         loading="lazy"
                       />
@@ -549,11 +566,12 @@ export default function CartFlyout({ onReady }: Props) {
                             className="flex h-full flex-col rounded-lg border border-border bg-card p-1.5 transition-colors hover:border-foreground/30"
                           >
                             <img
-                              src={getProductImageUrl(product.imageUrl, 160)}
+                              {...productImageProps(product.imageUrl, CART_RECOMMENDATION_IMAGE)}
                               alt={product.imageAlt || product.name}
                               width={100}
                               height={100}
                               loading="lazy"
+                              decoding="async"
                               className="aspect-square w-full rounded-md bg-muted object-cover"
                             />
                             <span className="mt-1 line-clamp-2 text-xs font-medium leading-tight text-foreground">

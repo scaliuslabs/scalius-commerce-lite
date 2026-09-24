@@ -7,7 +7,6 @@ import {
 } from "@scalius/shared/http-security";
 
 import {
-  applyPlatformOrigins,
   getRuntimeApiBaseUrl,
   getRuntimeCspAllowedDomains,
   getRuntimeMediaUrl,
@@ -29,6 +28,7 @@ import {
 import {
   applyPublicStorefrontPreconnectHint,
   getPublicStorefrontCachePolicy,
+  isLayoutBatchedPagePath,
 } from "@/lib/public-worker-cache";
 import { BUILD_ID } from "@/config/build-id";
 import { deferProductGlobalStylesheet } from "@/lib/product-style-delivery";
@@ -61,6 +61,8 @@ function setPrivateResponse(response: Response, status: string): void {
 const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   const { request, url } = context;
   const response = await next();
+  // The CSP below needs the platform origins; pages already awaited this read.
+  await getLayoutData();
   response.headers.set("X-Storefront-Build", BUILD_ID);
   const isGet = request.method === "GET" || request.method === "HEAD";
   const hasVariantSelection = hasStorefrontProductVariantSelectionParams(url);
@@ -121,13 +123,17 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
 });
 
 // Seeds the request-scoped runtime: derived secrets from SCALIUS_SECRET, then
-// public origins and merchant CSP sources from the layout payload. Pages reuse
-// that same layout read, so there is no separate platform or CSP sub-request.
-// Nothing is read from Wrangler vars or import.meta.env, and nothing is
-// retained across requests.
-const requestRuntimeMiddleware = defineMiddleware(({ request }, next) =>
+// public origins and merchant CSP sources from the layout payload (applied
+// when that read resolves). Storefront pages start the layout read together
+// with their own reads, so the whole render is one API batch; every other
+// route waits for the origins first. Nothing is read from Wrangler vars or
+// import.meta.env, and nothing is retained across requests.
+const requestRuntimeMiddleware = defineMiddleware(({ request, url }, next) =>
   runWithRequestRuntime(request, getEnv(), async () => {
-    applyPlatformOrigins(await getLayoutData());
+    const layout = getLayoutData();
+    const batchedPage =
+      request.method === "GET" && isLayoutBatchedPagePath(url.pathname);
+    if (!batchedPage) await layout;
     return next();
   }),
 );

@@ -41,8 +41,19 @@ export const REFUND_ATTEMPT_RECONCILIATION_LIMIT = 5;
 export const EXTERNAL_REFUND_RECONCILIATION_LIMIT = 5;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
-/** Each image costs one R2 read, one Images info call and up to six transforms. */
-export const MEDIA_RENDITION_BACKFILL_LIMIT = 12;
+/**
+ * Rendition backfill budget. Each image costs one R2 read, one Images info
+ * call, up to six Images transforms, six R2 writes and a few D1 queries: a
+ * few seconds of wall time but little Worker CPU (the transforms run in the
+ * Images service). The backfill runs last and starts no new image once the
+ * run is this old, so the run ends well inside the 15-minute cron wall limit
+ * and before the next 15-minute tick starts.
+ */
+export const MEDIA_RENDITION_BACKFILL_DEADLINE_MS = 10 * 60 * 1_000;
+/** Two originals (up to 20 MB each) in memory at once, two D1 connections. */
+export const MEDIA_RENDITION_BACKFILL_CONCURRENCY = 2;
+/** CPU guard against the 30 s cron CPU limit (~tens of ms of our CPU per image). */
+export const MEDIA_RENDITION_BACKFILL_MAX_PER_RUN = 240;
 
 type ScheduledMaintenanceMetadata = {
   cron?: string;
@@ -419,14 +430,25 @@ async function runScheduledMaintenanceInner(
     console.log(`[scheduled] Identity handoff audit prune: deleted=${handoffEventsPruned}`);
   }
 
-  // Images that still publish only their original get WebP renditions a few
-  // at a time. Rendition URLs replace the published image URLs, so one
-  // generation bump per run that saved any. Local dev binds no IMAGES.
+  // Images that still publish only their original get WebP renditions until
+  // none are left or the run's time budget is spent. Rendition URLs replace
+  // the published image URLs, so one generation bump per run that saved any.
+  // Local dev binds no IMAGES.
   const images = env.IMAGES;
   if (images) {
     const renditions = await timed("media_rendition_backfill", () =>
-      backfillMissingMediaVariants(db, env.BUCKET, images, { limit: MEDIA_RENDITION_BACKFILL_LIMIT }),
+      backfillMissingMediaVariants(db, env.BUCKET, images, {
+        deadline: runContext.startedAt + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
+        concurrency: MEDIA_RENDITION_BACKFILL_CONCURRENCY,
+        maxImages: MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
+      }),
     );
+    if (renditions.scanned > 0) {
+      console.log(
+        `[scheduled] Media rendition backfill: scanned=${renditions.scanned}, ` +
+          `generated=${renditions.generated}, failed=${renditions.failed}, hasMore=${renditions.hasMore}`,
+      );
+    }
     if (renditions.generated > 0) {
       await timed("media_rendition_cache_generation", () =>
         bumpCacheGeneration({ env, executionCtx }),
