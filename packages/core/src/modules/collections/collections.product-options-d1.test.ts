@@ -43,4 +43,33 @@ describe("collection product picker on D1", () => {
 
     expect(products.map((product) => product.id)).toEqual(["prod_new", "prod_open"]);
   });
+
+  it("counts what buyers see beside every matching product, by the storefront's own rule (CAT-01)", async () => {
+    const { db, sqlite } = setup();
+    // A second published category: one sellable simple product, one active product without a SKU.
+    sqlite.exec(`
+      INSERT INTO categories (id, name, slug, status) VALUES ('cat_b', 'Caps', 'caps', 'published');
+      INSERT INTO products (id, name, price_minor, slug, category_id, is_active, created_at) VALUES
+        ('prod_cap', 'Cap', 20000, 'cap', 'cat_b', 1, 1700000200),
+        ('prod_skuless', 'Scarf', 20000, 'scarf', 'cat_b', 1, 1700000300);
+      INSERT INTO product_variants (id, product_id, sku, option_combination_key, price_minor, stock, reserved_stock, track_inventory, is_default) VALUES
+        ('var_cap', 'prod_cap', 'CAP', NULL, 20000, 5, 0, 1, 1);
+    `);
+
+    const both = await listCollectionProductOptions(db, { categoryIds: ["cat_a", "cat_b"] });
+    // The draft Tupi and the SKU-less scarf are members, but buyers never see them.
+    expect(both.pagination.total).toBe(4);
+    expect(both.visibleOnline).toBeGreaterThanOrEqual(1);
+    expect(both.visibleOnline).toBeLessThan(both.pagination.total);
+
+    const { getStorefrontCollectionProducts } = await import("../products/products.storefront");
+    const storefront = await getStorefrontCollectionProducts(db, { categoryIds: ["cat_a", "cat_b"] }, {});
+    expect(storefront.products.map((product) => product.id)).toContain("prod_cap");
+    expect(storefront.products.map((product) => product.id)).not.toContain("prod_skuless");
+    expect(storefront.products.map((product) => product.id)).not.toContain("prod_open");
+    expect(both.visibleOnline).toBe(storefront.pagination.total);
+
+    // A picker without categories has no buyer view to count.
+    expect((await listCollectionProductOptions(db, {})).visibleOnline).toBeNull();
+  });
 });
