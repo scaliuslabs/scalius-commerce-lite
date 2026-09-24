@@ -128,17 +128,74 @@ the local stack):
   has no active collections (production home does not make it);
 - about 40 ms of render.
 
-What would remove most of the rest (not done; it is an architecture
-decision): the ~100 ms parse cost comes from shipping the dashboard,
-agent-access (MCP server, OAuth provider), Better Auth, Stripe and the
-Postgres driver in the same script as the public reads. The modules the
-public render path actually runs are about a fifth of the bundle. Two ways
-to cut the parse cost to about a quarter for public reads:
+### What is left, and why it stays
 
-- a separate public-read Worker behind the same service binding;
-- a multi-module upload that code-splits the route families so V8 compiles
-  a family only when it is imported. This needs a pre-bundle step with
-  splitting and `no_bundle` with `find_additional_modules`.
+The rest of the cold cost is start-up of the one API script. The owner has
+decided the storefront and the API stay two Workers, so a separate
+public-read Worker is out.
+
+Measured 2026-09-25 under workerd 1.20260831 (the production runtime). A
+fresh process ran per run, timing until `/api/v1/health` answers, then the
+first read into each route family, with no database. Medians of 9-11 runs:
+
+| Build | Uploaded JS | Ready | First config read |
+| --- | --- | --- | --- |
+| Trivial worker | 0 MB | 21 ms | - |
+| Single bundle (as `wrangler deploy` builds it) | 8.5 MB | 152-160 ms | 31-36 ms |
+| esbuild `splitting`: 146 ESM modules, route families lazy, static graph 1.1 MB | 8.5 MB | 148 ms | 19 ms |
+| Same split, dynamic chunks removed from the upload | 1.2 MB | 67 ms | - |
+| Split with the `new_module_registry` flag | 8.5 MB | 92 ms | 41 ms |
+| Generated payloads as Text modules | 5.1 MB JS + 4.7 MB text | 139 ms | 29 ms |
+| Generated payloads removed (upper bound) | 5.1 MB | 134-140 ms | 31 ms |
+
+**Code splitting is blocked on `new_module_registry`.** Workerd's default
+(legacy) module registry compiles every module in the upload when the
+isolate starts, whether or not anything imports it. So a split upload
+starts as slowly as one bundle (148 vs 152 ms). Only code that is not
+uploaded at all is free (67 ms).
+
+The `new_module_registry` compatibility flag loads modules lazily: 92 ms
+ready, and 73 ms saved on the cold public-read path (ready plus first config
+read). It is experimental in workerd, though: without `--experimental` the
+runtime refuses to start ("The new ModuleRegistry implementation is an
+experimental feature"), so it cannot be deployed. Revisit when the flag is
+no longer experimental. The design notes for that day:
+
+- Build: a pre-bundle step with esbuild `splitting: true`, using the
+  conditions, target and nodejs_compat (unenv) handling wrangler uses.
+  Wrangler then deploys the output with `no_bundle: true` and
+  `find_additional_modules: true`. Same `pnpm run deploy*` commands, same
+  two Workers.
+- Evaluation order: ESM chunks import `@hono/zod-openapi`'s re-exported `z`
+  straight from zod's chunk and skip its `extendZodWithOpenApi` side effect.
+  The spike failed with `z.custom(...).openapi is not a function` until the
+  extension was imported explicitly before any route family.
+- Boundaries: a test that the entry's static graph never includes the admin,
+  auth, payment or agent families, and a start-up budget on the static graph
+  (about 1.1 MB today).
+
+**The generated contract payloads stay JavaScript.**
+
+- `openapi-contract.gen.ts` (2.3 MB, one JSON string) and
+  `agent-operations.gen.ts` (1.1 MB) are 40% of the script but only about
+  18 ms of start-up, because string and object literals parse cheaply.
+  Shipping them as Text modules would save 13 ms (152 to 139 ms).
+- Doing so needs a `.txt` loader in every toolchain that imports them: the
+  two vitest configs, `tsx` for `generate:sdk` (`generate-spec.ts` imports
+  the contract app) and `generate:agent-contract`, and the CLI's contract
+  test.
+- Serving `/openapi.json` from the dashboard's static assets would put an
+  API artefact into `apps/admin-v2/dist`, and it breaks local dev, whose
+  wrangler config has no assets binding. That would save 8 ms.
+- A slim agent-operation index does not apply: the MCP runtime reads full
+  operation entries.
+- Neither is worth the tooling cost at this size. Both payloads already stay
+  unevaluated outside their own routes
+  (`runtime/generated-payload-boundaries.test.ts`).
+
+What production does beyond this: API placement keeps the isolate that
+serves storefront renders warm, and storefront batch parts never start a
+second isolate (see the render path).
 
 ## Known platform failure: a stuck Workers Cache key
 
