@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -162,7 +162,8 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   // The same cached query the table reads; it also carries the store alert level.
   const storeLevel = useQuery({ ...listQuery, placeholderData: keepPreviousData }).data?.defaultLowStockThreshold ?? null;
 
-  const adjustButton = (variant: InventoryVariant) => permissions.canAdjustStock ? (
+  const canAdjustStock = permissions.canAdjustStock;
+  const adjustButton = useCallback((variant: InventoryVariant) => canAdjustStock ? (
     <Button
       type="button"
       variant="outline"
@@ -178,9 +179,10 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
     >
       {t("adjust")}
     </Button>
-  ) : null;
+  ) : null, [canAdjustStock, t]);
 
-  const columns: ColumnDef<InventoryVariant, unknown>[] = [
+  // Stable columns keep TanStack's cells, so rows re-render only when their variant changes.
+  const columns = useMemo<ColumnDef<InventoryVariant, unknown>[]>(() => [
     createSelectColumn<InventoryVariant>({ getLabel: (row) => (row as InventoryVariant).sku }),
     {
       accessorKey: "productName",
@@ -216,7 +218,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       cell: ({ row }) => adjustButton(row.original),
       enableSorting: false,
     },
-  ];
+  ], [adjustButton, r, storeLevel, t]);
 
   const { table, isFetching, isLoading, error, refetch, selectedIds, clearSelection } = useServerTable<InventoryVariant>({
     columns,

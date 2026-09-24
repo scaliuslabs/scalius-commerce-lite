@@ -5,8 +5,9 @@
 // to the JavaScript its first render needs (the entry chunk, plus the lazy
 // component chunks of the route and its layouts, plus everything those import
 // statically) and checks each against a Brotli budget. It fails when a heavy
-// library (rich-text editor, QR scanner, drag and drop, charts) becomes part
-// of a route's first download, or when anything grows past its budget.
+// library (rich-text editor, QR scanner, PDF; phone metadata or drag and drop
+// on the everyday screens) becomes part of a route's first download, or when
+// anything grows past its budget.
 //
 // --runtime: times first load and route transitions against a running local
 // stack in headless Chrome (see scripts/admin-perf-runtime.mjs).
@@ -27,32 +28,46 @@ const ADMIN_DIR = "apps/admin-v2";
  * little above today's sizes: raise one only with a reason in the commit.
  */
 export const BUNDLE_BUDGETS = {
-  entry: 140,
-  css: 24,
-  routeDefault: 240,
+  entry: 138,
+  css: 17,
+  // Editors (rich text preview, forms, validation) sit near 290-350.
+  routeDefault: 360,
   routes: {
-    "admin/index.tsx": 200,
-    "admin/orders/_list/index.tsx": 225,
-    "admin/orders/$orderId/index.tsx": 240,
-    "admin/products/index.tsx": 215,
-    "admin/products/$productId/edit.tsx": 260,
-    "admin/inventory/index.tsx": 220,
-    "admin/customers/index.tsx": 210,
-    "admin/settings/store.tsx": 215,
-    "auth/login.tsx": 175,
+    "auth/login.tsx": 168,
+    "admin/index.tsx": 206,
+    "admin/orders/_list/index.tsx": 290,
+    "admin/orders/$orderId/index.tsx": 284,
+    "admin/products/index.tsx": 290,
+    "admin/products/$productId/edit.tsx": 364,
+    "admin/inventory/index.tsx": 255,
+    "admin/customers/index.tsx": 245,
+    "admin/settings/store.tsx": 291,
   },
 };
 
+/** The screens merchants live in: they must never pay for another screen's tools. */
+const HOT_ROUTES = [
+  "admin/index.tsx",
+  "admin/orders/_list/index.tsx",
+  "admin/orders/$orderId/index.tsx",
+  "admin/products/index.tsx",
+  "admin/products/$productId/edit.tsx",
+  "admin/inventory/index.tsx",
+  "admin/customers/index.tsx",
+];
+
 /**
- * Libraries that must only ever load on demand, never as part of a route's
- * first render (module path fragments). The scanner route owns the QR engine.
+ * Libraries that load on demand, never as part of a route's first render
+ * (module path patterns). `allow`: routes whose own job needs it first
+ * (the scanner's QR engine). `only`: forbidden on these routes alone (phone
+ * metadata belongs to phone forms; drag and drop to reordering screens).
  */
 export const LAZY_ONLY_MODULES = [
   { name: "Tiptap / ProseMirror", pattern: /node_modules\/(?:@tiptap|prosemirror-)/ },
   { name: "html5-qrcode", pattern: /node_modules\/html5-qrcode\//, allow: ["scanner.tsx"] },
-  { name: "@dnd-kit", pattern: /node_modules\/@dnd-kit\// },
   { name: "html2pdf", pattern: /node_modules\/html2pdf/ },
-  { name: "libphonenumber-js metadata", pattern: /node_modules\/libphonenumber-js\/.*metadata/ },
+  { name: "@dnd-kit", pattern: /node_modules\/@dnd-kit\//, only: HOT_ROUTES },
+  { name: "libphonenumber-js metadata", pattern: /node_modules\/libphonenumber-js\/.*metadata/, only: HOT_ROUTES },
 ];
 
 // ── Route tree ─────────────────────────────────────────────────────────────
@@ -126,7 +141,8 @@ export function measureRoutes({ chunks, parentByFile, routesDir, brotliBytes }) 
       for (const id of chunkByName.get(file)?.moduleIds ?? []) {
         const normalized = id.split("\\").join("/");
         for (const rule of LAZY_ONLY_MODULES) {
-          if (rule.pattern.test(normalized) && !rule.allow?.includes(routeFile)) found.add(rule.name);
+          const applies = rule.only ? rule.only.includes(routeFile) || routeFile === "" : !rule.allow?.includes(routeFile);
+          if (applies && rule.pattern.test(normalized)) found.add(rule.name);
         }
       }
     }

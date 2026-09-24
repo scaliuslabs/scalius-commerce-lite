@@ -2,7 +2,7 @@
    print) that must not follow the dashboard theme, so it carries its own stylesheet and classes. */
 import type { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
-import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
+import { normalizeBdMobile } from "@scalius/shared/phone-input";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
@@ -28,6 +28,12 @@ export function invoiceBusinessName(document: Pick<InvoiceDocument, "businessInf
 }
 
 /** One printable invoice sheet (A4). Several stack with page breaks for bulk printing. */
+/** The number a courier dials: "01712345678" for a Bangladesh mobile, else as stored. */
+function localPhone(phone: string): string {
+  const mobile = normalizeBdMobile(phone);
+  return mobile ? `0${mobile.slice(4)}` : phone;
+}
+
 export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
@@ -120,7 +126,7 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
           <h2>{t("invoice.billTo")}</h2>
           <p className="strong">{order.customerName}</p>
           {/* Local format, as the customer writes it: 01712345678. */}
-          <p>{formatPhoneForProvider(order.customerPhone)}</p>
+          <p>{localPhone(order.customerPhone)}</p>
           {order.customerEmail ? <p>{order.customerEmail}</p> : null}
           <p>{formatLocationParts(order.shippingAddress, order.areaName, order.zoneName, order.cityName)}</p>
         </div>

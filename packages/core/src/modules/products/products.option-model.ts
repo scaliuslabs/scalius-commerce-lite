@@ -218,6 +218,50 @@ export async function loadVariantSelectedOptions(
     return result;
 }
 
+/**
+ * The option values of every active variant of one product, in one query keyed
+ * by the product: the editor reads them alongside the variants instead of
+ * after them (and a product with 150 variants needs no id chunking).
+ */
+export async function loadProductVariantSelectedOptions(
+    db: Database,
+    productId: string,
+): Promise<Map<string, SelectedProductOption[]>> {
+    const rows = await db
+        .select({
+            variantId: productVariantOptionValues.variantId,
+            optionDefinitionId: productOptionDefinitions.id,
+            optionValueId: productOptionValues.id,
+            name: productOptionDefinitions.name,
+            value: productOptionValues.value,
+            position: productOptionDefinitions.position,
+            valuePosition: productOptionValues.position,
+            standardMapping: productOptionDefinitions.standardMapping,
+        })
+        .from(productVariantOptionValues)
+        .innerJoin(productVariants, eq(productVariants.id, productVariantOptionValues.variantId))
+        .innerJoin(productOptionDefinitions, eq(productOptionDefinitions.id, productVariantOptionValues.optionDefinitionId))
+        .innerJoin(productOptionValues, eq(productOptionValues.id, productVariantOptionValues.optionValueId))
+        .where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt)))
+        .orderBy(asc(productVariantOptionValues.variantId), asc(productOptionDefinitions.position));
+
+    const result = new Map<string, SelectedProductOption[]>();
+    for (const row of rows) {
+        const list = result.get(row.variantId) ?? [];
+        list.push({
+            optionDefinitionId: row.optionDefinitionId,
+            optionValueId: row.optionValueId,
+            name: row.name,
+            value: row.value,
+            position: row.position,
+            valuePosition: row.valuePosition,
+            standardMapping: row.standardMapping,
+        });
+        result.set(row.variantId, list);
+    }
+    return result;
+}
+
 /** Compact buyer/admin label for projections that do not need structured axes. */
 export function variantOptionLabelSql(_variantId: SQLWrapper): SQL<string | null> {
     // Every caller projects from the concrete product_variants table. Drizzle
