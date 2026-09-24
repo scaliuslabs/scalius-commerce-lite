@@ -1,6 +1,6 @@
 // src/modules/customers/customer-auth.service.ts
 // Customer sign-in: one-time codes, account resolution, sessions.
-// Used by the customer-auth route handler (apps/api/src/routes/customer-auth.ts).
+// Used by the customer-auth route handler (apps/api/src/routes/customer-auth/).
 //
 // Identity rule (Shopify's): a VERIFIED identifier owns an account. An email
 // owns an account only once a code sent to it was entered; the phone is the
