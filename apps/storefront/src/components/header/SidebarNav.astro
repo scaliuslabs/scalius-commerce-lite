@@ -31,6 +31,12 @@ const { navigation } = Astro.props;
       margin-inline: auto;
       padding-left: 2rem;
     }
+
+    /* The divider belongs to the content column, so it runs the page's full
+       height instead of stopping where the sticky menu ends. */
+    .site-shell[data-site-shell="sidebar"] > main {
+      border-left: 1px solid var(--border);
+    }
   }
 </style>
 
@@ -49,7 +55,6 @@ const { navigation } = Astro.props;
       overscroll-behavior: contain;
       scrollbar-width: thin;
       padding: 1.5rem 0.75rem 2rem 0;
-      border-right: 1px solid var(--border);
     }
   }
 </style>
