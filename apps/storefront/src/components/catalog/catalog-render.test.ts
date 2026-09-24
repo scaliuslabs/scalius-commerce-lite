@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ViteDevServer } from "vite";
+import { Window } from "happy-dom";
 import {
   DEFAULT_STOREFRONT_THEME,
   storeShapeFromFacts,
@@ -95,14 +96,44 @@ async function render(
   });
 }
 
-/** Astro's per-build ids differ between runs; the markup must not. */
+/**
+ * The rendered markup as it paints: Astro's per-build ids, scripts, styles
+ * and stylesheet links removed, and one element per line with its
+ * attributes and class tokens sorted (their order never changes a pixel).
+ */
 function normalize(html: string): string {
-  return html
-    .replace(/ data-astro-cid-[a-z0-9]+(="")?/g, "")
-    .replace(/astro-[a-z0-9]{8}/g, "astro-cid")
+  const document = new Window().document;
+  const body = document.createElement("body");
+  body.innerHTML = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/g, "")
     .replace(/<link\b[^>]*>/g, "");
+  const lines: string[] = [];
+  const walk = (node: Node, depth: number) => {
+    for (const child of Array.from(node.childNodes)) {
+      const indent = "  ".repeat(depth);
+      if (child.nodeType === 3) {
+        const text = (child.textContent ?? "").replace(/\s+/g, " ");
+        if (text.trim()) lines.push(`${indent}"${text}"`);
+        continue;
+      }
+      if (child.nodeType !== 1) continue;
+      const element = child as Element;
+      const attributes = Array.from(element.attributes)
+        .filter((attribute) => !attribute.name.startsWith("data-astro-cid"))
+        .map((attribute) => {
+          const value = attribute.name === "class"
+            ? attribute.value.split(/\s+/).filter(Boolean).sort().join(" ")
+            : attribute.value;
+          return `${attribute.name}="${value}"`;
+        })
+        .sort();
+      lines.push(`${indent}<${element.tagName.toLowerCase()}${attributes.length ? ` ${attributes.join(" ")}` : ""}>`);
+      walk(element.tagName === "TEMPLATE" ? (element as HTMLTemplateElement).content : element, depth + 1);
+    }
+  };
+  walk(body, 0);
+  return `${lines.join("\n")}\n`;
 }
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────

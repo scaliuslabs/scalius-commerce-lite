@@ -1,1 +1,558 @@
-<div class="sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-4 grid grid-cols-2 gap-2 rounded-xl bg-background/95 p-1 backdrop-blur lg:hidden"><button type="button" id="mobile-filter-toggle" aria-controls="filter-section" aria-expanded="false" class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-semibold text-foreground shadow-sm"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sliders-horizontal h-4 w-4" aria-hidden="true"="true"><path d="M10 5H3"></path><path d="M12 19H3"></path><path d="M14 3v4"></path><path d="M16 17v4"></path><path d="M21 12h-9"></path><path d="M21 19h-5"></path><path d="M21 5h-7"></path><path d="M8 10v4"></path><path d="M8 12H3"></path></svg><span>Filters</span></button><label class="relative block"><span class="sr-only">Sort products</span><select id="sortByMobile" name="sortBy" data-catalog-sort="true" data-list-pathname="/search" data-default-sort="newest" data-current-filters="{&quot;q&quot;:&quot;linen&quot;}" class="min-h-11 w-full rounded-lg border-border bg-background py-2.5 pl-3 pr-8 text-sm font-semibold text-foreground shadow-sm focus:border-primary focus:ring-2 focus:ring-primary"><option value="newest" selected>Latest</option><option value="price-asc">Price: Low to High</option><option value="price-desc">Price: High to Low</option><option value="name-asc">Name: A to Z</option><option value="name-desc">Name: Z to A</option><option value="discount">Biggest discount</option></select></label></div><div class="flex flex-col gap-6 lg:flex-row"><aside id="filter-section" aria-labelledby="mobile-filter-title" class="fixed inset-0 z-60 hidden bg-black/50 lg:static lg:z-0 lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"><div class="filter-sheet flex max-h-[88dvh] w-full flex-col rounded-t-2xl bg-background text-foreground lg:h-full lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:shadow-sm"><div class="flex items-center justify-between border-b border-border bg-background p-4 lg:hidden"><h2 id="mobile-filter-title" class="text-lg font-semibold">Filters</h2><button type="button" id="mobile-filter-close" aria-label="Close filters" class="inline-flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x h-5 w-5" aria-hidden="true"="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button></div><form id="filterForm" method="get" autocomplete="off" data-catalog-filters data-count-endpoint="/products" class="grow overflow-y-auto"><div class="space-y-3 p-4 pb-28 lg:p-6 lg:pb-6"><div class="relative mb-6"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-search pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg><label for="catalog-filter-search" class="sr-only">Search products</label><input id="catalog-filter-search" type="search" name="q" placeholder="Search products…" value="linen" maxlength="120" enterkeyhint="search" class="w-full rounded-lg border border-border bg-background py-2.5 pl-9 pr-4 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:text-sm"></div><details open class="group rounded-lg border border-border bg-background"><summary class="flex min-h-11 cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold text-foreground [&amp;::-webkit-details-marker]:hidden">Shopping options<svg class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></summary><div class="space-y-2 px-4 pb-4"><label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2 text-sm font-medium text-foreground">On sale<input type="checkbox" role="switch" name="hasDiscount" value="true" class="relative h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-input transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-background before:shadow before:transition-transform checked:bg-primary checked:before:translate-x-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:before:transition-none"></label><label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2 text-sm font-medium text-foreground">Free delivery<input type="checkbox" role="switch" name="freeDelivery" value="true" class="relative h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-input transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-background before:shadow before:transition-transform checked:bg-primary checked:before:translate-x-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:before:transition-none"></label></div></details><details open class="group rounded-lg border border-border bg-background"><summary class="flex min-h-11 cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold text-foreground [&amp;::-webkit-details-marker]:hidden">Price<svg class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></summary><div class="px-4 pb-4"><p class="mb-3 text-sm text-muted-foreground">The highest price is ৳4,500</p><div class="grid grid-cols-2 gap-3"><div><label for="catalog-minPrice" class="mb-1.5 block text-sm font-medium text-muted-foreground">From</label><div class="relative"><span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground" aria-hidden="true">৳</span><input id="catalog-minPrice" type="text" inputmode="decimal" name="minPrice" value placeholder="500" class="h-11 w-full rounded-lg border border-border bg-background pl-7 pr-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:h-10 lg:text-sm"></div></div><div><label for="catalog-maxPrice" class="mb-1.5 block text-sm font-medium text-muted-foreground">To</label><div class="relative"><span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground" aria-hidden="true">৳</span><input id="catalog-maxPrice" type="text" inputmode="decimal" name="maxPrice" value placeholder="4500" class="h-11 w-full rounded-lg border border-border bg-background pl-7 pr-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:h-10 lg:text-sm"></div></div></div><button type="submit" class="mt-3 hidden min-h-10 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted lg:inline-flex">Apply price</button></div></details><details open class="group rounded-lg border border-border bg-background"><summary class="flex min-h-11 cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold text-foreground [&amp;::-webkit-details-marker]:hidden">Size<svg class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></summary><fieldset class="space-y-1 px-4 pb-4"><legend class="sr-only">Size</legend><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="size" value="S" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">S</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>12</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="size" value="M" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">M</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>20</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="size" value="L" disabled data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">L</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>0</span></label></fieldset></details><details open class="group rounded-lg border border-border bg-background"><summary class="flex min-h-11 cursor-pointer list-none items-center justify-between px-4 py-3 font-semibold text-foreground [&amp;::-webkit-details-marker]:hidden">Fabric<svg class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></summary><fieldset class="space-y-1 px-4 pb-4"><legend class="sr-only">Fabric</legend><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 1" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 1</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>1</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 2" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 2</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>2</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 3" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 3</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>3</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 4" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 4</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>4</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 5" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 5</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>5</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 6" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 6</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>6</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 7" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 7</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>7</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 8" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 8</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>8</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 9" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 9</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>9</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 10" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 10</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>10</span></label><details class="group/more"><summary class="flex min-h-11 cursor-pointer list-none items-center px-2 text-sm font-medium text-primary hover:underline [&amp;::-webkit-details-marker]:hidden"><span class="group-open/more:hidden">Show 4 more</span><span class="hidden group-open/more:inline">Show less</span></summary><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 11" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 11</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>11</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 12" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 12</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>12</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 13" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 13</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>13</span></label><label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent"><input type="checkbox" name="fabric" value="Fabric 14" data-catalog-facet class="h-4 w-4 rounded border-border text-primary focus:ring-primary"><span class="min-w-0 flex-1 truncate font-medium text-foreground">Fabric 14</span><span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>14</span></label></details></fieldset></details><noscript><button type="submit" class="hidden min-h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground lg:flex">Apply filters</button></noscript></div><div class="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:hidden"><div class="grid gap-3 grid-cols-1"><button type="submit" data-catalog-filter-apply aria-live="polite" class="inline-flex h-12 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">Show 50 products</button></div></div></form></div></aside><div class="min-w-0 flex-1"><div class="mb-6 hidden items-center justify-between gap-4 rounded-lg border border-border bg-background p-4 shadow-sm lg:flex"><p class="text-sm font-medium text-foreground">Showing <span class="font-bold text-primary">20</span> of <span class="font-bold text-primary">50</span> products</p><div class="flex items-center gap-3"><label for="sortByDesktop" class="whitespace-nowrap text-sm font-medium text-foreground">Sort by:</label><select id="sortByDesktop" name="sortBy" data-catalog-sort="true" data-list-pathname="/search" data-default-sort="newest" data-current-filters="{&quot;q&quot;:&quot;linen&quot;}" class="min-w-[160px] rounded-lg border-border bg-background text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary"><option value="newest" selected>Latest</option><option value="price-asc">Price: Low to High</option><option value="price-desc">Price: High to Low</option><option value="name-asc">Name: A to Z</option><option value="name-desc">Name: Z to A</option><option value="discount">Biggest discount</option></select></div></div><nav aria-label="Applied filters" class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap"><a href="/search" class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-muted" aria-label="Remove Search: “linen” filter"><span>Search: “linen”</span><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x h-3.5 w-3.5" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></a></nav><div class="product-grid-frame mb-8"><div class="product-grid"><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p1.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p1" width="400" height="400" loading="eager" fetchpriority="high" decoding="sync" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"><span data-card-discount class="px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm">-20%</span></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p1" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p1</a></h2><p class="mt-auto flex flex-col"><span class="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground font-medium leading-none"><span><span class="sr-only">Regular price </span><s>৳1,200</s></span></span><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Sale price </span>৳960</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p2.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p2" width="400" height="400" loading="eager" fetchpriority="high" decoding="sync" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p2" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p2</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p3.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p3" width="400" height="400" loading="eager" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p3" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p3</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p4.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p4" width="400" height="400" loading="eager" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p4" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p4</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p5.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p5" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p5" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p5</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p6.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p6" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"><span data-card-discount class="px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm">-20%</span></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p6" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p6</a></h2><p class="mt-auto flex flex-col"><span class="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground font-medium leading-none"><span><span class="sr-only">Regular price </span><s>৳1,200</s></span></span><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Sale price </span>৳960</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p7.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p7" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p7" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p7</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p8.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p8" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p8" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p8</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p9.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p9" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p9" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p9</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p10.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p10" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p10" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p10</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p11.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p11" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"><span data-card-discount class="px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm">-20%</span></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p11" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p11</a></h2><p class="mt-auto flex flex-col"><span class="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground font-medium leading-none"><span><span class="sr-only">Regular price </span><s>৳1,200</s></span></span><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Sale price </span>৳960</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p12.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p12" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p12" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p12</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p13.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p13" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p13" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p13</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p14.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p14" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p14" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p14</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p15.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p15" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p15" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p15</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p16.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p16" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"><span data-card-discount class="px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm">-20%</span></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p16" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p16</a></h2><p class="mt-auto flex flex-col"><span class="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground font-medium leading-none"><span><span class="sr-only">Regular price </span><s>৳1,200</s></span></span><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Sale price </span>৳960</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p17.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p17" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p17" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p17</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p18.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p18" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p18" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p18</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p19.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p19" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p19" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p19</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div><div data-theme-component="product-card" data-card-variant="standard" data-card-ratio="square" data-card-badge="image" class="group relative flex flex-col h-full bg-card overflow-hidden"><div class="product-card-media relative overflow-hidden bg-muted"><img src="https://cdn.shop.test/products/p20.jpg" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" alt="Product p20" width="400" height="400" loading="lazy" fetchpriority="auto" decoding="async" class="product-card-photo w-full h-full object-center"><div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none"></div></div><div class="product-card-body p-3 sm:p-4 flex flex-col flex-1"><h2 class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"><a href="/products/product-p20" class="product-card-link after:absolute after:inset-0 after:content-['']">Product p20</a></h2><p class="mt-auto flex flex-col"><span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight"><span class="sr-only">Price </span>৳1,200</span></p></div></div></div></div><nav class="mb-20 mt-8 flex items-center justify-center lg:mb-8" aria-label="Pagination"><div class="flex items-center space-x-1 rounded-lg border border-border bg-background p-2 shadow-sm"><button type="button" disabled aria-label="Previous page" class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border/60 text-muted-foreground/40"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left h-4 w-4" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></button><a href="/search?q=linen" aria-label="Page 1" aria-current="page" class="inline-flex h-9 min-w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors border-primary bg-primary text-primary-foreground shadow-sm">1</a><a href="/search?page=2&amp;q=linen" aria-label="Page 2" class="inline-flex h-9 min-w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors border-border text-foreground hover:bg-muted">2</a><a href="/search?page=3&amp;q=linen" aria-label="Page 3" class="inline-flex h-9 min-w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors border-border text-foreground hover:bg-muted">3</a><a href="/search?page=2&amp;q=linen" aria-label="Next page" class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-foreground transition-colors hover:bg-muted"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right h-4 w-4" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></a></div></nav></div></div>
+<div class="-mx-1 backdrop-blur bg-background/95 gap-2 grid grid-cols-2 lg:hidden mb-4 p-1 rounded-xl sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30">
+  <button aria-controls="filter-section" aria-expanded="false" class="bg-background border border-border flex font-semibold gap-2 items-center justify-center min-h-11 px-3 py-2.5 relative rounded-lg shadow-sm text-foreground text-sm" id="mobile-filter-toggle" type="button">
+    <svg aria-hidden="true" class="h-4 lucide lucide-sliders-horizontal w-4" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M10 5H3">
+      <path d="M12 19H3">
+      <path d="M14 3v4">
+      <path d="M16 17v4">
+      <path d="M21 12h-9">
+      <path d="M21 19h-5">
+      <path d="M21 5h-7">
+      <path d="M8 10v4">
+      <path d="M8 12H3">
+    <span>
+      "Filters"
+  <label class="block relative">
+    <span class="sr-only">
+      "Sort products"
+    <select class="bg-background border-border focus:border-primary focus:ring-2 focus:ring-primary font-semibold min-h-11 pl-3 pr-8 py-2.5 rounded-lg shadow-sm text-foreground text-sm w-full" data-catalog-sort="true" data-current-filters="{"q":"linen"}" data-default-sort="newest" data-list-pathname="/search" id="sortByMobile" name="sortBy">
+      <option selected="" value="newest">
+        "Latest"
+      <option value="price-asc">
+        "Price: Low to High"
+      <option value="price-desc">
+        "Price: High to Low"
+      <option value="name-asc">
+        "Name: A to Z"
+      <option value="name-desc">
+        "Name: Z to A"
+      <option value="discount">
+        "Biggest discount"
+<div class="flex flex-col gap-6 lg:flex-row">
+  <aside aria-labelledby="mobile-filter-title" class="bg-black/50 fixed hidden inset-0 lg:bg-transparent lg:block lg:shrink-0 lg:static lg:w-80 lg:z-0 z-60" id="filter-section">
+    <div class="bg-background filter-sheet flex flex-col lg:border lg:border-border lg:h-full lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:overflow-hidden lg:rounded-lg lg:shadow-sm lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:w-full max-h-[88dvh] rounded-t-2xl text-foreground w-full">
+      <div class="bg-background border-b border-border flex items-center justify-between lg:hidden p-4">
+        <h2 class="font-semibold text-lg" id="mobile-filter-title">
+          "Filters"
+        <button aria-label="Close filters" class="h-11 hover:bg-muted inline-flex items-center justify-center rounded-lg w-11" id="mobile-filter-close" type="button">
+          <svg aria-hidden="true" class="h-5 lucide lucide-x w-5" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18 6 6 18">
+            <path d="m6 6 12 12">
+      <form autocomplete="off" class="grow overflow-y-auto" data-catalog-filters="" data-count-endpoint="/products" id="filterForm" method="get">
+        <div class="lg:p-6 lg:pb-6 p-4 pb-28 space-y-3">
+          <div class="mb-6 relative">
+            <svg aria-hidden="true" class="-translate-y-1/2 absolute h-4 left-3 lucide lucide-search pointer-events-none text-muted-foreground top-1/2 w-4" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+              <path d="m21 21-4.34-4.34">
+              <circle cx="11" cy="11" r="8">
+            <label class="sr-only" for="catalog-filter-search">
+              "Search products"
+            <input class="bg-background border border-border focus:border-primary focus:ring-2 focus:ring-primary lg:text-sm pl-9 pr-4 py-2.5 rounded-lg text-base text-foreground w-full" enterkeyhint="search" id="catalog-filter-search" maxlength="120" name="q" placeholder="Search products…" type="search" value="linen">
+          <details class="bg-background border border-border group rounded-lg" open="">
+            <summary class="[&::-webkit-details-marker]:hidden cursor-pointer flex font-semibold items-center justify-between list-none min-h-11 px-4 py-3 text-foreground">
+              "Shopping options"
+              <svg aria-hidden="true" class="group-open:rotate-180 h-4 shrink-0 text-muted-foreground transition-transform w-4" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="m6 9 6 6 6-6">
+            <div class="pb-4 px-4 space-y-2">
+              <label class="bg-muted/50 cursor-pointer flex font-medium gap-3 items-center justify-between min-h-11 px-3 py-2 rounded-lg text-foreground text-sm">
+                "On sale"
+                <input class="appearance-none before:absolute before:bg-background before:h-4 before:left-0.5 before:rounded-full before:shadow before:top-0.5 before:transition-transform before:w-4 bg-input checked:before:translate-x-4 checked:bg-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring h-5 motion-reduce:before:transition-none motion-reduce:transition-none relative rounded-full shrink-0 transition-colors w-9" name="hasDiscount" role="switch" type="checkbox" value="true">
+              <label class="bg-muted/50 cursor-pointer flex font-medium gap-3 items-center justify-between min-h-11 px-3 py-2 rounded-lg text-foreground text-sm">
+                "Free delivery"
+                <input class="appearance-none before:absolute before:bg-background before:h-4 before:left-0.5 before:rounded-full before:shadow before:top-0.5 before:transition-transform before:w-4 bg-input checked:before:translate-x-4 checked:bg-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring h-5 motion-reduce:before:transition-none motion-reduce:transition-none relative rounded-full shrink-0 transition-colors w-9" name="freeDelivery" role="switch" type="checkbox" value="true">
+          <details class="bg-background border border-border group rounded-lg" open="">
+            <summary class="[&::-webkit-details-marker]:hidden cursor-pointer flex font-semibold items-center justify-between list-none min-h-11 px-4 py-3 text-foreground">
+              "Price"
+              <svg aria-hidden="true" class="group-open:rotate-180 h-4 shrink-0 text-muted-foreground transition-transform w-4" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="m6 9 6 6 6-6">
+            <div class="pb-4 px-4">
+              <p class="mb-3 text-muted-foreground text-sm">
+                "The highest price is ৳4,500"
+              <div class="gap-3 grid grid-cols-2">
+                <div>
+                  <label class="block font-medium mb-1.5 text-muted-foreground text-sm" for="catalog-minPrice">
+                    "From"
+                  <div class="relative">
+                    <span aria-hidden="true" class="-translate-y-1/2 absolute left-3 pointer-events-none text-muted-foreground text-sm top-1/2">
+                      "৳"
+                    <input class="bg-background border border-border focus:border-primary focus:ring-2 focus:ring-primary h-11 lg:h-10 lg:text-sm pl-7 pr-3 rounded-lg text-base text-foreground w-full" id="catalog-minPrice" inputmode="decimal" name="minPrice" placeholder="500" type="text" value="">
+                <div>
+                  <label class="block font-medium mb-1.5 text-muted-foreground text-sm" for="catalog-maxPrice">
+                    "To"
+                  <div class="relative">
+                    <span aria-hidden="true" class="-translate-y-1/2 absolute left-3 pointer-events-none text-muted-foreground text-sm top-1/2">
+                      "৳"
+                    <input class="bg-background border border-border focus:border-primary focus:ring-2 focus:ring-primary h-11 lg:h-10 lg:text-sm pl-7 pr-3 rounded-lg text-base text-foreground w-full" id="catalog-maxPrice" inputmode="decimal" name="maxPrice" placeholder="4500" type="text" value="">
+              <button class="bg-background border border-border font-semibold hidden hover:bg-muted items-center justify-center lg:inline-flex min-h-10 mt-3 px-4 rounded-lg text-foreground text-sm transition-colors w-full" type="submit">
+                "Apply price"
+          <details class="bg-background border border-border group rounded-lg" open="">
+            <summary class="[&::-webkit-details-marker]:hidden cursor-pointer flex font-semibold items-center justify-between list-none min-h-11 px-4 py-3 text-foreground">
+              "Size"
+              <svg aria-hidden="true" class="group-open:rotate-180 h-4 shrink-0 text-muted-foreground transition-transform w-4" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="m6 9 6 6 6-6">
+            <fieldset class="pb-4 px-4 space-y-1">
+              <legend class="sr-only">
+                "Size"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="size" type="checkbox" value="S">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "S"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "12"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="size" type="checkbox" value="M">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "M"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "20"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" disabled="" name="size" type="checkbox" value="L">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "L"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "0"
+          <details class="bg-background border border-border group rounded-lg" open="">
+            <summary class="[&::-webkit-details-marker]:hidden cursor-pointer flex font-semibold items-center justify-between list-none min-h-11 px-4 py-3 text-foreground">
+              "Fabric"
+              <svg aria-hidden="true" class="group-open:rotate-180 h-4 shrink-0 text-muted-foreground transition-transform w-4" fill="none" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="m6 9 6 6 6-6">
+            <fieldset class="pb-4 px-4 space-y-1">
+              <legend class="sr-only">
+                "Fabric"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 1">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "Fabric 1"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "1"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 2">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "Fabric 2"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "2"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 3">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "Fabric 3"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "3"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 4">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "Fabric 4"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "4"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 5">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "Fabric 5"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "5"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 6">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "Fabric 6"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "6"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 7">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "Fabric 7"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "7"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 8">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "Fabric 8"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "8"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 9">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "Fabric 9"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "9"
+              <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 10">
+                <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                  "Fabric 10"
+                <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                  "10"
+              <details class="group/more">
+                <summary class="[&::-webkit-details-marker]:hidden cursor-pointer flex font-medium hover:underline items-center list-none min-h-11 px-2 text-primary text-sm">
+                  <span class="group-open/more:hidden">
+                    "Show 4 more"
+                  <span class="group-open/more:inline hidden">
+                    "Show less"
+                <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                  <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 11">
+                  <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                    "Fabric 11"
+                  <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                    "11"
+                <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                  <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 12">
+                  <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                    "Fabric 12"
+                  <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                    "12"
+                <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                  <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 13">
+                  <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                    "Fabric 13"
+                  <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                    "13"
+                <label class="cursor-pointer flex gap-3 has-disabled:cursor-not-allowed has-disabled:hover:bg-transparent has-disabled:opacity-40 hover:bg-muted items-center min-h-11 px-2 rounded-md text-sm transition-colors">
+                  <input class="border-border focus:ring-primary h-4 rounded text-primary w-4" data-catalog-facet="" name="fabric" type="checkbox" value="Fabric 14">
+                  <span class="flex-1 font-medium min-w-0 text-foreground truncate">
+                    "Fabric 14"
+                  <span class="tabular-nums text-muted-foreground text-sm" data-catalog-facet-count="">
+                    "14"
+          <noscript>
+            <button class="bg-primary font-semibold hidden items-center justify-center lg:flex min-h-10 px-4 rounded-lg text-primary-foreground text-sm w-full" type="submit">
+              "Apply filters"
+        <div class="bg-background border-border border-t bottom-0 fixed inset-x-0 lg:hidden p-4 pb-[max(1rem,env(safe-area-inset-bottom))] z-50">
+          <div class="gap-3 grid grid-cols-1">
+            <button aria-live="polite" class="bg-primary disabled:cursor-not-allowed disabled:opacity-50 font-semibold h-12 inline-flex items-center justify-center px-4 rounded-lg text-primary-foreground text-sm" data-catalog-filter-apply="" type="submit">
+              "Show 50 products"
+  <div class="flex-1 min-w-0">
+    <div class="bg-background border border-border gap-4 hidden items-center justify-between lg:flex mb-6 p-4 rounded-lg shadow-sm">
+      <p class="font-medium text-foreground text-sm">
+        "Showing "
+        <span class="font-bold text-primary">
+          "20"
+        " of "
+        <span class="font-bold text-primary">
+          "50"
+        " products"
+      <div class="flex gap-3 items-center">
+        <label class="font-medium text-foreground text-sm whitespace-nowrap" for="sortByDesktop">
+          "Sort by:"
+        <select class="bg-background border-border focus:border-primary focus:ring-2 focus:ring-primary min-w-[160px] rounded-lg text-foreground text-sm" data-catalog-sort="true" data-current-filters="{"q":"linen"}" data-default-sort="newest" data-list-pathname="/search" id="sortByDesktop" name="sortBy">
+          <option selected="" value="newest">
+            "Latest"
+          <option value="price-asc">
+            "Price: Low to High"
+          <option value="price-desc">
+            "Price: High to Low"
+          <option value="name-asc">
+            "Name: A to Z"
+          <option value="name-desc">
+            "Name: Z to A"
+          <option value="discount">
+            "Biggest discount"
+    <nav aria-label="Applied filters" class="flex gap-2 items-center lg:flex-wrap mb-4 overflow-x-auto pb-1">
+      <a aria-label="Remove Search: “linen” filter" class="bg-background border border-border font-medium gap-1.5 hover:bg-muted hover:border-primary/40 inline-flex items-center min-h-9 px-3 py-1.5 rounded-full shrink-0 text-foreground text-sm transition-colors" href="/search">
+        <span>
+          "Search: “linen”"
+        <svg aria-hidden="true" class="h-3.5 lucide lucide-x w-3.5" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M18 6 6 18">
+          <path d="m6 6 12 12">
+    <div class="mb-8 product-grid-frame">
+      <div class="product-grid">
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p1" class="h-full object-center product-card-photo w-full" decoding="sync" fetchpriority="high" height="400" loading="eager" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p1.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+              <span class="bg-destructive font-bold px-2.5 py-1 rounded-full shadow-sm text-destructive-foreground text-xs" data-card-discount="">
+                "-20%"
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p1">
+                "Product p1"
+            <p class="flex flex-col mt-auto">
+              <span class="flex flex-wrap font-medium gap-x-2 items-center leading-none text-muted-foreground text-xs">
+                <span>
+                  <span class="sr-only">
+                    "Regular price "
+                  <s>
+                    "৳1,200"
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Sale price "
+                "৳960"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p2" class="h-full object-center product-card-photo w-full" decoding="sync" fetchpriority="high" height="400" loading="eager" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p2.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p2">
+                "Product p2"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p3" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="eager" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p3.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p3">
+                "Product p3"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p4" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="eager" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p4.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p4">
+                "Product p4"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p5" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p5.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p5">
+                "Product p5"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p6" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p6.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+              <span class="bg-destructive font-bold px-2.5 py-1 rounded-full shadow-sm text-destructive-foreground text-xs" data-card-discount="">
+                "-20%"
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p6">
+                "Product p6"
+            <p class="flex flex-col mt-auto">
+              <span class="flex flex-wrap font-medium gap-x-2 items-center leading-none text-muted-foreground text-xs">
+                <span>
+                  <span class="sr-only">
+                    "Regular price "
+                  <s>
+                    "৳1,200"
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Sale price "
+                "৳960"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p7" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p7.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p7">
+                "Product p7"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p8" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p8.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p8">
+                "Product p8"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p9" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p9.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p9">
+                "Product p9"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p10" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p10.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p10">
+                "Product p10"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p11" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p11.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+              <span class="bg-destructive font-bold px-2.5 py-1 rounded-full shadow-sm text-destructive-foreground text-xs" data-card-discount="">
+                "-20%"
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p11">
+                "Product p11"
+            <p class="flex flex-col mt-auto">
+              <span class="flex flex-wrap font-medium gap-x-2 items-center leading-none text-muted-foreground text-xs">
+                <span>
+                  <span class="sr-only">
+                    "Regular price "
+                  <s>
+                    "৳1,200"
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Sale price "
+                "৳960"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p12" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p12.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p12">
+                "Product p12"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p13" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p13.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p13">
+                "Product p13"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p14" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p14.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p14">
+                "Product p14"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p15" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p15.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p15">
+                "Product p15"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p16" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p16.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+              <span class="bg-destructive font-bold px-2.5 py-1 rounded-full shadow-sm text-destructive-foreground text-xs" data-card-discount="">
+                "-20%"
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p16">
+                "Product p16"
+            <p class="flex flex-col mt-auto">
+              <span class="flex flex-wrap font-medium gap-x-2 items-center leading-none text-muted-foreground text-xs">
+                <span>
+                  <span class="sr-only">
+                    "Regular price "
+                  <s>
+                    "৳1,200"
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Sale price "
+                "৳960"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p17" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p17.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p17">
+                "Product p17"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p18" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p18.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p18">
+                "Product p18"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p19" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p19.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p19">
+                "Product p19"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+        <div class="bg-card flex flex-col group h-full overflow-hidden relative" data-card-badge="image" data-card-ratio="square" data-card-variant="standard" data-theme-component="product-card">
+          <div class="bg-muted overflow-hidden product-card-media relative">
+            <img alt="Product p20" class="h-full object-center product-card-photo w-full" decoding="async" fetchpriority="auto" height="400" loading="lazy" sizes="(max-width: 335px) calc(100vw - 32px), (max-width: 491px) calc(50vw - 20px), (max-width: 639px) calc(33.33vw - 16px), (max-width: 736px) calc(33.33vw - 21px), (max-width: 1023px) calc(25vw - 19px), (max-width: 1096px) calc(33.33vw - 141px), (max-width: 1439px) calc(25vw - 109px), 246px" src="https://cdn.shop.test/products/p20.jpg" width="400">
+            <div class="absolute flex flex-col gap-1.5 left-3 pointer-events-none top-3">
+          <div class="flex flex-1 flex-col p-3 product-card-body sm:p-4">
+            <h2 class="[font-family:var(--theme-font-body)] [letter-spacing:0] font-medium leading-snug line-clamp-2 mb-1.5 min-h-[2.5em] sm:text-[0.9375rem] text-foreground text-sm">
+              <a class="after:absolute after:content-[''] after:inset-0 product-card-link" href="/products/product-p20">
+                "Product p20"
+            <p class="flex flex-col mt-auto">
+              <span class="font-extrabold leading-tight sm:text-lg text-base text-foreground tracking-tight">
+                <span class="sr-only">
+                  "Price "
+                "৳1,200"
+    <nav aria-label="Pagination" class="flex items-center justify-center lg:mb-8 mb-20 mt-8">
+      <div class="bg-background border border-border flex items-center p-2 rounded-lg shadow-sm space-x-1">
+        <button aria-label="Previous page" class="border border-border/60 h-9 inline-flex items-center justify-center rounded-md text-muted-foreground/40 w-9" disabled="" type="button">
+          <svg aria-hidden="true" class="h-4 lucide lucide-chevron-left w-4" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+            <path d="m15 18-6-6 6-6">
+        <a aria-current="page" aria-label="Page 1" class="bg-primary border border-primary font-medium h-9 inline-flex items-center justify-center min-w-9 rounded-md shadow-sm text-primary-foreground text-sm transition-colors" href="/search?q=linen">
+          "1"
+        <a aria-label="Page 2" class="border border-border font-medium h-9 hover:bg-muted inline-flex items-center justify-center min-w-9 rounded-md text-foreground text-sm transition-colors" href="/search?page=2&q=linen">
+          "2"
+        <a aria-label="Page 3" class="border border-border font-medium h-9 hover:bg-muted inline-flex items-center justify-center min-w-9 rounded-md text-foreground text-sm transition-colors" href="/search?page=3&q=linen">
+          "3"
+        <a aria-label="Next page" class="border border-border h-9 hover:bg-muted inline-flex items-center justify-center rounded-md text-foreground transition-colors w-9" href="/search?page=2&q=linen">
+          <svg aria-hidden="true" class="h-4 lucide lucide-chevron-right w-4" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
+            <path d="m9 18 6-6-6-6">
