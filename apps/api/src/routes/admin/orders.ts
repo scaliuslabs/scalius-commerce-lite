@@ -23,9 +23,9 @@ import {
     type OrderPaymentRecoveryPreview,
 } from "@scalius/core/modules/orders";
 import { bulkFulfillOrders, bulkShipOrders } from "@scalius/core/modules/fulfilment";
-import * as ProductsAdmin from "@scalius/core/modules/products/products.admin";
+import { listProducts } from "@scalius/core/modules/products/admin/read";
 import { loadVariantSelectedOptions } from "@scalius/core/modules/products";
-import { presentCatalogPrice, readStoreDecimalPlaces } from "@scalius/core/modules/products/products.money";
+import { presentCatalogPrice, readStoreDecimalPlaces } from "@scalius/core/modules/products/money";
 import { fromMinor } from "@scalius/shared/money";
 import {
     createOrderSchema,
@@ -421,7 +421,7 @@ const catalogProductsRoute = createRoute({
 
 app.openapi(catalogProductsRoute, async (c) => {
     const query = c.req.valid("query");
-    const result = await ProductsAdmin.listProducts(c.get("db"), {
+    const result = await listProducts(c.get("db"), {
         page: query.page,
         limit: query.limit,
         search: query.search || undefined,

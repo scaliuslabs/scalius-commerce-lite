@@ -10,7 +10,7 @@ import {
   PRODUCT_FEED_ROW_PREVIEW_RESPONSE_BUDGET_BYTES,
   executeProductFeedRowPreview,
   validateProductFeedRowPreviewCursor,
-} from "@scalius/core/modules/products";
+} from "@scalius/core/modules/catalog";
 import {
   getCurrencySettings,
   getMediaOptimizationSettings,

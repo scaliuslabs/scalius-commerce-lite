@@ -61,7 +61,7 @@ import {
   PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT,
   PRODUCT_FEED_DIAGNOSTIC_REASONS,
   getProductFeedDiagnostics,
-} from "@scalius/core/modules/products";
+} from "@scalius/core/modules/catalog";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
 
 import { ok } from "../../../utils/api-response";

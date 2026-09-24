@@ -15,8 +15,8 @@ const mediaMocks = vi.hoisted(() => ({
   loadProductMediaProjections: vi.fn(async () => new Map()),
 }));
 
-vi.mock("../products/products.media", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../products/products.media")>()),
+vi.mock("../products/media", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../products/media")>()),
   loadProductMediaProjections: mediaMocks.loadProductMediaProjections,
 }));
 

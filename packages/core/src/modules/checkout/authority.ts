@@ -24,7 +24,7 @@ import {
     resolveProductMediaProjectionRows,
     selectCheckoutProductMediaProjectionRows,
     type ProductMediaProjectionRow,
-} from "../products/products.media";
+} from "../products/media";
 import {
     resolveStorefrontCartValidationFromRows,
     selectStorefrontCartProductRows,

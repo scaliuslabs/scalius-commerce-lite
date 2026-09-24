@@ -10,13 +10,13 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { getResourceCanonicalPathSegment } from "@scalius/shared/seo-canonical";
 import {
     publicCollectionProductConditions,
-} from "../products/products.public-eligibility";
+} from "../products/public-eligibility";
 import {
     buildBuyerCatalogPricingProjection,
     buyerPriceRangeColumns,
     presentBuyerPriceRange,
     type BuyerCatalogPricingProjection,
-} from "../products/products.buyer-projection";
+} from "../products/buyer-projection";
 import {
     COLLECTION_CONFIG_ID_LIMIT,
     collectionMembershipForConfig,
@@ -31,12 +31,9 @@ import {
     storeCurrencyCodeSql,
     storeDecimalPlacesFromCode,
     type BuyerPricingMinor,
-} from "../products/products.money";
-import {
-    getStorefrontCollectionProducts,
-    storefrontCollectionVisibleCountQuery,
-} from "../products/products.storefront";
-import type { StorefrontProductFilterInput } from "../products/products.types";
+} from "../products/money";
+import { getStorefrontCollectionProducts, storefrontCollectionVisibleCountQuery } from "../catalog/listing";
+import type { StorefrontProductFilterInput } from "../products/types";
 import {
     publicCategoryConditions,
     publishedCategoryIdExists,
@@ -46,7 +43,7 @@ import {
     resolveProductCardImages,
     resolveProductImageRepresentation,
     type ProductCardImages,
-} from "../products/products.media";
+} from "../products/media";
 
 // ─────────────────────────────────────────
 // Admin queries

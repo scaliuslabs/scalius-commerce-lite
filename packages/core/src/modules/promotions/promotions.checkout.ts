@@ -16,7 +16,7 @@ import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
 import { and, asc, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import { collectionMembershipForConfig } from "../collections/collection-config";
-import { publicProductBaseConditions, publicProductHasCustomerOptions } from "../products/products.public-eligibility";
+import { publicProductBaseConditions, publicProductHasCustomerOptions } from "../products/public-eligibility";
 import type { TaxDiscountAllocationInput } from "../tax/types";
 import {
     discountClassOf,

@@ -6,7 +6,7 @@ import { and, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { getPublicCategoryById } from "../categories/categories.storefront";
-import { getStorefrontProducts } from "../products/products.storefront";
+import { getStorefrontProducts } from "../catalog/listing";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { resolveNavigationConfigs } from "./navigation.resolver";
 import type {

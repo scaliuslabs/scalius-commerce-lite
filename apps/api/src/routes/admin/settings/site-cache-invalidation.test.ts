@@ -77,7 +77,7 @@ vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
   readSettingsForEdit: mocks.readSettingsForEdit,
 }));
 
-vi.mock("@scalius/core/modules/products", () => ({
+vi.mock("@scalius/core/modules/catalog", () => ({
   PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT: 10,
   PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT: 500,
   PRODUCT_FEED_DIAGNOSTIC_REASONS: [

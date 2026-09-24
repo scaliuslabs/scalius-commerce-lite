@@ -60,8 +60,8 @@ vi.mock("../../tax", async (importOriginal) => ({
     calculateStorefrontTaxQuote: taxMocks.calculateStorefrontTaxQuote,
 }));
 
-vi.mock("../../products/products.media", async (importOriginal) => ({
-    ...(await importOriginal<typeof import("../../products/products.media")>()),
+vi.mock("../../products/media", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("../../products/media")>()),
     loadProductMediaProjections: mediaMocks.loadProductMediaProjections,
 }));
 
