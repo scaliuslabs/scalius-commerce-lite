@@ -1,4 +1,4 @@
-import { discountStatus, type DiscountStatus } from "./discount-form";
+import { discountStatus, limitReached, type DiscountStatus } from "./discount-form";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { useMessages } from "~/i18n";
 import { discountsMessages } from "~/i18n/discounts";
@@ -20,12 +20,18 @@ export const STATUS_LABEL = {
   inactive: "statusInactive",
 } as const;
 
+/** Status, plus "Limit reached" when a code's total uses are spent. */
 export function DiscountStatusBadge({
   discount,
 }: {
-  discount: Pick<DiscountRecord, "status" | "startsAtEpochSeconds" | "endsAtEpochSeconds">;
+  discount: Pick<DiscountRecord, "status" | "startsAtEpochSeconds" | "endsAtEpochSeconds" | "maxRedemptions" | "redemptionCount">;
 }) {
   const t = useMessages(discountsMessages);
   const status = discountStatus(discount);
-  return <Badge variant={VARIANT[status]}>{t(STATUS_LABEL[status])}</Badge>;
+  return (
+    <span className="inline-flex flex-wrap gap-1">
+      <Badge variant={VARIANT[status]}>{t(STATUS_LABEL[status])}</Badge>
+      {limitReached(discount) && status !== "expired" ? <Badge variant="warning">{t("limitReached")}</Badge> : null}
+    </span>
+  );
 }

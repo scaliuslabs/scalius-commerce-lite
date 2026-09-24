@@ -109,6 +109,12 @@ function MenuRow({
   const draggable = useDraggable({ id: item.id, data: { item } });
   const isDragging = dragging === item.id;
   const move = (destination: MoveDestination) => handlers.onMove(item.id, destination);
+  // Where the link goes: the page's name, a path or address, or the kind of resource.
+  const destination = item.targetType === "system"
+    ? t(`system_${item.targetValue ?? "home"}` as "system_home")
+    : item.targetType === "internal_path" || item.targetType === "external_url"
+      ? item.targetValue ?? ""
+      : t(`link_${item.targetType}` as "link_label");
 
   return (
     <div className="relative">
@@ -145,9 +151,9 @@ function MenuRow({
           className="min-w-0 flex-1 py-2 text-left"
         >
           <span className="block truncate text-body font-medium">{item.label}</span>
-          {!item.isEnabled ? (
-            <span className="block truncate text-body text-muted-foreground">{t("hiddenItem")}</span>
-          ) : null}
+          <span className="block truncate text-body text-muted-foreground">
+            {item.isEnabled ? destination : `${t("hiddenItem")} · ${destination}`}
+          </span>
         </button>
         {childCount > 0 ? (
           <Button

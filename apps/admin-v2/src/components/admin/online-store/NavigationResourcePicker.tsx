@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { AlertCircle, Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
@@ -21,6 +21,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 
@@ -30,9 +31,13 @@ const RESOURCE_SEARCH_DEBOUNCE_MS = 250;
 interface NavigationResourcePickerProps {
   id: string;
   type: NavigationResourceType;
+  /** Let the merchant switch between these kinds inside the picker. */
+  types?: NavigationResourceType[];
   value: string;
   fallbackLabel?: string;
-  onValueChange: (resourceId: string, name: string) => void;
+  /** Replaces the default combobox button that shows the chosen name. */
+  trigger?: ReactNode;
+  onValueChange: (option: NavigationResourceOption) => void;
 }
 
 function uniqueOptions(pages: Array<{ items: NavigationResourceOption[] }>): NavigationResourceOption[] {
@@ -45,13 +50,16 @@ function uniqueOptions(pages: Array<{ items: NavigationResourceOption[] }>): Nav
 
 export function NavigationResourcePicker({
   id,
-  type,
+  type: initialType,
+  types,
   value,
   fallbackLabel,
+  trigger,
   onValueChange,
 }: NavigationResourcePickerProps) {
   const t = useMessages(onlineStoreMessages);
   const [open, setOpen] = useState(false);
+  const [type, setType] = useState(initialType);
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebounce(searchTerm.trim(), RESOURCE_SEARCH_DEBOUNCE_MS);
   const resourceQuery = useInfiniteQuery({
@@ -88,26 +96,39 @@ export function NavigationResourcePicker({
       }}
     >
       <PopoverTrigger asChild>
-        <Button
-          id={id}
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          aria-label={t(`choose_${type}`)}
-          className="w-full justify-between"
-        >
-          <span className="min-w-0 truncate">
-            {selected?.name || fallbackLabel || t(`choose_${type}`)}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
+        {trigger ?? (
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            aria-label={t(`choose_${type}`)}
+            className="w-full justify-between"
+          >
+            <span className="min-w-0 truncate">
+              {selected?.name || fallbackLabel || t(`choose_${type}`)}
+            </span>
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent
         align="start"
         collisionPadding={16}
         className="w-80 p-0"
       >
+        {types && types.length > 1 ? (
+          <div className="border-b p-1">
+            <Tabs value={type} onValueChange={(next) => setType(next as NavigationResourceType)}>
+              <TabsList className="w-full">
+                {types.map((option) => (
+                  <TabsTrigger key={option} value={option}>{t(`link_${option}`)}</TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+        ) : null}
         <Command shouldFilter={false}>
           <CommandInput
             aria-label={t("search")}
@@ -152,7 +173,7 @@ export function NavigationResourcePicker({
                     key={option.id}
                     value={option.id}
                     onSelect={() => {
-                      onValueChange(option.id, option.name);
+                      onValueChange(option);
                       setOpen(false);
                     }}
                     className="cursor-pointer"

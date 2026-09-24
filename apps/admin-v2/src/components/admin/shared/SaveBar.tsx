@@ -309,6 +309,19 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
   const t = useMessages(saveBarMessages);
   const { dirty, busy, invalid, errors, revealed } = state;
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const saveRef = useRef(state.saveAll);
+  saveRef.current = state.saveAll;
+  // Ctrl/⌘+S saves the page from any field while the bar shows.
+  useEffect(() => {
+    if (!dirty) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "s" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      event.preventDefault();
+      if (!busy) void saveRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [dirty, busy]);
   return (
     <>
       <UnsavedChangesGuard isDirty={dirty} isSubmitting={busy} />
@@ -329,7 +342,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
             <div
               role="region"
               data-save-bar=""
-              aria-label={t("unsavedChanges")}
+              aria-label={unsavedMessage ?? t("unsavedChanges")}
               className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between gap-2 border-b border-topbar-hover bg-topbar px-3 text-topbar-foreground sm:inset-x-auto sm:left-1/2 sm:top-1.5 sm:h-11 sm:min-w-lg sm:-translate-x-1/2 sm:gap-6 sm:rounded-full sm:border sm:pl-4 sm:pr-1"
             >
               <p className="flex min-w-0 items-center gap-2 text-body font-medium" aria-live="polite">

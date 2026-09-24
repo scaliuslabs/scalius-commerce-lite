@@ -3,7 +3,6 @@ import { Command as CommandPrimitive } from "cmdk";
 import { SearchIcon } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./dialog";
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -12,26 +11,6 @@ function Command({ className, ...props }: React.ComponentProps<typeof CommandPri
       className={cn("flex size-full flex-col overflow-hidden rounded-xl bg-popover text-popover-foreground", className)}
       {...props}
     />
-  );
-}
-
-function CommandDialog({
-  title = "Search",
-  description = "Search for a page or action",
-  children,
-  ...props
-}: React.ComponentProps<typeof Dialog> & {
-  title?: string;
-  description?: string;
-}) {
-  return (
-    <Dialog {...props}>
-      <DialogContent className="gap-0 overflow-hidden p-0">
-        <DialogTitle className="sr-only">{title}</DialogTitle>
-        <DialogDescription className="sr-only">{description}</DialogDescription>
-        <Command>{children}</Command>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -101,24 +80,12 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Comman
   );
 }
 
-function CommandShortcut({ className, ...props }: React.ComponentProps<"span">) {
-  return (
-    <span
-      data-slot="command-shortcut"
-      className={cn("ml-auto text-caption text-muted-foreground", className)}
-      {...props}
-    />
-  );
-}
-
 export {
   Command,
-  CommandDialog,
   CommandInput,
   CommandList,
   CommandEmpty,
   CommandGroup,
   CommandItem,
-  CommandShortcut,
   CommandSeparator,
 };
