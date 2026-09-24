@@ -10,8 +10,10 @@ function renderForm() {
     <form data-order-code-form data-send-url="/api/order-lookup/send-code" data-verify-url="/api/order-lookup/verify">
       <input name="reference" value="#1001" />
       <input name="phone" value="01712345678" />
+      <p data-order-code-order hidden>Order number <span data-order-number></span></p>
       <div data-order-code-step hidden><input name="code" /></div>
       <p data-order-code-message></p>
+      <p data-store-contact hidden>Contact the store: 01711-000000</p>
       <button type="submit" name="intent" value="send" data-order-code-submit>Send code</button>
       <button type="submit" name="intent" value="resend" data-order-code-resend hidden>Send a new code</button>
     </form>`;
@@ -31,6 +33,8 @@ function renderForm() {
     submit,
     resend,
     message: () => form.querySelector("[data-order-code-message]")!.textContent,
+    orderLine: () => form.querySelector<HTMLElement>("[data-order-code-order]")!,
+    storeContactHidden: () => form.querySelector<HTMLElement>("[data-store-contact]")!.hidden,
     codeStepHidden: () => form.querySelector<HTMLElement>("[data-order-code-step]")!.hidden,
     setCode: (code: string) => { form.querySelector<HTMLInputElement>("input[name='code']")!.value = code; },
   };
@@ -79,6 +83,53 @@ describe("order code form", () => {
     expect(view.resend.textContent).toBe("Send a new code");
   });
 
+  it("says where the code went and shows the short order number", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply({
+      success: true, sent: true, message: "We sent a code to 01•••••678.", orderNumber: 1048, resendAfterSeconds: 60,
+    })));
+    const view = renderForm();
+
+    await submitWith(view.form, view.submit);
+
+    expect(view.message()).toBe("We sent a code to 01•••••678.");
+    expect(view.orderLine().hidden).toBe(false);
+    expect(view.orderLine().textContent).toBe("Order number #1048");
+    expect(view.codeStepHidden()).toBe(false);
+  });
+
+  it("shows no code field and no countdown when nothing was sent", async () => {
+    const neutral = "If this order still needs an online payment, we've sent a code to the phone number or email saved on it.";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply({ success: true, sent: false, message: neutral })));
+    const view = renderForm();
+
+    await submitWith(view.form, view.submit);
+
+    expect(view.message()).toBe(neutral);
+    expect(view.codeStepHidden()).toBe(true);
+    expect(view.resend.hidden).toBe(true);
+    expect(view.submit.textContent).toBe("Send code");
+    expect(view.submit.disabled).toBe(false);
+  });
+
+  it("says the order wasn't found, or that it can't be reached and how to contact the store", async () => {
+    const notFound = "We couldn't find an order with that number and phone number. Check both and try again.";
+    const noChannel = "This order has no email address, and this store can't send text messages. Contact the store to check on your order.";
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "NOT_FOUND", message: notFound }, 404))
+      .mockResolvedValueOnce(reply({ success: false, errorCode: "NO_CODE_CHANNEL", message: noChannel }, 409)));
+    const view = renderForm();
+
+    await submitWith(view.form, view.submit);
+    expect(view.message()).toBe(notFound);
+    expect(view.storeContactHidden()).toBe(true);
+
+    await submitWith(view.form, view.submit);
+    expect(view.message()).toBe(noChannel);
+    expect(view.storeContactHidden()).toBe(false);
+    expect(view.codeStepHidden()).toBe(true);
+    expect(view.resend.hidden).toBe(true);
+  });
+
   it("checks the fields before sending anything", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -114,16 +165,16 @@ describe("order code form", () => {
 
   it("counts down a rate limit and then lets the buyer try again", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
-      reply({ success: false, errorCode: "RATE_LIMIT", retryAfterSeconds: 120 }, 429),
+      reply({ success: false, errorCode: "RATE_LIMIT", message: "Too many codes.", retryAfterSeconds: 120 }, 429),
     ));
     const view = renderForm();
 
     await submitWith(view.form, view.submit);
-    expect(view.message()).toBe("Try again in 2:00");
+    expect(view.message()).toBe("Too many codes. Try again in 2:00.");
     expect(view.submit.disabled).toBe(true);
 
     await vi.advanceTimersByTimeAsync(75_000);
-    expect(view.message()).toBe("Try again in 0:45");
+    expect(view.message()).toBe("Too many codes. Try again in 0:45.");
     await vi.advanceTimersByTimeAsync(45_000);
     expect(view.submit.disabled).toBe(false);
     expect(view.message()).toBe("");

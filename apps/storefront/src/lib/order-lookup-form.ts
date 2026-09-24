@@ -1,13 +1,16 @@
 // Progressive enhancement for the order-code forms. Without JavaScript the
 // form posts to its own page and the server renders each step; with it, the
-// same form talks to the JSON proxies, keeps what the buyer typed, and counts
-// down resend and rate-limit waits.
+// same form talks to the JSON proxies, keeps what the buyer typed, says where
+// the code went, and counts down resend and rate-limit waits. The code field
+// appears only once a code was actually sent.
 import {
   formatCheckoutLanguageText,
   type CheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import {
   DEFAULT_RESEND_AFTER_SECONDS,
+  NO_CODE_CHANNEL,
   formatCountdown,
   getOrderCodeFailureText,
   positiveSeconds,
@@ -33,6 +36,8 @@ export function enhanceOrderCodeForm(
   const codeStep = form.querySelector<HTMLElement>("[data-order-code-step]");
   const message = form.querySelector<HTMLElement>("[data-order-code-message]");
   const codeInput = form.querySelector<HTMLInputElement>("input[name='code']");
+  const orderLine = form.querySelector<HTMLElement>("[data-order-code-order]");
+  const storeContact = form.querySelector<HTMLElement>("[data-store-contact]");
   if (!submit || !message) return;
 
   let codeSent = form.dataset.codeSent === "true";
@@ -107,6 +112,7 @@ export function enhanceOrderCodeForm(
 
     const button = intent === "resend" ? resend : submit;
     if (button) button.disabled = true;
+    if (storeContact) storeContact.hidden = true;
     setMessage(intent === "verify" ? copy.paymentRecoveryVerifyingCodeText : copy.paymentRecoverySendingCodeText);
     const url = intent === "verify" ? form.dataset.verifyUrl : form.dataset.sendUrl;
     let status = 0;
@@ -131,10 +137,21 @@ export function enhanceOrderCodeForm(
           return;
         }
       } else {
-        showCodeStep();
-        setMessage(text.codeSent);
-        waitToResend(positiveSeconds(data.resendAfterSeconds) ?? DEFAULT_RESEND_AFTER_SECONDS);
+        const sentMessage = typeof data.message === "string" && data.message ? data.message : text.codeSent;
         if (button && button !== resend) button.disabled = false;
+        // A neutral answer: nothing was sent, so there is no code to enter.
+        if (data.sent === false) {
+          setMessage(sentMessage);
+          return;
+        }
+        showCodeStep();
+        setMessage(sentMessage);
+        const orderNumber = orderLine?.querySelector("[data-order-number]");
+        if (orderLine && orderNumber && typeof data.orderNumber === "number") {
+          orderNumber.textContent = formatOrderNumber(data.orderNumber, "");
+          orderLine.hidden = false;
+        }
+        waitToResend(positiveSeconds(data.resendAfterSeconds) ?? DEFAULT_RESEND_AFTER_SECONDS);
         codeInput?.focus();
         return;
       }
@@ -142,9 +159,11 @@ export function enhanceOrderCodeForm(
 
     const failure = {
       status: status || 502,
+      message: typeof data.message === "string" ? data.message : undefined,
       retryAfterSeconds: positiveSeconds(data.retryAfterSeconds),
       attemptsLeft: typeof data.attemptsLeft === "number" ? data.attemptsLeft : undefined,
     };
+    if (storeContact && data.errorCode === NO_CODE_CHANNEL) storeContact.hidden = false;
     const operation = intent === "verify" ? "verify" : "send";
     if (failure.status === 429 && failure.retryAfterSeconds && button) {
       countdown(

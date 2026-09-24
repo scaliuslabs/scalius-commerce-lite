@@ -184,6 +184,65 @@ async function loadAccountOrders(runId: number): Promise<void> {
   };
 }
 
+function showFieldError(field: HTMLInputElement | HTMLSelectElement, message: string | null): void {
+  const error = byId(`${field.id}Error`);
+  error.textContent = message ?? "";
+  error.classList.toggle("hidden", !message);
+  field.setAttribute("aria-invalid", String(Boolean(message)));
+}
+
+/** Profile → Edit changes the account name only; email and phone stay as verified. */
+function bindProfileNameEditor(
+  runId: number,
+  current: () => CustomerInfo,
+  onSaved: (customer: CustomerInfo) => void,
+): void {
+  const form = byId<HTMLFormElement>("nameForm");
+  const toggle = byId<HTMLButtonElement>("nameToggle");
+  const input = byId<HTMLInputElement>("fieldProfileName");
+  const saveBtn = byId<HTMLButtonElement>("saveNameBtn");
+  const status = byId("nameSaveStatus");
+  const saved = byId("nameSaved");
+  const check = () => (input.value.trim() ? null : "Enter your full name.");
+  const setEditing = (editing: boolean) => {
+    form.classList.toggle("hidden", !editing);
+    toggle.setAttribute("aria-expanded", String(editing));
+    toggle.textContent = editing ? "Cancel" : "Edit";
+    if (!editing) return;
+    saved.classList.add("hidden");
+    status.textContent = "";
+    input.value = current().name ?? "";
+    showFieldError(input, null);
+    input.focus();
+  };
+  setEditing(false);
+  toggle.onclick = () => setEditing(form.classList.contains("hidden"));
+  input.onblur = () => showFieldError(input, check());
+  input.oninput = () => { if (input.getAttribute("aria-invalid") === "true") showFieldError(input, check()); };
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    if (saveBtn.disabled) return;
+    const invalid = check();
+    showFieldError(input, invalid);
+    if (invalid) return input.focus();
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    status.textContent = "";
+    const name = input.value.trim();
+    const res = await updateCustomerProfile({ name });
+    if (accountWindow.__scaliusAccountInitRun !== runId) return;
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save name";
+    if (!res.success) {
+      status.textContent = res.unavailable ? ACCOUNT_OFFLINE_MESSAGE : res.error || ACCOUNT_OFFLINE_MESSAGE;
+      return;
+    }
+    onSaved(res.customer ?? { ...current(), name });
+    setEditing(false);
+    saved.classList.remove("hidden");
+  };
+}
+
 function hasSavedAddress(customer: CustomerInfo): boolean {
   return Boolean(customer.address?.trim() && customer.city && customer.zone);
 }
@@ -258,22 +317,13 @@ export async function initializeAccountPage(): Promise<void> {
   let zoneRead = 0;
   let areaRead = 0;
 
-  // Blank name, and a partial address, never save.
+  // The same checks as checkout: nothing saves without a full address.
   const errors: Array<[HTMLInputElement | HTMLSelectElement, () => string | null]> = [
     [fName, () => fName.value.trim() ? null : "Enter your full name."],
-    [fAddress, () => addressGiven() ? getShippingAddressError(fAddress.value) : null],
-    [fCity, () => addressGiven() && !fCity.value ? "Choose a city." : null],
-    [fZone, () => addressGiven() && fCity.value && !fZone.value ? "Choose a zone." : null],
+    [fAddress, () => getShippingAddressError(fAddress.value)],
+    [fCity, () => fCity.value ? null : "Choose a city."],
+    [fZone, () => fCity.value && !fZone.value ? "Choose a zone." : null],
   ];
-  function addressGiven(): boolean {
-    return Boolean(fAddress.value.trim() || fCity.value || fZone.value);
-  }
-  function showFieldError(field: HTMLInputElement | HTMLSelectElement, message: string | null): void {
-    const error = byId(`${field.id}Error`);
-    error.textContent = message ?? "";
-    error.classList.toggle("hidden", !message);
-    field.setAttribute("aria-invalid", String(Boolean(message)));
-  }
   function validate(show: "all" | "shown"): boolean {
     let firstInvalid: HTMLInputElement | HTMLSelectElement | null = null;
     for (const [field, check] of errors) {
@@ -471,6 +521,11 @@ export async function initializeAccountPage(): Promise<void> {
     saved.classList.remove("hidden");
   };
 
+  bindProfileNameEditor(runId, () => customer, (saved) => {
+    customer = saved;
+    renderProfile(customer);
+    if (form.classList.contains("hidden")) fName.value = customer.name ?? "";
+  });
   fName.value = customer.name ?? "";
   fAddress.value = customer.address ?? "";
   await loadLocations();

@@ -4,14 +4,25 @@ import { and, eq, gt, inArray, lt, lte, sql } from "drizzle-orm";
 import { RateLimitError } from "@scalius/core/errors";
 
 /**
- * Codes are limited per contact (email, phone, order reference): that is what
- * an attacker targets. The IP bucket is only a generous flood ceiling,
- * because Bangladeshi carriers put many buyers behind one CGNAT address.
+ * Rate limits that can't be turned against a buyer.
+ * - Per contact AND sender (email/phone/order reference + IP): stops one source
+ *   from flooding a contact without touching anyone else's requests.
+ * - Per contact overall: a higher ceiling that caps inbox/SMS spam from many
+ *   sources. When it trips, the last code already sent stays usable longer
+ *   (see sendOtp), so an attacker can't strand the owner.
+ * - Per IP: only a generous flood ceiling, because Bangladeshi carriers put
+ *   many buyers behind one CGNAT address.
+ * The resend cooldown escalates with the contact's recent sends (60 s, 2 min,
+ * 4 min … up to 10 min).
  */
-export const OTP_IDENTIFIER_RATE_LIMIT = { attempts: 5, windowSeconds: 15 * 60 } as const;
+export const OTP_CONTACT_SENDER_RATE_LIMIT = { attempts: 5, windowSeconds: 15 * 60 } as const;
+export const OTP_CONTACT_RATE_LIMIT = { attempts: 10, windowSeconds: 60 * 60 } as const;
 export const OTP_IP_RATE_LIMIT = { attempts: 30, windowSeconds: 10 * 60 } as const;
+const BASE_RESEND_COOLDOWN_SECONDS = 60;
+const MAX_RESEND_COOLDOWN_SECONDS = 10 * 60;
 
-export const OTP_RATE_LIMIT_MESSAGE = "Too many codes requested. Please wait and try again.";
+export const OTP_RATE_LIMIT_MESSAGE = "Too many codes.";
+export const OTP_CONTACT_CEILING_MESSAGE = "Too many codes. Enter the latest code we sent.";
 
 export interface CleanupExpiredCustomerAuthOtpRateLimitsResult {
     scanned: number;
@@ -20,10 +31,22 @@ export interface CleanupExpiredCustomerAuthOtpRateLimitsResult {
     hasMore: boolean;
 }
 
+export interface OtpSendAllowance {
+    /** Cooldown before the next code for these contacts, escalating with recent sends. */
+    resendCooldownSeconds: number;
+}
+
+/** Thrown when a contact's overall ceiling (not one sender's) is reached. */
+export class OtpContactCeilingError extends RateLimitError {
+    constructor(retryAfterSeconds: number) {
+        super(OTP_CONTACT_CEILING_MESSAGE, retryAfterSeconds);
+    }
+}
+
 /**
- * Counts one code request against every contact it targets and the caller's
- * IP. Throws RateLimitError with the honest wait (seconds until the fullest
- * bucket's window resets) once any bucket is full.
+ * Counts one code request against every contact it targets, per sender and
+ * overall, and the caller's IP. Throws RateLimitError with the honest wait
+ * (seconds until that bucket's window resets) once any bucket is full.
  */
 export async function enforceOtpSendRateLimits(
     db: Database,
@@ -33,19 +56,30 @@ export async function enforceOtpSendRateLimits(
         hashKey?: string;
         nowSeconds?: number;
     },
-): Promise<void> {
+): Promise<OtpSendAllowance> {
     const nowSeconds = input.nowSeconds ?? currentUnixSeconds();
-    const buckets = [
-        ...[...new Set(input.identifiers.map((value) => value.trim().toLowerCase()).filter(Boolean))]
-            .map((subject) => ({ scope: "identifier" as const, subject, ...OTP_IDENTIFIER_RATE_LIMIT })),
-        { scope: "ip" as const, subject: input.ip.trim() || "unknown", ...OTP_IP_RATE_LIMIT },
-    ];
-    for (const bucket of buckets) {
-        const retryAfterSeconds = await consumeRateLimitBucket(db, { ...bucket, hashKey: input.hashKey, nowSeconds });
-        if (retryAfterSeconds !== null) {
-            throw new RateLimitError(OTP_RATE_LIMIT_MESSAGE, retryAfterSeconds);
-        }
+    const ip = input.ip.trim() || "unknown";
+    const contacts = [...new Set(input.identifiers.map((value) => value.trim().toLowerCase()).filter(Boolean))];
+    let recentContactSends = 1;
+    for (const contact of contacts) {
+        const sender = await consumeRateLimitBucket(db, {
+            scope: "identifier", subject: `${contact}|${ip}`, ...OTP_CONTACT_SENDER_RATE_LIMIT, hashKey: input.hashKey, nowSeconds,
+        });
+        if ("retryAfterSeconds" in sender) throw new RateLimitError(OTP_RATE_LIMIT_MESSAGE, sender.retryAfterSeconds);
+        const overall = await consumeRateLimitBucket(db, {
+            scope: "identifier", subject: contact, ...OTP_CONTACT_RATE_LIMIT, hashKey: input.hashKey, nowSeconds,
+        });
+        if ("retryAfterSeconds" in overall) throw new OtpContactCeilingError(overall.retryAfterSeconds);
+        recentContactSends = Math.max(recentContactSends, overall.attempts);
     }
+    const flood = await consumeRateLimitBucket(db, { scope: "ip", subject: ip, ...OTP_IP_RATE_LIMIT, hashKey: input.hashKey, nowSeconds });
+    if ("retryAfterSeconds" in flood) throw new RateLimitError(OTP_RATE_LIMIT_MESSAGE, flood.retryAfterSeconds);
+    return {
+        resendCooldownSeconds: Math.min(
+            MAX_RESEND_COOLDOWN_SECONDS,
+            BASE_RESEND_COOLDOWN_SECONDS * 2 ** Math.max(0, recentContactSends - 2),
+        ),
+    };
 }
 
 async function consumeRateLimitBucket(
@@ -58,7 +92,7 @@ async function consumeRateLimitBucket(
         hashKey?: string;
         nowSeconds: number;
     },
-): Promise<number | null> {
+): Promise<{ attempts: number } | { retryAfterSeconds: number }> {
     const { nowSeconds } = input;
     const key = await buildCustomerAuthOtpRateLimitKey(input.scope, input.subject, input.hashKey);
     const windowExpiresAt = nowSeconds + input.windowSeconds;
@@ -75,7 +109,7 @@ async function consumeRateLimitBucket(
         })
         .onConflictDoNothing()
         .returning({ key: customerAuthOtpRateLimits.key });
-    if (inserted[0]?.key) return null;
+    if (inserted[0]?.key) return { attempts: 1 };
 
     const reset = await db
         .update(customerAuthOtpRateLimits)
@@ -85,7 +119,7 @@ async function consumeRateLimitBucket(
             lte(customerAuthOtpRateLimits.windowExpiresAt, nowSeconds),
         ))
         .returning({ key: customerAuthOtpRateLimits.key });
-    if (reset[0]?.key) return null;
+    if (reset[0]?.key) return { attempts: 1 };
 
     const incremented = await db
         .update(customerAuthOtpRateLimits)
@@ -95,15 +129,15 @@ async function consumeRateLimitBucket(
             gt(customerAuthOtpRateLimits.windowExpiresAt, nowSeconds),
             lt(customerAuthOtpRateLimits.attempts, input.attempts),
         ))
-        .returning({ key: customerAuthOtpRateLimits.key });
-    if (incremented[0]?.key) return null;
+        .returning({ attempts: customerAuthOtpRateLimits.attempts });
+    if (incremented[0]) return { attempts: incremented[0].attempts };
 
     const row = await db
         .select({ windowExpiresAt: customerAuthOtpRateLimits.windowExpiresAt })
         .from(customerAuthOtpRateLimits)
         .where(eq(customerAuthOtpRateLimits.key, key))
         .get();
-    return Math.max(1, (row?.windowExpiresAt ?? windowExpiresAt) - nowSeconds);
+    return { retryAfterSeconds: Math.max(1, (row?.windowExpiresAt ?? windowExpiresAt) - nowSeconds) };
 }
 
 export async function cleanupExpiredCustomerAuthOtpRateLimits(

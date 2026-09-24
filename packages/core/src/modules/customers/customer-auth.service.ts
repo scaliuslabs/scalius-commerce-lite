@@ -27,12 +27,14 @@ import {
     deleteCustomerAuthOtpChallenge,
     cleanupExpiredCustomerAuthOtpChallenges,
     buildCustomerAuthOtpStorageKey,
+    extendPendingCustomerAuthOtpChallenge,
 } from "./customer-auth-otp-challenges";
 import {
     cleanupExpiredCustomerAuthOtpRateLimits,
     enforceOtpSendRateLimits,
+    OtpContactCeilingError,
 } from "./customer-auth-rate-limit";
-import { buildVerifiedContactOrderLink } from "./order-account-claim";
+import { buildVerifiedContactOrderLink } from "./customer-identity";
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
     isContactFieldRequiredForAuthChannel,
@@ -60,7 +62,6 @@ export const COOKIE_NAME = "cs_tok";
 export const OTP_PREFIX = "cust_otp:";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 export const OTP_TTL_SECONDS = 60 * 5; // 5 minutes
-export const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_ATTEMPTS = 5;
 
 export {
@@ -400,7 +401,7 @@ async function resolveProofOwner(
             .select()
             .from(customers)
             .where(and(
-                eq(customers.email, identifier),
+                sql`lower(${customers.email}) = ${identifier}`,
                 isNotNull(customers.emailVerifiedAt),
                 isNotNull(customers.accountClaimedAt),
             ))
@@ -410,10 +411,17 @@ async function resolveProofOwner(
         return verified.deletedAt ? { kind: "deleted" } : { kind: "account", row: verified };
     }
 
-    const row = await db.select().from(customers).where(eq(customers.phone, identifier)).get();
-    if (!row) return { kind: "none" };
-    if (row.deletedAt) return { kind: "deleted" };
-    return row.accountClaimedAt ? { kind: "account", row } : { kind: "guest_profile", row };
+    // A phone owns an account only once proven. Accounts that merely typed
+    // this phone are not candidates; the phone's guest record is.
+    const rows = await db.select().from(customers).where(and(
+        eq(customers.phone, identifier),
+        or(isNotNull(customers.phoneVerifiedAt), isNull(customers.accountClaimedAt)),
+    ));
+    const verified = rows.find((row) => row.accountClaimedAt && row.phoneVerifiedAt && !row.deletedAt);
+    if (verified) return { kind: "account", row: verified };
+    const guest = rows.find((row) => !row.accountClaimedAt && !row.deletedAt);
+    if (guest) return { kind: "guest_profile", row: guest };
+    return rows.some((row) => row.accountClaimedAt && row.phoneVerifiedAt) ? { kind: "deleted" } : { kind: "none" };
 }
 
 async function resolveActiveCustomerLocation(
@@ -519,15 +527,24 @@ export async function sendOtp(
         throw new ServiceUnavailableError(configError);
     }
 
-    await enforceOtpSendRateLimits(db, {
-        ip: input.ip,
-        identifiers: [`${input.method}:${identifier}`],
-        hashKey: input.encryptionKey,
-    });
-
     // D1 is the OTP authority: the challenge row counts attempts and
     // consumes codes atomically. The raw code is never stored or queued.
     const otpKey = await buildCustomerAuthOtpStorageKey(channel, identifier, input.encryptionKey);
+    let allowance: Awaited<ReturnType<typeof enforceOtpSendRateLimits>>;
+    try {
+        allowance = await enforceOtpSendRateLimits(db, {
+            ip: input.ip,
+            identifiers: [`${input.method}:${identifier}`],
+            hashKey: input.encryptionKey,
+        });
+    } catch (error) {
+        // Whoever flooded this contact can't strand its owner: the latest code
+        // already delivered stays usable until requests open again.
+        if (error instanceof OtpContactCeilingError) {
+            await extendPendingCustomerAuthOtpChallenge(db, otpKey, error.retryAfterSeconds ?? OTP_TTL_SECONDS);
+        }
+        throw error;
+    }
     const deliveryKey = createAuthOtpDeliveryKey();
     const code = await deriveCustomerAuthOtpDeliveryCode({
         otpKey,
@@ -545,7 +562,7 @@ export async function sendOtp(
         encryptionKey: input.encryptionKey,
         contactEncryptionKey: input.credentialEncryptionKey,
         ttlSeconds: OTP_TTL_SECONDS,
-        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+        resendCooldownSeconds: allowance.resendCooldownSeconds,
         maxAttempts: OTP_MAX_ATTEMPTS,
     });
 
@@ -711,44 +728,9 @@ async function prepareNewAccount(
         phoneVerifiedAt: input.method === "phone" ? now : null,
     };
 
-    if (input.method === "email") {
-        // The phone is typed, not proven. It is the CRM key, so an unclaimed
-        // profile with that phone is taken over, but its saved address is
-        // kept only when the profile carries the email just proven: typing
-        // a number must not reveal where its owner lives.
-        const existing = await db.select().from(customers).where(eq(customers.phone, phone)).get();
-        if (existing?.deletedAt) {
-            throw new ValidationError("This phone number belongs to a closed account. Contact the store.");
-        }
-        if (existing?.accountClaimedAt) {
-            throw new ValidationError("This phone number is already on another account. Sign in to that account instead.");
-        }
-        if (existing) {
-            const sameBuyer = existing.email?.trim().toLowerCase() === email;
-            const cleared = {
-                name,
-                email,
-                ...(sameBuyer ? {} : {
-                    address: null,
-                    city: null,
-                    zone: null,
-                    area: null,
-                    cityName: null,
-                    zoneName: null,
-                    areaName: null,
-                }),
-                ...proof,
-                updatedAt: now,
-            };
-            return {
-                row: { ...existing, ...cleared },
-                write: db.update(customers)
-                    .set(cleared)
-                    .where(and(eq(customers.id, existing.id), isNull(customers.accountClaimedAt))) as SQLiteBatchItem,
-            };
-        }
-    }
-
+    // A typed phone (email sign-up) is only this account's contact: it never
+    // claims the phone's guest record or another account, and never blocks
+    // anyone. Proving the phone by code is what links its orders.
     const values: CustomerInsertRow = {
         id: `cust_${nanoid()}`,
         name,
@@ -803,19 +785,19 @@ async function createSessionForCustomer(
             updatedAt: nowSeconds,
         }) as SQLiteBatchItem,
     ];
-    const link = buildVerifiedContactOrderLink(db, {
+    statements.push(...buildVerifiedContactOrderLink(db, {
         customerId: row.id,
         email: row.emailVerifiedAt ? row.email : null,
         phone: row.phoneVerifiedAt ? row.phone : null,
-    });
-    if (link) statements.push(link as SQLiteBatchItem);
+    }) as SQLiteBatchItem[]);
 
     try {
         await safeBatch(db, statements);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        if (message.includes("customers.phone") || message.includes("customer_phone_unique")) {
-            throw new ValidationError("This phone number is already on another account. Sign in to that account instead.");
+        // Only a proven identifier is unique: a concurrent sign-up proved it first.
+        if (message.includes("customers_verified_") || message.includes("UNIQUE constraint failed: customers.")) {
+            throw new ValidationError("This contact was just used to create an account. Sign in instead.");
         }
         console.warn("[CustomerAuth] Account/session persistence failed:", error instanceof Error ? error.name : typeof error);
         throw new ServiceUnavailableError("We couldn't sign you in. Please try again.");

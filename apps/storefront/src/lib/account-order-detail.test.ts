@@ -92,6 +92,7 @@ beforeEach(() => {
       <h1 id="orderTitle"></h1><span id="orderStatus"></span><p id="orderSubtitle"></p>
       <div id="orderPaymentReturnNotice" class="hidden"></div><div id="orderRefundNotice" class="hidden"></div>
       <div id="orderProgress"></div><p id="orderExpectedDelivery" class="hidden"></p><ol id="orderTimeline"></ol>
+      <button id="orderBuyAgain">Buy again</button><p id="orderBuyAgainMessage"></p>
       <ul id="orderItems"></ul><dl id="orderSummary"></dl>
       <div id="orderAddress"></div><div id="orderShipments"></div>
       <div id="orderPayment"></div>
@@ -186,6 +187,54 @@ describe("account order detail", () => {
     expect(api.createCustomerOrderSupportRequest).toHaveBeenCalledWith("JJEHCFQ3C1JJ35GX", {
       type: "cancel_pre_shipment", reason: "Ordered by mistake", message: "Wrong size",
     });
+  });
+
+  it("offers no Retry for an order that isn't in this account", async () => {
+    api.getCustomerSession.mockResolvedValue({ authenticated: true });
+    api.getCustomerOrderDetail.mockResolvedValueOnce({ success: false, status: 404, error: "Order not found" });
+    await loadOrderDetail();
+    expect(text("orderErrorTitle")).toBe("Order not found");
+    expect(document.getElementById("orderRetry")?.classList.contains("hidden")).toBe(true);
+  });
+
+  it("puts the lines that are still for sale back in the cart at today's price", async () => {
+    const order = detail();
+    order.items = [
+      order.items[0]!,
+      { ...order.items[0]!, id: "item_2", productId: "prod_gone", variantId: "sku_gone", productName: "Old Tee", productSlug: null },
+      { ...order.items[0]!, id: "item_3", productId: "prod_3", variantId: "sku_red_m", quantity: 3, productName: "Polo", productSlug: "polo", variantLabel: "Red / M" },
+    ];
+    const validation = {
+      valid: false,
+      issues: [
+        { index: 1, productId: "prod_gone", variantId: "sku_gone", code: "PRODUCT_UNAVAILABLE", action: "remove", message: "Gone", productName: "Old Tee", variantLabel: null },
+        { index: 2, productId: "prod_3", variantId: "sku_red_m", code: "QUANTITY_UNAVAILABLE", action: "reduce_quantity", message: "Only 1 left", productName: "Polo", variantLabel: "Red / M" },
+      ],
+      items: [
+        { index: 0, cartKey: "0", productId: "prod_1", variantId: "sku_default", quantity: 2, unitPrice: 550, productName: "BB Tee", variantLabel: null, freeDelivery: false, availableQuantity: null, productImageMediaId: null, productImage: null },
+        { index: 2, cartKey: "2", productId: "prod_3", variantId: "sku_red_m", quantity: 3, unitPrice: 900, productName: "Polo", variantLabel: "Red / M", freeDelivery: true, availableQuantity: 1, productImageMediaId: "media_1", productImage: "https://cdn.example.test/polo.jpg" },
+      ],
+      subtotal: 0,
+      hasFreeDeliveryProduct: true,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ success: true, data: validation })));
+    vi.stubGlobal("fetch", fetchMock);
+    const added: unknown[] = [];
+    const listener = (event: Event) => added.push((event as CustomEvent).detail);
+    document.addEventListener("add-to-cart", listener);
+    renderOrderDetail(order, null);
+
+    document.getElementById("orderBuyAgain")!.click();
+    await vi.waitFor(() => expect(text("orderBuyAgainMessage")).toBe("Some items are no longer available, so they weren't added."));
+    document.removeEventListener("add-to-cart", listener);
+    vi.unstubAllGlobals();
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1].body)).items.map((item: { productId: string }) => item.productId))
+      .toEqual(["prod_1", "prod_gone", "prod_3"]);
+    expect(added).toEqual([
+      { id: "prod_1", variantId: "sku_default", name: "BB Tee", price: 550, quantity: 2, slug: "bb-tee", image: undefined, imageMediaId: undefined, options: undefined, freeDelivery: false },
+      { id: "prod_3", variantId: "sku_red_m", name: "Polo", price: 900, quantity: 1, slug: "polo", image: "https://cdn.example.test/polo.jpg", imageMediaId: "media_1", options: [{ name: "Variant", label: "Red / M" }], freeDelivery: true },
+    ]);
   });
 
   it("says the store could not be reached and retries", async () => {

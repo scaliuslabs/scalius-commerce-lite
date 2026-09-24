@@ -250,6 +250,18 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
     { signal },
   );
 
+  // Signing in replaces what was typed before (maybe someone else's number)
+  // with the account's phone, like every other contact field.
+  window.addEventListener(
+    "customer-login",
+    (event) => {
+      buyerHasEdited = false;
+      setError("");
+      applyValue((event as CustomEvent<{ phone?: string | null } | undefined>).detail?.phone ?? "");
+    },
+    { signal },
+  );
+
   window.addEventListener(
     "phone-validation-error",
     (event) => {

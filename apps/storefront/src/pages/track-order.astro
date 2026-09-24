@@ -3,6 +3,7 @@
 // the contact saved on the order. Works without JavaScript (the form posts
 // here); phone, email and code only ever travel in POST bodies.
 import Layout from "@/layouts/Layout.astro";
+import StoreContact from "@/components/StoreContact.astro";
 import {
   getActiveCheckoutLanguage,
   getLayoutData,
@@ -10,6 +11,7 @@ import {
   type LayoutData,
 } from "@/lib/api";
 import {
+  NO_CODE_CHANNEL,
   getOrderCodeFailureText,
   formatCountdown,
   normalizeOrderReference,
@@ -47,6 +49,7 @@ let phone = "";
 let codeSent = false;
 let message = "";
 let failed = false;
+let noCodeChannel = false;
 let resendAfterSeconds = 0;
 let verified: VerifiedOrderReceipt | null = null;
 
@@ -71,11 +74,12 @@ if (isPost) {
   } else {
     const result = await sendOrderLookupCode({ reference: input.reference, phone: input.phone });
     if (result.ok) {
-      codeSent = true;
+      codeSent = result.data.sent;
       failed = false;
-      message = copy.trackOrderCodeSentText;
+      message = result.data.message || copy.trackOrderCodeSentText;
       resendAfterSeconds = result.data.resendAfterSeconds;
     } else {
+      noCodeChannel = result.failure.errorCode === NO_CODE_CHANNEL;
       message = getOrderCodeFailureText(copy, result.failure, "send", copy.trackOrderUnavailableText);
     }
   }
@@ -116,10 +120,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
         </div>
         <div class="grid gap-2">
           <label for="trackOrderPhone" class="text-sm font-medium text-foreground">{copy.customerPhoneLabel}</label>
-          <div class="flex items-center gap-2">
-            <span class="shrink-0 text-base text-muted-foreground" aria-hidden="true">+880</span>
-            <input id="trackOrderPhone" name="phone" value={phone} type="tel" inputmode="tel" autocomplete="tel-national" placeholder="01XXXXXXXXX" required maxlength="20" class={fieldClass} />
-          </div>
+          <input id="trackOrderPhone" name="phone" value={phone} type="tel" inputmode="tel" autocomplete="tel-national" placeholder="01XXXXXXXXX" required maxlength="20" class={fieldClass} autofocus={!isPost && Boolean(reference)} />
         </div>
         <div class="grid gap-2" data-order-code-step hidden={!codeSent}>
           <label for="trackOrderCode" class="text-sm font-medium text-foreground">{copy.paymentRecoveryVerificationCodeText}</label>
@@ -127,6 +128,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
         </div>
 
         <p data-order-code-message aria-live="polite" class={`min-h-5 text-sm ${failed ? "text-destructive" : "text-muted-foreground"}`}>{message}</p>
+        <StoreContact layoutData={layoutData} hidden={!noCodeChannel} />
 
         <button
           type="submit"

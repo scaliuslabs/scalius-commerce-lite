@@ -52,6 +52,7 @@ import type { ReservationEntry } from "../inventory";
 import { getPaymentGateway, isOnlinePaymentMethod, listPaymentGateways } from "../payments/gateways/registry";
 
 import { sql, desc, eq, inArray, isNotNull, isNull, notInArray, and, type SQL } from "drizzle-orm";
+import { guestRecordForPhone } from "../customers/customer-identity";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
     ftsMatch,
@@ -2144,7 +2145,7 @@ export async function createOrder(
         const existingCustomer = await db
             .select()
             .from(customers)
-            .where(eq(customers.phone, data.customerPhone))
+            .where(guestRecordForPhone(data.customerPhone))
             .get();
         const reservationEntries: ReservationEntry[] = trackedItems
             .filter((item) => item.inventoryTracked)
@@ -2697,9 +2698,11 @@ export async function confirmManualOrderAmendment(
 
     let customerId = order.customerId;
     let newCustomerId: string | null = null;
-    if (data.customerPhone !== order.customerPhone || !customerId) {
+    // An order an account owns stays filed under that account; a contact
+    // edit only changes the order's own contact snapshot.
+    if (!order.accountOwnerCustomerId && (data.customerPhone !== order.customerPhone || !customerId)) {
         const existingCustomer = await db.select({ id: customers.id }).from(customers)
-            .where(eq(customers.phone, data.customerPhone)).get();
+            .where(guestRecordForPhone(data.customerPhone)).get();
         customerId = existingCustomer?.id ?? `cust_${nanoid()}`;
         if (!existingCustomer) newCustomerId = customerId;
     }
@@ -3068,9 +3071,11 @@ export async function updateOrderDetails(
 
     let customerId = order.customerId;
     let newCustomerId: string | null = null;
-    if (next.customerPhone !== order.customerPhone || !customerId) {
+    // An order an account owns stays filed under that account; a contact
+    // edit only changes the order's own contact snapshot.
+    if (!order.accountOwnerCustomerId && (next.customerPhone !== order.customerPhone || !customerId)) {
         const existingCustomer = await db.select({ id: customers.id }).from(customers)
-            .where(eq(customers.phone, next.customerPhone)).get();
+            .where(guestRecordForPhone(next.customerPhone)).get();
         customerId = existingCustomer?.id ?? `cust_${nanoid()}`;
         if (!existingCustomer) newCustomerId = customerId;
     }

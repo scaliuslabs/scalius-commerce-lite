@@ -1233,7 +1233,7 @@ export const postApiV1OrdersPaymentRecoveryVerifyOtp = <ThrowOnError extends boo
 });
 
 /**
- * Send a code to the contact saved on an order (never reveals whether it matched)
+ * Send a code to the contact saved on an order (order number + its phone)
  */
 export const postApiV1OrdersLookupSendOtp = <ThrowOnError extends boolean = false>(options: Options<PostApiV1OrdersLookupSendOtpData, ThrowOnError>): RequestResult<PostApiV1OrdersLookupSendOtpResponses, PostApiV1OrdersLookupSendOtpErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1OrdersLookupSendOtpResponses, PostApiV1OrdersLookupSendOtpErrors, ThrowOnError>({
     url: '/api/v1/orders/lookup/send-otp',

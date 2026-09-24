@@ -26189,7 +26189,6 @@
                   }
                 },
                 "required": [
-                  "channel",
                   "code"
                 ],
                 "additionalProperties": false
@@ -41331,6 +41330,16 @@
                       "properties": {
                         "message": {
                           "type": "string"
+                        },
+                        "destination": {
+                          "type": "string"
+                        },
+                        "orderNumber": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "resendAfterSeconds": {
+                          "type": "integer"
                         }
                       },
                       "required": [
@@ -41657,14 +41666,6 @@
                     "minLength": 1,
                     "maxLength": 128
                   },
-                  "channel": {
-                    "type": "string",
-                    "enum": [
-                      "email",
-                      "sms",
-                      "whatsapp"
-                    ]
-                  },
                   "code": {
                     "type": "string",
                     "minLength": 4,
@@ -41673,7 +41674,6 @@
                 },
                 "required": [
                   "orderId",
-                  "channel",
                   "code"
                 ],
                 "additionalProperties": false
@@ -42065,7 +42065,7 @@
         "tags": [
           "Orders"
         ],
-        "summary": "Send a code to the contact saved on an order (never reveals whether it matched)",
+        "summary": "Send a code to the contact saved on an order (order number + its phone)",
         "requestBody": {
           "required": true,
           "content": {
@@ -42097,7 +42097,7 @@
         },
         "responses": {
           "200": {
-            "description": "Request accepted",
+            "description": "Code sent; says where",
             "content": {
               "application/json": {
                 "schema": {
@@ -42115,12 +42115,25 @@
                         "message": {
                           "type": "string"
                         },
+                        "destination": {
+                          "type": "string"
+                        },
+                        "channel": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms",
+                            "whatsapp"
+                          ]
+                        },
                         "resendAfterSeconds": {
                           "type": "integer"
                         }
                       },
                       "required": [
                         "message",
+                        "destination",
+                        "channel",
                         "resendAfterSeconds"
                       ]
                     }
@@ -42249,6 +42262,44 @@
           },
           "404": {
             "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {

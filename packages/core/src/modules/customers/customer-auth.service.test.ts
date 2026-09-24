@@ -10,7 +10,7 @@ import { createAtomicCheckoutAttempt } from "../orders/checkout-attempts";
 import { commitStorefrontOrderPayload } from "../orders/orders.ingest";
 import type { StorefrontOrderCommitPayload } from "../orders/orders.types";
 import { getCustomerOrders } from "./customers.service";
-import { linkVerifiedContactOrders } from "./order-account-claim";
+import { linkVerifiedContactOrders } from "./customer-identity";
 import {
   buildCustomerAuthOtpStorageKey,
   persistCustomerAuthOtpChallenge,
@@ -163,6 +163,98 @@ const customerRows = () => sqlite.prepare(
 const orderOwner = (orderId: string) =>
   sqlite.prepare("SELECT account_owner_customer_id AS owner FROM orders WHERE id = ?").get(orderId)?.owner ?? null;
 
+const orderLinks = (orderId: string) =>
+  sqlite.prepare("SELECT customer_id AS customerId, account_owner_customer_id AS owner FROM orders WHERE id = ?").get(orderId);
+const customerById = (id: string) =>
+  sqlite.prepare("SELECT id, name, email, phone, address, zone_name AS zoneName, account_claimed_at IS NOT NULL AS claimed FROM customers WHERE id = ?").get(id);
+
+describe("unverified contacts never change identity (R2-BA-01, R2-MKT-02, R2-BA-04)", () => {
+  const VICTIM_PHONE = "+8801799200009";
+
+  it("a stranger typing someone's phone at sign-up takes over nothing and locks nobody out", async () => {
+    // 1. The victim orders as a guest with their phone only.
+    const firstOrder = await placeGuestOrder({ phone: VICTIM_PHONE, email: null, name: "Victim V" });
+    const victimRecord = orderLinks(firstOrder)!.customerId as string;
+
+    // 2. A stranger signs up with their own email and types the victim's phone.
+    const stranger = await createEmailAccount("stranger@example.test", VICTIM_PHONE, "Stranger S1");
+    expect(stranger.customer.customerId).not.toBe(victimRecord);
+    expect(customerById(victimRecord)).toMatchObject({ name: "Victim V", email: null, claimed: 0, address: "House 9, Road 9, Mirpur" });
+    expect(orderLinks(firstOrder)).toEqual({ customerId: victimRecord, owner: null });
+
+    // 3. The victim can still create their own account with their real phone.
+    const victim = await createEmailAccount("victim@example.test", VICTIM_PHONE, "Victim V");
+    expect(victim.customer.customerId).not.toBe(stranger.customer.customerId);
+
+    // 4. Another guest order with that phone stays with the guest record, in nobody's account.
+    const secondOrder = await placeGuestOrder({ phone: VICTIM_PHONE, email: null, name: "Victim V" });
+    expect(orderLinks(secondOrder)).toEqual({ customerId: victimRecord, owner: null });
+    expect(customerById(stranger.customer.customerId!)).toMatchObject({ name: "Stranger S1", email: "stranger@example.test" });
+    const strangerHistory = await getCustomerOrders(db, stranger.customer.customerId!, {});
+    expect(strangerHistory.orders).toEqual([]);
+
+    // 5. Proving the phone by code is what claims the guest record and its orders.
+    const proven = await verifyPhone(VICTIM_PHONE, await issuePhoneCode(VICTIM_PHONE));
+    expect(proven).toMatchObject({ status: "signed_in", customer: { customerId: victimRecord, name: "Victim V" } });
+    expect(orderLinks(firstOrder)).toEqual({ customerId: victimRecord, owner: victimRecord });
+    expect(orderLinks(secondOrder)).toEqual({ customerId: victimRecord, owner: victimRecord });
+  });
+
+  it("a guest checkout never renames, re-emails or re-addresses an existing customer", async () => {
+    const firstOrder = await placeGuestOrder({ phone: VICTIM_PHONE, email: null, name: "W4F Orders Test" });
+    const record = orderLinks(firstOrder)!.customerId as string;
+    const historyBefore = Number(sqlite.prepare("SELECT COUNT(*) AS n FROM customer_history WHERE customer_id = ?").get(record)?.n);
+
+    sqlite.prepare("UPDATE customers SET address = 'House 9, Road 4', zone_name = 'Mirpur' WHERE id = ?").run(record);
+    const attack = await placeGuestOrder({ phone: VICTIM_PHONE, email: "r2mkt-buyer@example.com", name: "R2-MKT ক্রেতা Buyer" });
+
+    expect(customerById(record)).toMatchObject({
+      name: "W4F Orders Test", email: null, address: "House 9, Road 4", zoneName: "Mirpur", claimed: 0,
+    });
+    expect(Number(sqlite.prepare("SELECT COUNT(*) AS n FROM customer_history WHERE customer_id = ?").get(record)?.n))
+      .toBe(historyBefore);
+    // The order keeps its own contact snapshot and is filed with the phone's record.
+    expect(orderLinks(attack)).toEqual({ customerId: record, owner: null });
+    expect(sqlite.prepare("SELECT customer_name AS name, customer_email AS email FROM orders WHERE id = ?").get(attack))
+      .toEqual({ name: "R2-MKT ক্রেতা Buyer", email: "r2mkt-buyer@example.com" });
+  });
+
+  it("files every order the same way for the merchant and the buyer (R2-BA-04)", async () => {
+    const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
+    const accountId = account.customer.customerId!;
+
+    // A guest order with the account's VERIFIED email joins the account on both sides at once.
+    const byEmail = await placeGuestOrder({ phone: STRANGER_PHONE, email: BUYER_EMAIL, name: "Stranger One" });
+    expect(orderLinks(byEmail)).toEqual({ customerId: accountId, owner: accountId });
+
+    // A phone-only guest order with the account's UNVERIFIED phone joins neither.
+    const byPhone = await placeGuestOrder({ phone: BUYER_PHONE, email: null, name: "Someone" });
+    const phoneLinks = orderLinks(byPhone)!;
+    expect(phoneLinks.owner).toBeNull();
+    expect(phoneLinks.customerId).not.toBe(accountId);
+
+    const history = await getCustomerOrders(db, accountId, {});
+    expect(history.orders.map((order) => order.id)).toEqual([byEmail]);
+    const merchantView = sqlite.prepare("SELECT id FROM orders WHERE customer_id = ? ORDER BY id").all(accountId)
+      .map((row) => row.id);
+    expect(merchantView).toEqual([byEmail]);
+  });
+
+  it("moves a guest record's orders into the account only for the email just proven, retiring an emptied record", async () => {
+    const guestOrder = await placeGuestOrder({ phone: STRANGER_PHONE, email: BUYER_EMAIL, name: "Buyer Five" });
+    const guestRecord = orderLinks(guestOrder)!.customerId as string;
+    const otherOrder = await placeGuestOrder({ phone: "+8801712000077", email: "someone@example.test", name: "Other" });
+
+    const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
+    const accountId = account.customer.customerId!;
+    expect(orderLinks(guestOrder)).toEqual({ customerId: accountId, owner: accountId });
+    expect(orderLinks(otherOrder)!.owner).toBeNull();
+    // The guest record that only held this buyer's order is merged away; one customer per verified identity.
+    expect(sqlite.prepare("SELECT deleted_at IS NOT NULL AS retired FROM customers WHERE id = ?").get(guestRecord))
+      .toEqual({ retired: 1 });
+  });
+});
+
 describe("guest checkout contacts never lock a buyer out (BA-01)", () => {
   it("signs the verified owner in after a stranger's guest order used their email", async () => {
     // 1. The buyer creates an account with their email and phone, then signs out.
@@ -171,7 +263,6 @@ describe("guest checkout contacts never lock a buyer out (BA-01)", () => {
 
     // 2. A stranger places a guest order with the buyer's email and their own phone.
     const strangerOrder = await placeGuestOrder({ phone: STRANGER_PHONE, email: BUYER_EMAIL });
-    expect(customerRows()).toHaveLength(2);
 
     // 3. The buyer signs in: the code is sent and the verified owner signs in.
     const code = await sendEmailCode(BUYER_EMAIL);
@@ -185,13 +276,12 @@ describe("guest checkout contacts never lock a buyer out (BA-01)", () => {
       phone: BUYER_PHONE,
       name: "Buyer Five",
     });
-    // The account's identity is unchanged; the stranger's CRM profile is untouched.
+    // The account's identity is unchanged by the stranger's contact details.
     expect(customerRows()).toEqual([
       expect.objectContaining({ id: account.customer.customerId, email: BUYER_EMAIL, phone: BUYER_PHONE, claimed: 1, email_verified: 1 }),
-      expect.objectContaining({ phone: STRANGER_PHONE, email: BUYER_EMAIL, claimed: 0 }),
     ]);
-    // Orders placed with the verified email show in the owner's history (Shopify semantics).
-    expect(orderOwner(strangerOrder)).toBe(account.customer.customerId);
+    // An order placed with the verified email is filed under its owner (Shopify semantics).
+    expect(orderLinks(strangerOrder)).toEqual({ customerId: account.customer.customerId, owner: account.customer.customerId });
   });
 
   it("does not let an unverified email saved on another account take the inbox owner's sign-in", async () => {
@@ -242,35 +332,11 @@ describe("one sign-in flow", () => {
     // Wrong code with sign-up details for a taken phone: only "wrong code".
     await expect(verifyEmail("attacker@example.test", wrong, { name: "X", phone: BUYER_PHONE }))
       .rejects.toThrow("That code isn't right.");
-    // With the right code, the phone conflict is explained and no account is made.
-    await expect(verifyEmail("attacker@example.test", code, { name: "X", phone: BUYER_PHONE }))
-      .rejects.toThrow("This phone number is already on another account.");
     expect(customerRows()).toHaveLength(1);
-  });
-
-  it("takes over an unclaimed guest profile by typed phone without exposing its saved address", async () => {
-    const guestOrder = await placeGuestOrder({ phone: BUYER_PHONE, email: null, name: "Guest Name" });
-    const code = await sendEmailCode(BUYER_EMAIL);
-    const created = await verifyEmail(BUYER_EMAIL, code, { name: "Buyer Five", phone: BUYER_PHONE });
-
-    expect(created).toMatchObject({ status: "signed_in", isNewUser: true, customer: { address: null, name: "Buyer Five" } });
-    expect(customerRows()).toEqual([
-      expect.objectContaining({ phone: BUYER_PHONE, email: BUYER_EMAIL, address: null, claimed: 1, phone_verified: 0 }),
-    ]);
-    // The phone was typed, not proven, so its guest orders are not added.
-    expect(orderOwner(guestOrder)).toBeNull();
-  });
-
-  it("keeps the saved address and adds the order when the guest profile carries the email just proven", async () => {
-    const guestOrder = await placeGuestOrder({ phone: BUYER_PHONE, email: BUYER_EMAIL, name: "Guest Name" });
-    const created = await verifyEmail(BUYER_EMAIL, await sendEmailCode(BUYER_EMAIL), { name: "Buyer Five", phone: BUYER_PHONE });
-
-    expect(created).toMatchObject({
-      status: "signed_in",
-      customer: { address: "House 9, Road 9, Mirpur", zoneName: "Mirpur", cityName: "Dhaka", name: "Buyer Five" },
-    });
-    if (created.status !== "signed_in") return;
-    expect(orderOwner(guestOrder)).toBe(created.customer.customerId);
+    // A typed phone is only a contact: someone else's number neither blocks nor joins accounts.
+    const second = await verifyEmail("attacker@example.test", code, { name: "X", phone: BUYER_PHONE });
+    expect(second).toMatchObject({ status: "signed_in", isNewUser: true });
+    expect(customerRows()).toHaveLength(2);
   });
 
   it("signs a phone-proven buyer into their guest profile and adds that phone's orders", async () => {
@@ -283,10 +349,10 @@ describe("one sign-in flow", () => {
     expect(orderOwner(guestOrder)).toBe(signedIn.customer.customerId);
   });
 
-  it("adds orders placed while signed out once the account lists its orders (BA-03)", async () => {
+  it("adds orders placed while signed out with the verified email, on any device (BA-03)", async () => {
     const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
     const later = await placeGuestOrder({ phone: "+8801712000099", email: "  Buyer5@Example.test " });
-    expect(orderOwner(later)).toBeNull();
+    expect(orderOwner(later)).toBe(account.customer.customerId);
 
     await linkVerifiedContactOrders(db, account.customer.customerId!);
     const history = await getCustomerOrders(db, account.customer.customerId!, {});
@@ -334,6 +400,20 @@ describe("codes and limits (BA-02, BA-15)", () => {
     expect((error as RateLimitError).details).toEqual({ retryAfterSeconds: (error as RateLimitError).retryAfterSeconds });
   });
 
+  it("keeps the latest code usable when others flood the email from many networks (R2-BA-06)", async () => {
+    let latest = "";
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      latest = await sendEmailCode(BUYER_EMAIL, `198.51.100.${attempt}`);
+      sqlite.prepare("UPDATE customer_auth_otp_challenges SET resend_available_at = 0").run();
+    }
+    const ceiling = await sendEmailCode(BUYER_EMAIL, "198.51.100.200").catch((caught: unknown) => caught);
+    expect(ceiling).toBeInstanceOf(RateLimitError);
+    expect((ceiling as RateLimitError).message).toBe("Too many codes. Enter the latest code we sent.");
+    const expiresAt = Number(sqlite.prepare("SELECT expires_at AS e FROM customer_auth_otp_challenges").get()?.e);
+    expect(expiresAt - Math.floor(Date.now() / 1000)).toBeGreaterThan(20 * 60);
+    await expect(verifyEmail(BUYER_EMAIL, latest)).resolves.toEqual({ status: "needs_account_details" });
+  });
+
   it("limits codes per email, not per shared carrier IP", async () => {
     const sharedIp = "198.51.100.7";
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -342,7 +422,7 @@ describe("codes and limits (BA-02, BA-15)", () => {
     }
     const limited = await sendEmailCode(BUYER_EMAIL, sharedIp).catch((caught: unknown) => caught);
     expect(limited).toBeInstanceOf(RateLimitError);
-    expect((limited as RateLimitError).message).toBe("Too many codes requested. Please wait and try again.");
+    expect((limited as RateLimitError).message).toBe("Too many codes.");
     expect((limited as RateLimitError).retryAfterSeconds).toBeGreaterThan(14 * 60);
     // Other buyers behind the same IP still get codes.
     for (let buyer = 0; buyer < 10; buyer += 1) {

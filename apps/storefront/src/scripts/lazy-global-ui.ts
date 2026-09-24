@@ -1,5 +1,5 @@
 import type { AddToCartEventDetail } from "@/components/CartFlyout";
-import type { AuthModalPrefill } from "@/components/AuthModal";
+import type { AuthModalOpenDetail } from "@/components/AuthModal";
 
 function hasCustomerAuthMirrorCookie(): boolean {
   return document.cookie
@@ -12,10 +12,10 @@ export function installLazyGlobalUi(): void {
   window.__scaliusLazyGlobalUiInstalled = true;
 
   let authLoading: Promise<unknown> | null = null;
-  const loadAuth = (openModal: boolean, prefill?: AuthModalPrefill) => {
+  const loadAuth = (openModal: boolean, detail?: AuthModalOpenDetail) => {
     if (openModal) {
       window.__scaliusAuthModalOpenPending = true;
-      if (prefill) window.__scaliusAuthModalPrefillPending = prefill;
+      if (detail) window.__scaliusAuthModalDetailPending = detail;
     }
     authLoading ??= import("@/components/client/mount-auth-modal").then(
       ({ mountAuthModal }) => mountAuthModal(),
@@ -23,8 +23,7 @@ export function installLazyGlobalUi(): void {
     return authLoading;
   };
   window.addEventListener("open-auth-modal", (event) => {
-    const prefill = (event as CustomEvent<{ prefill?: AuthModalPrefill }>).detail?.prefill;
-    void loadAuth(true, prefill);
+    void loadAuth(true, (event as CustomEvent<AuthModalOpenDetail | undefined>).detail);
   });
 
   if (hasCustomerAuthMirrorCookie()) {

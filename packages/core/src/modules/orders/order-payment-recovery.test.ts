@@ -65,7 +65,11 @@ function createDb(options: FakeDbOptions = {}) {
           return query;
         },
         where: () => query,
+        orderBy: () => query,
         get: async () => {
+          if (selectedTable === orderPaymentRecoveryChallenges) {
+            return { challengeKey: "order_payrec:challenge", method: "phone", channel: "sms", identifierHash: "h" };
+          }
           if (selectedTable === orders) {
             return {
               id: "order_1",
@@ -140,7 +144,7 @@ describe("order payment recovery OTP service", () => {
       depositAmount: 60,
       paymentRecovery: { state: "needs_attention" },
     });
-    mocks.enforceOtpSendRateLimits.mockResolvedValue(undefined);
+    mocks.enforceOtpSendRateLimits.mockResolvedValue({ resendCooldownSeconds: 60 });
     mocks.getEmailProviderReadiness.mockResolvedValue({ status: "ready", issues: [] });
     mocks.getSmsProviderReadiness.mockResolvedValue({ status: "ready", issues: [] });
     mocks.getWhatsAppCloudApiSettings.mockResolvedValue({
@@ -219,7 +223,6 @@ describe("order payment recovery OTP service", () => {
 
     const result = await verifyOrderPaymentRecoveryOtp(db, {
       orderId: "order_1",
-      channel: "sms",
       code: "123456",
       encryptionKey: "otp-signing-key",
     });

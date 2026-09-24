@@ -7293,7 +7293,7 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtp
 
 export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpData = {
     body: {
-        channel: 'email' | 'sms' | 'whatsapp';
+        channel?: 'email' | 'sms' | 'whatsapp';
         code: string;
     };
     path: {
@@ -11448,6 +11448,9 @@ export type PostApiV1OrdersPaymentRecoverySendOtpResponses = {
         success: true;
         data: {
             message: string;
+            destination?: string;
+            orderNumber?: number | null;
+            resendAfterSeconds?: number;
         };
     };
 };
@@ -11457,7 +11460,6 @@ export type PostApiV1OrdersPaymentRecoverySendOtpResponse = PostApiV1OrdersPayme
 export type PostApiV1OrdersPaymentRecoveryVerifyOtpData = {
     body: {
         orderId: string;
-        channel: 'email' | 'sms' | 'whatsapp';
         code: string;
     };
     path?: never;
@@ -11634,6 +11636,17 @@ export type PostApiV1OrdersLookupSendOtpErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -11672,12 +11685,14 @@ export type PostApiV1OrdersLookupSendOtpError = PostApiV1OrdersLookupSendOtpErro
 
 export type PostApiV1OrdersLookupSendOtpResponses = {
     /**
-     * Request accepted
+     * Code sent; says where
      */
     200: {
         success: true;
         data: {
             message: string;
+            destination: string;
+            channel: 'email' | 'sms' | 'whatsapp';
             resendAfterSeconds: number;
         };
     };
