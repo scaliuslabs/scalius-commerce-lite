@@ -404,6 +404,32 @@ describe("cart discount checkout handoff", () => {
     deliveryRates.mockResolvedValue([STANDARD]);
   });
 
+  it("refreshes the delivery options as soon as the total shows a changed fee", async () => {
+    // The options were read at ৳60; since then the merchant made the rate ৳80.
+    deliveryRates.mockResolvedValueOnce([STANDARD]).mockResolvedValue([{ ...STANDARD, fee: 80 }]);
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockImplementation(async () => ({
+      ...taxQuote(),
+      shippingMinor: 8_000,
+      shippingAmount: 80,
+      totalMinor: 18_000,
+      totalAmount: 180,
+      shippingMethod: { id: "standard", name: "Standard", description: null, baseAmountMinor: 8_000, feeWaived: false },
+    }));
+
+    await startCartPage();
+    await settleCheckout();
+
+    // No Place order needed: the option and the summary agree, and the buyer is told why.
+    expect(document.querySelector("[data-shipping-notice]")?.textContent).toBe(
+      formatCheckoutLanguageText(ENGLISH_CHECKOUT_LANGUAGE_DATA.deliveryFeeChangedText, { old: "৳60", new: "৳80" }),
+    );
+    expect(document.querySelector('[data-rate-id="standard"] [data-fee-label]')?.textContent).toBe("৳80");
+    expect(document.getElementById("shippingCost")?.textContent).toBe("৳80");
+    expect(window.lastShippingEventDetail?.fee).toBe(80);
+    deliveryRates.mockReset();
+    deliveryRates.mockResolvedValue([STANDARD]);
+  });
+
   it("asks for a delivery option when none applies to the address", async () => {
     deliveryRates.mockResolvedValueOnce([]);
     await startCartPage();
