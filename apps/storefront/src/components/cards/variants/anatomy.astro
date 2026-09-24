@@ -1,0 +1,200 @@
+---
+// Every card variant except `standard`, rendered from its measured anatomy
+// in the shared registry (STOREFRONT_CARD_VARIANTS[...].renders): the body
+// order, title emphasis, price tone, discount wording, facts and buy action
+// are data; sizes, radius, surface, photo ratio and fit are the theme's
+// tokens (theme-foundation.css). Facts without data render nothing.
+import type { StorefrontCardRenderer, StorefrontImageRatio } from "@scalius/shared/storefront-theme";
+import type { ProductCardImageLoading } from "@/lib/product-card-layout";
+import CardMedia from "../parts/CardMedia.astro";
+import { cardDiscountLabel, cardFactPresent, type ProductCardModel } from "../card-model";
+
+interface Props {
+  variant: string;
+  anatomy: StorefrontCardRenderer;
+  model: ProductCardModel;
+  ratio: StorefrontImageRatio;
+  sizes: string;
+  loading: ProductCardImageLoading;
+  headingLevel: "h2" | "h3";
+}
+
+const { variant, anatomy, model, ratio, sizes, loading, headingLevel } = Astro.props;
+const TitleTag = headingLevel;
+const discount = cardDiscountLabel(model, anatomy.discount);
+const { facts } = model;
+const parts = anatomy.body.filter((part) => part === "title" || part === "price" || cardFactPresent(facts, part));
+// The part that takes the free space, so prices and buttons line up across a
+// row: the price when it follows the title, else the action.
+const priceFollowsTitle = parts.indexOf("price") > parts.indexOf("title");
+const actionText = anatomy.actionLabel === "buy-now" ? "Buy now" : "Add to cart";
+const bodyAction = anatomy.quickBuy && anatomy.action !== "round";
+const roundAction = anatomy.quickBuy && anatomy.action === "round" ? model.quickBuyHref : null;
+const titleWeight = { regular: "font-normal", medium: "font-medium", strong: "font-semibold" }[anatomy.titleWeight];
+const priceTone = anatomy.priceTone === "primary"
+  ? "text-primary"
+  : anatomy.priceTone === "sale" && model.price.regular ? "text-destructive" : "text-foreground";
+---
+
+{/* One link per card (the stretched title link) plus at most the buy action,
+    which sits above it as its own control. */}
+<div
+  data-theme-component="product-card"
+  data-card-variant={variant}
+  data-card-ratio={ratio}
+  data-card-badge={anatomy.badge}
+  class="group relative flex flex-col h-full bg-card overflow-hidden"
+>
+  <CardMedia
+    model={model}
+    ratio={ratio}
+    sizes={sizes}
+    loading={loading}
+    badge={anatomy.badge === "image" ? discount : null}
+  >
+    {
+      roundAction && (
+        <a
+          href={roundAction}
+          data-astro-prefetch="false"
+          rel="nofollow"
+          class="product-card-round-action absolute right-2 bottom-2 z-10 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <span class="sr-only">{actionText}: {model.name}</span>
+        </a>
+      )
+    }
+  </CardMedia>
+
+  <div class="product-card-body product-card-stack flex flex-col flex-1">
+    {
+      parts.map((part) => {
+        if (part === "title") {
+          return (
+            <TitleTag
+              class:list={[
+                "product-card-name text-foreground [font-family:var(--theme-font-body)] [letter-spacing:0]",
+                titleWeight,
+                anatomy.titleLines === 1 ? "line-clamp-1" : "line-clamp-2 min-h-[2.8em]",
+              ]}
+            >
+              <a href={model.href} class="product-card-link after:absolute after:inset-0 after:content-['']">
+                {model.name}
+              </a>
+            </TitleTag>
+          );
+        }
+        if (part === "price") {
+          return (
+            <p
+              class:list={[
+                "product-card-price-row flex flex-wrap items-baseline gap-x-2 gap-y-0.5",
+                priceFollowsTitle && "mt-auto",
+              ]}
+            >
+              <span class:list={["product-card-price", priceTone]}>
+                <span class="sr-only">{model.price.regular ? "Sale price " : "Price "}</span>
+                {model.price.prefix}{model.price.current}
+              </span>
+              {model.price.regular && (
+                <span class="product-card-meta text-muted-foreground">
+                  <span class="sr-only">Regular price </span><s>{model.price.regular}</s>
+                </span>
+              )}
+              {anatomy.badge === "price" && discount && (
+                anatomy.discount === "off" ? (
+                  <span data-card-discount class="product-card-meta rounded-full bg-accent px-2 font-semibold text-accent-foreground">{discount}</span>
+                ) : (
+                  <span data-card-discount class="product-card-meta font-semibold text-destructive">{discount}</span>
+                )
+              )}
+            </p>
+          );
+        }
+        if (part === "brand") {
+          return <p class="product-card-meta line-clamp-1 font-bold text-foreground" data-card-fact="brand">{facts.brand}</p>;
+        }
+        if (part === "key-specs") {
+          return (
+            <ul class="product-card-meta list-disc space-y-0.5 ps-4 text-muted-foreground" data-card-fact="key-specs">
+              {facts.keySpecs.map((spec) => <li class="line-clamp-1">{spec}</li>)}
+            </ul>
+          );
+        }
+        if (part === "rating" && facts.rating) {
+          return (
+            <p class="product-card-meta text-foreground" data-card-fact="rating">
+              <span aria-hidden="true">★ {facts.rating.average} <span class="text-muted-foreground">({facts.rating.count})</span></span>
+              <span class="sr-only">Rated {facts.rating.average} out of 5 from {facts.rating.count} reviews</span>
+            </p>
+          );
+        }
+        if (part === "sold") {
+          return <p class="product-card-meta text-muted-foreground" data-card-fact="sold">{facts.sold} sold</p>;
+        }
+        if (part === "savings") {
+          return <p class="product-card-meta font-semibold text-destructive" data-card-fact="savings">{facts.savings}</p>;
+        }
+        if (part === "pack-size") {
+          return <p class="product-card-meta line-clamp-1 text-muted-foreground" data-card-fact="pack-size">{facts.packSize}</p>;
+        }
+        if (part === "delivery") {
+          return (
+            <p class="product-card-meta" data-card-fact="delivery">
+              <span class="inline-flex rounded-full bg-accent px-2 font-semibold text-accent-foreground">Free delivery</span>
+            </p>
+          );
+        }
+        if (part === "emi") {
+          return <p class="product-card-meta text-muted-foreground" data-card-fact="emi">{facts.emi}</p>;
+        }
+        return null;
+      })
+    }
+
+    {
+      bodyAction && model.quickBuyHref && (
+        <a
+          href={model.quickBuyHref}
+          data-astro-prefetch="false"
+          rel="nofollow"
+          class:list={[
+            "product-card-action relative z-10 inline-flex w-full items-center justify-center px-3 text-sm font-semibold transition-colors",
+            priceFollowsTitle ? "mt-1.5" : "mt-auto",
+            anatomy.action === "outline"
+              ? "border border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+              : "bg-primary text-primary-foreground hover:bg-primary/90",
+          ]}
+        >
+          {/* The name starts with the visible words (WCAG 2.5.3). */}
+          {actionText}<span class="sr-only">: {model.name}</span>
+        </a>
+      )
+    }
+    {
+      /* A product with options is chosen on its page: the hint sits under the
+         stretched card link, so it is not a second tab stop. */
+      bodyAction && !model.quickBuyHref && model.needsOptions && (
+        <span
+          aria-hidden="true"
+          data-card-action-hint
+          class:list={[
+            "product-card-action pointer-events-none inline-flex w-full items-center justify-center border border-border px-3 text-sm font-semibold text-foreground",
+            priceFollowsTitle ? "mt-1.5" : "mt-auto",
+          ]}
+        >
+          Choose options
+        </span>
+      )
+    }
+    {
+      /* Sold out keeps the action's space, so prices line up across a row. */
+      bodyAction && !model.quickBuyHref && !model.needsOptions && (
+        <span aria-hidden="true" data-quick-buy-spacer class:list={["product-card-action block", priceFollowsTitle ? "mt-1.5" : "mt-auto"]}></span>
+      )
+    }
+  </div>
+</div>
