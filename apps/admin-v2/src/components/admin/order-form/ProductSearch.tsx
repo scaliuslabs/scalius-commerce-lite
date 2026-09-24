@@ -11,6 +11,7 @@ import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
 import { resourceMessages } from "@/i18n/resource";
 import { discountedUnitPrice } from "./order-item-presentation";
+import { priceRangeText } from "@/lib/format-utils";
 
 export const PRODUCT_SEARCH_INPUT_ID = "order-product-search";
 
@@ -134,7 +135,10 @@ export function ProductSearch({
           ) : null}
           <ul id={listId} role="listbox" aria-label={t("products")}>
             {showOptions ? displayedProducts.map((product, index) => {
-              const price = discountedUnitPrice(product, null);
+              // Variants carry the prices of a product with options: show their range, as the store does.
+              const range = product.priceRange;
+              const price = range ? range.from : discountedUnitPrice(product, null);
+              const before = range ? (range.from === range.to ? range.compareAt : null) : price < product.price ? product.price : null;
               const variantCount = product.variantCount ?? product.variants.length;
               const stock = product.availableStock;
               return (
@@ -166,11 +170,8 @@ export function ProductSearch({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-body font-medium">{product.name}</span>
                     <span className="block truncate text-body text-muted-foreground tabular-nums">
-                      {price < product.price ? (
-                        <>
-                          <s>{fmt(product.price)}</s> {fmt(price)}
-                        </>
-                      ) : fmt(product.price)}
+                      {before !== null ? <><s>{fmt(before)}</s>{" "}</> : null}
+                      {(range ? priceRangeText(range, fmt) : null) ?? fmt(price)}
                       {variantCount > 1 ? ` · ${t("variantCount", { count: variantCount })}` : null}
                     </span>
                   </span>

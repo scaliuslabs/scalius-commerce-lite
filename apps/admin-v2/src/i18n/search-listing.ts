@@ -20,6 +20,7 @@ export const searchListingMessages = defineMessages({
     excludeFromFeed: "Leave out of Facebook and Google product ads",
     excludeFromFeedHelp: "It stays on your store.",
     addressOnSave: "The web address is set when you save",
+    autoHandleHint: "Made from the name. If this address is taken, a number is added.",
   },
   bn: {
     title: "সার্চ ইঞ্জিন লিস্টিং",
@@ -39,5 +40,6 @@ export const searchListingMessages = defineMessages({
     excludeFromFeed: "Facebook ও Google পণ্য বিজ্ঞাপনে রাখবেন না",
     excludeFromFeedHelp: "আপনার স্টোরে থাকবে।",
     addressOnSave: "সেভ করার পর ওয়েব ঠিকানা ঠিক হবে",
+    autoHandleHint: "নাম থেকে তৈরি। এই ঠিকানা আগে থেকে থাকলে শেষে একটি সংখ্যা যোগ হবে।",
   },
 });

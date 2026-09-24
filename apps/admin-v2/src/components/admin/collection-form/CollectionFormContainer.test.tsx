@@ -263,9 +263,9 @@ describe("CollectionForm", () => {
   it("adds picked products after the ones already in the collection", async () => {
     api.getCollectionProductOptions.mockResolvedValue({
       products: [
-        { id: "prod_panjabi", name: "Cotton panjabi", price: 1500, categoryId: null, categoryName: null, isActive: true, primaryImage: null },
-        { id: "prod_tote", name: "Canvas tote", price: 800, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: true, primaryImage: "/p/tote.webp" },
-        { id: "prod_shawl", name: "Wool shawl", price: 2200, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: false, primaryImage: null },
+        { id: "prod_panjabi", name: "Cotton panjabi", priceRange: { from: 1500, to: 1500, compareAt: null }, categoryId: null, categoryName: null, isActive: true, primaryImage: null },
+        { id: "prod_tote", name: "Canvas tote", priceRange: { from: 800, to: 800, compareAt: null }, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: true, primaryImage: "/p/tote.webp" },
+        { id: "prod_shawl", name: "Wool shawl", priceRange: { from: 2200, to: 2200, compareAt: null }, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: false, primaryImage: null },
       ],
       pagination: { page: 1, limit: 20, total: 3, totalPages: 1 },
     });
@@ -363,8 +363,8 @@ describe("CollectionForm", () => {
   it("previews the products an automatic collection will contain", async () => {
     api.getCollectionProductOptions.mockResolvedValue({
       products: [
-        { id: "prod_panjabi", name: "Cotton panjabi", price: 2500, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: true, primaryImage: null, variantCount: 2, available: 7 },
-        { id: "prod_tupi", name: "Tupi", price: 250, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: false, primaryImage: null, variantCount: 0, available: 0 },
+        { id: "prod_panjabi", name: "Cotton panjabi", priceRange: { from: 2400, to: 2600, compareAt: null }, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: true, primaryImage: null, variantCount: 2, available: 7 },
+        { id: "prod_tupi", name: "Tupi", priceRange: { from: 250, to: 250, compareAt: null }, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: false, primaryImage: null, variantCount: 0, available: 0 },
       ],
       pagination: { page: 1, limit: 10, total: 2, totalPages: 1 },
     });
@@ -378,7 +378,8 @@ describe("CollectionForm", () => {
     await waitFor(() => expect(host.textContent).toContain("Cotton panjabi"));
     const preview = host.querySelector('section[aria-label="Products in this collection"]');
     expect(text(preview?.textContent)).toContain("Products in this collection2 products");
-    expect(text(preview?.textContent)).toContain("৳2500 · 2 variants · 7 in stock");
+    // The variants' range, as the store sells it, not the product-level price.
+    expect(text(preview?.textContent)).toContain("৳2400–৳2600 · 2 variants · 7 in stock");
     expect(text(preview?.textContent)).toContain("Tupi৳250 · Out of stockDraft");
     // Only the active category counts: a draft category adds nothing on the store.
     expect(api.getCollectionProductOptions).toHaveBeenCalledWith({

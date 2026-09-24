@@ -10,6 +10,7 @@ import { sortHeader } from "~/components/admin/resource/columns";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import type { ProductListItemDto } from "~/lib/api-query-options/products";
+import { priceRangeText } from "~/lib/format-utils";
 
 export type ProductListItem = ProductListItemDto;
 
@@ -70,21 +71,17 @@ function InventoryText({ product }: { product: ProductListItem }) {
 }
 
 /** Price customers pay, with the regular price struck through while a product discount runs. */
-function PriceText({ product, fmt, salePrice }: {
-  product: ProductListItem;
-  fmt: (price: number) => string;
-  salePrice: (price: number, discount: ProductListItem) => number | null;
-}) {
-  const sale = salePrice(product.price, product);
+function PriceText({ product, fmt }: { product: ProductListItem; fmt: (price: number) => string }) {
+  const range = product.priceRange;
+  const text = priceRangeText(range, fmt);
   // A draft without a price says so instead of looking free.
-  if (product.price <= 0) return <div className="text-muted-foreground">{t("noPrice")}</div>;
+  if (!range || !text) return <div className="text-muted-foreground">{t("noPrice")}</div>;
   return (
     <div className="tabular-nums">
-      {sale === null ? fmt(product.price) : (
-        <>
-          {fmt(sale)} <s className="text-muted-foreground">{fmt(product.price)}</s>
-        </>
-      )}
+      {text}
+      {range.compareAt !== null && range.from === range.to ? (
+        <> <s className="text-muted-foreground">{fmt(range.compareAt)}</s></>
+      ) : null}
       {product.hasVariantDiscount ? <div className="text-muted-foreground">{t("saleOnSome")}</div> : null}
     </div>
   );
@@ -93,7 +90,6 @@ function PriceText({ product, fmt, salePrice }: {
 export function getProductColumns(opts: {
   trashed: boolean;
   fmt: (price: number) => string;
-  salePrice: (price: number, discount: ProductListItem) => number | null;
   rowTo: (product: ProductListItem) => string | undefined;
 }): ColumnDef<ProductListItem, unknown>[] {
   return [
@@ -146,7 +142,7 @@ export function getProductColumns(opts: {
       accessorKey: "price",
       header: sortHeader(t("columnPrice")),
       meta: { mobile: "secondary", numeric: true, priority: 80, minWidth: 110 },
-      cell: ({ row }) => <PriceText product={row.original} fmt={opts.fmt} salePrice={opts.salePrice} />,
+      cell: ({ row }) => <PriceText product={row.original} fmt={opts.fmt} />,
     },
   ];
 }

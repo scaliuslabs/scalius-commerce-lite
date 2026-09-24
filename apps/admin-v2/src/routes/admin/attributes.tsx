@@ -9,7 +9,7 @@ import {
   postApiV1AdminAttributesBulkRestore,
 } from "@scalius/api-client/sdk";
 import { createListSearchValidator } from "~/lib/list-helpers";
-import { adoptListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, listSearchKey, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -47,7 +47,7 @@ function listQuery(search: ReturnType<typeof validateAttributeSearch>, term: str
 export const Route = createFileRoute("/admin/attributes")({
   validateSearch: validateAttributeSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("attributes", deps.q))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("attributes", deps), deps.q))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "attributes") }] }),
   component: AttributesPage,
   errorComponent: RouteErrorComponent,
@@ -57,7 +57,7 @@ const INVALIDATE = [queryKeys.attributes.all];
 
 function AttributesPage() {
   const search = Route.useSearch();
-  const [term] = useListSearch("attributes");
+  const [term] = useListSearch(listSearchKey("attributes", search));
   const t = useMessages(catalogMessages);
   const tableCopy = useMessages(dataTableMessages);
   const { attributes: can } = useCatalogActionPermissions();

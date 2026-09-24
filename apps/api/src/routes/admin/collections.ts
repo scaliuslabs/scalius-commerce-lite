@@ -36,7 +36,7 @@ import {
     messageResponse,
     noContentResponse,
 } from "../../schemas/responses";
-import { collectionSchema, collectionSummarySchema } from "../../schemas/entities";
+import { buyerPriceRangeSchema, collectionSchema, collectionSummarySchema } from "../../schemas/entities";
 import { bumpCacheGeneration } from "../../utils/cache-generation";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -58,6 +58,7 @@ const collectionProductOptionSchema = z.object({
     id: z.string(),
     name: z.string(),
     price: z.number(),
+    priceRange: buyerPriceRangeSchema,
     categoryId: z.string().nullable(),
     categoryName: z.string().nullable(),
     isActive: z.boolean(),

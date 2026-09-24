@@ -11,7 +11,7 @@ import { createActionsColumn, createSelectColumn } from "~/components/admin/data
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { createDataSelector, type ListSearchParams } from "~/lib/list-helpers";
-import { useListSearch } from "~/lib/list-search";
+import { listSearchKey, useListSearch } from "~/lib/list-search";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
@@ -53,8 +53,9 @@ export interface ResourceListPageProps<T extends { id: string }> {
   /** The route's validated search (page, limit, sort, order, trashed…). */
   search: ListSearchParams & Record<string, unknown>;
   /**
-   * The list's name for its search term, which is kept in the session and
-   * never in the URL (`useListSearch`); build `query` with the same term.
+   * The list's name for its search terms, which are kept in the session per
+   * tab and never in the URL (`useListSearch(listSearchKey(list, search, views?.param))`);
+   * build `query` with the same term.
    */
   list: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -109,7 +110,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const trashed = search.trashed;
-  const [term, setTerm] = useListSearch(props.list);
+  const [term, setTerm] = useListSearch(listSearchKey(props.list, search, props.views?.param));
   // `kept`: selected rows a permanent delete leaves in Trash (canDeleteRow is false).
   const [confirm, setConfirm] = useState<{ action: "trash" | "delete"; rows: T[]; kept: number } | null>(null);
 

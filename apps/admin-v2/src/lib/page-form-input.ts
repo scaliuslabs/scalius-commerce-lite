@@ -27,7 +27,8 @@ function commonPageInput(values: PageFormValues) {
 
   return {
     title: values.title,
-    slug: values.slug,
+    // Empty: the server makes the address from the title (a new page) or keeps the saved one.
+    slug: values.slug || undefined,
     content: values.content,
     metaTitle: values.metaTitle,
     metaDescription: values.metaDescription,

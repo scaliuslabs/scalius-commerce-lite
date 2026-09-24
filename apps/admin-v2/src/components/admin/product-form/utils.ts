@@ -27,21 +27,25 @@ const FIELD_LABELS: Record<keyof ProductFormValues, ProductMessageKey> = {
   attributes: "attributes",
   additionalInfo: "additionalSections",
   slugEdited: "webAddress",
+  variantPriced: "price",
 };
 
 export function productFieldLabel(field: keyof ProductFormValues): string {
   return translate(productMessages, FIELD_LABELS[field] ?? "product");
 }
 
-/** Convert the editor form into the stable product metadata contract. */
+/**
+ * Convert the editor form into the stable product metadata contract. A new
+ * product sends `slug` only when the merchant typed it (see useProductSubmit).
+ */
 export function formatFormValuesForSubmission(
   values: ProductFormValues,
-): CreateProductInput {
+): CreateProductInput & { slug: string } {
   return {
     name: values.name,
     description: values.description,
     price: values.price ?? 0,
-    categoryId: values.categoryId,
+    categoryId: values.categoryId || null,
     isActive: values.isActive,
     discountType: values.discountType,
     discountPercentage:
@@ -71,13 +75,4 @@ export function formatFormValuesForSubmission(
       sortOrder,
     })) ?? [],
   };
-}
-
-export function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-+/g, "-");
 }
