@@ -40,6 +40,17 @@ const mocks = vi.hoisted(() => ({
   markWebhookEventManualReconciliation: vi.fn(),
   recordPaymentWebhookDlqEvidence: vi.fn(),
   readStoreIdentity: vi.fn(),
+  renderMissingMediaVariants: vi.fn(),
+  bumpCacheGeneration: vi.fn(),
+}));
+
+vi.mock("@scalius/core/modules/media", () => ({
+  renderMissingMediaVariants: mocks.renderMissingMediaVariants,
+}));
+
+vi.mock("./utils/cache-generation", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./utils/cache-generation")>(),
+  bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
 vi.mock("@scalius/database/client", () => ({
@@ -2211,5 +2222,69 @@ describe("handleQueueBatch payment confirmation retries", () => {
       },
     );
     expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("handleQueueBatch media rendition jobs", () => {
+  const images = { id: "images" };
+  const bucket = { id: "bucket" };
+  const env = { IMAGES: images, BUCKET: bucket } as unknown as Env;
+  const executionCtx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
+  const renderJob = (mediaId: string) => createMessage({ type: "media.render_variants", mediaId });
+  const runBatch = (messages: Array<Message<unknown>>, batchEnv: Env = env) =>
+    handleQueueBatch(createBatch(messages) as unknown as MessageBatch<PaymentQueueMessage>, batchEnv, executionCtx);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.bumpCacheGeneration.mockResolvedValue(undefined);
+  });
+
+  it("renders a still-missing upload and bumps the cache generation once", async () => {
+    mocks.renderMissingMediaVariants.mockResolvedValueOnce("generated");
+    const message = renderJob("media_upload_1");
+
+    await runBatch([message]);
+
+    expect(mocks.renderMissingMediaVariants).toHaveBeenCalledWith({ id: "db" }, "media_upload_1", bucket, images);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith({ env, executionCtx });
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    expect(message.retry).not.toHaveBeenCalled();
+  });
+
+  it("acks without a generation bump when the browser already saved renditions or rendering failed", async () => {
+    mocks.renderMissingMediaVariants.mockResolvedValueOnce("skipped").mockResolvedValueOnce("failed");
+    const done = renderJob("media_browser_done");
+    const broken = renderJob("media_broken");
+
+    await runBatch([done, broken]);
+
+    expect(mocks.renderMissingMediaVariants).toHaveBeenCalledTimes(2);
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+    expect(done.ack).toHaveBeenCalledTimes(1);
+    expect(broken.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("acks as a no-op without the Images binding (local dev)", async () => {
+    const message = renderJob("media_local");
+
+    await runBatch([message], { BUCKET: bucket } as unknown as Env);
+
+    expect(mocks.renderMissingMediaVariants).not.toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries when the media row cannot be read", async () => {
+    mocks.renderMissingMediaVariants.mockRejectedValueOnce(new Error("D1 unavailable"));
+    const message = renderJob("media_db_down");
+
+    await runBatch([message]);
+
+    expect(message.ack).not.toHaveBeenCalled();
+    expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 });

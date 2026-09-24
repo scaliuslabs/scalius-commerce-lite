@@ -30,6 +30,7 @@ vi.mock("../../utils/cache-generation", () => ({
     bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
+import { MEDIA_VARIANTS_JOB_DELAY_SECONDS } from "@scalius/core/modules/media";
 import { adminMediaRoutes } from "./media";
 
 const presentedMedia = {
@@ -186,5 +187,51 @@ describe("admin media cache invalidation", () => {
         await app.request("/api/v1/admin/media/uploads/mup_12345678/complete?variants=client", { method: "POST" }, withImages);
 
         expect(mocks.completeMediaUpload.mock.calls.map((call) => call[3])).toEqual([images, undefined]);
+    });
+
+    it("schedules exactly one delayed server render when a completed upload still lacks renditions", async () => {
+        const { app, env } = createTestApp();
+        const send = vi.fn(async () => undefined);
+        const withQueue = { ...env, IMAGES: { id: "images" }, JOBS_QUEUE: { send } } as unknown as Env;
+        mocks.completeMediaUpload.mockResolvedValueOnce({ ...presentedMedia, variantWidth: null });
+
+        const response = await app.request("/api/v1/admin/media/uploads/mup_12345678/complete?variants=client", { method: "POST" }, withQueue);
+
+        expect(response.status).toBe(200);
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(send).toHaveBeenCalledWith(
+            { type: "media.render_variants", mediaId: "media_123" },
+            { delaySeconds: MEDIA_VARIANTS_JOB_DELAY_SECONDS },
+        );
+        // A brand-new upload is not referenced yet; the job bumps if it renders.
+        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+    });
+
+    it("schedules nothing when completion already rendered, or without the Images binding", async () => {
+        const { app, env } = createTestApp();
+        const send = vi.fn(async () => undefined);
+        mocks.completeMediaUpload
+            .mockResolvedValueOnce({ ...presentedMedia, variantWidth: 800 })
+            .mockResolvedValueOnce({ ...presentedMedia, variantWidth: null });
+
+        await app.request("/api/v1/admin/media/uploads/mup_12345678/complete", { method: "POST" },
+            { ...env, IMAGES: { id: "images" }, JOBS_QUEUE: { send } } as unknown as Env);
+        await app.request("/api/v1/admin/media/uploads/mup_12345678/complete?variants=client", { method: "POST" },
+            { ...env, JOBS_QUEUE: { send } } as unknown as Env);
+
+        expect(send).not.toHaveBeenCalled();
+    });
+
+    it("still returns the committed upload when the queue rejects", async () => {
+        const { app, env } = createTestApp();
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const send = vi.fn(async () => { throw new Error("queue down"); });
+        mocks.completeMediaUpload.mockResolvedValueOnce({ ...presentedMedia, variantWidth: null });
+
+        const response = await app.request("/api/v1/admin/media/uploads/mup_12345678/complete?variants=client", { method: "POST" },
+            { ...env, IMAGES: { id: "images" }, JOBS_QUEUE: { send } } as unknown as Env);
+
+        expect(response.status).toBe(200);
+        expect(send).toHaveBeenCalledTimes(1);
     });
 });

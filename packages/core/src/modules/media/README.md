@@ -33,11 +33,20 @@ length and part-1 signature checks finish before the storage side effect.
   store cache generation after they commit, so every page that shows the image
   refreshes without a dependency scan. Renditions are derived storage and do
   not advance the media revision.
+- Every upload completion (direct or URL import) that still lacks renditions
+  enqueues one `media.render_variants` job on `JOBS_QUEUE`, delayed 120 s. The
+  consumer (`renderMissingMediaVariants`) renders only if `variant_width` is
+  still NULL, so the dashboard's browser pipeline normally wins and the job
+  skips; it bumps the cache generation only when it rendered. Render failures
+  are acked and left to the cron. Without `IMAGES` (local dev) nothing is
+  enqueued and a delivered job is a no-op.
 - The API cron (`backfillMissingMediaVariants`, when the `IMAGES` binding
-  exists) renders missing renditions for up to 4 still images per run, least
-  recently touched first, skipping media touched in the last hour. A failure
-  only touches `updated_at`, so a broken image waits an hour and goes behind
-  every other candidate.
+  exists) runs last and renders missing renditions two images at a time, least
+  recently touched first, until none are left, 240 were attempted, or the run
+  is 10 minutes old; one cache-generation bump per run that rendered any. It
+  skips media touched in the last 10 minutes (an upload's own pipeline and
+  job). A failure only touches `updated_at`, so a broken image leaves the run
+  and next time goes behind every other candidate.
 - Usage (`media.usage.ts`) is the one list of places that can show a file:
   product photos, video covers, and media URLs saved in product descriptions
   and extra sections, categories, collections, pages/blog posts, homepage
