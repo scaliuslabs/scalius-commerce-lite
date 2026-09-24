@@ -68,19 +68,24 @@ export function resolveOrder(defaults: readonly string[], saved: readonly string
 
 /**
  * Columns to hide so the rest fit `width`: lowest priority first (the later
- * one on a tie), never a locked column. Returns an empty set when everything
- * fits or the width is unknown.
+ * one on a tie), never a locked column. `extra` hides that many more, for
+ * when the rendered content turned out wider than the columns' minimums.
+ * Returns an empty set when everything fits or the width is unknown.
  */
-export function fitColumns(columns: readonly LayoutColumn[], width: number): Set<string> {
+export function fitColumns(columns: readonly LayoutColumn[], width: number, extra = 0): Set<string> {
   const hidden = new Set<string>();
   if (!(width > 0)) return hidden;
   let needed = columns.reduce((sum, column) => sum + column.minWidth, 0);
+  let more = extra;
   const candidates = columns
     .map((column, index) => ({ column, index }))
     .filter(({ column }) => !column.locked)
     .sort((left, right) => left.column.priority - right.column.priority || right.index - left.index);
   for (const { column } of candidates) {
-    if (needed <= width) break;
+    if (needed <= width) {
+      if (more <= 0) break;
+      more -= 1;
+    }
     hidden.add(column.id);
     needed -= column.minWidth;
   }
@@ -132,6 +137,8 @@ export interface ColumnLayout<TData extends TableRowData> {
   isHiddenByChoice: (id: string) => boolean;
   /** Columns stepped aside because the table is too narrow. */
   autoHidden: Set<string>;
+  /** Whether another column could still step aside to stop sideways scrolling. */
+  canHideMore: boolean;
   toggle: (id: string) => void;
   /** Move a configurable column to `index` among the configurable columns. */
   move: (id: string, index: number) => void;
@@ -147,6 +154,8 @@ export function useColumnLayout<TData extends TableRowData>(
   table: Table<TData>,
   key: string | null,
   width: number,
+  /** More columns to hide after measuring that the table still overflows. */
+  extra = 0,
 ): ColumnLayout<TData> {
   const [saved, setSaved] = useState<SavedLayout | null>(() => (key ? readSavedLayout(key) : null));
   const keyRef = useRef(key);
@@ -171,11 +180,12 @@ export function useColumnLayout<TData extends TableRowData>(
   ];
   const layoutKey = shown.map((column) => column.id).join("|");
   const autoHidden = useMemo(
-    () => fitColumns(shown.map(layoutColumnOf), width),
+    () => fitColumns(shown.map(layoutColumnOf), width, extra),
     // `shown` is rebuilt each render; its ids and the width are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [layoutKey, width],
+    [layoutKey, width, extra],
   );
+  const hideable = shown.filter((column) => !layoutColumnOf(column).locked).length;
 
   const save = useCallback(
     (next: SavedLayout | null) => {
@@ -190,6 +200,7 @@ export function useColumnLayout<TData extends TableRowData>(
     arrangeable,
     isHiddenByChoice: (id) => hiddenByChoice.has(id),
     autoHidden,
+    canHideMore: autoHidden.size < hideable,
     toggle: (id) => {
       const column = byId.get(id);
       if (!column || isPrimaryColumn(column)) return;

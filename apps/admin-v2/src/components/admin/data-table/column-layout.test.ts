@@ -29,6 +29,13 @@ describe("column layout", () => {
     expect([...fitColumns(columns, 0)]).toEqual([]);
   });
 
+  it("steps extra columns aside when the rendered content is wider than the minimums", () => {
+    const columns = [column("title", Infinity, 200, true), column("sku", 80, 140), column("stock", 90, 100), column("vendor", 20, 140)];
+    expect([...fitColumns(columns, 1000, 1)]).toEqual(["vendor"]);
+    expect([...fitColumns(columns, 1000, 2)]).toEqual(["vendor", "sku"]);
+    expect([...fitColumns(columns, 1000, 9)]).toEqual(["vendor", "sku", "stock"]);
+  });
+
   it("drops the later column first when priorities tie", () => {
     expect([...fitColumns([column("a", 50, 200), column("b", 50, 200)], 250)]).toEqual(["b"]);
   });
