@@ -40,9 +40,9 @@ Both admin-created and storefront-created customers now use the same E.164 forma
 
 `totalOrders` and `lastOrderAt` are denormalized columns on the `customers` table. They are NOT updated by this module -- they are materialized by the orders domain. Lifetime spend has no column: admin and account reads sum `orders.paid_amount_minor` (integer minor units) and convert once for the response.
 
-- **`orders.admin.ts`**: Increments existing-customer stats with SQL expressions inside the manual-create batch so concurrent creates cannot overwrite one another; the protected legacy full editor recalculates after its versioned update
-- **`orders.ingest.ts`**: Increments `totalOrders` inline inside the synchronous storefront order commit batch for authenticated customer orders
-- **`orders.storefront.ts`**: Carries the authenticated customer identity resolved by the API checkout policy into the prepared commit payload
+- **`orders/admin/create.ts`**: Increments existing-customer stats with SQL expressions inside the manual-create batch so concurrent creates cannot overwrite one another; the protected legacy full editor recalculates after its versioned update
+- **`checkout/commit.ts`**: Increments `totalOrders` inline inside the synchronous storefront order commit batch for authenticated customer orders
+- **`checkout/prepare.ts`**: Carries the authenticated customer identity resolved by the API checkout policy into the prepared commit payload
 
 ### Customer History Audit Log
 
@@ -148,7 +148,7 @@ Guest receipt account claim -> receipt proof + active customer session + immutab
 
 Customer account order history uses keyset pagination over `(orders.createdAt, orders.id)` with a default/max page size of 50. The account `summary` is intentionally computed across all non-deleted owned orders, not the current page. Detail timelines start with an immutable `Order placed` event using the order creation timestamp and add a separate `Current status: ...` event so delivered/refunded/cancelled orders do not rewrite the original placement milestone.
 
-`paymentRecovery` is intentionally assembled in `apps/api/src/routes/customer-auth.ts` via `routes/payment/payment-session-create.ts`, not in this core customer module. The preview depends on fresh checkout-flow settings, gateway credential readiness, and public payment-session policy; duplicating that in core without the API route context would invite stale or inconsistent buyer copy. `getCustomerOwnedOrderForDetail()` exposes the customer-scoped order header used by both the detail builder and the API recovery preview; private payment-session fields must stay out of the public `order` response because the API detail schema permits passthrough fields. Account-owned payment-session POSTs still revalidate through `createCustomerAccountPaymentSession()` before provider work instead of trusting a previously rendered preview, and may explicitly replace a failed unpaid online method with another currently eligible online method on the same order.
+`paymentRecovery` is intentionally assembled in `apps/api/src/routes/customer-auth/orders.ts` via `routes/payment/payment-session-create.ts`, not in this core customer module. The preview depends on fresh checkout-flow settings, gateway credential readiness, and public payment-session policy; duplicating that in core without the API route context would invite stale or inconsistent buyer copy. `getCustomerOwnedOrderForDetail()` exposes the customer-scoped order header used by both the detail builder and the API recovery preview; private payment-session fields must stay out of the public `order` response because the API detail schema permits passthrough fields. Account-owned payment-session POSTs still revalidate through `createCustomerAccountPaymentSession()` before provider work instead of trusting a previously rendered preview, and may explicitly replace a failed unpaid online method with another currently eligible online method on the same order.
 
 ## Dependencies
 
