@@ -4,12 +4,45 @@
  * support phone from Business settings, so they can never disagree.
  */
 import type { SocialLink } from "./api/types";
+import { mediaImageUrl } from "./media-url";
+import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import type { StorefrontBusinessInfo } from "./commerce-structured-data";
 
 export function resolveStoreName(
   business: StorefrontBusinessInfo | null | undefined,
 ): string | null {
   return business?.companyName?.trim() || business?.legalName?.trim() || null;
+}
+
+/**
+ * The name buyers see in titles, the header, footer and Open Graph: the
+ * Business settings name, else the Store URL host (never blank). Schema
+ * identity stays on resolveStoreName only.
+ */
+export function resolveStoreDisplayName(
+  business: StorefrontBusinessInfo | null | undefined,
+  storefrontUrl: string | null | undefined,
+): string | null {
+  const name = resolveStoreName(business);
+  if (name) return name;
+  try {
+    return storefrontUrl ? new URL(storefrontUrl).host || null : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The store-level share image: the social image from Preferences, else the
+ * header logo. Pages without their own image (and schema that needs one)
+ * use it, so no page shares without a preview.
+ */
+export function resolveStoreShareImage(input: {
+  socialImage?: string | null;
+  logo?: string | null;
+}): string | null {
+  const source = input.socialImage?.trim() || input.logo?.trim();
+  return source ? mediaImageUrl(source, MEDIA_DISCOVERY_IMAGE_WIDTH) || null : null;
 }
 
 /** Business settings own the support phone; the header field is the fallback. */
@@ -20,7 +53,16 @@ export function resolveStorePhone(
   return business?.phone?.trim() || headerPhone?.trim() || null;
 }
 
-/** `Page | Store`, unless the page title already names the store. */
+/** A pagination suffix added by listing pages (" – Page 2"). */
+const PAGE_SUFFIX = /\s[–—-]\sPage \d+$/u;
+/** " | Brand" or " – Brand": the title already carries its own brand segment. */
+const BRAND_SEPARATOR = /\s[|–—]\s/u;
+
+/**
+ * `Page | Store`. A title that already names the store, or that the merchant
+ * wrote with its own brand segment ("Footwear | Scalius Market"), is used as
+ * written so no page ever carries two brands.
+ */
 export function buildDocumentTitle(
   title: string | null | undefined,
   storeName: string | null,
@@ -28,7 +70,9 @@ export function buildDocumentTitle(
   const pageTitle = title?.trim() ?? "";
   if (!storeName) return pageTitle;
   if (!pageTitle) return storeName;
-  return pageTitle.toLocaleLowerCase().includes(storeName.toLocaleLowerCase())
+  const withoutPage = pageTitle.replace(PAGE_SUFFIX, "");
+  return withoutPage.toLocaleLowerCase().includes(storeName.toLocaleLowerCase()) ||
+    BRAND_SEPARATOR.test(withoutPage)
     ? pageTitle
     : `${pageTitle} | ${storeName}`;
 }

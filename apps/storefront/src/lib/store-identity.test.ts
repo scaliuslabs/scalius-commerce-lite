@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDocumentTitle,
+  resolveStoreDisplayName,
   resolveStoreName,
   resolveStorePhone,
   resolveStoreSocialLinks,
@@ -21,11 +22,25 @@ describe("store identity", () => {
     expect(resolveStorePhone(null, "")).toBeNull();
   });
 
-  it("applies one `Page | Store` title template", () => {
+  it("applies one `Page | Store` title template and never a second brand", () => {
     expect(buildDocumentTitle("Footwear", "Scalius Market")).toBe("Footwear | Scalius Market");
     expect(buildDocumentTitle("About Scalius Market", "Scalius Market")).toBe("About Scalius Market");
     expect(buildDocumentTitle("", "Scalius Market")).toBe("Scalius Market");
     expect(buildDocumentTitle("Footwear", null)).toBe("Footwear");
+    // Merchant SEO titles that already carry a brand segment are used as written.
+    expect(buildDocumentTitle("Footwear | Scalius Market", "Scalius Labs")).toBe("Footwear | Scalius Market");
+    expect(buildDocumentTitle("About Scalius Market | Scalius", "Scalius Labs")).toBe("About Scalius Market | Scalius");
+    expect(buildDocumentTitle("Footwear | Scalius Market – Page 2", "Scalius Labs")).toBe("Footwear | Scalius Market – Page 2");
+    // A plain page title keeps its pagination suffix and gains the store name.
+    expect(buildDocumentTitle("Footwear – Page 2", "Scalius Labs")).toBe("Footwear – Page 2 | Scalius Labs");
+    // Hyphens inside product names are not brand separators.
+    expect(buildDocumentTitle("Block Print Wool Shawl - 2027", "Scalius Labs")).toBe("Block Print Wool Shawl - 2027 | Scalius Labs");
+  });
+
+  it("falls back to the Store URL host when the store has no name", () => {
+    expect(resolveStoreDisplayName({ companyName: "" }, "https://storefront.scalius.com")).toBe("storefront.scalius.com");
+    expect(resolveStoreDisplayName({ companyName: "Scalius Labs" }, "https://x.test")).toBe("Scalius Labs");
+    expect(resolveStoreDisplayName(null, "")).toBeNull();
   });
 
   it("builds call and WhatsApp links from local, international and Bangla-digit numbers", () => {

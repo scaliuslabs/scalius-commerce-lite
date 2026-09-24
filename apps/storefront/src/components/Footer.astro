@@ -120,13 +120,12 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
         <a
           href="/"
           class="group inline-block transform transition-transform hover:scale-105 duration-300"
-          aria-label="Go to homepage"
         >
           {
             logo.src ? (
               <img
                 src={mediaImageUrl(logo.src, 480)}
-                alt={logo.alt || brandName}
+                alt={brandName || "Home"}
                 width={344}
                 height={256}
                 loading="lazy"
@@ -134,7 +133,9 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
                 class="h-12 sm:h-14 w-auto object-contain drop-shadow-lg"
               />
             ) : (
-              brandName && <span class="text-lg font-bold">{brandName}</span>
+              brandName
+                ? <span class="text-lg font-bold">{brandName}</span>
+                : <span class="sr-only">Home</span>
             )
           }
         </a>

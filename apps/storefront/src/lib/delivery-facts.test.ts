@@ -35,7 +35,7 @@ describe("buildDeliveryFacts", () => {
     ]);
   });
 
-  it("says free delivery for a free-delivery product", () => {
+  it("leaves free delivery to the product's own badge instead of repeating it", () => {
     const [fact] = buildDeliveryFacts({
       shippingMethods: [method("Standard", 80, 0)],
       checkoutConfig: null,
@@ -43,7 +43,7 @@ describe("buildDeliveryFacts", () => {
       formatMoney,
       freeDelivery: true,
     });
-    expect(fact).toEqual({ kind: "delivery", title: "Free delivery", detail: "" });
+    expect(fact).toBeUndefined();
   });
 
   it("never states one range across delivery zones: lowest fee, depends on area, pickup", () => {
@@ -86,6 +86,16 @@ describe("buildDeliveryFacts", () => {
       title: "Delivery ৳80–৳150",
       detail: "Standard ৳80, free over ৳2500 · Express ৳150 · Pickup available",
     });
+  });
+
+  it("states a single rate once, adding only its free-over threshold", () => {
+    const [fact] = buildDeliveryFacts({
+      shippingMethods: [method("OPS006 Standard Delivery", 80, 0, true, { freeOver: 2000 })],
+      checkoutConfig: null,
+      returnPolicy: null,
+      formatMoney,
+    });
+    expect(fact).toEqual({ kind: "delivery", title: "Delivery ৳80", detail: "Free over ৳2000" });
   });
 
   it("offers pickup alone when there is no delivery rate", () => {

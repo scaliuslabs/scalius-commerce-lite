@@ -126,6 +126,10 @@ describe("storefront catalog search and option facets", () => {
         expect(result.correctedQuery).toBe("kettle");
         expect(result.products.map((product) => product.id)).toEqual(["p_kettle"]);
         expect(result.pagination.total).toBe(1);
+
+        const shoes = await getStorefrontProducts(db, { search: "জুতা" });
+        expect(shoes.correctedQuery).toBe("footwear");
+        expect(shoes.products.map((product) => product.id).sort()).toEqual(["p_loafer", "p_runner", "p_sandal"]);
     });
 
     it("offers merchant option axes as facets and filters by them within D1's bind limit", async () => {
@@ -167,5 +171,99 @@ describe("storefront catalog search and option facets", () => {
             ] },
         ]);
         expect(maxParams).toBeLessThanOrEqual(100);
+    });
+});
+
+function twoAxisCatalog() {
+    const harness = createSqliteD1Database();
+    harness.sqlite.exec(`
+        INSERT INTO categories (id, name, slug, status) VALUES ('cat_shoes', 'Footwear', 'footwear', 'published');
+        INSERT INTO products (id, name, price_minor, slug, category_id, is_active) VALUES
+            ('p_knit', 'Padma Knit Slip-ons', 10000, 'padma-knit', 'cat_shoes', 1),
+            ('p_canvas', 'Canvas Sneaker', 10000, 'canvas-sneaker', 'cat_shoes', 1);
+        INSERT INTO product_attributes (id, name, slug, filterable) VALUES ('attr_material', 'Material', 'material', 1);
+        INSERT INTO product_attribute_values (id, product_id, attribute_id, value) VALUES
+            ('pav_knit', 'p_knit', 'attr_material', 'Knit'),
+            ('pav_canvas', 'p_canvas', 'attr_material', 'Canvas');
+    `);
+    const run = (statement: string, ...params: Array<string | number>) => harness.sqlite.prepare(statement).run(...params);
+    // The knit sells Chalk only in 41 and Black only in 42; the canvas is Black in both sizes.
+    const catalog: Array<[string, Array<[string, string]>]> = [
+        ["p_knit", [["Chalk", "41"], ["Black", "42"]]],
+        ["p_canvas", [["Black", "41"], ["Black", "42"]]],
+    ];
+    for (const [productId, combinations] of catalog) {
+        for (const [position, axis] of ["Color", "Size"].entries()) {
+            run(
+                "INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position) VALUES (?, ?, ?, ?, ?)",
+                `${productId}_${axis}`, productId, axis, axis.toLowerCase(), position,
+            );
+            const values = [...new Set(combinations.map((combination) => combination[position]!))];
+            values.forEach((value, valuePosition) => run(
+                "INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position) VALUES (?, ?, ?, ?, ?)",
+                `${productId}_${axis}_${value}`, `${productId}_${axis}`, value, value.toLowerCase(), valuePosition,
+            ));
+        }
+        for (const [color, size] of combinations) {
+            const skuId = `${productId}_${color}_${size}`;
+            run(
+                `INSERT INTO product_variants (id, product_id, option_combination_key, sku, price_minor, stock, is_default, track_inventory)
+                 VALUES (?, ?, ?, ?, 10000, 5, 0, 1)`,
+                skuId, productId, `${color}|${size}`, skuId,
+            );
+            for (const [axis, value] of [["Color", color], ["Size", size]]) {
+                run(
+                    "INSERT INTO product_variant_option_values (variant_id, option_definition_id, option_value_id) VALUES (?, ?, ?)",
+                    skuId, `${productId}_${axis}`, `${productId}_${axis}_${value}`,
+                );
+            }
+        }
+    }
+    return harness;
+}
+
+describe("storefront facet counts follow the buyer's other selections", () => {
+    const color = (values: string[]) => ({ id: "option.color", name: "Color", slug: "option.color", values });
+    const size = (values: string[]) => ({ id: "option.size", name: "Size", slug: "option.size", values });
+    const material = (values: string[]) => ({ id: "attr_material", name: "Material", slug: "material", values });
+    const counts = (facets: Array<{ slug: string; values: Array<{ value: string; count: number }> }>) =>
+        Object.fromEntries(facets.map((facet) => [
+            facet.slug,
+            Object.fromEntries(facet.values.map(({ value, count }) => [value, count])),
+        ]));
+
+    it("counts each colour by the SKUs sold in the selected size, never offering a dead end", async () => {
+        const { db } = twoAxisCatalog();
+
+        const size42 = await getStorefrontProducts(db, { category: "cat_shoes", attributeFilters: [size(["42"])] });
+        expect(counts(size42.facets)).toEqual({
+            "option.color": { Black: 2, Chalk: 0 },
+            "option.size": { "41": 2, "42": 2 },
+            material: { Canvas: 1, Knit: 1 },
+        });
+
+        // The knit sells Chalk and a 42, but not a Chalk 42.
+        const chalk42 = await getStorefrontProducts(db, {
+            category: "cat_shoes",
+            attributeFilters: [size(["42"]), color(["Chalk"])],
+        });
+        expect(chalk42.pagination.total).toBe(0);
+
+        const chalk = await getStorefrontProducts(db, { category: "cat_shoes", attributeFilters: [color(["Chalk"])] });
+        expect(chalk.products.map((product) => product.id)).toEqual(["p_knit"]);
+        expect(counts(chalk.facets)["option.size"]).toEqual({ "41": 1, "42": 0 });
+        expect(counts(chalk.facets).material).toEqual({ Canvas: 0, Knit: 1 });
+    });
+
+    it("counts option values within the selected attribute values", async () => {
+        const { db } = twoAxisCatalog();
+
+        const canvas = await getStorefrontProducts(db, { category: "cat_shoes", attributeFilters: [material(["Canvas"])] });
+
+        expect(counts(canvas.facets)).toEqual({
+            "option.color": { Black: 1, Chalk: 0 },
+            "option.size": { "41": 1, "42": 1 },
+            material: { Canvas: 1, Knit: 1 },
+        });
     });
 });

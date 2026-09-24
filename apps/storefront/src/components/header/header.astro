@@ -29,10 +29,10 @@ const headerData: HeaderData = {
     isEnabled: apiHeaderData?.topBar?.isEnabled ?? true,
   },
   logo: apiHeaderData?.logo?.src
-    ? { ...apiHeaderData.logo, alt: apiHeaderData.logo.alt || storeName || "Store" }
+    ? { ...apiHeaderData.logo, alt: storeName || apiHeaderData.logo.alt || "Store" }
     : {
         src: "",
-        alt: apiHeaderData?.logo?.alt || storeName || "Store",
+        alt: storeName || apiHeaderData?.logo?.alt || "Store",
         width: HEADER_LOGO_WIDTH_DEFAULT,
       },
   contact: {
@@ -45,7 +45,7 @@ const headerData: HeaderData = {
 ---
 
 <header id="site-header" class="contents">
-  <HeaderLayout headerData={headerData}>
+  <HeaderLayout headerData={headerData} hasNavigation={navigationItems.length > 0}>
     <DesktopNav
       slot="desktop-nav-full"
       navigation={navigationItems}
@@ -161,10 +161,6 @@ const headerData: HeaderData = {
         if (source) image.src = source;
       });
     };
-
-    if (desktopBreakpoint.matches) {
-      hydrateDeferredHeaderImages("[data-desktop-header-image]");
-    }
 
     const menuBackgroundElements = () => {
       const siteHeader = document.getElementById("site-header");
@@ -351,7 +347,6 @@ const headerData: HeaderData = {
 
     desktopBreakpoint.onchange = (event) => {
       if (event.matches) {
-        hydrateDeferredHeaderImages("[data-desktop-header-image]");
         if (menuTrigger?.getAttribute("aria-expanded") === "true") {
           toggleMenu(false);
         }

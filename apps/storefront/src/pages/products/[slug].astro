@@ -15,6 +15,7 @@ import ProductBreadcrumbs from "@/components/product/ProductBreadcrumbs.astro";
 import ProductGallery from "@/components/product/ProductGallery.astro";
 import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
+import StickyBuyBar from "@/components/product/StickyBuyBar.astro";
 import { GALLERY_CONFIG } from "@/components/product/config";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { resolveMediaUrl } from "@/lib/media-url";
@@ -634,9 +635,12 @@ const productCategoryAnalytics = productCategory
       </div>
     </section>
 
+    <StickyBuyBar productName={product.name} />
+
     <RelatedProducts
       relatedProducts={relatedProducts}
       currencySymbol={currencySymbol}
+      currencyCode={currencyCode}
     />
   </div>
 
