@@ -2,6 +2,7 @@
 // src/components/collection1.astro
 // Grid layout collection component - receives pre-populated data from parent
 import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
 import type { CollectionWithProducts } from "@/lib/api";
 import { ArrowRight } from "lucide-react";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -10,12 +11,15 @@ interface Props {
   collection: CollectionWithProducts;
   currencySymbol?: string;
   currencyCode?: string;
+  /** The grid starts in the first viewport (its first row loads eagerly). */
+  aboveFold?: boolean;
 }
 
 const {
   collection,
   currencySymbol = DEFAULT_CURRENCY.symbol,
   currencyCode = DEFAULT_CURRENCY.code,
+  aboveFold = false,
 } = Astro.props;
 
 // Data is pre-populated from consolidated API
@@ -56,7 +60,7 @@ const collectionHref = `/collections/${encodeURIComponent(collection.id)}`;
             categories.map((cat) => (
               <a
                 href={`/categories/${cat.slug}`}
-                class="text-sm font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full bg-muted hover:bg-accent transition-colors"
+                class="inline-flex min-h-11 items-center text-sm font-medium text-muted-foreground hover:text-primary px-3 py-1.5 rounded-full bg-muted hover:bg-accent transition-colors sm:min-h-0"
               >
                 {cat.name}
               </a>
@@ -74,16 +78,22 @@ const collectionHref = `/collections/${encodeURIComponent(collection.id)}`;
     </div>
 
     <!-- Products Grid -->
-    <div
-      class="product-grid"
-    >
-      {products.map((product) => <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} />)}
-    </div>
+    <ProductGrid>
+      {products.map((product, index) => (
+        <ProductCard
+          product={product}
+          currencySymbol={currencySymbol}
+          currencyCode={currencyCode}
+          index={index}
+          aboveFold={aboveFold}
+        />
+      ))}
+    </ProductGrid>
 
     <div class="mt-4 flex justify-center sm:hidden">
       <a
         href={collectionHref}
-        class="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-foreground bg-muted hover:bg-accent rounded-full transition-colors"
+        class="inline-flex min-h-11 items-center gap-2 px-6 py-2.5 text-sm font-semibold text-foreground bg-muted hover:bg-accent rounded-full transition-colors"
       >
         View collection
         <ArrowRight className="h-4 w-4" />

@@ -1,6 +1,7 @@
 ---
 import ErrorPageState from "@/components/ErrorPageState.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData, getProductRecommendations } from "@/lib/api";
 import { recommendationTitle } from "@/lib/recommendations";
@@ -29,7 +30,7 @@ const products = suggestions?.products ?? [];
       <h2 id="not-found-suggestions" class="mb-4 text-lg font-semibold text-foreground">
         {recommendationTitle(suggestions.reason)}
       </h2>
-      <div class="product-grid">
+      <ProductGrid>
         {products.map((product) => (
           <ProductCard
             product={product}
@@ -37,7 +38,7 @@ const products = suggestions?.products ?? [];
             currencyCode={layoutData?.currency?.code}
           />
         ))}
-      </div>
+      </ProductGrid>
     </section>
   )}
 </Layout>

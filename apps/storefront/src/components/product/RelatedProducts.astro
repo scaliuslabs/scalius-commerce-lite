@@ -2,6 +2,7 @@
 // The same card as every listing, so prices ("From ৳2,200"), badges and
 // labels read identically everywhere.
 import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
 import type { ProductRecommendations } from "@/lib/api";
 import { recommendationTitle } from "@/lib/recommendations";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -30,7 +31,7 @@ const {
         <h2 id="related-products-title" class="text-lg font-bold text-foreground mb-4">
           {recommendationTitle(recommendations.reason)}
         </h2>
-        <div class="product-grid">
+        <ProductGrid>
           {recommendations.products.map((relatedProduct) => (
             <ProductCard
               product={relatedProduct}
@@ -38,7 +39,7 @@ const {
               currencyCode={currencyCode}
             />
           ))}
-        </div>
+        </ProductGrid>
       </div>
     </section>
   )

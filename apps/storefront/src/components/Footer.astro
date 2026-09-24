@@ -55,6 +55,9 @@ const storeAddress = [business?.addressLine1, business?.addressLine2, business?.
   .map((part) => part?.trim())
   .filter(Boolean)
   .join(", ");
+// The contact block needs something to contact; without any store contact
+// detail it is left out rather than shown as an empty heading.
+const hasContactDetails = Boolean(phoneHref || chatHref || storeEmail || storeAddress);
 const tagline = footerData?.tagline || "";
 const description = footerData?.description || "";
 const optimizedDescription = applyStorefrontPrefetchPolicyToHtml(
@@ -149,14 +152,15 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
     {variant === "compact" ? (
       <div class="flex flex-col items-center gap-4 text-center lg:flex-row lg:justify-between lg:text-left">
         {brandName && (
-          <a href="/" class="text-lg font-bold">{brandName}</a>
+          <a href="/" class="inline-flex min-h-11 max-w-full shrink-0 items-center text-lg font-bold [overflow-wrap:anywhere]">{brandName}</a>
         )}
+        {/* Many links wrap into more rows inside the band, never past it. */}
         {compactLinks.length > 0 && (
-          <nav aria-label="Footer">
+          <nav aria-label="Footer" class="w-full min-w-0 lg:w-auto lg:flex-1">
             <ul class="flex flex-wrap justify-center gap-x-5 gap-y-1">
               {compactLinks.map((link) => (
-                <li>
-                  <a href={link.href} class="inline-flex min-h-11 items-center underline-offset-4 hover:underline">
+                <li class="min-w-0 max-w-full">
+                  <a href={link.href} class="inline-flex min-h-11 max-w-full items-center underline-offset-4 [overflow-wrap:anywhere] hover:underline">
                     {link.title}
                   </a>
                 </li>
@@ -165,7 +169,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
           </nav>
         )}
         {phoneHref && (
-          <a href={phoneHref} class="inline-flex min-h-11 items-center font-semibold underline underline-offset-4">
+          <a href={phoneHref} class="inline-flex min-h-11 shrink-0 items-center font-semibold underline underline-offset-4">
             {storePhone}
           </a>
         )}
@@ -206,8 +210,10 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
 
         {
           variant === "contact" ? (
-            <div class="mt-4 space-y-3">
+            hasContactDetails && (
+            <div class="mt-4 space-y-3" data-footer-contact>
               <h2 class="text-base font-semibold">Need help ordering?</h2>
+              {(phoneHref || chatHref) && (
               <div class="flex flex-wrap gap-2">
                 {phoneHref && (
                   <a href={phoneHref} class="inline-flex min-h-11 items-center rounded-lg bg-primary-foreground px-4 text-sm font-semibold text-primary">
@@ -220,13 +226,15 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
                   </a>
                 )}
               </div>
+              )}
               {storeEmail && (
-                <p class="text-base">
-                  <a href={`mailto:${storeEmail}`} class="underline underline-offset-4">{storeEmail}</a>
+                <p class="text-base [overflow-wrap:anywhere]">
+                  <a href={`mailto:${storeEmail}`} class="inline-flex min-h-11 items-center underline underline-offset-4 sm:min-h-0">{storeEmail}</a>
                 </p>
               )}
               {storeAddress && <address class="text-base not-italic">{storeAddress}</address>}
             </div>
+            )
           ) : (
             phoneHref && (
               <p class="mt-3 text-base">
@@ -314,7 +322,7 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
                     aria-label={displayTitle}
                     title={displayTitle}
                   >
-                    <div class="relative p-2.5 rounded-full bg-primary-foreground/10 backdrop-blur-sm group-hover:bg-primary-foreground/20 transform transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1">
+                    <div class="relative p-3 rounded-full bg-primary-foreground/10 backdrop-blur-sm group-hover:bg-primary-foreground/20 transform transition-all duration-300 group-hover:scale-105 group-hover:-translate-y-1">
                       {item.optimizedIconUrl ? (
                         <img
                           src={item.optimizedIconUrl}

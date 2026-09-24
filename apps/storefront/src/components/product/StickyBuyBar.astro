@@ -29,6 +29,23 @@ const { productName } = Astro.props;
   </div>
 </div>
 
+<style is:global>
+  /*
+   * While the phone bar shows, the page ends above it and focus scrolls clear
+   * of it. The reserve is the bar's own height: 1px border, 0.5rem top
+   * padding, a 2.75rem row, and max(0.5rem, safe-area inset) bottom padding.
+   */
+  @media (max-width: 63.999rem) {
+    html[data-sticky-buy-visible] {
+      --sticky-buy-reserve: calc(1px + 3.25rem + max(0.5rem, env(safe-area-inset-bottom, 0px)));
+      scroll-padding-bottom: calc(var(--sticky-buy-reserve) + 0.5rem);
+    }
+    html[data-sticky-buy-visible] body {
+      padding-bottom: var(--sticky-buy-reserve);
+    }
+  }
+</style>
+
 <script>
   import { bindStickyBuyBar } from "./scripts/sticky-buy-bar";
 

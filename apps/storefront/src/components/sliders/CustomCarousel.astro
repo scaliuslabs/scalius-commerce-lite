@@ -1,6 +1,6 @@
 ---
 // Optimized carousel component for best performance and LCP
-import { mediaImageUrl } from "@/lib/media-url";
+import { heroImageCandidate } from "@/lib/homepage-hero";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import {
   HERO_SLIDE_DEFAULT_FOCAL_POINT,
@@ -15,6 +15,8 @@ interface Props {
   type: "desktop" | "mobile";
   autoRotate?: boolean;
   interval?: number;
+  /** The first slide is the page's LCP (high fetch priority, sync decode). */
+  priority?: boolean;
 }
 
 // Slides advance every 6 s (WCAG 2.2.2 needs a pause control, provided below).
@@ -24,11 +26,10 @@ const {
   type,
   autoRotate = true,
   interval = 6000,
+  priority = true,
 } = Astro.props;
 const canRotate = autoRotate && images.length > 1;
 const presentation = HERO_SLIDE_PRESENTATION[type];
-const viewportMedia =
-  type === "desktop" ? "(min-width: 768px)" : "(max-width: 767px)";
 const transparentPixel =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
@@ -57,9 +58,12 @@ if (images.length === 0) return;
           const headline = image.heading?.trim();
           const buttonLabel = image.link ? image.buttonLabel?.trim() : "";
           const focalPoint = image.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT;
-          // One rendition at the authored slide width keeps the rendered
-          // <source> identical to the eager LCP preload in pages/index.astro.
-          const source = mediaImageUrl(image.url, presentation.width);
+          // Every rendition with the rendered width, built by the same helper
+          // as the LCP preload in pages/index.astro, so the browser picks one
+          // candidate for both. The <source> media keeps the other viewport's
+          // banner (display:none) from downloading at all.
+          const candidate = heroImageCandidate(image.url, type);
+          const source = candidate.srcset ?? candidate.src;
           return (
             <div
               class={`slide absolute inset-0 transition-opacity duration-500 ${index === 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}
@@ -73,16 +77,17 @@ if (images.length === 0) return;
               <SlideFrame
                 href={image.link || undefined}
                 data-astro-prefetch={getStorefrontPrefetchAttribute(image.link, Astro.url)}
-                class={`slide-link group block h-full w-full ${image.link ? "cursor-pointer" : "cursor-default"}`}
+                class={`slide-link group relative block h-full w-full rounded-xl ${image.link ? "cursor-pointer" : "cursor-default"}`}
                 aria-label={image.link && !headline && !image.title ? `Slide ${index + 1}` : undefined}
                 target={isExternal ? "_blank" : undefined}
                 rel={isExternal ? "noopener noreferrer" : undefined}
               >
                 <picture class="block h-full w-full">
                   <source
-                    media={viewportMedia}
+                    media={candidate.media}
                     srcset={index === 0 ? source : undefined}
                     data-srcset={index === 0 ? undefined : source}
+                    sizes={candidate.srcset ? candidate.sizes : undefined}
                   />
                   <img
                     src={transparentPixel}
@@ -92,8 +97,8 @@ if (images.length === 0) return;
                     class="h-full w-full object-cover"
                     style={`object-position: ${getHeroSlideObjectPosition(focalPoint)};`}
                     loading={index === 0 ? "eager" : "lazy"}
-                    fetchpriority={index === 0 ? "high" : "auto"}
-                    decoding={index === 0 ? "sync" : "async"}
+                    fetchpriority={index === 0 && priority ? "high" : "auto"}
+                    decoding={index === 0 && priority ? "sync" : "async"}
                   />
                 </picture>
 
@@ -662,11 +667,30 @@ if (images.length === 0) return;
     opacity: 1;
   }
 
-  /* Ensure buttons are visible on all backgrounds */
+  /* The dot buttons keep a 44px hit area (WCAG 2.5.8) that stays invisible:
+     only the dot itself is drawn, with its own shadow for contrast. */
   [data-nav-index] {
-    box-shadow:
-      0 0 5px rgba(0, 0, 0, 0.3),
-      0 0 3px rgba(255, 255, 255, 0.2);
-    transition: all 0.2s ease;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* The slide link fills a rounded overflow-hidden frame, so an outside ring
+     would be clipped away (WCAG 2.4.7). Draw it inside instead: a white ring
+     at the edge plus a dark inner ring, visible on any photo. Outlines and
+     the ::after layer paint above the image; an inset box-shadow would not. */
+  /* Scoped through the carousel root: the slide frame is a dynamic a/div tag. */
+  [data-carousel-type] :global(.slide-link:focus-visible) {
+    outline: 2px solid #fff;
+    outline-offset: -2px;
+  }
+
+  [data-carousel-type] :global(.slide-link:focus-visible::after) {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    z-index: 1;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 2px rgb(0 0 0 / 0.85);
+    pointer-events: none;
   }
 </style>
