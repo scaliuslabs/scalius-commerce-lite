@@ -7,7 +7,7 @@ export type ClientOptions = {
 export type NullableTimestamp = string | number | null;
 
 export type StorefrontThemeDocument = {
-    version: 2;
+    version: 3;
     mode: 'configured' | 'custom';
     tokens: {
         colors: {
@@ -31,11 +31,9 @@ export type StorefrontThemeDocument = {
             input: string;
             ring: string;
         };
-        typography: {
-            heading: 'system' | 'modern' | 'editorial';
-            body: 'system' | 'modern' | 'humanist';
-        };
+        typography: 'retail' | 'market' | 'editorial' | 'fresh' | 'beauty' | 'heritage' | 'tech';
         radius: 'square' | 'subtle' | 'rounded';
+        buttonShape: 'radius' | 'pill';
         containerWidth: 'standard' | 'wide';
         components: {
             buttons: 'solid' | 'outline';
@@ -49,6 +47,8 @@ export type StorefrontThemeDocument = {
         card: 'standard' | 'portrait' | 'quick';
         density: 'compact' | 'comfortable';
         productPage: 'gallery' | 'filmstrip' | 'stacked';
+        navigation: 'menu' | 'mega' | 'pills' | 'sidebar';
+        mobileNavigation: 'drawer' | 'tabs';
     };
     sections: Array<{
         id: string;
@@ -1633,16 +1633,19 @@ export type GetApiV1NavigationMenusByMenuIdResponses = {
                 id: string;
                 title: string;
                 href?: string;
+                imageUrl?: string;
                 openInNewTab?: boolean;
                 subMenu?: Array<{
                     id: string;
                     title: string;
                     href?: string;
+                    imageUrl?: string;
                     openInNewTab?: boolean;
                     subMenu?: Array<{
                         id: string;
                         title: string;
                         href?: string;
+                        imageUrl?: string;
                         openInNewTab?: boolean;
                     }>;
                 }>;
@@ -1710,6 +1713,7 @@ export type GetApiV1NavigationMenusByMenuIdItemsResponses = {
                 id: string;
                 title: string;
                 href?: string;
+                imageUrl?: string;
                 openInNewTab?: boolean;
                 position: number;
                 childCount: number;
@@ -1771,16 +1775,19 @@ export type GetApiV1NavigationByIdResponses = {
                     id: string;
                     title: string;
                     href?: string;
+                    imageUrl?: string;
                     openInNewTab?: boolean;
                     subMenu?: Array<{
                         id: string;
                         title: string;
                         href?: string;
+                        imageUrl?: string;
                         openInNewTab?: boolean;
                         subMenu?: Array<{
                             id: string;
                             title: string;
                             href?: string;
+                            imageUrl?: string;
                             openInNewTab?: boolean;
                         }>;
                     }>;
@@ -2926,16 +2933,19 @@ export type GetApiV1StorefrontLayoutResponses = {
                 id?: string;
                 title: string;
                 href?: string;
+                imageUrl?: string;
                 openInNewTab?: boolean;
                 subMenu?: Array<{
                     id?: string;
                     title: string;
                     href?: string;
+                    imageUrl?: string;
                     openInNewTab?: boolean;
                     subMenu?: Array<{
                         id?: string;
                         title: string;
                         href?: string;
+                        imageUrl?: string;
                         openInNewTab?: boolean;
                     }>;
                 }>;
@@ -2959,16 +2969,19 @@ export type GetApiV1StorefrontLayoutResponses = {
                         id?: string;
                         title: string;
                         href?: string;
+                        imageUrl?: string;
                         openInNewTab?: boolean;
                         subMenu?: Array<{
                             id?: string;
                             title: string;
                             href?: string;
+                            imageUrl?: string;
                             openInNewTab?: boolean;
                             subMenu?: Array<{
                                 id?: string;
                                 title: string;
                                 href?: string;
+                                imageUrl?: string;
                                 openInNewTab?: boolean;
                             }>;
                         }>;

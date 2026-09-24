@@ -18,6 +18,8 @@ import {
   STOREFRONT_DENSITIES,
   STOREFRONT_FOOTER_STYLES,
   STOREFRONT_HEADER_STYLES,
+  STOREFRONT_MOBILE_NAVIGATION_STYLES,
+  STOREFRONT_NAVIGATION_STYLES,
   STOREFRONT_PRODUCT_PAGE_LAYOUTS,
   STOREFRONT_THEME_MIN_CONTRAST,
   isStorefrontThemeHexColor,
@@ -47,6 +49,8 @@ import {
   HeaderRows,
   HeaderSketch,
   HomepageOrder,
+  MobileNavigationSketch,
+  NavigationSketch,
   ProductPageSketch,
   ProductTile,
   Sketch,
@@ -417,6 +421,45 @@ function ConfiguredThemeCards({ saved, revision, refetch, site }: {
           checked={headerDraft.draft.topBar.isEnabled === true}
           onCheckedChange={(isEnabled) =>
             headerDraft.setDraft((config) => ({ ...config, topBar: { ...config.topBar, isEnabled } }))}
+        />
+      </SectionCard>
+
+      <SectionCard
+        title={t("menuStyle")}
+        description={
+          <>
+            {t("menuStyleHelp")}{" "}
+            <Link to="/admin/online-store/navigation" className="text-link hover:underline">
+              {t("editMenus")}
+            </Link>
+          </>
+        }
+      >
+        <VisualChoice
+          label={t("menuStyleDesktop")}
+          showLabel
+          value={layout.navigation}
+          className="grid-cols-2"
+          options={STOREFRONT_NAVIGATION_STYLES.map((value) => ({
+            value,
+            label: option(`navigation_${value}`),
+            help: option(`navigation_${value}Help`),
+            sketch: <NavigationSketch kind={value} />,
+          }))}
+          onChange={(navigation) => setLayout({ navigation })}
+        />
+        <VisualChoice
+          label={t("menuStylePhone")}
+          showLabel
+          value={layout.mobileNavigation}
+          className="grid-cols-2"
+          options={STOREFRONT_MOBILE_NAVIGATION_STYLES.map((value) => ({
+            value,
+            label: option(`mobileNavigation_${value}`),
+            help: option(`mobileNavigation_${value}Help`),
+            sketch: <MobileNavigationSketch kind={value} />,
+          }))}
+          onChange={(mobileNavigation) => setLayout({ mobileNavigation })}
         />
       </SectionCard>
 

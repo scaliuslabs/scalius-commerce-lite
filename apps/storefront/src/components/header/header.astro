@@ -4,8 +4,14 @@ import type { HeaderData, NavigationItem, SocialLink } from "@/lib/api";
 import HeaderLayout from "./HeaderLayout.astro";
 import DesktopNav from "./DesktopNav.astro";
 import MobileMenu from "./MobileMenu.astro";
+import MobileTabBar from "./MobileTabBar.astro";
+import PillNav from "./PillNav.astro";
 import { HEADER_LOGO_WIDTH_DEFAULT } from "@scalius/shared/brand-presentation";
-import type { StorefrontHeaderStyle } from "@scalius/shared/storefront-theme";
+import type {
+  StorefrontHeaderStyle,
+  StorefrontMobileNavigationStyle,
+  StorefrontNavigationStyle,
+} from "@scalius/shared/storefront-theme";
 
 interface Props {
   headerData: HeaderData;
@@ -15,6 +21,9 @@ interface Props {
   storePhone: string | null;
   social: SocialLink[];
   variant: StorefrontHeaderStyle;
+  /** How the menu is browsed on computers (the sidebar itself is Layout's). */
+  navigationStyle: StorefrontNavigationStyle;
+  mobileNavigation: StorefrontMobileNavigationStyle;
 }
 
 const {
@@ -24,7 +33,13 @@ const {
   storePhone,
   social,
   variant,
+  navigationStyle,
+  mobileNavigation,
 } = Astro.props;
+const hasNavigation = navigationItems.length > 0;
+// Classic headers fold the menu row into the bar on scroll. Only the dropdown
+// menu folds: a mega panel spans the full row it hangs from.
+const condensedMenu = hasNavigation && variant === "classic" && navigationStyle === "menu";
 
 const headerData: HeaderData = {
   topBar: {
@@ -48,18 +63,24 @@ const headerData: HeaderData = {
 ---
 
 <header id="site-header" class="contents">
-  <HeaderLayout headerData={headerData} hasNavigation={navigationItems.length > 0} variant={variant}>
-    <DesktopNav
-      slot="desktop-nav-full"
-      navigation={navigationItems}
-      id="desktop-nav-full"
-    />
-
-    <DesktopNav
-      slot="desktop-nav-compact"
-      navigation={navigationItems}
-      id="desktop-nav-compact"
-    />
+  <HeaderLayout
+    headerData={headerData}
+    hasNavigation={hasNavigation}
+    navigationStyle={navigationStyle}
+    condensedMenu={condensedMenu}
+    variant={variant}
+  >
+    {
+      hasNavigation && (navigationStyle === "menu" || navigationStyle === "mega") && (
+        <DesktopNav slot="desktop-nav-full" navigation={navigationItems} id="desktop-nav" navStyle={navigationStyle} />
+      )
+    }
+    {
+      condensedMenu && (
+        <DesktopNav slot="desktop-nav-compact" navigation={navigationItems} id="desktop-nav-compact" navStyle="menu" />
+      )
+    }
+    {hasNavigation && navigationStyle === "pills" && <PillNav slot="pill-nav" navigation={navigationItems} />}
   </HeaderLayout>
 
   <MobileMenu
@@ -67,6 +88,8 @@ const headerData: HeaderData = {
     contact={headerData.contact}
     social={headerData.social}
   />
+
+  {mobileNavigation === "tabs" && <MobileTabBar />}
 </header>
 
 <script>
@@ -74,6 +97,9 @@ const headerData: HeaderData = {
   import { debounce } from "@/lib/utils";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
   import { formatMoney } from "@/lib/currency";
+  import { installNavDisclosure } from "./nav-disclosure";
+
+  installNavDisclosure();
 
   const openCart = debounce(() => {
     document.dispatchEvent(new CustomEvent("open-cart"));
@@ -145,11 +171,24 @@ const headerData: HeaderData = {
     };
 
     addClick("cart-button", handleOpenCart);
+    // The phone tab bar's Cart tab opens the same cart drawer.
+    const cartOpeners = document.querySelectorAll<HTMLElement>("[data-cart-open]");
+    cartOpeners.forEach((opener) => (opener.onclick = handleOpenCart));
 
     const menuPanel = document.getElementById("mobile-menu-panel");
     const menuOverlay = document.getElementById("mobile-menu-overlay");
     const menuTrigger = document.getElementById("mobile-menu-toggle");
     const menuClose = document.getElementById("mobile-menu-close");
+    // The header button and the tab bar's Categories tab both open the menu;
+    // focus returns to whichever opened it.
+    const menuOpeners = [
+      ...new Set(
+        [menuTrigger, ...document.querySelectorAll<HTMLElement>("[data-mobile-menu-open]")].filter(
+          (opener): opener is HTMLElement => opener !== null,
+        ),
+      ),
+    ];
+    let menuOpener: HTMLElement | null = menuTrigger;
     const menuHistoryKey = "__scaliusMobileMenu";
     let menuIsOpen = false;
     let bodyOverflowBeforeMenu = "";
@@ -243,7 +282,7 @@ const headerData: HeaderData = {
       }
       menuPanel.inert = !show;
       menuPanel.setAttribute("aria-hidden", String(!show));
-      menuTrigger?.setAttribute("aria-expanded", String(show));
+      menuOpeners.forEach((opener) => opener.setAttribute("aria-expanded", String(show)));
       if (show) {
         hydrateDeferredHeaderImages("[data-mobile-header-image]");
         setMenuBackgroundInert(true);
@@ -275,7 +314,7 @@ const headerData: HeaderData = {
           menuVisibilityTimer = undefined;
         }, 300);
         document.body.style.overflow = bodyOverflowBeforeMenu;
-        if (restoreFocus) menuTrigger?.focus();
+        if (restoreFocus) menuOpener?.focus();
         if (syncHistory && historyState()[menuHistoryKey] === true) {
           history.back();
         }
@@ -289,7 +328,12 @@ const headerData: HeaderData = {
     };
     window.addEventListener("popstate", handlePopState);
 
-    addClick("mobile-menu-toggle", () => toggleMenu(true));
+    menuOpeners.forEach((opener) => {
+      opener.onclick = () => {
+        menuOpener = opener;
+        toggleMenu(true);
+      };
+    });
     addClick("mobile-menu-close", () => toggleMenu(false));
     if (menuOverlay) {
       menuOverlay.onclick = () => toggleMenu(false);
@@ -321,24 +365,9 @@ const headerData: HeaderData = {
         }
       };
 
+      // Menu levels are disclosures (nav-disclosure.ts); a link closes the menu.
       menuPanel.onclick = (e) => {
         const target = e.target as HTMLElement;
-        const btn = target.closest("[data-menu-toggle]");
-        if (btn) {
-          e.preventDefault();
-          const id = btn.getAttribute("data-menu-toggle");
-          const submenu = menuPanel.querySelector(`[data-submenu="${id}"]`);
-          const icon = btn.querySelector("svg");
-          if (submenu) {
-            const isHidden = submenu.classList.contains("hidden");
-            submenu.classList.toggle("hidden", !isHidden);
-            submenu.setAttribute("aria-hidden", String(!isHidden));
-            btn.setAttribute("aria-expanded", String(isHidden));
-            icon?.classList.toggle("rotate-180", isHidden);
-            return;
-          }
-        }
-
         if (target.closest("a[href]")) {
           toggleMenu(false, { syncHistory: false, restoreFocus: false });
           if (historyState()[menuHistoryKey] === true) {

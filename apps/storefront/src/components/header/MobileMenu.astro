@@ -1,9 +1,10 @@
 ---
 import type { NavigationItem, SocialLink } from "@/lib/api";
-import { X, ChevronDown, Phone, ChevronRight } from "lucide-react";
+import { X, Phone, ChevronRight } from "lucide-react";
 import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { telHref } from "@/lib/store-identity";
+import NavTree from "./NavTree.astro";
 
 interface Props {
   navigation: NavigationItem[];
@@ -13,12 +14,6 @@ interface Props {
 
 const { navigation = [], contact, social = [] } = Astro.props;
 const phoneHref = telHref(contact.phone);
-
-// Helper function to generate unique IDs for nested items
-function generateMenuId(item: NavigationItem, prefix: string = ""): string {
-  const baseId = item.id || item.title.toLowerCase().replace(/\s+/g, "-");
-  return prefix ? `${prefix}-${baseId}` : baseId;
-}
 ---
 
 <div
@@ -52,223 +47,23 @@ function generateMenuId(item: NavigationItem, prefix: string = ""): string {
   </div>
 
   <nav
-    class="flex-1 overflow-y-auto overscroll-contain px-5 py-3 scrollbar-hide relative group"
+    class="flex-1 overflow-y-auto overscroll-contain px-3 py-3 scrollbar-hide relative"
     id="mobile-nav-container"
     aria-label="Mobile navigation"
   >
-    <ul class="space-y-1">
-      {
-        Array.isArray(navigation) &&
-          navigation.map((item) => {
-            const menuId = generateMenuId(item);
-            const hasSubMenu = item.subMenu && item.subMenu.length > 0;
-            return (
-              <li>
-                {hasSubMenu ? (
-                  <div class="group/item">
-                    <div class="flex items-center justify-between">
-                      {item.href ? (
-                        <a
-                          href={item.href}
-                          data-astro-prefetch={getStorefrontPrefetchAttribute(
-                            item.href,
-                            Astro.url,
-                          )}
-                          target={item.openInNewTab ? "_blank" : undefined}
-                          rel={
-                            item.openInNewTab
-                              ? "noopener noreferrer"
-                              : undefined
-                          }
-                          class="flex-1 text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5"
-                        >
-                          {item.title}
-                        </a>
-                      ) : (
-                        <span class="flex-1 text-[16px] font-bold text-foreground py-2.5">
-                          {item.title}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-all hover:text-foreground active:bg-muted"
-                        data-menu-toggle={menuId}
-                        aria-expanded="false"
-                        aria-controls={`submenu-${menuId}`}
-                        aria-label={`Toggle ${item.title} submenu`}
-                      >
-                        <ChevronDown className="h-4.5 w-4.5 stroke-2 transition-transform duration-300 pointer-events-none" />
-                      </button>
-                    </div>
-
-                    <div
-                      id={`submenu-${menuId}`}
-                      class="hidden overflow-hidden transition-[height] duration-300 ease-in-out"
-                      data-submenu={menuId}
-                      aria-hidden="true"
-                    >
-                      <div class="border-l-2 border-border ml-2.5 pl-3 mt-1 mb-2 space-y-1">
-                        <ul class="space-y-0.5">
-                          {(item.subMenu || []).map((level2Item) => {
-                            const level2Id = generateMenuId(level2Item, menuId);
-                            const hasLevel2Sub =
-                              level2Item.subMenu &&
-                              level2Item.subMenu.length > 0;
-                            return (
-                              <li>
-                                {hasLevel2Sub ? (
-                                  <div>
-                                    <div class="flex items-center justify-between group/sub">
-                                      {level2Item.href ? (
-                                        <a
-                                          href={level2Item.href}
-                                          data-astro-prefetch={getStorefrontPrefetchAttribute(
-                                            level2Item.href,
-                                            Astro.url,
-                                          )}
-                                          target={
-                                            level2Item.openInNewTab
-                                              ? "_blank"
-                                              : undefined
-                                          }
-                                          rel={
-                                            level2Item.openInNewTab
-                                              ? "noopener noreferrer"
-                                              : undefined
-                                          }
-                                          class="flex-1 text-[14px] font-semibold text-foreground hover:text-foreground transition-colors py-2"
-                                        >
-                                          {level2Item.title}
-                                        </a>
-                                      ) : (
-                                        <span class="flex-1 text-[14px] font-semibold text-foreground py-2">
-                                          {level2Item.title}
-                                        </span>
-                                      )}
-                                      <button
-                                        type="button"
-                                        class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-                                        data-menu-toggle={level2Id}
-                                        aria-expanded="false"
-                                        aria-controls={`submenu-${level2Id}`}
-                                        aria-label={`Toggle ${level2Item.title} submenu`}
-                                      >
-                                        <ChevronDown className="h-4 w-4 stroke-2 transition-transform duration-300 pointer-events-none" />
-                                      </button>
-                                    </div>
-
-                                    <div
-                                      id={`submenu-${level2Id}`}
-                                      class="hidden"
-                                      data-submenu={level2Id}
-                                      aria-hidden="true"
-                                    >
-                                      <ul class="space-y-0.5 border-l border-border ml-2 pl-3 mt-0.5 py-1">
-                                        {(level2Item.subMenu || []).map(
-                                          (level3Item) => {
-                                            return (
-                                              <li>
-                                                {level3Item.href ? (
-                                                  <a
-                                                    href={level3Item.href}
-                                                    data-astro-prefetch={getStorefrontPrefetchAttribute(
-                                                      level3Item.href,
-                                                      Astro.url,
-                                                    )}
-                                                    target={
-                                                      level3Item.openInNewTab
-                                                        ? "_blank"
-                                                        : undefined
-                                                    }
-                                                    rel={
-                                                      level3Item.openInNewTab
-                                                        ? "noopener noreferrer"
-                                                        : undefined
-                                                    }
-                                                    class="flex min-h-11 items-center py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                                                  >
-                                                    {level3Item.title}
-                                                  </a>
-                                                ) : (
-                                                  <span class="flex min-h-11 items-center py-2 text-sm font-medium text-muted-foreground">
-                                                    {level3Item.title}
-                                                  </span>
-                                                )}
-                                              </li>
-                                            );
-                                          },
-                                        )}
-                                      </ul>
-                                    </div>
-                                  </div>
-                                ) : level2Item.href ? (
-                                  <a
-                                    href={level2Item.href}
-                                    data-astro-prefetch={getStorefrontPrefetchAttribute(
-                                      level2Item.href,
-                                      Astro.url,
-                                    )}
-                                    target={
-                                      level2Item.openInNewTab
-                                        ? "_blank"
-                                        : undefined
-                                    }
-                                    rel={
-                                      level2Item.openInNewTab
-                                        ? "noopener noreferrer"
-                                        : undefined
-                                    }
-                                    class="flex min-h-11 items-center py-2 text-sm font-semibold text-foreground transition-colors hover:text-foreground"
-                                  >
-                                    {level2Item.title}
-                                  </a>
-                                ) : (
-                                  <span class="flex min-h-11 items-center py-2 text-sm font-semibold text-foreground">
-                                    {level2Item.title}
-                                  </span>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                ) : item.href ? (
-                  <a
-                    href={item.href}
-                    data-astro-prefetch={getStorefrontPrefetchAttribute(
-                      item.href,
-                      Astro.url,
-                    )}
-                    target={item.openInNewTab ? "_blank" : undefined}
-                    rel={item.openInNewTab ? "noopener noreferrer" : undefined}
-                    class="block text-[16px] font-bold text-foreground hover:text-primary transition-colors py-2.5"
-                  >
-                    {item.title}
-                  </a>
-                ) : (
-                  <span class="block text-[16px] font-bold text-foreground py-2.5">
-                    {item.title}
-                  </span>
-                )}
-              </li>
-            );
-          })
-      }
-    </ul>
+    <NavTree items={navigation} idPrefix="mobile-nav" variant="drawer" />
 
     <a
       href="/track-order"
       data-astro-prefetch="false"
-      class="mt-4 flex min-h-11 items-center border-t border-border pt-3 text-sm font-semibold text-foreground transition-colors hover:text-primary"
+      class="mt-4 flex min-h-11 items-center border-t border-border px-3 pt-3 text-sm font-semibold text-foreground transition-colors hover:text-primary"
     >
       Track your order
     </a>
 
     {
       social && social.length > 0 && (
-        <div class="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
+        <div class="mt-4 flex flex-wrap gap-2 border-t border-border px-3 pt-4">
           {social.map((item) => {
             if (!item.url) return null;
             const displayTitle = item.label || item.platform || "Social";

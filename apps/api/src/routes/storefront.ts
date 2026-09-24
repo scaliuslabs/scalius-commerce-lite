@@ -103,6 +103,7 @@ const navigationLeafSchema = z.object({
   id: z.string().optional(),
   title: z.string(),
   href: z.string().optional(),
+  imageUrl: z.string().optional(),
   openInNewTab: z.boolean().optional(),
 });
 const navigationChildSchema = navigationLeafSchema.extend({

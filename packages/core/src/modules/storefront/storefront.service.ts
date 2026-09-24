@@ -69,6 +69,7 @@ interface NestedNavigationItem {
   id?: string;
   title: string;
   href?: string;
+  imageUrl?: string;
   openInNewTab?: boolean;
   subMenu?: NestedNavigationItem[];
 }

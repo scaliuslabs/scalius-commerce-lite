@@ -1,0 +1,198 @@
+---
+// The `pills` navigation style: the top-level menu as one row of rounded
+// links under the header, on every screen size (marketplace style). The row
+// scrolls sideways with snap points and edge fades; its height is fixed in
+// the markup, so nothing moves when it renders. Children are reached from
+// their parent's page; an item without a link contributes its children.
+import type { NavigationItem } from "@/lib/api";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import {
+  ariaCurrent,
+  navigationChildren,
+  navigationCurrent,
+  navigationLinkAttributes,
+} from "./navigation-state";
+
+interface Props {
+  navigation: NavigationItem[];
+}
+
+const { navigation = [] } = Astro.props;
+const pills = navigation
+  .filter((item) => item?.title)
+  .flatMap((item) => (item.href ? [item] : navigationChildren(item).filter((child) => child.href)));
+---
+
+{
+  pills.length > 0 && (
+    <nav id="pill-nav" class="pill-nav" aria-label="Main navigation">
+      <ul class="pill-nav-list" data-pill-scroller>
+        {pills.map((item) => (
+          <li>
+            <a
+              href={item.href}
+              class="pill-nav-link"
+              aria-current={ariaCurrent(navigationCurrent(item, Astro.url))}
+              data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)}
+              {...navigationLinkAttributes(item)}
+            >
+              <span>{item.title}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+<style>
+  @property --pill-fade-start {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+  }
+
+  @property --pill-fade-end {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+  }
+
+  /* Bleeds to the screen edges on phones; aligned with the header content
+     from `sm` up. The height is reserved here, never by script. */
+  .pill-nav {
+    --pill-gutter: 1rem;
+    height: 3.25rem;
+    margin-inline: calc(var(--pill-gutter) * -1);
+    border-top: 1px solid var(--border);
+  }
+
+  @media (min-width: 40rem) {
+    .pill-nav {
+      --pill-gutter: 1.5rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .pill-nav {
+      --pill-gutter: 2rem;
+    }
+  }
+
+  .pill-nav-list {
+    display: flex;
+    align-items: center;
+    justify-content: safe center;
+    gap: 0.5rem;
+    height: 100%;
+    padding-inline: var(--pill-gutter);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--pill-gutter);
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--pill-fade-start),
+      #000 calc(100% - var(--pill-fade-end)),
+      transparent
+    );
+  }
+
+  .pill-nav-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Fade an edge only while there is more row beyond it (a fixed end fade
+     where scroll timelines are unsupported). */
+  @supports (animation-timeline: scroll()) {
+    .pill-nav-list {
+      animation: pill-nav-fade linear both;
+      animation-timeline: scroll(self inline);
+    }
+  }
+
+  @supports not (animation-timeline: scroll()) {
+    .pill-nav-list {
+      --pill-fade-end: 1.5rem;
+    }
+  }
+
+  @keyframes pill-nav-fade {
+    0% {
+      --pill-fade-start: 0px;
+      --pill-fade-end: 2rem;
+    }
+    8%,
+    92% {
+      --pill-fade-start: 2rem;
+      --pill-fade-end: 2rem;
+    }
+    100% {
+      --pill-fade-start: 2rem;
+      --pill-fade-end: 0px;
+    }
+  }
+
+  .pill-nav-list > li {
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+
+  /* A 44px target around a 36px pill. */
+  .pill-nav-link {
+    display: flex;
+    align-items: center;
+    height: 2.75rem;
+  }
+
+  .pill-nav-link > span {
+    display: inline-flex;
+    align-items: center;
+    height: 2.25rem;
+    padding-inline: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    background: var(--background);
+    color: var(--foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: var(--theme-label-tracking, 0);
+    white-space: nowrap;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .pill-nav-link:hover > span {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .pill-nav-link[aria-current] > span {
+    border-color: var(--foreground);
+    background: var(--foreground);
+    color: var(--background);
+    font-weight: 600;
+  }
+
+  .pill-nav-link:focus-visible {
+    outline: none;
+  }
+
+  .pill-nav-link:focus-visible > span {
+    outline: 2px solid var(--foreground);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pill-nav-link > span {
+      transition: none;
+    }
+  }
+</style>
