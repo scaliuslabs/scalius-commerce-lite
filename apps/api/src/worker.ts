@@ -24,13 +24,12 @@ import {
   normalizeCacheGeneration,
 } from "@scalius/shared/cache-generation";
 import {
-  decoratePublicApiResponse,
   getPublicApiCachePolicy,
   isCacheLayerServerError,
   logCacheLayerFallback,
-  withCacheGeneration,
   withoutCacheGeneration,
 } from "./public-cache-policy";
+import { publicReadCacheKey, renderPublicRead } from "./public-read";
 import { readCacheGeneration } from "./utils/cache-generation";
 import { isAgentAccessPath } from "./agent-access/paths";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
@@ -120,8 +119,7 @@ export class PublicApi extends WorkerEntrypoint<Env> {
 
     if (!hasMasterSecret(this.env)) return missingMasterSecretResponse(request);
     const env = await composeApiRuntimeEnv(this.env, { requestUrl: request.url });
-    const response = await fetchApiApp(request, env, this.ctx);
-    return decoratePublicApiResponse(response);
+    return renderPublicRead(request, env, this.ctx);
   }
 }
 
@@ -169,19 +167,16 @@ export default class ApiWorker extends WorkerEntrypoint<Env> {
       request = routed;
     }
 
-    const cachePolicy = getPublicApiCachePolicy(request);
-    if (cachePolicy) {
+    if (getPublicApiCachePolicy(request)) {
       // A storefront render pins its API reads to its own page generation.
       // Generations are unguessable, so a caller-supplied value can only
       // select an entry that already exists or render a fresh one.
       const generation =
         normalizeCacheGeneration(request.headers.get(CACHE_GENERATION_HEADER))
         ?? await readCacheGeneration(this.env, this.ctx);
-      if (generation) {
-        const cached = await this.ctx.exports.PublicApi.fetch(new Request(
-          withCacheGeneration(cachePolicy.canonicalUrl, generation),
-          request,
-        ));
+      const cacheKey = publicReadCacheKey(request, generation);
+      if (cacheKey) {
+        const cached = await this.ctx.exports.PublicApi.fetch(new Request(cacheKey, request));
         // The cache is a hint: a server error from the cache layer itself (a
         // stuck entry answers an empty platform 500) is rendered directly.
         if (!isCacheLayerServerError(cached)) return cached;
