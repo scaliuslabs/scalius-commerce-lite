@@ -10,6 +10,7 @@ import {
   readProductMediaSkuReferenceConflict,
   readProductRevisionConflict,
   readManualOrderDiscountLimitError,
+  readCustomerPhoneConflict,
 } from "./admin-api-error";
 
 describe("admin API detail-loader errors", () => {
@@ -248,5 +249,20 @@ describe("admin API detail-loader errors", () => {
         affectedAssociationIds: Array.from({ length: 21 }, (_, index) => `pmed_${index}`),
       }),
     )).toBeNull();
+  });
+});
+
+describe("customer phone conflict", () => {
+  const other = { id: "cust_2", name: "Rahim", phone: "+8801712345678", kind: "guest" };
+
+  it("reads the other customer from a 400 validation error", () => {
+    expect(readCustomerPhoneConflict(new AdminApiResponseError("taken", 400, "VALIDATION_ERROR", { customer: other }))).toEqual(other);
+    expect(readCustomerPhoneConflict({ cause: { status: 400, code: "VALIDATION_ERROR", details: { customer: other } } })).toEqual(other);
+  });
+
+  it("ignores other failures and malformed details", () => {
+    expect(readCustomerPhoneConflict(new AdminApiResponseError("taken", 409, "VALIDATION_ERROR", { customer: other }))).toBeNull();
+    expect(readCustomerPhoneConflict(new AdminApiResponseError("bad", 400, "VALIDATION_ERROR", { fields: [] }))).toBeNull();
+    expect(readCustomerPhoneConflict(new AdminApiResponseError("bad", 400, "VALIDATION_ERROR", { customer: { ...other, kind: "owner" } }))).toBeNull();
   });
 });

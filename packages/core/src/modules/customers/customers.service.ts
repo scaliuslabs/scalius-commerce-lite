@@ -20,11 +20,12 @@ import {
     media,
     products,
 } from "@scalius/database/schema";
-import { sql, isNull, isNotNull, inArray, asc, desc, eq, and, or, type SQL } from "drizzle-orm";
+import { sql, isNull, isNotNull, inArray, asc, desc, eq, and, or, type SQL, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
 import { orderMoneyAmounts, orderMoneySelection } from "../orders/order-money";
+import { customerKind } from "./customer-identity";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
@@ -480,7 +481,10 @@ export function customerAccountOrderVisibilityCondition(customerId: string): SQL
     )!;
 }
 
-const linkedAccount = alias(customers, "linked_account");
+/** The name on the record's most recent order (a guest record's secondary text). */
+export function latestOrderNameSql(customerId: SQLWrapper) {
+    return sql<string | null>`(SELECT ${orders.customerName} FROM ${orders} WHERE ${orders.customerId} = ${customerId} AND ${orders.deletedAt} IS NULL ORDER BY ${orders.createdAt} DESC, ${orders.orderNumber} DESC LIMIT 1)`;
+}
 
 export async function listCustomers(
     db: Database,
@@ -506,7 +510,7 @@ export async function listCustomers(
     const whereConditions: (SQL | undefined)[] = [];
     if (showTrashed) {
         // A retired guest record (all its orders joined an account) is merged, not trashed.
-        whereConditions.push(sql`${customers.deletedAt} IS NOT NULL AND ${customers.linkedAccountId} IS NULL`);
+        whereConditions.push(sql`${customers.deletedAt} IS NOT NULL AND ${customers.mergedIntoCustomerId} IS NULL`);
     } else {
         whereConditions.push(sql`${customers.deletedAt} IS NULL`);
     }
@@ -562,8 +566,8 @@ export async function listCustomers(
             zoneName: sql<string | null>`COALESCE(${customerZoneLocation.name}, ${customers.zone})`,
             areaName: sql<string | null>`COALESCE(${customerAreaLocation.name}, ${customers.area})`,
             accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
-            linkedAccountId: sql<string | null>`${linkedAccount.id}`.as("linked_account_id"),
-            linkedAccountName: sql<string | null>`${linkedAccount.name}`.as("linked_account_name"),
+            origin: customers.origin,
+            latestOrderName: latestOrderNameSql(customers.id).as("latest_order_name"),
             totalOrders: metrics.totalOrders,
             totalSpentMinor: metrics.totalSpentMinor,
             spendDecimalPlaces: metrics.spendDecimalPlaces,
@@ -575,11 +579,6 @@ export async function listCustomers(
         .leftJoin(orders, and(
             eq(orders.customerId, customers.id),
             isNull(orders.deletedAt),
-        ))
-        // A guest record whose other orders already joined an account says whose.
-        .leftJoin(linkedAccount, and(
-            eq(linkedAccount.id, customers.linkedAccountId),
-            isNull(customers.accountClaimedAt),
         ))
         .leftJoin(customerCityLocation, and(
             eq(customerCityLocation.id, customers.city),
@@ -596,7 +595,6 @@ export async function listCustomers(
         .where(whereClause)
         .groupBy(
             customers.id,
-            linkedAccount.id,
             customerCityLocation.name,
             customerZoneLocation.name,
             customerAreaLocation.name,
@@ -610,13 +608,13 @@ export async function listCustomers(
         resultsQuery,
     ] as Parameters<Database["batch"]>[0]) as [
         { count: number }[],
-        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; linkedAccountId: string | null; linkedAccountName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number }[],
+        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; origin: string; latestOrderName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number }[],
     ];
     const count = countArr[0]?.count ?? 0;
 
-    const formattedCustomers = results.map(({ totalSpentMinor, spendDecimalPlaces, linkedAccountId, linkedAccountName, ...c }) => ({
+    const formattedCustomers = results.map(({ totalSpentMinor, spendDecimalPlaces, origin, ...c }) => ({
         ...c,
-        linkedAccount: linkedAccountId ? { id: linkedAccountId, name: linkedAccountName ?? "" } : null,
+        kind: customerKind({ accountClaimedAt: c.accountClaimedAt, origin }),
         totalSpent: paidSpendAmount({ totalSpentMinor, spendDecimalPlaces }),
         accountClaimedAt: c.accountClaimedAt ? new Date(c.accountClaimedAt * 1000).toISOString() : null,
         lastOrderAt: c.lastOrderAt ? new Date(c.lastOrderAt * 1000).toISOString() : null,
@@ -637,15 +635,11 @@ export async function listCustomers(
 export async function createCustomer(
     db: Database,
     data: CreateCustomerInput,
+    actorId: string | null = null,
 ): Promise<{ id: string }> {
     await validateCustomerPhoneCountry(db, data.phone);
-    const existing = await db
-        .select({ id: customers.id })
-        .from(customers)
-        .where(sql`${customers.phone} = ${data.phone}`)
-        .get();
-
-    if (existing) throw new ValidationError("Customer with this phone number already exists");
+    const existing = await findActiveCustomerWithPhone(db, data.phone);
+    if (existing) throw new ValidationError("Customer with this phone number already exists", { customer: existing });
 
     const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
     let cityName = null, zoneName = null, areaName = null;
@@ -675,6 +669,7 @@ export async function createCustomer(
             cityName,
             zoneName,
             areaName,
+            origin: "merchant",
             totalOrders: 0,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
@@ -693,6 +688,8 @@ export async function createCustomer(
             zoneName,
             areaName,
             changeType: "created",
+            actor: "staff",
+            actorId,
             createdAt: sql`unixepoch()`,
         }),
     ] as Parameters<Database["batch"]>[0]);
@@ -706,32 +703,42 @@ export async function getCustomerById(db: Database, id: string) {
 
 /** The customer row plus its paid spend, derived from its orders. */
 export async function getCustomerDetail(db: Database, id: string) {
-    const [customer, spend] = await Promise.all([
+    const [customer, spend, latest] = await Promise.all([
         getCustomerById(db, id),
         db.select(paidSpendProjection()).from(orders)
             .where(and(eq(orders.customerId, id), isNull(orders.deletedAt)))
             .get(),
+        db.select({ name: latestOrderNameSql(customers.id) }).from(customers).where(eq(customers.id, id)).get(),
     ]);
     if (!customer) return null;
-    return { ...customer, totalSpent: spend ? paidSpendAmount(spend) : 0 };
+    const mergedInto = customer.mergedIntoCustomerId
+        ? await db.select({ id: customers.id, name: customers.name }).from(customers)
+            .where(eq(customers.id, customer.mergedIntoCustomerId)).get() ?? null
+        : null;
+    return {
+        ...customer,
+        mergedInto,
+        kind: customerKind(customer),
+        latestOrderName: latest?.name ?? null,
+        totalSpent: spend ? paidSpendAmount(spend) : 0,
+    };
 }
 
 export async function updateCustomer(
     db: Database,
     id: string,
     data: UpdateCustomerInput,
+    actorId: string | null = null,
 ) {
     const existing = await getCustomerById(db, id);
     if (!existing) throw new NotFoundError("Customer not found");
 
     if (data.phone && data.phone !== existing.phone) {
         await validateCustomerPhoneCountry(db, data.phone);
-        const phoneConflict = await db
-            .select({ id: customers.id })
-            .from(customers)
-            .where(sql`${customers.phone} = ${data.phone} AND ${customers.id} != ${id}`)
-            .get();
-        if (phoneConflict) throw new ValidationError("Another customer with this phone number already exists");
+        const phoneConflict = await findActiveCustomerWithPhone(db, data.phone, id);
+        if (phoneConflict) {
+            throw new ValidationError("Another customer with this phone number already exists", { customer: phoneConflict });
+        }
     }
 
     let cityName = existing.cityName, zoneName = existing.zoneName, areaName = existing.areaName;
@@ -763,13 +770,17 @@ export async function updateCustomer(
     // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
     if ((Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
 
+    // Naming a checkout guest record in the dashboard makes it the merchant's customer.
+    const origin = !existing.accountClaimedAt && next.name !== existing.name ? { origin: "merchant" as const } : {};
     await db.batch([
-        db.update(customers).set({ ...data, cityName, zoneName, areaName, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
+        db.update(customers).set({ ...data, ...origin, cityName, zoneName, areaName, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
         db.insert(customerHistory).values({
             id: "hist_" + nanoid(),
             customerId: id,
             ...next,
             changeType: "updated",
+            actor: "staff",
+            actorId,
             createdAt: sql`unixepoch()`,
         }),
     ] as Parameters<Database["batch"]>[0]);
@@ -777,7 +788,7 @@ export async function updateCustomer(
 }
 
 
-export async function deleteCustomer(db: Database, id: string): Promise<void> {
+export async function deleteCustomer(db: Database, id: string, actorId: string | null = null): Promise<void> {
     const existing = await getCustomerById(db, id);
     if (!existing) throw new NotFoundError("Customer not found");
 
@@ -801,6 +812,8 @@ export async function deleteCustomer(db: Database, id: string): Promise<void> {
             zoneName: existing.zoneName,
             areaName: existing.areaName,
             changeType: "deleted",
+            actor: "staff",
+            actorId,
             createdAt: sql`unixepoch()`,
         }),
     ] as Parameters<Database["batch"]>[0]);
@@ -823,8 +836,50 @@ export async function permanentlyDeleteCustomer(db: Database, id: string): Promi
     ] as Parameters<Database["batch"]>[0]);
 }
 
-export async function restoreCustomer(db: Database, id: string): Promise<void> {
-    await db.update(customers).set({ deletedAt: null }).where(eq(customers.id, id));
+/** Restores a trashed customer (a merged guest record stays merged) and logs who did it. */
+export async function restoreCustomer(db: Database, id: string, actorId: string | null = null): Promise<void> {
+    const existing = await getCustomerById(db, id);
+    if (!existing) throw new NotFoundError("Customer not found");
+    if (!existing.deletedAt) return;
+    if (existing.mergedIntoCustomerId) {
+        throw new ValidationError("This guest record was merged into an account and can't be restored.");
+    }
+    await db.batch([
+        db.update(customers).set({ deletedAt: null, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
+        db.insert(customerHistory).values({
+            id: "hist_" + nanoid(),
+            customerId: id,
+            name: existing.name,
+            email: existing.email,
+            phone: existing.phone,
+            address: existing.address,
+            city: existing.city,
+            zone: existing.zone,
+            area: existing.area,
+            cityName: existing.cityName,
+            zoneName: existing.zoneName,
+            areaName: existing.areaName,
+            changeType: "restored",
+            actor: "staff",
+            actorId,
+            createdAt: sql`unixepoch()`,
+        }),
+    ] as Parameters<Database["batch"]>[0]);
+}
+
+/** The active customer already using a phone, for a dashboard "uses this phone" link. */
+async function findActiveCustomerWithPhone(db: Database, phone: string, exceptId?: string) {
+    const row = await db
+        .select({ id: customers.id, name: customers.name, phone: customers.phone, accountClaimedAt: customers.accountClaimedAt, origin: customers.origin })
+        .from(customers)
+        .where(and(
+            eq(customers.phone, phone),
+            isNull(customers.deletedAt),
+            exceptId ? sql`${customers.id} != ${exceptId}` : undefined,
+        ))
+        .orderBy(desc(customers.accountClaimedAt))
+        .get();
+    return row ? { id: row.id, name: row.name, phone: row.phone, kind: customerKind(row) } : null;
 }
 
 export async function bulkDeleteCustomers(db: Database, ids: string[], permanent = false): Promise<void> {

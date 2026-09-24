@@ -1,6 +1,7 @@
 ---
 // Customer account: profile, delivery details and order history.
 import Layout from "@/layouts/Layout.astro";
+import StoreContact from "@/components/StoreContact.astro";
 import { getLayoutData } from "@/lib/api";
 import { ACCOUNT_OFFLINE_MESSAGE } from "@/lib/account-format";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
@@ -115,8 +116,9 @@ const error = "mt-1 hidden text-sm text-destructive";
             <span id="orderCount" class="text-sm text-muted-foreground"></span>
           </div>
 
-          <p id="guestOrdersStatus" role="status" aria-live="polite" class="mb-4 text-sm text-primary empty:hidden"></p>
-          <div id="guestOrderNotices" class="mb-4 hidden space-y-3"></div>
+          <p id="phoneVerificationStatus" role="status" aria-live="polite" class="mb-4 text-sm text-primary empty:hidden"></p>
+          <div id="phoneVerification" class="mb-4 hidden"></div>
+          <StoreContact layoutData={layoutData} id="phoneVerificationContact" hidden />
 
           <div id="emptyOrders" class="hidden rounded-xl border border-dashed border-border p-10 text-center">
             <h3 class="mb-1 text-base font-semibold text-foreground">No orders yet</h3>

@@ -4,6 +4,7 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 
 const sdk = vi.hoisted(() => ({ getApiV1AdminCustomersByIdHistory: vi.fn() }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
@@ -18,25 +19,28 @@ import { CustomerActivity } from "./CustomerActivity";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const owner = { id: "cust_owner", name: "Owner" };
-const guest = { id: "cust_guest", name: "Guest buyer" };
+const guestPhone = "+8801712345678";
+const owner = { id: "cust_owner", name: "Owner Rahman", kind: "account", phone: "+8801711111011" };
+const guest = { id: "cust_guest", name: "R3-SB Guest One", kind: "guest", phone: guestPhone };
+const guestTitle = `${formatPhoneForDisplay(guestPhone)} · guest orders`;
 const snapshot = (name: string) => ({
   name, email: null, phone: "+8801711111011", address: null, city: null, zone: null, area: null,
-  cityName: null, zoneName: null, areaName: null, order: null, relatedCustomer: null,
+  cityName: null, zoneName: null, areaName: null, order: null, relatedCustomer: null, verifiedContact: null, author: null,
 });
-const page = 1;
-const pagination = { page, limit: 10, total: 1, totalPages: 1, hasNextPage: false };
+const order1069 = { id: "ord_1069", orderNumber: 1069 };
+const pagination = { page: 1, limit: 10, total: 1, totalPages: 1, hasNextPage: false };
 
-function payload(customer: Record<string, unknown>, history: Array<Record<string, unknown>>) {
+function payload(customer: Record<string, unknown>, history: Array<Record<string, unknown>>, orders: Array<Record<string, unknown>> = []) {
   return {
     customer: {
-      id: "cust_page", name: "Page", email: null, phone: "+8801711111011", address: null, city: null, zone: null, area: null,
+      id: "cust_page", name: "Page", kind: "account", latestOrderName: null, mergedInto: null, samePhone: [],
+      email: null, phone: "+8801711111011", address: null, city: null, zone: null, area: null,
       cityName: null, zoneName: null, areaName: null, accountClaimedAt: null, totalOrders: 1, totalSpent: 500,
       lastOrderAt: null, createdAt: "2026-09-20T10:00:00.000Z", updatedAt: "2026-09-20T10:00:00.000Z", deletedAt: null,
-      linkedAccount: null, guestRecords: [], ...customer,
+      ...customer,
     },
     history,
-    orders: [],
+    orders,
     pagination: { history: pagination, orders: pagination },
   };
 }
@@ -71,51 +75,107 @@ describe("CustomerActivity", () => {
   const link = (text: string) => [...container.querySelectorAll("a")].find((anchor) => anchor.textContent === text);
   const entries = () => [...container.querySelectorAll("ol > li")].map((item) => item.textContent ?? "");
 
-  it("shows a moved-in order as one linked line and diffs an update against the older snapshot", async () => {
-    await show(payload({ guestRecords: [{ ...guest, orderCount: 1 }] }, [
-      { id: "h3", changeType: "updated", createdAt: "2026-09-23T10:00:00.000Z", ...snapshot("Owner Rahman") },
+  it("says how an account signed up and which orders a verified contact linked to it", async () => {
+    await show(payload({}, [
+      { id: "h4", changeType: "updated", createdAt: "2026-09-23T10:00:00.000Z", ...snapshot("Owner Rahman") },
       {
-        id: "h2", changeType: "order_moved_in", createdAt: "2026-09-22T10:00:00.000Z", ...snapshot("Guest buyer"),
-        order: { id: "ord_1069", orderNumber: 1069 }, relatedCustomer: guest,
+        id: "h3", changeType: "order_moved_in", createdAt: "2026-09-22T10:00:00.000Z", ...snapshot("Owner"),
+        order: order1069, relatedCustomer: guest, verifiedContact: "email",
       },
-      { id: "h1", changeType: "created", createdAt: "2026-09-21T10:00:00.000Z", ...snapshot("Owner") },
+      {
+        id: "h2", changeType: "order_linked", createdAt: "2026-09-21T12:00:00.000Z", ...snapshot("Owner"),
+        order: { id: "ord_1091", orderNumber: 1091 }, verifiedContact: "phone",
+      },
+      { id: "h1", changeType: "signed_up", createdAt: "2026-09-21T10:00:00.000Z", ...snapshot("Owner"), verifiedContact: "email" },
     ]));
 
-    const [update, moved, created] = entries();
-    // The update compares with "created", not with the move's snapshot.
+    const [update, movedIn, linked, signedUp] = entries();
+    // The update compares with the sign-up snapshot, not with the order events.
     expect(update).toContain("Name: Owner → Owner Rahman");
-    expect(moved).toContain("Order #1069 moved in from guest record Guest buyer");
-    expect(moved).not.toContain("Name:");
-    expect(created).toContain("Name: Owner");
+    expect(movedIn).toMatch(/^Order #1069 linked by verified email on .+ \(from .+ · guest orders\)$/);
+    expect(movedIn).not.toContain("R3-SB Guest One");
+    expect(linked).toMatch(/^Order #1091 linked by verified phone on .+$/);
+    expect(signedUp).toMatch(/^Signed up with a verified email on .+$/);
     expect(link("#1069")?.getAttribute("href")).toBe("/admin/orders/ord_1069");
-    expect(link("Guest buyer")?.getAttribute("href")).toBe("/admin/customers/cust_guest/edit");
-    expect(container.textContent).toContain("1 guest order still on Guest buyer");
+    expect(link("#1091")?.getAttribute("href")).toBe("/admin/orders/ord_1091");
+    expect(link(guestTitle)?.getAttribute("href")).toBe("/admin/customers/cust_guest/edit");
+    // No "guest orders still on …" cue on the account.
+    expect(container.querySelector("[data-slot=alert]")).toBeNull();
   });
 
-  it("marks a guest record an account hasn't claimed and links the account", async () => {
-    await show(payload({ linkedAccount: owner }, [
+  it("says which account an order moved to, and falls back to the plain wording without a verified contact", async () => {
+    await show(payload({ kind: "guest", latestOrderName: "R3-SB Guest Two" }, [
       {
-        id: "h2", changeType: "order_moved_out", createdAt: "2026-09-22T10:00:00.000Z", ...snapshot("Guest buyer"),
-        order: { id: "ord_1069", orderNumber: 1069 }, relatedCustomer: owner,
+        id: "h3", changeType: "order_moved_out", createdAt: "2026-09-22T10:00:00.000Z", ...snapshot("R3-SB Guest One"),
+        order: order1069, relatedCustomer: owner, verifiedContact: "email",
       },
-      { id: "h1", changeType: "created", createdAt: "2026-09-21T10:00:00.000Z", ...snapshot("Guest buyer") },
+      {
+        id: "h2", changeType: "order_moved_out", createdAt: "2026-09-21T12:00:00.000Z", ...snapshot("R3-SB Guest One"),
+        order: { id: "ord_1070", orderNumber: 1070 }, relatedCustomer: owner,
+      },
+      { id: "h1", changeType: "created", createdAt: "2026-09-21T10:00:00.000Z", ...snapshot("R3-SB Guest One") },
     ]));
 
-    const note = container.querySelector("[data-slot=alert]");
-    expect(note?.textContent).toContain("Guest orders (not yet claimed)");
-    expect(note?.textContent).toContain("These orders were placed with a contact the account Owner hasn't verified yet.");
-    expect(note?.querySelector("a")?.getAttribute("href")).toBe("/admin/customers/cust_owner/edit");
-    expect(entries()[0]).toContain("Order #1069 moved to account Owner");
+    const [verified, plain] = entries();
+    expect(verified).toMatch(/^Order #1069 moved to account Owner Rahman, linked by verified email on .+$/);
+    expect(plain).toMatch(/^Order #1070 moved to account Owner Rahman · .+$/);
+    expect(link("Owner Rahman")?.getAttribute("href")).toBe("/admin/customers/cust_owner/edit");
+    // A guest record carries no "not yet claimed" or "belongs to an account" marker.
+    expect(container.querySelector("[data-slot=alert]")).toBeNull();
+    expect(container.textContent).not.toContain("not yet claimed");
   });
 
-  it("says a retired guest record was merged into the account", async () => {
-    await show(payload({ linkedAccount: owner, deletedAt: "2026-09-22T10:00:00.000Z", totalOrders: 0 }, [
-      { id: "h1", changeType: "created", createdAt: "2026-09-21T10:00:00.000Z", ...snapshot("Guest buyer") },
+  it("names each order in the list by the name it was placed with", async () => {
+    await show(payload({ kind: "guest", totalOrders: 2 }, [
+      { id: "h1", changeType: "created", createdAt: "2026-09-21T10:00:00.000Z", ...snapshot("R3-SB Guest One") },
+    ], [
+      { id: "ord_1082", orderNumber: 1082, customerName: "R3-SB Guest Two", status: "pending", totalAmount: 900, createdAt: "2026-09-22T10:00:00.000Z" },
+      { id: "ord_1081", orderNumber: 1081, customerName: "R3-SB Guest One", status: "delivered", totalAmount: 500, createdAt: "2026-09-21T10:00:00.000Z" },
     ]));
 
-    const note = container.querySelector("[data-slot=alert]");
-    expect(note?.textContent).toBe("Merged into Owner");
-    expect(note?.textContent).not.toContain("not yet claimed");
-    expect(note?.querySelector("a")?.getAttribute("href")).toBe("/admin/customers/cust_owner/edit");
+    const rows = [...container.querySelectorAll("a[href^='/admin/orders/']")].map((row) => row.textContent ?? "");
+    expect(rows[0]).toContain("#1082 · R3-SB Guest Two");
+    expect(rows[1]).toContain("#1081 · R3-SB Guest One");
+  });
+
+  it("shows each change's time and author, and a restore from trash", async () => {
+    await show(payload({}, [
+      { id: "h4", changeType: "restored", createdAt: "2026-09-23T10:00:00.000Z", ...snapshot("Owner"), author: { kind: "staff", name: "Nasrin" } },
+      { id: "h3", changeType: "deleted", createdAt: "2026-09-22T10:00:00.000Z", ...snapshot("Owner"), author: { kind: "staff", name: null } },
+      {
+        id: "h2", changeType: "order_linked", createdAt: "2026-09-21T12:00:00.000Z", ...snapshot("Owner"),
+        order: { id: "ord_1091", orderNumber: 1091 }, verifiedContact: "email", author: { kind: "system", name: null },
+      },
+      { id: "h1", changeType: "signed_up", createdAt: "2026-09-21T10:00:00.000Z", ...snapshot("Owner"), verifiedContact: "phone", author: { kind: "buyer", name: null } },
+      { id: "h0", changeType: "created", createdAt: "2026-09-20T10:00:00.000Z", ...snapshot("Owner") },
+    ]));
+
+    const [restored, deleted, linked, signedUp, created] = entries();
+    // 10:00 UTC is 4:00 pm in Dhaka: the time is shown, not only the day.
+    expect(restored).toMatch(/^Restored from trash · .*4:00.* · by Nasrin$/i);
+    expect(restored).not.toContain("Name:");
+    expect(deleted).toMatch(/ · by staff$/);
+    expect(linked).toMatch(/^Order #1091 linked by verified email on .*6:00.* · automatic$/i);
+    expect(signedUp).toMatch(/^Signed up with a verified phone on .* · by the buyer$/);
+    // Older entries without an author say nothing about who.
+    expect(created).not.toContain(" by ");
+    expect(created).not.toContain("automatic");
+  });
+
+  it("links other customers with the same phone, without offering to merge them", async () => {
+    await show(payload({
+      kind: "merchant",
+      samePhone: [
+        { id: "cust_guest", name: "R3-SB Guest One", kind: "guest", phone: guestPhone },
+        { id: "cust_owner", name: "Owner Rahman", kind: "account", phone: guestPhone },
+      ],
+    }, [
+      { id: "h1", changeType: "created", createdAt: "2026-09-21T10:00:00.000Z", ...snapshot("Page") },
+    ]));
+
+    expect(container.textContent).toContain(`Same phone as ${guestTitle}, Owner Rahman`);
+    expect(link(guestTitle)?.getAttribute("href")).toBe("/admin/customers/cust_guest/edit");
+    expect(link("Owner Rahman")?.getAttribute("href")).toBe("/admin/customers/cust_owner/edit");
+    expect(container.querySelector("button")?.textContent ?? "").not.toMatch(/merge|claim/i);
   });
 });

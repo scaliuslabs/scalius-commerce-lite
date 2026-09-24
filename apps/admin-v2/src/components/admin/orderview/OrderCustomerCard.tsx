@@ -13,7 +13,13 @@ import { customerContactLinks } from "./contact-links";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import type { Order } from "./types";
 
-/** Customer, delivery address and the manual courier fraud check. */
+const sameName = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
+
+/**
+ * Customer, delivery address and the manual courier fraud check. The order
+ * keeps the name it was placed with; the record it's filed under is linked
+ * separately, since a guest record (keyed by phone) can hold several people.
+ */
 export function OrderCustomerCard({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const actions = useOrderActionPermissions();
@@ -21,6 +27,9 @@ export function OrderCustomerCard({ order }: { order: Order }) {
   const contact = customerContactLinks(order.customerPhone);
   const address = formatLocationParts(order.shippingAddress, order.areaName, order.zoneName, order.cityName);
   const canEditDetails = actions.canEditOrders && order.editReadiness.details.allowed;
+  const record = order.customerRecord ?? null;
+  // An account or merchant-added customer named differently from this order: say so, so the mismatch is seen.
+  const orderedAs = record !== null && record.kind !== "guest" && !sameName(record.name, order.customerName);
 
   return (
     <Card>
@@ -34,17 +43,17 @@ export function OrderCustomerCard({ order }: { order: Order }) {
               </Button>
             ) : null}
           </div>
-          {order.customerId ? (
+          <p className="font-medium">{order.customerName}</p>
+          {record ? (
             <Link
               to="/admin/customers/$customerId/edit"
-              params={{ customerId: order.customerId }}
+              params={{ customerId: record.id }}
               className="block text-link hover:underline"
             >
-              {order.customerName}
+              {record.kind === "guest" ? t("customer.guestRecord", { phone: formatPhoneForDisplay(record.phone) }) : record.name}
             </Link>
-          ) : (
-            <p>{order.customerName}</p>
-          )}
+          ) : null}
+          {orderedAs ? <p className="text-muted-foreground">{t("customer.orderedAs", { name: order.customerName })}</p> : null}
           <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone)}</p>
           {order.customerEmail ? (
             <a href={`mailto:${order.customerEmail}`} className="flex min-h-11 items-center break-all text-muted-foreground hover:text-foreground sm:min-h-0">

@@ -254,6 +254,24 @@ describe("sign-in dialog", () => {
     expect(host.querySelector('a[href="/track-order"]')?.textContent).toBe("Track your order");
   });
 
+  it.each([
+    [["email"], true],
+    [["email", "sms"], false],
+    [["email", "whatsapp"], false],
+    [["sms"], false],
+  ])("with sign-in channels %j, says phone sign-in isn't available: %s", async (otpChannels, noted) => {
+    window.__CHECKOUT_CONFIG__ = {
+      authVerificationMethod: "email",
+      allowedCountries: ["BD"],
+      customerAuthPolicy: { otpChannels, defaultOtpChannel: otpChannels[0], requiredContactFields: [], optionalContactFields: [] },
+    } as unknown as CheckoutConfig;
+    await open();
+
+    const note = host.querySelector("[data-phone-sign-in-note]");
+    expect(Boolean(note)).toBe(noted);
+    if (noted) expect(note?.textContent?.trim()).toBe("Phone sign-in isn't available yet. Use your email.");
+  });
+
   it("closes on Esc and the close button, and shows the signed-in state on reopen", async () => {
     document.cookie = "cs_auth=1; path=/";
     mocks.getCustomerSession.mockResolvedValue({ authenticated: true, customer });

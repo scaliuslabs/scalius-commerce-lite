@@ -7,7 +7,6 @@ import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { fetchCustomerHistory } from "~/lib/api-query-options/customers";
@@ -15,6 +14,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { useCurrency } from "~/hooks/use-currency";
 import { formatDateTime, useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
+import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
 import { resourceMessages } from "~/i18n/resource";
 
 const PAGE = { orders: 10, history: 10 } as const;
@@ -22,6 +22,12 @@ const PAGE = { orders: 10, history: 10 } as const;
 const day = (value: string | number | null | undefined) => {
   const date = unixToDate(value);
   return date ? formatDateTime(date, { dateStyle: "medium" }) : "";
+};
+
+/** Change-log entries carry the time too: several can land on one day. */
+const when = (value: string | number | null | undefined) => {
+  const date = unixToDate(value);
+  return date ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : "";
 };
 
 type Snapshot = Record<"name" | "phone" | "email" | "address" | "area" | "zone" | "city", string>;
@@ -53,13 +59,35 @@ function snapshot(change: {
 type HistoryPage = Awaited<ReturnType<typeof fetchCustomerHistory>>;
 type HistoryEntry = HistoryPage["history"][number];
 type CustomerFacts = HistoryPage["customer"];
+type CustomerMessage = keyof (typeof customersMessages)["en"];
 
-/** Order moves between a guest record and the account that proved its contact. */
-const isMove = (entry: HistoryEntry) => entry.changeType === "order_moved_in" || entry.changeType === "order_moved_out";
+const CHANGE_LABEL: Partial<Record<string, CustomerMessage>> = {
+  created: "changeCreated",
+  updated: "changeUpdated",
+  deleted: "changeDeleted",
+  restored: "changeRestored",
+};
 
-/** The next older entry that carries a contact snapshot (order moves carry none). */
+/** Order events: filed to an account at checkout, or moved between a guest record and an account. */
+const isOrderEvent = (entry: HistoryEntry) =>
+  entry.changeType === "order_linked" || entry.changeType === "order_moved_in" || entry.changeType === "order_moved_out";
+
+/** The next older entry whose contact snapshot an update is compared with (order events aren't edits). */
 function olderSnapshot(entries: HistoryEntry[], index: number): HistoryEntry | undefined {
-  return entries.slice(index + 1).find((entry) => !isMove(entry));
+  return entries.slice(index + 1).find((entry) => !isOrderEvent(entry));
+}
+
+/** The sentence for a linking event, worded by the contact that proved it (or the plain wording without one). */
+function linkSentence(entry: HistoryEntry): CustomerMessage {
+  const base = ({
+    signed_up: "signedUp",
+    order_linked: "orderLinked",
+    order_moved_in: "orderMovedIn",
+    order_moved_out: "orderMovedOut",
+  } as const)[entry.changeType as "signed_up" | "order_linked" | "order_moved_in" | "order_moved_out"];
+  if (entry.verifiedContact === "email") return `${base}Email`;
+  if (entry.verifiedContact === "phone") return `${base}Phone`;
+  return base;
 }
 
 /** Fills the `{token}` placeholders of a translated sentence with links. */
@@ -72,59 +100,46 @@ function withLinks(sentence: string, links: Record<string, ReactNode>): ReactNod
 
 const linkClass = "text-link hover:underline";
 
-function CustomerLink({ customer }: { customer: { id: string; name: string } }) {
+/** A link to another customer record, titled the same way as everywhere else. */
+function CustomerLink({ customer }: { customer: CustomerTitleInput & { id: string } }) {
+  const t = useMessages(customersMessages);
   return (
     <Link to="/admin/customers/$customerId/edit" params={{ customerId: customer.id }} className={linkClass}>
-      {customer.name}
+      {customerTitle(customer, t).title}
     </Link>
   );
 }
 
 /**
- * How this record relates to a buyer account: a guest record still holding
- * orders the account hasn't claimed, a retired guest record merged into the
- * account, or an account with guest records left to claim.
+ * Other active customers with the same phone (family, a typo): links only,
+ * never a merge or claim.
  */
-function AccountLinks({ customer }: { customer: CustomerFacts }) {
+function SamePhone({ customer }: { customer: CustomerFacts }) {
   const t = useMessages(customersMessages);
-  const account = customer.linkedAccount;
-  if (account && customer.deletedAt) {
-    return (
-      <Alert variant="info" role="note">
-        <AlertTitle>{withLinks(t("mergedInto"), { name: <CustomerLink customer={account} /> })}</AlertTitle>
-      </Alert>
-    );
-  }
-  if (account) {
-    return (
-      <Alert variant="info" role="note">
-        <AlertTitle>{t("guestOrders")}</AlertTitle>
-        <AlertDescription>{withLinks(t("guestOrdersBody"), { name: <CustomerLink customer={account} /> })}</AlertDescription>
-      </Alert>
-    );
-  }
-  const guests = customer.guestRecords;
-  if (guests.length === 0) return null;
-  return (
-    <Alert variant="info" role="note">
-      <AlertDescription>
-        <ul>
-          {guests.map((guest) => (
-            <li key={guest.id}>
-              {withLinks(
-                guest.orderCount === 1 ? t("guestOrdersOnOne") : t("guestOrdersOn", { count: guest.orderCount }),
-                { name: <CustomerLink customer={guest} /> },
-              )}
-            </li>
-          ))}
-        </ul>
-      </AlertDescription>
-    </Alert>
-  );
+  if (customer.samePhone.length === 0) return null;
+  const names = customer.samePhone.map((other, index) => (
+    <Fragment key={other.id}>
+      {index > 0 ? ", " : null}
+      <CustomerLink customer={other} />
+    </Fragment>
+  ));
+  return <p className="text-body text-muted-foreground">{withLinks(t("samePhoneAs"), { names })}</p>;
 }
 
-/** One line for an order that moved in from, or out to, another record. */
-function OrderMove({ entry }: { entry: HistoryEntry }) {
+/** " · by Nasrin", " · by the buyer", " · automatic"; nothing for older entries without an author. */
+function Author({ author }: { author: HistoryEntry["author"] }) {
+  const t = useMessages(customersMessages);
+  if (!author) return null;
+  const text = author.kind === "buyer"
+    ? t("byBuyer")
+    : author.kind === "system"
+      ? t("automatic")
+      : author.name ? t("byStaff", { name: author.name }) : t("byStaffUnknown");
+  return <> · {text}</>;
+}
+
+/** One line for a sign-up, or an order linked to, moved into or moved out of this record. */
+function LinkEvent({ entry }: { entry: HistoryEntry }) {
   const t = useMessages(customersMessages);
   const order = entry.order ? (
     <Link to="/admin/orders/$orderId" params={{ orderId: entry.order.id }} className={linkClass}>
@@ -132,11 +147,17 @@ function OrderMove({ entry }: { entry: HistoryEntry }) {
     </Link>
   ) : "—";
   const name = entry.relatedCustomer ? <CustomerLink customer={entry.relatedCustomer} /> : "—";
+  const sentence = linkSentence(entry);
+  // The worded sentences carry their own date; the plain move wording keeps it after a dot.
+  const dated = sentence !== "orderMovedIn" && sentence !== "orderMovedOut";
   return (
     <li className="text-body">
       <p>
-        {withLinks(t(entry.changeType === "order_moved_in" ? "orderMovedIn" : "orderMovedOut"), { order, name })}
-        <span className="text-muted-foreground"> · {day(entry.createdAt)}</span>
+        {withLinks(t(sentence), { order, name, date: when(entry.createdAt) })}
+        <span className="text-muted-foreground">
+          {dated ? null : ` · ${when(entry.createdAt)}`}
+          <Author author={entry.author} />
+        </span>
       </p>
     </li>
   );
@@ -187,7 +208,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
 
   return (
     <>
-      {first ? <AccountLinks customer={first.customer} /> : null}
+      {first ? <SamePhone customer={first.customer} /> : null}
       <Card>
         <CardHeader>
           <CardTitle>{t("recentOrders")}</CardTitle>
@@ -212,7 +233,10 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
                     className="flex min-h-11 items-center gap-3 px-4 py-2 text-body hover:bg-muted md:min-h-10"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block font-medium">{formatOrderNumber(order.orderNumber, order.id)}</span>
+                      {/* Each order keeps the name it was placed with: a guest record can hold orders from different people. */}
+                      <span className="block truncate font-medium">
+                        {formatOrderNumber(order.orderNumber, order.id)} · {order.customerName}
+                      </span>
                       <span className="block text-muted-foreground">{day(order.createdAt)}</span>
                     </span>
                     <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(to, order.status)}</Badge>
@@ -240,22 +264,21 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
           {history.isSuccess && changes.length === 0 ? <p className="text-body text-muted-foreground">{t("noHistory")}</p> : null}
           <ol className="space-y-3">
             {changes.map((change, index) => {
-              if (isMove(change)) return <OrderMove key={change.id} entry={change} />;
+              if (change.changeType === "signed_up" || isOrderEvent(change)) return <LinkEvent key={change.id} entry={change} />;
               // Newest first: an update is shown as what it changed against the snapshot below it.
               const older = olderSnapshot(changes, index);
               const fields = change.changeType === "updated" && older
                 ? changedFields(snapshot(change), snapshot(older))
                 : changedFields(snapshot(change), undefined);
               if (change.changeType === "updated" && older && fields.length === 0) return null;
+              const lifecycle = change.changeType === "deleted" || change.changeType === "restored";
               return (
                 <li key={change.id} className="text-body">
                   <p>
-                    <span className="font-medium">
-                      {t(change.changeType === "created" ? "changeCreated" : change.changeType === "deleted" ? "changeDeleted" : "changeUpdated")}
-                    </span>
-                    <span className="text-muted-foreground"> · {day(change.createdAt)}</span>
+                    <span className="font-medium">{t(CHANGE_LABEL[change.changeType] ?? "changeUpdated")}</span>
+                    <span className="text-muted-foreground"> · {when(change.createdAt)}<Author author={change.author} /></span>
                   </p>
-                  {change.changeType === "deleted" ? null : (
+                  {lifecycle ? null : (
                     <ul className="text-muted-foreground">
                       {fields.map(({ field, from, to }) => (
                         <li key={field} className="break-words">

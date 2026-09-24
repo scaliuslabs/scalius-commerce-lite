@@ -10,6 +10,7 @@ import {
     type Readiness,
     type ReadinessIssue,
 } from "@scalius/shared/readiness";
+import type { CustomerAuthOtpChannel, CustomerAuthPolicyConfig } from "@scalius/shared/customer-auth-policy";
 import { getEmailProviderReadiness } from "../../integrations/email";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
@@ -212,4 +213,45 @@ export async function getCustomerSignInReadiness(
     }
 
     return customerSignInReadiness(customerSignInRequired, false);
+}
+
+/** Whether one sign-in code channel can actually send right now. */
+async function isCustomerAuthChannelReady(
+    db: Database,
+    channel: CustomerAuthOtpChannel,
+    options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv">,
+): Promise<boolean> {
+    if (!options.encryptionKey?.trim()) return false;
+    try {
+        if (channel === "email") {
+            return isReady(await getEmailProviderReadiness({ db, encryptionKey: options.encryptionKey, env: options.runtimeEnv }));
+        }
+        if (channel === "sms") return isReady(await getSmsProviderReadiness(db, options.encryptionKey));
+        const whatsapp = await getWhatsAppCloudApiSettings(db, options.encryptionKey);
+        return Boolean(whatsapp.accessToken && whatsapp.phoneNumberId && whatsapp.authTemplateName);
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * The sign-in channels buyers are offered: the store's chosen ones that can
+ * send, plus phone sign-in (SMS, then WhatsApp) whenever those codes can be
+ * sent. Nothing that can't deliver a code is offered; when nothing can, the
+ * store's own choice stays so the dialog can say codes are unavailable.
+ */
+export async function getOfferedCustomerAuthPolicy(
+    db: Database,
+    policy: CustomerAuthPolicyConfig,
+    options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv">,
+): Promise<CustomerAuthPolicyConfig> {
+    const candidates = [...new Set<CustomerAuthOtpChannel>([...policy.otpChannels, "sms", "whatsapp"])];
+    const ready = await Promise.all(candidates.map((channel) => isCustomerAuthChannelReady(db, channel, options)));
+    const otpChannels = candidates.filter((_, index) => ready[index]);
+    if (otpChannels.length === 0) return policy;
+    return {
+        ...policy,
+        otpChannels,
+        defaultOtpChannel: otpChannels.includes(policy.defaultOtpChannel) ? policy.defaultOtpChannel : otpChannels[0]!,
+    };
 }

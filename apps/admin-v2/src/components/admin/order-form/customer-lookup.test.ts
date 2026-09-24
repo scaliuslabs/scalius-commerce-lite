@@ -50,6 +50,17 @@ describe("returning customer", () => {
       .toEqual({ customerEmail: "rahim@example.com", shippingAddress: "House 12, Road 5, Dhanmondi" });
   });
 
+  it("suggests only the latest order's name for a phone's guest record, never its stored details", () => {
+    const guest: SavedCustomer = { ...saved, name: "First Buyer", kind: "guest", latestOrderName: " Second Buyer " };
+    expect(customerFill(guest, empty, new Set(["city_dhaka"]))).toEqual({ customerName: "Second Buyer" });
+    // The suggestion never overwrites a name the merchant typed.
+    expect(customerFill(guest, { ...empty, customerName: "Karim" }, new Set(["city_dhaka"]))).toEqual({});
+    expect(customerFill({ ...guest, latestOrderName: null }, empty, new Set(["city_dhaka"]))).toEqual({});
+    // A merchant's customer or an account still fills its saved details.
+    expect(customerFill({ ...saved, kind: "merchant", latestOrderName: "Someone" }, empty, new Set(["city_dhaka"])))
+      .toMatchObject({ customerName: "Rahim Uddin", customerEmail: "rahim@example.com" });
+  });
+
   it("skips a saved city that is no longer a delivery city", () => {
     expect(customerFill(saved, empty, new Set(["city_ctg"]))).not.toHaveProperty("city");
   });

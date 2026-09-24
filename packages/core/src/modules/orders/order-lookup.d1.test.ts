@@ -69,7 +69,7 @@ describe("track your order", () => {
     await expect(send("ORDERNOEMAIL0001", "01712000002")).rejects.toBeInstanceOf(NoOrderCodeChannelError);
     await expect(send("ORDERNOEMAIL0001", "01712000002")).rejects.toMatchObject({
       status: 409,
-      message: "This order has no email address, and this store can't send text messages. Contact the store to check on your order.",
+      message: "This order has no email address, and this store can't send text messages, so we can't send you a code.",
     });
     // No match: a plain answer, nothing sent.
     await expect(send("ORDERWITHEMAIL01", "01712000009")).rejects.toBeInstanceOf(NotFoundError);
