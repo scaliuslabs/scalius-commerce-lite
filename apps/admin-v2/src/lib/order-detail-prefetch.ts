@@ -12,9 +12,15 @@ type OrderDetailQueryClient = Pick<QueryClient, "ensureQueryData" | "prefetchQue
 
 export const ORDER_DETAIL_PREFETCH_STALE_MS = 30_000;
 
+/**
+ * Loads the order (required) and warms the reads its cards need. The courier
+ * list is only readable by staff who can book couriers, so it is skipped for
+ * everyone else instead of failing with a 403.
+ */
 export async function prefetchOrderDetailQueries(
   queryClient: OrderDetailQueryClient,
   orderId: string,
+  options: { couriers: boolean },
 ) {
   const order = await queryClient.ensureQueryData({
     ...orderQueryOptions(orderId),
@@ -31,8 +37,8 @@ export async function prefetchOrderDetailQueries(
       staleTime: Infinity,
     }),
     queryClient.prefetchQuery(currencySettingsQueryOptions()),
-    queryClient.prefetchQuery(deliveryProvidersQueryOptions()),
   ];
+  if (options.couriers) optionalWarmQueries.push(queryClient.prefetchQuery(deliveryProvidersQueryOptions()));
 
   if (order.paymentMethod === "cod") {
     optionalWarmQueries.push(
@@ -48,4 +54,5 @@ export async function prefetchOrderDetailQueries(
       console.warn("Order detail warm query skipped", error);
     });
   }
+  return order;
 }

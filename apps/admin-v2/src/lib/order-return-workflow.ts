@@ -62,13 +62,12 @@ export function getRemainingReturnableQuantities(
     }
   }
 
+  // Only what reached the customer can come back; part of a line may still be unsent.
   return new Map(
-    items.map((item) => [
-      item.id,
-      isReturnItemEligible(item)
-        ? Math.max(0, item.quantity - (committedByItem.get(item.id) ?? 0))
-        : 0,
-    ]),
+    items.map((item) => {
+      const sent = item.shippedQuantity ?? (isReturnItemEligible(item) ? item.quantity : 0);
+      return [item.id, Math.max(0, sent - (committedByItem.get(item.id) ?? 0))];
+    }),
   );
 }
 

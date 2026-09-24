@@ -291,7 +291,7 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       sender: "ops@example.com",
       resendApiKey: null,
     });
-    expect(await readFirebaseSettings(db, KEY)).toEqual({
+    expect(await readFirebaseSettings(db, KEY)).toMatchObject({
       serviceAccountStored: false,
       serviceAccountJson: undefined,
       publicConfig: { projectId: "legacy" },

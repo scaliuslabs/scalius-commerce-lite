@@ -35,6 +35,7 @@ const METHOD_LINKS: Record<VerifyTwoFactorMethod, AuthMessageKey> = {
 
 function codeFailure({ code, status }: AuthFailure, method: VerifyTwoFactorMethod): AuthMessageKey | null {
   if (code === "INVALID_TWO_FACTOR_COOKIE") return "signInExpired";
+  if (code === "BANNED_USER") return "suspended";
   if (code === "OTP_HAS_EXPIRED") return "codeExpired";
   if (code === "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE") return "codeTooManyAttempts";
   if (code.startsWith("INVALID") || status === 400 || status === 401) {

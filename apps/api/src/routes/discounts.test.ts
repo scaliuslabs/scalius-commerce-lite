@@ -1,7 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ValidationError } from "@scalius/core/errors";
 import { errorResponseFromError } from "../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
@@ -13,7 +12,8 @@ vi.mock("@scalius/core/modules/settings/settings.service", () => ({
   getCurrencyConfig: mocks.getCurrencyConfig,
 }));
 
-vi.mock("@scalius/core/modules/promotions", () => ({
+vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/promotions")>(),
   quoteStorefrontDiscount: mocks.quoteStorefrontDiscount,
 }));
 
@@ -46,37 +46,40 @@ describe("public discount validation", () => {
     mocks.getCurrencyConfig.mockResolvedValue({ code: "BDT", decimalPlaces: 2 });
   });
 
-  it("quotes the code with the cart in minor units and returns the total savings", async () => {
+  it("previews every applied code with the cart in minor units, one line per discount", async () => {
     const { app, db } = createTestApp();
     mocks.quoteStorefrontDiscount.mockResolvedValue({
-      applied: {
-        totalDiscountMinor: 36_000,
-        discounts: [
-          { promotionId: "promo_code", promotionCode: "SAVE10", totalDiscountMinor: 30_000 },
-          { promotionId: "promo_auto", promotionCode: null, totalDiscountMinor: 6_000 },
-        ],
-        allocations: [],
-      },
+      applied: { totalDiscountMinor: 36_000, discounts: [], allocations: [] },
+      discounts: [
+        { promotionId: "promo_code", title: "Eid 10%", code: "SAVE10", amountMinor: 30_000 },
+        { promotionId: "promo_auto", title: "Free delivery", code: null, amountMinor: 6_000 },
+      ],
+      offers: [],
+      rejectedCodes: [{ code: "SHIP", reason: "minimum_subtotal", message: "Add ৳200 more to use SHIP.", shortfallMinor: 20_000 }],
     });
 
     const response = await post(app, {
-      code: "save10",
+      codes: ["save10", "SHIP"],
       items: [{ id: "prod_1", variantId: "var_1", price: 1500, quantity: 2 }],
       shippingCost: 60,
-      customerPhone: "+8801712345678",
+      customerPhone: "01712345678",
     });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       success: true,
       data: {
-        valid: true,
-        discount: { id: "promo_code", code: "SAVE10", type: "code", discountValue: 360 },
-        discountAmount: 360,
+        totalDiscount: 360,
+        discounts: [
+          { promotionId: "promo_code", title: "Eid 10%", code: "SAVE10", amount: 300 },
+          { promotionId: "promo_auto", title: "Free delivery", code: null, amount: 60 },
+        ],
+        offers: [],
+        rejectedCodes: [{ code: "SHIP", reason: "minimum_subtotal", message: "Add ৳200 more to use SHIP.", shortfallAmount: 200 }],
       },
     });
     expect(mocks.quoteStorefrontDiscount).toHaveBeenCalledWith(db, {
-      code: "save10",
+      codes: ["save10", "SHIP"],
       customerPhone: "+8801712345678",
       cart: {
         currencyCode: "BDT",
@@ -86,20 +89,21 @@ describe("public discount validation", () => {
     });
   });
 
-  it("returns the buyer-facing reason when the code does not apply", async () => {
+  it("rejects more codes than a buyer may combine", async () => {
     const { app } = createTestApp();
-    mocks.quoteStorefrontDiscount.mockRejectedValue(new ValidationError("This discount has expired."));
-    const response = await post(app, { code: "OLD", items: [{ id: "prod_1", variantId: "var_1", price: 10, quantity: 1 }] });
-    await expect(response.json()).resolves.toEqual({ success: true, data: { valid: false, error: "This discount has expired." } });
+    const response = await post(app, {
+      codes: ["A1A", "B2B", "C3C", "D4D", "E5E", "F6F"],
+      items: [{ id: "prod_1", variantId: "var_1", price: 10, quantity: 1 }],
+    });
+    expect(response.status).toBe(400);
+    expect(mocks.quoteStorefrontDiscount).not.toHaveBeenCalled();
   });
 
   it("asks for a cart refresh instead of guessing when variants are missing", async () => {
     const { app } = createTestApp();
-    const response = await post(app, { code: "SAVE10", items: [{ id: "prod_1", price: 10, quantity: 1 }] });
-    await expect(response.json()).resolves.toEqual({
-      success: true,
-      data: { valid: false, error: "Refresh the cart before applying this discount." },
-    });
+    const response = await post(app, { codes: ["SAVE10"], items: [{ id: "prod_1", price: 10, quantity: 1 }] });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ success: false, error: { message: "Refresh the cart before applying a discount." } });
     expect(mocks.quoteStorefrontDiscount).not.toHaveBeenCalled();
   });
 

@@ -1,3 +1,4 @@
+import { formatMoney } from "@scalius/shared/currency";
 export interface SavedOrderMoneyFields {
   currencyCode?: string | null;
   currencyDecimalPlaces?: number | null;
@@ -149,11 +150,5 @@ export function formatSavedMinorAmount(
   amountMinor: number,
   summary: Pick<SavedOrderMoneySummary, "currencyCode" | "decimalPlaces">,
 ): string {
-  const amount = amountMinor / 10 ** summary.decimalPlaces;
-  const formatted = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: summary.decimalPlaces,
-    maximumFractionDigits: summary.decimalPlaces,
-    useGrouping: true,
-  }).format(amount);
-  return `${summary.currencyCode} ${formatted}`;
+  return formatMoney(amountMinor / 10 ** summary.decimalPlaces, { code: summary.currencyCode });
 }

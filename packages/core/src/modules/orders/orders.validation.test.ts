@@ -6,7 +6,7 @@ import {
     createOrderSchema,
     restoreOrderSchema,
     shipmentCreationOptionsSchema,
-    updateOrderSchema,
+    updateOrderDetailsSchema,
 } from "./orders.validation";
 
 function orderInput(quantity: number) {
@@ -24,7 +24,6 @@ function orderInput(quantity: number) {
                 productId: "product_1",
                 variantId: "variant_1",
                 quantity,
-                price: 100,
             },
         ],
         discountAmount: null,
@@ -32,16 +31,9 @@ function orderInput(quantity: number) {
     };
 }
 
-describe.each([
-    ["create", createOrderSchema, false],
-    ["update", updateOrderSchema, true],
-] as const)("%s manual-order quantity validation", (_name, schema, isUpdate) => {
-    const input = (quantity: number) => ({
-        ...orderInput(quantity),
-        ...(isUpdate
-            ? { expectedVersion: 1, status: "pending" }
-            : { requestKey: crypto.randomUUID() }),
-    });
+describe("manual-order quantity validation", () => {
+    const schema = createOrderSchema;
+    const input = (quantity: number) => ({ ...orderInput(quantity), requestKey: crypto.randomUUID() });
 
     it.each([1, 99])("accepts boundary quantity %s", (quantity) => {
         expect(schema.safeParse(input(quantity)).success).toBe(true);
@@ -60,14 +52,14 @@ describe.each([
     });
 });
 
-describe("manual-order update concurrency", () => {
-    it("requires a positive integer version from the form that was loaded", () => {
-        const base = { ...orderInput(1), status: "pending" };
+describe("order details edit concurrency", () => {
+    it("requires a positive integer version from the page that was loaded", () => {
+        const { items: _items, notes: _notes, discountAmount: _discount, shippingCharge: _shipping, ...base } = orderInput(1);
 
-        expect(updateOrderSchema.safeParse(base).success).toBe(false);
-        expect(updateOrderSchema.safeParse({ ...base, expectedVersion: 0 }).success).toBe(false);
-        expect(updateOrderSchema.safeParse({ ...base, expectedVersion: 1.5 }).success).toBe(false);
-        expect(updateOrderSchema.safeParse({ ...base, expectedVersion: 3 }).success).toBe(true);
+        expect(updateOrderDetailsSchema.safeParse(base).success).toBe(false);
+        expect(updateOrderDetailsSchema.safeParse({ ...base, expectedVersion: 0 }).success).toBe(false);
+        expect(updateOrderDetailsSchema.safeParse({ ...base, expectedVersion: 1.5 }).success).toBe(false);
+        expect(updateOrderDetailsSchema.safeParse({ ...base, expectedVersion: 3 }).success).toBe(true);
     });
 });
 

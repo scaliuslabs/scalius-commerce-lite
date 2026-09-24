@@ -1,10 +1,16 @@
 // src/modules/customers/customer-auth.service.ts
-// Customer authentication business logic: OTP generation/verification, session management.
+// Customer sign-in: one-time codes, account resolution, sessions.
 // Used by the customer-auth route handler (apps/api/src/routes/customer-auth.ts).
+//
+// Identity rule (Shopify's): a VERIFIED identifier owns an account. An email
+// owns an account only once a code sent to it was entered; the phone is the
+// merchant's CRM key and is proven by an SMS/WhatsApp code. Contact details a
+// guest types at checkout never change who an account belongs to, and never
+// block anyone from signing in.
 
 import { nanoid } from "nanoid";
 import { customers, customerSessions, deliveryLocations } from "@scalius/database/schema";
-import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
@@ -24,8 +30,9 @@ import {
 } from "./customer-auth-otp-challenges";
 import {
     cleanupExpiredCustomerAuthOtpRateLimits,
-    enforceCustomerAuthOtpIpRateLimit,
+    enforceOtpSendRateLimits,
 } from "./customer-auth-rate-limit";
+import { buildVerifiedContactOrderLink } from "./order-account-claim";
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
     isContactFieldRequiredForAuthChannel,
@@ -53,7 +60,7 @@ export const COOKIE_NAME = "cs_tok";
 export const OTP_PREFIX = "cust_otp:";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 export const OTP_TTL_SECONDS = 60 * 5; // 5 minutes
-const OTP_RESEND_COOLDOWN_SECONDS = 120;
+export const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_ATTEMPTS = 5;
 
 export {
@@ -61,10 +68,6 @@ export {
     cleanupExpiredCustomerAuthOtpChallenges,
     cleanupExpiredCustomerAuthOtpRateLimits,
 };
-
-function getFallbackOtpChannel(method: "email" | "phone"): CustomerAuthOtpChannel {
-    return method === "email" ? "email" : "sms";
-}
 
 // ─────────────────────────────────────────
 // Types
@@ -84,39 +87,37 @@ export interface CustomerSession {
     zoneName?: string | null;
     areaName?: string | null;
     profileComplete: boolean;
-    needsProfileCompletion: boolean;
     createdAt: number;
     expiresAt: number;
 }
-
-export type CustomerAuthIntent = "sign_in" | "sign_up";
 
 export interface SendOtpInput {
     method: "email" | "phone";
     channel?: CustomerAuthOtpChannel;
     identifier: string;
-    name: string;
     ip: string;
-    intent?: CustomerAuthIntent;
-    phone?: string;
-    email?: string;
     emailEnv?: EmailRuntimeContext["env"];
     encryptionKey?: string;
     credentialEncryptionKey?: string;
 }
 
 export interface SendOtpResult {
-    success: boolean;
-    message?: string;
-    error?: string;
-    retryAfter?: number;
-    httpStatus?: number;
-    /** Queue payload for async OTP delivery */
-    queuePayload?: OtpQueuePayload;
-    /** Exact D1 challenge key used for this OTP attempt, so route-level queue failures can clear cooldown state. */
-    otpStorageKey?: string;
-    /** Stable per-attempt delivery key used for provider idempotency and D1 receipt fencing. */
-    deliveryKey?: string;
+    message: string;
+    /** Seconds until another code can be requested for this contact. */
+    resendAfterSeconds: number;
+    /** Queue payload for async OTP delivery. */
+    queuePayload: OtpQueuePayload;
+    /** Exact D1 challenge key, so a failed queue handoff can clear it. */
+    otpStorageKey: string;
+    /** Per-attempt delivery key used for provider idempotency and receipt fencing. */
+    deliveryKey: string;
+}
+
+/** Name and contact a buyer adds when the proven email/phone has no account yet. */
+export interface NewAccountDetails {
+    name: string;
+    phone?: string;
+    email?: string;
 }
 
 export interface VerifyOtpInput {
@@ -124,39 +125,22 @@ export interface VerifyOtpInput {
     channel?: CustomerAuthOtpChannel;
     identifier: string;
     code: string;
-    name: string;
-    intent?: CustomerAuthIntent;
-    phone?: string;
-    email?: string;
+    account?: NewAccountDetails;
     encryptionKey?: string;
-    credentialEncryptionKey?: string;
     sessionHashKey?: string;
 }
 
-export interface VerifyOtpResult {
-    success: boolean;
-    error?: string;
-    httpStatus?: number;
-    attemptsLeft?: number;
-    session?: CustomerSession;
-    isNewUser?: boolean;
-    customer?: {
-        identifier: string;
-        name: string;
-        email: string;
-        phone?: string;
-        customerId?: string;
-        address?: string | null;
-        city?: string | null;
-        zone?: string | null;
-        area?: string | null;
-        cityName?: string | null;
-        zoneName?: string | null;
-        areaName?: string | null;
-        profileComplete: boolean;
-        needsProfileCompletion: boolean;
+export type VerifyOtpResult =
+    | {
+        /** The code is right but this email/phone has no account: ask for name (and phone). */
+        status: "needs_account_details";
+    }
+    | {
+        status: "signed_in";
+        session: CustomerSession;
+        customer: CustomerAuthProfile;
+        isNewUser: boolean;
     };
-}
 
 export interface CleanupExpiredCustomerSessionsResult {
     scanned: number;
@@ -181,7 +165,7 @@ export async function deriveCustomerAuthOtpDeliveryCode(input: {
     deliveryKey: string;
     encryptionKey?: string;
 }): Promise<string> {
-    const secret = requireCustomerOtpDeliveryKey(input.encryptionKey);
+    const secret = requireKey(input.encryptionKey, "Customer OTP signing key is not configured.");
     const key = await crypto.subtle.importKey(
         "raw",
         new TextEncoder().encode(secret),
@@ -198,11 +182,9 @@ export async function deriveCustomerAuthOtpDeliveryCode(input: {
     return String(num);
 }
 
-function requireCustomerOtpDeliveryKey(encryptionKey: string | undefined): string {
-    const key = encryptionKey?.trim();
-    if (!key) {
-        throw new ServiceUnavailableError("Customer OTP signing key is not configured.");
-    }
+function requireKey(value: string | undefined, message: string): string {
+    const key = value?.trim();
+    if (!key) throw new ServiceUnavailableError(message);
     return key;
 }
 
@@ -276,15 +258,6 @@ async function getCustomerAuthRuntimePolicy(db: Database): Promise<{
     };
 }
 
-function normalizeCustomerAuthIntent(intent: unknown): CustomerAuthIntent {
-    return intent === "sign_up" ? "sign_up" : "sign_in";
-}
-
-function normalizeEmail(value: string | undefined): string | undefined {
-    const trimmed = value?.trim().toLowerCase();
-    return trimmed || undefined;
-}
-
 function isValidEmailAddress(value: string): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
@@ -297,37 +270,28 @@ function normalizePhoneOrThrow(phone: string, phoneCountryPolicy?: PhoneCountryP
     }
 }
 
-function normalizePrimaryIdentifier(
+function normalizeEmailOrThrow(email: string): string {
+    if (!isValidEmailAddress(email)) {
+        throw new ValidationError("Enter a valid email address.");
+    }
+    return email.trim().toLowerCase();
+}
+
+function normalizeIdentifier(
     method: "email" | "phone",
     identifier: string,
     phoneCountryPolicy?: PhoneCountryPolicy,
 ): string {
-    if (method === "email") {
-        if (!isValidEmailAddress(identifier)) {
-            throw new ValidationError("Valid email address required");
-        }
-        return identifier.trim().toLowerCase();
+    if (!identifier?.trim()) {
+        throw new ValidationError(method === "email" ? "Enter your email address." : "Enter your phone number.");
     }
-
-    return normalizePhoneOrThrow(identifier, phoneCountryPolicy);
-}
-
-function getPrimaryEmail(method: "email" | "phone", identifier: string, email?: string): string | undefined {
-    return method === "email" ? identifier.trim().toLowerCase() : normalizeEmail(email);
-}
-
-function getPrimaryPhone(
-    method: "email" | "phone",
-    identifier: string,
-    phone?: string,
-    phoneCountryPolicy?: PhoneCountryPolicy,
-): string | undefined {
-    if (method === "phone") return normalizePhoneOrThrow(identifier, phoneCountryPolicy);
-    return phone ? normalizePhoneOrThrow(phone, phoneCountryPolicy) : undefined;
+    return method === "email"
+        ? normalizeEmailOrThrow(identifier)
+        : normalizePhoneOrThrow(identifier, phoneCountryPolicy);
 }
 
 export async function hashCustomerSessionToken(sessionToken: string, sessionHashKey: string | undefined): Promise<string> {
-    const secret = requireCustomerSessionHashKey(sessionHashKey);
+    const secret = requireKey(sessionHashKey, "Customer session signing key is not configured.");
     const key = await crypto.subtle.importKey(
         "raw",
         new TextEncoder().encode(secret),
@@ -345,111 +309,11 @@ export async function hashCustomerSessionToken(sessionToken: string, sessionHash
         .join("");
 }
 
-function requireCustomerSessionHashKey(sessionHashKey: string | undefined): string {
-    const key = sessionHashKey?.trim();
-    if (!key) {
-        throw new ServiceUnavailableError("Customer session signing key is not configured.");
-    }
-    return key;
-}
-
-function assertSecondaryContactFormats(input: {
-    email?: string;
-    phone?: string;
-}, phoneCountryPolicy?: PhoneCountryPolicy): void {
-    const email = normalizeEmail(input.email);
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        throw new ValidationError("Valid email address required");
-    }
-    if (input.phone) {
-        normalizePhoneOrThrow(input.phone, phoneCountryPolicy);
-    }
-}
-
-function assertPolicyRequiredFields(
-    policy: CustomerAuthPolicyConfig,
-    input: {
-        intent: CustomerAuthIntent;
-        channel: CustomerAuthOtpChannel;
-        method: "email" | "phone";
-        normalizedIdentifier: string;
-        email?: string;
-        phone?: string;
-    },
-    phoneCountryPolicy?: PhoneCountryPolicy,
-): void {
-    if (input.intent !== "sign_up") return;
-
-    const email = getPrimaryEmail(input.method, input.normalizedIdentifier, input.email);
-    const phone = getPrimaryPhone(input.method, input.normalizedIdentifier, input.phone, phoneCountryPolicy);
-
-    if (isContactFieldRequiredForAuthChannel(policy, input.channel, "email") && !email) {
-        throw new ValidationError("Email address is required to create an account.");
-    }
-
-    if (isContactFieldRequiredForAuthChannel(policy, input.channel, "phone") && !phone) {
-        throw new ValidationError("Phone number is required to create an account.");
-    }
-}
-
-type CustomerAuthProfileRow = typeof customers.$inferSelect;
+type CustomerRow = typeof customers.$inferSelect;
 type CustomerInsertRow = typeof customers.$inferInsert;
 type SQLiteBatchItem = BatchItem<"sqlite">;
-type SQLTimestamp = ReturnType<typeof sql>;
-
-function customerAccountStateForProof(input: {
-    verifiedEmail?: string | null;
-    verifiedPhone?: string | null;
-}): {
-    accountClaimedAt: SQLTimestamp;
-    phoneVerifiedAt?: SQLTimestamp;
-    emailVerifiedAt?: SQLTimestamp;
-    lastAuthenticatedAt: SQLTimestamp;
-} {
-    const updates: {
-        accountClaimedAt: SQLTimestamp;
-        phoneVerifiedAt?: SQLTimestamp;
-        emailVerifiedAt?: SQLTimestamp;
-        lastAuthenticatedAt: SQLTimestamp;
-    } = {
-        accountClaimedAt: sql`coalesce(${customers.accountClaimedAt}, unixepoch())`,
-        lastAuthenticatedAt: sql`unixepoch()`,
-    };
-
-    if (input.verifiedPhone) {
-        updates.phoneVerifiedAt = sql`coalesce(${customers.phoneVerifiedAt}, unixepoch())`;
-    }
-    if (input.verifiedEmail) {
-        updates.emailVerifiedAt = sql`coalesce(${customers.emailVerifiedAt}, unixepoch())`;
-    }
-
-    return updates;
-}
-
-function customerAccountInsertStateForProof(input: {
-    verifiedEmail?: string | null;
-    verifiedPhone?: string | null;
-    authenticatedAt: Date;
-}): Pick<CustomerInsertRow, "accountClaimedAt" | "phoneVerifiedAt" | "emailVerifiedAt" | "lastAuthenticatedAt"> {
-    return {
-        accountClaimedAt: input.authenticatedAt,
-        phoneVerifiedAt: input.verifiedPhone ? input.authenticatedAt : null,
-        emailVerifiedAt: input.verifiedEmail ? input.authenticatedAt : null,
-        lastAuthenticatedAt: input.authenticatedAt,
-    };
-}
-
-function isCustomerUniqueConstraintError(error: unknown): boolean {
-    const message = error instanceof Error ? error.message : String(error);
-    return (
-        message.includes("customer_phone_unique") ||
-        message.includes("UNIQUE constraint failed: customers.phone") ||
-        message.includes("customers.phone")
-    );
-}
 
 export interface CustomerAuthProfile {
-    identifier?: string;
     name: string;
     email: string;
     phone?: string;
@@ -461,8 +325,8 @@ export interface CustomerAuthProfile {
     cityName?: string | null;
     zoneName?: string | null;
     areaName?: string | null;
+    /** A delivery address is saved (checkout can prefill it). Never required. */
     profileComplete: boolean;
-    needsProfileCompletion: boolean;
 }
 
 interface ResolvedCustomerLocation {
@@ -479,27 +343,17 @@ function normalizeOptionalProfileText(value: string | null | undefined): string 
     return trimmed ? trimmed : null;
 }
 
-function hasRequiredCustomerProfileFields(row: {
-    name?: string | null;
-    phone?: string | null;
+function hasSavedDeliveryAddress(row: {
     address?: string | null;
     city?: string | null;
     zone?: string | null;
 }): boolean {
-    return Boolean(
-        row.name?.trim() &&
-        row.phone?.trim() &&
-        row.address?.trim() &&
-        row.city?.trim() &&
-        row.zone?.trim(),
-    );
+    return Boolean(row.address?.trim() && row.city?.trim() && row.zone?.trim());
 }
 
-function buildCustomerAuthProfile(row: CustomerAuthProfileRow, identifier?: string): CustomerAuthProfile {
-    const profileComplete = hasRequiredCustomerProfileFields(row);
+function buildCustomerAuthProfile(row: CustomerRow): CustomerAuthProfile {
     return {
-        identifier,
-        name: row.name || "Customer",
+        name: row.name,
         email: row.email ?? "",
         phone: row.phone,
         customerId: row.id,
@@ -510,12 +364,11 @@ function buildCustomerAuthProfile(row: CustomerAuthProfileRow, identifier?: stri
         cityName: row.cityName ?? null,
         zoneName: row.zoneName ?? null,
         areaName: row.areaName ?? null,
-        profileComplete,
-        needsProfileCompletion: !profileComplete && row.profileCompletionRequiredAt != null,
+        profileComplete: hasSavedDeliveryAddress(row),
     };
 }
 
-async function getActiveCustomerById(db: Database, customerId: string): Promise<CustomerAuthProfileRow | null> {
+async function getActiveCustomerById(db: Database, customerId: string): Promise<CustomerRow | null> {
     const row = await db
         .select()
         .from(customers)
@@ -524,87 +377,43 @@ async function getActiveCustomerById(db: Database, customerId: string): Promise<
     return row ?? null;
 }
 
-async function getActiveCustomerByPhone(db: Database, phone: string): Promise<CustomerAuthProfileRow | null> {
-    const row = await db
-        .select()
-        .from(customers)
-        .where(and(eq(customers.phone, phone), isNull(customers.deletedAt)))
-        .get();
-    return row ?? null;
-}
+type ProofOwner =
+    | { kind: "account"; row: CustomerRow }
+    /** An unclaimed CRM profile keyed by the phone just proven: the buyer owns it. */
+    | { kind: "guest_profile"; row: CustomerRow }
+    | { kind: "deleted" }
+    | { kind: "none" };
 
-async function getDeletedCustomerByPhone(db: Database, phone: string): Promise<Pick<CustomerAuthProfileRow, "id"> | null> {
-    const row = await db
-        .select({
-            id: customers.id,
-        })
-        .from(customers)
-        .where(and(eq(customers.phone, phone), isNotNull(customers.deletedAt)))
-        .get();
-    return row ?? null;
-}
-
-async function getDeletedCustomerByEmail(db: Database, email: string): Promise<Pick<CustomerAuthProfileRow, "id"> | null> {
-    const row = await db
-        .select({
-            id: customers.id,
-        })
-        .from(customers)
-        .where(and(eq(customers.email, email), isNotNull(customers.deletedAt)))
-        .get();
-    return row ?? null;
-}
-
-async function getActiveCustomersByEmail(
-    db: Database,
-    email: string,
-    limit = 2,
-): Promise<CustomerAuthProfileRow[]> {
-    return db
-        .select()
-        .from(customers)
-        .where(and(eq(customers.email, email), isNull(customers.deletedAt)))
-        .limit(limit)
-        .all();
-}
-
-async function getActiveCustomerByEmailForSignIn(db: Database, email: string): Promise<CustomerAuthProfileRow | null> {
-    const matches = await getActiveCustomersByEmail(db, email, 2);
-    if (matches.length > 1) {
-        throw new ValidationError("Multiple accounts use this email. Please use phone verification or contact store support.");
-    }
-    return matches[0] ?? null;
-}
-
-async function requireClaimedCustomerAccountForSignIn(
+/**
+ * Who owns a just-proven identifier. An email resolves ONLY to an account
+ * whose email was itself verified, so an email typed into someone else's
+ * checkout, or saved unverified on another account, can neither block the
+ * inbox owner nor hand them a stranger's account.
+ */
+async function resolveProofOwner(
     db: Database,
     method: "email" | "phone",
     identifier: string,
-): Promise<CustomerAuthProfileRow> {
-    const existing = method === "email"
-        ? await getActiveCustomerByEmailForSignIn(db, identifier)
-        : await getActiveCustomerByPhone(db, identifier);
-
-    if (existing?.accountClaimedAt) {
-        return existing;
+): Promise<ProofOwner> {
+    if (method === "email") {
+        const [verified] = await db
+            .select()
+            .from(customers)
+            .where(and(
+                eq(customers.email, identifier),
+                isNotNull(customers.emailVerifiedAt),
+                isNotNull(customers.accountClaimedAt),
+            ))
+            .orderBy(sql`${customers.deletedAt} IS NOT NULL`, desc(customers.lastAuthenticatedAt))
+            .limit(1);
+        if (!verified) return { kind: "none" };
+        return verified.deletedAt ? { kind: "deleted" } : { kind: "account", row: verified };
     }
 
-    const deleted = method === "email"
-        ? await getDeletedCustomerByEmail(db, identifier)
-        : await getDeletedCustomerByPhone(db, identifier);
-    if (deleted) {
-        throw new ValidationError(
-            method === "email"
-                ? "This email belongs to a deleted customer account. Contact store support to restore access."
-                : "This phone number belongs to a deleted customer account. Contact store support to restore access.",
-        );
-    }
-
-    throw new ValidationError(
-        method === "email"
-            ? "No account was found for this email. Create an account instead."
-            : "No account was found for this phone number. Create an account instead.",
-    );
+    const row = await db.select().from(customers).where(eq(customers.phone, identifier)).get();
+    if (!row) return { kind: "none" };
+    if (row.deletedAt) return { kind: "deleted" };
+    return row.accountClaimedAt ? { kind: "account", row } : { kind: "guest_profile", row };
 }
 
 async function resolveActiveCustomerLocation(
@@ -676,129 +485,49 @@ async function resolveActiveCustomerLocation(
 // ─────────────────────────────────────────
 
 /**
- * Handles OTP generation, rate limiting, and queueing for delivery.
- * Sign-in requests require a claimed active customer account before any OTP
- * delivery state is created. Sign-up duplicate checks still happen after proof.
- * Returns a queue payload that the route should send to JOBS_QUEUE.
+ * Sends a one-time code to an email or phone. Whether an account exists is
+ * decided only after the code is entered, so this never reveals it.
  *
- * @throws {ValidationError} if the identifier is missing or malformed
- * @throws {ForbiddenError} if the requested method is disabled by the store
- * @throws {RateLimitError} if the IP or identifier is rate-limited
- * @throws {ServiceUnavailableError} if the transport is misconfigured
+ * @throws {ValidationError} for a malformed identifier
+ * @throws {ForbiddenError} when the store has not enabled this channel
+ * @throws {RateLimitError} per contact, per resend cooldown, or the IP ceiling
+ * @throws {ServiceUnavailableError} when the delivery provider is not ready
  */
 export async function sendOtp(
     db: Database,
     input: SendOtpInput,
 ): Promise<SendOtpResult> {
-    const { method, identifier, name, ip } = input;
-    const intent = normalizeCustomerAuthIntent(input.intent);
-
-    // Validate identifier format
-    if (!identifier) {
-        throw new ValidationError("Contact identifier required (email or phone)");
-    }
-
-    normalizePrimaryIdentifier(method, identifier);
-    assertSecondaryContactFormats({
-        email: input.email,
-        phone: input.phone,
-    });
-
     const { settings, policy, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
-
-    assertSecondaryContactFormats({
-        email: input.email,
-        phone: input.phone,
-    }, phoneCountryPolicy);
-
-    // Normalize phone identifier to E.164 for consistent storage/lookup
-    const normalizedIdentifier = normalizePrimaryIdentifier(method, identifier, phoneCountryPolicy);
-    const channel = resolveCustomerAuthChannelForRequest(policy, method, input.channel);
-
+    const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
+    const channel = resolveCustomerAuthChannelForRequest(policy, input.method, input.channel);
     if (!channel) {
-        throw new ForbiddenError(`Verification via ${method} is currently disabled by the store.`);
+        throw new ForbiddenError(
+            input.method === "email"
+                ? "This store doesn't offer sign-in by email."
+                : "This store doesn't offer sign-in by phone.",
+        );
     }
+    requireKey(input.credentialEncryptionKey, "Customer OTP delivery target encryption key is not configured.");
 
-    assertPolicyRequiredFields(policy, {
-        intent,
-        channel,
-        method,
-        normalizedIdentifier,
-        email: input.email,
-        phone: input.phone,
-    }, phoneCountryPolicy);
-
-    if (intent === "sign_in") {
-        try {
-            await requireClaimedCustomerAccountForSignIn(db, method, normalizedIdentifier);
-        } catch (dbError: unknown) {
-            if (dbError instanceof ValidationError) {
-                await enforceCustomerAuthOtpIpRateLimit(db, {
-                    ip,
-                    hashKey: input.encryptionKey,
-                });
-                throw dbError;
-            }
-            console.warn("[CustomerAuth] Account preflight failed", {
-                errorType: dbError instanceof Error ? dbError.name : typeof dbError,
-            });
-            throw new ServiceUnavailableError("Customer account service is temporarily unavailable. Please try again.");
-        }
-    }
-
-    const otpKey = await buildCustomerAuthOtpStorageKey(channel, normalizedIdentifier, input.encryptionKey);
-    const contactEmail = getPrimaryEmail(method, normalizedIdentifier, input.email);
-    const contactPhone = getPrimaryPhone(method, normalizedIdentifier, input.phone, phoneCountryPolicy);
-    if (!input.credentialEncryptionKey?.trim()) {
-        throw new ServiceUnavailableError("Customer OTP delivery target encryption key is not configured.");
-    }
-    if (
-        intent === "sign_up" &&
-        ((method === "email" && contactPhone) || (method === "phone" && contactEmail)) &&
-        !input.credentialEncryptionKey?.trim()
-    ) {
-        throw new ServiceUnavailableError("Customer OTP contact encryption key is not configured.");
-    }
-
-    // Resolve and validate the delivery transport before mutating rate-limit or OTP challenge state.
-    const transport = getOtpTransport(method, policy, channel);
-    if (channel === "email") {
-        const emailReadiness = await getEmailProviderReadiness({
-            db,
-            env: input.emailEnv,
-            encryptionKey: input.credentialEncryptionKey,
-        });
-        if (!isReady(emailReadiness)) {
-            console.error(`[CustomerAuth] Email transport unavailable: ${emailReadiness.issues[0]?.message ?? "not configured"}`);
-            throw new ServiceUnavailableError("Email verification is currently unavailable. Contact store support.");
-        }
-    }
-    if (channel === "whatsapp") {
-        const whatsAppSettings = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey);
-        if (!whatsAppSettings.accessToken || !whatsAppSettings.phoneNumberId) {
-            throw new ServiceUnavailableError("WhatsApp verification is currently unavailable. Contact store support.");
-        }
-    }
-    if (channel === "sms") {
-        const smsReadiness = await getSmsProviderReadiness(db, input.credentialEncryptionKey);
-        if (!isReady(smsReadiness)) {
-            console.error(`[CustomerAuth] SMS transport unavailable: ${smsReadiness.issues[0]?.message ?? "not configured"}`);
-            throw new ServiceUnavailableError("SMS verification is currently unavailable. Contact store support.");
-        }
-    }
+    // Resolve and validate the delivery transport before counting the request
+    // or touching challenge state.
+    const transport = getOtpTransport(input.method, policy, channel);
+    await assertOtpChannelReady(db, channel, input);
     const configError = transport.validateConfig(settings);
     if (configError) {
         console.error(`[CustomerAuth] Transport ${transport.label} misconfigured: ${configError}`);
         throw new ServiceUnavailableError(configError);
     }
 
-    await enforceCustomerAuthOtpIpRateLimit(db, {
-        ip,
+    await enforceOtpSendRateLimits(db, {
+        ip: input.ip,
+        identifiers: [`${input.method}:${identifier}`],
         hashKey: input.encryptionKey,
     });
 
-    // Generate and persist an atomic D1 challenge. KV is intentionally not the
-    // OTP authority; it cannot safely count attempts or consume one-time codes.
+    // D1 is the OTP authority: the challenge row counts attempts and
+    // consumes codes atomically. The raw code is never stored or queued.
+    const otpKey = await buildCustomerAuthOtpStorageKey(channel, identifier, input.encryptionKey);
     const deliveryKey = createAuthOtpDeliveryKey();
     const code = await deriveCustomerAuthOtpDeliveryCode({
         otpKey,
@@ -808,14 +537,10 @@ export async function sendOtp(
     const challenge = await persistCustomerAuthOtpChallenge(db, {
         otpKey,
         deliveryKey,
-        method,
+        method: input.method,
         channel,
-        intent,
-        identifier: normalizedIdentifier,
-        deliveryTarget: normalizedIdentifier,
-        deliveryName: name,
-        contactEmail: intent === "sign_up" && method === "phone" ? contactEmail : undefined,
-        phone: intent === "sign_up" && method === "email" ? contactPhone : undefined,
+        identifier,
+        deliveryTarget: identifier,
         code,
         encryptionKey: input.encryptionKey,
         contactEncryptionKey: input.credentialEncryptionKey,
@@ -824,187 +549,186 @@ export async function sendOtp(
         maxAttempts: OTP_MAX_ATTEMPTS,
     });
 
-    // OTP code is intentionally NOT logged — it would leak secrets in production.
-
-    // Build queue payload via transport. The raw OTP is intentionally absent; the
-    // consumer derives the code and recipient target from the challenge and delivery references.
-    const queuePayload = transport.buildQueuePayload(
-        settings,
-        channel,
-        deliveryKey,
-        challenge.expiresAt,
-        otpKey,
-    );
-
     return {
-        success: true,
-        message: "Verification code sent. Please check your selected contact.",
-        queuePayload,
+        message: "We sent you a code.",
+        resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - Math.floor(Date.now() / 1000)),
+        queuePayload: transport.buildQueuePayload(settings, channel, deliveryKey, challenge.expiresAt, otpKey),
         otpStorageKey: otpKey,
         deliveryKey,
     };
 }
 
+async function assertOtpChannelReady(
+    db: Database,
+    channel: CustomerAuthOtpChannel,
+    input: Pick<SendOtpInput, "emailEnv" | "credentialEncryptionKey">,
+): Promise<void> {
+    if (channel === "email") {
+        const readiness = await getEmailProviderReadiness({
+            db,
+            env: input.emailEnv,
+            encryptionKey: input.credentialEncryptionKey,
+        });
+        if (!isReady(readiness)) {
+            console.error(`[CustomerAuth] Email transport unavailable: ${readiness.issues[0]?.message ?? "not configured"}`);
+            throw new ServiceUnavailableError("Email codes are unavailable right now. Contact the store.");
+        }
+        return;
+    }
+    if (channel === "whatsapp") {
+        const whatsApp = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey);
+        if (!whatsApp.accessToken || !whatsApp.phoneNumberId) {
+            throw new ServiceUnavailableError("WhatsApp codes are unavailable right now. Contact the store.");
+        }
+        return;
+    }
+    const readiness = await getSmsProviderReadiness(db, input.credentialEncryptionKey);
+    if (!isReady(readiness)) {
+        console.error(`[CustomerAuth] SMS transport unavailable: ${readiness.issues[0]?.message ?? "not configured"}`);
+        throw new ServiceUnavailableError("SMS codes are unavailable right now. Contact the store.");
+    }
+}
+
 /**
- * Verifies an OTP code and creates a customer session.
- * Handles customer lookup/creation in DB.
- *
- * @throws {ValidationError} if the identifier/code is missing, expired, or incorrect
- * @throws {RateLimitError} if too many failed attempts
+ * Checks a one-time code and signs the buyer in. One flow for everyone:
+ * - the proven identifier already has an account → signed in;
+ * - a proven phone matches an unclaimed CRM profile → that profile becomes
+ *   the buyer's account;
+ * - otherwise the code is kept (not used up) and the buyer is asked for their
+ *   name (and phone, for email sign-ups); the second call with `account`
+ *   creates the account.
+ * On every sign-in, guest orders whose contact matches an identifier the
+ * account has VERIFIED are added to its order history.
  */
 export async function verifyOtp(
     db: Database,
     input: VerifyOtpInput,
 ): Promise<VerifyOtpResult> {
-    const { method, identifier, code, name, phone, email } = input;
-
-    if (!identifier || !code) {
-        throw new ValidationError("Contact identifier and code are required");
+    if (!input.code?.trim()) {
+        throw new ValidationError("Enter the 6-digit code.");
     }
-
-    normalizePrimaryIdentifier(method, identifier);
-    assertSecondaryContactFormats({ email, phone });
-
-    const runtimePolicy = await getCustomerAuthRuntimePolicy(db);
-    const { phoneCountryPolicy } = runtimePolicy;
-
-    assertSecondaryContactFormats({ email, phone }, phoneCountryPolicy);
-
-    // Normalize the primary destination exactly as sendOtp() did. Verification
-    // payloads prove an OTP; they may not reinterpret which contact was verified.
-    const normalizedIdentifier = normalizePrimaryIdentifier(method, identifier, phoneCountryPolicy);
-
-    const channel = input.channel ?? getFallbackOtpChannel(method);
-    const otpKey = await buildCustomerAuthOtpStorageKey(channel, normalizedIdentifier, input.encryptionKey);
-
-    const challenge = await claimCustomerAuthOtpChallenge(db, {
+    const { policy, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
+    const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
+    const channel = resolveCustomerAuthChannelForRequest(policy, input.method, input.channel)
+        ?? (input.method === "email" ? "email" : "sms");
+    const otpKey = await buildCustomerAuthOtpStorageKey(channel, identifier, input.encryptionKey);
+    const challengeInput = {
         otpKey,
-        method,
+        method: input.method,
         channel,
-        identifier: normalizedIdentifier,
-        code,
+        identifier,
+        code: input.code,
         encryptionKey: input.encryptionKey,
-        contactEncryptionKey: input.credentialEncryptionKey,
-    });
-    const intent = normalizeCustomerAuthIntent(challenge.intent ?? input.intent);
-    const otpVerifiedEmail = challenge.method === "email" ? challenge.identifier : null;
-    const otpVerifiedPhone = challenge.method === "phone" ? challenge.identifier : null;
-    const verifiedEmail = otpVerifiedEmail ?? challenge.contactEmail;
-    const verifiedPhone = otpVerifiedPhone ?? challenge.phone;
-    if (verifiedPhone) {
-        normalizePhoneOrThrow(verifiedPhone, phoneCountryPolicy);
+    };
+    const owner = await resolveProofOwner(db, input.method, identifier);
+    let newAccount: Awaited<ReturnType<typeof prepareNewAccount>> = null;
+    if (owner.kind === "none" || owner.kind === "deleted") {
+        // Prove the code first (wrong codes still count), so nothing about
+        // accounts is revealed to someone who doesn't hold it.
+        await claimCustomerAuthOtpChallenge(db, { ...challengeInput, consume: false });
+        if (owner.kind === "deleted") {
+            throw new ValidationError("This account was closed. Contact the store to restore it.");
+        }
+        newAccount = await prepareNewAccount(db, input, identifier, channel, policy, phoneCountryPolicy);
+        if (!newAccount) return { status: "needs_account_details" };
+    }
+    await claimCustomerAuthOtpChallenge(db, challengeInput);
+
+    const authenticatedAt = new Date();
+    const statements: SQLiteBatchItem[] = [];
+    let row: CustomerRow;
+    let isNewUser = false;
+    if (owner.kind === "account") {
+        row = markProven(owner.row, input.method, authenticatedAt);
+        statements.push(db.update(customers).set(proofUpdate(input.method)).where(eq(customers.id, row.id)) as SQLiteBatchItem);
+    } else if (owner.kind === "guest_profile") {
+        row = { ...markProven(owner.row, input.method, authenticatedAt), accountClaimedAt: authenticatedAt };
+        isNewUser = true;
+        statements.push(db.update(customers)
+            .set({ ...proofUpdate(input.method), accountClaimedAt: authenticatedAt })
+            .where(and(eq(customers.id, row.id), isNull(customers.accountClaimedAt))) as SQLiteBatchItem);
+    } else {
+        row = newAccount!.row;
+        isNewUser = true;
+        statements.push(newAccount!.write);
     }
 
-    // Look up customer in DB (if exists)
-    let customerId: string | undefined;
-    let customerName = name;
-    let resolvedEmail = method === "email" ? normalizedIdentifier : verifiedEmail;
-    let isNewUser = false;
-    let customerProfileRow: CustomerAuthProfileRow | null | undefined;
-    let pendingCustomerInsertValues: CustomerInsertRow | null = null;
+    const session = await createSessionForCustomer(db, row, input.sessionHashKey, statements);
+    return { status: "signed_in", session, customer: buildCustomerAuthProfile(row), isNewUser };
+}
 
-    try {
-        if (intent === "sign_up") {
-            assertPolicyRequiredFields(runtimePolicy.policy, {
-                intent,
-                channel,
-                method,
-                normalizedIdentifier,
-                email: verifiedEmail,
-                phone: verifiedPhone,
-            }, phoneCountryPolicy);
+function proofUpdate(method: "email" | "phone") {
+    return {
+        ...(method === "email"
+            ? { emailVerifiedAt: sql`coalesce(${customers.emailVerifiedAt}, unixepoch())` }
+            : { phoneVerifiedAt: sql`coalesce(${customers.phoneVerifiedAt}, unixepoch())` }),
+        lastAuthenticatedAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+    };
+}
+
+function markProven(row: CustomerRow, method: "email" | "phone", at: Date): CustomerRow {
+    return {
+        ...row,
+        emailVerifiedAt: method === "email" ? row.emailVerifiedAt ?? at : row.emailVerifiedAt,
+        phoneVerifiedAt: method === "phone" ? row.phoneVerifiedAt ?? at : row.phoneVerifiedAt,
+        lastAuthenticatedAt: at,
+    };
+}
+
+/**
+ * Validates the details a new buyer adds after proving an email or phone
+ * that has no account. Returns null when the details were not sent yet.
+ */
+async function prepareNewAccount(
+    db: Database,
+    input: VerifyOtpInput,
+    identifier: string,
+    channel: CustomerAuthOtpChannel,
+    policy: CustomerAuthPolicyConfig,
+    phoneCountryPolicy: PhoneCountryPolicy,
+): Promise<{ row: CustomerRow; write: SQLiteBatchItem } | null> {
+    if (!input.account) return null;
+    const name = input.account.name?.trim();
+    if (!name) throw new ValidationError("Enter your name.");
+
+    const email = input.method === "email"
+        ? identifier
+        : input.account.email?.trim() ? normalizeEmailOrThrow(input.account.email) : null;
+    if (!email && isContactFieldRequiredForAuthChannel(policy, channel, "email")) {
+        throw new ValidationError("Enter your email address.");
+    }
+    const phone = input.method === "phone"
+        ? identifier
+        : input.account.phone?.trim() ? normalizePhoneOrThrow(input.account.phone, phoneCountryPolicy) : null;
+    if (!phone) throw new ValidationError("Enter your phone number.");
+
+    const now = new Date();
+    const proof = {
+        accountClaimedAt: now,
+        lastAuthenticatedAt: now,
+        emailVerifiedAt: input.method === "email" ? now : null,
+        phoneVerifiedAt: input.method === "phone" ? now : null,
+    };
+
+    if (input.method === "email") {
+        // The phone is typed, not proven. It is the CRM key, so an unclaimed
+        // profile with that phone is taken over, but its saved address is
+        // kept only when the profile carries the email just proven: typing
+        // a number must not reveal where its owner lives.
+        const existing = await db.select().from(customers).where(eq(customers.phone, phone)).get();
+        if (existing?.deletedAt) {
+            throw new ValidationError("This phone number belongs to a closed account. Contact the store.");
         }
-
-        if (intent === "sign_in") {
-            const existing = await requireClaimedCustomerAccountForSignIn(db, method, normalizedIdentifier);
-            customerProfileRow = existing;
-            customerId = existing.id;
-            customerName = existing.name || name;
-            resolvedEmail = existing.email || resolvedEmail;
-        } else {
-            const existing = method === "email"
-                ? await getActiveCustomerByEmailForSignIn(db, normalizedIdentifier)
-                : await getActiveCustomerByPhone(db, normalizedIdentifier);
-            if (existing) {
-                if (existing.accountClaimedAt) {
-                    throw new ValidationError(
-                        method === "email"
-                            ? "An account already exists for this email. Sign in instead."
-                            : "An account already exists for this phone number. Sign in instead.",
-                    );
-                }
-                customerProfileRow = existing;
-                customerId = existing.id;
-                customerName = existing.name || name;
-                resolvedEmail = existing.email || resolvedEmail;
-                isNewUser = true;
-            }
-            if (!existing && method === "email") {
-                if (!verifiedPhone) {
-                    throw new ValidationError("Phone number is required to create an account with email OTP.");
-                }
-            }
-
-            if (!existing && resolvedEmail) {
-                const activeEmailCustomers = await getActiveCustomersByEmail(db, resolvedEmail, 2);
-                if (activeEmailCustomers.length > 1) {
-                    throw new ValidationError("Multiple accounts use this email. Please use phone verification or contact store support.");
-                }
-                if (activeEmailCustomers.length === 1) {
-                    if (!activeEmailCustomers[0]?.accountClaimedAt) {
-                        throw new ValidationError("Use phone verification to create an account for this customer profile.");
-                    }
-                    throw new ValidationError("An account already exists for this email. Sign in instead.");
-                }
-            }
-
-            if (!existing) {
-                const phoneForNewCustomer = method === "phone" ? normalizedIdentifier : verifiedPhone;
-                if (!phoneForNewCustomer) {
-                    throw new ValidationError("Phone number is required to create an account.");
-                }
-
-                const activePhoneCustomer = await getActiveCustomerByPhone(db, phoneForNewCustomer);
-                if (activePhoneCustomer) {
-                    if (!activePhoneCustomer.accountClaimedAt) {
-                        throw new ValidationError("Use phone verification to create an account for this customer profile.");
-                    }
-                    throw new ValidationError("An account already exists for this phone number. Sign in instead.");
-                }
-                const deletedPhoneCustomer = await getDeletedCustomerByPhone(db, phoneForNewCustomer);
-                if (deletedPhoneCustomer) {
-                    throw new ValidationError("This phone number belongs to a deleted customer account. Contact store support to restore access.");
-                }
-
-                // Create new customer record — use "cust_" prefix for consistency with customers.service.ts
-                customerId = "cust_" + nanoid();
-                const profileRequiredAt = new Date();
-
-                // Determine phone value
-                const customerPhone = phoneForNewCustomer;
-
-                const newCustomerValues: CustomerInsertRow = {
-                    id: customerId,
-                    name: customerName,
-                    email: resolvedEmail || null,
-                    phone: customerPhone || "",
-                    ...customerAccountInsertStateForProof({
-                        verifiedEmail: otpVerifiedEmail,
-                        verifiedPhone: otpVerifiedPhone,
-                        authenticatedAt: profileRequiredAt,
-                    }),
-                    profileCompletionRequiredAt: profileRequiredAt,
-                    profileCompletedAt: null,
-                    createdAt: profileRequiredAt,
-                    updatedAt: profileRequiredAt,
-                };
-
-                pendingCustomerInsertValues = newCustomerValues;
-                customerProfileRow = {
-                    id: customerId,
-                    name: customerName,
-                    email: resolvedEmail || null,
-                    phone: customerPhone || "",
+        if (existing?.accountClaimedAt) {
+            throw new ValidationError("This phone number is already on another account. Sign in to that account instead.");
+        }
+        if (existing) {
+            const sameBuyer = existing.email?.trim().toLowerCase() === email;
+            const cleared = {
+                name,
+                email,
+                ...(sameBuyer ? {} : {
                     address: null,
                     city: null,
                     zone: null,
@@ -1012,114 +736,96 @@ export async function verifyOtp(
                     cityName: null,
                     zoneName: null,
                     areaName: null,
-                    accountClaimedAt: profileRequiredAt,
-                    phoneVerifiedAt: otpVerifiedPhone ? profileRequiredAt : null,
-                    emailVerifiedAt: otpVerifiedEmail ? profileRequiredAt : null,
-                    lastAuthenticatedAt: profileRequiredAt,
-                    profileCompletionRequiredAt: profileRequiredAt,
-                    profileCompletedAt: null,
-                    totalOrders: 0,
-                    lastOrderAt: null,
-                    createdAt: profileRequiredAt,
-                    updatedAt: profileRequiredAt,
-                    deletedAt: null,
-                };
-                isNewUser = true;
-            }
+                }),
+                ...proof,
+                updatedAt: now,
+            };
+            return {
+                row: { ...existing, ...cleared },
+                write: db.update(customers)
+                    .set(cleared)
+                    .where(and(eq(customers.id, existing.id), isNull(customers.accountClaimedAt))) as SQLiteBatchItem,
+            };
         }
-    } catch (dbError: unknown) {
-        // Re-throw typed errors (ValidationError etc.) as-is
-        if (dbError instanceof ValidationError) {
-            throw dbError;
-        }
-        console.warn("[CustomerAuth] DB lookup/insert failed:", dbError);
-        throw new ServiceUnavailableError("Customer account service is temporarily unavailable. Please try again.");
     }
 
-    if (!customerId) {
-        throw new ServiceUnavailableError("Customer session could not be created. Please try again.");
-    }
+    const values: CustomerInsertRow = {
+        id: `cust_${nanoid()}`,
+        name,
+        email,
+        phone,
+        ...proof,
+        createdAt: now,
+        updatedAt: now,
+    };
+    return {
+        row: {
+            address: null,
+            city: null,
+            zone: null,
+            area: null,
+            cityName: null,
+            zoneName: null,
+            areaName: null,
+            totalOrders: 0,
+            lastOrderAt: null,
+            deletedAt: null,
+            ...values,
+        } as CustomerRow,
+        write: db.insert(customers).values(values) as SQLiteBatchItem,
+    };
+}
 
-    if (!customerProfileRow) {
-        customerProfileRow = await getActiveCustomerById(db, customerId);
-    }
-
-    if (!customerProfileRow) {
-        throw new ServiceUnavailableError("Customer profile could not be read. Please try again.");
-    }
-
-    const customerProfile = buildCustomerAuthProfile(customerProfileRow, identifier);
-
-    // Create session. The raw bearer token is only returned for the httpOnly
-    // cookie; D1 stores an HMAC hash so a database leak cannot replay sessions.
+/**
+ * Commits the account write, the D1 session and the verified-contact order
+ * link in one batch. The raw bearer token only goes to the httpOnly cookie;
+ * D1 stores an HMAC so a database leak cannot replay sessions.
+ */
+async function createSessionForCustomer(
+    db: Database,
+    row: CustomerRow,
+    sessionHashKey: string | undefined,
+    accountWrites: SQLiteBatchItem[],
+): Promise<CustomerSession> {
     const nowMs = Date.now();
     const nowSeconds = Math.floor(nowMs / 1000);
-    const sessionToken = nanoid(48);
-    const sessionExpiresAtSeconds = nowSeconds + SESSION_TTL_SECONDS;
-    const tokenHash = await hashCustomerSessionToken(sessionToken, input.sessionHashKey);
-    const session: CustomerSession = {
-        token: sessionToken,
-        email: customerProfile.email,
-        name: customerProfile.name,
-        phone: customerProfile.phone,
-        customerId,
-        address: customerProfile.address,
-        city: customerProfile.city,
-        zone: customerProfile.zone,
-        area: customerProfile.area,
-        cityName: customerProfile.cityName,
-        zoneName: customerProfile.zoneName,
-        areaName: customerProfile.areaName,
-        profileComplete: customerProfile.profileComplete,
-        needsProfileCompletion: customerProfile.needsProfileCompletion,
-        createdAt: nowMs,
-        expiresAt: sessionExpiresAtSeconds * 1000,
-    };
-
-    const sessionInsertValues = {
-        tokenHash,
-        customerId,
-        expiresAt: sessionExpiresAtSeconds,
-        revokedAt: null,
-        createdAt: nowSeconds,
-        updatedAt: nowSeconds,
-    };
-
-    const sessionStatements: SQLiteBatchItem[] = [];
-    if (pendingCustomerInsertValues) {
-        sessionStatements.push(
-            db.insert(customers).values(pendingCustomerInsertValues) as SQLiteBatchItem,
-        );
-    } else {
-        sessionStatements.push(
-            db
-                .update(customers)
-                .set(customerAccountStateForProof({ verifiedEmail: otpVerifiedEmail, verifiedPhone: otpVerifiedPhone }))
-                .where(and(eq(customers.id, customerId), isNull(customers.deletedAt))) as SQLiteBatchItem,
-        );
-    }
-    sessionStatements.push(
-        db.insert(customerSessions).values(sessionInsertValues) as SQLiteBatchItem,
-    );
+    const token = nanoid(48);
+    const expiresAt = nowSeconds + SESSION_TTL_SECONDS;
+    const tokenHash = await hashCustomerSessionToken(token, sessionHashKey);
+    const statements = [
+        ...accountWrites,
+        db.insert(customerSessions).values({
+            tokenHash,
+            customerId: row.id,
+            expiresAt,
+            revokedAt: null,
+            createdAt: nowSeconds,
+            updatedAt: nowSeconds,
+        }) as SQLiteBatchItem,
+    ];
+    const link = buildVerifiedContactOrderLink(db, {
+        customerId: row.id,
+        email: row.emailVerifiedAt ? row.email : null,
+        phone: row.phoneVerifiedAt ? row.phone : null,
+    });
+    if (link) statements.push(link as SQLiteBatchItem);
 
     try {
-        await safeBatch(db, sessionStatements);
+        await safeBatch(db, statements);
     } catch (error: unknown) {
-        if (isCustomerUniqueConstraintError(error)) {
-            throw new ValidationError("An account already exists for this phone number. Sign in instead.");
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes("customers.phone") || message.includes("customer_phone_unique")) {
+            throw new ValidationError("This phone number is already on another account. Sign in to that account instead.");
         }
-        console.warn("[CustomerAuth] Account/session persistence failed:", error);
-        throw new ServiceUnavailableError("Customer session could not be created. Please try again.");
+        console.warn("[CustomerAuth] Account/session persistence failed:", error instanceof Error ? error.name : typeof error);
+        throw new ServiceUnavailableError("We couldn't sign you in. Please try again.");
     }
 
     return {
-        success: true,
-        session,
-        isNewUser,
-        customer: {
-            ...customerProfile,
-            identifier,
-        },
+        token,
+        ...buildCustomerAuthProfile(row),
+        createdAt: nowMs,
+        expiresAt: expiresAt * 1000,
     };
 }
 
@@ -1138,24 +844,7 @@ export async function getCustomerBySession(
     const nowSeconds = Math.floor(Date.now() / 1000);
     const tokenHash = await hashCustomerSessionToken(sessionToken, sessionHashKey);
     const row = await db
-        .select({
-            tokenHash: customerSessions.tokenHash,
-            customerId: customerSessions.customerId,
-            expiresAt: customerSessions.expiresAt,
-            createdAt: customerSessions.createdAt,
-            customerName: customers.name,
-            customerEmail: customers.email,
-            customerPhone: customers.phone,
-            customerAddress: customers.address,
-            customerCity: customers.city,
-            customerZone: customers.zone,
-            customerArea: customers.area,
-            customerCityName: customers.cityName,
-            customerZoneName: customers.zoneName,
-            customerAreaName: customers.areaName,
-            customerProfileCompletionRequiredAt: customers.profileCompletionRequiredAt,
-            customerProfileCompletedAt: customers.profileCompletedAt,
-        })
+        .select({ session: customerSessions, customer: customers })
         .from(customerSessions)
         .innerJoin(customers, eq(customerSessions.customerId, customers.id))
         .where(and(
@@ -1166,35 +855,12 @@ export async function getCustomerBySession(
         ))
         .get();
 
-    if (!row) {
-        return null;
-    }
-
-    const profileComplete = hasRequiredCustomerProfileFields({
-        name: row.customerName,
-        phone: row.customerPhone,
-        address: row.customerAddress,
-        city: row.customerCity,
-        zone: row.customerZone,
-    });
-
+    if (!row) return null;
     return {
         token: sessionToken,
-        email: row.customerEmail ?? "",
-        name: row.customerName,
-        phone: row.customerPhone,
-        customerId: row.customerId,
-        address: row.customerAddress ?? null,
-        city: row.customerCity ?? null,
-        zone: row.customerZone ?? null,
-        area: row.customerArea ?? null,
-        cityName: row.customerCityName ?? null,
-        zoneName: row.customerZoneName ?? null,
-        areaName: row.customerAreaName ?? null,
-        profileComplete,
-        needsProfileCompletion: !profileComplete && row.customerProfileCompletionRequiredAt != null,
-        createdAt: row.createdAt * 1000,
-        expiresAt: row.expiresAt * 1000,
+        ...buildCustomerAuthProfile(row.customer),
+        createdAt: row.session.createdAt * 1000,
+        expiresAt: row.session.expiresAt * 1000,
     };
 }
 
@@ -1247,7 +913,7 @@ export async function updateCustomerProfile(
         ? normalizeOptionalProfileText(updates.name)
         : existing.name;
     if (!nextName) {
-        throw new ValidationError("Name is required to save your profile.");
+        throw new ValidationError("Enter your name.");
     }
 
     const nextAddress = updates.address !== undefined
@@ -1258,15 +924,10 @@ export async function updateCustomerProfile(
         zone: updates.zone !== undefined ? normalizeOptionalProfileText(updates.zone) : existing.zone,
         area: updates.area !== undefined ? normalizeOptionalProfileText(updates.area) : existing.area,
     };
+    if (!nextAddress && (nextLocationInput.city || nextLocationInput.zone)) {
+        throw new ValidationError("Enter your delivery address.");
+    }
     const resolvedLocation = await resolveActiveCustomerLocation(db, nextLocationInput);
-    const mergedProfile = {
-        name: nextName,
-        phone: existing.phone,
-        address: nextAddress,
-        city: resolvedLocation.city,
-        zone: resolvedLocation.zone,
-    };
-    const profileComplete = hasRequiredCustomerProfileFields(mergedProfile);
 
     const dbUpdates: Record<string, unknown> = {
         name: nextName,
@@ -1277,7 +938,6 @@ export async function updateCustomerProfile(
         cityName: resolvedLocation.cityName,
         zoneName: resolvedLocation.zoneName,
         areaName: resolvedLocation.areaName,
-        profileCompletedAt: profileComplete ? sql`coalesce(${customers.profileCompletedAt}, unixepoch())` : null,
         updatedAt: sql`unixepoch()`,
     };
 
@@ -1293,24 +953,7 @@ export async function updateCustomerProfile(
     }
 
     const authProfile = buildCustomerAuthProfile(customer);
-    const updatedSession: CustomerSession = {
-        ...session,
-        email: authProfile.email,
-        name: authProfile.name,
-        phone: authProfile.phone,
-        address: authProfile.address,
-        city: authProfile.city,
-        zone: authProfile.zone,
-        area: authProfile.area,
-        cityName: authProfile.cityName,
-        zoneName: authProfile.zoneName,
-        areaName: authProfile.areaName,
-        profileComplete: authProfile.profileComplete,
-        needsProfileCompletion: authProfile.needsProfileCompletion,
-        customerId: customer.id,
-    };
-
-    return { session: updatedSession, customer: authProfile };
+    return { session: { ...session, ...authProfile }, customer: authProfile };
 }
 
 export async function cleanupExpiredCustomerSessions(

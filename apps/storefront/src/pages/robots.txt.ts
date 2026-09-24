@@ -4,11 +4,42 @@ import { getBaseUrl } from "@/lib/sitemap-utils";
 export const prerender = false;
 
 /**
- * Allow everything; advertise the one canonical sitemap only when the Store
- * URL is a valid absolute origin, so robots.txt never carries a relative line.
+ * Private buyer pages, internal search results and sort/filter variants are
+ * noindexed already; keep crawlers from spending the crawl budget on them
+ * (the same set Shopify disallows). Paginated listings stay crawlable.
+ */
+const DISALLOWED_PATHS = [
+  "/cart$",
+  "/checkout$",
+  "/checkout/",
+  "/account$",
+  "/account/",
+  "/order-success",
+  "/payment-recovery",
+  "/track-order",
+  "/theme-preview",
+  "/agent/",
+  "/search$",
+  "/search?",
+  "/*?*sortBy=",
+  "/*?*minPrice=",
+  "/*?*maxPrice=",
+  "/*?*hasDiscount=",
+  "/*?*freeDelivery=",
+] as const;
+
+const ROBOTS_RULES = [
+  "User-agent: *",
+  ...DISALLOWED_PATHS.map((path) => `Disallow: ${path}`),
+  "Allow: /",
+].join("\n");
+
+/**
+ * Advertise the one canonical sitemap only when the Store URL is a valid
+ * absolute origin, so robots.txt never carries a relative line.
  */
 export const GET: APIRoute = async () => {
-  let robotsContent = "User-agent: *\nAllow: /";
+  let robotsContent = ROBOTS_RULES;
   try {
     robotsContent += `\n\nSitemap: ${getBaseUrl()}/sitemap.xml`;
   } catch {

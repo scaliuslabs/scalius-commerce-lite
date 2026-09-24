@@ -23,6 +23,7 @@ import {
   normalizeMerchantCspSource,
   parseMerchantCspSources,
   serializeMerchantCspSources,
+  type CspSourceProblem,
 } from "@scalius/shared/security-csp";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -41,7 +42,7 @@ import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 import { platformQuery } from "./StoreSettings";
 
-type Platform = ApiResult<typeof getApiV1AdminSettingsPlatform>;
+type Platform = Omit<ApiResult<typeof getApiV1AdminSettingsPlatform>, "revision">;
 type Handoff = Platform["identityHandoff"];
 
 function useCanEdit() {
@@ -62,7 +63,8 @@ function OriginList({
   label: string;
   origins: string[];
   onChange: (next: string[]) => void;
-  normalize: (raw: string) => string | null;
+  /** The canonical origin, or what's wrong with the entry. */
+  normalize: (raw: string) => { value: string | null; error?: CspSourceProblem | null };
   max?: number;
   disabled?: boolean;
 }) {
@@ -72,8 +74,8 @@ function OriginList({
   const [error, setError] = useState<string | null>(null);
 
   function add() {
-    const origin = normalize(draft);
-    if (!origin) return setError(t("trustedInvalid"));
+    const { value: origin, error: problem } = normalize(draft);
+    if (!origin) return setError(t(problem === "https" ? "trustedHttps" : problem === "path" ? "trustedPath" : "trustedInvalid"));
     if (origins.includes(origin)) return setError(t("trustedDuplicate"));
     if (max !== undefined && origins.length >= max) return setError(t("corsLimit", { count: max }));
     onChange([...origins, origin]);
@@ -83,7 +85,7 @@ function OriginList({
 
   return (
     <div className="space-y-3">
-      <SettingsField id={id} label={label} error={error}>
+      <SettingsField id={id} label={label}>
         <div className="flex gap-2">
           <Input
             id={id}
@@ -112,6 +114,8 @@ function OriginList({
             {common("add")}
           </Button>
         </div>
+        {/* Add is an explicit action, so its verdict shows at once (Enter or the button). */}
+        {error ? <p id={`${id}-note`} role="alert" className="text-body text-destructive">{error}</p> : null}
       </SettingsField>
       {origins.length > 0 ? (
         <ul className="divide-y divide-border border-y border-border">
@@ -151,6 +155,7 @@ export const trustedWebsitesQuery = {
     const platform = new Set(inherited.map((source) => source.source).filter(Boolean));
     return {
       sources: parseMerchantCspSources(security.cspAllowedDomains).filter((source) => !platform.has(source)),
+      revision: security.revision,
     };
   },
 };
@@ -163,13 +168,14 @@ export function TrustedWebsitesCard() {
     label: t("trustedTitle"),
     queryKey: trustedWebsitesQuery.queryKey,
     fetchFn: trustedWebsitesQuery.queryFn,
-    saveFn: (draft) =>
+    saveFn: (draft, expectedRevision) =>
       apiData(postApiV1AdminSettingsSecurity({
-        body: { cspAllowedDomains: serializeMerchantCspSources(draft.sources) },
+        body: { cspAllowedDomains: serializeMerchantCspSources(draft.sources), expectedRevision },
       })),
     defaultValues: { sources: [] },
     errorMessage: common("saveFailed"),
     canEdit,
+    fields: { cspAllowedDomains: "trusted-website" },
   });
   if (isLoadError) return <SettingsLoadFailure title={t("trustedLoad")} onRetry={refetch} />;
   return (
@@ -179,7 +185,7 @@ export function TrustedWebsitesCard() {
         label={t("websiteLabel")}
         origins={values.sources}
         disabled={!canEdit}
-        normalize={(raw) => normalizeMerchantCspSource(raw).value}
+        normalize={normalizeMerchantCspSource}
         onChange={(sources) => setValue("sources", sources)}
       />
     </SettingsCard>
@@ -195,14 +201,16 @@ interface MediaValues {
 
 export const mediaQuery = {
   queryKey: queryKeys.settings.media(),
-  queryFn: async (): Promise<MediaValues> => {
+  queryFn: async (): Promise<MediaValues & { revision: number }> => {
     const data = (await apiData(getApiV1AdminSettingsMedia())) as {
       canonicalCdnUrl?: string;
       canonicalHostAliases?: string[];
+      revision: number;
     };
     return {
       canonicalCdnUrl: data.canonicalCdnUrl ?? "",
       aliases: (data.canonicalHostAliases ?? []).join("\n"),
+      revision: data.revision,
     };
   },
 };
@@ -220,9 +228,13 @@ function ImageDeliveryFields() {
   const { values, setValue } = useSettingsForm<MediaValues>({
     queryKey: mediaQuery.queryKey,
     fetchFn: mediaQuery.queryFn,
-    saveFn: (draft) =>
+    saveFn: (draft, expectedRevision) =>
       apiData(postApiV1AdminSettingsMedia({
-        body: { canonicalCdnUrl: draft.canonicalCdnUrl.trim(), canonicalHostAliases: hostsFromLines(draft.aliases) },
+        body: {
+          canonicalCdnUrl: draft.canonicalCdnUrl.trim(),
+          canonicalHostAliases: hostsFromLines(draft.aliases),
+          expectedRevision,
+        },
       })),
     defaultValues: { canonicalCdnUrl: "", aliases: "" },
     errorMessage: common("saveFailed"),
@@ -281,7 +293,8 @@ function usePlatformForm(pick: (draft: Platform) => Partial<Platform>, isValid?:
   return useSettingsForm<Platform, Platform>({
     queryKey: platformQuery.queryKey,
     fetchFn: platformQuery.queryFn,
-    saveFn: (draft) => apiData(putApiV1AdminSettingsPlatform({ body: pick(draft) })),
+    saveFn: (draft, expectedRevision) =>
+      apiData(putApiV1AdminSettingsPlatform({ body: { ...pick(draft), expectedRevision } })),
     resolveSavedValues: (payload) => payload,
     defaultValues: {} as Platform,
     errorMessage: common("saveFailed"),
@@ -406,7 +419,7 @@ function ConnectedSitesFields() {
         label={t("corsLabel")}
         origins={values.corsAllowedOrigins}
         max={PLATFORM_CORS_ORIGINS_MAX_COUNT}
-        normalize={(raw) => normalizePlatformOriginUrl(raw.trim())}
+        normalize={(raw) => ({ value: normalizePlatformOriginUrl(raw.trim()) })}
         onChange={(origins) => setValue("corsAllowedOrigins", origins)}
       />
     </>

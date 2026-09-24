@@ -6,6 +6,8 @@ export interface SendEmailOptions {
   subject: string;
   html: string;
   from?: string;
+  /** Display name for the sender; defaults to the store name. */
+  fromName?: string;
   text?: string;
   idempotencyKey?: string;
 }
@@ -30,6 +32,8 @@ export interface CloudflareEmailBinding {
 export interface EmailRuntimeSettings {
   provider: "cloudflare" | "resend";
   sender: string;
+  /** The store name from Business settings: what recipients see as the sender. */
+  senderName?: string;
   senderConfigured: boolean;
   resendApiKey: string | null;
   hasResendApiKey: boolean;
@@ -50,6 +54,17 @@ export interface EmailRuntimeContext {
   /** Explicit override of `env.CREDENTIAL_ENCRYPTION_KEY`. */
   encryptionKey?: string;
   settings?: EmailRuntimeSettings;
+}
+
+/** The sender as providers take it: address plus a display name, if any. */
+export function resolveSender(
+  options: Pick<SendEmailOptions, "from" | "fromName">,
+  settings: Pick<EmailRuntimeSettings, "sender" | "senderName">,
+): { email: string; name?: string } {
+  const email = options.from || settings.sender;
+  // Header-safe: no quotes, angle brackets or line breaks in the display name.
+  const name = (options.fromName ?? settings.senderName ?? "").replace(/["<>\r\n\\]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 78);
+  return name ? { email, name } : { email };
 }
 
 /**

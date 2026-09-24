@@ -1,26 +1,23 @@
 // src/components/product/lib/pricing-engine.ts
 /**
- * Product Pricing Engine
- *
- * This module contains price calculation logic for the product page.
- *
- * Pricing Rules:
- * 1. Variant has its own price → Use variant price as base
- * 2. Variant has no price → Use product price as base
- * 3. Variant has its own discount → Apply variant discount
- * 4. Variant has no discount → Apply product discount to variant price
- * 5. Final price cannot be negative
+ * Product page pricing, using the exact integer rule checkout charges
+ * (`discountedPriceMinor`): a SKU's own price and discount win over the
+ * product's, and in BDT percentage prices round to whole taka.
  */
 
 import {
   DEFAULT_CURRENCY,
-  formatPrice as sharedFormatPrice,
+  formatMoney,
+  getCurrencyCode,
+  getDecimalPlaces,
 } from "@/lib/currency";
 import { isVariantAvailable } from "@/lib/product-sellable-variants";
 import {
-  calculateDiscountedPriceAtPrecision,
-  roundPriceToPrecision,
-} from "@scalius/shared/price-utils";
+  discountedPriceMinor,
+  fromMinor,
+  percentToBps,
+  toMinor,
+} from "@scalius/shared/money";
 
 export type DiscountType = "percentage" | "flat" | null | undefined;
 
@@ -30,6 +27,8 @@ export interface ProductPricing {
   discountPercentage: number | null | undefined;
   discountAmount: number | null | undefined;
   currencyDecimalPlaces?: number;
+  /** Store currency; defaults to the page currency (or BDT on the server). */
+  currencyCode?: string;
 }
 
 export interface VariantPricing {
@@ -57,307 +56,128 @@ export interface PriceCalculationResult {
 }
 
 export interface BuyerVariantPricePresentation {
+  /** True only when the buyer's choices really have different prices. */
   isStartingAt: boolean;
   pricing: PriceCalculationResult;
 }
 
-function resolveCurrencyDecimalPlaces(explicit?: number): number {
-  if (
-    Number.isInteger(explicit) &&
-    explicit !== undefined &&
-    explicit >= 0 &&
-    explicit <= 6
-  ) {
-    return explicit;
-  }
-  const runtimePrecision =
-    typeof window !== "undefined"
-      ? window.__CURRENCY_DECIMAL_PLACES__
-      : undefined;
-  return Number.isInteger(runtimePrecision) &&
-    runtimePrecision !== undefined &&
-    runtimePrecision >= 0 &&
-    runtimePrecision <= 6
-    ? runtimePrecision
-    : DEFAULT_CURRENCY.decimalPlaces;
+function currencyOf(pricing: ProductPricing): { code: string; places: number } {
+  const code = pricing.currencyCode || getCurrencyCode() || DEFAULT_CURRENCY.code;
+  const explicit = pricing.currencyDecimalPlaces;
+  const places = Number.isInteger(explicit) && explicit! >= 0 && explicit! <= 3
+    ? explicit!
+    : getDecimalPlaces(code);
+  return { code, places };
 }
 
-/**
- * Calculate discounted price based on discount type
- */
-function applyDiscount(
-  price: number,
-  discountType: DiscountType,
-  discountPercentage: number | null | undefined,
-  discountAmount: number | null | undefined,
-  currencyDecimalPlaces?: number,
-): number {
-  return calculateDiscountedPriceAtPrecision(
-    price,
-    discountType,
-    discountPercentage,
-    discountAmount,
-    resolveCurrencyDecimalPlaces(currencyDecimalPlaces),
-  );
-}
-
-/**
- * Check if a discount configuration is valid
- */
 function hasValidDiscount(
   discountType: DiscountType,
   discountPercentage: number | null | undefined,
   discountAmount: number | null | undefined,
 ): boolean {
-  if (discountType === "percentage") {
-    return (
-      discountPercentage !== null &&
-      discountPercentage !== undefined &&
-      discountPercentage > 0
-    );
-  }
+  return (discountType === "percentage" && (discountPercentage ?? 0) > 0)
+    || (discountType === "flat" && (discountAmount ?? 0) > 0);
+}
 
-  if (discountType === "flat") {
-    return (
-      discountAmount !== null &&
-      discountAmount !== undefined &&
-      discountAmount > 0
-    );
+/** Amounts too large for minor units are not prices: they price at 0. */
+function minor(value: number | null | undefined, places: number): number | null {
+  if (value == null || !Number.isFinite(value) || value <= 0) return 0;
+  try {
+    return toMinor(value, places);
+  } catch {
+    return null;
   }
-
-  return false;
 }
 
 /**
- * Calculate the final price for a product variant
- *
- * Priority:
- * 1. Variant price (if set) OR product price (fallback)
- * 2. Variant discount (if set) OR product discount (fallback)
+ * The final price of a SKU (or of the product when `variantPricing` is null).
+ * Variant price wins over product price; variant discount over product discount.
  */
 export function calculateVariantPrice(
   productPricing: ProductPricing,
   variantPricing: VariantPricing | null,
 ): PriceCalculationResult {
-  // No variant selected - use product pricing
-  if (!variantPricing) {
-    return calculateProductPrice(productPricing);
-  }
-
-  // Determine base price
-  const variantHasPrice =
-    variantPricing.price !== null && variantPricing.price !== undefined;
-  const rawBasePrice: number = variantHasPrice
-    ? variantPricing.price!
-    : productPricing.basePrice;
-  const currencyDecimalPlaces = resolveCurrencyDecimalPlaces(
-    productPricing.currencyDecimalPlaces,
-  );
-  const basePrice = roundPriceToPrecision(
-    rawBasePrice,
-    currencyDecimalPlaces,
-  );
-
-  // Determine which discount to apply
-  const variantHasDiscount = hasValidDiscount(
+  const { code, places } = currencyOf(productPricing);
+  const rawBase = variantPricing?.price ?? productPricing.basePrice;
+  const discount = variantPricing && hasValidDiscount(
     variantPricing.discountType,
     variantPricing.discountPercentage,
     variantPricing.discountAmount,
-  );
-
-  let finalPrice: number;
-  let appliedDiscountType: DiscountType;
-  let appliedDiscountPercentage: number;
-  let appliedDiscountAmount: number;
-
-  if (variantHasDiscount) {
-    // Use variant discount
-    finalPrice = applyDiscount(
-      rawBasePrice,
-      variantPricing.discountType,
-      variantPricing.discountPercentage,
-      variantPricing.discountAmount,
-      currencyDecimalPlaces,
-    );
-    appliedDiscountType = variantPricing.discountType;
-    appliedDiscountPercentage = variantPricing.discountPercentage || 0;
-    appliedDiscountAmount = variantPricing.discountAmount || 0;
-  } else {
-    // Use product discount
-    finalPrice = applyDiscount(
-      rawBasePrice,
-      productPricing.discountType,
-      productPricing.discountPercentage,
-      productPricing.discountAmount,
-      currencyDecimalPlaces,
-    );
-    appliedDiscountType = productPricing.discountType;
-    appliedDiscountPercentage = productPricing.discountPercentage || 0;
-    appliedDiscountAmount = productPricing.discountAmount || 0;
-  }
-
-  const savingsAmount = basePrice - finalPrice;
-  const savingsPercentage =
-    basePrice > 0 ? Math.round((savingsAmount / basePrice) * 100) : 0;
-
+  )
+    ? variantPricing
+    : productPricing;
+  const baseMinor = minor(rawBase, places);
+  const discountMinor = minor(discount.discountAmount, places);
+  const finalMinor = baseMinor === null || discountMinor === null
+    ? 0
+    : discountedPriceMinor(
+        baseMinor,
+        discount.discountType,
+        percentToBps(discount.discountPercentage),
+        discountMinor,
+        code,
+      );
+  const originalPrice = fromMinor(baseMinor ?? 0, places);
+  const finalPrice = fromMinor(finalMinor, places);
+  const savingsAmount = fromMinor((baseMinor ?? 0) - finalMinor, places);
   return {
-    originalPrice: basePrice,
+    originalPrice,
     finalPrice,
-    discountType: appliedDiscountType,
-    discountPercentage: appliedDiscountPercentage,
-    discountAmount: appliedDiscountAmount,
+    discountType: discount.discountType,
+    discountPercentage: discount.discountPercentage || 0,
+    discountAmount: discount.discountAmount || 0,
     hasDiscount: savingsAmount > 0,
     savingsAmount,
-    savingsPercentage,
+    savingsPercentage: originalPrice > 0 ? Math.round((savingsAmount / originalPrice) * 100) : 0,
   };
 }
 
 /**
- * Calculate the final price for a product (no variant)
- */
-export function calculateProductPrice(
-  productPricing: ProductPricing,
-): PriceCalculationResult {
-  const currencyDecimalPlaces = resolveCurrencyDecimalPlaces(
-    productPricing.currencyDecimalPlaces,
-  );
-  const basePrice = roundPriceToPrecision(
-    productPricing.basePrice,
-    currencyDecimalPlaces,
-  );
-  const finalPrice = applyDiscount(
-    productPricing.basePrice,
-    productPricing.discountType,
-    productPricing.discountPercentage,
-    productPricing.discountAmount,
-    currencyDecimalPlaces,
-  );
-
-  const savingsAmount = basePrice - finalPrice;
-  const savingsPercentage =
-    basePrice > 0 ? Math.round((savingsAmount / basePrice) * 100) : 0;
-
-  return {
-    originalPrice: basePrice,
-    finalPrice,
-    discountType: productPricing.discountType,
-    discountPercentage: productPricing.discountPercentage || 0,
-    discountAmount: productPricing.discountAmount || 0,
-    hasDiscount: savingsAmount > 0,
-    savingsAmount,
-    savingsPercentage,
-  };
-}
-
-/**
- * Resolve the truthful price shown before an exact optioned SKU is selected.
- * Prefer buyer-actionable variants whenever any are available. If every SKU is
- * sold out, retain a truthful catalog price by falling back to all buyer SKUs.
+ * The truthful price shown before an exact optioned SKU is selected: the
+ * lowest buyer-actionable price (or, when all are sold out, the lowest of
+ * all), with "From" only when the choices are priced differently.
  */
 export function getBuyerVariantPricePresentation(
   productPricing: ProductPricing,
   variants: BuyerVariantPricing[],
 ): BuyerVariantPricePresentation {
   if (variants.length === 0) {
-    return {
-      isStartingAt: false,
-      pricing: calculateProductPrice(productPricing),
-    };
+    return { isStartingAt: false, pricing: calculateVariantPrice(productPricing, null) };
   }
-
-  if (variants.length === 1) {
-    return {
-      isStartingAt: false,
-      pricing: calculateVariantPrice(productPricing, variants[0] ?? null),
-    };
-  }
-
-  const availableVariants = variants.filter(isVariantAvailable);
-  const candidates =
-    availableVariants.length > 0 ? availableVariants : variants;
-  const pricing = candidates
-    .map((variant) => calculateVariantPrice(productPricing, variant))
-    .reduce((lowest, current) =>
-      current.finalPrice < lowest.finalPrice ? current : lowest,
-    );
-
-  return { isStartingAt: true, pricing };
-}
-
-/**
- * Format price for display using currency.js with correct ISO 4217 decimals.
- * Symbol is read from window globals (injected by Layout.astro).
- */
-export function formatPrice(
-  price: number,
-  currencySymbol?: string,
-  currencyDecimalPlaces?: number,
-): string {
-  const runtimePrecision = resolveCurrencyDecimalPlaces(
-    currencyDecimalPlaces,
+  const available = variants.filter(isVariantAvailable);
+  const priced = (available.length > 0 ? available : variants)
+    .map((variant) => calculateVariantPrice(productPricing, variant));
+  const pricing = priced.reduce((lowest, current) =>
+    current.finalPrice < lowest.finalPrice ? current : lowest,
   );
-  return sharedFormatPrice(price, {
-    ...(currencySymbol ? { symbol: currencySymbol } : {}),
-    ...(runtimePrecision !== undefined ? { precision: runtimePrecision } : {}),
-  });
+  return {
+    isStartingAt: priced.some((price) => price.finalPrice !== pricing.finalPrice),
+    pricing,
+  };
 }
 
-/**
- * Format discount badge text (e.g., "-20%" or "-৳200")
- */
+/** The store money format (see `formatMoney`). */
+export function formatPrice(price: number, currencySymbol?: string): string {
+  return formatMoney(price, currencySymbol ? { symbol: currencySymbol } : undefined);
+}
+
+/** Discount badge: "-20%" for a percentage, "-৳200" for a fixed amount. */
 export function formatDiscountBadge(
   discountType: DiscountType,
   discountPercentage: number | null | undefined,
   discountAmount: number | null | undefined,
   currencySymbol?: string,
-  currencyDecimalPlaces?: number,
 ): string | null {
-  if (
-    discountType === "percentage" &&
-    discountPercentage &&
-    discountPercentage > 0
-  ) {
+  if (discountType === "percentage" && discountPercentage && discountPercentage > 0) {
     return `-${Math.round(discountPercentage)}%`;
   }
-
   if (discountType === "flat" && discountAmount && discountAmount > 0) {
-    return `-${formatPrice(
-      discountAmount,
-      currencySymbol,
-      currencyDecimalPlaces,
-    )}`;
+    return `-${formatPrice(discountAmount, currencySymbol)}`;
   }
-
   return null;
 }
 
-/**
- * Format savings text (e.g., "Save ৳200")
- */
-export function formatSavings(savingsAmount: number, currencySymbol?: string): string {
-  if (savingsAmount <= 0) return "";
-  return `Save ${formatPrice(savingsAmount, currencySymbol)}`;
-}
-
-/**
- * Calculate the discounted price based on discount type and values.
- * Simple standalone calculation - use calculateVariantPrice for full variant logic.
- */
-export function calculateDiscountedPrice(
-  price: number,
-  discountType: DiscountType,
-  discountPercentage: number | null | undefined,
-  discountAmount: number | null | undefined,
-): number {
-  return applyDiscount(price, discountType, discountPercentage, discountAmount);
-}
-
-/**
- * Get the final discounted price for a product variant.
- * Convenience wrapper around calculateVariantPrice for simple use cases.
- *
- * Priority: Variant discount > Product discount > Original price
- */
+/** Final price of one SKU; see `calculateVariantPrice`. */
 export function getVariantDiscountedPrice(
   variantPrice: number | null | undefined,
   productPrice: number,
@@ -368,111 +188,22 @@ export function getVariantDiscountedPrice(
   productDiscountPercentage: number | null | undefined,
   productDiscountAmount: number | null | undefined,
   currencyDecimalPlaces?: number,
+  currencyCode?: string,
 ): number {
-  const productPricing: ProductPricing = {
-    basePrice: productPrice,
-    discountType: productDiscountType,
-    discountPercentage: productDiscountPercentage,
-    discountAmount: productDiscountAmount,
-    currencyDecimalPlaces,
-  };
-
-  const variantPricing: VariantPricing = {
-    price: variantPrice,
-    discountType: variantDiscountType,
-    discountPercentage: variantDiscountPercentage,
-    discountAmount: variantDiscountAmount,
-  };
-
-  return calculateVariantPrice(productPricing, variantPricing).finalPrice;
-}
-
-/**
- * Calculate line item total (price × quantity)
- */
-export function calculateLineTotal(price: number, quantity: number): number {
-  return Math.max(0, price * quantity);
-}
-
-/**
- * Calculate cart subtotal
- */
-export function calculateCartSubtotal(
-  items: Array<{ price: number; quantity: number }>,
-): number {
-  return items.reduce(
-    (total, item) => total + calculateLineTotal(item.price, item.quantity),
-    0,
-  );
-}
-
-/**
- * Apply cart-level discount
- */
-export function applyCartDiscount(
-  subtotal: number,
-  discountType: "percentage" | "flat",
-  discountValue: number,
-): {
-  discountedTotal: number;
-  discountAmount: number;
-} {
-  let discountAmount = 0;
-
-  if (discountType === "percentage") {
-    discountAmount = Math.round(subtotal * (discountValue / 100));
-  } else if (discountType === "flat") {
-    discountAmount = discountValue;
-  }
-
-  const discountedTotal = Math.max(0, subtotal - discountAmount);
-
-  return {
-    discountedTotal,
-    discountAmount,
-  };
-}
-
-/**
- * Get the price range for variants
- */
-export function getVariantPriceRange(
-  productPricing: ProductPricing,
-  variants: VariantPricing[],
-): {
-  minPrice: number;
-  maxPrice: number;
-  hasPriceRange: boolean;
-} {
-  if (variants.length === 0) {
-    const result = calculateProductPrice(productPricing);
-    return {
-      minPrice: result.finalPrice,
-      maxPrice: result.finalPrice,
-      hasPriceRange: false,
-    };
-  }
-
-  const prices = variants.map(
-    (variant) => calculateVariantPrice(productPricing, variant).finalPrice,
-  );
-
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
-
-  return {
-    minPrice,
-    maxPrice,
-    hasPriceRange: minPrice !== maxPrice,
-  };
-}
-
-/**
- * Format price range for display
- */
-export function formatPriceRange(minPrice: number, maxPrice: number, currencySymbol?: string): string {
-  if (minPrice === maxPrice) {
-    return formatPrice(minPrice, currencySymbol);
-  }
-  return `${formatPrice(minPrice, currencySymbol)} - ${formatPrice(maxPrice, currencySymbol)}`;
+  return calculateVariantPrice(
+    {
+      basePrice: productPrice,
+      discountType: productDiscountType,
+      discountPercentage: productDiscountPercentage,
+      discountAmount: productDiscountAmount,
+      currencyDecimalPlaces,
+      currencyCode,
+    },
+    {
+      price: variantPrice,
+      discountType: variantDiscountType,
+      discountPercentage: variantDiscountPercentage,
+      discountAmount: variantDiscountAmount,
+    },
+  ).finalPrice;
 }

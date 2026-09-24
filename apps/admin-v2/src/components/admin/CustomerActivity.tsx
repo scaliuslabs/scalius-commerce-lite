@@ -1,5 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -19,6 +21,40 @@ const day = (value: string | number | null | undefined) => {
   const date = unixToDate(value);
   return date ? formatDateTime(date, { dateStyle: "medium" }) : "";
 };
+
+type Snapshot = Record<"name" | "phone" | "email" | "address" | "area" | "zone" | "city", string>;
+const FIELD_LABEL = {
+  name: "fieldName",
+  phone: "fieldPhone",
+  email: "fieldEmail",
+  address: "fieldAddress",
+  area: "fieldArea",
+  zone: "fieldZone",
+  city: "fieldCity",
+} as const;
+
+function snapshot(change: {
+  name: string | null; phone: string | null; email: string | null; address: string | null;
+  area: string | null; areaName: string | null; zone: string | null; zoneName: string | null; city: string | null; cityName: string | null;
+}): Snapshot {
+  return {
+    name: change.name ?? "",
+    phone: change.phone ? formatPhoneForDisplay(change.phone) : "",
+    email: change.email ?? "",
+    address: change.address ?? "",
+    area: change.areaName || change.area || "",
+    zone: change.zoneName || change.zone || "",
+    city: change.cityName || change.city || "",
+  };
+}
+
+/** What an entry changed against the one before it (the next, older entry). */
+function changedFields(current: Snapshot, previous: Snapshot | undefined) {
+  return (Object.keys(FIELD_LABEL) as Array<keyof Snapshot>)
+    .filter((field) => !previous || current[field] !== previous[field])
+    .filter((field) => previous || current[field])
+    .map((field) => ({ field, from: previous?.[field] ?? "", to: current[field] }));
+}
 
 /** Orders and the change log for one customer (Shopify's customer timeline). */
 export function CustomerActivity({ customerId }: { customerId: string }) {
@@ -81,7 +117,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
                     className="flex min-h-11 items-center gap-3 px-4 py-2 text-body hover:bg-muted md:min-h-10"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block font-medium">#{order.id.slice(0, 8)}</span>
+                      <span className="block font-medium">{formatOrderNumber(order.orderNumber, order.id)}</span>
                       <span className="block text-muted-foreground">{day(order.createdAt)}</span>
                     </span>
                     <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(to, order.status)}</Badge>
@@ -108,21 +144,33 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
         <CardContent>
           {history.isSuccess && changes.length === 0 ? <p className="text-body text-muted-foreground">{t("noHistory")}</p> : null}
           <ol className="space-y-3">
-            {changes.map((change) => (
-              <li key={change.id} className="text-body">
-                <p>
-                  <span className="font-medium">
-                    {t(change.changeType === "created" ? "changeCreated" : change.changeType === "deleted" ? "changeDeleted" : "changeUpdated")}
-                  </span>
-                  <span className="text-muted-foreground"> · {day(change.createdAt)}</span>
-                </p>
-                <p className="text-muted-foreground">
-                  {[change.name, change.phone, change.email, change.address, change.areaName ?? change.area, change.zoneName ?? change.zone, change.cityName ?? change.city]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              </li>
-            ))}
+            {changes.map((change, index) => {
+              // Newest first: an update is shown as what it changed against the entry below it.
+              const older = changes[index + 1];
+              const fields = change.changeType === "updated" && older
+                ? changedFields(snapshot(change), snapshot(older))
+                : changedFields(snapshot(change), undefined);
+              if (change.changeType === "updated" && older && fields.length === 0) return null;
+              return (
+                <li key={change.id} className="text-body">
+                  <p>
+                    <span className="font-medium">
+                      {t(change.changeType === "created" ? "changeCreated" : change.changeType === "deleted" ? "changeDeleted" : "changeUpdated")}
+                    </span>
+                    <span className="text-muted-foreground"> · {day(change.createdAt)}</span>
+                  </p>
+                  {change.changeType === "deleted" ? null : (
+                    <ul className="text-muted-foreground">
+                      {fields.map(({ field, from, to }) => (
+                        <li key={field} className="break-words">
+                          {t(FIELD_LABEL[field])}: {change.changeType === "updated" && older ? `${from || "—"} → ${to || t("removed")}` : to}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
           </ol>
           {history.hasNextPage ? (
             <Button variant="ghost" size="sm" disabled={history.isFetchingNextPage} onClick={() => void history.fetchNextPage()}>

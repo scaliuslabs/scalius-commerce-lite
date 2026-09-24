@@ -6,7 +6,6 @@ import {
   customerRulesQuery,
   emailQuery,
   smsQuery,
-  staffRulesQuery,
 } from "~/components/admin/settings/NotificationSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
@@ -18,7 +17,6 @@ export const Route = createFileRoute("/admin/settings/notifications")({
   loader: ({ context: { queryClient } }) =>
     Promise.allSettled([
       queryClient.ensureQueryData(customerRulesQuery),
-      queryClient.ensureQueryData(staffRulesQuery),
       queryClient.ensureQueryData(emailQuery),
       queryClient.ensureQueryData(smsQuery),
     ]),

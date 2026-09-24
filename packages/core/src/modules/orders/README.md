@@ -8,7 +8,9 @@ Full order lifecycle: storefront checkout, admin CRUD, state machine validation,
 |------|---------|---------|
 | `index.ts` | barrel re-exports | Public API surface |
 | `orders.types.ts` | `OrderShipmentSummary`, `OrderListItem`, `OrderDetails`, `StorefrontOrderItem`, `CreateStorefrontOrderInput`, `CreateStorefrontOrderResult`, `StorefrontOrderCommitPayload`, `StatusUpdateResult` | Shared TypeScript interfaces for admin and storefront order flows |
-| `orders.admin.ts` | `listOrders()`, `getOrderDetails()`, `createOrder()`, `updateOrder()`, `archiveOrders()`, `restoreOrder()` | Admin dashboard queries and evidence-preserving write operations |
+| `orders.admin.ts` | `listOrders()`, `getOrderDetails()`, `createOrder()`, `buildOrderEditReadiness()`, `previewManualOrderAmendment()`, `confirmManualOrderAmendment()`, `updateOrderDetails()`, `archiveOrders()`, `restoreOrder()` | Admin dashboard queries (tabs/views, order-number search, refund owed), order editing, and evidence-preserving write operations |
+| `order-number.ts` | `nextOrderNumberSql()`, `orderNumberSearchCondition()` | Sequential "#1001" order numbers allocated inside the order INSERT (unique index) |
+| `order-timeline.ts` | `recordOrderEvent()`, `addOrderComment()`, `listOrderTimeline()` | The order timeline: staff comments plus what happened, newest first |
 | `orders.storefront.ts` | `createStorefrontOrder()` | Storefront checkout validation and synchronous order payload builder |
 | `cart-validation.ts` | `validateStorefrontCartItems()` | Batched buyer-cart freshness checks for active products, concrete variants, stock availability, and server-authoritative prices |
 | `checkout-attempts.ts` | `buildCheckoutAttemptIdentity()`, `resolveExistingCheckoutAttempt()`, `createAtomicCheckoutAttempt()`, `prepareAtomicCheckoutAttemptCommit()` | Database-backed storefront submit replay and atomic idempotency commit |
@@ -31,15 +33,16 @@ pending    --> processing, confirmed, cancelled
 processing --> confirmed, cancelled
 confirmed  --> shipped, delivered, cancelled
 shipped    --> confirmed, delivered, returned, cancelled
-delivered  --> completed, returned, refunded, partially_refunded
-completed  --> returned, refunded, partially_refunded
+delivered  --> completed, returned, refunded
+completed  --> returned, refunded
 cancelled                              (terminal)
 returned   --> refunded
 refunded   --> (terminal)
-partially_refunded --> refunded
 ```
 
-All 11 states: `incomplete`, `pending`, `processing`, `confirmed`, `shipped`, `delivered`, `completed`, `cancelled`, `returned`, `refunded`, `partially_refunded`.
+All 10 states: `incomplete`, `pending`, `processing`, `confirmed`, `shipped`, `delivered`, `completed`, `cancelled`, `returned`, `refunded`.
+
+A partial refund is a payment fact, not a lifecycle state: the order keeps its status and the payment status becomes `partially_refunded` with nothing due. `partial` payment status means a real under-payment only.
 
 **Note on CANCELLED:** Cancellation is terminal. Generic admin cancellation is limited to an order with an exact numeric zero paid amount, `unpaid` or `failed` payment status, no pending/confirmed/succeeded payment ledger row, and no active payment/refund setup. Captured, partially captured, or payment-uncertain orders must use the dedicated refund workflow; a successful full pre-fulfillment refund owns the safe transition to `cancelled` after provider and local reconciliation. Cancellation releases or restores inventory and notifies the buyer, while a merchant who wants to continue the sale must create a new order with a new lifecycle identity. Archive restoration is separate and does not reopen the order lifecycle.
 
@@ -97,16 +100,11 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 7. **On preparation or batch failure** -- the attempt is marked failed when safe to reclaim. Reserved stock is released with deterministic movement claims only while this worker still owns the attempt; an expired worker must never release a new owner's shared reservation. Cleanup failure is surfaced as temporary unavailability.
 8. **Fulfillment owns deduction** -- the committed confirmed order intentionally keeps `inventoryAction = "reserved"`. Shipment/final-fulfillment commands later call `applyInventoryForStatusChange()` with deterministic movement claims, stock CAS, and guarded `inventoryAction` convergence. There is no post-commit creation step that can leave a newly created manual order half-converted.
 
-### Admin Order Update
+### Editing an Order
 
-1. `updateOrder()` validates status transition via state machine
-2. `resolveAdminOrderItemInventory()` revalidates the complete replacement item set before inventory deltas are calculated, so stale admin tabs cannot swap in deleted, inactive, mismatched, or variantless lines
-3. If `inventoryAction === "reserved"`: applies version-scoped deterministic reserve/release claims for positive and negative item deltas before replacing item rows
-4. If `inventoryAction === "deducted"`: applies version-scoped deterministic deduct/restore claims and stock CAS batches for positive and negative item deltas
-5. Calls `applyInventoryForStatusChange()` after item writes unless an explicit item-delta/status branch already handled inventory; this also repairs same-status retries whose status was persisted before inventory completed
-6. Optimistic locking via `version` column -- throws `ConflictError` if version mismatch
-7. Deletes all existing items and re-inserts (full replacement)
-8. Updates customer stats for both old and new customer (if customer changed)
+`buildOrderEditReadiness()` decides what can still change, with a reason code the dashboard words:
+- **Details** (name, phone, email, delivery address) until the order ships: `updateOrderDetails()` (PUT `/:id/details`) CAS-updates them; a changed phone links the order to that phone's customer. Money, items and tax snapshots are untouched.
+- **Items** (products, quantities, discount, delivery charge) on an unpaid, unshipped cash-on-delivery order without a discount code — dashboard or checkout orders alike — through the quote-backed amendment (`previewManualOrderAmendment()` / `confirmManualOrderAmendment()`), which keeps before/after snapshots in `order_amendments`. Kept lines keep the price the buyer agreed to; added lines use today's catalog price.
 
 ### Status Update Flow
 
@@ -132,9 +130,8 @@ Admin detail and `GET /api/v1/admin/orders/:id/items` must expose this field so 
 | `cancelled` | `order_cancelled` |
 | `returned` | `order_returned` |
 | `refunded` | `order_refunded` |
-| `partially_refunded` | `order_partially_refunded` |
 
-All 10 buyer-visible order statuses that trigger status notifications are covered. Payment milestones can also enqueue order events, currently including `payment_balance_paid` for confirmed remaining-balance payments. Each dispatches to enabled channels (email, SMS, WhatsApp, push) via the queue consumer. Queue handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel targets are fenced by `order_notification_delivery_receipts` so accepted/skipped email, SMS, Meta WhatsApp template sends, and FCM token sends are not retried after a later target fails. Resend and GenNet also receive provider-native idempotency/client reference keys where supported.
+All 9 buyer-visible order statuses that trigger status notifications are covered; a partial refund sends `order_partially_refunded` from the refund path. Payment milestones can also enqueue order events, currently including `payment_balance_paid` for confirmed remaining-balance payments. Each dispatches to enabled channels (email, SMS, WhatsApp, push) via the queue consumer. Queue handoff is durable through `packages/core/src/modules/notifications/order-notification-outbox.ts`; channel targets are fenced by `order_notification_delivery_receipts` so accepted/skipped email, SMS, Meta WhatsApp template sends, and FCM token sends are not retried after a later target fails. Resend and GenNet also receive provider-native idempotency/client reference keys where supported.
 
 ### Fulfillment Flow
 
@@ -150,17 +147,17 @@ All 10 buyer-visible order statuses that trigger status notifications are covere
 
 `processCodAction()` handles three actions with CAS protection on the order version:
 
-- Collection is valid only for `confirmed | shipped | delivered` orders.
-- A failed delivery attempt is valid only for `confirmed | shipped` orders.
-- Return-to-sender is valid only for `shipped | delivered | completed` orders.
+- Collection is valid only for `shipped | delivered` orders: cash changes hands at the door, so it never skips the shipment.
+- A failed delivery attempt is valid only for `shipped` orders; its reason and note are kept on `cod_tracking`.
+- Return-to-sender is valid only for `shipped | delivered` orders.
 
 The shared `canProcessOrderCodAction()` policy drives both the merchant UI and
 the core write guard. The server must reject a stale or direct request even
 when the dashboard has already hidden the action.
 
-- `collected`: CAS-updates the order toward `delivered`, records collection via `recordCODCollection()` before inventory movement, reconciles reserved inventory, synchronizes shipped-item and provider-less manual-shipment delivery evidence, rolls back the delivered claim if COD evidence or inventory repair fails, and treats existing COD evidence as a retry/repair signal
+- `collected`: CAS-updates the shipped order to `delivered`, records collection via `recordCODCollection()` before inventory movement, reconciles reserved inventory, synchronizes shipped-item and provider-less manual-shipment delivery evidence, rolls back the delivered claim if COD evidence or inventory repair fails, and treats existing COD evidence as a retry/repair signal
 - `failed`: Records failure via `recordCODFailure()`
-- `returned`: CAS-updates the order toward `returned`, marks COD returned before inventory restoration, rolls back the returned claim if the COD marker or inventory repair fails, and retries inventory restoration when the order is already returned
+- `returned`: records an approved return of every sent unit awaiting receipt, marks COD returned, and moves the order to `returned` at once (no cash is owed). Stock comes back only through the return receipt (good units restocked, damaged written off); a later `returned` status sync never restores stock on top of an open return.
 
 ### Bulk Ship Orders
 
@@ -208,7 +205,7 @@ Payment events (one `payment.event` message type for every gateway) are handled 
 
 ## Concurrency Control
 
-- **Optimistic locking on orders**: `version` column, CAS update in `updateOrder()` and `updateOrderStatus()`
+- **Optimistic locking on orders**: `version` column, CAS update in `updateOrderDetails()`, amendments and `updateOrderStatus()`
 - **Optimistic locking on inventory**: `stockVersion` column on `productVariants`, separate from general `version`
 - **Checkout reservation rollback**: `commitStorefrontOrderPayload()` commits inventory CAS and ledger edges in the same guarded batch as the order. A failed authority, inventory, or order guard rolls back the whole batch; no compensating stock release is needed. Late reservation failures surface buyer-safe cart issues.
 - **Checkout idempotency**: `checkout_attempts` owns same-key replay, in-flight `202`, reserved order ids, and stale-claim recovery. `commitStorefrontOrderPayload()` also treats an already-committed order id as success so a crash after commit can converge without a duplicate order.
@@ -223,7 +220,10 @@ Payment events (one `payment.event` message type for every gateway) are handled 
 | GET | `/` | `listOrders()` | Paginated list with FTS5 search, status/date filters, shipment summary |
 | POST | `/` | `createOrder()` | Manual order creation with reserve-then-deduct inventory |
 | GET | `/:id` | `getOrderDetails()` | Full order with items, variant info, images |
-| PUT | `/:id` | `updateOrder()` | Full order update with inventory adjustment |
+| PUT | `/:id/details` | `updateOrderDetails()` | Customer and delivery details before shipment |
+| GET/POST | `/:id/timeline` | `listOrderTimeline()` / `addOrderComment()` | Order timeline and staff comments |
+| POST | `/bulk-confirm` | `bulkConfirmOrders()` | Confirm several new orders |
+| POST | `/bulk-fulfill` | `bulkFulfillOrders()` | Own-courier "Mark as sent" for several confirmed orders |
 | POST | `/:id/restore` | `restoreOrder()` | Restore archived order visibility with version CAS |
 | POST | `/archive` | `archiveOrders()` | Bounded versioned archive without commerce mutation |
 | POST | `/bulk-ship` | `bulkShipOrders()` | Bulk shipment creation |
@@ -253,7 +253,7 @@ Payment events (one `payment.event` message type for every gateway) are handled 
 
 Bulk provider shipment creation uses a durable order-level shipment claim (`orders.shipmentClaimId` / `orders.shipmentClaimExpiresAt`) linked to the insert-first `delivery_shipments` row. Admin order mutations, status changes, manual fulfillment, COD actions, refunds, returns, public payment-session creation, shipment refresh/deletion, and cleanup must reject or skip active claims. Queue/webhook paths must surface retryable failures so external payment or delivery truth is not acknowledged while shipment creation is being finalized. Provider success with failed local finalization leaves the shipment in `reconcile_required` and keeps the order claim active until `reconcileOrderShipment()` repairs local order status, inventory state, shipment status, and then clears only the matching claim. The repair path must use persisted provider evidence on the shipment; it must not create another provider shipment.
 
-Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/archive/refresh/bulk archive/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true. Shipment managers may run the explicit repair action from the recovery notice; view-only users only see the operator copy.
+Admin order list/detail projections expose only a sanitized `shipmentRecovery` summary for this state. `creating` or `reconcile_required` shipments and active shipment claims are active locks; failed provider rows are visible as retryable so merchants can create a new shipment after the failed evidence is recorded. Do not expose shipment claim ids, provider payloads, request hashes, or raw metadata through order list/detail. Admin mutation affordances should block edit/status/archive/refresh/bulk archive/bulk ship/manual fulfillment/provider shipment creation before click when `shipmentRecovery.activeLock` is true. Shipment managers may run the explicit repair action from the recovery notice; view-only users only see the operator copy. The summary carries a stable `reason` code (`courier_unconfirmed`, `reconcile_required`, `creating`, `claim_expired`, `failed`); the dashboard words it from its own en/bn catalog and never shows the server's English `label`/`message`, which remain for agent and CLI readers. Refund attempts (keyed by `status` and `gateway`) and payment webhook issues (`reason`) follow the same rule.
 
 Admin hosted-payment recovery link issuance is intentionally narrow. `POST /api/v1/admin/orders/{id}/payment-recovery-link` is gated by `orders.edit`, supports only SSLCommerz because it is the hosted receipt-page retry gateway, validates local order/payment/session/shipment evidence through `previewOrderPaymentRecoveryLink()`, and returns a clean `/payment-recovery?orderId=...` buyer verification URL. It must not mint receipt proof, call payment providers, enqueue jobs, write raw receipt tokens into KV, or expose raw receipt tokens in returned URLs, logs, analytics, or clipboard copy.
 
@@ -278,10 +278,6 @@ Cross-browser guest hosted-payment recovery is buyer-verified, not bearer-link b
 | POST | `/payment-recovery/verify-otp` | `verifyOrderPaymentRecoveryOtp()` | Service-authenticated storefront handoff that verifies OTP and returns raw receipt proof only to the storefront server proxy |
 | GET | `/status/:token` | KV/D1 status-token lookup | Poll checkout processing status with a non-bearer `cst_` token; `chk_` receipt proof is rejected in the URL |
 | POST | `/` | `createStorefrontOrder()` + `commitStorefrontOrderPayload()` | Synchronous idempotent order placement (returns `201` after D1 commit; `202` only for duplicate in-flight submits) |
-
-## Admin Full Edit Inventory Safety
-
-`updateOrder()` keeps the existing `order_items` rows as the retry snapshot until inventory deltas are safe. Positive quantity deltas are reserved or deducted before the order CAS. Removed/reduced reserved or deducted deltas, plus terminal cancellation/return/refund release or restore, are applied before replacing item rows and now fail closed instead of logging and succeeding. The final item replacement uses a single D1 batch for delete plus insert, so item insert failure does not leave old rows deleted; pre-write inventory compensation runs if a later write fails.
 
 ## Dependencies
 

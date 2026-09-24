@@ -63,7 +63,7 @@ describe("admin order recovery lifecycle", () => {
   ])("keeps an unknown courier outcome locked after $status in list and detail", async ({ status, activeClaim }) => {
     const recovery = await shipmentRecovery(status, "provider_outcome_unknown", activeClaim);
     expect(recovery).toMatchObject({
-      state: "needs_attention", severity: "danger", activeLock: true,
+      state: "needs_attention", reason: "courier_unconfirmed", severity: "danger", activeLock: true,
       label: "Courier confirmation needed", shipmentId: "shipment",
       canRepair: false, canRefresh: false, canRetryCreate: false, unknownOutcome: true,
     });
@@ -74,7 +74,7 @@ describe("admin order recovery lifecycle", () => {
   it("retains repair for a confirmed provider result with incomplete local finalization", async () => {
     const recovery = await shipmentRecovery("reconcile_required", "pending", false, "consignment_confirmed");
     expect(recovery).toMatchObject({
-      state: "needs_attention", activeLock: true, canRepair: true, canRefresh: true, canRetryCreate: false, unknownOutcome: false,
+      state: "needs_attention", reason: "reconcile_required", activeLock: true, canRepair: true, canRefresh: true, canRetryCreate: false, unknownOutcome: false,
     });
   });
 
@@ -135,13 +135,15 @@ describe("admin order recovery lifecycle", () => {
 
   it.each(["cancelled", "returned", "refunded", "partially_refunded"])(
     "removes settled %s failures from the list summary, detail, queue and count",
-    async (status) => {
-      const isPartial = status === "partially_refunded";
-      order("closed", status, isPartial ? "partial" : status === "refunded" ? "refunded" : "failed", isPartial ? 75 : 0);
+    async (kind) => {
+      // A partial refund keeps the order delivered; only the payment reads "partially refunded".
+      const isPartial = kind === "partially_refunded";
+      const paymentStatus = isPartial ? "partially_refunded" : kind === "refunded" ? "refunded" : "failed";
+      order("closed", isPartial ? "delivered" : kind, paymentStatus, isPartial ? 75 : 0);
       attempt("closed");
-      if (status === "refunded" || isPartial) refund("closed", "refunded", isPartial ? 25 : 100);
+      if (kind === "refunded" || isPartial) refund("closed", "refunded", isPartial ? 25 : 100);
       const detail = await expectRecovery("closed", "none");
-      expect(detail?.paymentStatus).toBe(isPartial ? "partial" : status === "refunded" ? "refunded" : "failed");
+      expect(detail?.paymentStatus).toBe(paymentStatus);
       expect(sqlite.prepare("SELECT status FROM payment_session_attempts").get()?.status).toBe("failed");
       await expect(previewOrderPaymentRecoveryLink(db, "closed"))
         .rejects.toThrow("Only incomplete hosted-payment orders");
@@ -189,7 +191,7 @@ describe("admin order recovery lifecycle", () => {
   });
 
   it.each(["pending", "processing", "provider_unknown", "reconcile_required"])("preserves %s refunds on closed orders", async (status) => {
-    order("closed", "partially_refunded", "partial", 75);
+    order("closed", "delivered", "partially_refunded", 75);
     attempt("closed");
     refund("closed", status);
     await expectRecovery("closed", "needs_attention");

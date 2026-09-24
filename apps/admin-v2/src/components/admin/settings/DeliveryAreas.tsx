@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, MoreHorizontal, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +12,15 @@ import {
   postApiV1AdminSettingsDeliveryLocationsImportPathao,
   putApiV1AdminSettingsDeliveryLocationsById,
 } from "@scalius/api-client/sdk";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -36,12 +46,14 @@ import {
   type PathaoImportProgress,
 } from "~/lib/api-query-options/delivery";
 import { queryKeys } from "~/lib/query-keys";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
+import { toLatinDigits } from "@scalius/shared/phone-input";
 import { settingsMessages } from "~/i18n/settings";
 import { shippingMessages } from "~/i18n/settings-shipping";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsCard, SettingsDialog, SettingsField } from "./SettingsPage";
+import { areaCountsQuery } from "./ShippingSettings";
 
 type Level = "city" | "zone" | "area";
 const PARENT: Record<Exclude<Level, "city">, Level> = { zone: "city", area: "zone" };
@@ -51,7 +63,12 @@ function useRefreshAreas() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all(
-      [queryKeys.settings.deliveryLocations(), queryKeys.settings.deliveryLocationsAll(), queryKeys.settings.checkoutReadiness()].map(
+      [
+        queryKeys.settings.deliveryLocations(),
+        queryKeys.settings.deliveryLocationsAll(),
+        queryKeys.settings.checkoutReadiness(),
+        queryKeys.settings.shippingMethods(),
+      ].map(
         (queryKey) => queryClient.invalidateQueries({ queryKey }),
       ),
     );
@@ -64,17 +81,14 @@ function LocationForm({ level, location, parents }: { level: Level; location: De
   const [saved] = useState(() => ({
     name: location?.name ?? "",
     parentId: location?.parentId ?? "",
-    pathaoId: location?.externalIds?.pathao === undefined ? "" : String(location.externalIds.pathao),
     isActive: location?.isActive ?? true,
   }));
   const [draft, setDraft] = useState(saved);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const pathaoValid = !draft.pathaoId.trim() || /^[1-9]\d*$/.test(draft.pathaoId.trim());
   const save = useMutation({
     mutationFn: (): Promise<unknown> => {
-      const externalIds = { ...(location?.externalIds ?? {}) } as Record<string, string | number>;
-      if (draft.pathaoId.trim()) externalIds.pathao = Number(draft.pathaoId.trim());
-      else delete externalIds.pathao;
+      // Courier ids (externalIds) come from the Pathao import, matched by name.
+      const externalIds = (location?.externalIds ?? {}) as Record<string, string | number>;
       const body = {
         name: draft.name.trim(),
         type: level,
@@ -98,10 +112,10 @@ function LocationForm({ level, location, parents }: { level: Level; location: De
     onError: () => toast.error(common("saveFailed")),
   });
   useSaveBar({
-    fields: { name: "location-name", parentId: "location-parent", externalIds: "location-pathao" },
+    fields: { name: "location-name", parentId: "location-parent" },
     dirty: JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
-    invalid: !draft.name.trim() || (level !== "city" && !draft.parentId) || !pathaoValid,
+    invalid: !draft.name.trim() || (level !== "city" && !draft.parentId),
     save: () => save.mutateAsync(),
     discard: () => setDraft(saved),
   });
@@ -124,17 +138,6 @@ function LocationForm({ level, location, parents }: { level: Level; location: De
           />
         </SettingsField>
       ) : null}
-      <SettingsField id="location-pathao" label={t("pathaoId")} error={pathaoValid ? null : t("pathaoIdInvalid")}>
-        <Input
-          id="location-pathao"
-          inputMode="numeric"
-          className="max-w-40"
-          value={draft.pathaoId}
-          aria-invalid={!pathaoValid}
-          aria-describedby="location-pathao-note"
-          onChange={(event) => setDraft({ ...draft, pathaoId: event.target.value })}
-        />
-      </SettingsField>
       <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
         {t("active")}
         <Switch checked={draft.isActive} onCheckedChange={(isActive) => setDraft({ ...draft, isActive })} />
@@ -224,7 +227,10 @@ export function DeliveryAreasManager() {
   const [parentFilter, setParentFilter] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
-  const [confirm, setConfirm] = useState<"selected" | "all" | "import" | null>(null);
+  const [confirm, setConfirm] = useState<"selected" | "import" | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
+  const counts = useQuery(areaCountsQuery).data;
+  const placeTotal = counts ? counts.cities + counts.zones + counts.areas : 0;
   const importer = usePathaoImport();
 
   const list = useQuery({
@@ -264,6 +270,7 @@ export function DeliveryAreasManager() {
       toast.success(t("deleted"));
       setSelected([]);
       setConfirm(null);
+      setConfirmAll(false);
       await refresh();
     },
     onError: () => toast.error(common("saveFailed")),
@@ -309,6 +316,11 @@ export function DeliveryAreasManager() {
         }
         action={
           <div className="flex gap-2">
+            {canEdit && hasPathao ? (
+              <Button type="button" variant="outline" size="sm" loading={importer.running} onClick={() => setConfirm("import")}>
+                {t("importBangladesh")}
+              </Button>
+            ) : null}
             {canEdit ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -317,12 +329,7 @@ export function DeliveryAreasManager() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {hasPathao ? (
-                    <DropdownMenuItem disabled={importer.running} onSelect={() => setConfirm("import")}>
-                      {t("importPathao")}
-                    </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuItem onSelect={() => setConfirm("all")}>{t("deleteAll")}</DropdownMenuItem>
+                  <DropdownMenuItem disabled={placeTotal === 0} onSelect={() => setConfirmAll(true)}>{t("deleteAll")}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
@@ -371,7 +378,11 @@ export function DeliveryAreasManager() {
               ) : null}
             </div>
             {locations.length === 0 ? (
-              <p className="border-t border-border px-4 py-8 text-center text-body text-muted-foreground">{t("empty")}</p>
+              <p className="border-t border-border px-4 py-8 text-center text-body text-muted-foreground">
+                {canEdit && !hasPathao && placeTotal === 0 ? (
+                  <Link to="/admin/settings/shipping" hash="couriers" className="text-link hover:underline">{t("importNeedsPathao")}</Link>
+                ) : t("empty")}
+              </p>
             ) : (
               <ul className="divide-y divide-border border-t border-border">
                 <li className="flex min-h-11 items-center gap-3 px-4 text-body text-muted-foreground">
@@ -405,7 +416,7 @@ export function DeliveryAreasManager() {
                           <span className="block truncate text-body text-muted-foreground">
                             {[
                               location.parentId ? parentName.get(location.parentId) : null,
-                              location.externalIds?.pathao ? `${t("pathaoId")} ${location.externalIds.pathao}` : null,
+                              location.externalIds?.pathao ? t("linkedPathao") : null,
                             ].filter(Boolean).join(" · ")}
                           </span>
                         </button>
@@ -444,14 +455,8 @@ export function DeliveryAreasManager() {
       <ConfirmDialog
         open={confirm !== null}
         onOpenChange={(open) => !open && setConfirm(null)}
-        title={confirm === "import" ? t("importConfirmTitle") : confirm === "all" ? t("deleteAll") : t("deleteSelected", { count: selected.length })}
-        description={
-          confirm === "import"
-            ? t("importConfirmBody")
-            : confirm === "all"
-              ? t("deleteAllConfirm")
-              : t("deleteSelectedConfirm", { count: selected.length })
-        }
+        title={confirm === "import" ? t("importConfirmTitle") : t("deleteSelected", { count: selected.length })}
+        description={confirm === "import" ? t("importConfirmBody") : t("deleteSelectedConfirm", { count: selected.length })}
         confirmLabel={confirm === "import" ? t("import") : common("delete")}
         cancelLabel={common("cancel")}
         variant={confirm === "import" ? "default" : "destructive"}
@@ -465,6 +470,59 @@ export function DeliveryAreasManager() {
           }
         }}
       />
+      <DeleteAllDialog
+        open={confirmAll}
+        onOpenChange={setConfirmAll}
+        count={placeTotal}
+        deleting={bulk.isPending}
+        onConfirm={() => bulk.mutate("all")}
+      />
     </>
+  );
+}
+
+/** Deleting every place can't be undone, so the merchant types the count first. */
+function DeleteAllDialog({
+  open,
+  onOpenChange,
+  count,
+  deleting,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  count: number;
+  deleting: boolean;
+  onConfirm: () => void;
+}) {
+  const t = useMessages(shippingMessages);
+  const common = useMessages(settingsMessages);
+  const [typed, setTyped] = useState("");
+  const shown = formatNumber(count);
+  const matches = toLatinDigits(typed).replace(/[,\s]/g, "") === String(count);
+  return (
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setTyped("");
+        onOpenChange(next);
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("deleteAllTitle", { count: shown })}</AlertDialogTitle>
+          <AlertDialogDescription>{t("deleteAllConfirm")}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <SettingsField id="delete-all-confirm" label={t("deleteAllType", { count: shown })}>
+          <Input id="delete-all-confirm" inputMode="numeric" autoComplete="off" value={typed} onChange={(event) => setTyped(event.target.value)} />
+        </SettingsField>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleting}>{common("cancel")}</AlertDialogCancel>
+          <Button type="button" variant="destructive" loading={deleting} disabled={!matches} onClick={onConfirm}>
+            {t("deleteAll")}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

@@ -19,6 +19,7 @@ describe("formatPaymentWebhookIssue", () => {
 
     expect(issue).toMatchObject({
       status: "manual_reconciliation",
+      reason: "manual_reconciliation",
       message: "Payment webhook needs manual reconciliation: Cannot pay a cancelled order",
       error: "Cannot pay a cancelled order",
       queueType: "payment.stripe.confirmed",
@@ -41,6 +42,7 @@ describe("formatPaymentWebhookIssue", () => {
     });
 
     expect(issue.status).toBe("failed");
+    expect(issue.reason).toBe("stale");
     expect(issue.message).toContain("did not finish within six hours");
     expect(issue.error).toBeNull();
   });
@@ -60,6 +62,7 @@ describe("formatPaymentWebhookIssue", () => {
     });
 
     expect(issue.status).toBe("failed");
+    expect(issue.reason).toBe("dead_letter");
     expect(issue.message).toContain("dead-letter queue");
     expect(issue.queueType).toBe("payment.stripe.confirmed");
     expect(issue.queueMessageId).toBe("msg_dlq");
@@ -75,6 +78,7 @@ describe("formatPaymentWebhookIssue", () => {
       processedAt: 1_900,
     });
 
+    expect(issue.reason).toBe("failed");
     expect(issue.message).toBe("Payment webhook processing failed: Queue not available");
     expect(issue.error).toBe("Queue not available");
   });

@@ -680,7 +680,12 @@ export function projectCatalogFeedRows(
     if (typeof row === "string") {
       omit(product.id, null, row);
     } else {
-      rows.push(row);
+      // A simple product sells its one default SKU: the feed id is that SKU,
+      // the same identifier the product page's Product JSON-LD emits.
+      const defaultSku = resolution.mode === "simple"
+        ? normalizedText(resolution.variants[0]?.sku)
+        : null;
+      rows.push(defaultSku ? { ...row, id: defaultSku } : row);
     }
   }
 

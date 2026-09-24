@@ -89,10 +89,6 @@ function getConnectSrcDirectives(
   const directives = [
     ...ESSENTIAL_CONNECT_SRC,
     ...COMMON_THIRD_PARTY_DOMAINS,
-    "https://connect.facebook.net", // For Facebook Pixel script/connections
-    "https://www.facebook.com", // For Facebook Pixel (tr endpoint)
-    "https://*.facebook.com", // For FB API calls by the pixel
-    "https://analytics.tiktok.com", // For TikTok Pixel script/connections
     ...additionalDomains,
   ];
 
@@ -182,13 +178,16 @@ export function setPageCspHeader(
     ? ["http://localhost:*", "http://127.0.0.1:*"]
     : [];
 
+  // Each source appears once per directive, whichever list contributed it.
+  const directive = (name: string, sources: string[]) =>
+    `${name} ${[...new Set(sources)].join(" ")}`;
   const cspDirectives = [
-    `script-src ${getScriptSrcDirectives(additionalDomains).join(" ")}`,
-    `connect-src ${getConnectSrcDirectives(additionalDomains, apiBaseUrl).join(" ")}`,
-    `frame-src ${getFrameSrcDirectives(additionalDomains).join(" ")}`,
-    `img-src ${getImgSrcDirectives(additionalDomains, platformDomains, localDevSources).join(" ")}`,
+    directive("script-src", getScriptSrcDirectives(additionalDomains)),
+    directive("connect-src", getConnectSrcDirectives(additionalDomains, apiBaseUrl)),
+    directive("frame-src", getFrameSrcDirectives(additionalDomains)),
+    directive("img-src", getImgSrcDirectives(additionalDomains, platformDomains, localDevSources)),
     "object-src 'none'",
-    `worker-src ${getWorkerSrcDirectives(additionalDomains).join(" ")}`,
+    directive("worker-src", getWorkerSrcDirectives(additionalDomains)),
     "base-uri 'self'",
     "form-action 'self' https://www.facebook.com https://*.sslcommerz.com https://*.stripe.com",
     "frame-ancestors 'self'",

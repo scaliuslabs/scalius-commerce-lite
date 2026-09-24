@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { toast } from "sonner";
-import { Badge } from "~/components/ui/badge";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -10,162 +8,219 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
-import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
-import { useCreateFulfillmentShipment } from "~/lib/api-mutations/orders";
-import { getOrderItemName } from "./order-returns/shared";
+import { orderErrorMessage, useCreateFulfillmentShipment } from "~/lib/api-mutations/orders";
+import { clampQuantity, getOrderItemName } from "./order-returns/shared";
 import type { Order, OrderItem } from "./types";
 
-const FULFILLMENT_READY_ORDER_STATUSES = new Set(["confirmed", "shipped"]);
-const FULFILLABLE_ITEM_STATUSES = new Set(["pending", "picked", "packed"]);
+const SENDABLE_ORDER_STATUSES = new Set(["confirmed", "shipped", "delivered"]);
 
-function isFulfillable(item: OrderItem) {
-  return FULFILLABLE_ITEM_STATUSES.has((item.fulfillmentStatus ?? "pending").toLowerCase());
+/** Units of a line not handed to a courier yet. */
+export function remainingToSend(item: OrderItem): number {
+  return Math.max(0, item.quantity - (item.shippedQuantity ?? 0));
 }
 
-function optional(value: string) {
-  return value.trim() || undefined;
+export function canSendWithOwnCourier(order: Order): boolean {
+  return SENDABLE_ORDER_STATUSES.has(order.status.toLowerCase())
+    && order.items.some((item) => remainingToSend(item) > 0)
+    && !order.activeRefundOperation?.active
+    && order.shipmentRecovery?.activeLock !== true
+    && !order.archivedAt;
 }
 
-/** Own-courier fulfillment: pick the items handed to your own rider. */
-export function ManualFulfillmentDialog({ order }: { order: Order }) {
+type FieldErrors = Partial<Record<"items" | "trackingUrl" | "amount", string>>;
+
+/** Own-courier "Mark as sent": how many of each item your rider is taking. */
+export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
+  order: Order;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const t = useMessages(orderDetailMessages);
   const r = useMessages(resourceMessages);
-  const canManage = useOrderActionPermissions().canManageOrderShipments;
-  const [open, setOpen] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [courierName, setCourierName] = useState(() => t("fulfill.defaultCourier"));
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [courierName, setCourierName] = useState("");
   const [trackingId, setTrackingId] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
-  const [shipmentAmount, setShipmentAmount] = useState("");
+  const [shipmentAmount, setShipmentAmount] = useState<number | null>(null);
   const [note, setNote] = useState("");
+  const [errors, setErrors] = useState<FieldErrors>({});
+  // One key per opened dialog: a double click or retry replays the first shipment.
+  const requestKey = useRef("");
   const mutation = useCreateFulfillmentShipment();
-  const refundLocked = Boolean(order.activeRefundOperation?.active);
-  const shipmentLocked = order.shipmentRecovery?.activeLock === true;
-  const fulfillableIds = useMemo(() => order.items.filter(isFulfillable).map((item) => item.id), [order.items]);
-  const canCreate = canManage
-    && FULFILLMENT_READY_ORDER_STATUSES.has(order.status.toLowerCase())
-    && fulfillableIds.length > 0
-    && !refundLocked
-    && !shipmentLocked;
-  const isFinalShipment = selectedIds.length > 0 && selectedIds.length === fulfillableIds.length;
 
   useEffect(() => {
-    if (open) setSelectedIds(fulfillableIds);
-  }, [fulfillableIds, open]);
+    if (!open) return;
+    setQuantities(Object.fromEntries(order.items.map((item) => [item.id, remainingToSend(item)])));
+    setCourierName(t("fulfill.defaultCourier"));
+    setTrackingId("");
+    setTrackingUrl("");
+    setShipmentAmount(null);
+    setNote("");
+    setErrors({});
+    requestKey.current = crypto.randomUUID();
+    mutation.reset();
+    // Every opening starts from what is left to send.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
-  const toggle = (item: OrderItem, checked: boolean) => {
-    if (!isFulfillable(item)) return;
-    setSelectedIds((current) => (checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id)));
+  const lines = order.items
+    .map((item) => ({ itemId: item.id, quantity: quantities[item.id] ?? 0 }))
+    .filter((line) => line.quantity > 0);
+  const remainingTotal = order.items.reduce((sum, item) => sum + remainingToSend(item), 0);
+  const sendingTotal = lines.reduce((sum, line) => sum + line.quantity, 0);
+  const firstSendableId = order.items.find((item) => remainingToSend(item) > 0)?.id;
+
+  const validate = (): FieldErrors => {
+    const next: FieldErrors = {};
+    if (lines.length === 0) next.items = t("fulfill.selectItem");
+    const url = trackingUrl.trim();
+    if (url && !/^https:\/\/[^\s/]+\.[^\s]+$/i.test(url)) next.trackingUrl = t("fulfill.trackingUrlInvalid");
+    const amount = shipmentAmount ?? 0;
+    if (!Number.isFinite(amount) || amount < 0) next.amount = t("fulfill.amountInvalid");
+    return next;
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canManage) return void toast.error(r("readOnly"));
-    if (refundLocked) return void toast.error(t("locked.refund"));
-    if (shipmentLocked) return void toast.error(t("locked.shipment"));
-    if (selectedIds.length === 0) return void toast.error(t("fulfill.selectItem"));
-    const amount = shipmentAmount.trim() ? Number(shipmentAmount) : undefined;
-    if (amount !== undefined && (!Number.isFinite(amount) || amount < 0)) {
-      return void toast.error(t("fulfill.amountInvalid"));
+    const next = validate();
+    setErrors(next);
+    const first = Object.keys(next)[0];
+    if (first) {
+      document.getElementById(`fulfill-${first}`)?.focus();
+      return;
     }
     mutation.mutate(
       {
         orderId: order.id,
-        itemIds: selectedIds,
-        courierName: optional(courierName),
-        trackingId: optional(trackingId),
-        trackingUrl: optional(trackingUrl),
-        note: optional(note),
-        shipmentAmount: amount,
-        isFinalShipment,
+        requestKey: requestKey.current,
+        items: lines,
+        courierName: courierName.trim() || undefined,
+        trackingId: trackingId.trim() || undefined,
+        trackingUrl: trackingUrl.trim() || undefined,
+        note: note.trim() || undefined,
+        shipmentAmount: shipmentAmount ?? undefined,
       },
-      { onSuccess: () => setOpen(false) },
+      { onSuccess: () => onOpenChange(false) },
     );
   };
 
-  const blockedReason = canCreate
-    ? undefined
-    : !canManage ? r("readOnly")
-      : refundLocked ? t("locked.refund")
-        : shipmentLocked ? t("locked.shipment")
-          : t("fulfill.confirmFirst");
+  const blur = (field: keyof FieldErrors) => setErrors((current) => ({ ...current, [field]: validate()[field] }));
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && setOpen(next)}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline" className="w-full" disabled={!canCreate} title={blockedReason}>
-          {t("fulfill.open")}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("fulfill.title")}</DialogTitle>
           <DialogDescription>{t("fulfill.help")}</DialogDescription>
         </DialogHeader>
-        <form method="post" className="space-y-4" onSubmit={handleSubmit} noValidate>
-          <div className="space-y-2">
+        <form id="manual-fulfillment" method="post" className="space-y-4" onSubmit={handleSubmit} noValidate>
+          {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
+          <div role="group" aria-labelledby="fulfill-items-label" className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-body font-medium">{t("fulfill.items")}</p>
-              <Badge variant={isFinalShipment ? "secondary" : "outline"}>
-                {isFinalShipment ? t("fulfill.final") : t("fulfill.partial")}
-              </Badge>
+              <p id="fulfill-items-label" className="text-body font-medium">{t("fulfill.items")}</p>
+              <span className="text-muted-foreground tabular-nums">
+                {t("fulfill.sending", { count: sendingTotal, total: remainingTotal })}
+              </span>
             </div>
-            <ul className="divide-y rounded-md border">
-              {order.items.map((item) => (
-                <li key={item.id} className="flex items-start gap-3 px-3 py-2 text-body">
-                  <Checkbox
-                    id={`fulfill-item-${item.id}`}
-                    checked={selectedIds.includes(item.id)}
-                    onCheckedChange={(checked) => toggle(item, checked === true)}
-                    disabled={!isFulfillable(item) || mutation.isPending}
-                  />
-                  <Label htmlFor={`fulfill-item-${item.id}`} className="min-w-0 flex-1">
-                    {getOrderItemName(item)} × {item.quantity}
-                  </Label>
-                  {!isFulfillable(item) ? <Badge variant="outline">{t("fulfill.alreadySent")}</Badge> : null}
-                </li>
-              ))}
+            <ul className="divide-y rounded-lg border">
+              {order.items.map((item) => {
+                const left = remainingToSend(item);
+                const name = getOrderItemName(item);
+                return (
+                  <li key={item.id} className="flex items-center gap-3 px-3 py-2 text-body">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{name}</p>
+                      <p className="text-muted-foreground">
+                        {left > 0 ? t("fulfill.left", { count: left }) : t("fulfill.alreadySent")}
+                      </p>
+                    </div>
+                    {left > 0 ? (
+                      <NumberInput
+                        id={item.id === firstSendableId ? "fulfill-items" : undefined}
+                        integer
+                        className="w-20 shrink-0"
+                        aria-label={t("fulfill.quantity", { name })}
+                        aria-invalid={Boolean(errors.items) || undefined}
+                        aria-describedby={errors.items ? "fulfill-items-error" : undefined}
+                        value={quantities[item.id] ?? 0}
+                        disabled={mutation.isPending}
+                        onValueChange={(value) => {
+                          setQuantities((current) => ({
+                            ...current,
+                            [item.id]: clampQuantity(value, left),
+                          }));
+                        }}
+                      />
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
+            {errors.items ? <p id="fulfill-items-error" className="text-destructive">{errors.items}</p> : null}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="fulfill-courier">{t("shipments.courier")}</Label>
-              <Input id="fulfill-courier" value={courierName} onChange={(e) => setCourierName(e.target.value)} disabled={mutation.isPending} autoComplete="off" />
+              <Input id="fulfill-courier" value={courierName} onChange={(e) => setCourierName(e.target.value)} disabled={mutation.isPending} autoComplete="off" maxLength={120} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="fulfill-tracking">{t("shipments.trackingId")}</Label>
-              <Input id="fulfill-tracking" value={trackingId} onChange={(e) => setTrackingId(e.target.value)} disabled={mutation.isPending} autoComplete="off" />
+              <Input id="fulfill-tracking" value={trackingId} onChange={(e) => setTrackingId(e.target.value)} disabled={mutation.isPending} autoComplete="off" maxLength={180} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fulfill-tracking-url">{t("fulfill.trackingUrl")}</Label>
-              <Input id="fulfill-tracking-url" type="url" value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} disabled={mutation.isPending} autoComplete="off" />
+              <Label htmlFor="fulfill-trackingUrl">{t("fulfill.trackingUrl")}</Label>
+              <Input
+                id="fulfill-trackingUrl"
+                type="url"
+                inputMode="url"
+                placeholder="https://"
+                value={trackingUrl}
+                aria-invalid={Boolean(errors.trackingUrl) || undefined}
+                aria-describedby={errors.trackingUrl ? "fulfill-trackingUrl-error" : undefined}
+                onChange={(e) => setTrackingUrl(e.target.value)}
+                onBlur={() => blur("trackingUrl")}
+                disabled={mutation.isPending}
+                autoComplete="off"
+              />
+              {errors.trackingUrl ? <p id="fulfill-trackingUrl-error" className="text-destructive">{errors.trackingUrl}</p> : null}
             </div>
             <div className="space-y-2">
               <Label htmlFor="fulfill-amount">{t("fulfill.amount")}</Label>
-              <Input id="fulfill-amount" type="number" inputMode="decimal" min="0" step="0.01" value={shipmentAmount} onChange={(e) => setShipmentAmount(e.target.value)} disabled={mutation.isPending} />
+              <NumberInput
+                id="fulfill-amount"
+                value={shipmentAmount}
+                aria-invalid={Boolean(errors.amount) || undefined}
+                aria-describedby={errors.amount ? "fulfill-amount-error" : "fulfill-amount-help"}
+                onValueChange={setShipmentAmount}
+                onBlur={() => blur("amount")}
+                disabled={mutation.isPending}
+              />
+              {errors.amount
+                ? <p id="fulfill-amount-error" className="text-destructive">{errors.amount}</p>
+                : <p id="fulfill-amount-help" className="text-muted-foreground">{t("fulfill.amountHelp")}</p>}
             </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="fulfill-note">{t("fulfill.note")}</Label>
-            <Textarea id="fulfill-note" value={note} onChange={(e) => setNote(e.target.value)} disabled={mutation.isPending} />
+            <Textarea id="fulfill-note" value={note} onChange={(e) => setNote(e.target.value)} disabled={mutation.isPending} maxLength={500} />
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={mutation.isPending}>
-              {r("cancel")}
-            </Button>
-            <Button type="submit" disabled={mutation.isPending || selectedIds.length === 0 || !canCreate}>
-              {t("fulfill.submit")}
-            </Button>
-          </DialogFooter>
         </form>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
+            {r("cancel")}
+          </Button>
+          <Button type="submit" form="manual-fulfillment" loading={mutation.isPending}>
+            {t("fulfill.submit")}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

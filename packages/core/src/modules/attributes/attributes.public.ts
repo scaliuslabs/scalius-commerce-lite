@@ -7,6 +7,7 @@ import type { Database } from "@scalius/database/client";
 import { publicProductHasBuyerResolvableSku } from "../products/products.public-eligibility";
 import { ValidationError } from "@scalius/core/errors";
 import { ftsMatch } from "../../search/fts5";
+import { OPTION_FACET_PREFIX } from "../products/products.storefront";
 
 export interface PublicAttributeFilter {
     id: string;
@@ -62,8 +63,17 @@ export async function resolvePublicAttributeFilters(
             `At most ${MAX_PUBLIC_ATTRIBUTE_FILTER_VALUES} attribute filter values are allowed.`,
         );
     }
+    // `option.<axis>` keys filter by merchant option values (Size, Color);
+    // the catalog query matches them against live SKUs, so unknown axes or
+    // values simply match nothing.
+    const isOption = (slug: string) => slug.startsWith(OPTION_FACET_PREFIX);
+    const optionFilters = requestedFilters
+        .filter((filter) => isOption(filter.slug) && filter.slug.length > OPTION_FACET_PREFIX.length)
+        .map((filter) => ({ id: filter.slug, name: filter.slug.slice(OPTION_FACET_PREFIX.length), ...filter }));
+    const attributeRequests = requestedFilters.filter((filter) => !isOption(filter.slug));
+    if (attributeRequests.length === 0) return optionFilters;
 
-    const requestedJson = JSON.stringify(requestedFilters);
+    const requestedJson = JSON.stringify(attributeRequests);
     const matchedValues = await db
         .selectDistinct({
             id: productAttributes.id,
@@ -109,15 +119,18 @@ export async function resolvePublicAttributeFilters(
         matchedBySlug.set(row.slug, filter);
     }
 
-    return requestedFilters
-        .map((requested) => {
-            const matched = matchedBySlug.get(requested.slug);
-            if (!matched) return null;
-            const available = new Set(matched.values);
-            const values = requested.values.filter((value) => available.has(value));
-            return values.length > 0 ? { ...matched, values } : null;
-        })
-        .filter((filter): filter is PublicAttributeQueryFilter => filter !== null);
+    return [
+        ...optionFilters,
+        ...attributeRequests
+            .map((requested) => {
+                const matched = matchedBySlug.get(requested.slug);
+                if (!matched) return null;
+                const available = new Set(matched.values);
+                const values = requested.values.filter((value) => available.has(value));
+                return values.length > 0 ? { ...matched, values } : null;
+            })
+            .filter((filter): filter is PublicAttributeQueryFilter => filter !== null),
+    ];
 }
 
 /**

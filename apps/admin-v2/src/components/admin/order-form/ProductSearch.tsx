@@ -1,14 +1,9 @@
 import React from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+import { ImageIcon, Loader2, Search } from "lucide-react";
+import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { cn } from "@scalius/shared/utils";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, X } from "lucide-react";
 import { useOrderForm } from "./OrderFormContext";
 import type { Product } from "./types";
 import { useCurrency } from "@/hooks/use-currency";
@@ -16,6 +11,8 @@ import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
 import { resourceMessages } from "@/i18n/resource";
 import { discountedUnitPrice } from "./order-item-presentation";
+
+export const PRODUCT_SEARCH_INPUT_ID = "order-product-search";
 
 interface ProductSearchProps {
   searchTerm: string;
@@ -29,13 +26,14 @@ interface ProductSearchProps {
   isLoadingMore: boolean;
   isLoadMoreError: boolean;
   retry: () => void;
-  selectedProduct: Product | null;
-  isLoadingVariants: boolean;
   selectProduct: (product: Product) => void;
-  clearProductSelection: () => void;
+  invalid?: boolean;
 }
 
-/** Product picker: server-backed catalog search with "load more". */
+/**
+ * The product picker is the search field itself: typing (or focusing it)
+ * lists matching products with a thumbnail, price and stock.
+ */
 export function ProductSearch({
   searchTerm,
   setSearchTerm,
@@ -48,149 +46,165 @@ export function ProductSearch({
   isLoadingMore,
   isLoadMoreError,
   retry,
-  selectedProduct,
-  isLoadingVariants,
   selectProduct,
-  clearProductSelection,
+  invalid = false,
 }: ProductSearchProps) {
   const { refs } = useOrderForm();
   const { fmt } = useCurrency();
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
   const [open, setOpen] = React.useState(false);
+  const [activeIndex, setActiveIndex] = React.useState(0);
+  const listId = React.useId();
+  const showOptions = !isLoading && !isError && displayedProducts.length > 0;
+  const active = showOptions ? Math.min(activeIndex, displayedProducts.length - 1) : -1;
+
+  const pick = (product: Product) => {
+    selectProduct(product);
+    setSearchTerm("");
+    setOpen(false);
+  };
 
   return (
-    <div className="flex items-center gap-2">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            id="product-search-button"
-            ref={refs.productSearchButtonRef}
-            type="button"
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            aria-label={t("addProduct")}
-            className="min-w-0 flex-1 justify-between"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === "ArrowDown") {
-                e.preventDefault();
-                setOpen(true);
-              }
-            }}
-          >
-            <span className="truncate">
-              {selectedProduct ? selectedProduct.name : t("searchProducts")}
-            </span>
-            {isLoadingVariants ? (
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-label={t("loadingVariants")} />
-            ) : (
-              <Search className="h-4 w-4 shrink-0 opacity-50" />
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80 sm:w-96" align="start">
-          <Command shouldFilter={false}>
-            <CommandInput
-              placeholder={t("searchProducts")}
-              value={searchTerm}
-              onValueChange={setSearchTerm}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setOpen(false);
-                  refs.productSearchButtonRef.current?.focus();
-                }
-              }}
-            />
-            <CommandList>
-              {isLoading ? (
-                <p className="flex items-center justify-center gap-2 py-8 text-body text-muted-foreground" role="status">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {t("searching")}
-                </p>
-              ) : isError ? (
-                <div className="space-y-3 px-4 py-6 text-center">
-                  <p className="text-body text-muted-foreground">{t("productsFailed")}</p>
-                  <Button type="button" variant="outline" size="sm" onClick={retry}>
-                    {r("retry")}
-                  </Button>
-                </div>
-              ) : displayedProducts.length === 0 ? (
-                <p className="px-4 py-8 text-center text-body text-muted-foreground">
-                  {t("noProducts")}
-                </p>
-              ) : (
-                <CommandGroup>
-                  {displayedProducts.map((product) => {
-                    const price = discountedUnitPrice(product, null);
-                    const variantCount = product.variantCount ?? product.variants.length;
-                    return (
-                      <CommandItem
-                        key={product.id}
-                        value={product.id}
-                        onSelect={() => {
-                          selectProduct(product);
-                          setSearchTerm("");
-                          setOpen(false);
-                        }}
-                        className="flex items-start justify-between"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">{product.name}</p>
-                          <p className="text-body text-muted-foreground">
-                            {price < product.price ? (
-                              <>
-                                <s>{fmt(product.price)}</s> {fmt(price)}
-                              </>
-                            ) : fmt(product.price)}
-                          </p>
-                        </div>
-                        {variantCount > 1 ? (
-                          <span className="shrink-0 text-body text-muted-foreground">
-                            {t("variantCount", { count: variantCount })}
-                          </span>
-                        ) : null}
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              )}
-              {!isLoading && !isError && hasMore ? (
-                <div className="border-t p-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="w-full"
-                    disabled={isLoadingMore}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      loadMoreProducts();
-                    }}
-                  >
-                    {isLoadingMore
-                      ? t("loading")
-                      : isLoadMoreError
-                        ? r("retry")
-                        : t("loadMore", { shown: displayedProducts.length, total: totalProducts })}
-                  </Button>
-                </div>
-              ) : null}
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-
-      {selectedProduct ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={clearProductSelection}
-          aria-label={t("clearProduct")}
+    <div className="relative">
+      <Search
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+      />
+      <Input
+        id={PRODUCT_SEARCH_INPUT_ID}
+        ref={refs.productSearchInputRef}
+        type="search"
+        role="combobox"
+        autoComplete="off"
+        aria-label={t("addProduct")}
+        aria-autocomplete="list"
+        aria-controls={listId}
+        aria-expanded={open}
+        aria-activedescendant={open && active >= 0 ? `${listId}-${active}` : undefined}
+        aria-invalid={invalid || undefined}
+        placeholder={t("searchProducts")}
+        // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
+        className="pl-9"
+        value={searchTerm}
+        onChange={(event) => {
+          setSearchTerm(event.target.value);
+          setActiveIndex(0);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            setOpen(true);
+            const step = event.key === "ArrowDown" ? 1 : -1;
+            setActiveIndex(Math.max(0, Math.min(active + step, displayedProducts.length - 1)));
+          } else if (event.key === "Enter") {
+            event.preventDefault();
+            const product = displayedProducts[active];
+            if (open && product) pick(product);
+            else setOpen(true);
+          } else if (event.key === "Escape" && open) {
+            event.preventDefault();
+            setOpen(false);
+          }
+        }}
+      />
+      {open ? (
+        <div
+          // Clicks inside keep focus in the search field.
+          onMouseDown={(event) => event.preventDefault()}
+          className="absolute inset-x-0 top-full z-20 mt-1 max-h-80 overflow-y-auto overscroll-contain rounded-xl bg-popover p-1.5 shadow-popover"
         >
-          <X className="h-4 w-4" />
-        </Button>
+          {isLoading ? (
+            <p className="flex items-center justify-center gap-2 py-6 text-body text-muted-foreground" role="status">
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              {t("searching")}
+            </p>
+          ) : isError ? (
+            <div className="space-y-3 px-4 py-5 text-center">
+              <p className="text-body text-muted-foreground">{t("productsFailed")}</p>
+              <Button type="button" variant="outline" size="sm" onClick={retry}>
+                {r("retry")}
+              </Button>
+            </div>
+          ) : displayedProducts.length === 0 ? (
+            <p className="px-4 py-6 text-center text-body text-muted-foreground">{t("noProducts")}</p>
+          ) : null}
+          <ul id={listId} role="listbox" aria-label={t("products")}>
+            {showOptions ? displayedProducts.map((product, index) => {
+              const price = discountedUnitPrice(product, null);
+              const variantCount = product.variantCount ?? product.variants.length;
+              const stock = product.availableStock;
+              return (
+                <li
+                  key={product.id}
+                  id={`${listId}-${index}`}
+                  role="option"
+                  aria-selected={index === active}
+                  onMouseMove={() => setActiveIndex(index)}
+                  onClick={() => pick(product)}
+                  className={cn(
+                    "flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 py-1.5",
+                    index === active && "bg-accent",
+                  )}
+                >
+                  <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
+                    {product.primaryImage ? (
+                      <img
+                        src={mediaImageUrl(product.primaryImage, 96)}
+                        alt=""
+                        className="size-full object-contain"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <ImageIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-body font-medium">{product.name}</span>
+                    <span className="block truncate text-body text-muted-foreground tabular-nums">
+                      {price < product.price ? (
+                        <>
+                          <s>{fmt(product.price)}</s> {fmt(price)}
+                        </>
+                      ) : fmt(product.price)}
+                      {variantCount > 1 ? ` · ${t("variantCount", { count: variantCount })}` : null}
+                    </span>
+                  </span>
+                  {stock === undefined ? null : (
+                    <span
+                      className={cn(
+                        "shrink-0 text-body tabular-nums",
+                        stock === 0 ? "text-destructive" : "text-muted-foreground",
+                      )}
+                    >
+                      {stock === null ? t("noStockLimit") : t("inStock", { count: stock })}
+                    </span>
+                  )}
+                </li>
+              );
+            }) : null}
+          </ul>
+          {showOptions && hasMore ? (
+            <div className="border-t pt-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                loading={isLoadingMore}
+                onClick={loadMoreProducts}
+              >
+                {isLoadMoreError
+                  ? r("retry")
+                  : t("loadMore", { shown: displayedProducts.length, total: totalProducts })}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

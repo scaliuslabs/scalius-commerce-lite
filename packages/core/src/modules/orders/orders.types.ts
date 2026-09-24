@@ -34,8 +34,20 @@ export type OrderShipmentRecoveryState =
     | "needs_attention"
     | "failed";
 
+/** Why a shipment needs attention, as a stable code the dashboard words in its own language. */
+export const ORDER_SHIPMENT_RECOVERY_REASONS = [
+    "none",
+    "courier_unconfirmed",
+    "reconcile_required",
+    "creating",
+    "claim_expired",
+    "failed",
+] as const;
+export type OrderShipmentRecoveryReason = (typeof ORDER_SHIPMENT_RECOVERY_REASONS)[number];
+
 export interface OrderShipmentRecoverySummary {
     state: OrderShipmentRecoveryState;
+    reason: OrderShipmentRecoveryReason;
     severity: "info" | "warning" | "danger";
     activeLock: boolean;
     label: string;
@@ -102,14 +114,24 @@ export interface OrderPaymentRecoverySummary {
     updatedAt: Date | null;
 }
 
-export interface AdminOrderFullEditReadiness {
-    allowed: boolean;
-    reason: string | null;
-}
+/** Why part of an order can no longer be edited; the dashboard words each one. */
+export type OrderEditLockReason =
+    | "shipped"
+    | "closed"
+    | "paid"
+    | "online_payment"
+    | "discount"
+    | "history"
+    | "inventory"
+    | "archived"
+    | "busy"
+    | "unavailable";
 
-export interface AdminOrderAmendmentReadiness {
-    allowed: boolean;
-    reason: string | null;
+export interface OrderEditReadiness {
+    /** Products, quantities, discount and delivery charge (quote-backed amendment). */
+    items: { allowed: boolean; reason: OrderEditLockReason | null };
+    /** Customer name, phone, email and delivery address. */
+    details: { allowed: boolean; reason: OrderEditLockReason | null };
 }
 
 export interface OrderListItem {
@@ -141,11 +163,19 @@ export interface OrderListItem {
     shipmentRecovery: OrderShipmentRecoverySummary;
     paymentRecovery: OrderPaymentRecoverySummary;
     activeRefundOperation: ActiveRefundOperationView | null;
-    fullEditReadiness: AdminOrderFullEditReadiness;
+    /** Sequential store number, shown as "#1001". */
+    orderNumber: number | null;
+    archivedAt: Date | null;
+    /** The open customer request, so it isn't shipped unnoticed. */
+    openRequestType: "cancel_pre_shipment" | "return" | "refund" | null;
+    cod: { status: string; deliveryAttempts: number } | null;
+    /** Value of received returns not yet given back (major units). */
+    refundDue: number;
+    refundedAmount: number;
 }
 
 export interface OrderDetails extends OrderListItem {
-    amendmentReadiness: AdminOrderAmendmentReadiness;
+    editReadiness: OrderEditReadiness;
     notes: string | null;
     shippingAddress: string;
     customerId: string | null;
@@ -165,15 +195,14 @@ export interface OrderDetails extends OrderListItem {
     totalAmountMinor: number | null;
     taxLabel: string | null;
     pricesIncludeTax: boolean;
-    /** Immutable promotion attribution captured when the order committed. */
-    promotion: {
-        id: string;
-        revision: number;
-        evaluatorVersion: number;
-        method: "automatic" | "code";
+    /** Every discount applied at checkout, one entry per promotion (major units). */
+    discounts: Array<{
+        promotionId: string;
         name: string;
         code: string | null;
-    } | null;
+        method: "automatic" | "code";
+        amount: number;
+    }>;
     items: {
         id: string;
         productId: string;
@@ -184,6 +213,10 @@ export interface OrderDetails extends OrderListItem {
         productImage: string | null;
         variantLabel: string | null;
         fulfillmentStatus: string;
+        /** Units already handed to a courier (a line can be sent in parts). */
+        shippedQuantity: number;
+        /** Stock is tracked for this line (cancel/return restock counts only these). */
+        inventoryTracked: boolean;
         unitPriceMinor: number | null;
         lineSubtotalMinor: number | null;
         discountAmountMinor: number | null;
@@ -224,8 +257,8 @@ export interface CreateStorefrontOrderInput {
     areaName?: string | null;
     notes: string | null;
     items: StorefrontOrderItem[];
-    discountAmount: number | null;
-    discountCode?: string | null;
+    /** Discount codes the buyer applied; each must still apply at commit. */
+    discountCodes: string[];
     shippingCharge: number;
     shippingMethodId?: string | null;
     paymentMethod: string;

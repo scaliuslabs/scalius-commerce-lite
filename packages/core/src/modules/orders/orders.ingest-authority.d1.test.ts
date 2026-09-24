@@ -187,7 +187,7 @@ describe("storefront checkout authority at the atomic commit", () => {
     const promotion = await activatePromotion(db, created.id, created.revision, databaseNow);
     const { payload, commit } = checkout();
     const quote = await quoteStorefrontDiscount(db, {
-      code: "AUDIT50",
+      codes: ["AUDIT50"],
       customerPhone: payload.orderData.customerPhone,
       evaluatedAtEpochSeconds: databaseNow,
       cart: {
@@ -209,6 +209,94 @@ describe("storefront checkout authority at the atomic commit", () => {
     payload.promotion = quote.snapshot;
     return { payload, commit, promotion, rule };
   }
+
+  /** Live code discounts plus a prepared checkout that applies `codes` exactly as the quote allocated them. */
+  async function codesCheckout(
+    rules: Array<Partial<CreatePromotionDraftInput> & Pick<CreatePromotionDraftInput, "name" | "effects">>,
+    codes: string[],
+    identity = "a",
+  ) {
+    for (const rule of rules) {
+      const created = await createPromotionDraft(db, createPromotionDraftSchema.parse({
+        method: "code", codes: [{ code: rule.name }], ...rule,
+      }));
+      await activatePromotion(db, created.id, created.revision, databaseNow);
+    }
+    return preparedWithCodes(codes, identity);
+  }
+
+  async function preparedWithCodes(codes: string[], identity: string) {
+    const { payload, commit } = checkout(identity);
+    const quote = await quoteStorefrontDiscount(db, {
+      codes,
+      customerPhone: payload.orderData.customerPhone,
+      evaluatedAtEpochSeconds: databaseNow,
+      cart: {
+        currencyCode: "BDT",
+        lines: [{ id: "cart:0:variant_1", productId: "prod_1", variantId: "variant_1", unitPriceMinor: 10_000, quantity: 2 }],
+        shippingAmountMinor: 6_000,
+      },
+    });
+    const lineMinor = quote.taxAllocation?.lines.reduce((total, line) => total + line.amountMinor, 0) ?? 0;
+    const shippingMinor = quote.taxAllocation?.shippingMinor ?? 0;
+    const minor = lineMinor + shippingMinor;
+    Object.assign(payload.orderData, {
+      totalAmountMinor: 26_000 - minor, discountAmountMinor: minor, balanceDueMinor: 26_000 - minor,
+    });
+    payload.items[0]!.discountAmountMinor = lineMinor;
+    payload.taxQuote.discountMinor = minor;
+    payload.taxQuote.totalMinor = 26_000 - minor;
+    payload.taxQuote.lines[0]!.discountMinor = lineMinor;
+    payload.taxQuote.lines[0]!.totalMinor = 20_000 - lineMinor;
+    payload.taxQuote.shipping.discountMinor = shippingMinor;
+    payload.taxQuote.shipping.totalMinor = 6_000 - shippingMinor;
+    payload.promotion = quote.snapshot;
+    return { payload, commit, quote };
+  }
+
+  const productCode = {
+    name: "TEE10",
+    combinesWith: { product: false, order: false, shipping: true },
+    effects: [{ kind: "percentage_off" as const, target: "line" as const, allocation: "across" as const, config: { basisPoints: 1_000 } }],
+  };
+  const shippingCode = {
+    name: "SHIPFREE",
+    effects: [{ kind: "free" as const, target: "shipping" as const, allocation: "once" as const, config: {} }],
+  };
+
+  it("commits two combinable codes on one order with one redemption per code", async () => {
+    const { payload, commit, quote } = await codesCheckout([productCode, shippingCode], ["TEE10", "SHIPFREE"]);
+    expect(quote.rejectedCodes).toEqual([]);
+    await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
+    expect(sqlite.prepare("SELECT promotion_code, discount_amount_minor FROM promotion_redemptions ORDER BY promotion_code").all())
+      .toEqual([
+        { promotion_code: "SHIPFREE", discount_amount_minor: 6_000 },
+        { promotion_code: "TEE10", discount_amount_minor: 2_000 },
+      ]);
+    expect(sqlite.prepare("SELECT discount_amount_minor, total_amount_minor FROM orders").get())
+      .toEqual({ discount_amount_minor: 8_000, total_amount_minor: 18_000 });
+  });
+
+  it("claims a code typed twice once", async () => {
+    const { payload, commit } = await codesCheckout([productCode], ["TEE10", " tee10 "]);
+    expect(payload.promotion?.cart.submittedCodes).toEqual(["TEE10"]);
+    await expect(commitStorefrontOrderPayload(db, payload, commit)).resolves.toMatchObject({ alreadyCommitted: false });
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM promotion_redemptions").get()?.count).toBe(1);
+  });
+
+  it("refuses the whole second order when one of its two codes runs out concurrently", async () => {
+    const first = await codesCheckout([{ ...productCode, maxRedemptions: 1 }, shippingCode], ["TEE10", "SHIPFREE"]);
+    const second = await preparedWithCodes(["TEE10", "SHIPFREE"], "b");
+    second.payload.items[0]!.id = "item_2";
+    // The first order lands after the second passed its own re-check.
+    beforeWriteBatch = async () => { await commitStorefrontOrderPayload(db, first.payload, first.commit); };
+    await expect(commitStorefrontOrderPayload(db, second.payload, second.commit)).rejects.toThrow(/usage limit/);
+    expect(sqlite.prepare("SELECT id FROM orders").all()).toEqual([{ id: first.payload.orderData.id }]);
+    // No partial claim: the shipping code's redemption for the refused order rolled back too.
+    expect(sqlite.prepare("SELECT order_id FROM promotion_redemptions GROUP BY order_id").all())
+      .toEqual([{ order_id: first.payload.orderData.id }]);
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM promotion_redemptions").get()?.count).toBe(2);
+  });
 
   function expectNoCheckoutWrites() {
     for (const table of [

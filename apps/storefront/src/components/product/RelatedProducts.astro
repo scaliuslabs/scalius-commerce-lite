@@ -4,6 +4,7 @@ import type { Product } from "@/lib/api";
 import { formatDiscountBadge } from "./lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { formatMoney } from "@/lib/currency";
 
 interface Props {
   relatedProducts: Product[];
@@ -12,11 +13,7 @@ interface Props {
 
 const { relatedProducts, currencySymbol = DEFAULT_CURRENCY.symbol } = Astro.props;
 
-const formatPrice = (price: number) =>
-  `${currencySymbol}${price.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+const formatPrice = (price: number) => formatMoney(price, { symbol: currencySymbol });
 ---
 
 {
@@ -40,7 +37,7 @@ const formatPrice = (price: number) =>
                   alt={relatedProduct.imageAlt || relatedProduct.name}
                   width={300}
                   height={300}
-                  class="h-full w-full object-contain object-center group-hover:scale-105 transition-all duration-300 mix-blend-multiply"
+                  class="h-full w-full object-contain object-center group-hover:scale-105 transition-all duration-300"
                   loading="lazy"
                   decoding="async"
                 />
@@ -62,16 +59,18 @@ const formatPrice = (price: number) =>
                 <h3 class="text-sm font-medium text-foreground line-clamp-2 group-hover:text-primary transition-colors min-h-[2.5em]">
                   {relatedProduct.name}
                 </h3>
-                <div class="mt-1 flex items-center gap-1.5">
-                  <p class="font-medium text-foreground text-sm">
+                <p class="mt-1 flex items-center gap-1.5">
+                  <span class="font-medium text-foreground text-sm">
+                    <span class="sr-only">{relatedProduct.discountedPrice < relatedProduct.price ? "Sale price " : "Price "}</span>
                     {formatPrice(relatedProduct.discountedPrice)}
-                  </p>
+                  </span>
                   {relatedProduct.discountedPrice < relatedProduct.price && (
-                    <p class="text-xs text-muted-foreground line-through">
-                      {formatPrice(relatedProduct.price)}
-                    </p>
+                    <span class="text-xs text-muted-foreground">
+                      <span class="sr-only">Regular price </span>
+                      <s>{formatPrice(relatedProduct.price)}</s>
+                    </span>
                   )}
-                </div>
+                </p>
                 {relatedProduct.freeDelivery && (
                   <p class="mt-1 text-xs text-primary font-medium flex items-center">
                     <Truck className="h-3 w-3 mr-0.5" /> Free Delivery

@@ -10,7 +10,6 @@ import {
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiQuery, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
-import { normalizeCollectionProductOptionsPayload } from "../collection-product-options";
 
 const MODERATE_STALE_TIME_MS = 1000 * 60 * 2;
 const LOOKUP_STALE_TIME_MS = 1000 * 60 * 10;
@@ -143,12 +142,7 @@ export const collectionProductOptionsQueryOptions = (input: {
             ? selectedProductIds.join(",")
             : undefined,
         },
-      })).then((payload) =>
-        normalizeCollectionProductOptionsPayload(payload, {
-          page: pageParam,
-          limit,
-        }),
-      ),
+      })),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.pagination.page < lastPage.pagination.totalPages

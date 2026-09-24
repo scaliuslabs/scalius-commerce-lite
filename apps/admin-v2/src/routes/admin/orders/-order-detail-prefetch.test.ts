@@ -100,7 +100,7 @@ describe("order detail prefetch", () => {
   it("requires order detail and warms shipments, providers, payments, and COD tracking for COD orders", async () => {
     const { queryClient, ensureQueryData, prefetchQuery } = createQueryClient("cod");
 
-    await prefetchOrderDetailQueries(queryClient, "ord_1");
+    await prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: true });
 
     expect(ensureQueryData.mock.calls.map(([options]) => options.queryKey)).toEqual([
       ["orders", "detail", "ord_1"],
@@ -116,10 +116,19 @@ describe("order detail prefetch", () => {
     );
   });
 
+  it("skips the courier list for staff who can't book couriers", async () => {
+    const { queryClient, prefetchQuery } = createQueryClient("cod");
+
+    await prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: false });
+
+    expect(prefetchQuery.mock.calls.map(([options]) => options.queryKey))
+      .not.toContainEqual(["settings", "delivery-providers"]);
+  });
+
   it("does not request COD tracking for non-COD orders", async () => {
     const { queryClient, prefetchQuery } = createQueryClient("stripe");
 
-    await prefetchOrderDetailQueries(queryClient, "ord_1");
+    await prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: true });
 
     const prefetchedKeys = prefetchQuery.mock.calls.map(([options]) => options.queryKey);
     expect(prefetchedKeys).toEqual(
@@ -136,7 +145,7 @@ describe("order detail prefetch", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { queryClient } = createQueryClient("stripe", { rejectPayments: true });
 
-    await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
+    await expect(prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: true })).resolves.toMatchObject({ id: "ord_1" });
     await Promise.resolve();
     expect(warn).toHaveBeenCalledWith("Order detail warm query skipped", expect.any(Error));
   });
@@ -146,7 +155,7 @@ describe("order detail prefetch", () => {
       rejectOrder: true,
     });
 
-    await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).rejects.toThrow(
+    await expect(prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: true })).rejects.toThrow(
       "order detail temporarily unavailable",
     );
     expect(prefetchQuery).not.toHaveBeenCalled();
@@ -156,7 +165,7 @@ describe("order detail prefetch", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { queryClient } = createQueryClient("stripe", { rejectProviders: true });
 
-    await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
+    await expect(prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: true })).resolves.toMatchObject({ id: "ord_1" });
     await Promise.resolve();
     expect(warn).toHaveBeenCalledWith("Order detail warm query skipped", expect.any(Error));
   });
@@ -165,7 +174,7 @@ describe("order detail prefetch", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { queryClient } = createQueryClient("stripe", { rejectShipments: true });
 
-    await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
+    await expect(prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: true })).resolves.toMatchObject({ id: "ord_1" });
     await Promise.resolve();
     expect(warn).toHaveBeenCalledWith("Order detail warm query skipped", expect.any(Error));
   });
@@ -173,6 +182,6 @@ describe("order detail prefetch", () => {
   it("does not wait for optional warm queries before letting the route render", async () => {
     const { queryClient } = createQueryClient("stripe", { hangPayments: true });
 
-    await expect(prefetchOrderDetailQueries(queryClient, "ord_1")).resolves.toBeUndefined();
+    await expect(prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: true })).resolves.toMatchObject({ id: "ord_1" });
   });
 });

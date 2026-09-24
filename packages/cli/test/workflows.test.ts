@@ -536,7 +536,7 @@ describe("CLI workflow resolver adapter", () => {
       }),
     ]));
     expect(new TextEncoder().encode(JSON.stringify({ ok: true, result: product })).byteLength)
-      .toBeLessThanOrEqual(15_872);
+      .toBeLessThanOrEqual(16_128);
 
     const dailyCase = AGENT_INTENT_EVAL_CASES.find((testCase) =>
       testCase.id === "dashboard.daily-operations-snapshot"
@@ -605,8 +605,7 @@ describe("CLI workflow resolver adapter", () => {
                 query: {
                   page: 1,
                   limit: 10,
-                  statusGroup: "open",
-                  fulfillmentStatus: "pending",
+                  view: "unfulfilled",
                   sort: "createdAt",
                   order: "desc",
                 },

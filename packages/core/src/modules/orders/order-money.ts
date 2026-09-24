@@ -21,6 +21,14 @@ export function orderMoneyAmounts(order: OrderMoneyColumns) {
     };
 }
 
+/** Money for a merchant-facing sentence: "৳2,480" / "৳1,234.50" (lakh grouping). */
+export function formatOrderMoney(amountMinor: number, currency: { code: string; decimalPlaces: number }): string {
+    const amount = fromMinor(amountMinor, currency.decimalPlaces);
+    const digits = Number.isInteger(amount) ? 0 : currency.decimalPlaces;
+    const number = amount.toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    return currency.code === "BDT" ? `৳${number}` : `${currency.code} ${number}`;
+}
+
 /** Column selection shared by every reader that projects {@link orderMoneyAmounts}. */
 export function orderMoneySelection<
     T extends { [K in keyof OrderMoneyColumns]: unknown },

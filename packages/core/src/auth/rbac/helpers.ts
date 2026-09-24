@@ -12,7 +12,7 @@ import {
   userPermissions,
 } from "@scalius/database/schema";
 import type { PermissionName, UserPermissionContext, PermissionCheckResult } from "./types";
-import { getAllPermissionNames } from "./permissions";
+import { getAllPermissionNames, withoutUnmetPrerequisites } from "./permissions";
 
 // Every role or assignment mutation clears the affected entries, so the TTL is
 // only a backstop; a long window keeps admin sessions from re-writing KV every
@@ -165,7 +165,9 @@ async function resolveUserPermissionsFromD1(
     }
   }
 
-  return { userFound: true, permissions: effectivePermissions };
+  // "Edit products" without "View products" grants nothing: a denied or
+  // missing prerequisite takes its dependents with it.
+  return { userFound: true, permissions: withoutUnmetPrerequisites(effectivePermissions) };
 }
 
 /**

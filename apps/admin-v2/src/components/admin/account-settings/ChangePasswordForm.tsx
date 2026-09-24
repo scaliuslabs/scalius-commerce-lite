@@ -9,11 +9,10 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
 import { useHydrated } from "~/hooks/use-hydrated";
-import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { apiData } from "~/lib/api";
-import { getServerFnError } from "~/lib/api-helpers";
 import { useMessages } from "~/i18n";
-import { accountMessages } from "~/i18n/account";
+import { accountMessages, type AccountMessageKey } from "~/i18n/account";
+import { accountFailureKey } from "./account-error";
 
 const MIN_LENGTH = 12;
 type Field = "current" | "next" | "confirm";
@@ -31,11 +30,14 @@ export function ChangePasswordForm() {
   const [shown, setShown] = useState(false);
   const [saving, setSaving] = useState(false);
   const [wrongCurrent, setWrongCurrent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AccountMessageKey | null>(null);
 
+  const reused = values.next.length > 0 && values.next === values.current;
   const errors: Partial<Record<Field, string>> = {
     current: wrongCurrent ? t("wrongCurrentPassword") : touched.current && !values.current ? t("enterCurrentPassword") : undefined,
-    next: touched.next && values.next.length < MIN_LENGTH ? t("passwordTooShort") : undefined,
+    next: touched.next && values.next.length < MIN_LENGTH
+      ? t("passwordTooShort")
+      : touched.next && reused ? t("passwordReused") : undefined,
     confirm: touched.confirm && values.confirm !== values.next ? t("passwordsDontMatch") : undefined,
   };
 
@@ -48,7 +50,7 @@ export function ChangePasswordForm() {
     event.preventDefault();
     setTouched({ current: true, next: true, confirm: true });
     setError(null);
-    if (!values.current || values.next.length < MIN_LENGTH || values.next !== values.confirm) return;
+    if (!values.current || values.next.length < MIN_LENGTH || reused || values.next !== values.confirm) return;
     setSaving(true);
     try {
       await apiData(postApiV1AdminAuthChangePassword({ body: { currentPassword: values.current, newPassword: values.next } }));
@@ -57,8 +59,10 @@ export function ChangePasswordForm() {
       setShown(false);
       toast.success(t("passwordChanged"));
     } catch (err) {
-      if (err instanceof AdminApiResponseError && err.status === 400 && /current password/i.test(err.message)) setWrongCurrent(true);
-      else setError(getServerFnError(err, t("passwordFailed")));
+      const key = accountFailureKey(err, ({ code }) =>
+        code === "PASSWORD_INCORRECT" ? "wrongCurrentPassword" : code === "PASSWORD_REUSED" ? "passwordReused" : null);
+      if (key === "wrongCurrentPassword") setWrongCurrent(true);
+      else setError(key);
     } finally {
       setSaving(false);
     }
@@ -91,7 +95,7 @@ export function ChangePasswordForm() {
   };
 
   return (
-    <Card>
+    <Card id="password" className="scroll-mt-4">
       <UnsavedChangesGuard
         isDirty={Boolean(values.current || values.next || values.confirm)}
         isSubmitting={saving}
@@ -105,7 +109,7 @@ export function ChangePasswordForm() {
           {error ? (
             <Alert variant="destructive">
               <AlertCircle aria-hidden="true" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{t(error)}</AlertDescription>
             </Alert>
           ) : null}
           {field("current", t("currentPassword"), "current-password")}

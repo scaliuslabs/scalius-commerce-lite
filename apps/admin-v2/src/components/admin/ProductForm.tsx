@@ -1,10 +1,18 @@
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
+import { Link } from "@tanstack/react-router";
+import { ChevronDown } from "lucide-react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Form } from "../ui/form";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,11 +23,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
-import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
+import {
+  SaveBarProvider,
+  SaveErrorBanner,
+  SaveNotCompleted,
+  useSaveBar,
+  useSaveScope,
+} from "./shared/SaveBar";
 import { PageHeader } from "./resource/PageHeader";
+import { ReadOnlyNotice } from "./resource/ReadOnlyNotice";
 import { ProductStatusBadge } from "./product-list/product-columns";
-import { ProductActionBar } from "./product-form/ProductStickyHeader";
 import { ProductPager } from "./product-form/ProductPager";
 import {
   AdditionalSectionsCard,
@@ -39,14 +53,18 @@ import {
   type Category,
   type ProductFormValues,
 } from "./product-form/types";
-import { getProductEditorSaveStep } from "./product-form/save-orchestration";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
+import { useDuplicateProduct, useTrashProduct } from "@/lib/api-mutations/products";
 import { useMessages } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
+import { saveBarMessages } from "~/i18n/save-bar";
 import type { ProductRevisionConflict } from "@/lib/admin-api-error";
-import type { ProductCreateComposition } from "./product-form/variants/option-matrix-editor-model";
+import type {
+  OptionMatrixEditorHandle,
+  ProductCreateComposition,
+} from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
 
 interface ProductFormProps {
@@ -63,18 +81,61 @@ interface ProductFormProps {
     skuImages: ProductSkuImageChoice[];
     productName: string;
     productPrice: number;
+    isActive: boolean;
   }) => React.ReactNode;
+  /** The variant editor rendered by `optionManager`. */
+  matrixRef: React.RefObject<OptionMatrixEditorHandle | null>;
   createComposition?: ProductCreateComposition | null;
   optionMatrixIssue?: string | null;
   optionMatrixDirty?: boolean;
   optionMatrixSaving?: boolean;
-  onOptionMatrixSave?: () => void;
+  /** Saved SKUs, for printing their labels from the page's menu. */
+  variantIds?: string[];
   /** Throws away the product and variant drafts (the route remounts them from the last save). */
   onDiscard: () => void;
 }
 
+/** Banner names of the product fields a failed check can land on. */
+const FIELD_LABELS: Partial<Record<keyof ProductFormValues, ProductMessageKey>> = {
+  name: "title",
+  description: "description",
+  price: "price",
+  discountAmount: "discount",
+  discountPercentage: "discount",
+  categoryId: "category",
+  slug: "webAddress",
+  media: "media",
+  attributes: "attributes",
+  additionalInfo: "additionalSections",
+};
+
 /** The one product page: add, edit, or view (without products.edit). */
-export function ProductForm({
+export function ProductForm(props: ProductFormProps) {
+  const t = useMessages(productMessages);
+  const r = useMessages(resourceMessages);
+  return (
+    <ErrorBoundary
+      fallback={
+        <p className="p-4 text-center text-body text-muted-foreground">
+          {r("loadFailed")}{" "}
+          <Button type="button" variant="link" onClick={() => window.location.reload()}>
+            {r("retry")}
+          </Button>
+        </p>
+      }
+    >
+      {/* The same contextual save bar as every editor; a new product names itself. */}
+      <SaveBarProvider
+        unsavedLabel={props.isEdit ? undefined : t("unsavedProduct")}
+        savedMessage={t(props.isEdit ? "productSaved" : "productAdded")}
+      >
+        <ProductEditor {...props} />
+      </SaveBarProvider>
+    </ErrorBoundary>
+  );
+}
+
+function ProductEditor({
   categories,
   defaultValues,
   isEdit = false,
@@ -85,20 +146,24 @@ export function ProductForm({
   onOpenRevisionConflict,
   onProductSaved,
   optionManager,
+  matrixRef,
   createComposition,
   optionMatrixIssue = null,
   optionMatrixDirty = false,
   optionMatrixSaving = false,
-  onOptionMatrixSave,
+  variantIds = [],
   onDiscard,
 }: ProductFormProps) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
+  const s = useMessages(saveBarMessages);
   const { getStorefrontPath } = useStorefrontUrl();
   const { products: can } = useCatalogActionPermissions();
   // Server checks stay authoritative; this only keeps viewers from editing.
   const readOnly = isEdit ? !can.canEdit : !can.canCreate;
-  const [discardOpen, setDiscardOpen] = React.useState(false);
+  const [trashOpen, setTrashOpen] = React.useState(false);
+  const duplicate = useDuplicateProduct();
+  const trash = useTrashProduct();
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
@@ -107,7 +172,7 @@ export function ProductForm({
     defaultValues: {
       name: "",
       description: null,
-      price: 0,
+      price: null,
       categoryId: "",
       isActive: false,
       discountType: "percentage",
@@ -131,10 +196,7 @@ export function ProductForm({
 
   const {
     isSubmitting,
-    showAlert,
-    alertMessage,
-    setShowAlert,
-    handleSubmit,
+    submit,
     mediaRemovalConflict,
     confirmMediaRemoval,
     cancelMediaRemoval,
@@ -143,34 +205,58 @@ export function ProductForm({
     productId: defaultValues?.id,
     form,
     aggregateRevision,
-    revisionConflict,
     onAggregateRevisionChange,
     onRevisionConflict,
-    onOpenRevisionConflict,
     onProductSaved,
     createComposition,
-    optionMatrixIssue,
+    onVariantIssue: (path, message) => matrixRef.current?.showServerIssue(path, message) ?? null,
   });
   const productFormDirty = form.formState.isDirty;
-  const hasUnsavedChanges = productFormDirty || optionMatrixDirty;
-  const isSaving = isSubmitting || optionMatrixSaving;
-  const requestSave = React.useCallback(() => {
-    const step = getProductEditorSaveStep({
-      isEdit,
-      productFormDirty,
-      hasRevisionConflict: revisionConflict !== null,
+
+  /** One line per field that failed the page's own checks, for the save banner. */
+  const describeInvalid = (errors: FieldErrors<ProductFormValues>) =>
+    (Object.keys(errors) as Array<keyof ProductFormValues>).map((field) => {
+      const message = errors[field]?.message;
+      const label = FIELD_LABELS[field] ? t(FIELD_LABELS[field]!) : null;
+      return label ? `${label}: ${typeof message === "string" ? message : s("fixErrors")}` : s("fixErrors");
     });
-    if (step === "review-conflict") {
+
+  const save = async () => {
+    if (revisionConflict) {
       onOpenRevisionConflict?.();
-      return;
+      throw new SaveNotCompleted(t("changedElsewhere"));
     }
-    // A variant draft with a problem goes through handleSubmit, which explains it instead of saving.
-    if (step === "save-product" || optionMatrixIssue) {
-      void form.handleSubmit(handleSubmit)();
-      return;
+    // New products send their variants with the product, so their problems block the save too.
+    const matrixBlocks = optionMatrixIssue && (!isEdit || optionMatrixDirty);
+    let revision: number | undefined;
+    if (!isEdit || productFormDirty) {
+      let invalid: FieldErrors<ProductFormValues> = {};
+      const values = await new Promise<ProductFormValues | null>((resolve) => {
+        void form.handleSubmit(resolve, (errors) => {
+          invalid = errors;
+          resolve(null);
+        })();
+      });
+      if (!values || matrixBlocks) {
+        if (matrixBlocks) matrixRef.current?.reveal();
+        const lines = [...describeInvalid(invalid), ...(matrixBlocks ? [optionMatrixIssue] : [])];
+        throw new SaveNotCompleted(lines[0], lines);
+      }
+      revision = await submit(values);
     }
-    onOptionMatrixSave?.();
-  }, [form, handleSubmit, isEdit, onOpenRevisionConflict, onOptionMatrixSave, optionMatrixIssue, productFormDirty, revisionConflict]);
+    if (isEdit && optionMatrixDirty) await matrixRef.current?.save(revision);
+  };
+
+  useSaveBar({
+    dirty: !readOnly && (productFormDirty || optionMatrixDirty || revisionConflict !== null),
+    saving: isSubmitting || optionMatrixSaving,
+    save,
+    discard: () => {
+      if (revisionConflict) onOpenRevisionConflict?.();
+      else onDiscard();
+    },
+  });
+  const scope = useSaveScope();
 
   // New products take their web address from the title until it is edited.
   React.useEffect(() => {
@@ -186,28 +272,61 @@ export function ProductForm({
 
   const slug = form.watch("slug");
   const affectedCount = mediaRemovalConflict?.affectedCount ?? 0;
+  const productId = defaultValues?.id;
+  const productName = defaultValues?.name ?? "";
+
+  const moreActions = isEdit && productId ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline">
+          {r("moreActions")}
+          <ChevronDown className="ml-1 h-4 w-4" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {can.canCreate ? (
+          <DropdownMenuItem disabled={duplicate.isPending} onSelect={() => duplicate.mutate({ id: productId, name: productName })}>
+            {t("duplicate")}
+          </DropdownMenuItem>
+        ) : null}
+        {variantIds.length > 0 ? (
+          <DropdownMenuItem asChild>
+            <Link to="/admin/inventory/labels" search={{ variants: variantIds.join(",") }}>{t("printLabels")}</Link>
+          </DropdownMenuItem>
+        ) : null}
+        {can.canDelete ? (
+          <DropdownMenuItem variant="destructive" onSelect={() => setTrashOpen(true)}>{r("moveToTrash")}</DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : null;
 
   return (
-    <ErrorBoundary
-      fallback={
-        <p className="p-4 text-center text-body text-muted-foreground">
-          {r("loadFailed")}{" "}
-          <Button type="button" variant="link" onClick={() => window.location.reload()}>
-            {r("retry")}
-          </Button>
-        </p>
-      }
-    >
-      <UnsavedChangesGuard isDirty={hasUnsavedChanges} isSubmitting={isSaving} />
+    <>
       <PageHeader
         title={isEdit ? defaultValues?.name : t("addProduct")}
         backTo="/admin/products"
         badge={isEdit ? <ProductStatusBadge isActive={Boolean(defaultValues?.isActive)} /> : null}
-        actions={isEdit && defaultValues?.id ? <ProductPager productId={defaultValues.id} /> : null}
+        actions={isEdit && productId ? (
+          <>
+            {moreActions}
+            <ProductPager productId={productId} />
+          </>
+        ) : null}
       />
-      {readOnly ? <p className="mb-4 text-body text-muted-foreground">{r("readOnly")}</p> : null}
+      {readOnly ? <ReadOnlyNotice /> : null}
       <Form {...form}>
-        <form method="post" onSubmit={form.handleSubmit(handleSubmit)} noValidate>
+        <form
+          method="post"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            // React bubbles submits from forms in portalled dialogs; only this form saves the page.
+            if (event.target === event.currentTarget && scope?.dirty && !scope.busy) void scope.saveAll();
+          }}
+          className="flex flex-col gap-4 pb-6"
+        >
+          <SaveErrorBanner />
           <fieldset disabled={readOnly} className="grid min-w-0 gap-4 lg:grid-cols-3">
             <div className="min-w-0 space-y-4 lg:col-span-2">
               <TitleDescriptionSection form={form} readOnly={readOnly} />
@@ -242,7 +361,8 @@ export function ProductForm({
                         status: item.status,
                       })),
                     productName: form.watch("name"),
-                    productPrice: form.watch("price"),
+                    productPrice: Number.isFinite(form.watch("price")) ? form.watch("price") ?? 0 : 0,
+                    isActive: form.watch("isActive"),
                   })}
                 </CardContent>
               </Card>
@@ -250,82 +370,77 @@ export function ProductForm({
               <AttributesSection form={form} defaultOpen={readOnly} />
               <ProductSearchListing form={form} disabled={readOnly} />
             </div>
-            <div className="min-w-0 space-y-4">
-              <StatusCard
-                form={form}
-                storefrontUrl={isEdit && slug ? getStorefrontPath(`/products/${slug}`) : undefined}
-              />
+            {/* On phones the status comes first; the rest of the side column follows the main cards. */}
+            <div className="min-w-0 space-y-4 max-lg:contents">
+              <div className="max-lg:order-first">
+                <StatusCard
+                  form={form}
+                  storefrontUrl={isEdit && slug ? getStorefrontPath(`/products/${slug}`) : undefined}
+                />
+              </div>
               <OrganizationCard form={form} categories={categories} />
             </div>
           </fieldset>
-
-          <AlertDialog open={showAlert} onOpenChange={setShowAlert}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>{t("cantSaveYet")}</AlertDialogTitle>
-                <AlertDialogDescription>{alertMessage || r("fixFields")}</AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogAction>{t("ok")}</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          <AlertDialog
-            open={mediaRemovalConflict !== null}
-            onOpenChange={(open) => { if (!open) cancelMediaRemoval(); }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>{t("removeVariantPhotosTitle", { count: affectedCount })}</AlertDialogTitle>
-                <AlertDialogDescription>{t("removeVariantPhotosBody")}</AlertDialogDescription>
-              </AlertDialogHeader>
-              {mediaRemovalConflict?.affectedSkus.length ? (
-                <ul className="max-h-40 space-y-1 overflow-y-auto text-body">
-                  {mediaRemovalConflict.affectedSkus.map((sku) => (
-                    <li key={sku.id} className="truncate">{sku.sku}</li>
-                  ))}
-                  {affectedCount > mediaRemovalConflict.affectedSkus.length ? (
-                    <li className="text-muted-foreground">
-                      {t("andMore", { count: affectedCount - mediaRemovalConflict.affectedSkus.length })}
-                    </li>
-                  ) : null}
-                </ul>
-              ) : null}
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={cancelMediaRemoval}>{t("keepPhotos")}</AlertDialogCancel>
-                <AlertDialogAction
-                  disabled={isSubmitting}
-                  variant="destructive"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    void confirmMediaRemoval();
-                  }}
-                >
-                  {t("removePhotos")}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {readOnly ? null : (
+            // Shopify repeats Save at the end of the page, under a divider.
+            <div className="flex justify-end border-t pt-4">
+              <Button type="submit" loading={Boolean(scope?.busy)} disabled={!scope?.dirty}>
+                {s("save")}
+              </Button>
+            </div>
+          )}
         </form>
       </Form>
-      {!readOnly && (hasUnsavedChanges || revisionConflict !== null) ? (
-        <ProductActionBar
-          isEdit={isEdit}
-          isSubmitting={isSaving}
-          hasRevisionConflict={revisionConflict !== null}
-          onDiscard={() => setDiscardOpen(true)}
-          onSave={requestSave}
-        />
-      ) : null}
+      <AlertDialog
+        open={mediaRemovalConflict !== null}
+        onOpenChange={(open) => { if (!open) cancelMediaRemoval(); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("removeVariantPhotosTitle", { count: affectedCount })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("removeVariantPhotosBody")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          {mediaRemovalConflict?.affectedSkus.length ? (
+            <ul className="max-h-40 space-y-1 overflow-y-auto text-body">
+              {mediaRemovalConflict.affectedSkus.map((sku) => (
+                <li key={sku.id} className="truncate">{sku.sku}</li>
+              ))}
+              {affectedCount > mediaRemovalConflict.affectedSkus.length ? (
+                <li className="text-muted-foreground">
+                  {t("andMore", { count: affectedCount - mediaRemovalConflict.affectedSkus.length })}
+                </li>
+              ) : null}
+            </ul>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelMediaRemoval}>{t("keepPhotos")}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSubmitting}
+              variant="destructive"
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmMediaRemoval();
+              }}
+            >
+              {t("removePhotos")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ConfirmDialog
-        open={discardOpen}
-        onOpenChange={setDiscardOpen}
-        title={t("discardTitle")}
-        description={t("discardBody")}
-        confirmLabel={t("discardChanges")}
-        cancelLabel={t("continueEditing")}
-        onConfirm={onDiscard}
+        open={trashOpen}
+        onOpenChange={setTrashOpen}
+        title={t("trashProductTitle", { name: productName })}
+        description={t("trashProductBody")}
+        confirmLabel={r("moveToTrash")}
+        cancelLabel={r("cancel")}
+        loadingLabel={r("working")}
+        variant="default"
+        isLoading={trash.isPending}
+        onConfirm={() => {
+          if (productId && aggregateRevision) trash.mutate({ id: productId, expectedAggregateRevision: aggregateRevision });
+        }}
       />
-    </ErrorBoundary>
+    </>
   );
 }

@@ -11,14 +11,23 @@ export async function getCustomerRequestPolicy(db: Database): Promise<CustomerRe
   return customerRequestsDocument.read(db);
 }
 
+/** The stored policy and the revision a save must send back. */
+export async function getCustomerRequestPolicyDocument(db: Database) {
+  const { value, revision } = await customerRequestsDocument.readDetailed(db);
+  return { policy: value, revision };
+}
+
 export async function saveCustomerRequestPolicy(
   db: Database,
   value: unknown,
-): Promise<CustomerRequestPolicy> {
-  return (await customerRequestsDocument.write(
+  /** The revision the editor loaded; a stale one is a 409 conflict. */
+  options: { expectedRevision?: number } = {},
+): Promise<{ policy: CustomerRequestPolicy; revision: number }> {
+  const { value: policy, revision } = await customerRequestsDocument.write(
     db,
     normalizeCustomerRequestPolicy(value),
     {},
-    { replace: true },
-  )).value;
+    { replace: true, expectedRevision: options.expectedRevision },
+  );
+  return { policy, revision };
 }

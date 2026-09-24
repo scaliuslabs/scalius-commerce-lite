@@ -138,7 +138,7 @@ export async function claimAgentStorefrontContinuationBootstrap(
 }
 
 function customerProfile(row: typeof customers.$inferSelect) {
-  const profileComplete = Boolean(row.name && row.phone && row.address && row.city && row.zone);
+  const profileComplete = Boolean(row.address && row.city && row.zone);
   return {
     customerId: row.id,
     name: row.name,
@@ -152,7 +152,6 @@ function customerProfile(row: typeof customers.$inferSelect) {
     zoneName: row.zoneName,
     areaName: row.areaName,
     profileComplete,
-    needsProfileCompletion: !profileComplete,
   };
 }
 
@@ -189,7 +188,6 @@ async function liveContextCustomer(
       zoneName: profile.zoneName,
       areaName: profile.areaName,
       profileComplete: profile.profileComplete,
-      needsProfileCompletion: profile.needsProfileCompletion,
       createdAt: row.session.createdAt * 1_000,
       expiresAt: row.session.expiresAt * 1_000,
     },
@@ -442,7 +440,9 @@ export async function refreshAgentStorefrontPaymentContinuation(
     }).where(eq(agentStorefrontContinuations.id, continuationId));
     return;
   }
-  const complete = row.paymentStatus === PaymentStatus.PAID || row.paymentStatus === PaymentStatus.PARTIAL;
+  const complete = row.paymentStatus === PaymentStatus.PAID
+    || row.paymentStatus === PaymentStatus.PARTIAL
+    || row.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
   if (complete) {
     await db.update(agentStorefrontContinuations).set({
       status: "complete",

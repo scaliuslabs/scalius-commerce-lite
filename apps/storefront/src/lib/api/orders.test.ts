@@ -306,7 +306,6 @@ describe("storefront orders API client", () => {
       notes: null,
       items: [],
       shippingCharge: 0,
-      discountAmount: null,
       paymentMethod: "cod",
     });
 

@@ -1,11 +1,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
-    getBusinessSettings,
+    getBusinessSettingsDocument,
     saveBusinessSettings,
     type BusinessInfo,
 } from "@scalius/core/modules/settings/business-settings.service";
 import { ok } from "../../../utils/api-response";
-import { successEnvelope, messageResponse, errorResponses } from "../../../schemas/responses";
+import { successEnvelope, conflictResponse, errorResponses } from "../../../schemas/responses";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
 
@@ -57,7 +57,12 @@ const businessInfoSchema = z.object({
     invoiceLogoUrl: z.string().max(BUSINESS_FIELD_LIMITS.invoiceLogoUrl),
 });
 
+const businessDocumentSchema = businessInfoSchema.extend({
+    revision: z.number().int().nonnegative(),
+});
+
 const saveBusinessSchema = businessInfoSchema.partial().extend({
+    expectedRevision: z.number().int().nonnegative(),
     invoiceLogoUrl: z.string().trim().max(BUSINESS_FIELD_LIMITS.invoiceLogoUrl).refine(
         (value) => value === "" || normalizePublicMediaUrl(value) !== null,
         "Use an HTTPS image URL or a root-relative application asset.",
@@ -77,16 +82,15 @@ const getBusinessRoute = createRoute({
     responses: {
         200: {
             description: "Business settings",
-            content: { "application/json": { schema: successEnvelope(businessInfoSchema) } },
+            content: { "application/json": { schema: successEnvelope(businessDocumentSchema) } },
         },
         ...errorResponses,
     },
 });
 
 app.openapi(getBusinessRoute, async (c) => {
-    const db = c.get("db");
-    const result = await getBusinessSettings(db);
-    return ok(c, projectBusinessSettings(result));
+    const { revision, ...settings } = await getBusinessSettingsDocument(c.get("db"));
+    return ok(c, { ...projectBusinessSettings(settings), revision });
 });
 
 // ─────────────────────────────────────────
@@ -108,18 +112,18 @@ const saveBusinessRoute = createRoute({
     responses: {
         200: {
             description: "Business settings saved",
-            content: { "application/json": { schema: messageResponse } },
+            content: { "application/json": { schema: successEnvelope(businessDocumentSchema) } },
         },
         ...errorResponses,
+        409: conflictResponse,
     },
 });
 
 app.openapi(saveBusinessRoute, async (c) => {
-    const db = c.get("db");
-    const body = c.req.valid("json");
-    await saveBusinessSettings(db, body);
+    const { expectedRevision, ...fields } = c.req.valid("json");
+    const saved = await saveBusinessSettings(c.get("db"), fields, { expectedRevision });
     await bumpCacheGeneration(c);
-    return ok(c, { message: "Business settings saved successfully" });
+    return ok(c, { ...projectBusinessSettings(saved.value), revision: saved.revision });
 });
 
 export { app as businessSettingsRoutes };

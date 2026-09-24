@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { Plus, X } from "lucide-react";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
 import {
   getApiV1AdminSettingsAuth,
   getApiV1AdminSettingsEmail,
   getApiV1AdminSettingsFirebase,
   getApiV1AdminSettingsNotificationChannels,
-  getApiV1AdminSettingsNotificationChannelsAdminChannels,
   getApiV1AdminSettingsSms,
   postApiV1AdminSettingsAuth,
   postApiV1AdminSettingsEmail,
@@ -15,6 +16,7 @@ import {
   putApiV1AdminSettingsNotificationChannelsAdminChannels,
 } from "@scalius/api-client/sdk";
 import { isReady } from "@scalius/shared/readiness";
+import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
@@ -48,8 +50,8 @@ import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardL
 /** Saved secrets come back masked; sending the mask back keeps them. */
 export const MASKED_VALUE = "••••••••••••";
 
+/** The notifications document: customer rules, staff alerts, readiness. */
 type CustomerRules = ApiResult<typeof getApiV1AdminSettingsNotificationChannels>;
-type StaffRules = ApiResult<typeof getApiV1AdminSettingsNotificationChannelsAdminChannels>;
 type EmailSettings = ApiResult<typeof getApiV1AdminSettingsEmail>;
 type SmsSettings = ApiResult<typeof getApiV1AdminSettingsSms>;
 type AuthSettings = ApiResult<typeof getApiV1AdminSettingsAuth>;
@@ -58,10 +60,6 @@ type SmsProvider = NonNullable<SmsSettings["activeProvider"]>;
 export const customerRulesQuery = {
   queryKey: queryKeys.settings.notificationChannels(),
   queryFn: () => apiData(getApiV1AdminSettingsNotificationChannels()),
-};
-export const staffRulesQuery = {
-  queryKey: queryKeys.settings.adminNotificationChannels(),
-  queryFn: () => apiData(getApiV1AdminSettingsNotificationChannelsAdminChannels()),
 };
 export const emailQuery = {
   queryKey: queryKeys.settings.email(),
@@ -100,11 +98,14 @@ function RulesTable({
   isOn,
   onToggle,
   disabled,
+  linkEvents = false,
 }: {
   columns: ReadonlyArray<{ key: string; label: string; ready: boolean }>;
   isOn: (event: OrderNotificationType, column: string) => boolean;
   onToggle: (event: OrderNotificationType, column: string) => void;
   disabled: boolean;
+  /** Event names open that message's editor. */
+  linkEvents?: boolean;
 }) {
   const events = useMessages(notificationEventMessages);
   const t = useMessages(notificationsMessages);
@@ -127,7 +128,20 @@ function RulesTable({
           </tr>
           {group.events.map((event) => (
             <tr key={event} className="border-t border-border">
-              <td className="py-1.5 pr-2">{events(event)}</td>
+              <td className="py-1.5 pr-2">
+                {linkEvents ? (
+                  <Link
+                    to="/admin/settings/notifications/$event"
+                    params={{ event }}
+                    aria-label={t("editMessage", { event: events(event) })}
+                    className="text-link hover:underline"
+                  >
+                    {events(event)}
+                  </Link>
+                ) : (
+                  events(event)
+                )}
+              </td>
               {columns.map((column) => (
                 <td key={column.key} className="text-center">
                   <label className="inline-grid size-11 place-items-center">
@@ -156,11 +170,12 @@ export function CustomerNotificationsCard() {
     label: t("customerTitle"),
     queryKey: customerRulesQuery.queryKey,
     fetchFn: customerRulesQuery.queryFn,
-    saveFn: (draft) =>
+    saveFn: (draft, expectedRevision) =>
       apiData(putApiV1AdminSettingsNotificationChannels({
         body: {
           channels: serializeCustomerNotificationConfig(buildCustomerNotificationConfig(draft.channels)),
           whatsappTemplate: draft.whatsappTemplate,
+          expectedRevision,
         },
       })),
     defaultValues: {} as CustomerRules,
@@ -177,6 +192,7 @@ export function CustomerNotificationsCard() {
       <RulesTable
         columns={columns}
         disabled={!canEdit}
+        linkEvents
         isOn={(event, channel) => config[event][channel as keyof (typeof config)[typeof event]]}
         onToggle={(event, channel) =>
           setValues((draft) => ({
@@ -191,26 +207,44 @@ export function CustomerNotificationsCard() {
   );
 }
 
+const STAFF_EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+const STAFF_EMAILS_MAX = 10;
+
+function staffEmailValid(email: string): boolean {
+  const trimmed = email.trim();
+  return !trimmed || STAFF_EMAIL.test(trimmed);
+}
+
 export function StaffNotificationsCard() {
   const t = useMessages(notificationsMessages);
   const common = useMessages(settingsMessages);
   const canEdit = useCanEditNotifications();
-  const { values, setValues, isLoadError, refetch } = useSettingsForm<StaffRules>({
+  // The same document as the customer card: one read, each card saves its part.
+  const { values, setValues, isLoadError, refetch } = useSettingsForm<CustomerRules>({
     label: t("staffTitle"),
-    queryKey: staffRulesQuery.queryKey,
-    fetchFn: staffRulesQuery.queryFn,
-    saveFn: (draft) =>
+    queryKey: customerRulesQuery.queryKey,
+    fetchFn: customerRulesQuery.queryFn,
+    saveFn: (draft, expectedRevision) =>
       apiData(putApiV1AdminSettingsNotificationChannelsAdminChannels({
-        body: { channels: serializeAdminNotificationConfig(buildAdminNotificationConfig(draft.channels)) },
+        body: {
+          channels: serializeAdminNotificationConfig(buildAdminNotificationConfig(draft.adminChannels)),
+          emailRecipients: draft.staffEmailRecipients.map((email) => email.trim()).filter(Boolean),
+          expectedRevision,
+        },
       })),
-    defaultValues: {} as StaffRules,
+    defaultValues: {} as CustomerRules,
     errorMessage: common("saveFailed"),
     canEdit,
+    isValid: (draft) => draft.staffEmailRecipients.every(staffEmailValid),
+    fields: (path) => (path.startsWith("emailRecipients.") ? `staff-email-${path.split(".")[1]}` : undefined),
   });
   if (isLoadError) return <SettingsLoadFailure title={t("loadRules")} onRetry={refetch} />;
-  if (!values.channels) return <SettingsCardLoading />;
-  const config = buildAdminNotificationConfig(values.channels);
+  if (!values.adminChannels) return <SettingsCardLoading />;
+  const config = buildAdminNotificationConfig(values.adminChannels);
   const pushReady = isReady(values.push);
+  const recipients = values.staffEmailRecipients;
+  const setRecipients = (update: (current: string[]) => string[]) =>
+    setValues((draft) => ({ ...draft, staffEmailRecipients: update(draft.staffEmailRecipients) }));
   return (
     <SettingsCard id="staffNotifications" title={t("staffTitle")} description={t("staffDescription")}>
       <RulesTable
@@ -220,12 +254,66 @@ export function StaffNotificationsCard() {
         onToggle={(event) =>
           setValues((draft) => ({
             ...draft,
-            channels: { ...draft.channels, [event]: toggled(draft.channels[event], "push") },
+            adminChannels: { ...draft.adminChannels, [event]: toggled(draft.adminChannels[event], "push") },
           }))}
       />
       {!pushReady ? (
         <p className="text-body text-muted-foreground">{t("notReady", { channel: t("push") })}</p>
       ) : null}
+      <div className="space-y-3 border-t border-border pt-4">
+        <div className="space-y-1">
+          <h3 className="text-heading-sm">{t("staffEmails")}</h3>
+          <p className="text-body text-muted-foreground">{t("staffEmailsHelp")}</p>
+        </div>
+        {recipients.map((email, index) => (
+          <div key={index} className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <SettingsField
+                id={`staff-email-${index}`}
+                label={<span className="sr-only">{t("staffEmail", { number: index + 1 })}</span>}
+                error={staffEmailValid(email) ? null : t("staffEmailInvalid")}
+              >
+                <Input
+                  id={`staff-email-${index}`}
+                  type="email"
+                  inputMode="email"
+                  autoComplete="off"
+                  // A row the merchant just added is where they type next.
+                  autoFocus={!email && index === recipients.length - 1}
+                  value={email}
+                  disabled={!canEdit}
+                  placeholder="name@example.com"
+                  onChange={(event) =>
+                    setRecipients((current) => current.map((value, at) => (at === index ? event.target.value : value)))}
+                />
+              </SettingsField>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="mt-1.5"
+              disabled={!canEdit}
+              aria-label={t("removeStaffEmail", { email: email || t("staffEmail", { number: index + 1 }) })}
+              onClick={() => setRecipients((current) => current.filter((_, at) => at !== index))}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
+        ))}
+        {recipients.length < STAFF_EMAILS_MAX ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!canEdit}
+            onClick={() => setRecipients((current) => [...current, ""])}
+          >
+            <Plus aria-hidden="true" />
+            {t("addStaffEmail")}
+          </Button>
+        ) : null}
+      </div>
     </SettingsCard>
   );
 }
@@ -238,8 +326,12 @@ function EmailFields() {
   const { values, setValue } = useSettingsForm<EmailSettings>({
     queryKey: emailQuery.queryKey,
     fetchFn: emailQuery.queryFn,
-    saveFn: (draft) => {
-      const body: ApiBody<typeof postApiV1AdminSettingsEmail> = { provider: draft.provider, sender: draft.sender.trim() };
+    saveFn: (draft, expectedRevision) => {
+      const body: ApiBody<typeof postApiV1AdminSettingsEmail> = {
+        provider: draft.provider,
+        sender: draft.sender.trim(),
+        expectedRevision,
+      };
       if (draft.apiKey !== MASKED_VALUE) body.apiKey = draft.apiKey;
       return apiData(postApiV1AdminSettingsEmail({ body }));
     },
@@ -339,8 +431,8 @@ function SmsFields() {
   const { values, setValue } = useSettingsForm<SmsSettings>({
     queryKey: smsQuery.queryKey,
     fetchFn: smsQuery.queryFn,
-    saveFn: ({ activeProvider, activeProviderConfigured: _configured, activeProviderError: _error, ...credentials }) =>
-      apiData(postApiV1AdminSettingsSms({ body: { ...credentials, activeProvider: activeProvider ?? undefined } })),
+    saveFn: ({ activeProvider, activeProviderConfigured: _configured, activeProviderError: _error, ...credentials }, expectedRevision) =>
+      apiData(postApiV1AdminSettingsSms({ body: { ...credentials, activeProvider: activeProvider ?? undefined, expectedRevision } })),
     invalidateQueryKeys: [customerRulesQuery.queryKey],
     defaultValues: {} as SmsSettings,
     errorMessage: common("saveFailed"),
@@ -399,12 +491,13 @@ function WhatsAppFields() {
   const t = useMessages(notificationsMessages);
   const common = useMessages(settingsMessages);
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
-  const auth = useSettingsForm<AuthSettings>({
+  const auth = useSettingsForm<AuthSettings, unknown, { customerAuth: number; whatsapp: number }>({
     queryKey: authQuery.queryKey,
     fetchFn: authQuery.queryFn,
-    saveFn: (draft) =>
+    saveFn: (draft, expectedRevision) =>
       apiData(postApiV1AdminSettingsAuth({
         body: {
+          expectedRevision: { whatsapp: expectedRevision.whatsapp },
           whatsappAccessToken: draft.whatsappAccessToken,
           whatsappPhoneNumberId: draft.whatsappPhoneNumberId.trim(),
           whatsappTemplateName: draft.whatsappTemplateName.trim() || "auth_otp",
@@ -418,7 +511,7 @@ function WhatsAppFields() {
   const rules = useSettingsForm<CustomerRules>({
     queryKey: customerRulesQuery.queryKey,
     fetchFn: customerRulesQuery.queryFn,
-    saveFn: (draft) =>
+    saveFn: (draft, expectedRevision) =>
       apiData(putApiV1AdminSettingsNotificationChannels({
         body: {
           channels: serializeCustomerNotificationConfig(buildCustomerNotificationConfig(draft.channels)),
@@ -426,6 +519,7 @@ function WhatsAppFields() {
             templateName: draft.whatsappTemplate.templateName.trim() || "order_status_update",
             languageCode: draft.whatsappTemplate.languageCode.trim() || "en_US",
           },
+          expectedRevision,
         },
       })),
     defaultValues: {} as CustomerRules,
@@ -548,14 +642,15 @@ function PushFields() {
           typeof data.publicConfig[key] === "string" ? (data.publicConfig[key] as string) : "",
         ]),
       ) as FirebaseValues["publicConfig"];
-      return { serviceAccount: data.serviceAccount, publicConfig: config };
+      // The revision rides along for the save; the hook keeps it out of the values.
+      return { serviceAccount: data.serviceAccount, publicConfig: config, revision: data.revision };
     },
-    saveFn: (draft) => {
-      const body: ApiBody<typeof postApiV1AdminSettingsFirebase> = { publicConfig: draft.publicConfig };
+    saveFn: (draft, expectedRevision) => {
+      const body: ApiBody<typeof postApiV1AdminSettingsFirebase> = { publicConfig: draft.publicConfig, expectedRevision };
       if (draft.serviceAccount !== MASKED_VALUE) body.serviceAccount = draft.serviceAccount;
       return apiData(postApiV1AdminSettingsFirebase({ body }));
     },
-    invalidateQueryKeys: [staffRulesQuery.queryKey],
+    invalidateQueryKeys: [customerRulesQuery.queryKey],
     defaultValues: { serviceAccount: "", publicConfig: {} as FirebaseValues["publicConfig"] },
     errorMessage: common("saveFailed"),
     canEdit: useCanEditNotifications(),
@@ -618,10 +713,9 @@ export function SendingCard() {
   const canEditGeneral = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const canEditNotifications = useCanEditNotifications();
   const rules = useQuery(customerRulesQuery);
-  const staff = useQuery(staffRulesQuery);
   const email = useQuery(emailQuery);
   const sms = useQuery(smsQuery);
-  if (!rules.data || !staff.data) return null;
+  if (!rules.data) return null;
   const status = (ready: boolean, detail?: string | null) => (ready ? detail || t("ready") : t("notSetUp"));
   return (
     <SettingsCard id="sending"
@@ -664,7 +758,7 @@ export function SendingCard() {
           <SettingsDialog
             title={t("pushTitle")}
             trigger={
-              <SettingsRow label={t("pushTitle")} disabled={!canEditNotifications} value={status(isReady(staff.data.push))} />
+              <SettingsRow label={t("pushTitle")} disabled={!canEditNotifications} value={status(isReady(rules.data.push))} />
             }
           >
             <PushFields />

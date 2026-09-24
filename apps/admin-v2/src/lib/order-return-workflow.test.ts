@@ -78,6 +78,15 @@ describe("order return workflow helpers", () => {
     expect(remaining.get("item_2")).toBe(0);
   });
 
+  it("only lets units that were sent come back", () => {
+    const remaining = getRemainingReturnableQuantities(
+      [item({ fulfillmentStatus: "pending", shippedQuantity: 2 }), item({ id: "item_2", fulfillmentStatus: "pending", shippedQuantity: 0 })],
+      [],
+    );
+    expect(remaining.get("item_1")).toBe(2);
+    expect(remaining.get("item_2")).toBe(0);
+  });
+
   it("never reports a negative outstanding receipt quantity", () => {
     const line = returnCase("receiving", 3, 2).lines[0]!;
     expect(getOutstandingReceiptQuantity({ ...line, receivedQuantity: 1 })).toBe(1);

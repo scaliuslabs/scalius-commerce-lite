@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -33,7 +33,7 @@ import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { checkoutMessages } from "~/i18n/settings-checkout";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
-import { useSaveBar } from "../shared/SaveBar";
+import { useDocumentDraft } from "../online-store/shared";
 import { useCheckoutFlowForm } from "./PaymentsSettings";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
@@ -52,7 +52,10 @@ export const checkoutReadinessQuery = {
 };
 export const customerRequestsQuery = {
   queryKey: queryKeys.settings.customerRequests(),
-  queryFn: async () => (await apiData(getApiV1AdminSettingsCustomerRequests())).policy,
+  queryFn: async () => {
+    const { policy, revision } = await apiData(getApiV1AdminSettingsCustomerRequests());
+    return { ...policy, revision };
+  },
 };
 
 const TEXT_FIELDS = [
@@ -73,6 +76,21 @@ const TEXT_FIELDS = [
   "placeOrderText",
   "processingText",
 ] as const;
+/** The agreement line's link placeholders; the storefront links each to its policy page. */
+const TERMS_TOKENS = ["{terms}", "{privacy}"] as const;
+
+/**
+ * Whether the storefront can still link both policies in the agreement line:
+ * both `{terms}` and `{privacy}`, or (copy saved before the tokens) both link
+ * names written out, which the storefront links the same way.
+ */
+export function termsTextKeepsLinks(copy: Record<string, string>): boolean {
+  const text = copy.termsText ?? "";
+  if (TERMS_TOKENS.some((token) => text.includes(token))) return TERMS_TOKENS.every((token) => text.includes(token));
+  const names = [copy.termsLinkText, copy.privacyLinkText].map((name) => name?.trim() ?? "");
+  return names.every((name) => name !== "" && text.includes(name));
+}
+
 const FORM_FIELDS: Array<[FieldKey, "askEmail" | "orderNotes" | "area"]> = [
   ["showEmailField", "askEmail"],
   ["showOrderNotesField", "orderNotes"],
@@ -95,20 +113,35 @@ function visibility(language: Language | undefined, key: FieldKey): boolean {
 
 // ── Customer contact: guest checkout + form fields ──────────────────────
 
+/** Loads the latest languages; after a revision conflict the merchant's edits stay on top. */
+function useReloadLanguages() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
+}
+
 /**
  * Form fields live on the checkout language; edit the one buyers see. With
- * no language yet, saving creates the English one with these fields.
+ * no language yet, saving creates the English one with these fields. A save
+ * sends the revision it loaded, so another tab's change is never overwritten.
  */
 function FormFields({ language, disabled }: { language: Language | undefined; disabled: boolean }) {
   const t = useMessages(checkoutMessages);
-  const queryClient = useQueryClient();
-  const saved = Object.fromEntries(FORM_FIELDS.map(([key]) => [key, visibility(language, key)])) as Record<FieldKey, boolean>;
-  const [draft, setDraft] = useState(saved);
-  const dirty = FORM_FIELDS.some(([key]) => draft[key] !== saved[key]);
-  const save = useMutation({
-    mutationFn: (): Promise<unknown> =>
-      language
-        ? apiData(putApiV1AdminSettingsCheckoutLanguagesById({ path: { id: language.id }, body: { fieldVisibility: draft } }))
+  const reload = useReloadLanguages();
+  const saved = useMemo(
+    () => Object.fromEntries(FORM_FIELDS.map(([key]) => [key, visibility(language, key)])) as Record<FieldKey, boolean>,
+    [language],
+  );
+  const { draft, setDraft } = useDocumentDraft({
+    label: t("contactTitle"),
+    saved,
+    invalid: () => disabled,
+    reload,
+    save: async (fieldVisibility) => {
+      await (language
+        ? apiData(putApiV1AdminSettingsCheckoutLanguagesById({
+            path: { id: language.id },
+            body: { fieldVisibility, expectedRevision: language.revision },
+          }))
         : apiData(postApiV1AdminSettingsCheckoutLanguages({
             body: {
               name: "English",
@@ -116,18 +149,11 @@ function FormFields({ language, disabled }: { language: Language | undefined; di
               isActive: true,
               isDefault: true,
               languageData: getCheckoutLanguagePreset("en"),
-              fieldVisibility: draft,
+              fieldVisibility,
             },
-          })),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() }),
-  });
-  useSaveBar({
-    dirty,
-    saving: save.isPending,
-    invalid: disabled,
-    label: t("contactTitle"),
-    save: () => save.mutateAsync(),
-    discard: () => setDraft(saved),
+          })));
+      await reload();
+    },
   });
   return FORM_FIELDS.map(([key, label]) => (
     <label key={key} className="flex min-h-11 items-start gap-3 py-3 text-body">
@@ -149,12 +175,12 @@ export function CustomerContactCard() {
   const languages = useQuery(languagesQuery);
   // Requiring accounts fails closed until customer sign-in is known to work.
   const signInReady = readiness.data?.hasUsableCustomerSignIn === true;
-  const { values, setValue, isLoadError, refetch } = useCheckoutFlowForm(
+  const { values, setValue, isLoaded, isLoadError, refetch } = useCheckoutFlowForm(
     (draft) => draft.guestCheckoutEnabled || signInReady,
     t("contactTitle"),
   );
   if (isLoadError) return <SettingsLoadFailure title={t("loadFlow")} onRetry={refetch} />;
-  if (values.revision === undefined) return <SettingsCardLoading />;
+  if (!isLoaded) return <SettingsCardLoading />;
   const language = checkoutLanguage(languages.data?.languages);
   return (
     <SettingsCard id="customerContact" title={t("contactTitle")}>
@@ -175,7 +201,7 @@ export function CustomerContactCard() {
       <p className="text-body text-muted-foreground">{t("phoneAlways")}</p>
       <div className="border-t border-border pt-2">
         <FormFields
-          key={language ? `${language.id}:${JSON.stringify(language.fieldVisibility)}` : "none"}
+          key={language?.id ?? "none"}
           language={language}
           disabled={!canEdit}
         />
@@ -210,18 +236,23 @@ function toDraft(language: Language | null): LanguageDraft {
 function LanguageForm({ language }: { language: Language | null }) {
   const t = useMessages(checkoutMessages);
   const common = useMessages(settingsMessages);
-  const queryClient = useQueryClient();
-  const [saved] = useState(() => toDraft(language));
-  const [draft, setDraft] = useState(saved);
+  const refresh = useReloadLanguages();
+  const saved = useMemo(() => toDraft(language), [language]);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
-  const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.settings.checkoutLanguages() });
-  const save = useMutation({
-    mutationFn: () =>
-      language
-        ? apiData(putApiV1AdminSettingsCheckoutLanguagesById({ path: { id: language.id }, body: draft }))
-        : apiData(postApiV1AdminSettingsCheckoutLanguages({ body: draft })),
-    onSuccess: refresh,
+  const { draft, setDraft } = useDocumentDraft({
+    saved,
+    fields: (path) => ({ name: "language-name", code: "language-code" } as Record<string, string>)[path],
+    invalid: (next) => !next.name.trim() || !next.code.trim() || !termsTextKeepsLinks(next.languageData),
+    reload: refresh,
+    save: async (next) => {
+      await (language
+        ? apiData(putApiV1AdminSettingsCheckoutLanguagesById({
+            path: { id: language.id },
+            body: { ...next, expectedRevision: language.revision },
+          }))
+        : apiData(postApiV1AdminSettingsCheckoutLanguages({ body: next })));
+      await refresh();
+    },
   });
   const remove = useMutation({
     mutationFn: () => apiData(deleteApiV1AdminSettingsCheckoutLanguagesById({ path: { id: language!.id } })),
@@ -230,14 +261,6 @@ function LanguageForm({ language }: { language: Language | null }) {
       await refresh();
     },
     onError: () => toast.error(common("saveFailed")),
-  });
-  useSaveBar({
-    fields: { name: "language-name", code: "language-code" },
-    dirty,
-    saving: save.isPending,
-    invalid: !draft.name.trim() || !draft.code.trim(),
-    save: () => save.mutateAsync(),
-    discard: () => setDraft(saved),
   });
   const setText = (key: string, value: string) =>
     setDraft((current) => ({ ...current, languageData: { ...current.languageData, [key]: value } }));
@@ -275,9 +298,21 @@ function LanguageForm({ language }: { language: Language | null }) {
           </SettingsField>
         ))}
       </div>
-      <SettingsField id="language-terms" label={t("termsText")}>
+      <SettingsField
+        id="language-terms"
+        label={t("termsText")}
+        help={t("termsTextHelp")}
+        error={termsTextKeepsLinks(draft.languageData) ? null : t("termsLinksMissing")}
+      >
         <Textarea id="language-terms" rows={2} value={draft.languageData.termsText ?? ""} onChange={(event) => setText("termsText", event.target.value)} />
       </SettingsField>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {(["termsLinkText", "privacyLinkText"] as const).map((key) => (
+          <SettingsField key={key} id={`language-${key}`} label={t(key)}>
+            <Input id={`language-${key}`} value={draft.languageData[key] ?? ""} onChange={(event) => setText(key, event.target.value)} />
+          </SettingsField>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
@@ -365,7 +400,10 @@ export function CustomerRequestsCard() {
     label: t("requestsTitle"),
     queryKey: customerRequestsQuery.queryKey,
     fetchFn: customerRequestsQuery.queryFn,
-    saveFn: async (draft) => (await apiData(putApiV1AdminSettingsCustomerRequests({ body: draft }))).policy,
+    saveFn: async (draft, expectedRevision) => {
+      const saved = await apiData(putApiV1AdminSettingsCustomerRequests({ body: { ...draft, expectedRevision } }));
+      return { ...saved.policy, revision: saved.revision };
+    },
     resolveSavedValues: (saved) => saved,
     defaultValues: {} as CustomerRequestPolicy,
     errorMessage: common("saveFailed"),

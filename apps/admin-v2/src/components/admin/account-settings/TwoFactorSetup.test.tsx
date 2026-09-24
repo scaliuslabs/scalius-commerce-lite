@@ -3,6 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { TwoFactorSetup } from "./TwoFactorSetup";
 import type { User } from "./ProfileHeader";
 
@@ -75,7 +76,7 @@ describe("TwoFactorSetup", () => {
   }
 
   it("issues new recovery codes only after the password and a code from the new app entry", async () => {
-    api.challenge.mockResolvedValue({ challengeId: "tfmc_1", totpUri: "otpauth://totp/Store:owner?secret=JBSWY3DP&issuer=Store", expiresAt: "" });
+    api.challenge.mockResolvedValue({ challengeId: "tfmc_1", totpUri: "otpauth://totp/Store:owner?secret=JBSWY3DPEHPK3PXP&issuer=Store", expiresAt: "" });
     api.method.mockResolvedValue({ backupCodes: ["code-one", "code-two"] });
     act(() => root.render(<TwoFactorSetup user={user} />));
 
@@ -83,22 +84,25 @@ describe("TwoFactorSetup", () => {
     type("#two-step-password", "account-password");
     await submit();
     expect(api.challenge).toHaveBeenCalledWith({ body: { method: "totp", password: "account-password" } });
-    expect(host.textContent).toContain("JBSWY3DP");
+    // The key reads in blocks of four, and the card keeps its title through the flow.
+    expect(host.textContent).toContain("JBSW Y3DP EHPK 3PXP");
+    expect(host.querySelector(".text-heading-sm")?.textContent).toBe("Two-step verification");
 
     act(() => button("Continue").click());
     type("#two-step-code", "12a3456");
     await submit();
     expect(api.method).toHaveBeenCalledWith({ body: { method: "totp", challengeId: "tfmc_1", code: "123456" } });
     expect(host.textContent).toContain("code-one");
+    expect(button("Download codes")).toBeDefined();
 
     act(() => button("Done").click());
     expect(host.textContent).not.toContain("code-one");
     expect(host.textContent).toContain("On");
   });
 
-  it("shows the server's reason and stays on the code step when the code is wrong", async () => {
+  it("says a wrong code in plain words and stays on the code step", async () => {
     auth.enable.mockResolvedValue({ data: { method: "totp", totpURI: "otpauth://totp/x?secret=ABC", backupCodes: ["r1"] } });
-    api.method.mockRejectedValue(new Error("The verification code is invalid or expired"));
+    api.method.mockRejectedValue(new AdminApiResponseError("The verification code is wrong", 400, "TWO_FACTOR_CODE_INVALID"));
     act(() => root.render(<TwoFactorSetup user={{ ...user, twoFactorEnabled: false, twoFactorMethod: null }} />));
 
     act(() => button("Turn on").click());
@@ -110,7 +114,19 @@ describe("TwoFactorSetup", () => {
     act(() => button("Continue").click());
     type("#two-step-code", "000000");
     await submit();
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain("invalid or expired");
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("That code didn't work. Check your app and try again.");
     expect(host.querySelector("#two-step-code")).not.toBeNull();
+  });
+
+  it("never shows raw server text when the server fails", async () => {
+    api.challenge.mockRejectedValue(new AdminApiResponseError("API error: 502", 502));
+    act(() => root.render(<TwoFactorSetup user={user} />));
+    act(() => button("Change method").click());
+    act(() => button("Continue").click());
+    type("#two-step-password", "account-password");
+    await submit();
+    const alert = host.querySelector('[role="alert"]')?.textContent;
+    expect(alert).toBe("Something went wrong on our side. Try again in a moment.");
+    expect(host.textContent).not.toContain("502");
   });
 });

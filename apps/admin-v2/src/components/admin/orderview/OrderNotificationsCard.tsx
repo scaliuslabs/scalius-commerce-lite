@@ -14,8 +14,9 @@ import {
 } from "~/lib/api-query-options/orders";
 import { useResendOrderNotification, useRetryOrderNotification } from "~/lib/api-mutations/orders";
 import {
-  buildReceiptDisplayGroups,
-  describeNotificationIssue,
+  canSendNotificationAgain,
+  notificationChannelLines,
+  notificationIssue,
   summarizeNotificationDelivery,
 } from "~/lib/order-notification-display";
 import { formatOrderTimestamp } from "./formatters";
@@ -33,46 +34,50 @@ function MessageRow({ orderId, message, canRetry }: {
   const r = useMessages(resourceMessages);
   const retryMutation = useRetryOrderNotification();
   const resendMutation = useResendOrderNotification();
-  const summary = summarizeNotificationDelivery(message);
-  const issue = message.receipts.length === 0 ? describeNotificationIssue(message.lastError) : null;
-  const receipts = buildReceiptDisplayGroups(message.receipts);
+  const status = summarizeNotificationDelivery(message);
+  const lines = notificationChannelLines(message.receipts);
+  const outboxIssue = message.receipts.length === 0 ? notificationIssue(message.lastError) : null;
+  const sendable = canSendNotificationAgain(message);
   const retrying = retryMutation.isPending && retryMutation.variables?.outboxId === message.id;
   const resending = resendMutation.isPending && resendMutation.variables?.outboxId === message.id;
   const sentAt = formatOrderTimestamp(message.sentAt ?? message.queuedAt ?? message.createdAt);
-  // Channel lines only when a channel failed; a clean send needs no detail.
-  const failedChannels = receipts.filter((group) => group.status === "failed" && group.lastError);
 
   return (
     <li className="space-y-1 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="font-medium">{orderDetailLabel(t, "messages.type.", message.notificationType)}</span>
-          <Badge variant={statusBadgeVariant(summary.status)}>{orderDetailLabel(t, "messages.status.", summary.status)}</Badge>
+          <Badge variant={statusBadgeVariant(status)}>{orderDetailLabel(t, "messages.status.", status)}</Badge>
           {sentAt ? <span className="text-muted-foreground">{sentAt}</span> : null}
         </div>
-        {canRetry && RETRYABLE.has(message.status) ? (
-          <Button type="button" size="sm" variant="outline" disabled={retrying} onClick={() => retryMutation.mutate({ orderId, outboxId: message.id })}>
+        {canRetry && sendable && RETRYABLE.has(message.status) ? (
+          <Button type="button" size="sm" variant="outline" loading={retrying} onClick={() => retryMutation.mutate({ orderId, outboxId: message.id })}>
             {r("retry")}
           </Button>
         ) : null}
-        {canRetry && message.status === "sent" ? (
+        {canRetry && sendable && message.status === "sent" ? (
           <Button
             type="button"
             size="sm"
             variant="outline"
-            disabled={resending}
+            loading={resending}
             onClick={() => resendMutation.mutate({ orderId, outboxId: message.id, resendRequestId: crypto.randomUUID() })}
           >
             {t("messages.sendAgain")}
           </Button>
         ) : null}
       </div>
-      {issue ? <p className="line-clamp-3 text-destructive">{issue}</p> : null}
-      {failedChannels.map((group) => (
-        <p key={group.key} className="text-destructive">
-          {orderDetailLabel(t, "messages.channel.", group.channel)}: {group.lastError}
+      {lines.map((line) => (
+        <p key={line.key} className={line.issue ? "text-destructive" : "text-muted-foreground"}>
+          {[
+            orderDetailLabel(t, "messages.channel.", line.channel),
+            line.recipient ? line.recipient : line.count > 1 ? t("messages.recipients", { count: line.count }) : null,
+            orderDetailLabel(t, "messages.status.", line.status),
+            line.issue ? t(`messages.issue.${line.issue}`) : null,
+          ].filter(Boolean).join(" · ")}
         </p>
       ))}
+      {outboxIssue ? <p className="text-destructive">{t(`messages.issue.${outboxIssue}`)}</p> : null}
     </li>
   );
 }

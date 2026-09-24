@@ -36,7 +36,7 @@ function get(sql: string, ...params: string[]): Row {
   return sqlite!.prepare(sql).get(...params) as Row;
 }
 
-/** A 9.99 product at 12.5% off (8.74 each), 10% zone tax on merchandise only. */
+/** A 9.99 product at 12.5% off (৳9 each: BDT cash rounding), 10% zone tax on merchandise only. */
 function seedCatalog(pricesIncludeTax: boolean): void {
   sqlite!.exec(`
     INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
@@ -86,13 +86,14 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     const db = open(provider);
     seedCatalog(false);
 
-    // 3 × round-half-up(999 × 0.875 = 874.125) = 2622; taxable 2622 − 100 = 2522; VAT 252.2 → 252.
+    // 999 × 0.875 = 874.125 paisa rounds half-up to whole taka (900); 3 × 900 = 2700;
+    // taxable 2700 − 100 = 2600; VAT 260. Shipping keeps its exact paisa.
     await expect(quoteManualOrder(db, manualOrder())).resolves.toMatchObject({
-      subtotalAmount: 26.22,
+      subtotalAmount: 27,
       shippingAmount: 60.1,
       discountAmount: 1,
-      taxAmount: 2.52,
-      totalAmount: 87.84,
+      taxAmount: 2.6,
+      totalAmount: 88.7,
     });
     const created = await createOrder(db, manualOrder(), "admin_1");
 
@@ -101,25 +102,25 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
         total_amount_minor, paid_amount_minor, balance_due_minor
       FROM orders WHERE id = ?`, created.id);
     expect(order).toEqual({
-      subtotal_amount_minor: 2622,
+      subtotal_amount_minor: 2700,
       shipping_amount_minor: 6010,
       discount_amount_minor: 100,
-      tax_amount_minor: 252,
-      total_amount_minor: 8784,
+      tax_amount_minor: 260,
+      total_amount_minor: 8870,
       paid_amount_minor: 0,
-      balance_due_minor: 8784,
+      balance_due_minor: 8870,
     });
     expect(Number(order.subtotal_amount_minor) + Number(order.shipping_amount_minor)
       - Number(order.discount_amount_minor) + Number(order.tax_amount_minor)).toBe(order.total_amount_minor);
     expect(all(`
       SELECT unit_price_minor, quantity, line_subtotal_minor, discount_amount_minor, taxable_amount_minor, tax_amount_minor
       FROM order_items WHERE order_id = ?`, created.id)).toEqual([{
-      unit_price_minor: 874,
+      unit_price_minor: 900,
       quantity: 3,
-      line_subtotal_minor: 2622,
+      line_subtotal_minor: 2700,
       discount_amount_minor: 100,
-      taxable_amount_minor: 2522,
-      tax_amount_minor: 252,
+      taxable_amount_minor: 2600,
+      tax_amount_minor: 260,
     }]);
   });
 
@@ -127,9 +128,9 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     const db = open(provider);
     seedCatalog(true);
 
-    // Gross 2522 already contains VAT: 2522 × 1000 / 11000 = 229.27 → 229.
+    // Gross 2600 already contains VAT: 2600 × 1000 / 11000 = 236.36 → 236.
     const quote = await quoteManualOrder(db, manualOrder());
-    expect(quote).toMatchObject({ subtotalAmount: 26.22, taxAmount: 2.29, totalAmount: 85.32 });
+    expect(quote).toMatchObject({ subtotalAmount: 27, taxAmount: 2.36, totalAmount: 86.1 });
   });
 
   it("settles a deposit then the balance to exactly the order total", async () => {
@@ -158,7 +159,7 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     sqlite!.exec("INSERT INTO cod_tracking (id, order_id, cod_status) VALUES ('cod', 'order_cod', 'pending')");
 
     await expect(recordCODCollection(db, { orderId: "order_cod", collectedBy: "Courier", collectedAmountMinor: 9_999 }))
-      .rejects.toThrow("outstanding balance (100)");
+      .rejects.toThrow("Record the full cash balance of ৳100.");
     await recordCODCollection(db, { orderId: "order_cod", collectedBy: "Courier", collectedAmountMinor: 10_000 });
     await recordCODCollection(db, { orderId: "order_cod", collectedBy: "Courier", collectedAmountMinor: 10_000 });
     expect(get("SELECT payment_status, paid_amount_minor, balance_due_minor FROM orders"))
@@ -170,8 +171,8 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     // 40.5 BDT is converted once to 4050 paisa; the order keeps the exact remainder.
     await expect(processRefund(db, { orderId: "order_cod", amount: 40.5, reason: "damaged", manualSettlementConfirmed: true }))
       .resolves.toMatchObject({ success: true, amount: 40.5, isFullRefund: false });
-    expect(get("SELECT status, paid_amount_minor FROM orders"))
-      .toEqual({ status: "partially_refunded", paid_amount_minor: 5_950 });
+    expect(get("SELECT status, payment_status, paid_amount_minor, balance_due_minor FROM orders"))
+      .toEqual({ status: "delivered", payment_status: "partially_refunded", paid_amount_minor: 5_950, balance_due_minor: 0 });
     expect(get("SELECT amount_minor FROM order_payments WHERE payment_type = 'refund'")).toEqual({ amount_minor: 4_050 });
   });
 
@@ -193,7 +194,7 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
 
     const feed = await getStorefrontFeedProducts(db, { limit: 10 });
     expect(feed.products.map((product) => ({ id: product.id, price: product.price, sale: product.discountedPrice })))
-      .toEqual([{ id: "tee", price: 9.99, sale: 8.74 }]);
+      .toEqual([{ id: "tee", price: 9.99, sale: 9 }]);
     expect(feed.products[0]!.variants[0]).toMatchObject({ price: 9.99 });
 
     // 0.1 + 0.2: SKUs at 10 and 25 − 5 paisa total exactly 30, presented as 0.3.
@@ -205,10 +206,12 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     expect(cart.subtotalMinor).toBe(30);
     expect(presentStorefrontCartValidation(cart, 2).subtotal).toBe(0.3);
 
-    // Decimal price filters resolve against the saved store currency inside the query.
+    // Decimal price filters resolve against the saved store currency inside the query,
+    // including BDT whole-taka cash rounding of percentage prices (8.74 → 9).
     const listed = async (minPrice: number, maxPrice: number) =>
       (await getStorefrontProducts(db, { minPrice, maxPrice })).products.map((product) => product.id);
-    await expect(listed(8.7, 8.75)).resolves.toEqual(["tee"]);
+    await expect(listed(8.99, 9)).resolves.toEqual(["tee"]);
+    await expect(listed(8.7, 8.75)).resolves.toEqual([]);
     sqlite!.exec(`INSERT INTO settings (id, key, value, type, category)
       VALUES ('currency_doc', 'document', '{"currencyCode":"KWD"}', 'json', 'currency')`);
     await expect(listed(0.87, 0.875)).resolves.toEqual(["tee"]);

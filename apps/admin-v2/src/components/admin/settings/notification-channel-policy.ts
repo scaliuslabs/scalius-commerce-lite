@@ -55,7 +55,7 @@ export function buildCustomerNotificationConfig(
   for (const event of ORDER_NOTIFICATION_TYPES) {
     const saved = channelData?.[event];
     config[event] = {
-      email: Array.isArray(saved) ? saved.includes("email") : event !== "support_request_submitted",
+      email: Array.isArray(saved) ? saved.includes("email") : true,
       sms: Array.isArray(saved) && saved.includes("sms"),
       whatsapp: Array.isArray(saved) && saved.includes("whatsapp"),
     };

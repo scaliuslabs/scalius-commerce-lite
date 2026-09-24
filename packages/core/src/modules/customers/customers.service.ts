@@ -10,8 +10,9 @@ import {
     deliveryProviders,
     deliveryShipments,
     orderItems,
-    orderNotificationDeliveryReceipts,
+    orderNotificationOutbox,
     orderPayments,
+    orderSupportRequests,
     orders,
     OrderStatus,
     paymentPlans,
@@ -19,7 +20,7 @@ import {
     media,
     products,
 } from "@scalius/database/schema";
-import { sql, isNull, inArray, asc, desc, eq, and, or, type SQL } from "drizzle-orm";
+import { sql, isNull, isNotNull, inArray, asc, desc, eq, and, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
@@ -73,6 +74,7 @@ export interface CustomerOrderShipmentSummary {
     providerType: string;
     providerName: string | null;
     status: string;
+    statusLabel: string;
     rawStatus: string | null;
     trackingId: string | null;
     trackingUrl: string | null;
@@ -126,68 +128,221 @@ function historicalOrderImageUrl(
 
 export interface CustomerOrderDetailTimelineEvent {
     id: string;
-    type: "order" | "payment" | "refund" | "request" | "shipment" | "notification";
+    type: "order" | "payment" | "refund" | "request";
     status: string;
     label: string;
     happenedAt: string | null;
     details?: string | null;
 }
 
-export interface CustomerOrderNotificationReceiptRow {
-    id: string;
-    notificationType: string;
-    channel: string;
-    status: string;
-    provider: string;
-    providerStatus: string | null;
-    acceptedAt: number | null;
-    deliveredAt: number | null;
-    failedAt: number | null;
-    skippedAt: number | null;
-    updatedAt: number | null;
-    createdAt: number | null;
-}
+/** Where an order is, in the buyer's words; never provider or internal states. */
+type CustomerOrderMilestone =
+    | "placed"
+    | "confirmed"
+    | "shipped"
+    | "delivered"
+    | "cancelled"
+    | "returned"
+    | "refunded"
+    | "partially_refunded";
 
-export interface CustomerOrderNotificationReceipt {
-    id: string;
-    notificationType: string;
-    channel: string;
-    status: string;
-    provider: string;
-    providerStatus: string | null;
-    acceptedAt: string | null;
-    deliveredAt: string | null;
-    failedAt: string | null;
-    skippedAt: string | null;
-    updatedAt: string | null;
-    createdAt: string | null;
-}
+const CUSTOMER_ORDER_STEPS = ["placed", "confirmed", "shipped", "delivered"] as const;
+type CustomerOrderStep = typeof CUSTOMER_ORDER_STEPS[number];
 
-const normalizeStatusLabel = (status: string): string =>
-    status
-        .split("_")
-        .filter(Boolean)
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(" ");
-
-const NOTIFICATION_CHANNEL_LABELS: Record<string, string> = {
-    email: "Email",
-    sms: "SMS",
-    whatsapp: "WhatsApp",
+const MILESTONE_COPY: Record<CustomerOrderMilestone, { label: string; details: string | null }> = {
+    placed: { label: "Order placed", details: "We received your order." },
+    confirmed: { label: "Confirmed", details: "The store confirmed your order." },
+    shipped: { label: "On its way", details: "Your order is with the courier." },
+    delivered: { label: "Delivered", details: null },
+    cancelled: { label: "Cancelled", details: null },
+    returned: { label: "Returned", details: null },
+    refunded: { label: "Refunded", details: null },
+    partially_refunded: { label: "Partly refunded", details: null },
 };
 
-const getNotificationChannelLabel = (channel: string): string =>
-    NOTIFICATION_CHANNEL_LABELS[channel] ?? normalizeStatusLabel(channel);
+const ORDER_STATUS_MILESTONE: Record<string, CustomerOrderMilestone> = {
+    pending: "placed",
+    incomplete: "placed",
+    confirmed: "confirmed",
+    processing: "confirmed",
+    shipped: "shipped",
+    delivered: "delivered",
+    completed: "delivered",
+    cancelled: "cancelled",
+    returned: "returned",
+    refunded: "refunded",
+    partially_refunded: "partially_refunded",
+};
+
+/** Every status change is recorded once in the notification outbox, whichever channels are on. */
+const NOTIFICATION_MILESTONE: Record<string, CustomerOrderMilestone> = {
+    order_confirmed: "confirmed",
+    order_processing: "confirmed",
+    order_shipped: "shipped",
+    order_delivered: "delivered",
+    order_completed: "delivered",
+    order_cancelled: "cancelled",
+    order_returned: "returned",
+    order_refunded: "refunded",
+    order_partially_refunded: "partially_refunded",
+};
+
+/** The one status word a buyer sees for an order ("On its way"). */
+export function customerOrderStatusLabel(status: string): string {
+    if (status === OrderStatus.INCOMPLETE) return "Awaiting payment";
+    return MILESTONE_COPY[ORDER_STATUS_MILESTONE[status] ?? "placed"].label;
+}
+
+const SHIPMENT_STATUS_LABELS: Record<string, string> = {
+    picked_up: "On its way",
+    in_transit: "On its way",
+    out_for_delivery: "Out for delivery",
+    delivered: "Delivered",
+    partial_delivered: "Partly delivered",
+    delivery_failed: "Delivery attempt failed",
+    pickup_failed: "Delayed",
+    on_hold: "Delayed",
+    returned: "Returned to the store",
+    cancelled: "Cancelled",
+};
+
+/** A courier status in buyer words; booking and sync states read "Booked with courier". */
+export function customerShipmentStatusLabel(status: string): string {
+    return SHIPMENT_STATUS_LABELS[status] ?? "Booked with courier";
+}
+
+export interface CustomerOrderProgress {
+    steps: Array<{ key: CustomerOrderStep; label: string; done: boolean; happenedAt: string | null }>;
+    /** Set when the order left the normal path (cancelled, returned, refunded). */
+    outcome: { key: CustomerOrderMilestone; label: string; happenedAt: string | null } | null;
+}
+
+export interface CustomerOrderTrackingInput {
+    order: { id: string; status: string; createdAt: number | null };
+    statusEvents: Array<{ notificationType: string; createdAt: number | null }>;
+    shipments: Array<{ createdAt: string | null; providerName: string | null; courierName: string | null }>;
+    payments: Array<{ id: string; status: string; createdAt: string | null; updatedAt: string | null }>;
+    refunds: Array<{
+        id: string;
+        status: string;
+        label: string;
+        message: string;
+        refundedAt: string | null;
+        failedAt: string | null;
+        updatedAt: string | null;
+        createdAt: string | null;
+    }>;
+    requests: Array<{
+        id: string;
+        status: string;
+        label: string;
+        reason: string;
+        submittedAt: string | null;
+        updatedAt: string | null;
+        createdAt: string | null;
+    }>;
+}
+
+const PAYMENT_EVENT_LABELS: Record<string, string> = {
+    confirmed: "Payment received",
+    failed: "Payment didn't go through",
+};
+
+/**
+ * One step tracker (placed, confirmed, on its way, delivered) plus a short
+ * dated list of what happened, newest first, in buyer words only.
+ */
+export function buildCustomerOrderTracking(input: CustomerOrderTrackingInput): {
+    progress: CustomerOrderProgress;
+    timeline: CustomerOrderDetailTimelineEvent[];
+} {
+    const reachedAt = new Map<CustomerOrderMilestone, string>();
+    const reach = (milestone: CustomerOrderMilestone, at: string | null) => {
+        const known = reachedAt.get(milestone);
+        if (at && (!known || at < known)) reachedAt.set(milestone, at);
+    };
+    reach("placed", timestampToIso(input.order.createdAt));
+    for (const event of input.statusEvents) {
+        const milestone = NOTIFICATION_MILESTONE[event.notificationType];
+        if (milestone) reach(milestone, timestampToIso(event.createdAt));
+    }
+    if (!reachedAt.has("shipped")) {
+        reach("shipped", input.shipments.map((shipment) => shipment.createdAt).filter(Boolean).sort()[0] ?? null);
+    }
+    const courier = input.shipments.find((shipment) => shipment.providerName || shipment.courierName);
+
+    const current = ORDER_STATUS_MILESTONE[input.order.status] ?? "placed";
+    const stepIndex = CUSTOMER_ORDER_STEPS.indexOf(current as CustomerOrderStep);
+    const reachedIndex = stepIndex >= 0
+        ? stepIndex
+        : Math.max(...CUSTOMER_ORDER_STEPS.map((step, index) => reachedAt.has(step) ? index : 0));
+    const progress: CustomerOrderProgress = {
+        steps: CUSTOMER_ORDER_STEPS.map((key, index) => ({
+            key,
+            label: MILESTONE_COPY[key].label,
+            done: index <= reachedIndex,
+            happenedAt: index <= reachedIndex ? reachedAt.get(key) ?? null : null,
+        })),
+        outcome: stepIndex >= 0
+            ? null
+            : { key: current, label: MILESTONE_COPY[current].label, happenedAt: reachedAt.get(current) ?? null },
+    };
+
+    const timeline: CustomerOrderDetailTimelineEvent[] = [...reachedAt].map(([milestone, happenedAt]) => ({
+        id: `order:${input.order.id}:${milestone}`,
+        type: "order" as const,
+        status: milestone,
+        label: MILESTONE_COPY[milestone].label,
+        happenedAt,
+        details: milestone === "shipped" && courier
+            ? `With ${courier.providerName || courier.courierName}.`
+            : MILESTONE_COPY[milestone].details,
+    }));
+    for (const payment of input.payments) {
+        const label = PAYMENT_EVENT_LABELS[payment.status];
+        if (!label) continue;
+        timeline.push({
+            id: `payment:${payment.id}`,
+            type: "payment",
+            status: payment.status,
+            label,
+            happenedAt: payment.updatedAt ?? payment.createdAt,
+            details: null,
+        });
+    }
+    for (const refund of input.refunds) {
+        timeline.push({
+            id: `refund:${refund.id}`,
+            type: "refund",
+            status: refund.status,
+            label: refund.label,
+            happenedAt: refund.refundedAt ?? refund.failedAt ?? refund.updatedAt ?? refund.createdAt,
+            details: refund.message,
+        });
+    }
+    for (const request of input.requests) {
+        timeline.push({
+            id: `request:${request.id}`,
+            type: "request",
+            status: request.status,
+            label: request.label,
+            happenedAt: request.submittedAt ?? request.updatedAt ?? request.createdAt,
+            details: request.reason,
+        });
+    }
+    timeline.sort((a, b) => (b.happenedAt ?? "").localeCompare(a.happenedAt ?? ""));
+    return { progress, timeline };
+}
 
 const CUSTOMER_CLOSED_BALANCE_ORDER_STATUSES = [
     OrderStatus.CANCELLED,
     OrderStatus.REFUNDED,
     OrderStatus.RETURNED,
-    OrderStatus.PARTIALLY_REFUNDED,
 ] as const;
 const CUSTOMER_CLOSED_BALANCE_ORDER_STATUS_SET = new Set<string>(CUSTOMER_CLOSED_BALANCE_ORDER_STATUSES);
 
 const CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUSES = [
+    PaymentStatus.PARTIALLY_REFUNDED,
     PaymentStatus.REFUNDED,
 ] as const;
 const CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUS_SET = new Set<string>(CUSTOMER_CLOSED_BALANCE_PAYMENT_STATUSES);
@@ -311,66 +466,6 @@ export function customerAccountOrderVisibilityCondition(customerId: string): SQL
         customerAccountOwnershipCondition(customerId),
         isNull(orders.deletedAt),
     )!;
-}
-
-export function buildCustomerOrderBaseTimelineEvents(order: {
-    id: string;
-    status: string;
-    createdAt: number | null;
-    updatedAt: number | null;
-}): CustomerOrderDetailTimelineEvent[] {
-    const currentStatusLabel = normalizeStatusLabel(order.status);
-    return [
-        {
-            id: `order-created:${order.id}`,
-            type: "order",
-            status: "placed",
-            label: "Order placed",
-            happenedAt: timestampToIso(order.createdAt),
-            details: "We received your order.",
-        },
-        {
-            id: `order-status:${order.id}:${order.status}`,
-            type: "order",
-            status: order.status,
-            label: `Current status: ${currentStatusLabel}`,
-            happenedAt: timestampToIso(order.updatedAt ?? order.createdAt),
-            details: `Order is currently ${currentStatusLabel}.`,
-        },
-    ];
-}
-
-export function projectCustomerOrderNotifications(
-    receipts: CustomerOrderNotificationReceiptRow[],
-): CustomerOrderNotificationReceipt[] {
-    return receipts.map((receipt) => ({
-        ...receipt,
-        acceptedAt: timestampToIso(receipt.acceptedAt),
-        deliveredAt: timestampToIso(receipt.deliveredAt),
-        failedAt: timestampToIso(receipt.failedAt),
-        skippedAt: timestampToIso(receipt.skippedAt),
-        updatedAt: timestampToIso(receipt.updatedAt),
-        createdAt: timestampToIso(receipt.createdAt),
-    }));
-}
-
-export function buildCustomerOrderNotificationTimelineEvents(
-    notifications: CustomerOrderNotificationReceipt[],
-): CustomerOrderDetailTimelineEvent[] {
-    return notifications.map((notification) => ({
-        id: `notification:${notification.id}`,
-        type: "notification",
-        status: notification.status,
-        label: `${getNotificationChannelLabel(notification.channel)} notification ${normalizeStatusLabel(notification.status)}`,
-        happenedAt:
-            notification.deliveredAt ??
-            notification.acceptedAt ??
-            notification.failedAt ??
-            notification.skippedAt ??
-            notification.updatedAt ??
-            notification.createdAt,
-        details: normalizeStatusLabel(notification.notificationType),
-    }));
 }
 
 export async function listCustomers(
@@ -629,29 +724,27 @@ export async function updateCustomer(
         if (data.area !== undefined) areaName = data.area ? locMap.get(data.area) ?? null : null;
     }
 
-    const updateData = {
-        ...data,
+    const next = {
+        name: data.name ?? existing.name,
+        email: data.email !== undefined ? data.email : existing.email,
+        phone: data.phone ?? existing.phone,
+        address: data.address !== undefined ? data.address : existing.address,
+        city: data.city !== undefined ? data.city : existing.city,
+        zone: data.zone !== undefined ? data.zone : existing.zone,
+        area: data.area !== undefined ? data.area : existing.area,
         cityName,
         zoneName,
         areaName,
-        updatedAt: sql`unixepoch()`,
     };
+    // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
+    if ((Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
 
     await db.batch([
-        db.update(customers).set(updateData).where(eq(customers.id, id)),
+        db.update(customers).set({ ...data, cityName, zoneName, areaName, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
         db.insert(customerHistory).values({
             id: "hist_" + nanoid(),
             customerId: id,
-            name: data.name ?? existing.name,
-            email: data.email !== undefined ? data.email : existing.email,
-            phone: data.phone ?? existing.phone,
-            address: data.address !== undefined ? data.address : existing.address,
-            city: data.city !== undefined ? data.city : existing.city,
-            zone: data.zone !== undefined ? data.zone : existing.zone,
-            area: data.area !== undefined ? data.area : existing.area,
-            cityName,
-            zoneName,
-            areaName,
+            ...next,
             changeType: "updated",
             createdAt: sql`unixepoch()`,
         }),
@@ -800,6 +893,7 @@ export async function getCustomerOrders(
     const customerOrdersQuery = db
         .select({
             id: orders.id,
+            orderNumber: orders.orderNumber,
             invoiceNumber: orders.invoiceNumber,
             status: orders.status,
             ...orderMoneySelection(orders),
@@ -839,8 +933,10 @@ export async function getCustomerOrders(
         }>,
         Array<{
             id: string;
+            orderNumber: number | null;
             invoiceNumber: number | null;
             status: string;
+            currencyCode: string;
             currencyDecimalPlaces: number;
             totalAmountMinor: number;
             shippingAmountMinor: number;
@@ -887,9 +983,10 @@ export async function getCustomerOrders(
     const orderIds = customerOrders.map((o) => o.id);
     const itemsByOrder = new Map<string, CustomerOrderListItem[]>();
     const latestShipmentByOrder = new Map<string, CustomerOrderShipmentSummary>();
+    const openRequestTypeByOrder = new Map<string, string>();
 
     if (orderIds.length > 0) {
-        const [allItems, allShipments] = await db.batch([
+        const [allItems, allShipments, openRequests] = await db.batch([
             db
                 .select({
                     orderId: orderItems.orderId,
@@ -926,6 +1023,14 @@ export async function getCustomerOrders(
                 .leftJoin(deliveryProviders, eq(deliveryProviders.id, deliveryShipments.providerId))
                 .where(sql`${deliveryShipments.orderId} IN ${orderIds}`)
                 .orderBy(desc(deliveryShipments.createdAt)),
+            // A request holds its active key only while it is open.
+            db
+                .select({ orderId: orderSupportRequests.orderId, type: orderSupportRequests.type })
+                .from(orderSupportRequests)
+                .where(and(
+                    inArray(orderSupportRequests.orderId, orderIds),
+                    isNotNull(orderSupportRequests.activeKey),
+                )),
         ] as Parameters<Database["batch"]>[0]) as [
             Array<CustomerOrderListItem & {
                 productImageObjectKey: string | null;
@@ -945,7 +1050,10 @@ export async function getCustomerOrders(
                 updatedAt: number | null;
                 createdAt: number | null;
             }>,
+            Array<{ orderId: string; type: string }>,
         ];
+
+        for (const request of openRequests) openRequestTypeByOrder.set(request.orderId, request.type);
 
         for (const { productImageObjectKey, productImageStatus, ...item } of allItems) {
             const list = itemsByOrder.get(item.orderId) || [];
@@ -966,6 +1074,7 @@ export async function getCustomerOrders(
                 providerType: shipment.providerType,
                 providerName: shipment.providerName,
                 status: shipment.status,
+                statusLabel: customerShipmentStatusLabel(shipment.status),
                 rawStatus: shipment.rawStatus,
                 trackingId: shipment.trackingId,
                 trackingUrl: shipment.trackingUrl,
@@ -981,10 +1090,12 @@ export async function getCustomerOrders(
     const formattedOrders = customerOrders.map((order) => ({
         ...order,
         ...orderMoneyAmounts(order),
+        statusLabel: customerOrderStatusLabel(order.status),
         balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
         createdAt: order.createdAt
             ? new Date(order.createdAt * 1000).toISOString()
             : null,
+        openSupportRequestType: openRequestTypeByOrder.get(order.id) ?? null,
         latestShipment: latestShipmentByOrder.get(order.id) ?? null,
         items: (itemsByOrder.get(order.id) || []).map(({ unitPriceMinor, ...item }) => ({
             ...item,
@@ -1013,6 +1124,7 @@ export async function getCustomerOwnedOrderForDetail(
     const order = await db
         .select({
             id: orders.id,
+            orderNumber: orders.orderNumber,
             invoiceNumber: orders.invoiceNumber,
             status: orders.status,
             ...orderMoneySelection(orders),
@@ -1033,6 +1145,8 @@ export async function getCustomerOwnedOrderForDetail(
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             fulfillmentStatus: orders.fulfillmentStatus,
             expectedDelivery: orders.expectedDelivery,
+            customerName: orders.customerName,
+            customerPhone: orders.customerPhone,
             shippingAddress: orders.shippingAddress,
             city: orders.city,
             zone: orders.zone,
@@ -1167,32 +1281,18 @@ export async function getCustomerOrderDetailForOrder(
             .limit(1),
         db
             .select({
-                id: orderNotificationDeliveryReceipts.id,
-                notificationType: orderNotificationDeliveryReceipts.notificationType,
-                channel: orderNotificationDeliveryReceipts.channel,
-                status: orderNotificationDeliveryReceipts.status,
-                provider: orderNotificationDeliveryReceipts.provider,
-                providerStatus: orderNotificationDeliveryReceipts.providerStatus,
-                acceptedAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.acceptedAt} AS INTEGER)`,
-                deliveredAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.deliveredAt} AS INTEGER)`,
-                failedAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.failedAt} AS INTEGER)`,
-                skippedAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.skippedAt} AS INTEGER)`,
-                updatedAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.updatedAt} AS INTEGER)`,
-                createdAt: sql<number>`CAST(${orderNotificationDeliveryReceipts.createdAt} AS INTEGER)`,
+                notificationType: orderNotificationOutbox.notificationType,
+                createdAt: orderNotificationOutbox.createdAt,
             })
-            .from(orderNotificationDeliveryReceipts)
-            .where(and(
-                eq(orderNotificationDeliveryReceipts.orderId, orderId),
-                inArray(orderNotificationDeliveryReceipts.channel, ["email", "sms", "whatsapp"]),
-            ))
-            .orderBy(desc(orderNotificationDeliveryReceipts.createdAt)),
+            .from(orderNotificationOutbox)
+            .where(eq(orderNotificationOutbox.orderId, orderId)),
         ] as Parameters<Database["batch"]>[0]),
         listOrderRefundAttempts(db, orderId, { audience: "customer" }),
         listOrderSupportRequests(db, orderId),
         getCustomerRequestPolicy(db),
     ]);
 
-    const [items, shipments, payments, plans, codRows, notificationReceipts] = batchedRows as [
+    const [items, shipments, payments, plans, codRows, statusEvents] = batchedRows as [
         Array<{
             id: string;
             productId: string;
@@ -1259,7 +1359,7 @@ export async function getCustomerOrderDetailForOrder(
             collectedAt: number | null;
             updatedAt: number | null;
         }>,
-        CustomerOrderNotificationReceiptRow[],
+        Array<{ notificationType: string; createdAt: number | null }>,
     ];
 
     const amount = (minor: number) => fromMinor(minor, order.currencyDecimalPlaces);
@@ -1279,6 +1379,7 @@ export async function getCustomerOrderDetailForOrder(
 
     const formattedShipments = shipments.map(({ shipmentAmountMinor, ...shipment }) => ({
         ...shipment,
+        statusLabel: customerShipmentStatusLabel(shipment.status),
         shipmentAmount: optionalAmount(shipmentAmountMinor),
         lastChecked: timestampToIso(shipment.lastChecked),
         updatedAt: timestampToIso(shipment.updatedAt),
@@ -1321,7 +1422,6 @@ export async function getCustomerOrderDetailForOrder(
         }
         : null;
 
-    const notifications = projectCustomerOrderNotifications(notificationReceipts);
     const activeRefundOperation = summarizeActiveRefundOperation(refundAttemptViews, "customer");
     const supportRequestActions = applyCustomerRequestPolicyToSupportActions(
         customerRequestPolicy,
@@ -1332,66 +1432,22 @@ export async function getCustomerOrderDetailForOrder(
         }),
     );
 
-    const timeline: CustomerOrderDetailTimelineEvent[] = buildCustomerOrderBaseTimelineEvents(order);
-
-    for (const payment of formattedPayments) {
-        timeline.push({
-            id: `payment:${payment.id}`,
-            type: "payment",
-            status: payment.status,
-            label: `Payment ${normalizeStatusLabel(payment.status)}`,
-            happenedAt: payment.updatedAt ?? payment.createdAt,
-            details: `${normalizeStatusLabel(payment.paymentMethod)} ${normalizeStatusLabel(payment.paymentType)} payment`,
-        });
-    }
-
-    for (const refund of refundAttemptViews) {
-        timeline.push({
-            id: `refund:${refund.id}`,
-            type: "refund",
-            status: refund.status,
-            label: refund.label,
-            happenedAt: refund.refundedAt ?? refund.failedAt ?? refund.lastProbeAt ?? refund.updatedAt ?? refund.createdAt,
-            details: refund.message,
-        });
-    }
-
-    for (const request of supportRequests) {
-        timeline.push({
-            id: `request:${request.id}`,
-            type: "request",
-            status: request.status,
-            label: request.label,
-            happenedAt: request.submittedAt ?? request.updatedAt ?? request.createdAt,
-            details: request.reason,
-        });
-    }
-
-    for (const shipment of formattedShipments) {
-        timeline.push({
-            id: `shipment:${shipment.id}`,
-            type: "shipment",
-            status: shipment.status,
-            label: `Shipment ${normalizeStatusLabel(shipment.status)}`,
-            happenedAt: shipment.lastChecked ?? shipment.updatedAt ?? shipment.createdAt,
-            details: shipment.trackingId ? `Tracking ID: ${shipment.trackingId}` : shipment.courierName,
-        });
-    }
-
-    timeline.push(...buildCustomerOrderNotificationTimelineEvents(notifications));
-
-    timeline.sort((a, b) => {
-        if (!a.happenedAt && !b.happenedAt) return 0;
-        if (!a.happenedAt) return 1;
-        if (!b.happenedAt) return -1;
-        return new Date(a.happenedAt).getTime() - new Date(b.happenedAt).getTime();
+    const { progress, timeline } = buildCustomerOrderTracking({
+        order,
+        statusEvents,
+        shipments: formattedShipments,
+        payments: formattedPayments,
+        refunds: refundAttemptViews,
+        requests: supportRequests,
     });
 
     return {
         order: {
             id: order.id,
+            orderNumber: order.orderNumber,
             invoiceNumber: order.invoiceNumber,
             status: order.status,
+            statusLabel: customerOrderStatusLabel(order.status),
             ...orderMoneyAmounts(order),
             balanceDue: amount(getCustomerVisibleBalanceDueMinor(order)),
             currencyCode: order.currencyCode,
@@ -1412,6 +1468,8 @@ export async function getCustomerOrderDetailForOrder(
             paymentMethod: order.paymentMethod,
             fulfillmentStatus: order.fulfillmentStatus,
             expectedDelivery: order.expectedDelivery,
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
             shippingAddress: order.shippingAddress,
             city: order.city,
             zone: order.zone,
@@ -1433,7 +1491,7 @@ export async function getCustomerOrderDetailForOrder(
         supportRequestIntro: getCustomerRequestIntro(customerRequestPolicy),
         paymentPlan,
         cod,
-        notifications,
+        progress,
         timeline,
     };
 }

@@ -65,6 +65,8 @@ export function useMediaManager({
   const [showPreview, setShowPreview] = useState(false);
   const [viewState, setViewState] = useState<MediaLibraryView>("ready");
   const [isMutating, setIsMutating] = useState(false);
+  // Finished upload rows leave the queue; their files stay resolvable for selection.
+  const [uploadedFiles, setUploadedFiles] = useState<LibraryMediaFile[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectionAnchorId = useRef<string | null>(null);
   const unavailableFileIdSet = useMemo(
@@ -103,6 +105,7 @@ export function useMediaManager({
     capability,
     folderId: currentFolderId === "all" ? null : currentFolderId,
     onUploadComplete: (uploaded) => {
+      setUploadedFiles((current) => [...uploaded, ...current]);
       if (onSelectMultiple) {
         setSelectedFileIds((current) => [...new Set([...current, ...uploaded.map((file) => file.id)])]);
         setSelectionMode(true);
@@ -293,7 +296,6 @@ export function useMediaManager({
     [isFileUnavailable, media.files],
   );
 
-  const completedUploads = upload.queue.flatMap((item) => item.result ? [item.result] : []);
   const initialSelectionSource = initialSelectedFiles.map((file) => ({
     ...file,
     id: file.id.replace(/^temp_/, ""),
@@ -301,13 +303,13 @@ export function useMediaManager({
   const selectedFiles = resolveSelectedMedia<MediaFile>(
     selectedFileIds,
     media.files,
-    completedUploads,
+    uploadedFiles,
     initialSelectionSource,
   );
   const selectedLibraryFiles = resolveSelectedMedia<LibraryMediaFile>(
     selectedFileIds,
     media.files,
-    completedUploads,
+    uploadedFiles,
   );
 
   const mutateOne = useCallback(async (file: LibraryMediaFile, action: "trash" | "restore" | "permanent") => {

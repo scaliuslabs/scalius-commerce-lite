@@ -29,7 +29,7 @@ export type {
 } from "./release";
 export { restoreDeductedStock, restoreDeductedMultiple } from "./restore";
 export { recordMovement } from "./movements";
-export { checkAndAlertLowStock } from "./alerts";
+export { checkAndAlertLowStock, setLowStockThreshold } from "./alerts";
 export type { LowStockAlertResult } from "./alerts";
 export { releaseExpiredReservations } from "./expiry";
 export {

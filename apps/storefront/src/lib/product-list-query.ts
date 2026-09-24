@@ -3,12 +3,12 @@ import {
   STOREFRONT_QUERY_IGNORED_PARAMS,
   buildCanonicalQueryString,
 } from "./canonical-query";
-import { DEFAULT_MIN_PRICE } from "./filters/price-url";
 import { normalizeSearchQuery } from "./search-query";
 
-export const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy"] as const;
+const PRODUCT_LIST_NAVIGATION_PARAMS = ["q", "page", "sortBy"] as const;
 
 const PRODUCT_LIST_SORT_VALUES = [
+  "relevance",
   "newest",
   "price-asc",
   "price-desc",
@@ -28,11 +28,15 @@ const SORT_VALUE_SET = new Set<string>(PRODUCT_LIST_SORT_VALUES);
 const BOOLEAN_FILTER_SET = new Set<string>(PRODUCT_LIST_BOOLEAN_FILTERS);
 const PRICE_FILTER_SET = new Set<string>(PRODUCT_LIST_PRICE_FILTERS);
 
-type ProductListSort = NonNullable<ProductListOptions["sort"]>;
+export type ProductListSort = NonNullable<ProductListOptions["sort"]>;
+// Attribute slugs, or merchant option axes as `option.<axis>` (option.size).
+const FACET_KEY_PATTERN = /^(?:[a-z0-9][a-z0-9-]{0,79}|option\.[^\s&=#?]{1,80})$/;
 
 export interface ProductListQueryState {
   page: number;
   sortBy: ProductListSort;
+  /** The sort that stays out of URLs: "relevance" for search results, else "newest". */
+  defaultSort: ProductListSort;
   query: string;
   options: ProductListOptions;
   currentFilters: ProductListFilterState;
@@ -41,14 +45,41 @@ export interface ProductListQueryState {
 
 export type ProductListFilterState = Record<string, string | string[]>;
 
+/** Filters the buyer applied (search, price, switches, facet values), not page or sort. */
+export function countActiveProductListFilters(currentFilters: ProductListFilterState): number {
+  return Object.entries(currentFilters)
+    .filter(([key, value]) => key !== "page" && key !== "sortBy" && value)
+    .reduce((count, [, value]) => count + (Array.isArray(value) ? value.length : 1), 0);
+}
+
+/**
+ * Listing views worth indexing: the plain listing and its paginated pages.
+ * Sorted, filtered and searched views are `noindex,follow` (Google: paginated
+ * pages are indexable and self-canonical; facet/sort permutations are not).
+ */
+export function isIndexableProductListView(currentFilters: ProductListFilterState): boolean {
+  return Object.keys(currentFilters).every((key) => key === "page");
+}
+
+/** A listing page's self-canonical URL: the resource URL plus `?page=N` after page 1. */
+export function productListCanonicalUrl(resourceUrl: string | null, page: number): string | null {
+  if (!resourceUrl) return null;
+  if (page <= 1) return resourceUrl;
+  const url = new URL(resourceUrl);
+  url.search = `page=${page}`;
+  return url.toString();
+}
+
 export function buildProductListHref({
   pathname,
   currentFilters,
   overrides = {},
+  defaultSort = "newest",
 }: {
   pathname: string;
   currentFilters: ProductListFilterState;
   overrides?: Record<string, string | number | string[] | null | undefined>;
+  defaultSort?: ProductListSort;
 }): string {
   const nextFilters: Record<string, string | number | string[]> = {
     ...currentFilters,
@@ -68,40 +99,10 @@ export function buildProductListHref({
   const queryString = buildCanonicalQueryString(nextFilters, {
     defaultParams: {
       page: 1,
-      sortBy: "newest",
+      sortBy: defaultSort,
     },
   });
   return queryString ? `${pathname}?${queryString}` : pathname;
-}
-
-export function buildProductListPaginationHref({
-  pathname,
-  currentFilters,
-  page,
-}: {
-  pathname: string;
-  currentFilters: ProductListFilterState;
-  page: number;
-}): string {
-  return buildProductListHref({
-    pathname,
-    currentFilters,
-    overrides: { page },
-  });
-}
-
-export function hasDynamicProductListFilterParams(
-  params: URLSearchParams,
-): boolean {
-  for (const [key, value] of params.entries()) {
-    if (!value) continue;
-    if (IGNORED_PRODUCT_LIST_QUERY_PARAMS.has(key)) continue;
-    if (NAVIGATION_PARAM_SET.has(key)) continue;
-    if (BOOLEAN_FILTER_SET.has(key)) continue;
-    if (PRICE_FILTER_SET.has(key)) continue;
-    return true;
-  }
-  return false;
 }
 
 function normalizePage(value: string | null): {
@@ -117,15 +118,23 @@ function normalizePage(value: string | null): {
   return { page, changed: false };
 }
 
-function normalizeSort(value: string | null): {
+function normalizeSort(
+  value: string | null,
+  defaultSort: ProductListSort,
+): {
   sortBy: ProductListSort;
   changed: boolean;
 } {
-  if (!value) return { sortBy: "newest", changed: false };
-  if (SORT_VALUE_SET.has(value)) {
+  if (!value) return { sortBy: defaultSort, changed: false };
+  if (SORT_VALUE_SET.has(value) && (value !== "relevance" || defaultSort === "relevance")) {
     return { sortBy: value as ProductListSort, changed: false };
   }
-  return { sortBy: "newest", changed: true };
+  return { sortBy: defaultSort, changed: true };
+}
+
+/** Bangla digits typed into price inputs become Latin digits. */
+function latinDigits(value: string | null): string | null {
+  return value?.replace(/[\u09e6-\u09ef]/g, (digit) => String(digit.charCodeAt(0) - 0x09e6)) ?? null;
 }
 
 function getLastParam(params: URLSearchParams, key: string): string | null {
@@ -173,38 +182,32 @@ function buildAttributeValueMap(
   );
 }
 
-function appendCanonicalFilterParams(
-  canonical: URLSearchParams,
-  currentFilters: ProductListFilterState,
-): void {
-  const queryString = buildCanonicalQueryString(currentFilters, {
-    defaultParams: {
-      page: 1,
-      sortBy: "newest",
-    },
-  });
-  for (const [key, value] of new URLSearchParams(queryString).entries()) {
-    canonical.append(key, value);
-  }
-}
-
+/**
+ * Validates a listing URL into API options and canonical filter state.
+ * `rankByRelevance` (the /search page) makes "relevance" the default sort
+ * whenever there is a query; other listings default to "newest".
+ */
 export function resolveProductListQueryState({
   url,
   facets = [],
   allowUnknownAttributes = false,
+  rankByRelevance = false,
 }: {
   url: URL;
   facets?: readonly ProductFacet[];
   allowUnknownAttributes?: boolean;
+  rankByRelevance?: boolean;
 }): ProductListQueryState {
   const params = url.searchParams;
   const rawQuery = getLastParam(params, "q");
   const query = normalizeSearchQuery(rawQuery);
+  const defaultSort: ProductListSort = rankByRelevance && query ? "relevance" : "newest";
   const { page, changed: pageChanged } = normalizePage(
     getLastParam(params, "page"),
   );
   const { sortBy, changed: sortChanged } = normalizeSort(
     getLastParam(params, "sortBy"),
+    defaultSort,
   );
   const renderParams = collectRenderableParams(params);
   const attributeValues = buildAttributeValueMap(facets);
@@ -226,19 +229,25 @@ export function resolveProductListQueryState({
   if (page > 1) {
     currentFilters.page = String(page);
   }
-  if (sortBy !== "newest") {
+  if (sortBy !== defaultSort) {
     currentFilters.sortBy = sortBy;
   }
 
-  const minPriceParam = getLastParam(params, "minPrice");
-  const maxPriceParam = getLastParam(params, "maxPrice");
+  const minPriceParam = latinDigits(getLastParam(params, "minPrice"));
+  const maxPriceParam = latinDigits(getLastParam(params, "maxPrice"));
+  if (
+    minPriceParam !== getLastParam(params, "minPrice") ||
+    maxPriceParam !== getLastParam(params, "maxPrice")
+  ) {
+    shouldRedirect = true;
+  }
   let minPrice = minPriceParam === null ? undefined : Number(minPriceParam);
   let maxPrice = maxPriceParam === null ? undefined : Number(maxPriceParam);
   if (
     minPrice !== undefined &&
     (!minPriceParam ||
       !Number.isFinite(minPrice) ||
-      minPrice <= DEFAULT_MIN_PRICE)
+      minPrice <= 0)
   ) {
     minPrice = undefined;
     shouldRedirect = true;
@@ -247,7 +256,7 @@ export function resolveProductListQueryState({
     maxPrice !== undefined &&
     (!maxPriceParam ||
       !Number.isFinite(maxPrice) ||
-      maxPrice < DEFAULT_MIN_PRICE)
+      maxPrice < 0)
   ) {
     maxPrice = undefined;
     shouldRedirect = true;
@@ -296,11 +305,7 @@ export function resolveProductListQueryState({
       continue;
     }
 
-    if (
-      allowUnknownAttributes &&
-      /^[a-z0-9][a-z0-9-]{0,79}$/.test(key) &&
-      values.length > 0
-    ) {
+    if (allowUnknownAttributes && FACET_KEY_PATTERN.test(key) && values.length > 0) {
       options[key] = values;
       currentFilters[key] = values;
       continue;
@@ -310,28 +315,16 @@ export function resolveProductListQueryState({
   }
 
   if (!shouldRedirect) {
-    return {
-      page,
-      sortBy,
-      query,
-      options,
-      currentFilters,
-      redirectPath: null,
-    };
+    return { page, sortBy, defaultSort, query, options, currentFilters, redirectPath: null };
   }
-
-  const canonicalUrl = new URL(url.toString());
-  const canonicalParams = new URLSearchParams();
-  appendCanonicalFilterParams(canonicalParams, currentFilters);
-  canonicalUrl.search = canonicalParams.toString();
 
   return {
     page,
     sortBy,
+    defaultSort,
     query,
     options,
     currentFilters,
-    redirectPath:
-      canonicalUrl.pathname + canonicalUrl.search + canonicalUrl.hash,
+    redirectPath: buildProductListHref({ pathname: url.pathname, currentFilters, defaultSort }),
   };
 }

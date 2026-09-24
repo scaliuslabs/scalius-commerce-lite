@@ -116,20 +116,41 @@ export function formatPrice(
 }
 
 /**
- * Short format — no trailing zeros for whole numbers.
+ * The one buyer-facing money format: the currency symbol right before the
+ * amount (never a space, so it never wraps), lakh/crore grouping for BDT
+ * (৳2,30,690), no decimals for whole amounts and the currency's full
+ * precision otherwise (৳1,822.50). Negative amounts read "-৳150".
  */
-export function formatPriceShort(
-  price: number | string,
+export function formatMoney(
+  amount: number | string,
   opts?: { symbol?: string; code?: string },
 ): string {
-  const symbol = opts?.symbol ?? getCurrencySymbol();
-  const code = opts?.code ?? getCurrencyCode();
+  const code = (opts?.code ?? getCurrencyCode()).toUpperCase();
   const precision = getDecimalPlaces(code);
+  const value = Currency(amount, { precision });
+  const whole = value.intValue % 10 ** precision === 0;
+  const digits = whole ? 0 : precision;
+  const grouped = new Intl.NumberFormat(code === "BDT" ? "en-IN" : "en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Math.abs(value.value));
+  return `${value.value < 0 ? "-" : ""}${opts?.symbol ?? currencySymbolFor(code)}${grouped}`;
+}
 
-  const val = Currency(price, { precision });
-  // If it's a whole number, show without decimals
-  if (val.cents() % Math.pow(10, precision) === 0) {
-    return Currency(price, { symbol, precision: 0, separator: "," }).format();
+/** The page's symbol for its own currency, else the narrow symbol Intl knows. */
+function currencySymbolFor(code: string): string {
+  if (code === getCurrencyCode() && typeof window !== "undefined" && window.__CURRENCY_SYMBOL__) {
+    return window.__CURRENCY_SYMBOL__;
   }
-  return Currency(price, { symbol, precision, separator: ",", decimal: "." }).format();
+  if (code === DEFAULT_CURRENCY.code) return DEFAULT_CURRENCY.symbol;
+  try {
+    const symbol = new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: code,
+      currencyDisplay: "narrowSymbol",
+    }).formatToParts(0).find((part) => part.type === "currency")?.value;
+    return symbol && symbol !== code ? symbol : `${code} `;
+  } catch {
+    return `${code} `;
+  }
 }

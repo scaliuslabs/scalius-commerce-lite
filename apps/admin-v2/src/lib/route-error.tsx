@@ -6,7 +6,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouter } from "@tanstack/react-router";
-import { CloudOff, FileQuestion, Lock, RefreshCw, TriangleAlert, type LucideIcon } from "lucide-react";
+import { CloudOff, FileQuestion, Lock, RefreshCw, ServerCrash, TriangleAlert, type LucideIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { appMessages } from "~/i18n/app";
@@ -92,18 +92,25 @@ function CopyDetailsButton({ error }: { error: Error }) {
   );
 }
 
+const FAILURES = {
+  offline: { icon: CloudOff, title: "offlineTitle", body: "offlineBody" },
+  unavailable: { icon: ServerCrash, title: "unavailableTitle", body: "unavailableBody" },
+  broken: { icon: TriangleAlert, title: "errorTitle", body: "errorBody" },
+} as const;
+
 /** A page that failed to render or load: say so plainly, offer a retry, keep the details copyable. */
 export function ErrorState({ error, onRetry, fullPage }: { error: Error; onRetry: () => void; fullPage?: boolean }) {
   const t = useMessages(appMessages);
-  const offline = isConnectionError(error);
+  const failure = classifyFailure(error);
+  const { icon, title, body } = FAILURES[failure];
   return (
     <PageState
       fullPage={fullPage}
-      icon={offline ? CloudOff : TriangleAlert}
-      title={t(offline ? "offlineTitle" : "errorTitle")}
-      body={t(offline ? "offlineBody" : "errorBody")}
+      icon={icon}
+      title={t(title)}
+      body={t(body)}
       action={<Button onClick={onRetry}>{t("tryAgain")}</Button>}
-      secondary={offline ? null : <CopyDetailsButton error={error} />}
+      secondary={failure === "broken" ? <CopyDetailsButton error={error} /> : null}
     />
   );
 }
@@ -113,11 +120,18 @@ function httpStatus(error: unknown): number | null {
   return Number.isInteger(status) ? status : null;
 }
 
-/** The API or the network could not be reached (as opposed to a fault in the page). */
-function isConnectionError(error: unknown): boolean {
-  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+/**
+ * Whose problem it is: the merchant's connection (the request never got an
+ * answer), Scalius being down or too slow (a gateway error or a read that
+ * timed out), or a fault in the page itself.
+ */
+function classifyFailure(error: unknown): keyof typeof FAILURES {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return "offline";
   const message = error instanceof Error ? error.message : String(error);
-  return /failed to fetch|load failed|networkerror|network request failed|session is unavailable/i.test(message);
+  if (/failed to fetch|load failed|networkerror|network request failed/i.test(message)) return "offline";
+  const status = httpStatus(error);
+  if (status === 502 || status === 503 || status === 504) return "unavailable";
+  return "broken";
 }
 
 export function RouteErrorComponent({

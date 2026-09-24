@@ -31,6 +31,7 @@ function onFailure(error: unknown) {
 /**
  * Creates the discount and, when the merchant may switch discounts on,
  * activates it straight away (Shopify saves new discounts as active).
+ * The editor's save bar reports success and failure.
  */
 export function useCreateDiscount() {
   const queryClient = useQueryClient();
@@ -47,11 +48,7 @@ export function useCreateDiscount() {
         return created;
       });
     },
-    onSuccess: () => {
-      invalidate(queryClient);
-      toast.success(t("toastCreated"));
-    },
-    onError: onFailure,
+    onSuccess: () => invalidate(queryClient),
   });
 }
 
@@ -60,14 +57,11 @@ export function useUpdateDiscount() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: DiscountUpdateInput }) =>
       apiData(putApiV1AdminDiscountsById({ path: { id }, body: input })),
-    onSuccess: (_result, { id }) => {
-      invalidate(queryClient, id);
-      toast.success(t("toastSaved"));
-    },
-    onError: onFailure,
+    onSuccess: (_result, { id }) => invalidate(queryClient, id),
   });
 }
 
+/** Callers toast success: once per discount in the editor, once per batch in the list. */
 export function useSetDiscountActive() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -75,10 +69,7 @@ export function useSetDiscountActive() {
       const command = active ? postApiV1AdminDiscountsByIdActivate : postApiV1AdminDiscountsByIdPause;
       return apiData(command({ path: { id }, body: { expectedRevision } }));
     },
-    onSuccess: (_result, { id, active }) => {
-      invalidate(queryClient, id);
-      toast.success(t(active ? "toastActivated" : "toastDeactivated"));
-    },
+    onSuccess: (_result, { id }) => invalidate(queryClient, id),
     onError: onFailure,
   });
 }
@@ -91,7 +82,6 @@ export function useDeleteDiscount() {
     onSuccess: (_result, { id }) => {
       invalidate(queryClient);
       queryClient.removeQueries({ queryKey: queryKeys.discounts.detail(id) });
-      toast.success(t("toastDeleted"));
     },
     onError: onFailure,
   });

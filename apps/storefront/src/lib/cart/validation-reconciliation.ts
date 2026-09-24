@@ -8,7 +8,6 @@ import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 
 export function reconcileValidatedCartSnapshot(
   validation: CartValidationResult,
-  onDiscountCleared?: (message: string) => void,
 ): boolean {
   const state = cartStore.get();
   const updates: CartLineItemUpdate[] = [];
@@ -38,13 +37,5 @@ export function reconcileValidatedCartSnapshot(
     }
   }
 
-  if (updates.length === 0 || !updateCartItemsByKeyAtomically(updates)) {
-    return false;
-  }
-
-  if (state.discount && !cartStore.get().discount) {
-    onDiscountCleared?.("Discount removed - delivery eligibility changed.");
-  }
-
-  return true;
+  return updates.length > 0 && updateCartItemsByKeyAtomically(updates);
 }

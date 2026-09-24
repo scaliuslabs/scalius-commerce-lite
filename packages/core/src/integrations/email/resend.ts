@@ -1,7 +1,13 @@
 // src/integrations/email/resend.ts
 // Resend email provider.
 
-import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
+import {
+  resolveSender,
+  type EmailProvider,
+  type EmailRuntimeContext,
+  type SendEmailOptions,
+  type SendEmailResult,
+} from "./provider";
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import { getEmailRuntimeSettings } from "./settings";
 
@@ -22,7 +28,7 @@ export class ResendEmailProvider implements EmailProvider {
   readonly name = "resend";
 
   async sendEmail(
-    { to, subject, html, from, text, idempotencyKey }: SendEmailOptions,
+    { to, subject, html, from, fromName, text, idempotencyKey }: SendEmailOptions,
     context?: EmailRuntimeContext,
   ): Promise<SendEmailResult> {
     const settings = await getEmailRuntimeSettings(context);
@@ -31,7 +37,8 @@ export class ResendEmailProvider implements EmailProvider {
       throw new ServiceUnavailableError("Resend API key is not configured");
     }
 
-    const fromAddress = from || settings.sender;
+    const sender = resolveSender({ from, fromName }, settings);
+    const fromAddress = sender.name ? `"${sender.name}" <${sender.email}>` : sender.email;
 
     try {
       const response = await fetch("https://api.resend.com/emails", {

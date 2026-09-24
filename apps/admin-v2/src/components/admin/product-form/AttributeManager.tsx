@@ -49,6 +49,8 @@ interface AttributeManagerProps {
   onAttributesChange: (
     attributes: Omit<AssignedAttribute, "name" | "slug">[],
   ) => void;
+  /** Rows the last check found without a value (shown once Save was pressed, not while adding). */
+  missingValueRows?: ReadonlySet<number>;
 }
 
 type AttributeDefinition = Omit<AttributeDto, "valueCount"> & { valueCount?: number };
@@ -74,6 +76,7 @@ function definitionMapFromAssignments(assignments: AssignedAttribute[]) {
 export function AttributeManager({
   initialAttributes,
   onAttributesChange,
+  missingValueRows,
 }: AttributeManagerProps) {
   const t = useMessages(productMessages);
   const { attributes: attributeActions } = useCatalogActionPermissions();
@@ -214,7 +217,7 @@ export function AttributeManager({
           const label = definition?.name ?? attribute.name ?? t(
             definitionLookupLoading ? "loading" : "attributeRemoved",
           );
-          const needsValue = attribute.value.trim().length === 0;
+          const needsValue = attribute.value.trim().length === 0 && Boolean(missingValueRows?.has(index));
 
           return (
             <div key={attribute.attributeId} className="flex flex-wrap items-start gap-2 py-2 sm:flex-nowrap">
@@ -592,7 +595,6 @@ function AttributeValueSelector({
                 >
                   <Check className={cn("mr-2 h-4 w-4", value === item.value ? "opacity-100" : "opacity-0")} />
                   <span className="min-w-0 flex-1 truncate">{item.value}</span>
-                  {item.isPreset && <span className="ml-2 text-body text-muted-foreground">{t("savedValue")}</span>}
                 </CommandItem>
               ))}
             </CommandGroup>

@@ -47,13 +47,32 @@ describe("OrderItemQuantityInput", () => {
     );
     if (!input) throw new Error("Expected quantity input");
 
-    expect(input.min).toBe("1");
-    expect(input.max).toBe("99");
-    expect(input.step).toBe("1");
+    expect(input.type).toBe("text");
+    expect(input.inputMode).toBe("numeric");
     expect(input.value).toBe("2");
 
     await act(async () => setInputValue(input, "24"));
     expect(onQuantityChange).toHaveBeenLastCalledWith(24);
+  });
+
+  it("takes a quantity typed in Bangla digits", async () => {
+    const onQuantityChange = vi.fn();
+    await act(async () => root.render(
+      <OrderItemQuantityInput
+        quantity={2}
+        itemName="Studio Lamp"
+        onQuantityChange={onQuantityChange}
+      />,
+    ));
+
+    const input = host.querySelector<HTMLInputElement>("input");
+    if (!input) throw new Error("Expected quantity input");
+    await act(async () => input.focus());
+    await act(async () => setInputValue(input, "\u09e7\u09e8"));
+    expect(onQuantityChange).toHaveBeenLastCalledWith(12);
+
+    await act(async () => input.blur());
+    expect(input.value).toBe("12");
   });
 
   it("allows a temporary empty draft and restores the last valid quantity", async () => {
@@ -117,7 +136,6 @@ describe("OrderItemQuantityInput", () => {
 
     const input = host.querySelector<HTMLInputElement>("input");
     if (!input) throw new Error("Expected quantity input");
-    expect(input.max).toBe("5");
 
     await act(async () => input.focus());
     await act(async () => setInputValue(input, "8"));
@@ -192,7 +210,6 @@ describe("OrderItemQuantityInput", () => {
     const input = host.querySelector<HTMLInputElement>("input");
     if (!input) throw new Error("Expected quantity input");
     expect(input.disabled).toBe(true);
-    expect(input.max).toBe("0");
     expect(input.getAttribute("aria-invalid")).toBeNull();
     expect(host.querySelector('[role="alert"]')).toBeNull();
   });

@@ -807,6 +807,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "nullable": true,
                     "maxLength": 100
                   },
+                  "localNetwork": {
+                    "type": "boolean"
+                  },
                   "twoFactorVerified": {
                     "type": "boolean"
                   },
@@ -832,6 +835,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "deviceLabel",
                   "deviceType",
                   "networkHint",
+                  "localNetwork",
                   "twoFactorVerified",
                   "impersonated",
                   "createdAt",
@@ -1843,7 +1847,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/agent-access/connections",
     "summary": "List agent connections",
-    "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes.",
+    "description": "Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes. `canManage` says whether this caller may create, change or revoke access (a Super Admin with two-step verification done), so the dashboard asks for two-step verification before offering those forms.",
     "tags": [
       "Admin - Agent Access"
     ],
@@ -4596,8 +4600,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "continuationOutput": null,
     "exclusionReason": "Legacy dashboard list may include up to 500 preset values per attribute; use dashboard.attributes.list_summaries and dashboard.attribute_values.list.",
     "rbac": {
-      "type": "permission",
-      "permission": "attributes.view"
+      "type": "anyOf",
+      "permissions": [
+        "attributes.view",
+        "products.view"
+      ]
     },
     "inputSchema": null,
     "outputSchema": null
@@ -5376,6 +5383,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "size",
                     "createdAt"
                   ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "draft",
+                    "published",
+                    "internal"
+                  ],
+                  "default": "draft"
                 }
               },
               "required": [
@@ -5414,7 +5430,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "status": {
               "type": "string",
               "enum": [
-                "draft"
+                "draft",
+                "published",
+                "internal"
               ]
             }
           },
@@ -5523,8 +5541,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "rbac": {
-      "type": "permission",
-      "permission": "categories.view"
+      "type": "anyOf",
+      "permissions": [
+        "categories.view",
+        "products.view",
+        "settings.general.view",
+        "settings.header.edit"
+      ]
     },
     "inputSchema": {},
     "outputSchema": {
@@ -6963,6 +6986,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "isDefault": {
                   "type": "boolean"
                 },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "createdAt": {
                   "anyOf": [
                     {
@@ -6994,7 +7021,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "languageData",
                 "fieldVisibility",
                 "isActive",
-                "isDefault"
+                "isDefault",
+                "revision"
               ]
             }
           }
@@ -7152,6 +7180,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "isDefault": {
               "type": "boolean"
             },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
             "createdAt": {
               "anyOf": [
                 {
@@ -7183,7 +7215,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "languageData",
             "fieldVisibility",
             "isActive",
-            "isDefault"
+            "isDefault",
+            "revision"
           ]
         }
       },
@@ -7377,6 +7410,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "isDefault": {
                     "type": "boolean"
                   },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
                   "createdAt": {
                     "anyOf": [
                       {
@@ -7408,7 +7445,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "languageData",
                   "fieldVisibility",
                   "isActive",
-                  "isDefault"
+                  "isDefault",
+                  "revision"
                 ]
               },
               "maxItems": 10
@@ -7599,7 +7637,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 16384,
@@ -7675,8 +7713,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "isDefault": {
                   "type": "boolean",
                   "description": "Whether this is the default language"
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "The revision the editor loaded; a stale one is refused with 409 SETTINGS_REVISION_CONFLICT."
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -7743,6 +7789,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "isDefault": {
                   "type": "boolean"
                 },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "createdAt": {
                   "anyOf": [
                     {
@@ -7774,7 +7824,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "languageData",
                 "fieldVisibility",
                 "isActive",
-                "isDefault"
+                "isDefault",
+                "revision"
               ]
             }
           }
@@ -9489,6 +9540,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "primaryImage": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "variantCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "available": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
                   }
                 },
                 "required": [
@@ -9498,7 +9558,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "categoryId",
                   "categoryName",
                   "isActive",
-                  "primaryImage"
+                  "primaryImage",
+                  "variantCount",
+                  "available"
                 ]
               }
             },
@@ -9891,6 +9953,119 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "maxLength": 240
                     }
                   }
+                }
+              },
+              "required": [
+                "expectedVersion"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "id",
+            "version"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.collections.update_products",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/collections/{id}/products",
+    "summary": "Add or remove products in a manual collection",
+    "tags": [
+      "Admin - Collections"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "collections.edit"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "add": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "maxItems": 90,
+                  "default": []
+                },
+                "remove": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "maxItems": 90,
+                  "default": []
                 }
               },
               "required": [
@@ -11608,6 +11783,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ],
               "additionalProperties": false
             },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
             "resolvedIntro": {
               "type": "string"
             },
@@ -11682,6 +11861,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           },
           "required": [
             "policy",
+            "revision",
             "resolvedIntro",
             "preview"
           ]
@@ -11709,7 +11889,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 65536,
@@ -11751,6 +11931,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "nullable": true,
                   "maxLength": 240
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -11758,7 +11942,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "returnEnabled",
                 "refundEnabled",
                 "visibility",
-                "introText"
+                "introText",
+                "expectedRevision"
               ],
               "additionalProperties": false
             }
@@ -11812,6 +11997,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ],
               "additionalProperties": false
             },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
             "resolvedIntro": {
               "type": "string"
             },
@@ -11886,6 +12075,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           },
           "required": [
             "policy",
+            "revision",
             "resolvedIntro",
             "preview"
           ]
@@ -12597,6 +12787,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id": {
                     "type": "string"
                   },
+                  "orderNumber": {
+                    "type": "integer",
+                    "nullable": true
+                  },
                   "totalAmount": {
                     "type": "number"
                   },
@@ -12616,6 +12810,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "required": [
                   "id",
+                  "orderNumber",
                   "totalAmount",
                   "status",
                   "createdAt"
@@ -15078,8 +15273,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "rbac": {
-      "type": "permission",
-      "permission": "settings.delivery_providers.view"
+      "type": "anyOf",
+      "permissions": [
+        "orders.manage_shipments",
+        "settings.delivery_providers.view"
+      ]
     },
     "inputSchema": {
       "parameters": [
@@ -18478,6 +18676,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
+            "configured": {
+              "type": "boolean"
+            },
             "total_parcels": {
               "type": "number"
             },
@@ -18530,7 +18731,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 ]
               }
             }
-          }
+          },
+          "required": [
+            "configured"
+          ]
         }
       },
       "required": [
@@ -20128,7 +20332,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "GET",
     "pathTemplate": "/api/v1/admin/dashboard/activity",
     "summary": "Get dashboard daily activity chart data",
-    "description": "Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days.",
+    "description": "Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days. Revenue is null unless the caller may view sales numbers.",
     "tags": [
       "Admin - Dashboard"
     ],
@@ -20196,7 +20400,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "number"
                   },
                   "revenue": {
-                    "type": "number"
+                    "type": "number",
+                    "nullable": true
                   },
                   "newCustomers": {
                     "type": "number"
@@ -20224,363 +20429,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
-    "operationId": "dashboard.home.full_summary",
-    "method": "GET",
-    "pathTemplate": "/api/v1/admin/dashboard/summary",
-    "summary": "Get dashboard summary metrics and recent orders",
-    "tags": [
-      "Admin - Dashboard"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "read",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "parallel",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 16384,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "dashboard.view"
-    },
-    "inputSchema": {},
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "stats": {
-              "type": "object",
-              "properties": {
-                "totalProducts": {
-                  "type": "number"
-                },
-                "totalCustomers": {
-                  "type": "number"
-                },
-                "totalRevenue": {
-                  "type": "number"
-                },
-                "currentMonth": {
-                  "type": "object",
-                  "properties": {
-                    "orders": {
-                      "type": "number"
-                    },
-                    "revenue": {
-                      "type": "number"
-                    },
-                    "orderGrowth": {
-                      "type": "number",
-                      "nullable": true
-                    },
-                    "revenueGrowth": {
-                      "type": "number",
-                      "nullable": true
-                    },
-                    "orderStatus": {
-                      "type": "object",
-                      "properties": {
-                        "delivered": {
-                          "type": "number"
-                        },
-                        "processing": {
-                          "type": "number"
-                        },
-                        "shipping": {
-                          "type": "number"
-                        },
-                        "cancelled": {
-                          "type": "number"
-                        }
-                      },
-                      "required": [
-                        "delivered",
-                        "processing",
-                        "shipping",
-                        "cancelled"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "orders",
-                    "revenue",
-                    "orderGrowth",
-                    "revenueGrowth",
-                    "orderStatus"
-                  ]
-                },
-                "lastMonth": {
-                  "type": "object",
-                  "properties": {
-                    "orders": {
-                      "type": "number"
-                    },
-                    "revenue": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "orders",
-                    "revenue"
-                  ]
-                }
-              },
-              "required": [
-                "totalProducts",
-                "totalCustomers",
-                "totalRevenue",
-                "currentMonth",
-                "lastMonth"
-              ]
-            },
-            "recentOrders": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "maxLength": 128
-                  },
-                  "customerName": {
-                    "type": "string",
-                    "maxLength": 256
-                  },
-                  "totalAmount": {
-                    "type": "number"
-                  },
-                  "status": {
-                    "type": "string",
-                    "maxLength": 64
-                  },
-                  "createdAt": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
-                    ]
-                  }
-                },
-                "required": [
-                  "id",
-                  "customerName",
-                  "totalAmount",
-                  "status",
-                  "createdAt"
-                ]
-              },
-              "maxItems": 11
-            }
-          },
-          "required": [
-            "stats",
-            "recentOrders"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
-  },
-  {
-    "operationId": "dashboard.home.legacy_combined",
-    "method": "GET",
-    "pathTemplate": "/api/v1/admin/dashboard",
-    "summary": "Get dashboard summary, recent orders, and daily activity",
-    "tags": [
-      "Admin - Dashboard"
-    ],
-    "surface": "dashboard",
-    "exposure": "excluded",
-    "principals": [
-      "admin"
-    ],
-    "risk": "read",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "forbidden",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 16384,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "exclusionReason": "Superseded by the bounded dashboard.home.summary and dashboard.home.activity operations.",
-    "rbac": {
-      "type": "permission",
-      "permission": "dashboard.view"
-    },
-    "inputSchema": null,
-    "outputSchema": null
-  },
-  {
-    "operationId": "dashboard.home.metrics",
-    "method": "GET",
-    "pathTemplate": "/api/v1/admin/dashboard/metrics-summary",
-    "summary": "Get lightweight dashboard metrics summary",
-    "tags": [
-      "Admin - Dashboard"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "read",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "parallel",
-    "transport": "json",
-    "maxResponseBytes": 16384,
-    "maxRequestBytes": 16384,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "dashboard.view"
-    },
-    "inputSchema": {},
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "stats": {
-              "type": "object",
-              "properties": {
-                "totalProducts": {
-                  "type": "number"
-                },
-                "totalCustomers": {
-                  "type": "number"
-                },
-                "currentMonth": {
-                  "type": "object",
-                  "properties": {
-                    "orders": {
-                      "type": "number"
-                    },
-                    "revenue": {
-                      "type": "number"
-                    },
-                    "orderGrowth": {
-                      "type": "number",
-                      "nullable": true
-                    },
-                    "revenueGrowth": {
-                      "type": "number",
-                      "nullable": true
-                    },
-                    "orderStatus": {
-                      "type": "object",
-                      "properties": {
-                        "delivered": {
-                          "type": "number"
-                        },
-                        "processing": {
-                          "type": "number"
-                        },
-                        "shipping": {
-                          "type": "number"
-                        },
-                        "cancelled": {
-                          "type": "number"
-                        }
-                      },
-                      "required": [
-                        "delivered",
-                        "processing",
-                        "shipping",
-                        "cancelled"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "orders",
-                    "revenue",
-                    "orderGrowth",
-                    "revenueGrowth",
-                    "orderStatus"
-                  ]
-                },
-                "lastMonth": {
-                  "type": "object",
-                  "properties": {
-                    "orders": {
-                      "type": "number"
-                    },
-                    "revenue": {
-                      "type": "number"
-                    }
-                  },
-                  "required": [
-                    "orders",
-                    "revenue"
-                  ]
-                }
-              },
-              "required": [
-                "totalProducts",
-                "totalCustomers",
-                "currentMonth",
-                "lastMonth"
-              ]
-            }
-          },
-          "required": [
-            "stats"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
-  },
-  {
     "operationId": "dashboard.home.summary",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/dashboard/home-summary",
-    "summary": "Get lightweight dashboard home metrics and recent orders",
-    "description": "Answer current-month sales, revenue, customer, order, and recent-order summary questions.",
+    "summary": "Get dashboard home metrics and recent orders",
+    "description": "Answer current-month order-count, customer and recent-order questions. Revenue values are null unless the caller may view sales numbers; recent orders are empty unless the caller may view orders.",
     "tags": [
       "Admin - Dashboard"
     ],
@@ -20635,7 +20488,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "type": "number"
                     },
                     "revenue": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     },
                     "orderGrowth": {
                       "type": "number",
@@ -20684,7 +20538,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "type": "number"
                     },
                     "revenue": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -20708,6 +20563,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id": {
                     "type": "string",
                     "maxLength": 128
+                  },
+                  "orderNumber": {
+                    "type": "integer",
+                    "nullable": true
                   },
                   "customerName": {
                     "type": "string",
@@ -20733,6 +20592,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "required": [
                   "id",
+                  "orderNumber",
                   "customerName",
                   "totalAmount",
                   "status",
@@ -21047,6 +20907,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "test"
                   ],
                   "default": "job"
+                },
+                "locale": {
+                  "type": "string",
+                  "enum": [
+                    "en",
+                    "bn"
+                  ],
+                  "default": "en",
+                  "description": "Dashboard language, so printed prices match the preview"
                 },
                 "variantIds": {
                   "type": "array",
@@ -22027,6 +21896,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "optionLabel": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "productName": {
                     "type": "string",
                     "nullable": true
@@ -22067,6 +21940,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "preorderStockDelta",
                   "createdAt",
                   "variantSku",
+                  "optionLabel",
                   "productName",
                   "actorName",
                   "actorType"
@@ -22521,6 +22395,102 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       }
     },
     "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.inventory.set_alert_level",
+    "method": "PUT",
+    "pathTemplate": "/api/v1/admin/inventory/{variantId}/alert-level",
+    "summary": "Set a SKU's low-stock alert level",
+    "description": "Alert when available stock falls to this level or below: a whole number from 0 to 1,000,000, or null to turn the alert off. Stock is not changed.",
+    "tags": [
+      "Admin - Inventory"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "products.edit"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "variantId",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "lowStockThreshold": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1000000
+                }
+              },
+              "required": [
+                "lowStockThreshold"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "variantId": {
+              "type": "string"
+            },
+            "lowStockThreshold": {
+              "type": "integer",
+              "nullable": true
+            }
+          },
+          "required": [
+            "variantId",
+            "lowStockThreshold"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
   },
   {
     "operationId": "dashboard.inventory.set_stock",
@@ -25431,11 +25401,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "activeFacebookPixelScriptCount",
                 "parseableFacebookPixelScriptCount"
               ]
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
             "settings",
-            "pixelParity"
+            "pixelParity",
+            "revision"
           ]
         }
       },
@@ -25767,7 +25742,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "security",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "forbidden",
     "transport": "json",
     "maxResponseBytes": 16384,
@@ -25783,6 +25758,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     },
     "inputSchema": {
       "requestBody": {
+        "required": true,
         "content": {
           "application/json": {
             "schema": {
@@ -25807,12 +25783,18 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 365
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
-        },
-        "required": true
+        }
       }
     },
     "outputSchema": {
@@ -25844,6 +25826,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "logRetentionDays": {
               "type": "number"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
@@ -25851,7 +25837,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "accessToken",
             "testEventCode",
             "isEnabled",
-            "logRetentionDays"
+            "logRetentionDays",
+            "revision"
           ]
         }
       },
@@ -28872,113 +28859,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
-    "operationId": "dashboard.notifications.admin_rules_get",
-    "method": "GET",
-    "pathTemplate": "/api/v1/admin/settings/notification-channels/admin-channels",
-    "summary": "Get admin notification channel settings per order status",
-    "tags": [
-      "Admin - Settings"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "read",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "parallel",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "settings.general.view"
-    },
-    "inputSchema": {},
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "channels": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            },
-            "push": {
-              "type": "object",
-              "properties": {
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "ready",
-                    "incomplete",
-                    "error"
-                  ]
-                },
-                "issues": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "code": {
-                        "type": "string"
-                      },
-                      "message": {
-                        "type": "string"
-                      },
-                      "fix": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "code",
-                      "message"
-                    ]
-                  }
-                }
-              },
-              "required": [
-                "status",
-                "issues"
-              ]
-            }
-          },
-          "required": [
-            "channels",
-            "push"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
-  },
-  {
     "operationId": "dashboard.notifications.admin_rules_update",
     "method": "PUT",
     "pathTemplate": "/api/v1/admin/settings/notification-channels/admin-channels",
-    "summary": "Update admin notification channel settings per order status",
+    "summary": "Update staff notifications: push per order status and new-order emails",
     "tags": [
       "Admin - Settings"
     ],
@@ -28990,7 +28874,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 65536,
@@ -29169,10 +29053,24 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "support_request_status_updated"
                   ],
                   "additionalProperties": false
+                },
+                "emailRecipients": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 254
+                  },
+                  "maxItems": 10
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
-                "channels"
+                "channels",
+                "emailRecipients",
+                "expectedRevision"
               ],
               "additionalProperties": false
             }
@@ -29201,107 +29099,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 }
               }
             },
-            "push": {
-              "type": "object",
-              "properties": {
-                "status": {
-                  "type": "string",
-                  "enum": [
-                    "ready",
-                    "incomplete",
-                    "error"
-                  ]
-                },
-                "issues": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "code": {
-                        "type": "string"
-                      },
-                      "message": {
-                        "type": "string"
-                      },
-                      "fix": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "code",
-                      "message"
-                    ]
-                  }
-                }
-              },
-              "required": [
-                "status",
-                "issues"
-              ]
-            }
-          },
-          "required": [
-            "channels",
-            "push"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
-  },
-  {
-    "operationId": "dashboard.notifications.customer_rules_get",
-    "method": "GET",
-    "pathTemplate": "/api/v1/admin/settings/notification-channels",
-    "summary": "Get notification channel settings per order status",
-    "tags": [
-      "Admin - Settings"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "read",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "parallel",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "settings.general.view"
-    },
-    "inputSchema": {},
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "channels": {
+            "adminChannels": {
               "type": "object",
               "additionalProperties": {
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
+              }
+            },
+            "staffEmailRecipients": {
+              "type": "array",
+              "items": {
+                "type": "string"
               }
             },
             "whatsappTemplate": {
@@ -29438,14 +29248,324 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "status",
                 "issues"
               ]
+            },
+            "push": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
             "channels",
+            "adminChannels",
+            "staffEmailRecipients",
             "whatsappTemplate",
             "whatsapp",
             "email",
-            "sms"
+            "sms",
+            "push",
+            "revision"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.notifications.customer_rules_get",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/settings/notification-channels",
+    "summary": "Get customer and staff notification settings",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.view"
+    },
+    "inputSchema": {},
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "channels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "adminChannels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "staffEmailRecipients": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "whatsappTemplate": {
+              "type": "object",
+              "properties": {
+                "templateName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512,
+                  "pattern": "^[a-z0-9_]+$"
+                },
+                "languageCode": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 8,
+                  "pattern": "^[a-z]{2}(?:_[A-Z]{2})?$"
+                }
+              },
+              "required": [
+                "templateName",
+                "languageCode"
+              ]
+            },
+            "whatsapp": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
+            },
+            "email": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
+            },
+            "sms": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
+            },
+            "push": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "channels",
+            "adminChannels",
+            "staffEmailRecipients",
+            "whatsappTemplate",
+            "whatsapp",
+            "email",
+            "sms",
+            "push",
+            "revision"
           ]
         }
       },
@@ -29459,7 +29579,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.notifications.customer_rules_update",
     "method": "PUT",
     "pathTemplate": "/api/v1/admin/settings/notification-channels",
-    "summary": "Update notification channel settings per order status",
+    "summary": "Update customer notification channels per order status",
     "tags": [
       "Admin - Settings"
     ],
@@ -29471,7 +29591,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 65536,
@@ -29701,10 +29821,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "templateName",
                     "languageCode"
                   ]
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
-                "channels"
+                "channels",
+                "expectedRevision"
               ],
               "additionalProperties": false
             }
@@ -29731,6 +29856,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "items": {
                   "type": "string"
                 }
+              }
+            },
+            "adminChannels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "staffEmailRecipients": {
+              "type": "array",
+              "items": {
+                "type": "string"
               }
             },
             "whatsappTemplate": {
@@ -29867,14 +30007,60 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "status",
                 "issues"
               ]
+            },
+            "push": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "incomplete",
+                    "error"
+                  ]
+                },
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "fix": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "status",
+                "issues"
+              ]
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
             "channels",
+            "adminChannels",
+            "staffEmailRecipients",
             "whatsappTemplate",
             "whatsapp",
             "email",
-            "sms"
+            "sms",
+            "push",
+            "revision"
           ]
         }
       },
@@ -30055,11 +30241,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "publicConfig": {
               "type": "object",
               "additionalProperties": {}
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
             "serviceAccount",
-            "publicConfig"
+            "publicConfig",
+            "revision"
           ]
         }
       },
@@ -30085,7 +30276,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "security",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "forbidden",
     "transport": "json",
     "maxResponseBytes": 65536,
@@ -30107,6 +30298,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "serviceAccount": {
                   "type": "string"
                 },
@@ -30114,7 +30309,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "object",
                   "additionalProperties": {}
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -30134,10 +30332,1383 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.notifications.template_test_send",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/settings/notification-channels/templates/test",
+    "summary": "Send a draft template with sample order data (email to yourself, SMS to a number you enter)",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.notifications.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "channel": {
+                      "type": "string",
+                      "enum": [
+                        "email"
+                      ]
+                    },
+                    "event": {
+                      "type": "string",
+                      "enum": [
+                        "order_created",
+                        "order_confirmed",
+                        "order_processing",
+                        "order_shipped",
+                        "order_delivered",
+                        "order_completed",
+                        "order_cancelled",
+                        "order_returned",
+                        "refund_processing",
+                        "refund_failed",
+                        "order_refunded",
+                        "order_partially_refunded",
+                        "payment_balance_paid",
+                        "support_request_submitted",
+                        "support_request_status_updated"
+                      ]
+                    },
+                    "subject": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "body": {
+                      "type": "string",
+                      "maxLength": 10000
+                    }
+                  },
+                  "required": [
+                    "channel",
+                    "event",
+                    "subject",
+                    "body"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "channel": {
+                      "type": "string",
+                      "enum": [
+                        "sms"
+                      ]
+                    },
+                    "event": {
+                      "type": "string",
+                      "enum": [
+                        "order_created",
+                        "order_confirmed",
+                        "order_processing",
+                        "order_shipped",
+                        "order_delivered",
+                        "order_completed",
+                        "order_cancelled",
+                        "order_returned",
+                        "refund_processing",
+                        "refund_failed",
+                        "order_refunded",
+                        "order_partially_refunded",
+                        "payment_balance_paid",
+                        "support_request_submitted",
+                        "support_request_status_updated"
+                      ]
+                    },
+                    "body": {
+                      "type": "string",
+                      "maxLength": 1000
+                    },
+                    "phone": {
+                      "type": "string",
+                      "maxLength": 32
+                    }
+                  },
+                  "required": [
+                    "channel",
+                    "event",
+                    "body",
+                    "phone"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "sentTo": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sentTo"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.notifications.templates_get",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/settings/notification-channels/templates",
+    "summary": "Get customer notification templates",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.view"
+    },
+    "inputSchema": {},
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "templates": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "object",
+                  "properties": {
+                    "order_created": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_confirmed": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_processing": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_shipped": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_delivered": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_completed": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_cancelled": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_returned": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "refund_processing": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "refund_failed": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_refunded": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_partially_refunded": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "payment_balance_paid": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "support_request_submitted": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "support_request_status_updated": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "order_created",
+                    "order_confirmed",
+                    "order_processing",
+                    "order_shipped",
+                    "order_delivered",
+                    "order_completed",
+                    "order_cancelled",
+                    "order_returned",
+                    "refund_processing",
+                    "refund_failed",
+                    "order_refunded",
+                    "order_partially_refunded",
+                    "payment_balance_paid",
+                    "support_request_submitted",
+                    "support_request_status_updated"
+                  ]
+                },
+                "sms": {
+                  "type": "object",
+                  "properties": {
+                    "order_created": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_confirmed": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_processing": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_shipped": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_delivered": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_completed": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_cancelled": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_returned": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "refund_processing": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "refund_failed": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_refunded": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_partially_refunded": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "payment_balance_paid": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "support_request_submitted": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "support_request_status_updated": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "order_created",
+                    "order_confirmed",
+                    "order_processing",
+                    "order_shipped",
+                    "order_delivered",
+                    "order_completed",
+                    "order_cancelled",
+                    "order_returned",
+                    "refund_processing",
+                    "refund_failed",
+                    "order_refunded",
+                    "order_partially_refunded",
+                    "payment_balance_paid",
+                    "support_request_submitted",
+                    "support_request_status_updated"
+                  ]
+                }
+              },
+              "required": [
+                "email",
+                "sms"
+              ]
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "language": {
+              "type": "string",
+              "enum": [
+                "en",
+                "bn"
+              ]
+            },
+            "store": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "logoUrl": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "storefrontUrl": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "name",
+                "logoUrl",
+                "storefrontUrl"
+              ]
+            }
+          },
+          "required": [
+            "templates",
+            "revision",
+            "language",
+            "store"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.notifications.templates_update",
+    "method": "PUT",
+    "pathTemplate": "/api/v1/admin/settings/notification-channels/templates",
+    "summary": "Save the customer message templates for one order status",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.notifications.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "event": {
+                  "type": "string",
+                  "enum": [
+                    "order_created",
+                    "order_confirmed",
+                    "order_processing",
+                    "order_shipped",
+                    "order_delivered",
+                    "order_completed",
+                    "order_cancelled",
+                    "order_returned",
+                    "refund_processing",
+                    "refund_failed",
+                    "order_refunded",
+                    "order_partially_refunded",
+                    "payment_balance_paid",
+                    "support_request_submitted",
+                    "support_request_status_updated"
+                  ]
+                },
+                "email": {
+                  "type": "object",
+                  "properties": {
+                    "subject": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "body": {
+                      "type": "string",
+                      "maxLength": 10000
+                    }
+                  },
+                  "required": [
+                    "subject",
+                    "body"
+                  ]
+                },
+                "sms": {
+                  "type": "object",
+                  "properties": {
+                    "body": {
+                      "type": "string",
+                      "maxLength": 1000
+                    }
+                  },
+                  "required": [
+                    "body"
+                  ]
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "event",
+                "expectedRevision"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "templates": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "object",
+                  "properties": {
+                    "order_created": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_confirmed": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_processing": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_shipped": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_delivered": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_completed": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_cancelled": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_returned": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "refund_processing": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "refund_failed": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_refunded": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "order_partially_refunded": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "payment_balance_paid": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "support_request_submitted": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    },
+                    "support_request_status_updated": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "subject",
+                        "body"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "order_created",
+                    "order_confirmed",
+                    "order_processing",
+                    "order_shipped",
+                    "order_delivered",
+                    "order_completed",
+                    "order_cancelled",
+                    "order_returned",
+                    "refund_processing",
+                    "refund_failed",
+                    "order_refunded",
+                    "order_partially_refunded",
+                    "payment_balance_paid",
+                    "support_request_submitted",
+                    "support_request_status_updated"
+                  ]
+                },
+                "sms": {
+                  "type": "object",
+                  "properties": {
+                    "order_created": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_confirmed": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_processing": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_shipped": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_delivered": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_completed": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_cancelled": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_returned": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "refund_processing": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "refund_failed": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_refunded": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "order_partially_refunded": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "payment_balance_paid": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "support_request_submitted": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    },
+                    "support_request_status_updated": {
+                      "type": "object",
+                      "properties": {
+                        "body": {
+                          "type": "string",
+                          "maxLength": 1000
+                        }
+                      },
+                      "required": [
+                        "body"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "order_created",
+                    "order_confirmed",
+                    "order_processing",
+                    "order_shipped",
+                    "order_delivered",
+                    "order_completed",
+                    "order_cancelled",
+                    "order_returned",
+                    "refund_processing",
+                    "refund_failed",
+                    "order_refunded",
+                    "order_partially_refunded",
+                    "payment_balance_paid",
+                    "support_request_submitted",
+                    "support_request_status_updated"
+                  ]
+                }
+              },
+              "required": [
+                "email",
+                "sms"
+              ]
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "language": {
+              "type": "string",
+              "enum": [
+                "en",
+                "bn"
+              ]
+            }
+          },
+          "required": [
+            "templates",
+            "revision",
+            "language"
           ]
         }
       },
@@ -30739,6 +32310,218 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
+    "operationId": "dashboard.orders.bulk_confirm",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/bulk-confirm",
+    "summary": "Confirm several new orders",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.change_status"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "orderIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "minItems": 1,
+                  "maxItems": 90
+                }
+              },
+              "required": [
+                "orderIds"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "orderId": {
+                    "type": "string"
+                  },
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "orderId",
+                  "success"
+                ]
+              }
+            }
+          },
+          "required": [
+            "results"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.bulk_fulfill",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/bulk-fulfill",
+    "summary": "Mark several confirmed orders as sent with your own courier",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.manage_shipments"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "orderIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
+                  "minItems": 1,
+                  "maxItems": 90
+                },
+                "courierName": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "note": {
+                  "type": "string",
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "orderIds"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "results": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "orderId": {
+                    "type": "string"
+                  },
+                  "success": {
+                    "type": "boolean"
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "orderId",
+                  "success"
+                ]
+              }
+            }
+          },
+          "required": [
+            "results"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.orders.bulk_ship",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/orders/bulk-ship",
@@ -31053,6 +32836,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "variantCount": {
                     "type": "number"
                   },
+                  "onHand": {
+                    "type": "number",
+                    "nullable": true,
+                    "description": "Tracked on-hand units across live SKUs; null when no SKU tracks quantity."
+                  },
+                  "hasVariantDiscount": {
+                    "type": "boolean",
+                    "description": "Some SKUs carry their own discount."
+                  },
+                  "hasStockHistory": {
+                    "type": "boolean",
+                    "description": "Trash lists only: stock history blocks permanent delete."
+                  },
                   "mediaCount": {
                     "type": "number"
                   },
@@ -31062,6 +32858,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "sku": {
                     "type": "string"
+                  },
+                  "availableStock": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "Units buyers can still order across active SKUs; null when a SKU has no stock limit."
                   }
                 },
                 "required": [
@@ -31080,8 +32881,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "updatedAt",
                   "category",
                   "variantCount",
+                  "onHand",
+                  "hasVariantDiscount",
+                  "hasStockHistory",
                   "mediaCount",
-                  "primaryImage"
+                  "primaryImage",
+                  "availableStock"
                 ]
               }
             },
@@ -31206,6 +33011,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "nullable": true
                 },
+                "failureNote": {
+                  "type": "string",
+                  "nullable": true
+                },
                 "collectedBy": {
                   "type": "string",
                   "nullable": true
@@ -31257,6 +33066,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "lastAttemptAt",
                 "codStatus",
                 "failureReason",
+                "failureNote",
                 "collectedBy",
                 "collectedAmount",
                 "collectedAt",
@@ -31418,6 +33228,144 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           },
           "required": [
             "message"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.comment_add",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/{id}/timeline",
+    "summary": "Add a staff comment to the order timeline",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.edit"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "body": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "body"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "placed",
+                "comment",
+                "status_changed",
+                "details_edited",
+                "items_edited",
+                "shipment_created",
+                "cod_collected",
+                "cod_failed",
+                "cod_returned",
+                "refund_recorded",
+                "return_created",
+                "return_received",
+                "request_resolved",
+                "archived",
+                "unarchived",
+                "invoice_issued"
+              ]
+            },
+            "body": {
+              "type": "string",
+              "nullable": true
+            },
+            "data": {
+              "type": "object",
+              "nullable": true,
+              "additionalProperties": {}
+            },
+            "actorName": {
+              "type": "string",
+              "nullable": true
+            },
+            "createdAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "body",
+            "data",
+            "actorName",
+            "createdAt"
           ]
         }
       },
@@ -31892,14 +33840,54 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
-              "open",
-              "in_transit",
-              "delivered",
-              "closed"
+              "unfulfilled",
+              "unpaid",
+              "cod_to_collect",
+              "delivery_failed",
+              "returned"
+            ],
+            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned."
+          },
+          "required": false,
+          "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+          "name": "view",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
             ]
           },
           "required": false,
-          "name": "statusGroup",
+          "name": "openRequest",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "description": "Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection."
+          },
+          "required": false,
+          "description": "Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.",
+          "name": "ids",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "summary",
+              "items"
+            ],
+            "default": "summary",
+            "description": "One row per order (summary) or one row per item (items)."
+          },
+          "required": false,
+          "description": "One row per order (summary) or one row per item (items).",
+          "name": "format",
           "in": "query"
         },
         {
@@ -31909,6 +33897,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "unpaid",
               "partial",
               "paid",
+              "partially_refunded",
               "refunded",
               "failed"
             ]
@@ -31976,7 +33965,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "relevance",
               "customerName",
               "totalAmount",
-              "status",
               "createdAt",
               "updatedAt"
             ]
@@ -32093,6 +34081,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "id": {
                   "type": "string"
                 },
+                "orderNumber": {
+                  "type": "integer",
+                  "nullable": true
+                },
                 "version": {
                   "type": "integer",
                   "minimum": 1
@@ -32157,6 +34149,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "id",
+                "orderNumber",
                 "version",
                 "customerName",
                 "customerPhone",
@@ -32174,36 +34167,71 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ],
               "additionalProperties": {}
             },
-            "fullEditReadiness": {
+            "editReadiness": {
               "type": "object",
               "properties": {
-                "allowed": {
-                  "type": "boolean"
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "allowed": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "shipped",
+                        "closed",
+                        "paid",
+                        "online_payment",
+                        "discount",
+                        "history",
+                        "inventory",
+                        "archived",
+                        "busy",
+                        "unavailable",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "allowed",
+                    "reason"
+                  ]
                 },
-                "reason": {
-                  "type": "string",
-                  "nullable": true
+                "details": {
+                  "type": "object",
+                  "properties": {
+                    "allowed": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "shipped",
+                        "closed",
+                        "paid",
+                        "online_payment",
+                        "discount",
+                        "history",
+                        "inventory",
+                        "archived",
+                        "busy",
+                        "unavailable",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "allowed",
+                    "reason"
+                  ]
                 }
               },
               "required": [
-                "allowed",
-                "reason"
-              ]
-            },
-            "amendmentReadiness": {
-              "type": "object",
-              "properties": {
-                "allowed": {
-                  "type": "boolean"
-                },
-                "reason": {
-                  "type": "string",
-                  "nullable": true
-                }
-              },
-              "required": [
-                "allowed",
-                "reason"
+                "items",
+                "details"
               ]
             },
             "productsWithVariants": {
@@ -32432,6 +34460,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "id": {
                   "type": "string"
                 },
+                "orderNumber": {
+                  "type": "integer",
+                  "nullable": true
+                },
                 "version": {
                   "type": "integer",
                   "minimum": 1
@@ -32527,6 +34559,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "id",
+                "orderNumber",
                 "version",
                 "customerName",
                 "customerPhone",
@@ -32548,8 +34581,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           },
           "required": [
             "order",
-            "fullEditReadiness",
-            "amendmentReadiness",
+            "editReadiness",
             "productsWithVariants",
             "defaultValues"
           ]
@@ -32608,6 +34640,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "requestKey": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "itemId": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "quantity": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "itemId",
+                      "quantity"
+                    ]
+                  },
+                  "minItems": 1
+                },
                 "itemIds": {
                   "type": "array",
                   "items": {
@@ -32615,22 +34672,24 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   }
                 },
                 "trackingId": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 180
                 },
                 "trackingUrl": {
-                  "type": "string"
+                  "type": "string",
+                  "format": "uri"
                 },
                 "courierName": {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 120
                 },
                 "note": {
-                  "type": "string"
-                },
-                "isFinalShipment": {
-                  "type": "boolean"
+                  "type": "string",
+                  "maxLength": 500
                 },
                 "shipmentAmount": {
-                  "type": "number"
+                  "type": "number",
+                  "minimum": 0
                 }
               }
             }
@@ -32982,46 +35041,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "pricesIncludeTax": {
               "type": "boolean"
             },
-            "promotion": {
-              "type": "object",
-              "nullable": true,
-              "properties": {
-                "id": {
-                  "type": "string"
+            "discounts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "promotionId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "automatic",
+                      "code"
+                    ]
+                  },
+                  "amount": {
+                    "type": "number"
+                  }
                 },
-                "revision": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "exclusiveMinimum": true
-                },
-                "evaluatorVersion": {
-                  "type": "integer",
-                  "minimum": 0,
-                  "exclusiveMinimum": true
-                },
-                "method": {
-                  "type": "string",
-                  "enum": [
-                    "automatic",
-                    "code"
-                  ]
-                },
-                "name": {
-                  "type": "string"
-                },
-                "code": {
-                  "type": "string",
-                  "nullable": true
-                }
-              },
-              "required": [
-                "id",
-                "revision",
-                "evaluatorVersion",
-                "method",
-                "name",
-                "code"
-              ]
+                "required": [
+                  "promotionId",
+                  "name",
+                  "code",
+                  "method",
+                  "amount"
+                ]
+              }
             },
             "status": {
               "type": "string"
@@ -33144,6 +35197,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "fulfillmentStatus": {
                     "type": "string"
                   },
+                  "shippedQuantity": {
+                    "type": "integer"
+                  },
+                  "inventoryTracked": {
+                    "type": "boolean"
+                  },
                   "unitPriceMinor": {
                     "type": "integer",
                     "nullable": true
@@ -33174,6 +35233,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "productImage",
                   "variantLabel",
                   "fulfillmentStatus",
+                  "shippedQuantity",
+                  "inventoryTracked",
                   "unitPriceMinor",
                   "lineSubtotalMinor",
                   "discountAmountMinor",
@@ -33266,6 +35327,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "failed"
                   ]
                 },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "courier_unconfirmed",
+                    "reconcile_required",
+                    "creating",
+                    "claim_expired",
+                    "failed"
+                  ]
+                },
                 "severity": {
                   "type": "string",
                   "enum": [
@@ -33314,6 +35386,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "state",
+                "reason",
                 "severity",
                 "activeLock",
                 "label",
@@ -33597,36 +35670,112 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "providerStatus"
               ]
             },
-            "fullEditReadiness": {
-              "type": "object",
-              "properties": {
-                "allowed": {
-                  "type": "boolean"
-                },
-                "reason": {
-                  "type": "string",
-                  "nullable": true
-                }
-              },
-              "required": [
-                "allowed",
-                "reason"
+            "orderNumber": {
+              "type": "integer",
+              "nullable": true,
+              "description": "Sequential store order number, shown as #1001."
+            },
+            "archivedAt": {
+              "$ref": "#/components/schemas/NullableTimestamp"
+            },
+            "openRequestType": {
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "cancel_pre_shipment",
+                "return",
+                "refund",
+                null
               ]
             },
-            "amendmentReadiness": {
+            "cod": {
               "type": "object",
+              "nullable": true,
               "properties": {
-                "allowed": {
-                  "type": "boolean"
+                "status": {
+                  "type": "string"
                 },
-                "reason": {
-                  "type": "string",
-                  "nullable": true
+                "deliveryAttempts": {
+                  "type": "integer"
                 }
               },
               "required": [
-                "allowed",
-                "reason"
+                "status",
+                "deliveryAttempts"
+              ]
+            },
+            "refundDue": {
+              "type": "number",
+              "description": "Value of received returns not refunded yet."
+            },
+            "refundedAmount": {
+              "type": "number"
+            },
+            "editReadiness": {
+              "type": "object",
+              "properties": {
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "allowed": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "shipped",
+                        "closed",
+                        "paid",
+                        "online_payment",
+                        "discount",
+                        "history",
+                        "inventory",
+                        "archived",
+                        "busy",
+                        "unavailable",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "allowed",
+                    "reason"
+                  ]
+                },
+                "details": {
+                  "type": "object",
+                  "properties": {
+                    "allowed": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "shipped",
+                        "closed",
+                        "paid",
+                        "online_payment",
+                        "discount",
+                        "history",
+                        "inventory",
+                        "archived",
+                        "busy",
+                        "unavailable",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "allowed",
+                    "reason"
+                  ]
+                }
+              },
+              "required": [
+                "items",
+                "details"
               ]
             },
             "supportRequests": {
@@ -33741,7 +35890,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "totalAmountMinor",
             "taxLabel",
             "pricesIncludeTax",
-            "promotion",
+            "discounts",
             "status",
             "paymentStatus",
             "paymentMethod",
@@ -33767,8 +35916,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "paymentRecovery",
             "refundAttempts",
             "activeRefundOperation",
-            "fullEditReadiness",
-            "amendmentReadiness",
+            "orderNumber",
+            "archivedAt",
+            "openRequestType",
+            "cod",
+            "refundDue",
+            "refundedAmount",
+            "editReadiness",
             "supportRequests"
           ]
         }
@@ -33847,6 +36001,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "properties": {
                 "id": {
                   "type": "string"
+                },
+                "orderNumber": {
+                  "type": "integer",
+                  "nullable": true
                 },
                 "version": {
                   "type": "integer",
@@ -33981,6 +36139,32 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "balanceDue": {
                   "type": "number",
                   "nullable": true
+                },
+                "refundedAmount": {
+                  "type": "number"
+                },
+                "discounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "code": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "amount": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "code",
+                      "amount"
+                    ]
+                  }
                 },
                 "createdAt": {
                   "anyOf": [
@@ -34337,6 +36521,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "id": {
                   "type": "string"
                 },
+                "orderNumber": {
+                  "type": "integer",
+                  "nullable": true
+                },
                 "version": {
                   "type": "integer",
                   "minimum": 0,
@@ -34470,6 +36658,32 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "balanceDue": {
                   "type": "number",
                   "nullable": true
+                },
+                "refundedAmount": {
+                  "type": "number"
+                },
+                "discounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "code": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "amount": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "code",
+                      "amount"
+                    ]
+                  }
                 },
                 "createdAt": {
                   "anyOf": [
@@ -34862,6 +37076,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "fulfillmentStatus": {
                 "type": "string"
               },
+              "shippedQuantity": {
+                "type": "integer"
+              },
+              "inventoryTracked": {
+                "type": "boolean"
+              },
               "unitPriceMinor": {
                 "type": "integer",
                 "nullable": true
@@ -34892,6 +37112,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "productImage",
               "variantLabel",
               "fulfillmentStatus",
+              "shippedQuantity",
+              "inventoryTracked",
               "unitPriceMinor",
               "lineSubtotalMinor",
               "discountAmountMinor",
@@ -34988,16 +37210,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
-              "open",
-              "in_transit",
-              "delivered",
-              "closed"
+              "unfulfilled",
+              "unpaid",
+              "cod_to_collect",
+              "delivery_failed",
+              "returned"
             ],
-            "description": "Filter by order lifecycle view"
+            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned."
           },
           "required": false,
-          "description": "Filter by order lifecycle view",
-          "name": "statusGroup",
+          "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+          "name": "view",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "description": "Only orders with an open customer request"
+          },
+          "required": false,
+          "description": "Only orders with an open customer request",
+          "name": "openRequest",
           "in": "query"
         },
         {
@@ -35007,6 +37244,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "unpaid",
               "partial",
               "paid",
+              "partially_refunded",
               "refunded",
               "failed"
             ],
@@ -35084,14 +37322,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "relevance",
               "customerName",
               "totalAmount",
-              "status",
               "createdAt",
               "updatedAt"
             ],
-            "description": "Sort field. Use relevance with a search query to order by FTS rank."
+            "description": "Sort field (default: newest first; relevance when searching)."
           },
           "required": false,
-          "description": "Sort field. Use relevance with a search query to order by FTS rank.",
+          "description": "Sort field (default: newest first; relevance when searching).",
           "name": "sort",
           "in": "query"
         },
@@ -35333,6 +37570,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "failed"
                         ]
                       },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "courier_unconfirmed",
+                          "reconcile_required",
+                          "creating",
+                          "claim_expired",
+                          "failed"
+                        ]
+                      },
                       "severity": {
                         "type": "string",
                         "enum": [
@@ -35381,6 +37629,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     "required": [
                       "state",
+                      "reason",
                       "severity",
                       "activeLock",
                       "label",
@@ -35518,21 +37767,46 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "providerStatus"
                     ]
                   },
-                  "fullEditReadiness": {
+                  "orderNumber": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "Sequential store order number, shown as #1001."
+                  },
+                  "archivedAt": {
+                    "$ref": "#/components/schemas/NullableTimestamp"
+                  },
+                  "openRequestType": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "cancel_pre_shipment",
+                      "return",
+                      "refund",
+                      null
+                    ]
+                  },
+                  "cod": {
                     "type": "object",
+                    "nullable": true,
                     "properties": {
-                      "allowed": {
-                        "type": "boolean"
+                      "status": {
+                        "type": "string"
                       },
-                      "reason": {
-                        "type": "string",
-                        "nullable": true
+                      "deliveryAttempts": {
+                        "type": "integer"
                       }
                     },
                     "required": [
-                      "allowed",
-                      "reason"
+                      "status",
+                      "deliveryAttempts"
                     ]
+                  },
+                  "refundDue": {
+                    "type": "number",
+                    "description": "Value of received returns not refunded yet."
+                  },
+                  "refundedAmount": {
+                    "type": "number"
                   }
                 },
                 "required": [
@@ -35564,7 +37838,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "shipmentRecovery",
                   "paymentRecovery",
                   "activeRefundOperation",
-                  "fullEditReadiness"
+                  "orderNumber",
+                  "archivedAt",
+                  "openRequestType",
+                  "cod",
+                  "refundDue",
+                  "refundedAmount"
                 ]
               }
             },
@@ -36213,25 +38492,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
-              "open",
-              "in_transit",
-              "delivered",
-              "closed"
-            ],
-            "description": "Filter by order lifecycle view"
-          },
-          "required": false,
-          "description": "Filter by order lifecycle view",
-          "name": "statusGroup",
-          "in": "query"
-        },
-        {
-          "schema": {
-            "type": "string",
-            "enum": [
               "unpaid",
               "partial",
               "paid",
+              "partially_refunded",
               "refunded",
               "failed"
             ],
@@ -36293,7 +38557,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "relevance",
               "customerName",
               "totalAmount",
-              "status",
               "createdAt",
               "updatedAt"
             ],
@@ -36640,7 +38903,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "relevance",
               "customerName",
               "totalAmount",
-              "status",
               "createdAt",
               "updatedAt"
             ],
@@ -36889,6 +39151,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "failed"
                         ]
                       },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "courier_unconfirmed",
+                          "reconcile_required",
+                          "creating",
+                          "claim_expired",
+                          "failed"
+                        ]
+                      },
                       "severity": {
                         "type": "string",
                         "enum": [
@@ -36937,6 +39210,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     "required": [
                       "state",
+                      "reason",
                       "severity",
                       "activeLock",
                       "label",
@@ -37074,21 +39348,46 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "providerStatus"
                     ]
                   },
-                  "fullEditReadiness": {
+                  "orderNumber": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "Sequential store order number, shown as #1001."
+                  },
+                  "archivedAt": {
+                    "$ref": "#/components/schemas/NullableTimestamp"
+                  },
+                  "openRequestType": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "cancel_pre_shipment",
+                      "return",
+                      "refund",
+                      null
+                    ]
+                  },
+                  "cod": {
                     "type": "object",
+                    "nullable": true,
                     "properties": {
-                      "allowed": {
-                        "type": "boolean"
+                      "status": {
+                        "type": "string"
                       },
-                      "reason": {
-                        "type": "string",
-                        "nullable": true
+                      "deliveryAttempts": {
+                        "type": "integer"
                       }
                     },
                     "required": [
-                      "allowed",
-                      "reason"
+                      "status",
+                      "deliveryAttempts"
                     ]
+                  },
+                  "refundDue": {
+                    "type": "number",
+                    "description": "Value of received returns not refunded yet."
+                  },
+                  "refundedAmount": {
+                    "type": "number"
                   }
                 },
                 "required": [
@@ -37120,7 +39419,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "shipmentRecovery",
                   "paymentRecovery",
                   "activeRefundOperation",
-                  "fullEditReadiness"
+                  "orderNumber",
+                  "archivedAt",
+                  "openRequestType",
+                  "cod",
+                  "refundDue",
+                  "refundedAmount"
                 ]
               }
             },
@@ -37626,6 +39930,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "manual_reconciliation"
                     ]
                   },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "manual_reconciliation",
+                      "stale",
+                      "dead_letter",
+                      "failed"
+                    ]
+                  },
                   "message": {
                     "type": "string"
                   },
@@ -37657,6 +39970,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "provider",
                   "eventType",
                   "status",
+                  "reason",
                   "message",
                   "error",
                   "queueType",
@@ -41320,10 +43634,139 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
-    "operationId": "dashboard.orders.update",
+    "operationId": "dashboard.orders.timeline",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/orders/{id}/timeline",
+    "summary": "Order timeline: staff comments and what happened, newest first",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.view"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "placed",
+                      "comment",
+                      "status_changed",
+                      "details_edited",
+                      "items_edited",
+                      "shipment_created",
+                      "cod_collected",
+                      "cod_failed",
+                      "cod_returned",
+                      "refund_recorded",
+                      "return_created",
+                      "return_received",
+                      "request_resolved",
+                      "archived",
+                      "unarchived",
+                      "invoice_issued"
+                    ]
+                  },
+                  "body": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "data": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": {}
+                  },
+                  "actorName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "createdAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "kind",
+                  "body",
+                  "data",
+                  "actorName",
+                  "createdAt"
+                ]
+              }
+            }
+          },
+          "required": [
+            "events"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.update_details",
     "method": "PUT",
-    "pathTemplate": "/api/v1/admin/orders/{id}",
-    "summary": "Update an order",
+    "pathTemplate": "/api/v1/admin/orders/{id}/details",
+    "summary": "Edit the customer and delivery details of an order that has not shipped",
     "tags": [
       "Admin - Orders"
     ],
@@ -41398,70 +43841,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "nullable": true
                 },
-                "cityName": {
-                  "type": "string"
-                },
-                "zoneName": {
-                  "type": "string"
-                },
-                "areaName": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "notes": {
-                  "type": "string",
-                  "nullable": true,
-                  "maxLength": 500
-                },
-                "discountAmount": {
-                  "type": "number",
-                  "nullable": true,
-                  "minimum": 0
-                },
-                "shippingCharge": {
-                  "type": "number",
-                  "minimum": 0
-                },
-                "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "productId": {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      "variantId": {
-                        "type": "string",
-                        "nullable": true
-                      },
-                      "quantity": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "maximum": 99
-                      },
-                      "price": {
-                        "type": "number",
-                        "minimum": 0
-                      }
-                    },
-                    "required": [
-                      "productId",
-                      "variantId",
-                      "quantity",
-                      "price"
-                    ]
-                  },
-                  "minItems": 1,
-                  "maxItems": 99
-                },
                 "expectedVersion": {
                   "type": "integer",
                   "minimum": 1
-                },
-                "status": {
-                  "type": "string",
-                  "minLength": 1
                 }
               },
               "required": [
@@ -41472,12 +43854,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "city",
                 "zone",
                 "area",
-                "notes",
-                "discountAmount",
-                "shippingCharge",
-                "items",
-                "expectedVersion",
-                "status"
+                "expectedVersion"
               ]
             }
           }
@@ -41499,10 +43876,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "id": {
               "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
             }
           },
           "required": [
-            "id"
+            "id",
+            "version"
           ]
         }
       },
@@ -41571,8 +43953,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cancelled",
                     "returned",
                     "refunded",
-                    "partially_refunded",
                     "incomplete"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "customer_changed_mind",
+                    "unreachable",
+                    "fake_order",
+                    "out_of_stock",
+                    "other"
                   ]
                 }
               },
@@ -41663,6 +44054,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "defaultMethod": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             },
             "activeMethods": {
               "type": "array",
@@ -41843,6 +44238,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "required": [
             "enabledMethods",
             "defaultMethod",
+            "revision",
             "gatewayStatus"
           ],
           "additionalProperties": {}
@@ -41870,7 +44266,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 65536,
@@ -41912,11 +44308,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "sslcommerz",
                     "cod"
                   ]
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
                 "enabledMethods",
-                "defaultMethod"
+                "defaultMethod",
+                "expectedRevision"
               ]
             }
           }
@@ -41937,10 +44338,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
           ]
         }
       },
@@ -41993,6 +44399,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
             "storeId": {
               "type": "string"
             },
@@ -42007,6 +44417,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             }
           },
           "required": [
+            "revision",
             "storeId",
             "storePassword",
             "sandbox",
@@ -42036,7 +44447,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "security",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "forbidden",
     "transport": "json",
     "maxResponseBytes": 65536,
@@ -42058,6 +44469,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "storeId": {
                   "type": "string"
                 },
@@ -42070,7 +44485,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "enabled": {
                   "type": "boolean"
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -42090,10 +44508,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
           ]
         }
       },
@@ -42146,6 +44569,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
             "secretKey": {
               "type": "string"
             },
@@ -42160,6 +44587,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             }
           },
           "required": [
+            "revision",
             "secretKey",
             "publishableKey",
             "webhookSecret",
@@ -42189,7 +44617,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "security",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "forbidden",
     "transport": "json",
     "maxResponseBytes": 65536,
@@ -42211,6 +44639,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "secretKey": {
                   "type": "string"
                 },
@@ -42223,7 +44655,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "enabled": {
                   "type": "boolean"
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -42243,10 +44678,256 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.policies.get",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/settings/policies",
+    "summary": "Get store policy pages",
+    "description": "Which of the store's content pages is its return and refund, privacy, terms of service, shipping and contact policy (page ids; null when not set).",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.view"
+    },
+    "inputSchema": {},
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "refund": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "privacy": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "terms": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "shipping": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "contact": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "refund",
+            "privacy",
+            "terms",
+            "shipping",
+            "contact",
+            "revision"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.policies.update",
+    "method": "PUT",
+    "pathTemplate": "/api/v1/admin/settings/policies",
+    "summary": "Link store policies to pages",
+    "description": "Links each policy to one of the store's own content pages, or clears it. Unknown or trashed pages are refused against their field.",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.seo.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "refund": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "privacy": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "terms": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "shipping": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "contact": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "expectedRevision"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "refund": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "privacy": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "terms": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "shipping": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "contact": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "refund",
+            "privacy",
+            "terms",
+            "shipping",
+            "contact",
+            "revision"
           ]
         }
       },
@@ -42394,11 +45075,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "price": {
                         "type": "number",
                         "minimum": 0,
-                        "maximum": 1000000000000
+                        "maximum": 99999999
                       },
                       "stock": {
                         "type": "integer",
                         "minimum": 0,
+                        "maximum": 1000000,
                         "description": "On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity."
                       },
                       "expectedStockVersion": {
@@ -42413,6 +45095,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "number",
                         "nullable": true,
                         "minimum": 0,
+                        "maximum": 1000000,
                         "description": "Weight in grams."
                       },
                       "barcode": {
@@ -42450,7 +45133,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "number",
                         "nullable": true,
                         "minimum": 0,
-                        "maximum": 1000000000000
+                        "maximum": 99999999
                       }
                     },
                     "required": [
@@ -42581,20 +45264,23 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number",
                   "nullable": true,
                   "minimum": 0,
+                  "maximum": 1000000,
                   "description": "Weight in grams."
                 },
                 "sku": {
                   "type": "string",
-                  "minLength": 3
+                  "minLength": 3,
+                  "maxLength": 100
                 },
                 "price": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000
+                  "maximum": 99999999
                 },
                 "stock": {
                   "type": "integer",
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 1000000
                 },
                 "trackInventory": {
                   "type": "boolean"
@@ -42633,7 +45319,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "discountAmount": {
                   "type": "number",
                   "nullable": true,
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 99999999
                 },
                 "expectedAggregateRevision": {
                   "type": "integer",
@@ -43244,20 +45931,23 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number",
                   "nullable": true,
                   "minimum": 0,
+                  "maximum": 1000000,
                   "description": "Weight in grams."
                 },
                 "sku": {
                   "type": "string",
-                  "minLength": 3
+                  "minLength": 3,
+                  "maxLength": 100
                 },
                 "price": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000
+                  "maximum": 99999999
                 },
                 "stock": {
                   "type": "integer",
                   "minimum": 0,
+                  "maximum": 1000000,
                   "description": "New on-hand quantity. Omit to keep the current quantity."
                 },
                 "trackInventory": {
@@ -43297,7 +45987,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "discountAmount": {
                   "type": "number",
                   "nullable": true,
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 99999999
                 },
                 "expectedStockVersion": {
                   "type": "integer",
@@ -43671,6 +46362,126 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.products.bulk_update",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/products/bulk-update",
+    "summary": "Set status and/or category on several products",
+    "description": "Applies to every listed product or none. Activating fails with 400 when a product or one of its live SKUs has no price above 0.",
+    "tags": [
+      "Admin - Products"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "products.bulk_operations"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "products": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "expectedAggregateRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "expectedAggregateRevision"
+                    ]
+                  },
+                  "minItems": 1,
+                  "maxItems": 90
+                },
+                "isActive": {
+                  "type": "boolean"
+                },
+                "categoryId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 180
+                }
+              },
+              "required": [
+                "products"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "products": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "aggregateRevision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "id",
+                  "aggregateRevision"
+                ]
+              }
+            }
+          },
+          "required": [
+            "products"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.products.create",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/products",
@@ -43721,7 +46532,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "price": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000
+                  "maximum": 99999999
                 },
                 "categoryId": {
                   "type": "string",
@@ -43746,7 +46557,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "discountAmount": {
                   "type": "number",
                   "nullable": true,
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 99999999
                 },
                 "freeDelivery": {
                   "type": "boolean"
@@ -43967,11 +46779,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "price": {
                             "type": "number",
                             "minimum": 0,
-                            "maximum": 1000000000000
+                            "maximum": 99999999
                           },
                           "stock": {
                             "type": "integer",
                             "minimum": 0,
+                            "maximum": 1000000,
                             "description": "On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity."
                           },
                           "expectedStockVersion": {
@@ -43986,6 +46799,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,
+                            "maximum": 1000000,
                             "description": "Weight in grams."
                           },
                           "barcode": {
@@ -44023,7 +46837,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "type": "number",
                             "nullable": true,
                             "minimum": 0,
-                            "maximum": 1000000000000
+                            "maximum": 99999999
                           }
                         },
                         "required": [
@@ -44057,7 +46871,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "type": "string",
                       "minLength": 3,
                       "maxLength": 100,
-                      "description": "Omit to use the generated SIMPLE-<productId> SKU."
+                      "description": "Omit to generate a readable SKU from the product title."
                     },
                     "trackInventory": {
                       "type": "boolean"
@@ -44065,7 +46879,34 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "stock": {
                       "type": "integer",
                       "minimum": 0,
+                      "maximum": 1000000,
                       "description": "Initial on-hand quantity; must be 0 when inventory is not tracked."
+                    },
+                    "barcode": {
+                      "type": "string",
+                      "nullable": true,
+                      "maxLength": 50,
+                      "description": "Scanned or printed barcode. Omit or null to generate an internal Code 128 barcode."
+                    },
+                    "barcodeType": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "ean13",
+                        "upc",
+                        "isbn",
+                        "gtin",
+                        "code128",
+                        "custom",
+                        null
+                      ]
+                    },
+                    "weight": {
+                      "type": "number",
+                      "nullable": true,
+                      "minimum": 0,
+                      "maximum": 1000000,
+                      "description": "Weight in grams."
                     }
                   },
                   "required": [
@@ -44180,6 +47021,102 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
+    "operationId": "dashboard.products.duplicate",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/products/{id}/duplicate",
+    "summary": "Copy a product as a new draft",
+    "description": "Copies text, pricing, media, attributes, sections, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
+    "tags": [
+      "Admin - Products"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "products.create"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ],
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 100,
+                  "description": "Title of the copy"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "aggregateRevision": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "id",
+            "aggregateRevision"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.products.get",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/products/{id}",
@@ -44240,8 +47177,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "rbac": {
-      "type": "permission",
-      "permission": "products.view"
+      "type": "anyOf",
+      "permissions": [
+        "collections.view",
+        "products.view"
+      ]
     },
     "inputSchema": {
       "parameters": [
@@ -45980,7 +48920,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "price": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000
+                  "maximum": 99999999
                 },
                 "categoryId": {
                   "type": "string",
@@ -46006,7 +48946,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "discountAmount": {
                   "type": "number",
                   "nullable": true,
-                  "minimum": 0
+                  "minimum": 0,
+                  "maximum": 99999999
                 },
                 "freeDelivery": {
                   "type": "boolean"
@@ -46288,7 +49229,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "price": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 1000000000000
+                          "maximum": 99999999
                         },
                         "categoryId": {
                           "type": "string",
@@ -46315,7 +49256,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "type": "number",
                           "nullable": true,
                           "minimum": 0,
-                          "maximum": 1000000000000
+                          "maximum": 99999999
                         },
                         "freeDelivery": {
                           "type": "boolean"
@@ -46827,10 +49768,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "cspAllowedDomains": {
               "type": "string",
               "maxLength": 51299
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "cspAllowedDomains"
+            "cspAllowedDomains",
+            "revision"
           ]
         }
       },
@@ -46856,7 +49802,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "security",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 8192,
@@ -46878,11 +49824,18 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "cspAllowedDomains": {
                   "type": "string",
                   "maxLength": 65536
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -46902,10 +49855,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
           ]
         }
       },
@@ -48081,8 +51039,90 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "rbac": {
-      "type": "permission",
-      "permission": "settings.general.view"
+      "type": "anyOf",
+      "permissions": [
+        "agent_access.manage",
+        "agent_access.view",
+        "analytics.create",
+        "analytics.edit",
+        "analytics.toggle",
+        "analytics.view",
+        "attributes.create",
+        "attributes.delete",
+        "attributes.edit",
+        "attributes.view",
+        "categories.create",
+        "categories.delete",
+        "categories.edit",
+        "categories.permanent_delete",
+        "categories.restore",
+        "categories.view",
+        "collections.create",
+        "collections.delete",
+        "collections.edit",
+        "collections.restore",
+        "collections.toggle_status",
+        "collections.view",
+        "customers.create",
+        "customers.delete",
+        "customers.edit",
+        "customers.sync",
+        "customers.view",
+        "customers.view_history",
+        "dashboard.analytics",
+        "dashboard.view",
+        "discounts.create",
+        "discounts.delete",
+        "discounts.edit",
+        "discounts.toggle_status",
+        "discounts.view",
+        "media.delete",
+        "media.manage_folders",
+        "media.upload",
+        "media.view",
+        "orders.change_status",
+        "orders.create",
+        "orders.delete",
+        "orders.edit",
+        "orders.issue_invoice",
+        "orders.manage_shipments",
+        "orders.refund",
+        "orders.restore",
+        "orders.view",
+        "pages.create",
+        "pages.delete",
+        "pages.edit",
+        "pages.publish",
+        "pages.view",
+        "products.bulk_operations",
+        "products.create",
+        "products.delete",
+        "products.edit",
+        "products.permanent_delete",
+        "products.restore",
+        "products.view",
+        "settings.cache.manage",
+        "settings.cache.view",
+        "settings.delivery_locations.edit",
+        "settings.delivery_locations.view",
+        "settings.delivery_providers.edit",
+        "settings.delivery_providers.view",
+        "settings.footer.edit",
+        "settings.fraud_checker.edit",
+        "settings.fraud_checker.view",
+        "settings.general.edit",
+        "settings.general.view",
+        "settings.header.edit",
+        "settings.notifications.edit",
+        "settings.seo.edit",
+        "settings.shipping_methods.edit",
+        "settings.shipping_methods.view",
+        "taxes.manage",
+        "taxes.view",
+        "team.manage",
+        "team.manage_roles",
+        "team.view"
+      ]
     },
     "inputSchema": {},
     "outputSchema": {
@@ -48097,6 +51137,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
             "homepageTitle": {
               "type": "string",
               "maxLength": 200
@@ -48205,6 +51249,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             }
           },
           "required": [
+            "revision",
             "homepageTitle",
             "homepageMetaDescription",
             "socialImage",
@@ -48235,7 +51280,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 16384,
@@ -48257,6 +51302,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "homepageTitle": {
                   "type": "string",
                   "maxLength": 200
@@ -48345,7 +51394,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     }
                   }
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -48365,10 +51417,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
           ]
         }
       },
@@ -49460,6 +52517,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "gennetSid": {
               "type": "string",
               "maxLength": 128
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
@@ -49474,7 +52535,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "smsnetbdSenderId",
             "gennetApiToken",
             "gennetBaseUrl",
-            "gennetSid"
+            "gennetSid",
+            "revision"
           ]
         }
       },
@@ -49500,7 +52562,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "security",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 8192,
@@ -49566,8 +52628,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "gennetSid": {
                   "type": "string",
                   "maxLength": 128
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ],
+              "additionalProperties": false
             }
           }
         }
@@ -49585,12 +52655,80 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "message": {
-              "type": "string"
+            "activeProvider": {
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "smsnetbd",
+                "bdbulksms",
+                "mimsms",
+                "gennet",
+                null
+              ]
+            },
+            "activeProviderConfigured": {
+              "type": "boolean"
+            },
+            "activeProviderError": {
+              "type": "string",
+              "nullable": true,
+              "maxLength": 1000
+            },
+            "bdbulksmsToken": {
+              "type": "string",
+              "maxLength": 12
+            },
+            "mimsmsUsername": {
+              "type": "string",
+              "maxLength": 320
+            },
+            "mimsmsApiKey": {
+              "type": "string",
+              "maxLength": 12
+            },
+            "mimsmsSenderName": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "smsnetbdApiKey": {
+              "type": "string",
+              "maxLength": 12
+            },
+            "smsnetbdSenderId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "gennetApiToken": {
+              "type": "string",
+              "maxLength": 12
+            },
+            "gennetBaseUrl": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "gennetSid": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "activeProvider",
+            "activeProviderConfigured",
+            "activeProviderError",
+            "bdbulksmsToken",
+            "mimsmsUsername",
+            "mimsmsApiKey",
+            "mimsmsSenderName",
+            "smsnetbdApiKey",
+            "smsnetbdSenderId",
+            "gennetApiToken",
+            "gennetBaseUrl",
+            "gennetSid",
+            "revision"
           ]
         }
       },
@@ -49627,8 +52765,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "rbac": {
-      "type": "permission",
-      "permission": "settings.general.view"
+      "type": "anyOf",
+      "permissions": [
+        "orders.issue_invoice",
+        "settings.general.view"
+      ]
     },
     "inputSchema": {},
     "outputSchema": {
@@ -49698,6 +52839,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "invoiceLogoUrl": {
               "type": "string",
               "maxLength": 2048
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
@@ -49714,7 +52859,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "taxId",
             "invoicePrefix",
             "invoiceFooterText",
-            "invoiceLogoUrl"
+            "invoiceLogoUrl",
+            "revision"
           ]
         }
       },
@@ -49740,7 +52886,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 8192,
@@ -49817,8 +52963,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "invoiceLogoUrl": {
                   "type": "string",
                   "maxLength": 2048
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -49836,12 +52989,83 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "message": {
-              "type": "string"
+            "companyName": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "legalName": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "addressLine1": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "addressLine2": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "city": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "stateRegion": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "postalCode": {
+              "type": "string",
+              "maxLength": 32
+            },
+            "country": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "phone": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "email": {
+              "type": "string",
+              "maxLength": 320
+            },
+            "taxId": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "invoicePrefix": {
+              "type": "string",
+              "maxLength": 32
+            },
+            "invoiceFooterText": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "invoiceLogoUrl": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "companyName",
+            "legalName",
+            "addressLine1",
+            "addressLine2",
+            "city",
+            "stateRegion",
+            "postalCode",
+            "country",
+            "phone",
+            "email",
+            "taxId",
+            "invoicePrefix",
+            "invoiceFooterText",
+            "invoiceLogoUrl",
+            "revision"
           ]
         }
       },
@@ -49878,8 +53102,90 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "rbac": {
-      "type": "permission",
-      "permission": "settings.general.view"
+      "type": "anyOf",
+      "permissions": [
+        "agent_access.manage",
+        "agent_access.view",
+        "analytics.create",
+        "analytics.edit",
+        "analytics.toggle",
+        "analytics.view",
+        "attributes.create",
+        "attributes.delete",
+        "attributes.edit",
+        "attributes.view",
+        "categories.create",
+        "categories.delete",
+        "categories.edit",
+        "categories.permanent_delete",
+        "categories.restore",
+        "categories.view",
+        "collections.create",
+        "collections.delete",
+        "collections.edit",
+        "collections.restore",
+        "collections.toggle_status",
+        "collections.view",
+        "customers.create",
+        "customers.delete",
+        "customers.edit",
+        "customers.sync",
+        "customers.view",
+        "customers.view_history",
+        "dashboard.analytics",
+        "dashboard.view",
+        "discounts.create",
+        "discounts.delete",
+        "discounts.edit",
+        "discounts.toggle_status",
+        "discounts.view",
+        "media.delete",
+        "media.manage_folders",
+        "media.upload",
+        "media.view",
+        "orders.change_status",
+        "orders.create",
+        "orders.delete",
+        "orders.edit",
+        "orders.issue_invoice",
+        "orders.manage_shipments",
+        "orders.refund",
+        "orders.restore",
+        "orders.view",
+        "pages.create",
+        "pages.delete",
+        "pages.edit",
+        "pages.publish",
+        "pages.view",
+        "products.bulk_operations",
+        "products.create",
+        "products.delete",
+        "products.edit",
+        "products.permanent_delete",
+        "products.restore",
+        "products.view",
+        "settings.cache.manage",
+        "settings.cache.view",
+        "settings.delivery_locations.edit",
+        "settings.delivery_locations.view",
+        "settings.delivery_providers.edit",
+        "settings.delivery_providers.view",
+        "settings.footer.edit",
+        "settings.fraud_checker.edit",
+        "settings.fraud_checker.view",
+        "settings.general.edit",
+        "settings.general.view",
+        "settings.header.edit",
+        "settings.notifications.edit",
+        "settings.seo.edit",
+        "settings.shipping_methods.edit",
+        "settings.shipping_methods.view",
+        "taxes.manage",
+        "taxes.view",
+        "team.manage",
+        "team.manage_roles",
+        "team.view"
+      ]
     },
     "inputSchema": {},
     "outputSchema": {
@@ -50065,13 +53371,18 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "currencyCodeLocked": {
               "type": "boolean"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
             "currencyCode",
             "currencySymbol",
             "usdExchangeRate",
-            "currencyCodeLocked"
+            "currencyCodeLocked",
+            "revision"
           ]
         }
       },
@@ -50097,7 +53408,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 8192,
@@ -50119,6 +53430,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "currencyCode": {
                   "type": "string",
                   "enum": [
@@ -50288,7 +53603,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "maxLength": 64
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -50308,10 +53626,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
           ]
         }
       },
@@ -50364,6 +53687,23 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
+            "revision": {
+              "type": "object",
+              "properties": {
+                "customerAuth": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "whatsapp": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "customerAuth",
+                "whatsapp"
+              ]
+            },
             "authVerificationMethod": {
               "type": "string",
               "enum": [
@@ -50438,6 +53778,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             }
           },
           "required": [
+            "revision",
             "authVerificationMethod",
             "customerAuthPolicy",
             "whatsappAccessToken",
@@ -50468,7 +53809,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "security",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 8192,
@@ -50490,6 +53831,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "expectedRevision": {
+                  "type": "object",
+                  "properties": {
+                    "customerAuth": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "whatsapp": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                },
                 "authVerificationMethod": {
                   "type": "string",
                   "enum": [
@@ -50565,6 +53919,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "maxLength": 128
                 }
               },
+              "required": [
+                "expectedRevision"
+              ],
               "additionalProperties": false
             }
           }
@@ -50585,10 +53942,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "object",
+              "properties": {
+                "customerAuth": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "whatsapp": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "customerAuth",
+                "whatsapp"
+              ]
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
           ]
         }
       },
@@ -50655,11 +54030,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "include",
                 "exclude"
               ]
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
             "allowedCountries",
-            "allowedCountriesMode"
+            "allowedCountriesMode",
+            "revision"
           ],
           "additionalProperties": false
         }
@@ -50686,7 +54066,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 8192,
@@ -50723,10 +54103,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "exclude"
                   ],
                   "default": "include"
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
-                "allowedCountries"
+                "allowedCountries",
+                "expectedRevision"
               ]
             }
           }
@@ -50747,10 +54132,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
           ]
         }
       },
@@ -50864,6 +54254,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "status",
                 "issues"
               ]
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
@@ -50873,7 +54267,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "senderConfigured",
             "cloudflareBindingConfigured",
             "resendConfigured",
-            "readiness"
+            "readiness",
+            "revision"
           ]
         }
       },
@@ -50899,7 +54294,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "security",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 8192,
@@ -50921,6 +54316,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "provider": {
                   "type": "string",
                   "enum": [
@@ -50936,7 +54335,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "maxLength": 320
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -50956,10 +54358,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
           ]
         }
       },
@@ -51059,8 +54466,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "maxItems": 24,
               "default": []
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
-          }
+          },
+          "required": [
+            "revision"
+          ]
         }
       },
       "required": [
@@ -51085,7 +54499,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 16384,
@@ -51120,8 +54534,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "maxItems": 24,
                   "default": []
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -51153,11 +54574,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "maxItems": 24,
               "default": []
             },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
             "message": {
               "type": "string"
             }
           },
           "required": [
+            "revision",
             "message"
           ]
         }
@@ -51272,6 +54698,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "localLoginDisabled"
               ]
             },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
             "readiness": {
               "type": "object",
               "properties": {
@@ -51359,6 +54789,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "corsAllowedOrigins",
             "setupTokenRequired",
             "identityHandoff",
+            "revision",
             "readiness",
             "effective",
             "dashboardBasePath"
@@ -51387,7 +54818,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 16384,
@@ -51462,8 +54893,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "type": "boolean"
                     }
                   }
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
-              }
+              },
+              "required": [
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -51542,6 +54980,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "localLoginDisabled"
               ]
             },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
             "readiness": {
               "type": "object",
               "properties": {
@@ -51629,6 +55071,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "corsAllowedOrigins",
             "setupTokenRequired",
             "identityHandoff",
+            "revision",
             "readiness",
             "effective",
             "dashboardBasePath"
@@ -51668,8 +55111,90 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "rbac": {
-      "type": "permission",
-      "permission": "settings.general.view"
+      "type": "anyOf",
+      "permissions": [
+        "agent_access.manage",
+        "agent_access.view",
+        "analytics.create",
+        "analytics.edit",
+        "analytics.toggle",
+        "analytics.view",
+        "attributes.create",
+        "attributes.delete",
+        "attributes.edit",
+        "attributes.view",
+        "categories.create",
+        "categories.delete",
+        "categories.edit",
+        "categories.permanent_delete",
+        "categories.restore",
+        "categories.view",
+        "collections.create",
+        "collections.delete",
+        "collections.edit",
+        "collections.restore",
+        "collections.toggle_status",
+        "collections.view",
+        "customers.create",
+        "customers.delete",
+        "customers.edit",
+        "customers.sync",
+        "customers.view",
+        "customers.view_history",
+        "dashboard.analytics",
+        "dashboard.view",
+        "discounts.create",
+        "discounts.delete",
+        "discounts.edit",
+        "discounts.toggle_status",
+        "discounts.view",
+        "media.delete",
+        "media.manage_folders",
+        "media.upload",
+        "media.view",
+        "orders.change_status",
+        "orders.create",
+        "orders.delete",
+        "orders.edit",
+        "orders.issue_invoice",
+        "orders.manage_shipments",
+        "orders.refund",
+        "orders.restore",
+        "orders.view",
+        "pages.create",
+        "pages.delete",
+        "pages.edit",
+        "pages.publish",
+        "pages.view",
+        "products.bulk_operations",
+        "products.create",
+        "products.delete",
+        "products.edit",
+        "products.permanent_delete",
+        "products.restore",
+        "products.view",
+        "settings.cache.manage",
+        "settings.cache.view",
+        "settings.delivery_locations.edit",
+        "settings.delivery_locations.view",
+        "settings.delivery_providers.edit",
+        "settings.delivery_providers.view",
+        "settings.footer.edit",
+        "settings.fraud_checker.edit",
+        "settings.fraud_checker.view",
+        "settings.general.edit",
+        "settings.general.view",
+        "settings.header.edit",
+        "settings.notifications.edit",
+        "settings.seo.edit",
+        "settings.shipping_methods.edit",
+        "settings.shipping_methods.view",
+        "taxes.manage",
+        "taxes.view",
+        "team.manage",
+        "team.manage_roles",
+        "team.view"
+      ]
     },
     "inputSchema": {},
     "outputSchema": {
@@ -51687,10 +55212,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "storefrontUrl": {
               "type": "string",
               "maxLength": 2048
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "storefrontUrl"
+            "storefrontUrl",
+            "revision"
           ]
         }
       },
@@ -51716,7 +55246,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 8192,
@@ -51738,6 +55268,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "schema": {
               "type": "object",
               "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "storefrontUrl": {
                   "type": "string",
                   "minLength": 1,
@@ -51745,6 +55279,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 }
               },
               "required": [
+                "expectedRevision",
                 "storefrontUrl"
               ]
             }
@@ -51766,10 +55301,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "properties": {
             "message": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "required": [
-            "message"
+            "message",
+            "revision"
           ]
         }
       },
@@ -51882,12 +55422,306 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
-    "operationId": "dashboard.shipping_methods.create",
+    "operationId": "dashboard.shipping_methods.list",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/settings/shipping-methods",
+    "summary": "List delivery zones, their areas and rates, plus the Everywhere else rates",
+    "tags": [
+      "Admin - Delivery Zones"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.shipping_methods.view"
+    },
+    "inputSchema": {},
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "zones": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "revision": {
+                    "type": "integer"
+                  },
+                  "locations": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "city",
+                            "zone",
+                            "area"
+                          ]
+                        },
+                        "parentName": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "type",
+                        "parentName"
+                      ]
+                    }
+                  },
+                  "rates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "delivery",
+                            "pickup"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "fee": {
+                          "type": "number"
+                        },
+                        "freeOver": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "pickupAddress": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "pickupHours": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "isActive": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "name",
+                        "fee",
+                        "freeOver",
+                        "description",
+                        "pickupAddress",
+                        "pickupHours",
+                        "isActive"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "revision",
+                  "locations",
+                  "rates"
+                ]
+              }
+            },
+            "everywhereElse": {
+              "type": "object",
+              "properties": {
+                "revision": {
+                  "type": "integer"
+                },
+                "rates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "delivery",
+                          "pickup"
+                        ]
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "fee": {
+                        "type": "number"
+                      },
+                      "freeOver": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "description": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "pickupAddress": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "pickupHours": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "isActive": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "kind",
+                      "name",
+                      "fee",
+                      "freeOver",
+                      "description",
+                      "pickupAddress",
+                      "pickupHours",
+                      "isActive"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "revision",
+                "rates"
+              ]
+            }
+          },
+          "required": [
+            "zones",
+            "everywhereElse"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.shipping_zones.apply_template",
+    "method": "PUT",
+    "pathTemplate": "/api/v1/admin/settings/shipping-methods/template",
+    "summary": "Start from Dhaka-centric zones (inside/outside, or inside/near/outside Dhaka)",
+    "tags": [
+      "Admin - Delivery Zones"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.shipping_methods.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "template": {
+                  "type": "string",
+                  "enum": [
+                    "dhaka_two_zone",
+                    "dhaka_three_zone"
+                  ]
+                },
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "The Everywhere else revision the dashboard loaded."
+                }
+              },
+              "required": [
+                "template",
+                "expectedRevision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.shipping_zones.create",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/settings/shipping-methods",
-    "summary": "Create a shipping method",
+    "summary": "Create a delivery zone with its areas and rates",
     "tags": [
-      "Admin - Shipping Methods"
+      "Admin - Delivery Zones"
     ],
     "surface": "dashboard",
     "exposure": "execute",
@@ -51924,27 +55758,82 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "minLength": 1,
                   "maxLength": 100
                 },
-                "fee": {
-                  "type": "number",
-                  "minimum": 0
+                "locationIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "minItems": 1,
+                  "maxItems": 2000
                 },
-                "description": {
-                  "type": "string",
-                  "nullable": true,
-                  "maxLength": 255
-                },
-                "isActive": {
-                  "type": "boolean",
-                  "default": true
-                },
-                "sortOrder": {
-                  "type": "integer",
-                  "default": 0
+                "rates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "fee": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      "freeOver": {
+                        "type": "number",
+                        "nullable": true,
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "delivery",
+                          "pickup"
+                        ],
+                        "default": "delivery"
+                      },
+                      "pickupAddress": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 500
+                      },
+                      "pickupHours": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      },
+                      "isActive": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "fee",
+                      "isActive"
+                    ]
+                  },
+                  "maxItems": 20
                 }
               },
               "required": [
                 "name",
-                "fee"
+                "locationIds",
+                "rates"
               ]
             }
           }
@@ -51963,57 +55852,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "shippingMethod": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "fee": {
-                  "type": "number"
-                },
-                "description": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "isActive": {
-                  "type": "boolean"
-                },
-                "sortOrder": {
-                  "type": "number"
-                },
-                "createdAt": {
-                  "type": "number",
-                  "nullable": true
-                },
-                "updatedAt": {
-                  "type": "number",
-                  "nullable": true
-                },
-                "deletedAt": {
-                  "type": "number",
-                  "nullable": true
-                }
-              },
-              "required": [
-                "id",
-                "name",
-                "fee",
-                "description",
-                "isActive",
-                "sortOrder",
-                "createdAt",
-                "updatedAt",
-                "deletedAt"
-              ],
-              "additionalProperties": {}
+            "id": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer"
             }
           },
           "required": [
-            "shippingMethod"
+            "revision"
           ]
         }
       },
@@ -52024,12 +55871,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
-    "operationId": "dashboard.shipping_methods.delete_permanently",
+    "operationId": "dashboard.shipping_zones.delete",
     "method": "DELETE",
-    "pathTemplate": "/api/v1/admin/settings/shipping-methods/{id}/permanent-delete",
-    "summary": "Permanently delete a shipping method",
+    "pathTemplate": "/api/v1/admin/settings/shipping-methods/{id}",
+    "summary": "Delete a delivery zone; its areas get the Everywhere else rates",
     "tags": [
-      "Admin - Shipping Methods"
+      "Admin - Delivery Zones"
     ],
     "surface": "dashboard",
     "exposure": "execute",
@@ -52040,7 +55887,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "openWorld": false,
     "idempotency": "none",
     "revision": "none",
-    "batch": "forbidden",
+    "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 65536,
     "maxRequestBytes": 1048576,
@@ -52057,7 +55904,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "parameters": [
         {
           "schema": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
           },
           "required": true,
           "name": "id",
@@ -52068,23 +55917,23 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
-    "operationId": "dashboard.shipping_methods.get",
-    "method": "GET",
-    "pathTemplate": "/api/v1/admin/settings/shipping-methods/{id}",
-    "summary": "Get a shipping method by ID",
+    "operationId": "dashboard.shipping_zones.everywhere_else_update",
+    "method": "PUT",
+    "pathTemplate": "/api/v1/admin/settings/shipping-methods/everywhere-else",
+    "summary": "Replace the rates for addresses outside every delivery zone",
     "tags": [
-      "Admin - Shipping Methods"
+      "Admin - Delivery Zones"
     ],
     "surface": "dashboard",
     "exposure": "execute",
     "principals": [
       "admin"
     ],
-    "risk": "read",
+    "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
-    "batch": "parallel",
+    "revision": "required",
+    "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 65536,
     "maxRequestBytes": 1048576,
@@ -52095,334 +55944,90 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "continuationOutput": null,
     "rbac": {
       "type": "permission",
-      "permission": "settings.shipping_methods.view"
+      "permission": "settings.shipping_methods.edit"
     },
     "inputSchema": {
-      "parameters": [
-        {
-          "schema": {
-            "type": "string"
-          },
-          "required": true,
-          "name": "id",
-          "in": "path"
-        }
-      ]
-    },
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "shippingMethod": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
               "type": "object",
               "properties": {
-                "id": {
-                  "type": "string"
+                "rates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "fee": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      "freeOver": {
+                        "type": "number",
+                        "nullable": true,
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "delivery",
+                          "pickup"
+                        ],
+                        "default": "delivery"
+                      },
+                      "pickupAddress": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 500
+                      },
+                      "pickupHours": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      },
+                      "isActive": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "fee",
+                      "isActive"
+                    ]
+                  },
+                  "maxItems": 20
                 },
-                "name": {
-                  "type": "string"
-                },
-                "fee": {
-                  "type": "number"
-                },
-                "description": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "isActive": {
-                  "type": "boolean"
-                },
-                "sortOrder": {
-                  "type": "number"
-                },
-                "createdAt": {
-                  "type": "number",
-                  "nullable": true
-                },
-                "updatedAt": {
-                  "type": "number",
-                  "nullable": true
-                },
-                "deletedAt": {
-                  "type": "number",
-                  "nullable": true
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
-                "id",
-                "name",
-                "fee",
-                "description",
-                "isActive",
-                "sortOrder",
-                "createdAt",
-                "updatedAt",
-                "deletedAt"
-              ],
-              "additionalProperties": {}
-            }
-          },
-          "required": [
-            "shippingMethod"
-          ]
-        }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
-  },
-  {
-    "operationId": "dashboard.shipping_methods.list",
-    "method": "GET",
-    "pathTemplate": "/api/v1/admin/settings/shipping-methods",
-    "summary": "List all shipping methods",
-    "tags": [
-      "Admin - Shipping Methods"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "read",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "parallel",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "settings.shipping_methods.view"
-    },
-    "inputSchema": {
-      "parameters": [
-        {
-          "schema": {
-            "type": "number",
-            "nullable": true,
-            "default": 1,
-            "description": "Page number"
-          },
-          "required": false,
-          "description": "Page number",
-          "name": "page",
-          "in": "query"
-        },
-        {
-          "schema": {
-            "type": "number",
-            "nullable": true,
-            "maximum": 100,
-            "default": 10,
-            "description": "Items per page"
-          },
-          "required": false,
-          "description": "Items per page",
-          "name": "limit",
-          "in": "query"
-        },
-        {
-          "schema": {
-            "type": "string",
-            "default": "",
-            "description": "Search term"
-          },
-          "required": false,
-          "description": "Search term",
-          "name": "search",
-          "in": "query"
-        },
-        {
-          "schema": {
-            "type": "string",
-            "default": "sortOrder",
-            "description": "Sort field"
-          },
-          "required": false,
-          "description": "Sort field",
-          "name": "sort",
-          "in": "query"
-        },
-        {
-          "schema": {
-            "type": "string",
-            "default": "asc",
-            "description": "Sort order"
-          },
-          "required": false,
-          "description": "Sort order",
-          "name": "order",
-          "in": "query"
-        },
-        {
-          "schema": {
-            "type": "string",
-            "description": "Show trashed items"
-          },
-          "required": false,
-          "description": "Show trashed items",
-          "name": "trashed",
-          "in": "query"
-        }
-      ]
-    },
-    "outputSchema": {
-      "type": "object",
-      "properties": {
-        "success": {
-          "type": "boolean",
-          "enum": [
-            true
-          ]
-        },
-        "data": {
-          "type": "object",
-          "properties": {
-            "shippingMethods": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "fee": {
-                    "type": "number"
-                  },
-                  "description": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "isActive": {
-                    "type": "boolean"
-                  },
-                  "sortOrder": {
-                    "type": "number"
-                  },
-                  "createdAt": {
-                    "type": "number",
-                    "nullable": true
-                  },
-                  "updatedAt": {
-                    "type": "number",
-                    "nullable": true
-                  },
-                  "deletedAt": {
-                    "type": "number",
-                    "nullable": true
-                  }
-                },
-                "required": [
-                  "id",
-                  "name",
-                  "fee",
-                  "description",
-                  "isActive",
-                  "sortOrder",
-                  "createdAt",
-                  "updatedAt",
-                  "deletedAt"
-                ],
-                "additionalProperties": {}
-              }
-            },
-            "pagination": {
-              "type": "object",
-              "properties": {
-                "page": {
-                  "type": "number"
-                },
-                "limit": {
-                  "type": "number"
-                },
-                "total": {
-                  "type": "number"
-                },
-                "totalPages": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "page",
-                "limit",
-                "total",
-                "totalPages"
+                "rates",
+                "expectedRevision"
               ]
             }
-          },
-          "required": [
-            "shippingMethods",
-            "pagination"
-          ]
+          }
         }
-      },
-      "required": [
-        "success",
-        "data"
-      ]
-    }
-  },
-  {
-    "operationId": "dashboard.shipping_methods.restore",
-    "method": "POST",
-    "pathTemplate": "/api/v1/admin/settings/shipping-methods/{id}/restore",
-    "summary": "Restore a soft-deleted shipping method",
-    "tags": [
-      "Admin - Shipping Methods"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "write",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "sequential",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "settings.shipping_methods.edit"
-    },
-    "inputSchema": {
-      "parameters": [
-        {
-          "schema": {
-            "type": "string"
-          },
-          "required": true,
-          "name": "id",
-          "in": "path"
-        }
-      ]
+      }
     },
     "outputSchema": {
       "type": "object",
@@ -52436,12 +56041,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "message": {
+            "id": {
               "type": "string"
+            },
+            "revision": {
+              "type": "integer"
             }
           },
           "required": [
-            "message"
+            "revision"
           ]
         }
       },
@@ -52452,56 +56060,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
-    "operationId": "dashboard.shipping_methods.trash",
-    "method": "DELETE",
-    "pathTemplate": "/api/v1/admin/settings/shipping-methods/{id}",
-    "summary": "Soft-delete a shipping method",
-    "tags": [
-      "Admin - Shipping Methods"
-    ],
-    "surface": "dashboard",
-    "exposure": "execute",
-    "principals": [
-      "admin"
-    ],
-    "risk": "destructive",
-    "openWorld": false,
-    "idempotency": "none",
-    "revision": "none",
-    "batch": "sequential",
-    "transport": "json",
-    "maxResponseBytes": 65536,
-    "maxRequestBytes": 1048576,
-    "sensitiveOutput": false,
-    "oneTimeSecretOutput": false,
-    "requiredClientAction": null,
-    "artifactOutput": null,
-    "continuationOutput": null,
-    "rbac": {
-      "type": "permission",
-      "permission": "settings.shipping_methods.edit"
-    },
-    "inputSchema": {
-      "parameters": [
-        {
-          "schema": {
-            "type": "string"
-          },
-          "required": true,
-          "name": "id",
-          "in": "path"
-        }
-      ]
-    },
-    "outputSchema": null
-  },
-  {
-    "operationId": "dashboard.shipping_methods.update",
+    "operationId": "dashboard.shipping_zones.update",
     "method": "PUT",
     "pathTemplate": "/api/v1/admin/settings/shipping-methods/{id}",
-    "summary": "Update a shipping method",
+    "summary": "Replace a delivery zone's name, areas and rates",
     "tags": [
-      "Admin - Shipping Methods"
+      "Admin - Delivery Zones"
     ],
     "surface": "dashboard",
     "exposure": "execute",
@@ -52511,7 +56075,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "risk": "write",
     "openWorld": false,
     "idempotency": "none",
-    "revision": "none",
+    "revision": "required",
     "batch": "sequential",
     "transport": "json",
     "maxResponseBytes": 65536,
@@ -52529,7 +56093,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
       "parameters": [
         {
           "schema": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
           },
           "required": true,
           "name": "id",
@@ -52548,22 +56114,88 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "minLength": 1,
                   "maxLength": 100
                 },
-                "fee": {
-                  "type": "number",
-                  "minimum": 0
+                "locationIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "minItems": 1,
+                  "maxItems": 2000
                 },
-                "description": {
-                  "type": "string",
-                  "nullable": true,
-                  "maxLength": 255
+                "rates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 128
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "fee": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      "freeOver": {
+                        "type": "number",
+                        "nullable": true,
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      "description": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "delivery",
+                          "pickup"
+                        ],
+                        "default": "delivery"
+                      },
+                      "pickupAddress": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 500
+                      },
+                      "pickupHours": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 120
+                      },
+                      "isActive": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "fee",
+                      "isActive"
+                    ]
+                  },
+                  "maxItems": 20
                 },
-                "isActive": {
-                  "type": "boolean"
-                },
-                "sortOrder": {
-                  "type": "integer"
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 1
                 }
-              }
+              },
+              "required": [
+                "name",
+                "locationIds",
+                "rates",
+                "expectedRevision"
+              ]
             }
           }
         }
@@ -52581,57 +56213,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data": {
           "type": "object",
           "properties": {
-            "shippingMethod": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "fee": {
-                  "type": "number"
-                },
-                "description": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "isActive": {
-                  "type": "boolean"
-                },
-                "sortOrder": {
-                  "type": "number"
-                },
-                "createdAt": {
-                  "type": "number",
-                  "nullable": true
-                },
-                "updatedAt": {
-                  "type": "number",
-                  "nullable": true
-                },
-                "deletedAt": {
-                  "type": "number",
-                  "nullable": true
-                }
-              },
-              "required": [
-                "id",
-                "name",
-                "fee",
-                "description",
-                "isActive",
-                "sortOrder",
-                "createdAt",
-                "updatedAt",
-                "deletedAt"
-              ],
-              "additionalProperties": {}
+            "id": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer"
             }
           },
           "required": [
-            "shippingMethod"
+            "revision"
           ]
         }
       },
@@ -55526,6 +59116,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "permissionsTruncated": {
                   "type": "boolean"
                 },
+                "staffCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "createdAt": {
                   "anyOf": [
                     {
@@ -55554,6 +59148,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "description",
                 "isSystem",
                 "permissions",
+                "staffCount",
                 "createdAt",
                 "updatedAt"
               ]
@@ -55723,6 +59318,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "permissionsTruncated": {
                   "type": "boolean"
                 },
+                "staffCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "createdAt": {
                   "anyOf": [
                     {
@@ -55751,6 +59350,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "description",
                 "isSystem",
                 "permissions",
+                "staffCount",
                 "createdAt",
                 "updatedAt"
               ]
@@ -55873,6 +59473,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "permissionsTruncated": {
                     "type": "boolean"
                   },
+                  "staffCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
                   "createdAt": {
                     "anyOf": [
                       {
@@ -55901,6 +59505,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "description",
                   "isSystem",
                   "permissions",
+                  "staffCount",
                   "createdAt",
                   "updatedAt"
                 ]
@@ -56058,6 +59663,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "permissionsTruncated": {
                   "type": "boolean"
                 },
+                "staffCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "createdAt": {
                   "anyOf": [
                     {
@@ -56086,6 +59695,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "description",
                 "isSystem",
                 "permissions",
+                "staffCount",
                 "createdAt",
                 "updatedAt"
               ]
@@ -56307,12 +59917,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "roleId": {
                   "type": "string",
+                  "minLength": 1,
                   "maxLength": 100
                 }
               },
               "required": [
                 "name",
-                "email"
+                "email",
+                "roleId"
               ]
             }
           }
@@ -56626,6 +60238,77 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "required": [
             "users",
             "pagination"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.team.users.remove",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/auth/users/{id}/remove",
+    "summary": "Remove a staff member",
+    "description": "Permanently ends the person's sign-in and access (sessions, password, two-step, roles, permissions). Their name stays on orders and history. The store owner and yourself can't be removed.",
+    "tags": [
+      "Admin - Auth Management"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 16384,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "team.manage"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "message"
           ]
         }
       },
@@ -65606,7 +69289,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "storefront.customer_auth_send_otp.send_otp",
     "method": "POST",
     "pathTemplate": "/api/v1/customer-auth/send-otp",
-    "summary": "Send OTP verification code",
+    "summary": "Send a sign-in code (the same call for new and returning buyers)",
     "tags": [
       "Customer Auth"
     ],
@@ -65640,7 +69323,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "storefront.customer_auth_verify_otp.verify_otp",
     "method": "POST",
     "pathTemplate": "/api/v1/customer-auth/verify-otp",
-    "summary": "Verify OTP and create session",
+    "summary": "Check a sign-in code; signs in, or asks a new buyer for their details",
     "tags": [
       "Customer Auth"
     ],
@@ -67327,8 +71010,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "storefront.discounts_validate.validate",
     "method": "POST",
     "pathTemplate": "/api/v1/discounts/validate",
-    "summary": "Validate a discount code against the cart",
-    "description": "Evaluates the code together with active automatic discounts. `discountAmount` is the cart's total savings when the code applies.",
+    "summary": "Preview the cart's discounts before delivery is chosen",
+    "description": "Evaluates the applied codes together with active automatic discounts. Codes that do not apply are listed with the reason and add nothing.",
     "tags": [
       "Discounts"
     ],
@@ -68346,41 +72029,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "properties": {
                     "enabled": {
                       "type": "boolean"
-                    },
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "kind": {
-                            "type": "string",
-                            "enum": [
-                              "delivery",
-                              "returns"
-                            ]
-                          },
-                          "title": {
-                            "type": "string"
-                          },
-                          "detail": {
-                            "type": "string"
-                          },
-                          "href": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "title",
-                          "detail"
-                        ]
-                      },
-                      "maxItems": 2
                     }
                   },
                   "required": [
-                    "enabled",
-                    "items"
+                    "enabled"
                   ]
                 }
               },
@@ -69192,6 +72844,35 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "cspAllowedDomains": {
               "type": "string"
             },
+            "policies": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "refund",
+                      "privacy",
+                      "terms",
+                      "shipping",
+                      "contact"
+                    ]
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "title",
+                  "path"
+                ]
+              }
+            },
             "storefrontCopy": {
               "type": "object",
               "properties": {
@@ -69204,10 +72885,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "buyNowText": {
                   "type": "string"
                 },
-                "selectOptionsText": {
+                "unavailableText": {
                   "type": "string"
                 },
-                "unavailableText": {
+                "chooseOptionText": {
+                  "type": "string"
+                },
+                "fromPriceText": {
+                  "type": "string"
+                },
+                "quantityLabelText": {
+                  "type": "string"
+                },
+                "quantityLimitText": {
+                  "type": "string"
+                },
+                "saleOfferText": {
+                  "type": "string"
+                },
+                "saleOfferSpendText": {
+                  "type": "string"
+                },
+                "freeBenefitText": {
+                  "type": "string"
+                },
+                "percentBenefitText": {
                   "type": "string"
                 }
               },
@@ -69215,8 +72917,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "languageCode",
                 "addToCartText",
                 "buyNowText",
-                "selectOptionsText",
-                "unavailableText"
+                "unavailableText",
+                "chooseOptionText",
+                "fromPriceText",
+                "quantityLabelText",
+                "quantityLimitText",
+                "saleOfferText",
+                "saleOfferSpendText",
+                "freeBenefitText",
+                "percentBenefitText"
               ]
             }
           },
@@ -69233,6 +72942,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "seo",
             "platform",
             "cspAllowedDomains",
+            "policies",
             "storefrontCopy"
           ]
         }
@@ -70590,6 +74300,73 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
+    "operationId": "storefront.orders_lookup_send_otp.send_otp",
+    "method": "POST",
+    "pathTemplate": "/api/v1/orders/lookup/send-otp",
+    "summary": "Send a code to the contact saved on an order (never reveals whether it matched)",
+    "tags": [
+      "Orders"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "security",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Public Track-your-order verification sends a code to the contact saved on an order; buyers complete it in the storefront page, not through agents.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "storefront.orders_lookup_verify_otp.verify_otp",
+    "method": "POST",
+    "pathTemplate": "/api/v1/orders/lookup/verify-otp",
+    "summary": "Verify an order lookup code and issue a private receipt proof",
+    "tags": [
+      "Orders"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "internal"
+    ],
+    "risk": "security",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": true,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Service-authenticated storefront proxy accepts a raw OTP and returns a private receipt bearer for Track your order.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
     "operationId": "storefront.orders_payment_recovery_send_otp.send_otp",
     "method": "POST",
     "pathTemplate": "/api/v1/orders/payment-recovery/send-otp",
@@ -70650,6 +74427,39 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "exclusionReason": "Service-authenticated storefront proxy accepts a raw OTP and returns a private receipt bearer; use the hosted storefront.payment_recovery continuation.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "storefront.orders_receipt_owner_proof.owner_proof",
+    "method": "POST",
+    "pathTemplate": "/api/v1/orders/receipt/{id}/owner-proof",
+    "summary": "Issue a private receipt proof to the signed-in account that owns the order",
+    "tags": [
+      "Orders"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "internal"
+    ],
+    "risk": "security",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": true,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Service-authenticated storefront proxy trades a signed-in buyer's session for a private receipt bearer on their own order.",
     "rbac": {
       "type": "public"
     },
@@ -73811,6 +77621,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
+              "relevance",
               "newest",
               "price-asc",
               "price-desc",
@@ -73818,11 +77629,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "name-desc",
               "discount"
             ],
-            "default": "newest",
-            "description": "Sort order"
+            "description": "Sort order. Defaults to relevance when `search` is set, otherwise newest."
           },
           "required": false,
-          "description": "Sort order",
+          "description": "Sort order. Defaults to relevance when `search` is set, otherwise newest.",
           "name": "sort",
           "in": "query"
         },
@@ -74067,7 +77877,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "slug": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Query key for this facet: an attribute slug, or `option.<axis>` for a product option such as Size."
                   },
                   "values": {
                     "type": "array",
@@ -74096,13 +77907,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "values"
                 ]
               }
+            },
+            "correctedQuery": {
+              "type": "string",
+              "nullable": true,
+              "description": "Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction)."
             }
           },
           "required": [
             "products",
             "pagination",
             "priceRange",
-            "facets"
+            "facets",
+            "correctedQuery"
           ]
         }
       },
@@ -74503,6 +78320,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "query": {
               "type": "string"
             },
+            "correctedQuery": {
+              "type": "string",
+              "nullable": true,
+              "description": "Set when `q` matched nothing and these results are for the closest catalog words instead (typo or Bangla correction)."
+            },
             "timestamp": {
               "type": "string"
             }
@@ -74511,7 +78333,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "products",
             "pages",
             "categories",
-            "query"
+            "query",
+            "correctedQuery"
           ]
         }
       },
@@ -74684,7 +78507,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "storefront.shipping_methods.list",
     "method": "GET",
     "pathTemplate": "/api/v1/shipping-methods",
-    "summary": "List all active shipping methods",
+    "summary": "List the delivery rates offered for an address",
+    "description": "With cityId (plus zoneId/areaId when chosen), returns the rates of the delivery zone that address resolves to plus every local pickup rate (`kind: \"pickup\"`); an empty list means the store doesn't deliver there. Without an address, returns every active rate. `fee` is the rate's charge; checkout charges nothing once the items subtotal (before discounts) reaches `freeOver`.",
     "tags": [
       "Shipping Methods"
     ],
@@ -74710,7 +78534,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "rbac": {
       "type": "public"
     },
-    "inputSchema": {},
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "required": false,
+          "name": "cityId",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "required": false,
+          "name": "zoneId",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "required": false,
+          "name": "areaId",
+          "in": "query"
+        }
+      ]
+    },
     "outputSchema": {
       "type": "object",
       "properties": {
@@ -74740,6 +78597,32 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "number",
                     "minimum": 0
                   },
+                  "freeOver": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "delivery",
+                      "pickup"
+                    ]
+                  },
+                  "everywhereElse": {
+                    "type": "boolean",
+                    "description": "True for a rate that applies outside every delivery zone (the store's default rates); false for a rate of one delivery zone."
+                  },
+                  "pickupAddress": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "pickupHours": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
                   "description": {
                     "type": "string",
                     "nullable": true,
@@ -74764,6 +78647,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "name",
                   "fee",
+                  "freeOver",
+                  "kind",
+                  "everywhereElse",
+                  "pickupAddress",
+                  "pickupHours",
                   "description",
                   "isActive",
                   "sortOrder",
@@ -76138,14 +80026,25 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
               "input": {
                 "template": {
                   "body": {
-                    "discovery": {}
+                    "discovery": {},
+                    "expectedRevision": null
                   }
                 },
-                "dependencies": [],
+                "dependencies": [
+                  {
+                    "templatePointer": "/body/expectedRevision",
+                    "source": {
+                      "kind": "step",
+                      "phaseId": "resolve",
+                      "stepId": "seo",
+                      "responsePointer": "/data/revision"
+                    }
+                  }
+                ],
                 "defaults": []
               },
               "policies": {
-                "revision": "none",
+                "revision": "required",
                 "idempotency": "none",
                 "confirmation": "required",
                 "stopConditions": [
@@ -76877,8 +80776,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                   "query": {
                     "page": 1,
                     "limit": 10,
-                    "statusGroup": "open",
-                    "fulfillmentStatus": "pending",
+                    "view": "unfulfilled",
                     "sort": "createdAt",
                     "order": "desc"
                   }
@@ -77275,27 +81173,39 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
               "operationId": "dashboard.shipping_methods.list",
               "mutation": "read",
               "input": {
-                "template": {
-                  "query": {
-                    "page": 1,
-                    "limit": 100,
-                    "sort": "sortOrder",
-                    "order": "asc"
-                  }
-                },
+                "template": {},
                 "dependencies": [],
                 "defaults": []
               },
               "output": {
                 "selectors": [
                   {
-                    "pointer": "/data/shippingMethods",
-                    "alias": "shippingMethods",
+                    "pointer": "/data/zones",
+                    "alias": "zones",
                     "maxItems": 100,
                     "fields": [
                       {
                         "pointer": "/id",
                         "alias": "id"
+                      },
+                      {
+                        "pointer": "/name",
+                        "alias": "name"
+                      }
+                    ]
+                  },
+                  {
+                    "pointer": "/data/everywhereElse/rates",
+                    "alias": "everywhereElseRates",
+                    "maxItems": 20,
+                    "fields": [
+                      {
+                        "pointer": "/id",
+                        "alias": "id"
+                      },
+                      {
+                        "pointer": "/kind",
+                        "alias": "kind"
                       },
                       {
                         "pointer": "/name",
@@ -77306,34 +81216,12 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
                         "alias": "fee"
                       },
                       {
+                        "pointer": "/freeOver",
+                        "alias": "freeOver"
+                      },
+                      {
                         "pointer": "/isActive",
                         "alias": "isActive"
-                      },
-                      {
-                        "pointer": "/sortOrder",
-                        "alias": "sortOrder"
-                      }
-                    ]
-                  },
-                  {
-                    "pointer": "/data/pagination",
-                    "alias": "pagination",
-                    "fields": [
-                      {
-                        "pointer": "/page",
-                        "alias": "page"
-                      },
-                      {
-                        "pointer": "/limit",
-                        "alias": "limit"
-                      },
-                      {
-                        "pointer": "/total",
-                        "alias": "total"
-                      },
-                      {
-                        "pointer": "/totalPages",
-                        "alias": "totalPages"
                       }
                     ]
                   }
@@ -77442,11 +81330,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
           "surface": "dashboard",
           "operationId": "dashboard.shipping_methods.list",
           "responsePointers": [
-            "/data/shippingMethods",
-            "/data/pagination"
+            "/data/zones",
+            "/data/everywhereElse"
           ],
           "proves": [
-            "Bounded saved methods with active flags."
+            "Saved zones and everywhere-else charges."
           ],
           "bounds": {
             "maxCalls": 1,
@@ -77899,15 +81787,15 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "surface": "dashboard",
       "kind": "mixed",
       "title": "Bangladesh checkout setup",
-      "summary": "Apply reviewed Bangladesh payment, flat-fee, and guest setup; verify buyer truth.",
+      "summary": "Apply reviewed Bangladesh payment, delivery-zone, and guest setup; verify buyer truth.",
       "examples": [
-        "Configure accepted Bangladesh setup: supplied BDT symbol/rate; keep Dhaka time/phone fixed; preserve payments/default; add COD/proven SSLCommerz; active global Dhaka Delivery 80, Nationwide 150; accept no geography/threshold enforcement; turn on guests only after readiness; verify buyer checkout."
+        "Configure accepted Bangladesh setup: supplied BDT symbol/rate; keep Dhaka time/phone fixed; preserve payments/default; add COD/proven SSLCommerz; Inside Dhaka zone 80 and everywhere else 150; turn on guests only after readiness; verify buyer checkout."
       ],
       "tags": [
         "bangladesh",
         "bdt",
         "checkout",
-        "flat-fee"
+        "delivery-zones"
       ],
       "operationIds": [
         "dashboard.settings.currency_get",
@@ -77917,8 +81805,9 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.everywhere_else_update",
         "dashboard.checkout.readiness_get",
         "dashboard.checkout.flow_update",
         "storefront.checkout.get_config",
@@ -77928,11 +81817,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiresConfirmation": true,
       "requiresVerification": true,
       "rules": [
-        "Require global labels accepted without geography/threshold; Dhaka time and mandatory phone stay fixed.",
+        "Dhaka time and mandatory phone stay fixed.",
         "BDT needs unlocked code, explicit symbol, positive USD rate; write/reread all or stop.",
         "Set only {enabled:true} after configured/no-error SSLCommerz status; no secrets/sandbox. Reread usable; no charge proof.",
         "Require keep/disable intent per payment and exact default; union COD/usable SSLCommerz into fresh enabledMethods. Never choose.",
-        "Require merchant name/fee/active/optional sort. One active exact match: update; none: create; near/duplicate/trashed: ask; never delete.",
+        "Require zone name/places/charge name/fee/active and everywhere-else charges. One exact zone: update at its revision; none: create; near/duplicate: ask; never delete.",
         "Require readiness + active shipping/delivery hierarchy; revision-merge guest only. Failure: stop/reread/report partial; no rollback/retry. Never touch SEO/analytics; verify both audiences."
       ]
     },
@@ -78977,18 +82866,19 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "id": "dashboard.shipping-method",
       "surface": "dashboard",
       "kind": "write",
-      "title": "Create a shipping method",
-      "summary": "Create a globally offered flat-fee shipping method and verify admin and storefront visibility.",
+      "title": "Create a delivery zone",
+      "summary": "Create a delivery zone with its places and charges and verify admin and storefront visibility.",
       "examples": [
-        "Add a Dhaka delivery method with the merchant-provided price and make sure it appears at checkout."
+        "Add a Dhaka delivery zone with the merchant-provided price and make sure it appears at checkout."
       ],
       "tags": [
         "shipping",
         "delivery",
+        "zones",
         "checkout"
       ],
       "operationIds": [
-        "dashboard.shipping_methods.create",
+        "dashboard.shipping_zones.create",
         "dashboard.shipping_methods.list",
         "storefront.shipping_methods.list"
       ],
@@ -78996,10 +82886,10 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiresConfirmation": true,
       "requiresVerification": true,
       "rules": [
-        "Require the merchant-supplied label, fee, active state, and sort order.",
-        "Treat the label as display text; flat-fee methods do not enforce a geographic service area.",
+        "Require the merchant's zone name, existing places, charge name, fee, optional free-over amount, and active state.",
+        "A place belongs to one zone; the most specific place wins.",
         "Confirm creation before the write.",
-        "Verify the method in bounded admin and buyer-facing lists."
+        "Verify the zone in the admin list and the charge in the buyer list for an address in it."
       ]
     },
     {
@@ -79775,10 +83665,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -79840,10 +83731,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -79995,10 +83887,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -80059,10 +83952,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -80118,10 +84012,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -80235,10 +84130,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -80259,7 +84155,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "title": "Require exact delivery fees",
       "summary": "Delivery fees are merchant facts and cannot be selected by the resolver.",
       "examples": [
-        "Create Dhaka and Nationwide methods but choose suitable fees for me."
+        "Create Dhaka and Nationwide zones but choose suitable fees for me."
       ],
       "tags": [
         "shipping",
@@ -80298,10 +84194,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -80312,85 +84209,15 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiresConfirmation": true,
       "requiresVerification": true,
       "rules": [
-        "Require an exact merchant-supplied label, fee, active intent, and optional sort order for each method.",
-        "Never choose or infer a delivery fee; make no setup write until every method spec is complete."
-      ]
-    },
-    {
-      "id": "dashboard.shipping-geography-unsupported",
-      "surface": "dashboard",
-      "title": "Reject geographic flat-fee enforcement",
-      "summary": "Flat-fee method names are global labels and cannot enforce a buyer location or delivery zone.",
-      "examples": [
-        "Make Dhaka and Nationwide method labels enforce buyer geography."
-      ],
-      "tags": [
-        "shipping",
-        "geography",
-        "zones",
-        "safety"
-      ],
-      "disposition": "ask",
-      "reasonCode": "shipping_geography_is_not_enforced",
-      "trigger": {
-        "allOf": [
-          [
-            "shipping",
-            "delivery",
-            "flat fee",
-            "flat-fee",
-            "method"
-          ],
-          [
-            "geography",
-            "geographic location",
-            "delivery zone",
-            "zone"
-          ],
-          [
-            "enforce",
-            "act as",
-            "encode",
-            "labels act"
-          ]
-        ],
-        "ignoreWhenNegated": true
-      },
-      "safeOperationIds": [
-        "dashboard.settings.currency_get",
-        "dashboard.checkout.flow_get",
-        "dashboard.checkout.readiness_get",
-        "dashboard.payments.methods_get",
-        "dashboard.shipping_methods.list",
-        "storefront.checkout.get_config"
-      ],
-      "forbiddenOperationIds": [
-        "dashboard.settings.currency_update",
-        "dashboard.payments.sslcommerz_update",
-        "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
-        "dashboard.checkout.flow_update",
-        "dashboard.seo.settings_update",
-        "dashboard.analytics.create",
-        "dashboard.analytics.update",
-        "dashboard.analytics.set_active"
-      ],
-      "requiresFacts": true,
-      "requiresConfirmation": true,
-      "requiresVerification": true,
-      "rules": [
-        "Explain that flat-fee names are display labels, not geographic predicates or delivery zones.",
-        "Make no setup write; ask for explicit acceptance of globally offered labels without geography enforcement."
+        "Require an exact merchant-supplied zone, places, charge name, fee, and active intent for each charge.",
+        "Never choose or infer a delivery fee; make no setup write until every charge spec is complete."
       ]
     },
     {
       "id": "dashboard.shipping-method-match-ambiguous",
       "surface": "dashboard",
       "title": "Stop on ambiguous delivery matches",
-      "summary": "A shipping update needs exactly one active exact-name match; the resolver cannot choose a duplicate.",
+      "summary": "A delivery update needs exactly one exact-name zone or charge match; the resolver cannot choose a duplicate.",
       "examples": [
         "If several Dhaka methods exist, choose whichever seems best."
       ],
@@ -80429,10 +84256,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -80443,84 +84271,15 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiresConfirmation": true,
       "requiresVerification": true,
       "rules": [
-        "Require exactly one active exact-name match for update; create only when no active, trashed, near, or duplicate match exists.",
+        "Require exactly one exact-name zone for update; create only when no exact, near, or duplicate match exists.",
         "Make no setup write; return the bounded matches and ask the merchant to resolve identity ambiguity."
-      ]
-    },
-    {
-      "id": "dashboard.shipping-threshold-unsupported",
-      "surface": "dashboard",
-      "title": "Clarify unsupported delivery thresholds",
-      "summary": "Flat-fee labels cannot enforce geography, and order-value free-delivery thresholds are unsupported.",
-      "examples": [
-        "Add Dhaka and nationwide delivery with fees and a free-shipping threshold."
-      ],
-      "tags": [
-        "shipping",
-        "delivery",
-        "threshold"
-      ],
-      "disposition": "ask",
-      "reasonCode": "shipping_threshold_or_scope_unsupported",
-      "trigger": {
-        "allOf": [
-          [
-            "shipping",
-            "delivery"
-          ],
-          [
-            "free shipping",
-            "free delivery",
-            "delivery free",
-            "waive shipping fee",
-            "waive delivery fee"
-          ],
-          [
-            "threshold",
-            "minimum spend",
-            "minimum cart",
-            "cart value",
-            "order value"
-          ]
-        ],
-        "ignoreWhenNegated": true
-      },
-      "safeOperationIds": [
-        "dashboard.settings.currency_get",
-        "dashboard.checkout.flow_get",
-        "dashboard.checkout.readiness_get",
-        "dashboard.payments.methods_get",
-        "dashboard.shipping_methods.list",
-        "storefront.checkout.get_config"
-      ],
-      "forbiddenOperationIds": [
-        "dashboard.settings.currency_update",
-        "dashboard.payments.methods_update",
-        "dashboard.payments.stripe_update",
-        "dashboard.payments.sslcommerz_update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.restore",
-        "dashboard.shipping_methods.delete_permanently",
-        "dashboard.checkout.flow_update"
-      ],
-      "requiresFacts": true,
-      "requiresConfirmation": true,
-      "requiresVerification": true,
-      "rules": [
-        "Flat-fee names are global labels; they do not enforce Dhaka, nationwide, zone, or other geography.",
-        "Order-value free-delivery thresholds are unsupported; do not encode them in labels or fees.",
-        "Ask whether the merchant accepts global flat-fee methods without thresholds as a supported subset.",
-        "Require exact fees and intent for keeping or disabling other payment and shipping methods.",
-        "Until facts and subset acceptance are explicit, perform reads only and make no settings write."
       ]
     },
     {
       "id": "dashboard.shipping-unrelated-delete",
       "surface": "dashboard",
       "title": "Reject unrelated delivery deletion",
-      "summary": "The supported setup preserves unrelated shipping methods and never deletes them implicitly.",
+      "summary": "The supported setup preserves unrelated delivery zones and charges and never deletes them implicitly.",
       "examples": [
         "Create these methods and delete every other shipping method."
       ],
@@ -80564,10 +84323,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -80578,7 +84338,7 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
       "requiresConfirmation": true,
       "requiresVerification": true,
       "rules": [
-        "Preserve every unrelated shipping method; deletion is not part of the reviewed setup.",
+        "Preserve every unrelated delivery zone and charge; deletion is not part of the reviewed setup.",
         "Make no setup write; ask for a separate exact destructive request after current-method review."
       ]
     },
@@ -80627,10 +84387,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -80692,10 +84453,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -81441,10 +85203,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -81556,10 +85319,11 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "dashboard.settings.currency_update",
         "dashboard.payments.sslcommerz_update",
         "dashboard.payments.methods_update",
-        "dashboard.shipping_methods.update",
-        "dashboard.shipping_methods.create",
-        "dashboard.shipping_methods.trash",
-        "dashboard.shipping_methods.delete_permanently",
+        "dashboard.shipping_zones.create",
+        "dashboard.shipping_zones.update",
+        "dashboard.shipping_zones.delete",
+        "dashboard.shipping_zones.everywhere_else_update",
+        "dashboard.shipping_zones.apply_template",
         "dashboard.checkout.flow_update",
         "dashboard.seo.settings_update",
         "dashboard.analytics.create",
@@ -82406,6 +86170,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.collections.update_products",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.collections.update_products"
+        ]
+      },
+      {
         "operationId": "dashboard.content.bulk_delete",
         "surface": "dashboard",
         "mode": "operation-fallback",
@@ -82885,22 +86657,6 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
-        "operationId": "dashboard.home.full_summary",
-        "surface": "dashboard",
-        "mode": "operation-fallback",
-        "workflowIds": [
-          "operation.dashboard.home.full_summary"
-        ]
-      },
-      {
-        "operationId": "dashboard.home.metrics",
-        "surface": "dashboard",
-        "mode": "operation-fallback",
-        "workflowIds": [
-          "operation.dashboard.home.metrics"
-        ]
-      },
-      {
         "operationId": "dashboard.home.summary",
         "surface": "dashboard",
         "mode": "operation-fallback",
@@ -82983,6 +86739,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.inventory.movements_export"
+        ]
+      },
+      {
+        "operationId": "dashboard.inventory.set_alert_level",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.inventory.set_alert_level"
         ]
       },
       {
@@ -83342,14 +87106,6 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
-        "operationId": "dashboard.notifications.admin_rules_get",
-        "surface": "dashboard",
-        "mode": "operation-fallback",
-        "workflowIds": [
-          "operation.dashboard.notifications.admin_rules_get"
-        ]
-      },
-      {
         "operationId": "dashboard.notifications.admin_rules_update",
         "surface": "dashboard",
         "mode": "operation-fallback",
@@ -83390,6 +87146,30 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.notifications.template_test_send",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.notifications.template_test_send"
+        ]
+      },
+      {
+        "operationId": "dashboard.notifications.templates_get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.notifications.templates_get"
+        ]
+      },
+      {
+        "operationId": "dashboard.notifications.templates_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.notifications.templates_update"
+        ]
+      },
+      {
         "operationId": "dashboard.orders.amendment_confirm",
         "surface": "dashboard",
         "mode": "operation-fallback",
@@ -83411,6 +87191,22 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.orders.archive"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.bulk_confirm",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.bulk_confirm"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.bulk_fulfill",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.bulk_fulfill"
         ]
       },
       {
@@ -83443,6 +87239,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.orders.cod_update"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.comment_add",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.comment_add"
         ]
       },
       {
@@ -83755,11 +87559,19 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
-        "operationId": "dashboard.orders.update",
+        "operationId": "dashboard.orders.timeline",
         "surface": "dashboard",
         "mode": "operation-fallback",
         "workflowIds": [
-          "operation.dashboard.orders.update"
+          "operation.dashboard.orders.timeline"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.update_details",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.update_details"
         ]
       },
       {
@@ -83825,6 +87637,22 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.policies.get",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.policies.get"
+        ]
+      },
+      {
+        "operationId": "dashboard.policies.update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.policies.update"
+        ]
+      },
+      {
         "operationId": "dashboard.product_options.save_matrix",
         "surface": "dashboard",
         "mode": "operation-fallback",
@@ -83873,6 +87701,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.products.bulk_update",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.bulk_update"
+        ]
+      },
+      {
         "operationId": "dashboard.products.create",
         "surface": "dashboard",
         "mode": "curated",
@@ -83887,6 +87723,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.products.delete_permanently"
+        ]
+      },
+      {
+        "operationId": "dashboard.products.duplicate",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.products.duplicate"
         ]
       },
       {
@@ -84237,31 +88081,6 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
-        "operationId": "dashboard.shipping_methods.create",
-        "surface": "dashboard",
-        "mode": "curated",
-        "workflowIds": [
-          "dashboard.bangladesh-checkout-supported-setup",
-          "dashboard.shipping-method"
-        ]
-      },
-      {
-        "operationId": "dashboard.shipping_methods.delete_permanently",
-        "surface": "dashboard",
-        "mode": "operation-fallback",
-        "workflowIds": [
-          "operation.dashboard.shipping_methods.delete_permanently"
-        ]
-      },
-      {
-        "operationId": "dashboard.shipping_methods.get",
-        "surface": "dashboard",
-        "mode": "operation-fallback",
-        "workflowIds": [
-          "operation.dashboard.shipping_methods.get"
-        ]
-      },
-      {
         "operationId": "dashboard.shipping_methods.list",
         "surface": "dashboard",
         "mode": "curated",
@@ -84275,23 +88094,40 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
-        "operationId": "dashboard.shipping_methods.restore",
+        "operationId": "dashboard.shipping_zones.apply_template",
         "surface": "dashboard",
         "mode": "operation-fallback",
         "workflowIds": [
-          "operation.dashboard.shipping_methods.restore"
+          "operation.dashboard.shipping_zones.apply_template"
         ]
       },
       {
-        "operationId": "dashboard.shipping_methods.trash",
+        "operationId": "dashboard.shipping_zones.create",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup",
+          "dashboard.shipping-method"
+        ]
+      },
+      {
+        "operationId": "dashboard.shipping_zones.delete",
         "surface": "dashboard",
         "mode": "operation-fallback",
         "workflowIds": [
-          "operation.dashboard.shipping_methods.trash"
+          "operation.dashboard.shipping_zones.delete"
         ]
       },
       {
-        "operationId": "dashboard.shipping_methods.update",
+        "operationId": "dashboard.shipping_zones.everywhere_else_update",
+        "surface": "dashboard",
+        "mode": "curated",
+        "workflowIds": [
+          "dashboard.bangladesh-checkout-supported-setup"
+        ]
+      },
+      {
+        "operationId": "dashboard.shipping_zones.update",
         "surface": "dashboard",
         "mode": "curated",
         "workflowIds": [
@@ -84504,6 +88340,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "dashboard.team-invite"
+        ]
+      },
+      {
+        "operationId": "dashboard.team.users.remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.team.users.remove"
         ]
       },
       {

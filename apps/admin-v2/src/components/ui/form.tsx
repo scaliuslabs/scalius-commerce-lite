@@ -142,7 +142,8 @@ const FormMessage = React.forwardRef<
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, children, ...props }, ref) => {
   const { error, formMessageId } = useFormField();
-  const body = error ? String(error?.message) : children;
+  // A nested field's error lives on its child; never render a message-less error as "undefined".
+  const body = error?.message ? String(error.message) : children;
 
   if (!body) {
     return null;

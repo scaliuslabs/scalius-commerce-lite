@@ -493,8 +493,9 @@ describe("orders fulfillment side-effect ordering", () => {
     ]);
     expect(mocks.createShipment).not.toHaveBeenCalled();
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
-    expect(updates[0]).toMatchObject({ inventoryAction: "deducted" });
-    expect(updates[1]).toMatchObject({ shipmentClaimId: null, shipmentClaimExpiresAt: null });
+    expect(updates[0]).toMatchObject({ fulfillmentStatus: ItemFulfillmentStatus.SHIPPED });
+    expect(updates[1]).toMatchObject({ inventoryAction: "deducted" });
+    expect(updates[2]).toMatchObject({ shipmentClaimId: null, shipmentClaimExpiresAt: null });
   });
 
   it("does not record COD collection when the delivered status CAS fails", async () => {
@@ -515,13 +516,13 @@ describe("orders fulfillment side-effect ordering", () => {
         collectedBy: "Courier A",
         collectedAmount: 100,
       }),
-    ).rejects.toThrow("Order was modified by another request");
+    ).rejects.toThrow("This order changed");
 
     expect(mocks.recordCODCollection).not.toHaveBeenCalled();
   });
 
-  it("rejects COD collection before confirmation and after cancellation", async () => {
-    for (const status of [OrderStatus.PENDING, OrderStatus.CANCELLED]) {
+  it("rejects COD collection before the order is sent and after cancellation", async () => {
+    for (const status of [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED]) {
       const { db } = createDbMock({
         selectedOrder: {
           status,
@@ -539,7 +540,7 @@ describe("orders fulfillment side-effect ordering", () => {
           collectedBy: "Courier A",
           collectedAmount: 100,
         }),
-      ).rejects.toThrow(`order is ${status}`);
+      ).rejects.toThrow("Cash can be recorded once the order is sent");
     }
 
     expect(mocks.recordCODCollection).not.toHaveBeenCalled();
@@ -561,7 +562,7 @@ describe("orders fulfillment side-effect ordering", () => {
     await expect(processCodAction(db as never, "order_1", {
       action: "failed",
       reason: "not_home",
-    })).rejects.toThrow("order is cancelled");
+    })).rejects.toThrow("only while the order is with the courier");
 
     expect(mocks.recordCODFailure).not.toHaveBeenCalled();
   });
@@ -676,34 +677,6 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
   });
 
-  it("rolls the full confirmed-to-delivered COD path back to confirmed when collection recording fails", async () => {
-    mocks.recordCODCollection.mockResolvedValueOnce({ success: false, error: "ledger write failed" });
-    const { db, updates } = createDbMock({
-      selectedOrder: {
-        status: OrderStatus.CONFIRMED,
-        version: 3,
-        totalAmountMinor: 10_000,
-        paidAmountMinor: 0,
-        balanceDueMinor: 10_000,
-        inventoryAction: "reserved",
-      },
-      updateResults: [[{ id: "order_1" }], [{ id: "order_1" }]],
-    });
-
-    await expect(
-      processCodAction(db as never, "order_1", {
-        action: "collected",
-        collectedBy: "Courier A",
-        collectedAmount: 100,
-      }),
-    ).rejects.toThrow("ledger write failed");
-
-    expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 4 });
-    expect(updates[1]).toMatchObject({ status: OrderStatus.DELIVERED, version: 5 });
-    expect(updates[2]).toMatchObject({ status: OrderStatus.CONFIRMED });
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-  });
-
   it("rolls back the delivered claim when COD inventory reconciliation fails after collection", async () => {
     mocks.applyInventoryForStatusChange.mockRejectedValueOnce(new Error("inventory transition failed"));
     const { db, updates } = createDbMock({
@@ -729,54 +702,6 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.recordCODCollection).toHaveBeenCalled();
     expect(updates[0]).toMatchObject({ status: OrderStatus.DELIVERED, version: 4 });
     expect(updates[1]).toMatchObject({ status: OrderStatus.SHIPPED });
-  });
-
-  it("rolls confirmed COD retry back to confirmed when delivered inventory reconciliation fails after existing collection evidence", async () => {
-    mocks.applyInventoryForStatusChange.mockRejectedValueOnce(new Error("inventory transition failed"));
-    const { db, updates } = createDbMock({
-      selectedOrder: {
-        status: OrderStatus.CONFIRMED,
-        version: 3,
-        totalAmountMinor: 10_000,
-        paidAmountMinor: 10_000,
-        balanceDueMinor: 0,
-        inventoryAction: "reserved",
-      },
-      selectedPayment: {
-        id: "pay_1",
-        amountMinor: 10_000,
-        currency: "BDT",
-        paymentMethod: PaymentMethod.COD,
-        status: PaymentRecordStatus.SUCCEEDED,
-        collectedBy: "Courier A",
-      },
-      selectedCodTracking: {
-        id: "cod_1",
-        codStatus: CodStatus.COLLECTED,
-        collectedBy: "Courier A",
-      },
-      updateResults: [[{ id: "order_1" }], [{ id: "order_1" }]],
-    });
-
-    await expect(
-      processCodAction(db as never, "order_1", {
-        action: "collected",
-        collectedBy: "Courier A",
-        collectedAmount: 100,
-      }),
-    ).rejects.toThrow("inventory transition failed");
-
-    expect(mocks.validateCODCollectionDetails).not.toHaveBeenCalled();
-    expect(mocks.recordCODCollection).toHaveBeenCalledWith(db, {
-      orderId: "order_1",
-      collectedBy: "Courier A",
-      collectedAmountMinor: 10_000,
-      receiptUrl: undefined,
-    });
-    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.DELIVERED);
-    expect(updates[0]).toMatchObject({ status: OrderStatus.SHIPPED, version: 4 });
-    expect(updates[1]).toMatchObject({ status: OrderStatus.DELIVERED, version: 5 });
-    expect(updates[2]).toMatchObject({ status: OrderStatus.CONFIRMED });
   });
 
   it("retries COD delivered inventory reconciliation when collection evidence already exists", async () => {
@@ -937,7 +862,7 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.recordCODCollection).toHaveBeenCalled();
   });
 
-  it("records COD return-to-sender as an approved non-restocking item return", async () => {
+  it("records COD return-to-sender as a returned order with an approved non-restocking item return", async () => {
     const { db, updates } = createDbMock({
       selectedOrder: {
         status: OrderStatus.SHIPPED,
@@ -947,8 +872,8 @@ describe("orders fulfillment side-effect ordering", () => {
         balanceDueMinor: 10_000,
         inventoryAction: "deducted",
       },
-      selectedRows: [{ id: "item_1", quantity: 1 }],
-      updateResults: [],
+      selectedRows: [{ id: "item_1", shippedQuantity: 1 }],
+      updateResults: [[{ id: "order_1" }]],
     });
 
     const result = await processCodAction(db as never, "order_1", { action: "returned" });
@@ -959,7 +884,7 @@ describe("orders fulfillment side-effect ordering", () => {
       "order_1",
       expect.objectContaining({
         expectedOrderVersion: 4,
-        lines: [{ orderItemId: "item_1", quantity: 1, reason: "return_to_sender" }],
+        lines: [{ orderItemId: "item_1", quantity: 1, reason: "Returned by the courier" }],
       }),
       { type: "system", id: "cod" },
       { source: "cod_return_to_sender", sourceReferenceId: "cod-rts:order_1" },
@@ -967,7 +892,8 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(mocks.approveOrderReturn).toHaveBeenCalled();
     expect(mocks.markCODReturned).toHaveBeenCalledWith(db, "order_1");
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-    expect(updates).not.toContainEqual(expect.objectContaining({ status: OrderStatus.RETURNED }));
+    // Returned to sender closes the order at once; stock waits for the receipt.
+    expect(updates).toContainEqual(expect.objectContaining({ status: OrderStatus.RETURNED, version: 5 }));
   });
 
   it("does not apply inventory or write shipment rows when manual fulfillment claim fails", async () => {
@@ -979,7 +905,7 @@ describe("orders fulfillment side-effect ordering", () => {
         version: 5,
       },
       selectedRows: [
-        { id: "item_1", fulfillmentStatus: "pending" },
+        { id: "item_1", quantity: 1, shippedQuantity: 0 },
       ],
       updateResults: [[]],
     });
@@ -989,7 +915,7 @@ describe("orders fulfillment side-effect ordering", () => {
         itemIds: ["item_1"],
         isFinalShipment: true,
       }),
-    ).rejects.toThrow("Order was modified by another request");
+    ).rejects.toThrow("This order changed");
 
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
     expect(batches).toHaveLength(0);
@@ -1005,7 +931,7 @@ describe("orders fulfillment side-effect ordering", () => {
       },
       selectedRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "reconcile_required" },
       selectedRows: [
-        { id: "item_1", fulfillmentStatus: "pending" },
+        { id: "item_1", quantity: 1, shippedQuantity: 0 },
       ],
       updateResults: [[{ id: "order_1" }]],
     });
@@ -1030,7 +956,7 @@ describe("orders fulfillment side-effect ordering", () => {
         version: 5,
       },
       selectedRows: [
-        { id: "item_1", fulfillmentStatus: "pending" },
+        { id: "item_1", quantity: 1, shippedQuantity: 0 },
       ],
       updateResults: [[{ id: "order_1" }]],
     });
@@ -1040,7 +966,7 @@ describe("orders fulfillment side-effect ordering", () => {
         itemIds: ["foreign_item"],
         isFinalShipment: true,
       }),
-    ).rejects.toThrow("do not belong to this order");
+    ).rejects.toThrow("not part of the order");
 
     expect(updates).toHaveLength(0);
     expect(batches).toHaveLength(0);
@@ -1056,7 +982,7 @@ describe("orders fulfillment side-effect ordering", () => {
         version: 5,
       },
       selectedRows: [
-        { id: "item_1", fulfillmentStatus: "pending" },
+        { id: "item_1", quantity: 1, shippedQuantity: 0 },
       ],
       updateResults: [[{ id: "order_1" }]],
     });
@@ -1066,7 +992,7 @@ describe("orders fulfillment side-effect ordering", () => {
         itemIds: ["item_1", "item_1"],
         isFinalShipment: true,
       }),
-    ).rejects.toThrow("must be unique");
+    ).rejects.toThrow("only once");
 
     expect(updates).toHaveLength(0);
     expect(batches).toHaveLength(0);
@@ -1089,7 +1015,7 @@ describe("orders fulfillment side-effect ordering", () => {
       createFulfillmentShipment(db as never, "order_1", {
         isFinalShipment: true,
       }),
-    ).rejects.toThrow("At least one order item");
+    ).rejects.toThrow("already been sent");
 
     expect(updates).toHaveLength(0);
     expect(batches).toHaveLength(0);
@@ -1105,7 +1031,7 @@ describe("orders fulfillment side-effect ordering", () => {
         version: 5,
       },
       selectedRows: [
-        { id: "item_1", fulfillmentStatus: "pending" },
+        { id: "item_1", quantity: 1, shippedQuantity: 0 },
       ],
       updateResults: [[{ id: "order_1" }]],
     });
@@ -1147,7 +1073,7 @@ describe("orders fulfillment side-effect ordering", () => {
         version: 5,
       },
       selectedRows: [
-        { id: "item_1", fulfillmentStatus: "pending" },
+        { id: "item_1", quantity: 1, shippedQuantity: 0 },
       ],
       selectedShipment: null,
       updateResults: [[{ id: "order_1" }]],
@@ -1178,7 +1104,7 @@ describe("orders fulfillment side-effect ordering", () => {
         version: 6,
       },
       selectedRows: [
-        { id: "item_1", fulfillmentStatus: "pending" },
+        { id: "item_1", quantity: 1, shippedQuantity: 0 },
       ],
       updateResults: [[{ id: "order_1" }]],
     });
@@ -1238,7 +1164,7 @@ describe("orders fulfillment side-effect ordering", () => {
     });
 
     await expect(updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED))
-      .rejects.toThrow("Record COD collection");
+      .rejects.toThrow("Mark the cash as collected first");
 
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1262,7 +1188,7 @@ describe("orders fulfillment side-effect ordering", () => {
     });
 
     await expect(updateOrderStatus(db as never, "order_1", OrderStatus.COMPLETED))
-      .rejects.toThrow("Record COD collection");
+      .rejects.toThrow("Mark the cash as collected first");
 
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1293,7 +1219,7 @@ describe("orders fulfillment side-effect ordering", () => {
     });
 
     await expect(updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED))
-      .rejects.toThrow("Record COD collection");
+      .rejects.toThrow("Mark the cash as collected first");
 
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1383,7 +1309,7 @@ describe("orders fulfillment side-effect ordering", () => {
     });
 
     await expect(updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED))
-      .rejects.toThrow("Record the remaining cash balance");
+      .rejects.toThrow("Record the rest of the payment first");
 
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1409,7 +1335,7 @@ describe("orders fulfillment side-effect ordering", () => {
     });
 
     await expect(updateOrderStatus(db as never, "order_1", OrderStatus.DELIVERED))
-      .rejects.toThrow("Record the remaining cash balance");
+      .rejects.toThrow("Record the rest of the payment first");
 
     expect(updates).toHaveLength(0);
     expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1468,7 +1394,7 @@ describe("orders fulfillment side-effect ordering", () => {
       });
 
       await expect(updateOrderStatus(db as never, "order_1", targetStatus))
-        .rejects.toThrow("cannot move an order from cancelled");
+        .rejects.toThrow("This order is now cancelled");
 
       expect(updates).toHaveLength(0);
       expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1500,7 +1426,7 @@ describe("orders fulfillment side-effect ordering", () => {
       });
 
       await expect(updateOrderStatus(db as never, "order_1", OrderStatus.CANCELLED))
-        .rejects.toThrow("Use the refund workflow");
+        .rejects.toThrow("Refund the payment first");
 
       expect(updates).toHaveLength(0);
       expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
@@ -1535,7 +1461,7 @@ describe("orders fulfillment side-effect ordering", () => {
       });
 
       await expect(updateOrderStatus(db as never, "order_1", OrderStatus.CANCELLED))
-        .rejects.toThrow("payment reconciliation");
+        .rejects.toThrow("still being processed");
 
       expect(updates).toHaveLength(0);
       expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();

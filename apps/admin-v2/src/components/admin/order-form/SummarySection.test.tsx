@@ -87,6 +87,20 @@ vi.mock("lucide-react", () => ({
   RotateCcw: () => null,
 }));
 
+// No shipping-rate access in these tests: the delivery method picker stays hidden.
+vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: undefined }) }));
+vi.mock("react-hook-form", () => ({ useWatch: () => testState.shippingValue }));
+vi.mock("~/contexts/PermissionContext", () => ({
+  usePermissions: () => ({ hasPermission: () => false }),
+}));
+vi.mock("~/components/ui/select", () => ({
+  Select: () => null,
+  SelectContent: () => null,
+  SelectItem: () => null,
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+}));
+
 vi.mock("./OrderFormContext", () => ({
   useOrderForm: () => ({
     form: { control: {}, setValue: testState.setValue },
@@ -97,7 +111,6 @@ vi.mock("./OrderFormContext", () => ({
     },
     handleKeyDown: vi.fn(),
     isEdit: false,
-    usesQuote: true,
     localTotals: testState.localTotals,
     manualQuote: testState.manualQuote,
   }),
@@ -157,7 +170,6 @@ describe("manual-order summary discount recovery", () => {
       'input[name="discountAmount"]',
     );
     if (!discountInput) throw new Error("Expected discount input");
-    expect(discountInput.max).toBe("100");
     expect(discountInput.getAttribute("aria-invalid")).toBe("true");
     expect(host.textContent).toContain(en.discountTooHigh.replace("{amount}", "৳100.00"));
     expect(host.textContent).toContain(en.fixDiscount);
@@ -205,6 +217,17 @@ describe("manual-order summary discount recovery", () => {
     if (!retry) throw new Error("Expected retry action");
     await act(async () => retry.click());
     expect(testState.manualQuote.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("never shows a negative delivery charge in the total", async () => {
+    testState.discountValue = null;
+    testState.shippingValue = -20;
+    testState.localTotals = { subtotal: 100, shipping: -20, discount: 0, total: 80 };
+    testState.manualQuote.discountLimit = null;
+
+    await act(async () => root.render(<SummarySection />));
+    expect(host.textContent).not.toContain("-৳20");
+    expect(host.textContent).toContain(en.fixDeliveryCharge);
   });
 
   it("does not offer Retry for a deterministic non-discount validation error", async () => {

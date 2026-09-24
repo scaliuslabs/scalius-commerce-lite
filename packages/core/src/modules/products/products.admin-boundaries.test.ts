@@ -34,10 +34,12 @@ describe("admin product SKU invariant boundaries", () => {
             select() {
                 return {
                     from() {
-                        return {
+                        const query = {
+                            innerJoin: () => query,
                             where() {
                                 return {
                                     get: async () => null,
+                                    limit: () => ({ get: async () => null }),
                                     all: async () => Array.from(
                                         { length: 90 },
                                         (_, index) => ({ id: `attr_${index}` }),
@@ -45,6 +47,7 @@ describe("admin product SKU invariant boundaries", () => {
                                 };
                             },
                         };
+                        return query;
                     },
                 };
             },
@@ -62,6 +65,7 @@ describe("admin product SKU invariant boundaries", () => {
             ...productUpdate,
             id: undefined,
             expectedAggregateRevision: undefined,
+            defaultSku: { sku: "STRICT-01", trackInventory: false, stock: 0 },
             attributes: Array.from({ length: 90 }, (_, index) => ({
                 attributeId: `attr_${index}`,
                 value: `Value ${index}`,
@@ -380,11 +384,14 @@ describe("admin product SKU invariant boundaries", () => {
             select() {
                 return {
                     from() {
-                        return {
+                        const query = {
+                            // The SKU-ownership check joins products; no other product owns these SKUs.
+                            innerJoin: () => query,
                             where() {
-                                return { get: async () => null };
+                                return { get: async () => null, limit: () => ({ get: async () => null }) };
                             },
                         };
+                        return query;
                     },
                 };
             },

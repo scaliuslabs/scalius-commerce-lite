@@ -10,6 +10,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
 import { createListSearchValidator } from "~/lib/list-helpers";
+import { readListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -19,21 +20,21 @@ import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissi
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink, inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
-import { StatusBadge } from "~/components/admin/resource/StatusBadge";
-import { sortHeader } from "~/components/admin/resource/columns";
+import { Badge } from "~/components/ui/badge";
+import { DateText, sortHeader } from "~/components/admin/resource/columns";
 import { translate, useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 
 const validateCollectionSearch = createListSearchValidator(
   ["name", "presentation", "isActive", "sortOrder", "updatedAt"] as const,
-  { sort: "sortOrder", order: "asc", limit: 50 },
+  { sort: "sortOrder", order: "asc" },
 );
 
-function listQuery(search: ReturnType<typeof validateCollectionSearch>) {
+function listQuery(search: ReturnType<typeof validateCollectionSearch>, term: string) {
   return collectionsQueryOptions({
     page: search.page,
     limit: search.limit,
-    search: search.search || undefined,
+    search: term || undefined,
     sort: search.sort,
     order: search.order,
     trashed: search.trashed ? "true" : undefined,
@@ -43,7 +44,7 @@ function listQuery(search: ReturnType<typeof validateCollectionSearch>) {
 export const Route = createFileRoute("/admin/collections/")({
   validateSearch: validateCollectionSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps)),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, readListSearch("collections"))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "collections") }] }),
   component: CollectionsPage,
   errorComponent: RouteErrorComponent,
@@ -54,6 +55,7 @@ const ids = (rows: CollectionSummaryDto[]) => rows.map((row) => row.id);
 
 function CollectionsPage() {
   const search = Route.useSearch();
+  const [term] = useListSearch("collections");
   const t = useMessages(catalogMessages);
   const { collections: can } = useCatalogActionPermissions();
   const update = useResourceMutation(
@@ -85,8 +87,8 @@ function CollectionsPage() {
         return (
           <span className="text-muted-foreground">
             {config.source === "dynamic"
-              ? t("autoFromCategories", { count: config.categoryIds.length })
-              : config.productIds.length === 1 ? t("productCountOne") : t("handPicked", { count: config.productIds.length })}
+              ? config.categoryIds.length === 1 ? t("autoOneCategory") : t("autoFromCategories", { count: config.categoryIds.length })
+              : config.productIds.length === 1 ? t("productCountOne") : t("productCount", { count: config.productIds.length })}
             {config.showOnHomepage ? ` · ${t("onHomepage")}` : ""}
           </span>
         );
@@ -97,23 +99,25 @@ function CollectionsPage() {
       header: sortHeader(t("status")),
       meta: { mobile: "status" },
       cell: ({ row }) => (
-        <StatusBadge tone={row.original.isActive ? "success" : "neutral"}>{t(row.original.isActive ? "active" : "inactive")}</StatusBadge>
+        <Badge variant={row.original.isActive ? "success" : "attention"}>{t(row.original.isActive ? "active" : "draft")}</Badge>
       ),
     },
+    { accessorKey: "updatedAt", header: sortHeader(t("updated")), cell: ({ row }) => <DateText value={row.original.updatedAt} /> },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, search.trashed, can.canEdit]);
 
   // Drag to reorder in display order (the list kit also requires every row loaded).
   const reorderable =
-    can.canReorder && !search.trashed && !search.search && search.sort === "sortOrder" && search.order === "asc";
+    can.canReorder && !search.trashed && !term && search.sort === "sortOrder" && search.order === "asc";
 
   return (
     <ResourceListPage<CollectionSummaryDto>
       title={t("collections")}
       actions={can.canCreate ? <Button asChild><Link to="/admin/collections/new">{t("addCollection")}</Link></Button> : null}
       search={search}
-      query={listQuery(search)}
-      pageQuery={(page, limit) => listQuery({ ...search, page, limit })}
+      list="collections"
+      query={listQuery(search, term)}
+      pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
       dataKey="collections"
       columns={columns}
       invalidate={INVALIDATE}
@@ -133,11 +137,11 @@ function CollectionsPage() {
       }}
       bulkActions={can.canToggleStatus ? (rows, done) => (
         <>
-          <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ variables: { kind: "activate", ids: ids(rows) }, success: t("activated") }, { onSuccess: done })}>
-            {t("activate")}
+          <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ variables: { kind: "activate", ids: ids(rows) }, success: t("statusUpdated") }, { onSuccess: done })}>
+            {t("setActive")}
           </Button>
-          <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ variables: { kind: "deactivate", ids: ids(rows) }, success: t("deactivated") }, { onSuccess: done })}>
-            {t("deactivate")}
+          <Button variant="outline" size="sm" disabled={update.isPending} onClick={() => update.mutate({ variables: { kind: "deactivate", ids: ids(rows) }, success: t("statusUpdated") }, { onSuccess: done })}>
+            {t("setDraft")}
           </Button>
         </>
       ) : undefined}

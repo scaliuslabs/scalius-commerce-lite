@@ -119,7 +119,7 @@ interface Window {
   __CHECKOUT_CONFIG__?: unknown;
   __CHECKOUT_LANGUAGE__?: unknown;
   __scaliusAuthModalOpenPending?: boolean;
-  __scaliusAuthModalIntentPending?: "sign_in" | "sign_up";
+  __scaliusAuthModalPrefillPending?: import("@/components/AuthModal").AuthModalPrefill;
   __scaliusSearchPaletteOpenPending?: boolean;
   __scaliusCartPendingEvents?: Array<
     | { type: "open" }
@@ -150,7 +150,7 @@ interface Window {
   };
 
   // Cart interaction handlers (set by lib/cart/client.ts initCartFunctionality)
-  lastShippingEventDetail?: { id: string; fee: number; name?: string };
+  lastShippingEventDetail?: import("./lib/checkout/shipping-methods").ShippingMethodDetail;
   handleAbandonedCheckout?: () => void;
   validateCartSnapshot?: () => Promise<boolean>;
   hasCartValidationIssues?: () => boolean;

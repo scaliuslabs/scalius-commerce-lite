@@ -33,7 +33,10 @@ import {
     markNotificationProviderBlocked,
 } from "./notification-provider-health";
 import { ORDER_NOTIFICATION_LABELS, type OrderNotificationType } from "./notification-types";
-import { composeOrderEmail } from "./order-email";
+import { composeOrderEmail, composeStaffOrderEmail, readOrderMessageContext } from "./order-email";
+import { notificationsDocument } from "../settings/documents";
+import { renderTemplate } from "./notification-templates";
+import { getNotificationTemplates } from "./notification-templates.service";
 
 interface OrderNotificationData {
     id: string;
@@ -82,11 +85,6 @@ interface DeliverySendResult {
     retryable?: boolean;
 }
 
-function defaultCustomerChannelsForNotification(type: OrderNotificationType): string[] {
-    if (type === "support_request_submitted") return [];
-    return ["email"];
-}
-
 const EMPTY_DISPATCH_RESULT: OrderNotificationDispatchResult = {
     outcomes: [],
     hasRetryableFailure: false,
@@ -119,8 +117,10 @@ const NON_RETRYABLE_DISPATCH_ERROR_PATTERNS = [
     /account\s+(?:expired|suspended|inactive|disabled)/i,
 ];
 
-function resolveDashboardOrderLink(env: Env, orderId: string): string | null {
-    const dashboardUrl = typeof env.BETTER_AUTH_URL === "string" ? env.BETTER_AUTH_URL.trim() : "";
+/** The dashboard order page (BETTER_AUTH_URL is the dashboard origin from Platform settings). */
+function resolveDashboardOrderLink(env: object | undefined, orderId: string): string | null {
+    const origin = (env as { BETTER_AUTH_URL?: unknown } | undefined)?.BETTER_AUTH_URL;
+    const dashboardUrl = typeof origin === "string" ? origin.trim() : "";
     if (!dashboardUrl) return null;
     try {
         return new URL(`/admin/orders/${encodeURIComponent(orderId)}`, dashboardUrl).href;
@@ -513,57 +513,36 @@ export async function sendOrderNotificationEmail(
     name: string,
     orderId: string,
     type: OrderNotificationType,
-    data?: Record<string, unknown>,
-    db?: Database,
+    data: Record<string, unknown> | undefined,
+    db: Database,
     options: OrderNotificationOptions = {},
 ): Promise<OrderNotificationDispatchResult> {
     const outcomes: OrderNotificationChannelOutcome[] = [];
-    let enabledChannels = defaultCustomerChannelsForNotification(type);
-
-    if (db) {
-        try {
-            const { getNotificationChannels } = await import("../settings/settings.service");
-            const channels = await getNotificationChannels(db);
-            enabledChannels = channels[type] ?? defaultCustomerChannelsForNotification(type);
-        } catch (channelError: unknown) {
-            console.warn("[Notifications] Failed to check channel preferences, defaulting to safe channels:", channelError);
-        }
+    // Every buyer notification, including the support-request acknowledgement,
+    // defaults to email; the merchant's saved channels override it.
+    let enabledChannels = ["email"];
+    try {
+        const { getNotificationChannels } = await import("../settings/settings.service");
+        enabledChannels = (await getNotificationChannels(db))[type] ?? enabledChannels;
+    } catch (channelError: unknown) {
+        console.warn("[Notifications] Failed to check channel preferences, defaulting to email:", channelError);
     }
 
-    const supportRequestTypeLabel = data?.supportRequestTypeLabel
-        ? String(data.supportRequestTypeLabel)
-        : "support request";
-    const supportRequestStatusLabel = data?.supportRequestStatusLabel
-        ? String(data.supportRequestStatusLabel)
-        : "updated";
-
-    const smsMessages: Record<OrderNotificationType, string> = {
-        order_created: `Hi ${name}, your order #${orderId} has been received. We'll process it shortly.`,
-        order_confirmed: `Hi ${name}, your order #${orderId} has been confirmed and is being prepared.`,
-        order_processing: `Hi ${name}, your order #${orderId} is being processed. We'll update you when it ships.`,
-        order_shipped: `Hi ${name}, your order #${orderId} is on its way!${data?.trackingId ? ` Tracking: ${data.trackingId}` : ""}`,
-        order_delivered: `Hi ${name}, your order #${orderId} has been delivered. Enjoy!`,
-        order_completed: `Hi ${name}, your order #${orderId} has been completed. Thank you for shopping with us!`,
-        order_cancelled: `Hi ${name}, your order #${orderId} has been cancelled. Contact us if you have questions.`,
-        order_returned: `Hi ${name}, your order #${orderId} has been marked as returned. Contact us if you have questions.`,
-        refund_processing: `Hi ${name}, your refund for order #${orderId} is being processed. We'll update you when it is complete.`,
-        refund_failed: `Hi ${name}, we couldn't complete the refund for order #${orderId}. Please contact support for help.`,
-        order_refunded: `Hi ${name}, your order #${orderId} has been refunded. Contact us if you have questions.`,
-        order_partially_refunded: `Hi ${name}, a partial refund has been processed for order #${orderId}. Contact us if you have questions.`,
-        payment_balance_paid: `Hi ${name}, we received the remaining payment for order #${orderId}. Your order is now fully paid.`,
-        support_request_submitted: `Hi ${name}, we received your ${supportRequestTypeLabel} for order #${orderId}. We'll update you soon.`,
-        support_request_status_updated: `Hi ${name}, your ${supportRequestTypeLabel} for order #${orderId} is now ${supportRequestStatusLabel}.`,
-    };
+    // Read lazily, after a target is claimed: an accepted or skipped receipt
+    // never re-reads the order or the store's templates.
+    const context = once(() => readOrderMessageContext({
+        orderId, name, type, data,
+        storefrontUrl: typeof options.env?.STOREFRONT_URL === "string" ? options.env.STOREFRONT_URL : undefined,
+    }, db));
+    const templates = once(async () => (await getNotificationTemplates(db, (await context()).language)).templates);
+    const smsMessage = async () => renderTemplate((await templates()).sms[type].body, (await context()).variables);
 
     const receiptEnabled = Boolean(db && options.outboxId);
     const receiptDb = receiptEnabled ? db : undefined;
     const outboxId = options.outboxId;
 
     if (enabledChannels.includes("email")) {
-        const composeEmail = () => composeOrderEmail({
-            orderId, name, type, data,
-            storefrontUrl: typeof options.env?.STOREFRONT_URL === "string" ? options.env.STOREFRONT_URL : undefined,
-        }, db);
+        const composeEmail = async () => composeOrderEmail(await context(), (await templates()).email[type]);
 
         if (!email) {
             if (receiptDb && outboxId) {
@@ -655,7 +634,6 @@ export async function sendOrderNotificationEmail(
                     }));
                 }
             } else if (db) {
-                const msg = smsMessages[type] || `Hi ${name}, your order #${orderId} status has been updated.`;
                 const smsReadiness = await getSmsProviderReadiness(db, options.encryptionKey);
                 const readinessProviderName = smsReadiness.activeProvider ?? "sms";
 
@@ -736,7 +714,7 @@ export async function sendOrderNotificationEmail(
                                     }
                                     const smsResult = await smsProvider.sendSms({
                                         to: customerPhone,
-                                        message: msg,
+                                        message: await smsMessage(),
                                         clientReference: createProviderClientReference(target),
                                     });
                                     if (smsResult.success) {
@@ -756,7 +734,7 @@ export async function sendOrderNotificationEmail(
                             }));
                         }
                     } else if (smsProvider) {
-                        const smsResult = await smsProvider.sendSms({ to: customerPhone, message: msg });
+                        const smsResult = await smsProvider.sendSms({ to: customerPhone, message: await smsMessage() });
                         if (smsResult.success) {
                             console.log(`[Notifications] SMS sent via ${smsProvider.name} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
                         } else {
@@ -866,7 +844,7 @@ export async function sendOrderNotificationEmail(
                     } else {
                         const send = async (): Promise<DeliverySendResult> => sendOrderWhatsAppTemplate({
                             config: sendConfig,
-                            orderId,
+                            orderNumber: (await context()).variables.order_number ?? `#${orderId}`,
                             notificationType: type,
                             customerName: name,
                             customerPhone,
@@ -947,9 +925,67 @@ export async function sendOrderNotificationEmail(
     return buildDispatchResult(outcomes);
 }
 
+/**
+ * Emails every staff recipient from the notifications settings about a new
+ * order, after it committed (from the order notification queue). Each
+ * recipient is its own delivery receipt, so a retried outbox row never
+ * emails the same person twice.
+ */
+export async function sendStaffOrderEmails(
+    db: Database,
+    order: { id: string; customerName: string; notificationType: OrderNotificationType },
+    options: OrderNotificationOptions = {},
+): Promise<OrderNotificationDispatchResult> {
+    if (order.notificationType !== "order_created") return EMPTY_DISPATCH_RESULT;
+    const recipients = (await notificationsDocument.read(db)).staffEmailRecipients;
+    if (recipients.length === 0) return EMPTY_DISPATCH_RESULT;
+
+    const context = once(() => readOrderMessageContext({
+        orderId: order.id,
+        name: order.customerName,
+        type: order.notificationType,
+    }, db));
+    const compose = async () =>
+        composeStaffOrderEmail(await context(), resolveDashboardOrderLink(options.env, order.id));
+    const emailContext = { db, env: options.env, encryptionKey: options.encryptionKey };
+    const outcomes: OrderNotificationChannelOutcome[] = [];
+
+    for (const recipient of recipients) {
+        const target = {
+            channel: "email" as const,
+            provider: "email",
+            // Distinct from a customer who uses the same address.
+            recipient: `staff:${recipient}`,
+            recipientMasked: `staff ${maskEmail(recipient)}`,
+        };
+        if (!options.outboxId) {
+            try {
+                const result = await sendEmail({ ...await compose(), to: recipient }, emailContext);
+                if (!result.success) {
+                    console.error(`[Notifications] Staff order email did not send for order ${order.id}: ${compactProviderLogDetail(result.rawStatus)}`);
+                }
+            } catch (error: unknown) {
+                console.error(`[Notifications] Staff order email failed for order ${order.id}: ${compactProviderLogDetail(error)}`);
+            }
+            continue;
+        }
+        const receipt = { db, outboxId: options.outboxId, orderId: order.id, notificationType: order.notificationType, ...target };
+        const blocked = await recordProviderBlockedDeliveryIfNeeded(receipt);
+        outcomes.push(blocked ?? await dispatchWithReceipt({
+            ...receipt,
+            send: async (delivery) => emailResultToDeliveryResult(await sendEmail({
+                ...await compose(),
+                to: recipient,
+                idempotencyKey: delivery.receiptKey,
+            }, emailContext)),
+        }));
+    }
+    return buildDispatchResult(outcomes);
+}
+
 async function sendOrderWhatsAppTemplate(options: {
     config: OrderWhatsAppSendConfig;
-    orderId: string;
+    orderNumber: string;
     notificationType: OrderNotificationType;
     customerName: string;
     customerPhone: string;
@@ -994,7 +1030,7 @@ async function resolveOrderWhatsAppSendConfig(
 }
 
 function buildOrderWhatsAppBodyParameters(options: {
-    orderId: string;
+    orderNumber: string;
     notificationType: OrderNotificationType;
     customerName: string;
     data?: Record<string, unknown>;
@@ -1002,7 +1038,7 @@ function buildOrderWhatsAppBodyParameters(options: {
     const label = ORDER_NOTIFICATION_LABELS[options.notificationType] ?? "Order Update";
     return [
         templateText(options.customerName, "Customer", 80),
-        templateText(options.orderId, "order", 80),
+        templateText(options.orderNumber, "order", 80),
         templateText(label, "Order Update", 80),
         templateText(options.data?.trackingId, "-", 120),
     ];
@@ -1431,4 +1467,10 @@ function compactProviderLogDetail(error: unknown): string {
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 240);
+}
+
+/** Runs `load` at most once, on first use. */
+function once<T>(load: () => Promise<T>): () => Promise<T> {
+    let pending: Promise<T> | undefined;
+    return () => (pending ??= load());
 }

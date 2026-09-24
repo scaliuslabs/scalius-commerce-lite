@@ -116,7 +116,6 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
                   <AdminPhoneInput
                     value={field.value}
                     onChange={field.onChange}
-                    preserveExistingValue={isEdit ? defaultValues?.phone : undefined}
                     required
                   />
                 </FormControl>
@@ -169,6 +168,8 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
   return (
     <FormContainer
       heading={isEdit ? defaultValues?.name || t("customer") : t("newCustomer")}
+      unsavedLabel={isEdit ? undefined : t("unsavedCustomer")}
+      savedMessage={isEdit ? undefined : t("customerCreated")}
       isSubmitting={isSubmitting}
       backUrl="/admin/customers"
       canSave={canSave}

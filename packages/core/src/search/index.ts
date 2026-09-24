@@ -1,6 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { products, categories, pages } from "@scalius/database/schema";
-import { eq, sql, and, type SQL } from "drizzle-orm";
+import { eq, sql, and, or, type SQL } from "drizzle-orm";
 import {
   ftsMatch,
   isFts5SearchEnabled,
@@ -19,6 +19,8 @@ import {
 } from "../modules/products/products.money";
 import { fromMinor } from "@scalius/shared/money";
 import { getCurrentMediaUrl } from "../integrations/storage";
+import { suggestSearchCorrection } from "./correct";
+import { productCategoryNameMatch, productSearchRelevanceOrder } from "./relevance";
 export { ftsMatch, sanitizeFtsQuery } from "./fts5";
 
 // Types for search results
@@ -134,22 +136,45 @@ function parseSearchImageProjection(
   }
 }
 
-export async function search(
-  db: Database,
-  query: string,
-  options?: {
-    limit?: number;
-    categoryId?: string;
-    minPrice?: number;
-    maxPrice?: number;
-    searchPages?: boolean;
-    searchCategories?: boolean;
-  },
-): Promise<{
+type SearchOptions = {
+  limit?: number;
+  categoryId?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  searchPages?: boolean;
+  searchCategories?: boolean;
+  /** Buyer search: when nothing matches, retry once with the closest catalog words. */
+  correctTypos?: boolean;
+};
+
+type SearchResults = {
   products: ProductSearchResult[];
   pages: PageSearchResult[];
   categories: CategorySearchResult[];
-}> {
+};
+
+export async function search(
+  db: Database,
+  query: string,
+  options?: SearchOptions,
+): Promise<SearchResults & { correctedQuery: string | null }> {
+  const results = await runSearch(db, query, options);
+  const empty = results.products.length + results.pages.length + results.categories.length === 0;
+  if (!options?.correctTypos || !empty) return { ...results, correctedQuery: null };
+
+  const correctedQuery = await suggestSearchCorrection(db, query);
+  if (!correctedQuery) return { ...results, correctedQuery: null };
+  const corrected = await runSearch(db, correctedQuery, options);
+  return corrected.products.length + corrected.pages.length + corrected.categories.length > 0
+    ? { ...corrected, correctedQuery }
+    : { ...results, correctedQuery: null };
+}
+
+async function runSearch(
+  db: Database,
+  query: string,
+  options?: SearchOptions,
+): Promise<SearchResults> {
   const limit = options?.limit || 10;
   const searchPages = options?.searchPages !== false;
   const searchCategories = options?.searchCategories !== false;
@@ -164,7 +189,7 @@ export async function search(
     // Build Product Query
     const productConditions: SQL[] = publicProductBaseConditions();
     if (hasValidQuery) {
-      const cond = ftsMatch(db, "products_fts", "products", query);
+      const cond = or(ftsMatch(db, "products_fts", "products", query), productCategoryNameMatch(db, query));
       if (cond) productConditions.push(cond);
     }
     if (options?.categoryId) {
@@ -217,11 +242,7 @@ export async function search(
         ...publicCategoryConditions(),
       ))
       .where(and(...productConditions))
-      .orderBy(
-        hasValidQuery && fts5Enabled
-          ? sql`COALESCE((SELECT rank FROM products_fts WHERE rowid = products.rowid AND products_fts MATCH ${sanitizedQuery}), 0) ASC`
-          : products.name,
-      )
+      .orderBy(...(hasValidQuery ? productSearchRelevanceOrder(db, query) : [products.name]))
       .limit(limit);
 
     // Build Pages Query

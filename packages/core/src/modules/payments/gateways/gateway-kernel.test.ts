@@ -230,7 +230,7 @@ describe("gateway kernel with a newly registered adapter", () => {
     const refund = await processRefund(db, { orderId: "order_1", amount: 40.5, reason: "damaged" });
     expect(refund).toMatchObject({ success: true, gateway: "fakepay", amount: 40.5, isFullRefund: false, refundId: "fr_1" });
     expect(state.refunds).toEqual([expect.objectContaining({ amountMinor: 4_050, currency: "BDT", secondaryRef: "txn_pay_1" })]);
-    expect(orderState()).toMatchObject({ status: OrderStatus.PARTIALLY_REFUNDED, paid_amount_minor: 5_950 });
+    expect(orderState()).toMatchObject({ status: OrderStatus.DELIVERED, payment_status: PaymentStatus.PARTIALLY_REFUNDED, paid_amount_minor: 5_950 });
 
     await expect(processRefund(db, { orderId: "order_1", amount: 60, reason: "again" })).rejects.toThrow(/exceeds paid amount/);
     await processRefund(db, { orderId: "order_1", reason: "rest" });
@@ -306,7 +306,7 @@ describe("gateway kernel with a newly registered adapter", () => {
 
     const first = await reconcileExternalRefundWebhooks(db);
     expect(first).toMatchObject({ imported: 1, finalized: 1, deferred: 0 });
-    expect(orderState()).toMatchObject({ status: OrderStatus.PARTIALLY_REFUNDED, paid_amount_minor: 7_000 });
+    expect(orderState()).toMatchObject({ status: OrderStatus.DELIVERED, payment_status: PaymentStatus.PARTIALLY_REFUNDED, paid_amount_minor: 7_000 });
     expect(sqlite.prepare("SELECT status FROM webhook_events").get()).toEqual({ status: "processed" });
 
     sqlite.prepare("UPDATE webhook_events SET status = 'manual_reconciliation'").run();

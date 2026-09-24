@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -8,16 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
-import { useApproveOrderReturn } from "~/lib/api-mutations/orders";
+import { orderErrorMessage, useApproveOrderReturn } from "~/lib/api-mutations/orders";
 import { StableReturnCommandKey, type OrderReturnDto } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
-import { createReturnCommandKey, getOrderItemName, parseReturnQuantity } from "./shared";
+import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
 
 /** Approve or reject each requested unit. The decision never changes stock. */
 export function ApproveReturnDialog({
@@ -62,13 +63,14 @@ export function ApproveReturnDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => !mutation.isPending && onOpenChange(next)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("returns.reviewTitle")}</DialogTitle>
           <DialogDescription>{t("returns.reviewHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
           <ul className="divide-y rounded-md border">
             {orderReturn.lines.map((line) => {
               const name = getOrderItemName(itemsById.get(line.orderItemId));
@@ -81,17 +83,14 @@ export function ApproveReturnDialog({
                       {t("returns.qtyRequested", { count: line.requestedQuantity })} · {t("returns.qtyRejected", { count: line.requestedQuantity - value })}
                     </p>
                   </div>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={line.requestedQuantity}
+                  <NumberInput
+                    integer
                     className="w-20 shrink-0"
                     aria-label={t("returns.approveQty", { name })}
                     value={value}
-                    onChange={(e) => setApproved((current) => ({
+                    onValueChange={(value) => setApproved((current) => ({
                       ...current,
-                      [line.id]: parseReturnQuantity(e.target.value, line.requestedQuantity),
+                      [line.id]: clampQuantity(value, line.requestedQuantity),
                     }))}
                   />
                 </li>
@@ -105,7 +104,7 @@ export function ApproveReturnDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>
-          <Button type="button" variant={rejectAll ? "destructive" : "default"} onClick={submit} disabled={mutation.isPending}>
+          <Button type="button" variant={rejectAll ? "destructive" : "default"} onClick={submit} loading={mutation.isPending}>
             {rejectAll
               ? t("returns.reject")
               : t("returns.approveSummary", {

@@ -4,11 +4,12 @@ import {
   hydrateCartFromStorage,
   syncCartFromStorage,
   addToCart,
+  addDiscountCode,
   removeCartItemByKey,
+  removeDiscountCode,
+  restoreCart,
   updateCartItemByKey,
-  applyDiscount,
   getEffectiveCartShippingFee,
-  removeDiscount,
   type CartItem,
   type VariantCartItem,
 } from "@/store/cart";
@@ -18,10 +19,10 @@ import type {
 } from "@/lib/api/orders";
 import type { CheckoutLanguageData } from "@/lib/api/types";
 import {
+  previewCartDiscounts,
   saveAbandonedCheckoutFromBrowser as saveAbandonedCheckout,
-  validateDiscountFromBrowser as validateDiscount,
 } from "./browser-api";
-import { formatPriceShort } from "@scalius/shared/currency";
+import { formatMoney } from "@scalius/shared/currency";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { nanoid } from "nanoid";
 import { getProductImageUrl } from "@/lib/product-media";
@@ -41,17 +42,31 @@ import {
 import { resolveCartKeyForValidatedLine } from "./cart-key-resolution";
 import {
   clearHostedPaymentRecoverySession,
-  fingerprintCheckoutCart,
   matchesCheckoutRecoveryCart,
   readHostedPaymentRecoverySession,
   type HostedPaymentRecoverySession,
 } from "../checkout/session-state";
-import { fetchAuthoritativeTaxQuote } from "../checkout/tax-quote-client";
-import type { CheckoutTaxQuote } from "../checkout/tax-quote-contract";
+import {
+  fetchAuthoritativeTaxQuote,
+  TaxQuoteCartChangedError,
+  TaxQuoteDeliveryRateError,
+} from "../checkout/tax-quote-client";
+import { isDeliveryRateUnavailable } from "../checkout/tax-quote-error-contract";
+import type { ShippingMethodDetail } from "../checkout/shipping-methods";
+import type {
+  CheckoutDiscountFacts,
+  CheckoutDiscountOffer,
+  CheckoutTaxQuote,
+} from "../checkout/tax-quote-contract";
 import {
   cartItemVariantLabel as optionVariantLabel,
   normalizeCartItemOptions,
 } from "./item-options";
+import {
+  describeRejectedCode,
+  isPendingCodeReason,
+  renderDiscountPanel,
+} from "./discount-panel";
 
 /**
  * Escape HTML entities in user-supplied strings to prevent XSS when
@@ -94,6 +109,8 @@ let isApplyingCartSnapshot = false;
 let cartTaxQuoteSequence = 0;
 let discountValidationSequence = 0;
 let pendingDiscountValidation: number | null = null;
+/** The latest server discount facts, for the applied-code list. */
+let latestDiscountFacts: CheckoutDiscountFacts | null = null;
 let latestCheckoutLocation: {
   cityId: string;
   cityName: string;
@@ -103,6 +120,7 @@ let latestCheckoutLocation: {
   areaName: string;
 } | null = null;
 let hostedPaymentRecoverySession: HostedPaymentRecoverySession | null = null;
+let undoTimer: ReturnType<typeof setTimeout> | null = null;
 
 function reconcileHostedPaymentRecoveryWithCart(): void {
   if (
@@ -150,6 +168,7 @@ function resetCartRuntimeListeners(): AbortSignal {
   cartTaxQuoteSequence += 1;
   discountValidationSequence += 1;
   pendingDiscountValidation = null;
+  latestDiscountFacts = null;
   latestCheckoutLocation = null;
   cartQuantityLimits = {};
   cartStoreUnsubscribe?.();
@@ -157,23 +176,15 @@ function resetCartRuntimeListeners(): AbortSignal {
   cartRuntimeAbortController?.abort();
   cartRuntimeAbortController = new AbortController();
 
-  if (abandonedCheckoutTimer !== null) {
-    clearTimeout(abandonedCheckoutTimer);
-    abandonedCheckoutTimer = null;
+  for (const timer of [abandonedCheckoutTimer, cartValidationTimer, undoTimer]) {
+    if (timer !== null) clearTimeout(timer);
   }
-  if (cartValidationTimer !== null) {
-    clearTimeout(cartValidationTimer);
-    cartValidationTimer = null;
-  }
+  abandonedCheckoutTimer = null;
+  cartValidationTimer = null;
+  undoTimer = null;
 
   if (hadPendingDiscountValidation) {
-    const applyButton = document.getElementById(
-      "applyDiscountBtn",
-    ) as HTMLButtonElement | null;
-    if (applyButton) {
-      applyButton.textContent = activeCheckoutCopy().applyDiscountText;
-      applyButton.disabled = false;
-    }
+    setApplyButtonPending(false);
     notifyDiscountValidationState();
   }
 
@@ -229,10 +240,10 @@ function rotateCheckoutIdIfCartBlocked(): void {
 interface CheckoutFormData {
   [key: string]:
     | FormDataEntryValue
-    | { items: unknown[]; totalAmount: number; discount: unknown }
+    | { items: unknown[]; totalAmount: number; discountCodes: string[] }
     | { id: string; fee: number }
     | undefined;
-  cart?: { items: unknown[]; totalAmount: number; discount: unknown };
+  cart?: { items: unknown[]; totalAmount: number; discountCodes: string[] };
   shipping?: { id: string; fee: number };
   customerPhone?: FormDataEntryValue;
 }
@@ -247,18 +258,18 @@ function getCheckoutFormData(): CheckoutFormData {
     data[key] = value;
   });
 
-  const { items, totalAmount, discount } = cartStore.get();
+  const { items, totalAmount, discountCodes } = cartStore.get();
   data.cart = {
     items: Object.values(items),
     totalAmount,
-    discount,
+    discountCodes,
   };
 
   const selectedShipping = window.lastShippingEventDetail;
   data.shipping = selectedShipping
     ? {
         ...selectedShipping,
-        fee: getEffectiveCartShippingFee(items, selectedShipping.fee),
+        fee: getEffectiveCartShippingFee(items, selectedShipping.fee, selectedShipping.freeOver),
       }
     : undefined;
 
@@ -299,6 +310,8 @@ function syncCartPagePresentation(ready: boolean): void {
   if (root) {
     root.dataset.cartReady = ready ? "true" : "false";
     root.dataset.cartHasItems = hasItems ? "true" : "false";
+    // An empty cart is a centred empty state without checkout steps.
+    root.dataset.cartState = !ready ? "loading" : hasItems ? "items" : "empty";
   }
   cartItems?.setAttribute("aria-busy", ready ? "false" : "true");
 
@@ -307,7 +320,6 @@ function syncCartPagePresentation(ready: boolean): void {
   checkoutPanel?.classList.toggle("hidden", hideOperationalPanels);
 }
 
-// --- NEW FUNCTION: To handle the quick buy action ---
 function processQuickBuy() {
   try {
     const quickBuyJSON = sessionStorage.getItem("quickBuyData");
@@ -318,10 +330,8 @@ function processQuickBuy() {
       const data = JSON.parse(quickBuyJSON);
 
       if (data.cartItem) {
-        // 1. Add item to cart store
         if (!addToCart(data.cartItem)) return;
 
-        // 2. Fire analytics events (override currency with dynamic value)
         const dynamicCurrency = window.__CURRENCY_CODE__ || "BDT";
         if (data.addToCartEvent) {
           data.addToCartEvent.currency = dynamicCurrency;
@@ -342,74 +352,36 @@ function processQuickBuy() {
   }
 }
 
-function showDiscountMessage(
-  message: string,
-  type: "success" | "error" | "info",
-) {
+// --- Discount code field ---
+
+/**
+ * The code field's message stays until the buyer edits the field or applies
+ * again, so it never disappears before it is read.
+ */
+function showDiscountMessage(message: string, type: "success" | "error") {
   const messageElement = document.getElementById("discountMessage");
+  const input = document.getElementById("discountCodeInput");
   if (!messageElement) return;
-
   messageElement.textContent = message;
-  messageElement.setAttribute("role", type === "error" ? "alert" : "status");
-  messageElement.setAttribute(
-    "aria-live",
-    type === "error" ? "assertive" : "polite",
-  );
-  const colors = {
-    success: "text-primary",
-    error: "text-destructive",
-    info: "text-primary",
-  };
-  messageElement.className = `text-xs mt-1 ${colors[type]}`;
-  messageElement.style.display = "block";
-
-  setTimeout(() => {
-    if (messageElement) messageElement.style.display = "none";
-  }, 4000);
+  messageElement.className = `mt-1.5 text-sm ${type === "error" ? "text-destructive" : "text-primary"}`;
+  messageElement.hidden = !message;
+  if (type === "error" && message) input?.setAttribute("aria-invalid", "true");
+  else input?.removeAttribute("aria-invalid");
 }
 
-function updateDiscountUI() {
-  const { discount } = cartStore.get();
-  const discountCodeInput = document.getElementById(
-    "discountCodeInput",
-  ) as HTMLInputElement;
+function clearDiscountMessage() {
+  showDiscountMessage("", "success");
+}
+
+function setApplyButtonPending(pending: boolean) {
   const applyButton = document.getElementById(
     "applyDiscountBtn",
-  ) as HTMLButtonElement;
-  const removeButton = document.getElementById(
-    "removeDiscountBtn",
-  ) as HTMLButtonElement;
-  const discountRowEl = document.getElementById("discountRow");
-  const discountAmountEl = document.getElementById("discountAmount");
-  const appliedDiscountCodeEl = document.getElementById("appliedDiscountCode");
-
-  if (
-    !discountCodeInput ||
-    !applyButton ||
-    !removeButton ||
-    !discountRowEl ||
-    !discountAmountEl ||
-    !appliedDiscountCodeEl
-  )
-    return;
-
-  if (discount) {
-    discountCodeInput.value = discount.code;
-    discountCodeInput.disabled = true;
-    applyButton.style.display = "none";
-    removeButton.style.display = "block";
-
-    discountRowEl.style.display = "flex";
-    discountAmountEl.textContent = `-${formatPriceShort(discount.discountAmount || 0)}`;
-    appliedDiscountCodeEl.textContent = discount.code;
-    appliedDiscountCodeEl.parentElement!.classList.remove("hidden");
-  } else {
-    discountCodeInput.value = "";
-    discountCodeInput.disabled = false;
-    applyButton.style.display = "block";
-    removeButton.style.display = "none";
-    discountRowEl.style.display = "none";
-  }
+  ) as HTMLButtonElement | null;
+  if (!applyButton) return;
+  applyButton.textContent = pending
+    ? activeCheckoutCopy().processingText
+    : activeCheckoutCopy().applyDiscountText;
+  applyButton.disabled = pending;
 }
 
 function cartItemVariantLabel(item: CartItem): string | null {
@@ -458,9 +430,7 @@ function formCanonicalPhoneValue(): string | null {
 function cartTaxQuoteInput(): Record<string, unknown> | null {
   const city = latestCheckoutLocation?.cityId || formStringValue("city");
   const zone = latestCheckoutLocation?.zoneId || formStringValue("zone");
-  const shippingMethodId =
-    window.lastShippingEventDetail?.id ||
-    document.getElementById("checkout-meta")?.dataset.defaultShippingId;
+  const shippingMethodId = window.lastShippingEventDetail?.id;
   const cartItems = (
     document.getElementById("cartItemsInput") as HTMLInputElement | null
   )?.value;
@@ -476,85 +446,112 @@ function cartTaxQuoteInput(): Record<string, unknown> | null {
     area:
       latestCheckoutLocation?.areaId || formStringValue("area") || undefined,
     shippingMethodId,
-    discountCodeHidden: (
-      document.getElementById("discountCodeHidden") as HTMLInputElement | null
-    )?.value,
+    discountCodes: cartStore.get().discountCodes,
     customerPhone: formCanonicalPhoneValue() || undefined,
   };
 }
 
+/** The codes the latest quote applied; only these go to the order commit. */
+function setAcceptedDiscountCodes(facts: CheckoutDiscountFacts | null): void {
+  const input = document.getElementById("discountCodesInput") as HTMLInputElement | null;
+  if (!input) return;
+  const accepted = (facts?.discounts ?? []).flatMap(({ code }) => (code ? [code] : []));
+  input.value = accepted.length > 0 ? JSON.stringify(accepted) : "";
+}
+
+function renderDiscountFacts(facts: CheckoutDiscountFacts | null): void {
+  latestDiscountFacts = facts;
+  setAcceptedDiscountCodes(facts);
+  const summary = document.getElementById("cartSummary");
+  if (!summary) return;
+  renderDiscountPanel(
+    summary,
+    { codes: cartStore.get().discountCodes, facts },
+    activeCheckoutCopy(),
+    {
+      removeCode: (code) => {
+        clearDiscountMessage();
+        removeDiscountCode(code);
+      },
+      addOfferProduct,
+      focusPhone: () => document.getElementById("customerPhone-input")?.focus(),
+    },
+  );
+}
+
+/** One-tap add of a simple product that completes a Buy X get Y. */
+function addOfferProduct(offer: CheckoutDiscountOffer, productIndex: number): void {
+  const product = offer.products[productIndex];
+  if (!product?.variantId || product.price === null) return;
+  addToCart({
+    id: product.id,
+    slug: product.slug,
+    name: product.name,
+    price: product.price,
+    variantId: product.variantId,
+    quantity: Math.max(1, offer.quantity),
+  });
+}
+
+type TotalsElements = {
+  subtotal: HTMLElement;
+  shipping: HTMLElement;
+  total: HTMLElement;
+  totalLabel: HTMLElement | null;
+  taxLabel: HTMLElement | null;
+  taxAmount: HTMLElement | null;
+  taxStatus: HTMLElement | null;
+  taxRow: HTMLElement | null;
+};
+
 function renderAuthoritativeCartQuote(
   quote: CheckoutTaxQuote,
-  elements: {
-    subtotal: HTMLElement;
-    shipping: HTMLElement;
-    total: HTMLElement;
-    totalLabel: HTMLElement | null;
-    taxLabel: HTMLElement | null;
-    taxAmount: HTMLElement | null;
-    taxStatus: HTMLElement | null;
-  },
+  elements: TotalsElements,
 ): void {
-  document
-    .getElementById("taxRow")
-    ?.classList.toggle("hidden", quote.taxMinor === 0);
-  elements.subtotal.textContent = formatPriceShort(quote.subtotalAmount);
+  elements.taxRow?.classList.toggle("hidden", quote.taxMinor === 0);
+  elements.subtotal.textContent = formatMoney(quote.subtotalAmount);
   elements.shipping.textContent =
     quote.shippingAmount === 0
       ? activeCheckoutCopy().freeText
-      : formatPriceShort(quote.shippingAmount);
-  elements.total.textContent = formatPriceShort(quote.totalAmount);
+      : formatMoney(quote.shippingAmount);
+  elements.total.textContent = formatMoney(quote.totalAmount);
   if (elements.totalLabel) {
     elements.totalLabel.textContent =
       elements.totalLabel.dataset.finalLabel || activeCheckoutCopy().totalText;
   }
-
   if (elements.taxLabel) {
-    elements.taxLabel.textContent = `${quote.displayLabel}${
-      quote.pricesIncludeTax ? " (included)" : ""
-    }`;
+    elements.taxLabel.textContent = quote.pricesIncludeTax
+      ? `${quote.displayLabel} (${activeCheckoutCopy().includedText})`
+      : quote.displayLabel;
   }
   if (elements.taxAmount) {
-    elements.taxAmount.textContent = formatPriceShort(quote.taxAmount);
+    elements.taxAmount.textContent = formatMoney(quote.taxAmount);
   }
-  if (elements.taxStatus) {
-    elements.taxStatus.textContent = "";
-    elements.taxStatus.classList.add("hidden");
-  }
+  setTaxStatus(elements, "");
+  renderDiscountFacts(quote);
+}
 
-  // Earned Buy X get Y: the buyer still has to add the free item.
-  const offers = document.getElementById("discountOffers");
-  if (offers) {
-    offers.replaceChildren(...quote.discountOffers.map((offer) => {
-      const item = document.createElement("li");
-      item.textContent = formatCheckoutLanguageText(activeCheckoutCopy().freeItemOfferText, { offer });
-      return item;
-    }));
-    offers.classList.toggle("hidden", quote.discountOffers.length === 0);
-  }
-
-  const discountRow = document.getElementById("discountRow");
-  const discountAmount = document.getElementById("discountAmount");
-  if (discountRow && discountAmount) {
-    if (quote.discountAmount > 0) {
-      discountRow.style.display = "flex";
-      discountAmount.textContent = `-${formatPriceShort(quote.discountAmount)}`;
-    } else {
-      discountRow.style.display = "none";
-    }
-  }
+function setTaxStatus(elements: TotalsElements, message: string): void {
+  const status = elements.taxStatus;
+  if (!status) return;
+  status.replaceChildren();
+  status.classList.toggle("hidden", !message);
+  if (!message) return;
+  status.append(document.createTextNode(`${message} `));
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "font-medium underline underline-offset-2";
+  retry.textContent = activeCheckoutCopy().retryText;
+  retry.addEventListener("click", () => void updateTotals());
+  status.append(retry);
 }
 
 function cartValidationDeliveryPayload() {
   const city = formStringValue("city");
   const zone = formStringValue("zone");
-  if (!city || !zone) return {};
-
-  const meta = document.getElementById("checkout-meta");
-  const shippingMethodId =
-    window.lastShippingEventDetail?.id ??
-    meta?.dataset.defaultShippingId ??
-    null;
+  // Delivery is checked only against a rate chosen for this address.
+  const shippingMethodId = window.lastShippingEventDetail?.id;
+  if (!city || !zone || !shippingMethodId) return {};
 
   return {
     city,
@@ -635,7 +632,7 @@ function cartBlockedMessage(): string {
   if (cartValidationSummaryMessage) return cartValidationSummaryMessage;
   return count === 1
     ? activeCheckoutCopy().cartItemChangedText
-    : `${count} cart items need attention before checkout.`;
+    : formatCheckoutLanguageText(activeCheckoutCopy().cartItemsNeedAttentionText, { count });
 }
 
 function updateCartValidationMessage() {
@@ -721,18 +718,21 @@ export async function validateCartSnapshot(): Promise<boolean> {
     if (response.ok && json?.success && json.data) {
       isApplyingCartSnapshot = true;
       try {
-        reconcileValidatedCartSnapshot(json.data, (message) => {
-          showDiscountMessage(message, "info");
-        });
+        reconcileValidatedCartSnapshot(json.data);
       } finally {
         isApplyingCartSnapshot = false;
       }
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
     }
     setCartValidationIssues(issues, cartStore.get().items, summaryMessage);
+    const deliveryRateRefused =
+      !response.ok && issues.length === 0 && isDeliveryRateUnavailable(json);
+    if (deliveryRateRefused) {
+      window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
+    }
     if (!response.ok || !json?.success) {
       cartValidationGlobalError =
-        issues.length > 0
+        issues.length > 0 || deliveryRateRefused
           ? ""
           : json?.error ||
             json?.details?.message ||
@@ -794,24 +794,22 @@ function renderCartItemIssues(cartKey: string): string {
     .join("")}</div>`;
 }
 
+/**
+ * Totals are always the server's: the authoritative tax quote once a
+ * destination is chosen, otherwise the discount preview for the chosen
+ * delivery method. Applied codes stay applied through every cart edit.
+ */
 export async function updateTotals() {
   const quoteSequence = ++cartTaxQuoteSequence;
-  const { items, totalAmount, discount } = cartStore.get();
-  const selectedMethodFee = window.lastShippingEventDetail?.fee ?? 0;
-  const shippingFee = getEffectiveCartShippingFee(items, selectedMethodFee);
-  const shippingFeeIsWaived = selectedMethodFee > 0 && shippingFee === 0;
+  const { items, totalAmount, discountCodes } = cartStore.get();
+  const selectedMethod = window.lastShippingEventDetail;
+  const shippingFee = selectedMethod
+    ? getEffectiveCartShippingFee(items, selectedMethod.fee, selectedMethod.freeOver)
+    : 0;
 
   const subtotalEl = document.getElementById("subtotal");
   const shippingEl = document.getElementById("shippingCost");
   const totalEl = document.getElementById("total");
-  const totalLabelEl = document.getElementById("totalLabel");
-  const taxLabelEl = document.getElementById("taxLabel");
-  const taxAmountEl = document.getElementById("taxAmount");
-  const taxStatusEl = document.getElementById("taxStatus");
-  const taxRowEl = document.getElementById("taxRow");
-  const discountHiddenInput = document.getElementById(
-    "discountCodeHidden",
-  ) as HTMLInputElement;
   const expectedQuoteFingerprintInput = document.getElementById(
     "expectedQuoteFingerprint",
   ) as HTMLInputElement | null;
@@ -819,57 +817,48 @@ export async function updateTotals() {
   if (expectedQuoteFingerprintInput) expectedQuoteFingerprintInput.value = "";
   updateCheckoutButtonState();
 
-  if (!subtotalEl || !shippingEl || !totalEl || !discountHiddenInput) return;
+  if (!subtotalEl || !shippingEl || !totalEl) return;
+  const elements: TotalsElements = {
+    subtotal: subtotalEl,
+    shipping: shippingEl,
+    total: totalEl,
+    totalLabel: document.getElementById("totalLabel"),
+    taxLabel: document.getElementById("taxLabel"),
+    taxAmount: document.getElementById("taxAmount"),
+    taxStatus: document.getElementById("taxStatus"),
+    taxRow: document.getElementById("taxRow"),
+  };
 
-  subtotalEl.textContent = formatPriceShort(totalAmount);
-  shippingEl.textContent =
-    shippingFeeIsWaived || shippingFee === 0
-      ? activeCheckoutCopy().freeText
-      : formatPriceShort(shippingFee);
+  subtotalEl.textContent = formatMoney(totalAmount);
+  // Before a delivery option applies to the address, shipping isn't known yet.
+  shippingEl.textContent = !selectedMethod
+    ? "—"
+    : shippingFee === 0 ? activeCheckoutCopy().freeText : formatMoney(shippingFee);
+  elements.taxRow?.classList.add("hidden");
+  if (Object.keys(items).length === 0) return;
 
-  let finalTotal = totalAmount + shippingFee;
-
-  if (discount && discount.discountAmount) {
-    finalTotal -= discount.discountAmount;
-    discountHiddenInput.value = JSON.stringify({
-      id: discount.id,
-      code: discount.code,
-      type: discount.type,
-      amount: discount.discountAmount,
-    });
-  } else {
-    discountHiddenInput.value = "";
-  }
-
-  totalEl.textContent = formatPriceShort(Math.max(0, finalTotal));
-  if (totalLabelEl) totalLabelEl.textContent = activeCheckoutCopy().estimatedTotalText;
-  updateDiscountUI();
+  const renderEstimate = async (failure: string) => {
+    const preview = await previewCartDiscounts(
+      discountCodes,
+      Object.values(items),
+      shippingFee,
+      formCanonicalPhoneValue() || undefined,
+    );
+    if (quoteSequence !== cartTaxQuoteSequence) return;
+    const discount = preview.ok ? preview.totalDiscount : 0;
+    totalEl.textContent = formatMoney(Math.max(0, totalAmount + shippingFee - discount));
+    if (elements.totalLabel) elements.totalLabel.textContent = activeCheckoutCopy().estimatedTotalText;
+    setTaxStatus(elements, failure || (preview.ok ? "" : activeCheckoutCopy().taxVerificationFailedText));
+    renderDiscountFacts(preview.ok ? preview : latestDiscountFacts);
+  };
 
   const quoteInput = cartTaxQuoteInput();
   if (!quoteInput) {
-    if (taxLabelEl) taxLabelEl.textContent = activeCheckoutCopy().taxText;
-    if (taxAmountEl) taxAmountEl.textContent = "—";
-    taxRowEl?.classList.add("hidden");
-    if (taxStatusEl) {
-      taxStatusEl.textContent = "";
-      taxStatusEl.classList.add("hidden");
-    }
+    await renderEstimate("");
     return;
   }
 
-  if (taxLabelEl) taxLabelEl.textContent = activeCheckoutCopy().taxText;
-  if (taxAmountEl) taxAmountEl.textContent = "—";
-  taxRowEl?.classList.add("hidden");
-  if (taxStatusEl) {
-    taxStatusEl.textContent = "";
-    taxStatusEl.classList.add("hidden");
-  }
   totalEl.textContent = activeCheckoutCopy().calculatingText;
-  if (totalLabelEl) {
-    totalLabelEl.textContent =
-      totalLabelEl.dataset.finalLabel || activeCheckoutCopy().totalText;
-  }
-
   try {
     const quote = await fetchAuthoritativeTaxQuote(quoteInput);
     if (quoteSequence !== cartTaxQuoteSequence) return;
@@ -877,27 +866,68 @@ export async function updateTotals() {
       expectedQuoteFingerprintInput.value = quote.quoteFingerprint;
     }
     updateCheckoutButtonState();
-    renderAuthoritativeCartQuote(quote, {
-      subtotal: subtotalEl,
-      shipping: shippingEl,
-      total: totalEl,
-      totalLabel: totalLabelEl,
-      taxLabel: taxLabelEl,
-      taxAmount: taxAmountEl,
-      taxStatus: taxStatusEl,
-    });
-  } catch {
+    renderAuthoritativeCartQuote(quote, elements);
+  } catch (error) {
     if (quoteSequence !== cartTaxQuoteSequence) return;
-    if (taxAmountEl) taxAmountEl.textContent = activeCheckoutCopy().unavailableText;
-    taxRowEl?.classList.add("hidden");
-    totalEl.textContent = "—";
-    if (taxStatusEl) {
-      taxStatusEl.textContent =
-        activeCheckoutCopy().taxVerificationFailedText;
-      taxStatusEl.classList.remove("hidden");
-    }
+    // An item that changed is shown on its line and a refused delivery rate
+    // re-reads the address's rates; only a real outage asks for a retry.
+    const cartChanged = error instanceof TaxQuoteCartChangedError;
+    const rateRefused = error instanceof TaxQuoteDeliveryRateError;
+    if (cartChanged) scheduleCartValidation();
+    if (rateRefused) window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
+    await renderEstimate(cartChanged || rateRefused ? "" : activeCheckoutCopy().taxVerificationFailedText);
     updateCheckoutButtonState();
   }
+}
+
+function renderCartLine(cartKey: string, item: VariantCartItem): string {
+  const rawName = item.name || "";
+  const safeName = escapeHtml(rawName);
+  const safeImage = escapeHtml(getProductImageUrl(item.image, 96));
+  const jsCartKey = inlineJsString(cartKey);
+  const copy = activeCheckoutCopy();
+  const options = normalizeCartItemOptions(item.options) ?? [];
+  const issueBlock = renderCartItemIssues(cartKey);
+  const quantityKnown = Object.prototype.hasOwnProperty.call(
+    cartQuantityLimits,
+    cartKey,
+  );
+  const quantityLimit = cartQuantityLimits[cartKey];
+  const atLimit = typeof quantityLimit === "number" && item.quantity >= quantityLimit;
+  const increaseDisabled = !quantityKnown || atLimit;
+  const increaseLabel = escapeHtml(formatCheckoutLanguageText(
+    !quantityKnown
+      ? copy.checkingAvailableQuantityText
+      : atLimit
+        ? copy.maximumAvailableQuantityText
+        : copy.increaseQuantityText,
+    { item: rawName },
+  ));
+  const variantInfo = options
+    .map((option) => `<span class="block">${escapeHtml(option.name)}: ${escapeHtml(option.label)}</span>`)
+    .join("");
+  const stepperButton =
+    "flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-9";
+
+  return `
+      <li class="py-3 first:pt-0"><div class="flex gap-3">
+          <div class="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-20 sm:w-20"><img src="${safeImage}" alt="" class="h-full w-full object-contain object-center" /></div>
+          <div class="min-w-0 flex-1">
+            <div class="flex justify-between gap-2">
+              <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-sm text-muted-foreground">${variantInfo}</div></div>
+              <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.removeFromCartText, { item: rawName }))}" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <div class="mt-2 flex items-center justify-between gap-2">
+              <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
+                <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: rawName }))}" class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
+                <span class="flex h-full w-8 items-center justify-center text-center text-sm tabular-nums text-foreground" aria-live="polite">${item.quantity}</span>
+                <button type="button" aria-label="${increaseLabel}" ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
+              </div>
+              <div class="text-right"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
+            </div>
+            ${issueBlock}
+          </div>
+        </div></li>`;
 }
 
 export async function renderCartItems() {
@@ -923,68 +953,15 @@ export async function renderCartItems() {
           }
         : null,
     );
+    renderDiscountFacts(null);
     syncCartPagePresentation(true);
     return;
   }
   renderCheckoutRecoveryNotice();
 
-  cartItemsContainer.innerHTML = Object.entries(items)
-    .map(([cartKey, item]) => {
-      // Escape all user-supplied strings to prevent XSS via innerHTML
-      const rawName = item.name || "";
-      const safeName = escapeHtml(rawName);
-      const safeImage = escapeHtml(
-        getProductImageUrl(item.image, 96),
-      );
-      const jsCartKey = inlineJsString(cartKey);
-      const safeOptions = normalizeCartItemOptions(item.options)?.map(
-        (option) => ({
-          name: escapeHtml(option.name),
-          label: escapeHtml(option.label),
-        }),
-      );
-      const issueBlock = renderCartItemIssues(cartKey);
-      const quantityKnown = Object.prototype.hasOwnProperty.call(
-        cartQuantityLimits,
-        cartKey,
-      );
-      const quantityLimit = cartQuantityLimits[cartKey];
-      const increaseDisabled =
-        !quantityKnown ||
-        (typeof quantityLimit === "number" && item.quantity >= quantityLimit);
-      const increaseLabel = escapeHtml(!quantityKnown
-        ? formatCheckoutLanguageText(activeCheckoutCopy().checkingAvailableQuantityText, { item: rawName })
-        : typeof quantityLimit === "number" && item.quantity >= quantityLimit
-          ? formatCheckoutLanguageText(activeCheckoutCopy().maximumAvailableQuantityText, { item: rawName })
-          : formatCheckoutLanguageText(activeCheckoutCopy().increaseQuantityText, { item: rawName }));
-
-      const variantInfo = safeOptions
-        ? `<div class="space-x-1">${safeOptions
-            .map((option) => `<span>${option.name}: ${option.label}</span>`)
-            .join("<span>•</span>")}</div>`
-        : "";
-
-      return `
-      <div class="py-2.5 sm:py-3 first:pt-0"><div class="flex gap-2.5 sm:gap-3">
-          <div class="w-16 h-16 sm:w-20 sm:h-20 bg-muted rounded-lg overflow-hidden shrink-0"><img src="${safeImage}" alt="${safeName}" class="w-full h-full object-contain object-center" /></div>
-          <div class="flex-1 min-w-0">
-            <div class="flex justify-between">
-              <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-xs text-muted-foreground sm:mt-1 sm:text-sm">${variantInfo}</div></div>
-              <button aria-label="${escapeHtml(formatCheckoutLanguageText(activeCheckoutCopy().removeFromCartText, { item: rawName }))}" class="ml-1.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive sm:ml-2 sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-            </div>
-            <div class="flex items-center justify-between mt-1.5 sm:mt-2">
-              <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-8">
-                <button aria-label="${escapeHtml(formatCheckoutLanguageText(activeCheckoutCopy().decreaseQuantityText, { item: rawName }))}" class="flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted sm:w-8" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">-</button>
-                <span class="flex h-full w-7 items-center justify-center text-center text-xs text-foreground sm:w-6 sm:text-sm">${item.quantity}</span>
-                <button aria-label="${increaseLabel}" ${increaseDisabled ? "disabled" : ""} class="flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-8" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
-              </div>
-              <div class="text-right"><div class="font-medium text-sm sm:text-base text-foreground">${formatPriceShort(item.price * item.quantity)}</div><div class="text-xs text-muted-foreground">${formatPriceShort(item.price)} ${escapeHtml(activeCheckoutCopy().eachText)}</div></div>
-            </div>
-            ${issueBlock}
-          </div>
-        </div></div>`;
-    })
-    .join("");
+  cartItemsContainer.innerHTML = `<ul class="divide-y divide-border">${Object.entries(items)
+    .map(([cartKey, item]) => renderCartLine(cartKey, item))
+    .join("")}</ul>`;
 
   await updateTotals();
   syncCartPagePresentation(true);
@@ -1000,24 +977,18 @@ export function updateCheckoutButtonState() {
   const unavailableMessage =
     meta?.dataset.checkoutUnavailableMessage ||
     activeCheckoutCopy().checkoutUnavailableMessage;
+  const cartReady =
+    document.getElementById("cartPageRoot")?.dataset.cartReady !== "false";
   const isEmpty = Object.keys(cartStore.get().items).length === 0;
-  const expectedQuoteFingerprint = (
-    document.getElementById("expectedQuoteFingerprint") as HTMLInputElement | null
-  )?.value ?? "";
-  const quoteUnverified =
-    meta?.dataset.codOnly === "true" &&
-    !/^taxq_[A-Za-z0-9_-]{22}$/.test(expectedQuoteFingerprint);
   applyCheckoutButtonState(submitButton, {
     checkoutUnavailable,
     unavailableMessage,
-    isEmpty,
+    isEmpty: isEmpty || !cartReady,
     cartBlocked: hasBlockingCartIssues(),
     cartBlockedMessage: cartBlockedMessage(),
     checkoutPending: hostedPaymentRecoverySession !== null,
     discountValidationPending: isDiscountValidationPending(),
     discountValidationPendingMessage: activeCheckoutCopy().processingText,
-    quoteUnverified,
-    quoteUnverifiedMessage: activeCheckoutCopy().totalVerificationFailedText,
   });
 }
 
@@ -1058,120 +1029,121 @@ function attemptToTrackInitiateCheckout() {
 }
 
 // --- Discount Logic ---
-function readDiscountCustomerPhone(): string | undefined {
-  const customerPhoneInput = document.querySelector<HTMLInputElement>(
-    '[name="customerPhone"]',
-  );
-  const enteredPhone = (
-    customerPhoneInput?.dataset.e164Value ||
-    customerPhoneInput?.value ||
-    ""
-  ).trim();
-  return enteredPhone && enteredPhone.length >= 7 ? enteredPhone : undefined;
-}
+const DISCOUNT_CODE_INPUT = /^[A-Z0-9_-]{1,50}$/;
 
+/**
+ * Checks a new code together with the codes already applied. A code the
+ * buyer can still qualify for (a minimum, a missing free item, a phone) is
+ * kept and shown as pending; a code that can never apply is refused.
+ */
 async function handleApplyDiscount() {
   const codeInput = document.getElementById(
     "discountCodeInput",
   ) as HTMLInputElement;
+  const copy = activeCheckoutCopy();
   const code = codeInput.value.trim().toUpperCase();
-  if (!code) {
-    showDiscountMessage(activeCheckoutCopy().enterDiscountCodeText, "error");
-    return;
-  }
-  // Reflect the normalized code back in the input
   codeInput.value = code;
-
-  const { items, totalAmount, discount: existingDiscount } = cartStore.get();
+  if (!code) {
+    showDiscountMessage(copy.enterDiscountCodeText, "error");
+    return;
+  }
+  if (!DISCOUNT_CODE_INPUT.test(code)) {
+    showDiscountMessage(copy.invalidDiscountCodeText, "error");
+    return;
+  }
+  const { items, discountCodes } = cartStore.get();
   if (Object.keys(items).length === 0) {
-    showDiscountMessage(activeCheckoutCopy().emptyCartText, "error");
+    showDiscountMessage(copy.emptyCartText, "error");
     return;
   }
-  if (existingDiscount) {
-    showDiscountMessage(activeCheckoutCopy().removeCurrentDiscountText, "error");
+  if (discountCodes.includes(code)) {
+    showDiscountMessage(formatCheckoutLanguageText(copy.discountAlreadyAppliedText, { code }), "error");
     return;
   }
-
   if (isDiscountValidationPending()) return;
 
-  const customerPhone = readDiscountCustomerPhone();
-  const shippingCost = getEffectiveCartShippingFee(
-    items,
-    window.lastShippingEventDetail?.fee ?? 0,
-  );
   const requestSequence = ++discountValidationSequence;
   pendingDiscountValidation = requestSequence;
+  clearDiscountMessage();
+  setApplyButtonPending(true);
   notifyDiscountValidationState();
 
-  const applyBtn = document.getElementById(
-    "applyDiscountBtn",
-  ) as HTMLButtonElement;
-  applyBtn.textContent = activeCheckoutCopy().processingText;
-  applyBtn.disabled = true;
-
-  const requestCartFingerprint = fingerprintCheckoutCart(items);
-  const isCurrentRequest = () => {
-    const current = cartStore.get();
-    return (
-      pendingDiscountValidation === requestSequence &&
-      codeInput.value.trim().toUpperCase() === code &&
-      current.discount === null &&
-      current.totalAmount === totalAmount &&
-      fingerprintCheckoutCart(current.items) === requestCartFingerprint &&
-      getEffectiveCartShippingFee(
-        current.items,
-        window.lastShippingEventDetail?.fee ?? 0,
-      ) === shippingCost &&
-      readDiscountCustomerPhone() === customerPhone
-    );
-  };
-
   try {
-    const result = await validateDiscount(
-      code,
+    const preview = await previewCartDiscounts(
+      [...discountCodes, code],
       Object.values(items),
-      shippingCost,
-      customerPhone,
+      getEffectiveCartShippingFee(
+        items,
+        window.lastShippingEventDetail?.fee ?? 0,
+        window.lastShippingEventDetail?.freeOver ?? null,
+      ),
+      formCanonicalPhoneValue() || undefined,
     );
-
-    if (
-      result?.valid &&
-      result.discount &&
-      result.discountAmount !== undefined
-    ) {
-      if (!isCurrentRequest()) return;
-      applyDiscount({
-        ...result.discount,
-        discountAmount: result.discountAmount,
-      });
-      await updateTotals();
-      showDiscountMessage(activeCheckoutCopy().discountAppliedText, "success");
-    } else {
-      if (!isCurrentRequest()) return;
-      if (result?.requiresCustomerPhone) {
-        document.querySelector<HTMLInputElement>(
-          '[name="customerPhone"]',
-        )?.focus();
-      }
-      showDiscountMessage(result?.error || activeCheckoutCopy().invalidDiscountCodeText, "error");
+    if (pendingDiscountValidation !== requestSequence) return;
+    if (!preview.ok) {
+      showDiscountMessage(preview.message || copy.discountApplyFailedText, "error");
+      return;
     }
-  } catch (error: unknown) {
-    if (!isCurrentRequest()) return;
-    console.error("Error applying discount:", error);
-    showDiscountMessage(activeCheckoutCopy().discountApplyFailedText, "error");
+    const rejection = preview.rejectedCodes.find((candidate) => candidate.code === code);
+    if (rejection && !isPendingCodeReason(rejection.reason)) {
+      showDiscountMessage(describeRejectedCode(rejection, copy), "error");
+      return;
+    }
+    codeInput.value = "";
+    addDiscountCode(code);
+    if (rejection) {
+      showDiscountMessage("", "success");
+      if (rejection.requiresCustomerPhone) {
+        document.getElementById("customerPhone-input")?.focus();
+      }
+    } else {
+      showDiscountMessage(formatCheckoutLanguageText(copy.discountAppliedText, { code }), "success");
+    }
   } finally {
     if (pendingDiscountValidation === requestSequence) {
       pendingDiscountValidation = null;
-      applyBtn.textContent = activeCheckoutCopy().applyDiscountText;
-      applyBtn.disabled = false;
+      setApplyButtonPending(false);
       notifyDiscountValidationState();
     }
   }
 }
 
-function handleRemoveDiscount() {
-  removeDiscount();
-  showDiscountMessage(activeCheckoutCopy().discountRemovedText, "success");
+// --- Undo for removals ---
+
+/** "Item removed · Undo" for 10 seconds, instead of a silent removal. */
+function offerUndo(message: string, snapshot: ReturnType<typeof cartStore.get>): void {
+  const status = document.getElementById("cartUndo");
+  if (!status) return;
+  if (undoTimer !== null) clearTimeout(undoTimer);
+  status.replaceChildren(document.createTextNode(`${message} · `));
+  const undo = document.createElement("button");
+  undo.type = "button";
+  undo.className = "font-medium text-foreground underline underline-offset-2";
+  undo.textContent = activeCheckoutCopy().undoText;
+  undo.addEventListener("click", () => {
+    restoreCart(snapshot);
+    hideUndo();
+  });
+  status.append(undo);
+  status.hidden = false;
+  undoTimer = setTimeout(hideUndo, 10_000);
+}
+
+function hideUndo(): void {
+  const status = document.getElementById("cartUndo");
+  if (status) {
+    status.hidden = true;
+    status.replaceChildren();
+  }
+  if (undoTimer !== null) clearTimeout(undoTimer);
+  undoTimer = null;
+}
+
+function removeLineWithUndo(cartKey: string): void {
+  const snapshot = cartStore.get();
+  const item = snapshot.items[cartKey];
+  if (!item || !removeCartItemByKey(cartKey)) return;
+  offerUndo(formatCheckoutLanguageText(activeCheckoutCopy().itemRemovedText, { item: item.name }), snapshot);
 }
 
 // --- Initialization ---
@@ -1182,27 +1154,7 @@ export async function initCartFunctionality() {
   reconcileHostedPaymentRecoveryWithCart();
   renderCheckoutRecoveryNotice();
 
-  // ── Read server-rendered shipping defaults ────────────────────────────────
-  // Eliminates the race condition: this runs before React hydration, ensuring
-  // window.lastShippingEventDetail is always set for the first updateTotals().
-  if (!window.lastShippingEventDetail) {
-    const meta = document.getElementById("checkout-meta");
-    const defaultId = meta?.dataset.defaultShippingId;
-    const defaultFee = meta?.dataset.defaultShippingFee;
-    const defaultName = meta?.dataset.defaultShippingName;
-    if (defaultId) {
-      window.lastShippingEventDetail = {
-        id: defaultId,
-        fee: parseInt(defaultFee || "0", 10),
-        name: defaultName || "",
-      };
-    }
-  }
-
-  // --- MODIFIED: Call the new quick buy processor first ---
   processQuickBuy();
-
-  // Populate the hidden checkoutId input field
   syncCheckoutIdInput();
 
   window.handleAbandonedCheckout = handleAbandonedCheckout;
@@ -1223,14 +1175,14 @@ export async function initCartFunctionality() {
       typeof quantityLimit === "number" ? Math.min(qty, quantityLimit) : qty;
     rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
-    if (nextQuantity <= 0) removeCartItemByKey(cartKey);
+    if (nextQuantity <= 0) removeLineWithUndo(cartKey);
     else updateCartItemByKey(cartKey, { quantity: nextQuantity });
   };
   window.removeFromCart = (cartKey) => {
     rotateCheckoutIdIfCartBlocked();
     clearCartValidationSummary();
     delete cartQuantityLimits[cartKey];
-    removeCartItemByKey(cartKey);
+    removeLineWithUndo(cartKey);
   };
   window.removeCartIssueItem = (cartKey) => {
     rotateCheckoutIdIfCartBlocked();
@@ -1290,7 +1242,8 @@ export async function initCartFunctionality() {
   window.bulkRefreshCartIssueItems = () => applyBulkCartRepair("refresh_item");
 
   let cartSubscriptionIsLive = false;
-  cartStoreUnsubscribe = cartStore.subscribe(() => {
+  let lastItemsJson = JSON.stringify(cartStore.get().items);
+  cartStoreUnsubscribe = cartStore.subscribe((state) => {
     // Nanostores invokes subscribers once immediately. Initialization already
     // renders and validates the hydrated cart below, so treating that first
     // observation as a mutation schedules a duplicate serial validation.
@@ -1299,22 +1252,26 @@ export async function initCartFunctionality() {
       return;
     }
     if (isApplyingCartSnapshot) return;
+    const itemsJson = JSON.stringify(state.items);
+    const itemsChanged = itemsJson !== lastItemsJson;
+    lastItemsJson = itemsJson;
     reconcileHostedPaymentRecoveryWithCart();
     void renderCartItems();
     updateCheckoutButtonState();
     handleAbandonedCheckout();
-    scheduleCartValidation();
+    // A code change only needs a new quote; stock needs checking only when lines change.
+    if (itemsChanged) scheduleCartValidation();
   });
 
   window.addEventListener(
     "shippingLocationChange",
     (e) => {
-      window.lastShippingEventDetail = (e as CustomEvent).detail;
-      // Preserve the buyer's code while the authoritative quote rechecks it
-      // against the newly selected delivery method. Initialization and browser
-      // restoration emit this event too, so clearing here loses valid codes.
+      const detail = (e as CustomEvent<ShippingMethodDetail | null>).detail;
+      window.lastShippingEventDetail = detail ?? undefined;
       void updateTotals();
       handleAbandonedCheckout();
+      // A delivery refusal belongs to the previous choice: check the new one.
+      if (detail) scheduleCartValidation();
     },
     { signal: runtimeSignal },
   );
@@ -1341,7 +1298,8 @@ export async function initCartFunctionality() {
         areaName: typeof detail?.areaName === "string" ? detail.areaName : "",
       };
       if (latestCheckoutLocation.zoneId) attemptToTrackInitiateCheckout();
-      void updateTotals();
+      // Totals follow the delivery options, which re-read the rates for this
+      // address and announce the choice with `shippingLocationChange`.
       handleAbandonedCheckout();
     },
     { signal: runtimeSignal },
@@ -1351,15 +1309,27 @@ export async function initCartFunctionality() {
     "submit",
     (e) => {
       e.preventDefault();
-      handleApplyDiscount();
+      void handleApplyDiscount();
     },
     { signal: runtimeSignal },
   );
+  document.getElementById("discountCodeInput")?.addEventListener(
+    "input",
+    clearDiscountMessage,
+    { signal: runtimeSignal },
+  );
 
+  let lastQuotedPhone = formCanonicalPhoneValue();
   document.getElementById("customerPhone-input")?.addEventListener(
     "blur",
     () => {
       attemptToTrackInitiateCheckout();
+      // One-use codes are checked against the phone: re-quote when it changes.
+      const phone = formCanonicalPhoneValue();
+      if (phone !== lastQuotedPhone && cartStore.get().discountCodes.length > 0) {
+        void updateTotals();
+      }
+      lastQuotedPhone = phone;
     },
     { signal: runtimeSignal },
   );
@@ -1371,12 +1341,6 @@ export async function initCartFunctionality() {
     },
     { signal: runtimeSignal },
   );
-
-  document
-    .getElementById("removeDiscountBtn")
-    ?.addEventListener("click", handleRemoveDiscount, {
-      signal: runtimeSignal,
-    });
 
   await renderCartItems();
   if (applyPendingCartRepairState()) {

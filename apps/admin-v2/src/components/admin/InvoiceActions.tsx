@@ -1,27 +1,32 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { postApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
+import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { apiData, type ApiResult } from "~/lib/api";
+import { orderErrorMessage } from "~/lib/api-mutations/orders";
 
-export type InvoiceDocument = ApiResult<typeof postApiV1AdminOrdersByIdInvoice>;
+export type IssuedInvoiceDocument = ApiResult<typeof postApiV1AdminOrdersByIdInvoice>;
 
 /**
- * Screen-only toolbar above the invoice. An issued invoice prints; a draft is
- * issued first, which allocates its number once (retries reuse one key).
+ * Screen-only toolbar above the invoice: back, issue (a draft gets its number
+ * once; retries reuse one key) and print. A missing business name is a
+ * reminder here, never text inside the document.
  */
 export function InvoiceActions({
   orderId,
   issued,
+  businessNameMissing,
   expectedOrderVersion,
   onIssued,
 }: {
   orderId: string;
   issued: boolean;
+  businessNameMissing: boolean;
   expectedOrderVersion: number;
-  onIssued: (document: InvoiceDocument) => void;
+  onIssued: (document: IssuedInvoiceDocument) => void;
 }) {
   const t = useMessages(orderDetailMessages);
   const operationKey = useRef<string | null>(null);
@@ -41,7 +46,7 @@ export function InvoiceActions({
       operationKey.current = null;
       onIssued(document);
     } catch (issueError) {
-      setError(issueError instanceof Error && issueError.message ? issueError.message : t("invoice.issueFailed"));
+      setError(orderErrorMessage(issueError));
     } finally {
       setIssuing(false);
     }
@@ -53,17 +58,22 @@ export function InvoiceActions({
         <Button variant="ghost" asChild>
           <Link to="/admin/orders/$orderId" params={{ orderId }}>{t("invoice.back")}</Link>
         </Button>
-        {issued ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {issued ? null : (
+            <Button variant="outline" onClick={() => void issue()} loading={issuing}>{t("invoice.issue")}</Button>
+          )}
           <Button onClick={() => window.print()}>{t("invoice.print")}</Button>
-        ) : (
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <p className="text-body text-muted-foreground">{t("invoice.issueHelp")}</p>
-            <Button onClick={() => void issue()} disabled={issuing}>
-              {issuing ? t("invoice.issuing") : t("invoice.issue")}
-            </Button>
-          </div>
-        )}
+        </div>
+        {issued ? null : <p className="w-full text-body text-muted-foreground">{t("invoice.issueHelp")}</p>}
         {error ? <p role="alert" className="w-full text-body text-destructive">{error}</p> : null}
+        {businessNameMissing ? (
+          <Alert variant="warning">
+            <p>
+              {t("invoice.businessMissing")}{" "}
+              <Link to="/admin/settings/store" className="text-link underline">{t("invoice.openSettings")}</Link>
+            </p>
+          </Alert>
+        ) : null}
       </div>
     </div>
   );

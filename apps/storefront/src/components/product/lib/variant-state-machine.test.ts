@@ -72,10 +72,11 @@ describe("generic product option selection", () => {
       .toEqual({ finish: "gloss" });
   });
 
-  it("auto-selects only single available values", () => {
-    const singleOptions = [{ ...options[0]!, values: [options[0]!.values[0]!] }];
-    expect(createInitialSelection(singleOptions, variants)).toEqual({ size: "small" });
-    expect(createInitialSelection(options, variants)).toEqual({});
+  it("preselects the first available SKU in option order and nothing when all are sold out", () => {
+    expect(createInitialSelection(options, variants)).toEqual({ size: "small", finish: "matte" });
+    const firstSoldOut = [variant("lg", "large", "gloss"), variant("sm", "small", "matte", 0), variant("sg", "small", "gloss")];
+    expect(createInitialSelection(options, firstSoldOut)).toEqual({ size: "small", finish: "gloss" });
+    expect(createInitialSelection(options, variants.map((item) => ({ ...item, stock: 0 })))).toEqual({});
   });
 
   it("requires all axes and an available exact SKU", () => {

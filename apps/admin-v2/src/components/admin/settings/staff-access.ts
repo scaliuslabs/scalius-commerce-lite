@@ -1,4 +1,9 @@
-import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import {
+  PERMISSIONS,
+  permissionPrerequisites,
+  withoutUnmetPrerequisites,
+  withPrerequisites,
+} from "@scalius/core/auth/rbac/permissions";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
 
 // ── Permission groups (plain merchant words; keys stay exactly as stored) ──
@@ -44,6 +49,26 @@ export const PERMISSION_GROUPS: ReadonlyArray<{ group: PermissionGroup; permissi
     ),
   }));
 
+/** Shown indented under the permission it needs ("Edit products" under "View products"). */
+export function isDependentPermission(permission: string): boolean {
+  return permissionPrerequisites(permission).length > 0;
+}
+
+/**
+ * Ticking permissions ticks what they need; unticking one unticks what depends
+ * on it. The API refuses roles that break this, and a person's effective
+ * access drops anything whose prerequisite is missing.
+ */
+export function togglePermissions(
+  checked: ReadonlySet<string>,
+  permissions: readonly string[],
+  on: boolean,
+): Set<string> {
+  if (on) return withPrerequisites([...checked, ...permissions]);
+  const removed = new Set(permissions);
+  return withoutUnmetPrerequisites([...checked].filter((permission) => !removed.has(permission)));
+}
+
 // ── Staff status: only real facts a merchant can act on ──
 
 export interface StaffStatusInput {
@@ -81,6 +106,7 @@ export interface StaffActions {
   cancelInvite: boolean;
   restore: boolean;
   suspend: boolean;
+  remove: boolean;
 }
 
 export function staffActions(
@@ -97,7 +123,18 @@ export function staffActions(
     cancelInvite: manage && invited,
     restore: manage && target.status === "suspended",
     suspend: manage && !invited && target.status !== "password_setup" && target.status !== "suspended",
+    // An invite is cancelled instead; everyone else can be removed for good.
+    remove: manage && !invited,
   };
+}
+
+/** Why a row can't be opened, when that's not obvious: the owner's and your own access are fixed. */
+export function lockedReason(
+  target: { id: string; isSuperAdmin: boolean },
+  viewer: { id: string },
+): "self" | "owner" | null {
+  if (target.id === viewer.id) return "self";
+  return target.isSuperAdmin ? "owner" : null;
 }
 
 // ── Staff access draft: roles plus per-person overrides ──
@@ -128,12 +165,12 @@ export function rolePermissionSet(roleIds: readonly string[], roles: readonly Ro
   return new Set(roles.filter((role) => selected.has(role.id)).flatMap((role) => role.permissions));
 }
 
-/** What this person can actually do: overrides win over their roles. */
+/** What this person can actually do: overrides win over their roles, and nothing works without its prerequisite. */
 export function effectivePermissions(access: StaffAccess, roles: readonly RolePermissions[]): Set<string> {
   const effective = rolePermissionSet(access.roleIds, roles);
   for (const permission of access.grants) effective.add(permission);
   for (const permission of access.denials) effective.delete(permission);
-  return effective;
+  return withoutUnmetPrerequisites(effective);
 }
 
 /** Ticking a box sets an override only when it differs from the roles. */
@@ -149,6 +186,22 @@ export function setPermission(
   if (on && !fromRoles) grants.push(permission);
   if (!on && fromRoles) denials.push(permission);
   return { ...access, grants, denials };
+}
+
+/** Overrides that make this person's effective access exactly `next`. */
+export function setAccessPermissions(
+  access: StaffAccess,
+  roles: readonly RolePermissions[],
+  next: ReadonlySet<string>,
+): StaffAccess {
+  const current = effectivePermissions(access, roles);
+  let draft = access;
+  for (const permission of new Set([...current, ...next])) {
+    if (current.has(permission) !== next.has(permission)) {
+      draft = setPermission(draft, roles, permission, next.has(permission));
+    }
+  }
+  return draft;
 }
 
 export interface AccessChanges {
@@ -186,6 +239,26 @@ export function accessChanges(saved: StaffAccess, draft: StaffAccess): AccessCha
 // ── Roles ──
 
 export const OWNER_ROLE = "super_admin";
+
+/** The built-in roles, by stored key; their names are translated, custom names stay as typed. */
+export const BUILT_IN_ROLES = ["super_admin", "manager", "sales_rep", "content_editor", "product_specialist"] as const;
+export type BuiltInRole = (typeof BUILT_IN_ROLES)[number];
+
+export function builtInRole(name: string): BuiltInRole | null {
+  return (BUILT_IN_ROLES as readonly string[]).includes(name) ? (name as BuiltInRole) : null;
+}
+
+/**
+ * The server's rule for handing out a role: only the owner hands out the
+ * owner role, and staff can only give access they have themselves.
+ */
+export function canGrantRole(
+  role: { name: string; permissions: readonly string[] },
+  viewer: { isOwner: boolean; permissions: ReadonlySet<string> },
+): boolean {
+  if (viewer.isOwner) return true;
+  return role.name !== OWNER_ROLE && role.permissions.every((permission) => viewer.permissions.has(permission));
+}
 
 /** Stored role key from the name the merchant types (lowercase, digits, underscores). */
 export function roleKey(displayName: string, fallback: () => string = () => `role_${Date.now().toString(36)}`): string {

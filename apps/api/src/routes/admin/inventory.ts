@@ -2,8 +2,8 @@
 // Admin OpenAPI routes for inventory.
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
-import { getInventoryOverview, getInventoryLabelVariants, adjustInventory, adjustInventoryRequestSchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema, INVENTORY_LABEL_VARIANT_LIMIT, INVENTORY_LABEL_ARTIFACT_MAX_COPIES, INVENTORY_LABEL_ARTIFACT_MAX_BYTES, buildInventoryLabelArtifact, buildInventoryMovementCsvArtifact, INVENTORY_MOVEMENT_EXPORT_MAX_BYTES, INVENTORY_MOVEMENT_EXPORT_MAX_ROWS } from "@scalius/core/modules/inventory";
-import { acknowledgeLowStockAlert } from "@scalius/core/modules/inventory/alerts";
+import { getInventoryOverview, getInventoryLabelVariants, adjustInventory, adjustInventoryRequestSchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema, INVENTORY_LABEL_VARIANT_LIMIT, INVENTORY_LABEL_ARTIFACT_MAX_COPIES, INVENTORY_LABEL_ARTIFACT_MAX_BYTES, buildInventoryLabelArtifact, buildInventoryMovementCsvArtifact, INVENTORY_MOVEMENT_EXPORT_MAX_BYTES, INVENTORY_MOVEMENT_EXPORT_MAX_ROWS, lowStockThresholdSchema } from "@scalius/core/modules/inventory";
+import { acknowledgeLowStockAlert, setLowStockThreshold } from "@scalius/core/modules/inventory/alerts";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
@@ -106,6 +106,7 @@ const inventoryMovementSchema = z.object({
     preorderStockDelta: z.number().int().nullable(),
     createdAt: z.union([z.string(), z.number()]),
     variantSku: z.string().nullable(),
+    optionLabel: z.string().nullable(),
     productName: z.string().nullable(),
     actorName: z.string(),
     actorType: z.enum(["system", "admin", "former_admin"]),
@@ -475,6 +476,7 @@ const labelArtifactPresetSchema = z.object({
 const labelArtifactBodySchema = z.object({
     format: z.enum(["csv", "html", "pdf"]),
     mode: z.enum(["job", "test"]).default("job"),
+    locale: z.enum(["en", "bn"]).default("en").openapi({ description: "Dashboard language, so printed prices match the preview" }),
     variantIds: z.array(z.string().trim().min(1).max(100)).min(1).max(INVENTORY_LABEL_VARIANT_LIMIT),
     quantities: z.record(z.string().trim().min(1).max(100), z.number().int().min(0).max(INVENTORY_LABEL_ARTIFACT_MAX_COPIES)),
     order: z.enum(["selected", "product", "sku"]).default("selected"),
@@ -531,7 +533,7 @@ app.openapi(labelArtifactRoute, async (c) => {
     const currency = await getCurrencyConfig(db);
     let artifact: ReturnType<typeof buildInventoryLabelArtifact>;
     try {
-        artifact = buildInventoryLabelArtifact(projection.variants, job, currency.code);
+        artifact = buildInventoryLabelArtifact(projection.variants, job, currency);
     } catch (error: unknown) {
         if (error instanceof Error) throw new ValidationError(error.message);
         throw error;
@@ -588,6 +590,53 @@ app.openapi(adjustRoute, async (c) => {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;
     }
+});
+
+// ── Alert level ──
+
+const alertLevelRoute = createRoute({
+    method: "put",
+    path: "/{variantId}/alert-level",
+    operationId: "dashboard.inventory.set_alert_level",
+    tags: ["Admin - Inventory"],
+    summary: "Set a SKU's low-stock alert level",
+    description: "Alert when available stock falls to this level or below: a whole number from 0 to 1,000,000, or null to turn the alert off. Stock is not changed.",
+    request: {
+        params: z.object({ variantId: z.string() }),
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        lowStockThreshold: lowStockThresholdSchema,
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Alert level saved",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        variantId: z.string(),
+                        lowStockThreshold: z.number().int().nullable(),
+                    })),
+                },
+            },
+        },
+        400: errorResponses[400],
+        404: errorResponses[404],
+    },
+});
+
+app.openapi(alertLevelRoute, async (c) => {
+    const { variantId } = c.req.valid("param");
+    const { lowStockThreshold } = c.req.valid("json");
+    const result = await setLowStockThreshold(c.get("db"), variantId, lowStockThreshold);
+    // The alert level shapes the buyer availability band.
+    await bumpCacheGeneration(c);
+    return ok(c, result);
 });
 
 // ── Scanner: Barcode/SKU Lookup ──

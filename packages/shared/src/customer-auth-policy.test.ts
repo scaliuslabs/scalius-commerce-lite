@@ -7,6 +7,7 @@ import {
   customerAuthPolicyUsesEmailProvider,
   getCustomerAuthAllowedRequestMethods,
   getCustomerAuthDeliveryChannel,
+  getCustomerAuthPolicyForMethod,
   getDefaultCustomerAuthRequestMethod,
   getLegacyCustomerAuthMethodForPolicy,
   normalizeCustomerAuthMethod,
@@ -111,6 +112,23 @@ describe("customer auth policy", () => {
       optionalContactFields: ["email"],
       defaultOtpChannel: "sms",
     });
+  });
+
+  it("requires email when codes are sent only by email", () => {
+    expect(normalizeCustomerAuthPolicy({
+      otpChannels: ["email"],
+      requiredContactFields: ["phone"],
+      optionalContactFields: [],
+      defaultOtpChannel: "email",
+    }).requiredContactFields).toEqual(["phone", "email"]);
+    expect(getCustomerAuthPolicyForMethod("email").requiredContactFields).toEqual(["phone", "email"]);
+    // Another channel reaches customers without email, so email stays the merchant's choice.
+    expect(normalizeCustomerAuthPolicy({
+      otpChannels: ["email", "sms"],
+      requiredContactFields: ["phone"],
+      optionalContactFields: [],
+      defaultOtpChannel: "email",
+    }).requiredContactFields).toEqual(["phone"]);
   });
 
   it("resolves explicit phone channel selection when both SMS and WhatsApp are enabled", () => {

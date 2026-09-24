@@ -24,6 +24,10 @@ export interface Product {
   categoryName?: string | null;
   isActive?: boolean;
   primaryImage?: string | null;
+  /** Optioned SKUs; 0 for a simple product. */
+  variantCount?: number;
+  /** Sellable units across tracked SKUs; null when stock isn't tracked. */
+  available?: number | null;
 }
 
 export const collectionFormSchema = z.object({
@@ -43,12 +47,14 @@ export const collectionFormSchema = z.object({
   config: z.object({
     source: z.enum(["manual", "dynamic"]),
     categoryIds: z.array(z.string().trim().min(1).max(180)).max(MAX_MEMBERSHIP_IDS),
-    productIds: z
-      .array(z.string().trim().min(1).max(180).refine((id) => id.startsWith("prod_"), message("productOnly")))
-      .max(MAX_MEMBERSHIP_IDS),
+    productIds: z.array(z.string().trim().min(1).max(180)).max(MAX_MEMBERSHIP_IDS),
     featuredProductId: z.string().trim().max(180).optional(),
     showOnHomepage: z.boolean(),
-    maxProducts: z.number().int().min(1).max(24),
+    maxProducts: z
+      .number(message("productsShownRange"))
+      .int(message("productsShownRange"))
+      .min(1, message("productsShownRange"))
+      .max(24, message("productsShownRange")),
     title: z.string().trim().max(120).optional(),
     subtitle: z.string().trim().max(240).optional(),
   }),

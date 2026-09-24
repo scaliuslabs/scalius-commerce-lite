@@ -10,11 +10,10 @@ describe("generic admin order status policy", () => {
     for (const target of [
       OrderStatus.RETURNED,
       OrderStatus.REFUNDED,
-      OrderStatus.PARTIALLY_REFUNDED,
     ]) {
       expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.DELIVERED, target)).toBe(false);
       expect(() => assertGenericAdminOrderStatusTransition(OrderStatus.DELIVERED, target))
-        .toThrow("dedicated item-level workflow");
+        .toThrow("Use Return or Refund");
     }
   });
 
@@ -34,7 +33,7 @@ describe("generic admin order status policy", () => {
     for (const target of [OrderStatus.PENDING, OrderStatus.CONFIRMED]) {
       expect(isGenericAdminOrderStatusTransitionAllowed(OrderStatus.CANCELLED, target)).toBe(false);
       expect(() => assertGenericAdminOrderStatusTransition(OrderStatus.CANCELLED, target))
-        .toThrow("cannot move an order from cancelled");
+        .toThrow("This order is now cancelled, so it can't be marked");
     }
   });
 });

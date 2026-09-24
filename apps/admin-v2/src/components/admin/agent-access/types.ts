@@ -52,6 +52,8 @@ export interface AgentConnection {
 export interface AgentConnectionsPage {
   connections: AgentConnection[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
+  /** This session may create, change and remove access (store owner, two-step verified). */
+  canManage: boolean;
 }
 
 export interface AgentSecretResult {

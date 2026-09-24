@@ -78,7 +78,6 @@ type CurrentMonthRow = RevenueMinor & {
     cancelled: number;
 };
 type MonthComparisonRow = RevenueMinor & { count: number };
-type TotalRevenueRow = RevenueMinor;
 type DailyOrderRow = RevenueMinor & {
     day: number;
     orderCount: number;
@@ -89,6 +88,7 @@ type DailyCustomerRow = {
 };
 type RecentOrderRow = {
     id: string;
+    orderNumber: number | null;
     customerName: string;
     totalAmountMinor: number;
     currencyDecimalPlaces: number;
@@ -160,22 +160,11 @@ function getDashboardSummaryQueries(
     ] as const;
 }
 
-function getDashboardTotalRevenueQuery(db: Database) {
-    return db
-        .select({
-            revenueMinor: sql<number>`sum(${orders.totalAmountMinor})`,
-            currencyDecimalPlaces: revenueDecimalPlaces,
-        })
-        .from(orders)
-        .where(
-            sql`${orders.deletedAt} is null AND ${orders.status} NOT IN ('cancelled', 'returned')`,
-        );
-}
-
 function getRecentOrdersQuery(db: Database, limit: number) {
     return db
         .select({
             id: orders.id,
+            orderNumber: orders.orderNumber,
             customerName: orders.customerName,
             totalAmountMinor: orders.totalAmountMinor,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
@@ -237,45 +226,30 @@ function mapDashboardSummaryStats([
     };
 }
 
-/** Aggregated dashboard metrics needed by the admin home SSR summary. */
-export async function getDashboardSummaryStats(db: Database) {
-    const monthBounds = getDashboardMonthBounds();
-
-    const rows = await runDashboardQuery("summary_stats", () =>
-        safeBatch(db, getDashboardSummaryQueries(db, monthBounds)) as Promise<[
-            CountRow[],
-            CountRow[],
-            CurrentMonthRow[],
-            MonthComparisonRow[],
-        ]>,
-    );
-
-    return mapDashboardSummaryStats(rows);
-}
-
 /**
  * Dashboard home projection in one provider batch. D1 executes batch statements
  * sequentially in a single call, avoiding a second connection and round trip;
  * the same provider-neutral batch contract is used by TursoDB and PostgreSQL.
+ * `recentOrderLimit` 0 skips the order feed (and its customer names) entirely.
  */
-export async function getDashboardHomeSummary(db: Database, recentOrderLimit = 5) {
+export async function getDashboardHomeSummary(db: Database, recentOrderLimit: number) {
     const monthBounds = getDashboardMonthBounds();
+    const queries = getDashboardSummaryQueries(db, monthBounds);
     const [
         totalProductsArr,
         totalCustomersArr,
         currentMonthArr,
         lastMonthArr,
-        recentOrders,
+        recentOrders = [],
     ] = await runDashboardQuery("home_summary", () =>
-        safeBatch(db, [
-            ...getDashboardSummaryQueries(db, monthBounds),
-            getRecentOrdersQuery(db, recentOrderLimit),
-        ]) as Promise<[
+        safeBatch(db, recentOrderLimit > 0
+            ? [...queries, getRecentOrdersQuery(db, recentOrderLimit)]
+            : queries) as unknown as Promise<[
             CountRow[],
             CountRow[],
             CurrentMonthRow[],
             MonthComparisonRow[],
-            RecentOrderRow[],
+            RecentOrderRow[]?,
         ]>,
     );
 
@@ -288,51 +262,6 @@ export async function getDashboardHomeSummary(db: Database, recentOrderLimit = 5
         ]),
         recentOrders: mapRecentOrders(recentOrders),
     };
-}
-
-/** Full dashboard metrics for legacy callers that still need lifetime revenue. */
-export async function getDashboardStats(db: Database) {
-    const monthBounds = getDashboardMonthBounds();
-
-    const [
-        totalProductsArr,
-        totalCustomersArr,
-        currentMonthArr,
-        lastMonthArr,
-        totalRevenueArr,
-    ] = await runDashboardQuery("full_stats", () =>
-        safeBatch(db, [
-            ...getDashboardSummaryQueries(db, monthBounds),
-            getDashboardTotalRevenueQuery(db),
-        ]) as Promise<[
-            CountRow[],
-            CountRow[],
-            CurrentMonthRow[],
-            MonthComparisonRow[],
-            TotalRevenueRow[],
-        ]>,
-    );
-
-    const summaryStats = mapDashboardSummaryStats([
-        totalProductsArr,
-        totalCustomersArr,
-        currentMonthArr,
-        lastMonthArr,
-    ]);
-    return {
-        ...summaryStats,
-        totalRevenue: revenueAmount(totalRevenueArr[0]),
-    };
-}
-
-/** Returns the N most recent orders for the dashboard feed. */
-export async function getRecentOrders(db: Database, limit = 5) {
-    const recentOrders = await runDashboardQuery(
-        "recent_orders",
-        () => getRecentOrdersQuery(db, limit),
-    );
-
-    return mapRecentOrders(recentOrders);
 }
 
 /**

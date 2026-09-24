@@ -912,7 +912,8 @@ describe("Facebook product feed route", () => {
 
     expect(response.status).toBe(200);
     expect(body.match(/<item>/g)).toHaveLength(1);
-    expect(body).toContain("<g:id>prod_simple</g:id>");
+    // A simple product is identified by its one default SKU (matches Product JSON-LD sku).
+    expect(body).toContain("<g:id>SIMPLE-SHIRT</g:id>");
     expect(body).toContain("<g:gtin>8801234567890</g:gtin>");
     expect(body).not.toContain("<g:identifier_exists>no</g:identifier_exists>");
   });
@@ -1285,7 +1286,8 @@ describe("Facebook product feed route", () => {
       const body = await response.text();
       const item = feedItemById(body, "prod_rounding_boundary");
       expect(item).toContain("<g:price>1.01 BDT</g:price>");
-      expect(item).toContain("<g:sale_price>0.91 BDT</g:sale_price>");
+      // BDT percentage prices round to whole taka, exactly as checkout charges.
+      expect(item).toContain("<g:sale_price>1.00 BDT</g:sale_price>");
       expectFeedPriceInvariant(body);
     }
   });

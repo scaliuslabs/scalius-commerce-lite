@@ -6,9 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import type { AuthState } from "../api/customer-auth";
 import { findNamedCheckoutControl } from "../checkout/form-controls";
-import { readCheckoutFormDraft, syncCheckoutTransferSession, writeCheckoutFormDraft } from "../checkout/session-state";
-import { cartHasFreeDeliveryItem, cartStore, getEffectiveCartShippingFee } from "../../store/cart";
+import {
+  clearCheckoutFormDraft,
+  discardCheckoutFormDraftOfOtherOwner,
+  readCheckoutFormDraft,
+  syncCheckoutTransferSession,
+  writeCheckoutFormDraft,
+} from "../checkout/session-state";
+import { cartHasFreeDeliveryItem, cartItemsSubtotal, cartStore, getEffectiveCartShippingFee } from "../../store/cart";
 import { enhanceShippingMethods } from "../checkout/shipping-methods";
+import { formatMoney } from "@scalius/shared/currency";
 import { enhanceLocationSelects, fetchLocationOptions } from "../checkout/location-select";
 import { initCheckoutPhoneField } from "../checkout/phone-field";
 import { storefrontSourcePath } from "../test-source-paths";
@@ -16,7 +23,7 @@ import { storefrontSourcePath } from "../test-source-paths";
 // Execute the real cart draft/autofill listeners with a deferred session read.
 // Keep the page's submission/payment side effects outside this focused harness.
 const cartSource = readFileSync(storefrontSourcePath("pages", "cart.astro"), "utf8");
-const scriptSource = cartSource.split("<script>")[1]!.split("// ── Multi-gateway checkout redirect")[0]!;
+const scriptSource = cartSource.split("<script>")[1]!.split("// ── Submit ──")[0]!;
 const parsedScript = ts.createSourceFile("cart.ts", scriptSource, ts.ScriptTarget.ES2022, true);
 const script = ts.transpileModule(
   parsedScript.statements.filter((statement) => !ts.isImportDeclaration(statement))
@@ -44,12 +51,18 @@ function startCart() {
     cartHasFreeDeliveryItem,
     cartStore,
     enhanceShippingMethods,
+    fetchDeliveryRates: vi.fn(async () => []),
+    cartItemsSubtotal,
+    formatMoney,
     enhanceLocationSelects,
     fetchLocationOptions,
     getEffectiveCartShippingFee,
     readCheckoutFormDraft,
     writeCheckoutFormDraft,
     syncCheckoutTransferSession,
+    clearCheckoutFormDraft,
+    discardCheckoutFormDraftOfOtherOwner,
+    browserApiUrl: (path: string) => path,
     findNamedCheckoutControl,
     initCheckoutPhoneField,
   };

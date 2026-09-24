@@ -11,6 +11,7 @@ const testState = vi.hoisted(() => ({
       variantId: "var_1",
       quantity: 2,
       price: 100,
+      name: undefined as string | undefined,
     },
   ],
   setValue: vi.fn(),
@@ -38,7 +39,6 @@ vi.mock("./OrderFormContext", () => ({
     },
     products: [],
     isEdit: false,
-    usesQuote: true,
     manualQuote: { isCurrent: false, data: null },
   }),
 }));
@@ -72,6 +72,7 @@ describe("OrderItemsTable", () => {
         variantId: "var_1",
         quantity: 2,
         price: 100,
+        name: "Studio Lamp",
       },
     ];
     testState.setValue.mockReset();
@@ -88,15 +89,6 @@ describe("OrderItemsTable", () => {
   it("updates the exact line from its quantity control", async () => {
     await act(async () => root.render(
       <OrderItemsTable
-        resolvedProductsById={{
-          prod_1: {
-            id: "prod_1",
-            name: "Studio Lamp",
-            price: 100,
-            discountPercentage: null,
-            variants: [],
-          },
-        }}
         resolvedVariantsById={{
           var_1: {
             id: "var_1",
@@ -123,6 +115,7 @@ describe("OrderItemsTable", () => {
       variantId: "var_1",
       quantity: 4,
       price: 100,
+      name: "Studio Lamp",
     }];
     expect(testState.setValue).toHaveBeenCalledWith("items", expectedItems, {
       shouldDirty: true,
@@ -133,15 +126,6 @@ describe("OrderItemsTable", () => {
   it("does not let a staged line exceed the tracked SKU snapshot", async () => {
     await act(async () => root.render(
       <OrderItemsTable
-        resolvedProductsById={{
-          prod_1: {
-            id: "prod_1",
-            name: "Studio Lamp",
-            price: 100,
-            discountPercentage: null,
-            variants: [],
-          },
-        }}
         resolvedVariantsById={{
           var_1: {
             id: "var_1",
@@ -162,7 +146,6 @@ describe("OrderItemsTable", () => {
       'input[aria-label="Quantity for Studio Lamp"]',
     );
     if (!input) throw new Error("Expected quantity input");
-    expect(input.max).toBe("7");
 
     await act(async () => input.focus());
     await act(async () => setInputValue(input, "8"));

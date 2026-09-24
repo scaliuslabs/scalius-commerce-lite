@@ -119,7 +119,7 @@ function ProductEditor({ productId, initialProduct, categories }: {
       name: values.name,
       slug: values.slug,
       description: values.description,
-      price: values.price,
+      price: values.price ?? 0,
       categoryId: values.categoryId,
       isActive: values.isActive,
       media: values.media.map(({ effectiveAltText, altText, ...item }) => ({
@@ -130,8 +130,8 @@ function ProductEditor({ productId, initialProduct, categories }: {
       aggregateRevision: revision,
     }));
     setAggregateRevision(revision);
-    if (matrixDirty) matrixRef.current?.save(revision);
-    else void refreshMatrix();
+    // A variant draft is saved next by the page, against this new revision.
+    if (!matrixDirty) void refreshMatrix();
   }, [matrixDirty, refreshMatrix]);
 
   const defaultValues = {
@@ -184,7 +184,8 @@ function ProductEditor({ productId, initialProduct, categories }: {
         optionMatrixIssue={matrixIssue}
         optionMatrixDirty={matrixDirty}
         optionMatrixSaving={matrixSaving}
-        onOptionMatrixSave={() => matrixRef.current?.save()}
+        matrixRef={matrixRef}
+        variantIds={matrixSnapshot.variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id)}
         onDiscard={() => {
           if (revisionConflict) {
             void reloadLatest();
@@ -195,9 +196,10 @@ function ProductEditor({ productId, initialProduct, categories }: {
           setMatrixDirty(false);
           setMatrixIssue(null);
         }}
-        optionManager={({ skuImages, productName, productPrice }) => (
+        optionManager={({ skuImages, productName, productPrice, isActive }) => (
           <Suspense fallback={<LoadingFallback height="h-48" />}>
             <OptionMatrixEditor
+              requirePositivePrice={isActive}
               ref={matrixRef}
               key={`matrix-${matrixGeneration}`}
               productId={productId}

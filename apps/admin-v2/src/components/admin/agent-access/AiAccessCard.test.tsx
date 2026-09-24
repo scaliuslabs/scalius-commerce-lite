@@ -26,6 +26,11 @@ const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 
 vi.mock("./api", () => api);
 vi.mock("sonner", () => ({ toast: toasts }));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, hash, children, ...props }: { to: string; hash?: string; children: React.ReactNode }) => (
+    <a href={hash ? `${to}#${hash}` : to} {...props}>{children}</a>
+  ),
+}));
 
 const connection = {
   id: "agr_1",
@@ -83,6 +88,7 @@ function listWith(...connections: object[]) {
   api.listAgentConnections.mockResolvedValue({
     connections,
     pagination: { page: 1, limit: 100, total: connections.length, totalPages: 1 },
+    canManage: true,
   });
 }
 
@@ -113,6 +119,7 @@ beforeEach(() => {
   api.listAgentConnections.mockResolvedValue({
     connections: [connection],
     pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    canManage: true,
   });
   api.countClearableAgentConnections.mockResolvedValue({ revoked: 0, expired: 0, total: 0 });
   api.createAgentToken.mockResolvedValue({ token: SECRET, connection });
@@ -154,6 +161,37 @@ describe("AI & app access card", () => {
 
     await click(button("Done"));
     expect(document.body.innerHTML).not.toContain(SECRET);
+  });
+
+  it("asks the owner to turn on two-step verification before offering the key form", async () => {
+    api.listAgentConnections.mockResolvedValue({
+      connections: [connection],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+      canManage: false,
+    });
+    await render(["agent_access.view", "agent_access.manage"], true);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Codex"));
+
+    expect(document.body.textContent).toContain("Turn on two-step verification to create access keys.");
+    const link = [...host.querySelectorAll("a")].find((anchor) => anchor.textContent === "Turn on two-step verification");
+    expect(link?.getAttribute("href")).toBe("/admin/account#two-step");
+    expect(document.body.textContent).not.toContain("Create access key");
+    expect(document.body.textContent).not.toContain("Disconnect all");
+    expect(document.body.textContent).not.toMatch(/agent|2FA|Super Admin/i);
+  });
+
+  it("puts a refused key in the dialog's banner only, not a toast as well", async () => {
+    api.createAgentToken.mockRejectedValue(new Error("Only the store owner can manage app access, with two-step verification turned on."));
+    await render(["agent_access.view", "agent_access.manage"], true);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Codex"));
+
+    await click(button("Create access key"));
+    await type(document.getElementById("ai-key-name") as HTMLInputElement, "Warehouse");
+    await click(button("Save"));
+
+    expect(document.querySelector("[role=dialog] [role=alert]")?.textContent).toContain("two-step verification turned on");
+    expect(toasts.error).not.toHaveBeenCalled();
+    expect((document.getElementById("ai-key-name") as HTMLInputElement).value).toBe("Warehouse");
   });
 
   it("lets viewers see connections but not create or disconnect them", async () => {

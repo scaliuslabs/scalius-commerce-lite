@@ -28,7 +28,9 @@ import {
     normalizeOptionIdentity,
 } from "./products.option-model";
 import {
-    MAX_PRODUCT_PRICE,
+    catalogMoneySchema,
+    skuStockSchema,
+    skuWeightSchema,
     STOCK_CHANGED_MESSAGE,
     expectedProductAggregateRevisionSchema,
     expectedStockVersionSchema,
@@ -38,6 +40,7 @@ import {
     resolveNewVariantBarcode,
     assertUniqueVariantBarcodes,
     reconcileVariantLowStockAlerts,
+    assertSkusFree,
 } from "./products.variants";
 import {
     executeProductAggregateMutationBatch,
@@ -66,17 +69,17 @@ const matrixVariantInputSchema = z.object({
         .regex(/^pmed_[A-Za-z0-9_-]+$/u)
         .nullable(),
     sku: z.string().trim().min(3).max(100),
-    price: z.number().min(0).max(MAX_PRODUCT_PRICE),
-    stock: z.number().int().min(0).optional()
+    price: catalogMoneySchema,
+    stock: skuStockSchema.optional()
         .describe("On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity."),
     expectedStockVersion: expectedStockVersionSchema.optional(),
     trackInventory: z.boolean(),
-    weight: z.number().min(0).nullable().describe("Weight in grams."),
+    weight: skuWeightSchema.nullable(),
     barcode: z.string().trim().max(50).nullable(),
     barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "code128", "custom"]).nullable(),
     discountType: z.enum(["percentage", "flat"]),
     discountPercentage: z.number().min(0).max(100).nullable(),
-    discountAmount: z.number().min(0).max(MAX_PRODUCT_PRICE).nullable(),
+    discountAmount: catalogMoneySchema.nullable(),
 });
 
 const productOptionMatrixBaseSchema = z.object({
@@ -283,7 +286,6 @@ const CLOSED_ORDER_STATUSES = [
     OrderStatus.CANCELLED,
     OrderStatus.RETURNED,
     OrderStatus.REFUNDED,
-    OrderStatus.PARTIALLY_REFUNDED,
 ];
 
 function chunk<T>(values: readonly T[], size: number): T[][] {
@@ -450,11 +452,24 @@ export async function saveProductOptionMatrix(
     adminUserId?: string,
 ): Promise<{ aggregateRevision: number }> {
     const input = parseProductOptionMatrix(rawInput);
-    const [product, decimalPlaces] = await Promise.all([db.select({ id: products.id })
+    const [product, decimalPlaces] = await Promise.all([db.select({ id: products.id, isActive: products.isActive })
         .from(products)
         .where(and(eq(products.id, productId), isNull(products.deletedAt)))
         .get(), readStoreDecimalPlaces(db)]);
     if (!product) throw new NotFoundError("Product not found");
+    if (product.isActive) {
+        const unpriced = input.variants.findIndex((variant) => variant.price <= 0);
+        if (unpriced >= 0) {
+            throw new ValidationError("Enter a price above 0 for every variant of an active product.", {
+                field: `variants.${unpriced}.price`,
+            });
+        }
+    }
+    await assertSkusFree(
+        db,
+        input.variants.map((variant, index) => ({ sku: variant.sku, field: `variants.${index}.sku` })),
+        productId,
+    );
 
     const [existingDefinitions, existingValues, allProductVariants, productImageRows] = await Promise.all([
         db.select().from(productOptionDefinitions).where(eq(productOptionDefinitions.productId, productId)),

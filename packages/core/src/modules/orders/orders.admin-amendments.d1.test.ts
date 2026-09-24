@@ -6,9 +6,8 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import * as ordersAdmin from "./orders.admin";
 import {
   confirmManualOrderAmendment,
-  getAdminOrderAmendmentReadiness,
+  getOrderEditReadiness,
   previewManualOrderAmendment,
-  updateOrder,
 } from "./orders.admin";
 import { createOrderSchema } from "./orders.validation";
 import type { ConfirmManualOrderAmendmentInput } from "./orders.validation";
@@ -160,10 +159,10 @@ describe("manual COD order amendments on D1 storage", () => {
     },
   );
 
-  it("recognizes an untouched manual COD order as amendment-ready", async () => {
-    await expect(getAdminOrderAmendmentReadiness(db, "order_1")).resolves.toEqual({
-      allowed: true,
-      reason: null,
+  it("recognizes an untouched COD order as editable", async () => {
+    await expect(getOrderEditReadiness(db, "order_1")).resolves.toEqual({
+      items: { allowed: true, reason: null },
+      details: { allowed: true, reason: null },
     });
   });
 
@@ -205,15 +204,19 @@ describe("manual COD order amendments on D1 storage", () => {
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM order_amendments").get()).toEqual({ count: 1 });
   });
 
-  it("rejects a changed catalog quote after preview while preserving an exact replay", async () => {
+  it("rejects a changed catalog quote for an added line after preview while preserving an exact replay", async () => {
+    // Kept lines keep the agreed price; a newly added line is quoted at today's catalog price.
     const draft = input({
       requestKey: "24444444-2444-4444-8444-244444444444",
-      items: [{ orderItemId: "item_1", productId: "product_1", variantId: "variant_1", quantity: 3 }],
+      items: [
+        { orderItemId: "item_1", productId: "product_1", variantId: "variant_1", quantity: 2 },
+        { productId: "product_2", variantId: "variant_2", quantity: 1 },
+      ],
     });
     const preview = await previewManualOrderAmendment(db, "order_1", draft);
     const staleQuote = { ...draft, quoteFingerprint: preview.quoteFingerprint };
 
-    sqlite.exec("UPDATE product_variants SET price_minor = 11000 WHERE id = 'variant_1'");
+    sqlite.exec("UPDATE product_variants SET price_minor = 13000 WHERE id = 'variant_2'");
     await expect(confirmManualOrderAmendment(db, "order_1", staleQuote, "admin_1"))
       .rejects.toThrow(/prices or taxes changed.*refresh the quote/i);
     expect(sqlite.prepare("SELECT version FROM orders WHERE id = 'order_1'").get()).toEqual({ version: 1 });
@@ -222,11 +225,12 @@ describe("manual COD order amendments on D1 storage", () => {
     const refreshed = await previewManualOrderAmendment(db, "order_1", draft);
     const amendment = { ...draft, quoteFingerprint: refreshed.quoteFingerprint };
     const committed = await confirmManualOrderAmendment(db, "order_1", amendment, "admin_1");
-    sqlite.exec("UPDATE product_variants SET price_minor = 12000 WHERE id = 'variant_1'");
+    sqlite.exec("UPDATE product_variants SET price_minor = 14000 WHERE id = 'variant_2'");
     await expect(confirmManualOrderAmendment(db, "order_1", amendment, "admin_1"))
       .resolves.toEqual(committed);
+    expect(sqlite.prepare("SELECT unit_price_minor FROM order_items WHERE id = 'item_1'").get())
+      .toEqual({ unit_price_minor: 10000 });
   });
-
   it("replaces a SKU atomically while keeping the retained order identity", async () => {
     const result = await confirmManualOrderAmendment(db, "order_1", await confirmedInput({
       shippingAddress: "456 Revised Street, Dhaka",
@@ -326,38 +330,6 @@ describe("manual COD order amendments on D1 storage", () => {
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM order_amendments").get()).toEqual({ count: 0 });
   });
 
-  it("refuses full-editor replacement for a stale revision, lifecycle change, issued invoice, or return", async () => {
-    // A full-editable manual order has no checkout tax snapshot.
-    sqlite.exec("DELETE FROM order_item_tax_snapshots; DELETE FROM order_tax_snapshots;");
-    const edit = (overrides: Record<string, unknown> = {}) => updateOrder(db, "order_1", {
-      ...input(),
-      items: [{ productId: "product_1", variantId: "variant_1", quantity: 3, price: 100 }],
-      status: "confirmed",
-      ...overrides,
-    } as never);
-
-    const state = () => [
-      sqlite.prepare("SELECT version FROM orders").get(),
-      sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get(),
-    ];
-
-    await expect(edit({ expectedVersion: 2 })).rejects.toThrow(/changed after you opened/i);
-    await expect(edit({ status: "shipped" })).rejects.toThrow(/order status action/i);
-    expect(state()).toEqual([{ version: 1 }, { reserved_stock: 2 }]);
-    await expect(edit()).resolves.toMatchObject({ id: "order_1" });
-    expect(state()).toEqual([{ version: 2 }, { reserved_stock: 3 }]);
-
-    // Invoice then return: each refusal is attributable because the return check runs first.
-    sqlite.exec(`INSERT INTO order_invoices (id, order_id, invoice_number, prefix, formatted_number,
-      order_version, snapshot, content_hash, render_version, issued_at)
-      VALUES ('invoice_1', 'order_1', 1, 'INV', 'INV-1', 2, '{}', '${"a".repeat(64)}', 'v1', unixepoch())`);
-    await expect(edit({ expectedVersion: 2 })).rejects.toThrow(/invoice/i);
-    sqlite.exec(`INSERT INTO order_returns (id, order_id, status, reason, actor_type, actor_id)
-      VALUES ('return_1', 'order_1', 'cancelled', 'Test return', 'admin', 'admin_1')`);
-    await expect(edit({ expectedVersion: 2 })).rejects.toThrow(/return/i);
-    expect(state()).toEqual([{ version: 2 }, { reserved_stock: 3 }]);
-  });
-
   it("commits a manual order with its reservation, COD tracking, customer stats and replay evidence exactly once", async () => {
     sqlite.exec(`INSERT INTO customers (id, name, phone, total_orders)
       VALUES ('cust_1', 'Buyer', '+8801712345678', 4)`);
@@ -399,33 +371,6 @@ describe("manual COD order amendments on D1 storage", () => {
       .toEqual({ customer_phone: "+8801812345678" });
     expect(sqlite.prepare("SELECT reserved_stock FROM product_variants WHERE id = 'variant_1'").get())
       .toEqual({ reserved_stock: 3 });
-  });
-
-  it("refuses a full-editor phone change to a disallowed country", async () => {
-    sqlite.exec("DELETE FROM order_item_tax_snapshots; DELETE FROM order_tax_snapshots;");
-    const edit = (customerPhone: string, expectedVersion = 1) => updateOrder(db, "order_1", {
-      ...input({ expectedVersion, customerPhone }),
-      items: [{ productId: "product_1", variantId: "variant_1", quantity: 2, price: 100 }],
-      status: "confirmed",
-    } as never);
-    const stored = () => sqlite.prepare("SELECT customer_phone, version FROM orders").get();
-
-    // The stored phone predates the policy; only a changed phone is re-checked.
-    await saveAllowedCountries(db, ["IN"], "include");
-    await expect(edit("+8801812345678")).rejects.toThrow("Phone numbers from BD are not accepted");
-    expect(stored()).toEqual({ customer_phone: "+8801712345678", version: 1 });
-    await expect(edit("+8801712345678")).resolves.toMatchObject({ id: "order_1" });
-
-    await saveAllowedCountries(db, ["IN"], "exclude");
-    await expect(edit("+919876543210", 2)).rejects.toThrow("Phone numbers from IN are not accepted");
-    expect(stored()).toEqual({ customer_phone: "+8801712345678", version: 2 });
-    // Regression: the new-phone customer insert once bound 19 values to 23 columns.
-    await expect(edit("+8801812345678", 2)).resolves.toMatchObject({ id: "order_1" });
-    expect(stored()).toEqual({ customer_phone: "+8801812345678", version: 3 });
-    expect(sqlite.prepare(`SELECT c.phone, c.city_name, c.zone_name, c.total_orders, c.account_claimed_at
-      FROM customers c JOIN orders o ON o.customer_id = c.id`).get()).toEqual({
-      phone: "+8801812345678", city_name: "Dhaka", zone_name: "North", total_orders: 1, account_claimed_at: null,
-    });
   });
 
   it("exposes archive but no permanent order deletion service", () => {

@@ -116,6 +116,9 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/settings/payments": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/checkout": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/shipping": { anyOf: [...SHIPPING_PAGE_PERMISSIONS] },
+  "/admin/settings/shipping/areas": {
+    permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW,
+  },
   "/admin/settings/taxes": { permission: PERMISSIONS.TAXES_VIEW },
   "/admin/settings/notifications": {
     anyOf: [
@@ -155,16 +158,15 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     config: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
 
-  // Categories
+  // Catalog and content records open read-only for view roles; saving still
+  // needs the edit permission.
   {
     pattern: /^\/admin\/categories\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.CATEGORIES_EDIT },
+    config: { permission: PERMISSIONS.CATEGORIES_VIEW },
   },
-
-  // Collections
   {
     pattern: /^\/admin\/collections\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.COLLECTIONS_EDIT },
+    config: { permission: PERMISSIONS.COLLECTIONS_VIEW },
   },
 
   // Orders
@@ -189,14 +191,23 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
     config: { permission: PERMISSIONS.DISCOUNTS_VIEW },
   },
 
-  // Pages
   {
     pattern: /^\/admin\/pages\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.PAGES_EDIT },
+    config: { permission: PERMISSIONS.PAGES_VIEW },
   },
   {
     pattern: /^\/admin\/articles\/[^/]+\/edit$/,
-    config: { permission: PERMISSIONS.PAGES_EDIT },
+    config: { permission: PERMISSIONS.PAGES_VIEW },
+  },
+
+  // Staff and roles: one page each, opened from Settings → Users.
+  {
+    pattern: /^\/admin\/settings\/users\/roles\/[^/]+$/,
+    config: { permission: PERMISSIONS.TEAM_MANAGE_ROLES },
+  },
+  {
+    pattern: /^\/admin\/settings\/users\/[^/]+$/,
+    config: { anyOf: [PERMISSIONS.TEAM_MANAGE, PERMISSIONS.TEAM_MANAGE_ROLES] },
   },
 ];
 

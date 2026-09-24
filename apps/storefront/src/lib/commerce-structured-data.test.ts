@@ -281,6 +281,23 @@ describe("commerce structured data helpers", () => {
     });
   });
 
+  it("claims no country-wide rate when delivery fees vary by zone or for pickup", () => {
+    const rate = (id: string, fee: number, extra: Record<string, unknown> = {}) => ({
+      id, name: id, fee, description: null, isActive: true, sortOrder: 0, createdAt: null, updatedAt: null,
+      kind: "delivery" as const, everywhereElse: true, ...extra,
+    });
+    const zoned = [rate("Inside Dhaka", 60, { everywhereElse: false }), rate("Outside Dhaka", 120)];
+    expect(buildOfferShippingDetails({ shippingMethods: zoned, currencyCode: "BDT", freeDelivery: false })).toEqual([]);
+    // A free-delivery product costs nothing to ship anywhere, zones or not.
+    expect(buildOfferShippingDetails({ shippingMethods: zoned, currencyCode: "BDT", freeDelivery: true })
+      .map((detail) => detail.shippingRate.value)).toEqual(["0.00"]);
+    expect(buildOfferShippingDetails({
+      shippingMethods: [rate("Standard", 80), rate("Pickup", 0, { kind: "pickup" })],
+      currencyCode: "BDT",
+      freeDelivery: false,
+    }).map((detail) => detail.name)).toEqual(["Standard"]);
+  });
+
   it("maps only schema-safe barcode types to GTIN fields", () => {
     expect(gtinJsonLdForVariant("0123456789012", "ean13")).toEqual({
       gtin13: "0123456789012",

@@ -28,7 +28,8 @@ describe("robots.txt route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toBe("text/plain; charset=utf-8");
     expect(response.headers.get("Cache-Control")).toContain("public");
-    expect(body).toContain("User-agent: *\nAllow: /");
+    expect(body.startsWith("User-agent: *\n")).toBe(true);
+    expect(body).toContain("\nAllow: /\n");
     expect(sitemapLines(body)).toEqual([
       "Sitemap: https://storefront.example.test/sitemap.xml",
     ]);
@@ -45,7 +46,26 @@ describe("robots.txt route", () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toBe("User-agent: *\nAllow: /");
+    expect(body.endsWith("Allow: /")).toBe(true);
     expect(sitemapLines(body)).toEqual([]);
+  });
+
+  it("keeps crawlers off private pages, internal search and sort/filter variants only", async () => {
+    const disallowed = (await (await GET({} as never)).text())
+      .split("\n")
+      .filter((line) => line.startsWith("Disallow: "))
+      .map((line) => line.slice("Disallow: ".length));
+
+    expect(disallowed).toEqual(expect.arrayContaining([
+      "/cart$", "/checkout$", "/checkout/", "/account$", "/account/",
+      "/order-success", "/track-order", "/search$", "/search?", "/*?*sortBy=", "/*?*minPrice=",
+    ]));
+    // A bare "/search" prefix would also block CMS pages such as /searchlight.
+    expect(disallowed).not.toContain("/search");
+    // Catalog, content, paginated listings and the feeds stay crawlable.
+    for (const path of disallowed) {
+      expect(["/products/", "/categories/", "/collections/", "/blog", "/api/product-feed.xml", "/*?*page="])
+        .not.toContain(path);
+    }
   });
 });

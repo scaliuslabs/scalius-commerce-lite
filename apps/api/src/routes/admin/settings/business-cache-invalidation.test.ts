@@ -4,13 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorResponseFromError } from "../../../utils/api-response";
 
 const mocks = vi.hoisted(() => ({
-    getBusinessSettings: vi.fn(),
+    getBusinessSettingsDocument: vi.fn(),
     saveBusinessSettings: vi.fn(),
     bumpCacheGeneration: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings/business-settings.service", () => ({
-    getBusinessSettings: mocks.getBusinessSettings,
+    getBusinessSettingsDocument: mocks.getBusinessSettingsDocument,
     saveBusinessSettings: mocks.saveBusinessSettings,
 }));
 
@@ -49,7 +49,8 @@ describe("business settings cache invalidation", () => {
     });
 
     it("returns a bounded merchant projection without redacting usable business fields", async () => {
-        mocks.getBusinessSettings.mockResolvedValue({
+        mocks.getBusinessSettingsDocument.mockResolvedValue({
+            revision: 3,
             companyName: `Scalius ${"c".repeat(1_000)}`,
             legalName: "Scalius Commerce Ltd",
             addressLine1: "123 Merchant Street",
@@ -81,11 +82,20 @@ describe("business settings cache invalidation", () => {
         expect(body.data.companyName).toHaveLength(200);
         expect(body.data.invoiceFooterText).toHaveLength(4_000);
         expect(body.data.email).toBe("merchant@example.com");
+        expect(body.data.revision).toBe(3);
         expect(responseText).not.toContain("must-not-project");
     });
 
     it("invalidates layout caches after business identity saves", async () => {
         const { app, env } = createTestApp();
+        mocks.saveBusinessSettings.mockResolvedValueOnce({
+            value: {
+                companyName: "Scalius Demo", legalName: "Scalius Demo Ltd", addressLine1: "", addressLine2: "",
+                city: "", stateRegion: "", postalCode: "", country: "BD", phone: "", email: "", taxId: "",
+                invoicePrefix: "INV", invoiceFooterText: "", invoiceLogoUrl: "",
+            },
+            revision: 2,
+        });
 
         const response = await app.request(
             "/api/v1/admin/settings/business",
@@ -96,12 +106,14 @@ describe("business settings cache invalidation", () => {
                     companyName: "Scalius Demo",
                     legalName: "Scalius Demo Ltd",
                     country: "BD",
+                    expectedRevision: 1,
                 }),
             },
             env,
         );
 
         expect(response.status).toBe(200);
+        expect((await response.json() as { data: { revision: number } }).data.revision).toBe(2);
         expect(mocks.saveBusinessSettings).toHaveBeenCalledWith(
             expect.objectContaining({ id: "db" }),
             expect.objectContaining({
@@ -109,6 +121,7 @@ describe("business settings cache invalidation", () => {
                 legalName: "Scalius Demo Ltd",
                 country: "BD",
             }),
+            { expectedRevision: 1 },
         );
         expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith(expect.anything(),
         );
@@ -123,7 +136,7 @@ describe("business settings cache invalidation", () => {
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ companyName: "Updated company", phone: "01700000000" }),
+                body: JSON.stringify({ companyName: "Updated company", phone: "01700000000", expectedRevision: 0 }),
             },
             env,
         );
@@ -146,7 +159,7 @@ describe("business settings cache invalidation", () => {
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ invoiceLogoUrl }),
+                body: JSON.stringify({ invoiceLogoUrl, expectedRevision: 0 }),
             },
             env,
         );

@@ -12,6 +12,7 @@ export const SETTINGS_CARDS = [
   { page: "store", card: "storeDefaults" },
   { page: "users", card: "staff" },
   { page: "users", card: "roles" },
+  { page: "policies", card: "storePolicies" },
   { page: "policies", card: "returnPolicy" },
   { page: "payments", card: "paymentMethods" },
   { page: "payments", card: "paymentOptions" },
@@ -42,6 +43,30 @@ export const SETTINGS_CARDS = [
 
 export type SettingsCardId = (typeof SETTINGS_CARDS)[number]["card"];
 
+/**
+ * Things merchants look for by another name (message templates, staff order
+ * emails) or that live outside settings: My account, the store theme, and the
+ * dashboard language and light/dark mode (account menu, so no link).
+ * `section` names where each one is.
+ */
+export const SEARCH_SHORTCUTS = [
+  { card: "accountPassword", section: "myAccount", to: "/admin/account", hash: "password" },
+  { card: "accountTwoStep", section: "myAccount", to: "/admin/account", hash: "two-step" },
+  { card: "accountSessions", section: "myAccount", to: "/admin/account", hash: "sessions" },
+  { card: "messageTemplates", section: "notificationsPage", to: "/admin/settings/notifications", hash: "customerNotifications" },
+  { card: "staffOrderEmails", section: "notificationsPage", to: "/admin/settings/notifications", hash: "staffNotifications" },
+  { card: "storeTheme", section: "onlineStore", to: "/admin/online-store/theme" },
+  { card: "dashboardLanguage", section: "accountMenu" },
+  { card: "dashboardAppearance", section: "accountMenu" },
+] as const satisfies ReadonlyArray<{
+  card: keyof typeof settingsSearchMessages.en;
+  section: keyof typeof settingsSearchMessages.en;
+  to?: string;
+  hash?: string;
+}>;
+
+export type SearchShortcut = (typeof SEARCH_SHORTCUTS)[number];
+
 function words(text: string): string[] {
   return text.normalize("NFC").toLocaleLowerCase().split(/[\s,.&/·()-]+/).filter(Boolean);
 }
@@ -68,7 +93,7 @@ const PAGE_WORDS = new Map(
 );
 
 const CARD_WORDS = new Map(
-  SETTINGS_CARDS.map(({ card }) => [
+  [...SETTINGS_CARDS, ...SEARCH_SHORTCUTS].map(({ card }) => [
     card,
     haystack(
       settingsSearchMessages.en[card],
@@ -79,15 +104,17 @@ const CARD_WORDS = new Map(
   ]),
 );
 
-/** Pages and cards matching a settings search, in list order. */
+/** Pages, cards and shortcuts matching a settings search, in list order. */
 export function searchSettings(query: string): {
   pages: SettingsNavKey[];
   cards: Array<(typeof SETTINGS_CARDS)[number]>;
+  shortcuts: SearchShortcut[];
 } {
   const terms = words(query);
-  if (terms.length === 0) return { pages: SETTINGS_NAV.map((item) => item.key), cards: [] };
+  if (terms.length === 0) return { pages: SETTINGS_NAV.map((item) => item.key), cards: [], shortcuts: [] };
   return {
     pages: SETTINGS_NAV.filter(({ key }) => matches(terms, PAGE_WORDS.get(key)!)).map((item) => item.key),
     cards: SETTINGS_CARDS.filter(({ card }) => matches(terms, CARD_WORDS.get(card)!)),
+    shortcuts: SEARCH_SHORTCUTS.filter(({ card }) => matches(terms, CARD_WORDS.get(card)!)),
   };
 }

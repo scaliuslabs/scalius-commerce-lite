@@ -9,9 +9,8 @@ import {
     calculateStorefrontTaxQuote,
     type StorefrontTaxAuthoritySnapshot,
 } from "../tax";
-import { quoteStorefrontDiscount } from "../promotions";
+import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "../promotions";
 import {
-    shippingMethods,
     PaymentMethod,
     PaymentStatus,
     OrderStatus,
@@ -19,7 +18,6 @@ import {
 } from "@scalius/database/schema";
 import { nanoid } from "nanoid";
 
-import { eq, and, inArray, isNull } from "drizzle-orm";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { checkoutDocument } from "../settings/documents";
 import { ValidationError } from "@scalius/core/errors";
@@ -41,15 +39,13 @@ import {
     type ActiveDeliveryLocationRow,
 } from "./delivery-location-validation";
 import { MAX_ORDER_LINE_ITEMS } from "./orders.validation";
-
-export interface StorefrontShippingMethodRow {
-    id: string;
-    name: string;
-    description: string | null;
-    feeMinor: number;
-    isActive: boolean;
-    deletedAt: Date | number | null;
-}
+import {
+    resolveAddressZoneId,
+    resolveDeliveryRate,
+    selectDeliveryRateRowsByIds,
+    type DeliveryRateKind,
+    type DeliveryRateRow,
+} from "../delivery/zones";
 
 export interface StorefrontDeliveryPreflightInput {
     city: string;
@@ -59,6 +55,8 @@ export interface StorefrontDeliveryPreflightInput {
 }
 
 export interface StorefrontDeliveryPreflightResult {
+    /** "pickup": the buyer collects the order, so no delivery address is needed. */
+    kind: DeliveryRateKind;
     shippingMinor: number;
     shippingMethod: StorefrontOrderShippingMethodSnapshot;
     cityName: string;
@@ -109,89 +107,28 @@ export function isTrustedStorefrontCheckoutPolicySnapshot(
     return Boolean(snapshot && Reflect.get(snapshot, STOREFRONT_CHECKOUT_POLICY_SNAPSHOT_PROOF) === true);
 }
 
-export function selectActiveStorefrontShippingMethodRows(
-    storefrontDb: Database,
-    shippingMethodId: string | null | undefined,
-) {
-    return selectActiveStorefrontShippingMethodRowsByIds(
-        storefrontDb,
-        shippingMethodId ? [shippingMethodId] : [],
-    );
-}
-
-export function selectActiveStorefrontShippingMethodRowsByIds(
-    storefrontDb: Database,
-    rawShippingMethodIds: readonly string[],
-) {
-    const shippingMethodIds = [...new Set(
-        rawShippingMethodIds.map((id) => id.trim()).filter(Boolean),
-    )];
-    const query = storefrontDb
-        .select({
-            id: shippingMethods.id,
-            name: shippingMethods.name,
-            description: shippingMethods.description,
-            feeMinor: shippingMethods.feeMinor,
-            isActive: shippingMethods.isActive,
-            deletedAt: shippingMethods.deletedAt,
-        })
-        .from(shippingMethods);
-    if (shippingMethodIds.length === 0) return query.limit(0);
-    return query.where(
-        and(
-            inArray(shippingMethods.id, shippingMethodIds),
-            eq(shippingMethods.isActive, true),
-            isNull(shippingMethods.deletedAt),
-        ),
-    );
-}
-
 export function resolveStorefrontDeliveryPreflightFromRows(
     data: StorefrontDeliveryPreflightInput,
-    cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct">,
+    cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct" | "subtotalMinor">,
     locationRows: readonly ActiveDeliveryLocationRow[],
-    shippingMethodRows: readonly StorefrontShippingMethodRow[],
+    shippingMethodRows: readonly DeliveryRateRow[],
 ): StorefrontDeliveryPreflightResult {
     const locationNames = resolveActiveDeliveryLocationNamesFromRows(data, [...locationRows]);
-
-    const shippingMethod = shippingMethodRows[0] ?? null;
-    const shippingMethodIsUsable =
-        shippingMethod
-        && shippingMethod.id === data.shippingMethodId
-        && shippingMethod.isActive === true
-        && shippingMethod.deletedAt == null;
-
-    if (!shippingMethodIsUsable) {
-        throw new ValidationError("A valid active shipping method is required for this order.");
-    }
-
-    const methodFeeMinor = shippingMethod.feeMinor;
-    const methodName = typeof shippingMethod.name === "string"
-        ? shippingMethod.name.trim()
-        : "";
-    const methodDescription = shippingMethod.description == null
-        ? null
-        : typeof shippingMethod.description === "string"
-            ? shippingMethod.description.trim() || null
-            : null;
-    if (
-        !Number.isSafeInteger(methodFeeMinor)
-        || methodFeeMinor < 0
-        || !methodName
-        || methodName.length > 100
-        || (methodDescription?.length ?? 0) > 255
-    ) {
-        throw new ValidationError("Selected shipping method is misconfigured.");
-    }
-    const shippingFeeWaived = cartValidation.hasFreeDeliveryProduct;
+    const rate = resolveDeliveryRate({
+        rate: shippingMethodRows.find((row) => row.id === data.shippingMethodId),
+        addressZoneId: resolveAddressZoneId(data, locationRows),
+        subtotalMinor: cartValidation.subtotalMinor,
+    });
+    const shippingFeeWaived = cartValidation.hasFreeDeliveryProduct || rate.freeOverApplied;
 
     return markTrustedStorefrontDeliveryPreflightResult({
-        shippingMinor: shippingFeeWaived ? 0 : methodFeeMinor,
+        kind: rate.kind,
+        shippingMinor: shippingFeeWaived ? 0 : rate.baseFeeMinor,
         shippingMethod: {
-            id: shippingMethod.id,
-            name: methodName,
-            description: methodDescription,
-            baseAmountMinor: methodFeeMinor,
+            id: rate.id,
+            name: rate.name,
+            description: rate.description,
+            baseAmountMinor: rate.baseFeeMinor,
             feeWaived: shippingFeeWaived,
         },
         cityName: locationNames.cityName,
@@ -203,11 +140,11 @@ export function resolveStorefrontDeliveryPreflightFromRows(
 export async function validateStorefrontDeliveryPreflight(
     storefrontDb: Database,
     data: StorefrontDeliveryPreflightInput,
-    cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct">,
+    cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct" | "subtotalMinor">,
 ): Promise<StorefrontDeliveryPreflightResult> {
     const readBatch = [
         selectActiveDeliveryLocationRows(storefrontDb, data),
-        selectActiveStorefrontShippingMethodRows(storefrontDb, data.shippingMethodId),
+        selectDeliveryRateRowsByIds(storefrontDb, data.shippingMethodId ? [data.shippingMethodId] : []),
     ];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
@@ -217,7 +154,7 @@ export async function validateStorefrontDeliveryPreflight(
         data,
         cartValidation,
         Array.isArray(locationRows) ? locationRows as ActiveDeliveryLocationRow[] : [],
-        Array.isArray(shippingMethodRows) ? shippingMethodRows as StorefrontShippingMethodRow[] : [],
+        Array.isArray(shippingMethodRows) ? shippingMethodRows as DeliveryRateRow[] : [],
     );
 }
 
@@ -338,10 +275,10 @@ export async function createStorefrontOrder(
     });
 
     // ------------------------------------------------------------------
-    // DISCOUNT: the typed code (fails closed) against active automatic ones
+    // DISCOUNT: the typed codes (each fails closed) against active automatic ones
     // ------------------------------------------------------------------
     const discount = await quoteStorefrontDiscount(storefrontDb, {
-        code: data.discountCode,
+        codes: data.discountCodes,
         customerId: accountOwnerCustomer?.id,
         customerPhone: data.customerPhone,
         cart: {
@@ -356,6 +293,7 @@ export async function createStorefrontOrder(
             shippingAmountMinor: verifiedShippingMinor,
         },
     });
+    assertDiscountCodesApplied(discount);
     const taxQuoteInput = {
         destination: {
             city: data.city,

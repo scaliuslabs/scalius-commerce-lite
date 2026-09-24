@@ -36,6 +36,18 @@ describe("security CSP source normalization", () => {
     }
   });
 
+  it.each([
+    ["not a url", "invalid"],
+    ["https://not%20a%20url", "invalid"],
+    ["chat", "invalid"],
+    ["http://chat.example.com", "https"],
+    ["chat.example.com/widget", "path"],
+    ["https://chat.example.com?x=1", "path"],
+    ["*.example.com/path", "path"],
+  ] as const)("names what's wrong with %j", (source, problem) => {
+    expect(normalizeMerchantCspSource(source)).toEqual({ value: null, error: problem });
+  });
+
   it("permits HTTP only for explicit loopback development origins", () => {
     expect(normalizeMerchantCspSource("http://localhost:3000").value).toBe(
       "http://localhost:3000",

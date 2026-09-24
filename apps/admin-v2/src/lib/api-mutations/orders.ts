@@ -3,12 +3,9 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   postApiV1AdminOrders,
-  postApiV1AdminOrdersArchive,
-  postApiV1AdminOrdersBulkShip,
   postApiV1AdminOrdersByIdAmendments,
   postApiV1AdminOrdersByIdCod,
   postApiV1AdminOrdersByIdFulfill,
@@ -27,14 +24,16 @@ import {
   postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile,
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown,
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup,
-  putApiV1AdminOrdersById,
+  postApiV1AdminOrdersByIdTimeline,
+  putApiV1AdminOrdersByIdDetails,
   putApiV1AdminOrdersByIdStatus,
   putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus,
 } from "@scalius/api-client/sdk";
 import { translate } from "~/i18n";
 import { orderDetailMessages, type OrderDetailMessageKey } from "~/i18n/order-detail";
-import { orderMessages, orderStatusLabel } from "~/i18n/orders";
-import { apiData, type ApiBody, type ApiResult } from "../api";
+import { apiData, type ApiBody } from "../api";
+import { isAdminApiConflictError } from "../admin-api-error";
+import { showOrderNotice } from "../order-notice";
 import type {
   ApproveOrderReturnInput,
   CancelOrderReturnInput,
@@ -48,10 +47,11 @@ import {
   queryKeys,
 } from "./shared";
 
-type BulkShipOrdersPayload = ApiResult<typeof postApiV1AdminOrdersBulkShip>;
 type OrderShipmentRef = { orderId: string; shipmentId: string };
-export type UpdateOrderStatusInput = { orderId: string; note?: string } &
+export type UpdateOrderStatusInput = { orderId: string } &
   ApiBody<typeof putApiV1AdminOrdersByIdStatus>;
+export type UpdateOrderDetailsInput = { orderId: string } &
+  ApiBody<typeof putApiV1AdminOrdersByIdDetails>;
 export type ConfirmManualOrderAmendmentInput = { id: string } &
   ApiBody<typeof postApiV1AdminOrdersByIdAmendments>;
 type ResolveUnknownShipmentBody =
@@ -67,10 +67,16 @@ export type ResolveUnknownShipmentInput = OrderShipmentRef &
 const msg = (key: OrderDetailMessageKey, vars?: Record<string, string | number>) =>
   translate(orderDetailMessages, key, vars);
 
-const ORDER_CATALOG_PRODUCTS_QUERY_PREFIX = [
-  "orders",
-  "catalog-products",
-] as const;
+/** Toast per status the merchant can pick: noun + past verb (ORD-35). */
+const STATUS_TOASTS: Partial<Record<string, OrderDetailMessageKey>> = {
+  processing: "toast.status.processing",
+  confirmed: "toast.status.confirmed",
+  shipped: "toast.status.shipped",
+  delivered: "toast.status.delivered",
+  completed: "toast.status.completed",
+  cancelled: "toast.status.cancelled",
+  pending: "toast.status.pending",
+};
 
 /**
  * Stock changes are visible in three admin projections: the inventory
@@ -81,60 +87,38 @@ const ORDER_CATALOG_PRODUCTS_QUERY_PREFIX = [
 function invalidateOrderInventoryQueries(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() });
   queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
-  queryClient.invalidateQueries({
-    queryKey: ORDER_CATALOG_PRODUCTS_QUERY_PREFIX,
-  });
+  queryClient.invalidateQueries({ queryKey: ["orders", "catalog-products"] });
 }
 
-function invalidateBulkShipOrderQueries(
-  queryClient: ReturnType<typeof useQueryClient>,
-  orderIds: readonly string[],
-) {
+/**
+ * Everything the order page reads about one order (detail, shipments,
+ * payments, cash collection, returns, messages, timeline), plus the lists and
+ * dashboard that summarise it. One action can move several cards at once,
+ * e.g. "Mark returned" changes the status, the balance and the Returns card.
+ */
+export function invalidateOrder(queryClient: QueryClient, orderId: string) {
+  queryClient.invalidateQueries({
+    predicate: (query) => query.queryKey[0] === "orders" && query.queryKey[2] === orderId,
+  });
   queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
   invalidateDashboardQueries(queryClient);
-  for (const orderId of orderIds) {
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.orders.detail(orderId),
-    });
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.orders.shipments(orderId),
-    });
-  }
 }
 
-function firstBulkShipFailureReason(result: BulkShipOrdersPayload) {
-  const reason = result.results.find((item) => !item.success)?.error;
-  if (!reason) return undefined;
-  return reason.replace(/\s+/g, " ").slice(0, 180);
+/**
+ * A refused action whose order changed elsewhere (409) reloads the order, so
+ * the page shows the truth. Actions without their own dialog also show the
+ * reason in the page banner; dialogs show `mutation.error` inline instead.
+ */
+function onOrderError(queryClient: QueryClient, orderId: string, error: unknown, banner: boolean) {
+  if (isAdminApiConflictError(error)) invalidateOrder(queryClient, orderId);
+  if (banner) showOrderNotice(orderId, orderErrorMessage(error));
 }
 
-function toastBulkShipResult(result: BulkShipOrdersPayload) {
-  if (result.successCount === result.totalProcessed) {
-    toast.success(msg("toast.bulkShipped"), {
-      description: msg("toast.bulkShippedDetail", { count: result.successCount }),
-    });
-    return;
-  }
-
-  const reason = firstBulkShipFailureReason(result);
-  if (result.successCount > 0) {
-    toast.warning(
-      msg("toast.bulkShippedSome"),
-      {
-        description: msg(reason ? "toast.bulkShipFirstIssue" : "toast.bulkShipRemaining", {
-          done: result.successCount,
-          total: result.totalProcessed,
-          count: result.failureCount,
-          reason: reason ?? "",
-        }),
-      },
-    );
-    return;
-  }
-
-  toast.error(msg("toast.bulkShipFailed"), {
-    description: reason ?? msg("toast.bulkShipNone"),
-  });
+/** Plain words for a failed order action; transport and server faults read "Couldn't reach the server". */
+export function orderErrorMessage(error: unknown): string {
+  const status = (error as { status?: unknown } | null)?.status;
+  if (typeof status === "number" && status < 500) return getServerFnError(error, msg("error.network"));
+  return msg("error.network");
 }
 
 export function useCreateOrder() {
@@ -151,52 +135,42 @@ export function useCreateOrder() {
   });
 }
 
+/** The edit page shows a failure inside its review dialog (`mutation.error`). */
 export function useConfirmManualOrderAmendment() {
   const queryClient = useQueryClient();
-  const router = useRouter();
   return useMutation({
     mutationFn: ({ id, ...body }: ConfirmManualOrderAmendmentInput) =>
       apiData(postApiV1AdminOrdersByIdAmendments({ path: { id }, body })),
-    onSuccess: async (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.formData(variables.id),
-      });
-      invalidateDashboardQueries(queryClient);
+    onSuccess: (_result, variables) => {
+      invalidateOrder(queryClient, variables.id);
       invalidateOrderInventoryQueries(queryClient);
-      await router.invalidate().catch(() => undefined);
       toast.success(msg("toast.orderUpdated"));
     },
-    onError: (err) => {
-      invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, msg("toast.saveFailed")));
-    },
+    onError: () => invalidateOrderInventoryQueries(queryClient),
   });
 }
 
-export function useUpdateOrder() {
+/** Customer and delivery details of an order that hasn't shipped. */
+export function useUpdateOrderDetails() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string } & ApiBody<typeof putApiV1AdminOrdersById>) =>
-      apiData(putApiV1AdminOrdersById({ path: { id }, body })),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.formData(variables.id),
-      });
-      invalidateOrderInventoryQueries(queryClient);
-      toast.success(msg("toast.orderUpdated"));
+    mutationFn: ({ orderId, ...body }: UpdateOrderDetailsInput) =>
+      apiData(putApiV1AdminOrdersByIdDetails({ path: { id: orderId }, body })),
+    onSuccess: (_result, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      toast.success(msg("toast.detailsSaved"));
     },
-    onError: (err) => {
-      invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, msg("toast.saveFailed")));
+    onError: (err, variables) => onOrderError(queryClient, variables.orderId, err, false),
+  });
+}
+
+export function useAddOrderComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, body }: { orderId: string; body: string }) =>
+      apiData(postApiV1AdminOrdersByIdTimeline({ path: { id: orderId }, body: { body } })),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["orders", "timeline", variables.orderId] });
     },
   });
 }
@@ -204,26 +178,18 @@ export function useUpdateOrder() {
 export function useUpdateOrderStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, status }: UpdateOrderStatusInput) =>
-      apiData(putApiV1AdminOrdersByIdStatus({ path: { id: orderId }, body: { status } })),
+    mutationFn: ({ orderId, ...body }: UpdateOrderStatusInput) =>
+      apiData(putApiV1AdminOrdersByIdStatus({ path: { id: orderId }, body })),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
+      invalidateOrder(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
-      toast.success(msg("toast.statusUpdated"), {
-        description: msg("toast.statusDetail", {
-          status: orderStatusLabel((key, vars) => translate(orderMessages, key, vars), variables.status),
-        }),
-      });
+      toast.success(msg(STATUS_TOASTS[variables.status] ?? "toast.orderUpdated"));
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, msg("toast.statusFailed"))),
+    onError: (err, variables) => onOrderError(queryClient, variables.orderId, err, true),
   });
 }
 
+/** Courier booking; the Delivery card shows a failure next to the Book button. */
 export function useCreateOrderShipment() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -231,55 +197,19 @@ export function useCreateOrderShipment() {
       ApiBody<typeof postApiV1AdminOrdersByIdShipments>) =>
       apiData(postApiV1AdminOrdersByIdShipments({ path: { id: orderId }, body })),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.shipments(variables.orderId),
-      });
+      invalidateOrder(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
       toast.success(msg("toast.courierBooked"));
     },
-    onError: (err, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.shipments(variables.orderId),
-      });
+    onError: (_err, variables) => {
+      // The booking may have reached the courier: always reload the truth.
+      invalidateOrder(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, msg("toast.bookFailed")));
     },
   });
 }
 
-export function useBulkShipOrders() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ApiBody<typeof postApiV1AdminOrdersBulkShip>) =>
-      apiData(postApiV1AdminOrdersBulkShip({ body })),
-    onSuccess: (result, variables) => {
-      const touchedOrderIds = [
-        ...new Set([
-          ...variables.orderIds,
-          ...result.results.map((item) => item.orderId),
-        ]),
-      ];
-      invalidateBulkShipOrderQueries(queryClient, touchedOrderIds);
-      invalidateOrderInventoryQueries(queryClient);
-      toastBulkShipResult(result);
-    },
-    onError: (err, variables) => {
-      invalidateBulkShipOrderQueries(queryClient, variables.orderIds);
-      invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, msg("toast.bulkShipError")));
-    },
-  });
-}
-
+/** Own-courier "Mark as sent"; the dialog shows a failure inline. */
 export function useCreateFulfillmentShipment() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -287,24 +217,18 @@ export function useCreateFulfillmentShipment() {
       ApiBody<typeof postApiV1AdminOrdersByIdFulfill>) =>
       apiData(postApiV1AdminOrdersByIdFulfill({ path: { id: orderId }, body })),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.shipments(variables.orderId),
-      });
+      invalidateOrder(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
       toast.success(msg("toast.fulfilled"));
     },
-    onError: (err) => {
+    onError: (err, variables) => {
+      onOrderError(queryClient, variables.orderId, err, false);
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, msg("toast.fulfillFailed")));
     },
   });
 }
 
+/** Refund dialog; a failure stays inside the dialog. */
 export function useRefundOrder() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -312,22 +236,14 @@ export function useRefundOrder() {
       ApiBody<typeof postApiV1AdminOrdersByIdRefund>) =>
       apiData(postApiV1AdminOrdersByIdRefund({ path: { id: orderId }, body })),
     onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.payments(variables.orderId),
-      });
-      if (result.isFullRefund) {
-        invalidateOrderInventoryQueries(queryClient);
-      }
+      invalidateOrder(queryClient, variables.orderId);
+      if (result.isFullRefund) invalidateOrderInventoryQueries(queryClient);
       toast.success(msg(result.manualSettlementRecorded ? "toast.cashRefundRecorded" : "toast.refunded"));
-      if (result.sideEffectErrors > 0) toast.warning(msg("toast.refundFollowUp"), { description: msg("toast.refundFollowUpDetail") });
+      if (result.sideEffectErrors > 0) {
+        toast.warning(msg("toast.refundFollowUp"), { description: msg("toast.refundFollowUpDetail") });
+      }
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, msg("toast.refundFailed"))),
+    onError: (err, variables) => onOrderError(queryClient, variables.orderId, err, false),
   });
 }
 
@@ -336,17 +252,8 @@ export function useIssueOrderPaymentRecoveryLink() {
   return useMutation({
     mutationFn: ({ orderId }: { orderId: string }) =>
       apiData(postApiV1AdminOrdersByIdPaymentRecoveryLink({ path: { id: orderId } })),
-    onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.payments(variables.orderId),
-      });
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, msg("toast.recoveryLinkFailed"))),
+    onSuccess: (_result, variables) => invalidateOrder(queryClient, variables.orderId),
+    onError: (err, variables) => onOrderError(queryClient, variables.orderId, err, true),
   });
 }
 
@@ -358,24 +265,20 @@ export function useReconcileRefundAttempt() {
         path: { id: orderId, attemptId },
       })),
     onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.payments(variables.orderId),
-      });
+      invalidateOrder(queryClient, variables.orderId);
       if (result.status === "finalized") {
         invalidateOrderInventoryQueries(queryClient);
+        toast.success(msg("toast.refundCheckDone"));
+      } else if (result.status === "failed") {
+        toast.warning(msg("toast.refundCheckFailed"));
+      } else {
+        toast.info(msg("toast.refundCheckPending"));
       }
-      if (result.status === "finalized") toast.success(msg("toast.refundCheckDone"));
-      else if (result.status === "failed") toast.warning(msg("toast.refundCheckFailed"));
-      else toast.info(msg("toast.refundCheckPending"));
-      if (result.sideEffectErrors > 0) toast.warning(msg("toast.refundFollowUp"), { description: msg("toast.refundFollowUpDetail") });
+      if (result.sideEffectErrors > 0) {
+        toast.warning(msg("toast.refundFollowUp"), { description: msg("toast.refundFollowUpDetail") });
+      }
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, msg("toast.refundCheckError"))),
+    onError: (err, variables) => onOrderError(queryClient, variables.orderId, err, true),
   });
 }
 
@@ -386,23 +289,14 @@ export function useReconcileShipment() {
       apiData(postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile({
         path: { id: orderId, shipmentId },
       })),
-    onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.shipments(variables.orderId),
-      });
+    onSuccess: (_result, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
-      toast.success(msg("toast.shipmentRepaired"), {
-        description: result.message,
-      });
+      toast.success(msg("toast.shipmentRepaired"));
     },
-    onError: (err) => {
+    onError: (err, variables) => {
+      onOrderError(queryClient, variables.orderId, err, true);
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, msg("toast.shipmentRepairFailed")));
     },
   });
 }
@@ -416,16 +310,12 @@ export function useLookupUnknownShipment() {
         path: { id: orderId, shipmentId },
         body: { expectedOrderVersion, operationKey },
       })),
-    onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(variables.orderId) });
+    onSuccess: (_result, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
-      toast.success(msg("toast.courierChecked"), { description: result.message });
+      toast.success(msg("toast.courierChecked"));
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, msg("toast.courierCheckFailed"))),
+    onError: (err, variables) => onOrderError(queryClient, variables.orderId, err, true),
   });
 }
 
@@ -438,18 +328,15 @@ export function useResolveUnknownShipment() {
         body: body as ResolveUnknownShipmentBody,
       })),
     onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(variables.orderId) });
+      invalidateOrder(queryClient, variables.orderId);
       if (result.status === "repaired") invalidateOrderInventoryQueries(queryClient);
-      toast.success(msg("toast.courierRecorded"), { description: result.message });
+      toast.success(msg("toast.courierRecorded"));
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, msg("toast.courierRecordFailed"))),
+    onError: (err, variables) => onOrderError(queryClient, variables.orderId, err, false),
   });
 }
 
+/** Cash collected, failed delivery or returned by the courier; dialogs show failures inline. */
 export function useUpdateOrderCod() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -457,33 +344,16 @@ export function useUpdateOrderCod() {
       ApiBody<typeof postApiV1AdminOrdersByIdCod>) =>
       apiData(postApiV1AdminOrdersByIdCod({ path: { id: orderId }, body })),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.payments(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.cod(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.shipments(variables.orderId),
-      });
-      if (variables.action === "collected") {
-        invalidateOrderInventoryQueries(queryClient);
-      }
+      invalidateOrder(queryClient, variables.orderId);
+      if (variables.action === "collected") invalidateOrderInventoryQueries(queryClient);
       toast.success(msg(
         variables.action === "collected" ? "toast.codCollected"
           : variables.action === "failed" ? "toast.codFailed" : "toast.codReturned",
       ));
     },
     onError: (err, variables) => {
-      if (variables.action === "collected") {
-        invalidateOrderInventoryQueries(queryClient);
-      }
-      toast.error(getServerFnError(err, msg("toast.saveFailedShort")));
+      onOrderError(queryClient, variables.orderId, err, false);
+      if (variables.action === "collected") invalidateOrderInventoryQueries(queryClient);
     },
   });
 }
@@ -496,14 +366,10 @@ export function useRetryOrderNotification() {
         path: { id: orderId, outboxId },
       })),
     onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.notifications(variables.orderId),
-      });
-      if (result.enqueued) toast.success(msg("toast.messageQueued"));
-      else toast.info(msg("toast.messageLater"));
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.notifications(variables.orderId) });
+      toast.success(msg(result.enqueued ? "toast.messageQueued" : "toast.messageLater"));
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, msg("toast.messageFailed"))),
+    onError: (err, variables) => onOrderError(queryClient, variables.orderId, err, true),
   });
 }
 
@@ -520,17 +386,14 @@ export function useResendOrderNotification() {
         body: { resendRequestId },
       })),
     onSuccess: (result, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.notifications(variables.orderId),
-      });
-      if (result.enqueued) toast.success(msg("toast.messageQueued"));
-      else toast.info(msg("toast.messageLater"));
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.notifications(variables.orderId) });
+      toast.success(msg(result.enqueued ? "toast.messageQueued" : "toast.messageLater"));
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, msg("toast.messageFailed"))),
+    onError: (err, variables) => onOrderError(queryClient, variables.orderId, err, true),
   });
 }
 
+/** Customer request review; accepting a cancellation cancels the order on the server. */
 export function useResolveOrderSupportRequest() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -543,131 +406,78 @@ export function useResolveOrderSupportRequest() {
         body: { status, note: note ?? null, returnRequest },
       })),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.returns(variables.orderId),
-      });
+      invalidateOrder(queryClient, variables.orderId);
+      invalidateOrderInventoryQueries(queryClient);
       toast.success(msg("toast.requestUpdated"));
     },
-    onError: (err, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.detail(variables.orderId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.orders.returns(variables.orderId),
-      });
-      toast.error(getServerFnError(err, msg("toast.requestFailed")));
-    },
+    onError: (_err, variables) => invalidateOrder(queryClient, variables.orderId),
   });
 }
 
-function invalidateOrderReturnQueries(
-  queryClient: ReturnType<typeof useQueryClient>,
-  orderId: string,
+function useOrderReturnMutation<Input extends { orderId: string }, Result>(
+  mutationFn: (input: Input) => Promise<Result>,
+  onDone: (queryClient: QueryClient, result: Result, input: Input) => void,
 ) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-  queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(orderId) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.orders.returns(orderId) });
-  invalidateDashboardQueries(queryClient);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn,
+    onSuccess: (result: Result, input: Input) => {
+      invalidateOrder(queryClient, input.orderId);
+      onDone(queryClient, result, input);
+    },
+    // The return may have changed elsewhere: always reload it.
+    onError: (_err: unknown, input: Input) => invalidateOrder(queryClient, input.orderId),
+  });
 }
 
 export function useCreateOrderReturn() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ orderId, ...body }: CreateOrderReturnInput) =>
+  return useOrderReturnMutation(
+    ({ orderId, ...body }: CreateOrderReturnInput) =>
       apiData(postApiV1AdminOrdersByIdReturns({ path: { id: orderId }, body })),
-    onSuccess: (_data, variables) => {
-      invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.success(msg("toast.returnRequested"));
-    },
-    onError: (err, variables) => {
-      invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.error(getServerFnError(err, msg("toast.returnFailed")));
-    },
-  });
+    () => toast.success(msg("toast.returnRequested")),
+  );
 }
 
 export function useApproveOrderReturn() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ orderId, returnId, ...body }: ApproveOrderReturnInput) =>
-      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdApprove({
-        path: { id: orderId, returnId },
-        body,
-      })),
-    onSuccess: (result, variables) => {
-      invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.success(msg(result.status === "rejected" ? "toast.returnRejected" : "toast.returnApproved"));
-    },
-    onError: (err, variables) => {
-      invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.error(getServerFnError(err, msg("toast.returnFailed")));
-    },
-  });
+  return useOrderReturnMutation(
+    ({ orderId, returnId, ...body }: ApproveOrderReturnInput) =>
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdApprove({ path: { id: orderId, returnId }, body })),
+    (_client, result) => toast.success(msg(result.status === "rejected" ? "toast.returnRejected" : "toast.returnApproved")),
+  );
 }
 
 export function useReceiveOrderReturn() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ orderId, returnId, ...body }: ReceiveOrderReturnInput) =>
-      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdReceive({
-        path: { id: orderId, returnId },
-        body,
-      })),
-    onSuccess: (result, variables) => {
-      invalidateOrderReturnQueries(queryClient, variables.orderId);
-      if (variables.lines.some((line) => line.restockQuantity > 0)) {
-        invalidateOrderInventoryQueries(queryClient);
-      }
+  return useOrderReturnMutation(
+    ({ orderId, returnId, ...body }: ReceiveOrderReturnInput) =>
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdReceive({ path: { id: orderId, returnId }, body })),
+    (queryClient, result, input) => {
+      if (input.lines.some((line) => line.restockQuantity > 0)) invalidateOrderInventoryQueries(queryClient);
       toast.success(msg(result.status === "completed" ? "toast.returnReceived" : "toast.receiptRecorded"));
     },
-    onError: (err, variables) => {
-      invalidateOrderReturnQueries(queryClient, variables.orderId);
-      if (variables.lines.some((line) => line.restockQuantity > 0)) {
-        invalidateOrderInventoryQueries(queryClient);
-      }
-      toast.error(getServerFnError(err, msg("toast.returnFailed")));
-    },
-  });
+  );
 }
 
 export function useCancelOrderReturn() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ orderId, returnId, ...body }: CancelOrderReturnInput) =>
-      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdCancel({
-        path: { id: orderId, returnId },
-        body,
-      })),
-    onSuccess: (_result, variables) => {
-      invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.success(msg("toast.returnCancelled"));
-    },
-    onError: (err, variables) => {
-      invalidateOrderReturnQueries(queryClient, variables.orderId);
-      toast.error(getServerFnError(err, msg("toast.returnFailed")));
-    },
-  });
+  return useOrderReturnMutation(
+    ({ orderId, returnId, ...body }: CancelOrderReturnInput) =>
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdCancel({ path: { id: orderId, returnId }, body })),
+    () => toast.success(msg("toast.returnCancelled")),
+  );
 }
 
 export function useReconcileOrderReturn() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, returnId }: ReconcileOrderReturnInput) =>
-      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdReconcile({
-        path: { id: orderId, returnId },
-      })),
+      apiData(postApiV1AdminOrdersByIdReturnsByReturnIdReconcile({ path: { id: orderId, returnId } })),
     onSuccess: (_result, variables) => {
-      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      invalidateOrder(queryClient, variables.orderId);
       invalidateOrderInventoryQueries(queryClient);
       toast.success(msg("toast.receiptRecorded"));
     },
     onError: (err, variables) => {
-      invalidateOrderReturnQueries(queryClient, variables.orderId);
+      onOrderError(queryClient, variables.orderId, err, true);
       invalidateOrderInventoryQueries(queryClient);
-      toast.error(getServerFnError(err, msg("toast.returnFailed")));
     },
   });
 }
@@ -678,29 +488,9 @@ export function useRestoreOrder() {
     mutationFn: ({ id, expectedVersion }: { id: string; expectedVersion: number }) =>
       apiData(postApiV1AdminOrdersByIdRestore({ path: { id }, body: { expectedVersion } })),
     onSuccess: (_data, input) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(input.id) });
+      invalidateOrder(queryClient, input.id);
       toast.success(msg("toast.orderRestored"));
     },
-    onError: (err) =>
-      toast.error(getServerFnError(err, msg("toast.restoreFailed"))),
-  });
-}
-
-export function useArchiveOrders() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ApiBody<typeof postApiV1AdminOrdersArchive>) =>
-      apiData(postApiV1AdminOrdersArchive({ body })),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
-      invalidateDashboardQueries(queryClient);
-      toast.success(msg("toast.archived"), {
-        description: msg("toast.archivedDetail", { count: variables.orders.length }),
-      });
-    },
-    onError: (err) =>
-      toast.error(getServerFnError(err, msg("toast.archiveFailed"))),
+    onError: (err, input) => onOrderError(queryClient, input.id, err, true),
   });
 }

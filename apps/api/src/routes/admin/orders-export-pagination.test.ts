@@ -70,7 +70,8 @@ describe("order CSV export pagination", () => {
         expect(response.headers.get("X-Export-Artifact-Bytes")).toBe(String(bytes.byteLength));
         expect(response.headers.get("X-Export-Max-Bytes")).toBe(String(ORDER_CSV_ARTIFACT_MAX_BYTES));
         expect(response.headers.get("X-Export-Row-Count")).toBe(String(rows.length));
-        return { response, ids: rows.map((row) => /^"([^"]+)"/.exec(row)?.[1]) };
+        // Orders inserted without a number export under their id ("#export_001").
+        return { response, ids: rows.map((row) => /^"#?([^"]+)"/.exec(row)?.[1]) };
     }
 
     it("resolves static order routes ahead of the dynamic order id and bounds catalog search", async () => {

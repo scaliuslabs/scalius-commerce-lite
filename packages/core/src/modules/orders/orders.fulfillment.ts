@@ -95,9 +95,9 @@ const CANCELLATION_UNSAFE_PAYMENT_RECORD_STATUSES = [
 ] as const;
 
 const CANCELLATION_REQUIRES_REFUND_MESSAGE =
-    "Generic cancellation requires a zero-paid order with unpaid or failed payment status. Use the refund workflow so provider and local payment state reconcile before cancellation.";
+    "This order has been paid. Refund the payment first, then cancel.";
 const CANCELLATION_REQUIRES_PAYMENT_RECONCILIATION_MESSAGE =
-    "This order has pending, confirmed, or succeeded payment evidence. Complete payment reconciliation before cancellation.";
+    "A payment for this order is still being processed. Check the payment before cancelling.";
 
 function noUnsafeCancellationPaymentCondition(orderId: string): SQL {
     return sql`
@@ -143,16 +143,15 @@ async function assertGenericCancellationPaymentSafe(
     }
 }
 
+const COD_ACTION_REFUSALS: Record<OrderCodAction, string> = {
+    collected: "Cash can be recorded once the order is sent with a courier.",
+    failed: "A failed delivery can be recorded only while the order is with the courier.",
+    returned: "Only an order that was sent can be marked returned.",
+};
+
 function assertOrderCodActionAllowed(status: string, action: OrderCodAction): void {
     if (canProcessOrderCodAction(status, action)) return;
-    const actionLabel = action === "collected"
-        ? "collection"
-        : action === "failed"
-            ? "failure"
-            : "return";
-    throw new ValidationError(
-        `COD ${actionLabel} cannot be recorded while the order is ${status}.`,
-    );
+    throw new ValidationError(COD_ACTION_REFUSALS[action]);
 }
 
 /**
@@ -195,6 +194,24 @@ async function markManualDeliveryEvidence(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
     await db.batch(writes as any);
+}
+
+/**
+ * A courier booking sends the whole order: every line is handed over, so
+ * returns and return-to-sender can count what was sent. Idempotent.
+ */
+async function markAllOrderItemsSent(db: Database, orderId: string): Promise<void> {
+    await db.update(orderItems).set({
+        shippedQuantity: sql`${orderItems.quantity}`,
+        fulfillmentStatus: ItemFulfillmentStatus.SHIPPED,
+    }).where(and(
+        eq(orderItems.orderId, orderId),
+        inArray(orderItems.fulfillmentStatus, [
+            ItemFulfillmentStatus.PENDING,
+            ItemFulfillmentStatus.PICKED,
+            ItemFulfillmentStatus.PACKED,
+        ]),
+    ));
 }
 
 function parseShipmentMetadata(metadata: unknown): Record<string, unknown> {
@@ -821,6 +838,9 @@ export async function reconcileOrderShipment(
             orderStatusChanged = true;
         }
 
+        if (targetOrderStatus === OrderStatus.SHIPPED || targetOrderStatus === OrderStatus.DELIVERED) {
+            await markAllOrderItemsSent(db, orderId);
+        }
         const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
             db,
             orderId,
@@ -990,6 +1010,7 @@ export async function bulkShipOrders(
             });
             await assertNoActivePaymentSessionAttempt(db, orderId);
             if (order.status === OrderStatus.SHIPPED) {
+                await markAllOrderItemsSent(db, orderId);
                 const availabilityTransitionVariantIds = await reconcileInventoryForStatus(
                     db,
                     orderId,
@@ -1092,6 +1113,7 @@ export async function bulkShipOrders(
                 }
 
                 try {
+                    await markAllOrderItemsSent(db, orderId);
                     availabilityTransitionVariantIds = await reconcileInventoryForStatus(
                         db,
                         orderId,
@@ -1197,10 +1219,10 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                 }
             }
 
-            // Validate transition to DELIVERED. If current status is CONFIRMED,
-            // transition through SHIPPED first (COD collection implies delivery).
-            let currentVersion = order.version;
-            let currentStatus = order.status;
+            // Cash is handed over at the door, so a shipped order becomes
+            // delivered. Collection never skips the shipment (ORD-01).
+            const currentVersion = order.version;
+            const currentStatus = order.status;
             let statusClaim: { claimedStatus: string; claimedVersion: number } | null = null;
             const rollbackStatusClaim = async () => {
                 if (!statusClaim) return;
@@ -1212,22 +1234,6 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     previousInventoryAction: order.inventoryAction as string,
                 });
             };
-            if (order.status === OrderStatus.CONFIRMED) {
-                validateTransition("order", order.status, OrderStatus.SHIPPED);
-                const shipResult = await db.update(orders).set({ status: OrderStatus.SHIPPED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(
-                    eq(orders.id, orderId),
-                    eq(orders.version, currentVersion),
-                    noActiveRefundAttemptForOrderIdCondition(orderId),
-                    noActivePaymentSessionAttemptForOrderIdCondition(orderId),
-                )).returning({ id: orders.id });
-                if (shipResult.length === 0) throw new ConflictError("Order was modified by another request. Please reload and try again.");
-                currentVersion += 1;
-                currentStatus = OrderStatus.SHIPPED;
-                statusClaim = {
-                    claimedStatus: OrderStatus.SHIPPED,
-                    claimedVersion: currentVersion,
-                };
-            }
             if (currentStatus !== OrderStatus.DELIVERED) {
                 validateTransition("order", currentStatus, OrderStatus.DELIVERED);
                 const deliveredVersion = currentVersion + 1;
@@ -1239,7 +1245,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                 )).returning({ id: orders.id });
                 if (delResult.length === 0) {
                     await rollbackStatusClaim();
-                    throw new ConflictError("Order was modified by another request. Please reload and try again.");
+                    throw new ConflictError("This order changed. Reload to see the latest.");
                 }
                 statusClaim = {
                     claimedStatus: OrderStatus.DELIVERED,
@@ -1292,27 +1298,25 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     && candidate.sourceReferenceId === sourceReferenceId,
             );
             if (!returnRecord) {
-                const fulfilledItems = await db.select({
+                const sentItems = await db.select({
                     id: orderItems.id,
-                    quantity: orderItems.quantity,
+                    shippedQuantity: orderItems.shippedQuantity,
                 }).from(orderItems).where(and(
                     eq(orderItems.orderId, orderId),
-                    sql`${orderItems.fulfillmentStatus} IN (${ItemFulfillmentStatus.SHIPPED}, ${ItemFulfillmentStatus.DELIVERED})`,
+                    sql`${orderItems.shippedQuantity} > 0`,
                 )).all();
-                if (fulfilledItems.length === 0) {
-                    throw new ValidationError(
-                        "Courier return evidence cannot be linked because no shipped order items were found.",
-                    );
+                if (sentItems.length === 0) {
+                    throw new ValidationError("Nothing from this order was sent, so nothing can come back.");
                 }
                 const createdReturn = await createOrderReturn(db, orderId, {
                     commandKey: `cod-rts-create:${orderId}`,
                     expectedOrderVersion: order.version,
-                    reason: "Courier return to sender",
+                    reason: COURIER_RETURN_REASON,
                     notes: typeof body.notes === "string" ? body.notes : null,
-                    lines: fulfilledItems.map((item) => ({
+                    lines: sentItems.map((item) => ({
                         orderItemId: item.id,
-                        quantity: item.quantity,
-                        reason: typeof body.reason === "string" ? body.reason : "return_to_sender",
+                        quantity: item.shippedQuantity,
+                        reason: COURIER_RETURN_REASON,
                     })),
                 }, { type: "system", id: "cod" }, {
                     source: "cod_return_to_sender",
@@ -1324,7 +1328,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                 await approveOrderReturn(db, orderId, returnRecord.id, {
                     commandKey: `cod-rts-approve:${orderId}`,
                     expectedVersion: returnRecord.version,
-                    notes: "Awaiting explicit warehouse receipt and disposition.",
+                    notes: null,
                     lines: returnRecord.lines.map((line) => ({
                         lineId: line.id,
                         approvedQuantity: line.requestedQuantity,
@@ -1334,14 +1338,39 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             }
             const retResult = await markCODReturned(db, orderId);
             if (!retResult.success) throw new ValidationError(retResult.error || "COD return failed");
+            // Returned to sender is a closing state right away: no cash is
+            // owed and the order leaves the courier views. Stock comes back
+            // only when the parcel is received on the return (ORD-02).
+            await markOrderReturnedToSender(db, orderId);
             return {
-                message: "Courier return-to-sender recorded; stock awaits warehouse receipt.",
+                message: "Order returned. Receive the items when they arrive.",
                 returnId: returnRecord.id,
                 availabilityTransitionVariantIds: [],
             };
         }
         default:
             throw new ValidationError("Invalid action");
+    }
+}
+
+const COURIER_RETURN_REASON = "Returned by the courier";
+
+async function markOrderReturnedToSender(db: Database, orderId: string): Promise<void> {
+    const current = await db.select({ status: orders.status, version: orders.version })
+        .from(orders).where(eq(orders.id, orderId)).get();
+    if (!current || current.status === OrderStatus.RETURNED) return;
+    validateTransition("order", current.status, OrderStatus.RETURNED);
+    const updated = await db.update(orders).set({
+        status: OrderStatus.RETURNED,
+        version: current.version + 1,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(
+        eq(orders.id, orderId),
+        eq(orders.version, current.version),
+        inArray(orders.status, [OrderStatus.SHIPPED, OrderStatus.DELIVERED]),
+    )).returning({ id: orders.id });
+    if (updated.length === 0) {
+        throw new ConflictError("This order changed. Reload to see the latest.");
     }
 }
 
@@ -1356,6 +1385,73 @@ export async function getOrderShipments(db: Database, orderId: string) {
     return rows.map(presentShipment);
 }
 
+const SENDABLE_ORDER_STATUSES = new Set<string>([
+    OrderStatus.CONFIRMED,
+    OrderStatus.SHIPPED,
+    OrderStatus.DELIVERED,
+]);
+
+interface ShipmentLine {
+    itemId: string;
+    quantity: number;
+}
+
+/**
+ * The lines one own-courier shipment sends: explicit `{ itemId, quantity }`
+ * pairs (part of a line is fine), whole lines by id, or everything left.
+ */
+function resolveShipmentLines(
+    items: ReadonlyArray<{ id: string; quantity: number; shippedQuantity: number }>,
+    body: Record<string, unknown>,
+): ShipmentLine[] {
+    const remaining = new Map(items.map((item) => [item.id, item.quantity - item.shippedQuantity]));
+    const requested: ShipmentLine[] = Array.isArray(body.items)
+        ? (body.items as ShipmentLine[]).map((line) => ({ itemId: line.itemId, quantity: line.quantity }))
+        : Array.isArray(body.itemIds)
+            ? (body.itemIds as string[]).map((itemId) => ({ itemId, quantity: remaining.get(itemId) ?? 0 }))
+            : items.map((item) => ({ itemId: item.id, quantity: remaining.get(item.id) ?? 0 }))
+                .filter((line) => line.quantity > 0);
+    if (requested.length === 0) {
+        throw new ValidationError(
+            Array.isArray(body.items) || Array.isArray(body.itemIds)
+                ? "Choose at least one item to send."
+                : "Everything in this order has already been sent.",
+        );
+    }
+    if (new Set(requested.map((line) => line.itemId)).size !== requested.length) {
+        throw new ValidationError("Each item can appear only once in a shipment.");
+    }
+    for (const line of requested) {
+        const left = remaining.get(line.itemId);
+        if (left === undefined) {
+            throw new ValidationError("An item in this shipment is not part of the order. Reload and try again.");
+        }
+        if (!Number.isInteger(line.quantity) || line.quantity < 1) {
+            throw new ValidationError("Send at least 1 of each selected item.");
+        }
+        if (line.quantity > left) {
+            throw new ConflictError(
+                left === 0
+                    ? "Some of these items were already sent. Reload to see the latest."
+                    : `Only ${left} of that item ${left === 1 ? "is" : "are"} left to send.`,
+            );
+        }
+    }
+    return requested;
+}
+
+async function findShipmentByRequestKey(db: Database, orderId: string, requestKey: string) {
+    const rows = await db.select({
+        id: deliveryShipments.id,
+        isFinalShipment: deliveryShipments.isFinalShipment,
+        metadata: deliveryShipments.metadata,
+    }).from(deliveryShipments).where(and(
+        eq(deliveryShipments.orderId, orderId),
+        eq(deliveryShipments.providerType, "manual"),
+    )).all();
+    return rows.find((row) => parseShipmentMetadata(row.metadata).requestKey === requestKey) ?? null;
+}
+
 export async function createFulfillmentShipment(db: Database, orderId: string, body: Record<string, unknown>) {
     const order = await db.select({
         id: orders.id,
@@ -1368,39 +1464,51 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
     }).from(orders).where(eq(orders.id, orderId)).get();
     if (!order) throw new NotFoundError("Order not found");
     assertNoActiveShipmentClaim(order);
+    const requestKey = typeof body.requestKey === "string" && body.requestKey.trim()
+        ? body.requestKey.trim()
+        : null;
+    if (requestKey) {
+        // A double click or a retried request returns the first shipment
+        // instead of failing on items that it already sent (ORD-10).
+        const replay = await findShipmentByRequestKey(db, orderId, requestKey);
+        if (replay) {
+            return {
+                shipmentId: replay.id,
+                isFinalShipment: replay.isFinalShipment ?? false,
+                fulfillmentStatus: order.fulfillmentStatus,
+                availabilityTransitionVariantIds: [] as string[],
+                replayed: true,
+                statusChange: undefined,
+            };
+        }
+    }
     const shipmentAmount = body.shipmentAmount;
     if (shipmentAmount != null && (typeof shipmentAmount !== "number" || !Number.isFinite(shipmentAmount) || shipmentAmount < 0)) {
-        throw new ValidationError("Shipment amount must be a non-negative number.");
+        throw new ValidationError("The delivery cost can't be negative.");
     }
     await assertNoActiveRefundAttempt(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
-    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED) {
-        throw new ValidationError("Cannot fulfill a cancelled/returned order");
+    if (!SENDABLE_ORDER_STATUSES.has(order.status)) {
+        throw new ValidationError(
+            order.status === OrderStatus.CANCELLED || order.status === OrderStatus.RETURNED
+                ? "A cancelled or returned order can't be sent."
+                : "Confirm the order before sending it.",
+        );
     }
 
-    const allItems = await db.select({ id: orderItems.id, fulfillmentStatus: orderItems.fulfillmentStatus }).from(orderItems).where(eq(orderItems.orderId, orderId)).all();
-    const shipmentItemIds = (body.itemIds as string[] | undefined) ?? allItems.map((i) => i.id);
-    const ownItemIds = new Set(allItems.map((item) => item.id));
-    const uniqueShipmentItemIds = new Set(shipmentItemIds as string[]);
-    const missingItemIds = (shipmentItemIds as string[]).filter((itemId) => !ownItemIds.has(itemId));
-
-    if (shipmentItemIds.length === 0) {
-        throw new ValidationError("At least one order item is required to create a fulfillment shipment");
-    }
-    if (uniqueShipmentItemIds.size !== shipmentItemIds.length) {
-        throw new ValidationError("Fulfillment shipment item IDs must be unique");
-    }
-    if (missingItemIds.length > 0) {
-        throw new ValidationError(`Fulfillment items do not belong to this order: ${missingItemIds.join(", ")}`);
-    }
-
-    const alreadyFulfilled = allItems.filter((i) => (shipmentItemIds as string[]).includes(i.id) && (i.fulfillmentStatus === ItemFulfillmentStatus.SHIPPED || i.fulfillmentStatus === ItemFulfillmentStatus.DELIVERED));
-    if (alreadyFulfilled.length > 0) throw new ConflictError(`Items already shipped: ${alreadyFulfilled.map((i) => i.id).join(", ")}`);
-
+    const allItems = await db.select({
+        id: orderItems.id,
+        quantity: orderItems.quantity,
+        shippedQuantity: orderItems.shippedQuantity,
+    }).from(orderItems).where(eq(orderItems.orderId, orderId)).all();
+    const lines = resolveShipmentLines(allItems, body);
     const shipmentId = `shp_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
     const now = new Date();
-    const unfulfilledItemIds = allItems.filter((i) => i.fulfillmentStatus === ItemFulfillmentStatus.PENDING || i.fulfillmentStatus === ItemFulfillmentStatus.PICKED || i.fulfillmentStatus === ItemFulfillmentStatus.PACKED).map((i) => i.id);
-    const isFinalShipment = (body.isFinalShipment as boolean | undefined) ?? ((shipmentItemIds as string[]).every((sid: string) => unfulfilledItemIds.includes(sid)) && unfulfilledItemIds.every((uid) => (shipmentItemIds as string[]).includes(uid)));
+    const remainingAfter = allItems.reduce((sum, item) => {
+        const sent = lines.find((line) => line.itemId === item.id)?.quantity ?? 0;
+        return sum + item.quantity - item.shippedQuantity - sent;
+    }, 0);
+    const isFinalShipment = remainingAfter === 0;
 
     const newFulfillmentStatus = isFinalShipment ? FulfillmentStatus.COMPLETE : FulfillmentStatus.PARTIAL;
     const orderUpdate: Record<string, unknown> = {
@@ -1430,7 +1538,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
     )).returning({ id: orders.id });
 
     if (claimResult.length === 0) {
-        throw new ConflictError("Order was modified by another request. Please reload and try again.");
+        throw new ConflictError("This order changed. Reload to see the latest.");
     }
 
     // Drizzle D1 batch() requires specific tuple types
@@ -1442,14 +1550,23 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         status: ShipmentStatus.IN_TRANSIT,
         rawStatus: ShipmentStatus.IN_TRANSIT,
         note: (body.note as string | undefined) ?? null,
-        shipmentItems: JSON.stringify(shipmentItemIds), shipmentAmountMinor: shipmentAmount == null ? null : toMinor(shipmentAmount, order.currencyDecimalPlaces), isFinalShipment,
+        shipmentItems: JSON.stringify(lines),
+        shipmentAmountMinor: shipmentAmount == null ? null : toMinor(shipmentAmount, order.currencyDecimalPlaces),
+        isFinalShipment,
+        metadata: requestKey ? JSON.stringify({ requestKey }) : null,
         createdAt: now, updatedAt: now,
     }));
 
-    for (const itemId of shipmentItemIds as string[]) {
-        writes.push(db.update(orderItems).set({ fulfillmentStatus: ItemFulfillmentStatus.SHIPPED }).where(and(
-            eq(orderItems.id, itemId),
+    for (const line of lines) {
+        const item = allItems.find((candidate) => candidate.id === line.itemId)!;
+        const shippedQuantity = item.shippedQuantity + line.quantity;
+        writes.push(db.update(orderItems).set({
+            shippedQuantity,
+            ...(shippedQuantity === item.quantity ? { fulfillmentStatus: ItemFulfillmentStatus.SHIPPED } : {}),
+        }).where(and(
+            eq(orderItems.id, line.itemId),
             eq(orderItems.orderId, orderId),
+            eq(orderItems.shippedQuantity, item.shippedQuantity),
         )));
     }
 
@@ -1499,6 +1616,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         isFinalShipment,
         fulfillmentStatus: newFulfillmentStatus,
         availabilityTransitionVariantIds,
+        replayed: false,
         ...(shouldShipOrder
             ? {
                 statusChange: {
@@ -1523,7 +1641,6 @@ const NOTIFICATION_STATUSES: Record<string, OrderNotificationType> = {
     cancelled: "order_cancelled",
     returned: "order_returned",
     refunded: "order_refunded",
-    partially_refunded: "order_partially_refunded",
 };
 
 export async function updateOrderStatus(db: Database, orderId: string, status: string, data?: { trackingId?: string }): Promise<StatusUpdateResult> {
@@ -1564,17 +1681,17 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         if (hasMoneyDue || existingOrder.paymentStatus !== PaymentStatus.PAID) {
             throw new ValidationError(
                 existingOrder.paymentMethod === PaymentMethod.COD
-                    ? "Record COD collection through the COD action before marking the order delivered or completed."
+                    ? "Mark the cash as collected first."
                     : existingOrder.paymentStatus === PaymentStatus.PARTIAL
-                    ? "Record the remaining cash balance through the collection action before marking the order delivered or completed."
-                    : "Settle the outstanding payment before marking the order delivered or completed.",
+                    ? "Record the rest of the payment first."
+                    : "This order still has money due.",
             );
         }
 
         if (existingOrder.paymentMethod === PaymentMethod.COD) {
             const hasCodCollection = await hasRecordedCodCollection(db, orderId, currency);
             if (!hasCodCollection || existingOrder.paidAmountMinor <= 0) {
-                throw new ValidationError("Record COD collection through the COD action before marking the order delivered or completed.");
+                throw new ValidationError("Mark the cash as collected first.");
             }
         }
     }
@@ -1621,7 +1738,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     )).returning({ id: orders.id });
 
     if (result.length === 0) {
-        throw new ConflictError("Order was modified by another request. Please reload and try again.");
+        throw new ConflictError("This order changed. Reload to see the latest.");
     }
 
     // CAS succeeded. If inventory reconciliation fails before the order's
@@ -1677,4 +1794,66 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         notification,
         availabilityTransitionVariantIds,
     };
+}
+
+export interface BulkOrderActionResult {
+    orderId: string;
+    success: boolean;
+    error?: string;
+}
+
+/**
+ * Confirms each new order in the selection (the phone-confirmation queue).
+ * Orders past that stage are reported as skipped, never changed.
+ */
+export async function bulkConfirmOrders(db: Database, orderIds: readonly string[]) {
+    const results: Array<BulkOrderActionResult & { update?: StatusUpdateResult }> = [];
+    for (const orderId of orderIds) {
+        try {
+            const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+            if (!order) throw new NotFoundError("Order not found");
+            if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.PROCESSING) {
+                results.push({ orderId, success: false, error: "Only new orders can be confirmed." });
+                continue;
+            }
+            const update = await updateOrderStatus(db, orderId, OrderStatus.CONFIRMED);
+            results.push({ orderId, success: true, update });
+        } catch (error: unknown) {
+            results.push({ orderId, success: false, error: error instanceof Error ? error.message : "Couldn't confirm this order." });
+        }
+    }
+    return results;
+}
+
+/** Own-courier "Mark as sent" for whole confirmed orders. */
+export async function bulkFulfillOrders(
+    db: Database,
+    orderIds: readonly string[],
+    options: { courierName?: string; note?: string },
+) {
+    const results: Array<BulkOrderActionResult & { shipment?: Awaited<ReturnType<typeof createFulfillmentShipment>> }> = [];
+    for (const orderId of orderIds) {
+        try {
+            const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
+            if (!order) throw new NotFoundError("Order not found");
+            if (order.status !== OrderStatus.CONFIRMED) {
+                results.push({
+                    orderId,
+                    success: false,
+                    error: SENDABLE_ORDER_STATUSES.has(order.status)
+                        ? "This order was already sent."
+                        : "Confirm the order before sending it.",
+                });
+                continue;
+            }
+            const shipment = await createFulfillmentShipment(db, orderId, {
+                courierName: options.courierName,
+                note: options.note,
+            });
+            results.push({ orderId, success: true, shipment });
+        } catch (error: unknown) {
+            results.push({ orderId, success: false, error: error instanceof Error ? error.message : "Couldn't send this order." });
+        }
+    }
+    return results;
 }
