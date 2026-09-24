@@ -16,7 +16,7 @@ import {
     updateEverywhereElseRates,
 } from "./zones";
 
-const BDT = 2;
+const BDT = { code: "BDT", decimalPlaces: 2 };
 
 /** Dhaka (Mirpur → Pallabi, Savar) and Chattogram (Agrabad). */
 function seedLocations() {
@@ -41,7 +41,7 @@ const rate = (name: string, fee: number, extra: { freeOver?: number | null; isAc
 });
 
 async function rateIdByName(db: ReturnType<typeof seedLocations>["db"], name: string): Promise<string> {
-    const view = await listDeliveryZones(db, BDT);
+    const view = await listDeliveryZones(db, BDT.decimalPlaces);
     const all = [...view.zones.flatMap((zone) => zone.rates), ...view.everywhereElse.rates];
     return all.find((candidate) => candidate.name === name)!.id;
 }
@@ -170,6 +170,26 @@ describe("local pickup", () => {
 });
 
 describe("delivery zone editing", () => {
+    it("refuses paisa in a taka delivery charge or free-over threshold", async () => {
+        const { db } = seedLocations();
+        await expect(createDeliveryZone(db, {
+            name: "Inside Dhaka",
+            locationIds: ["dhaka"],
+            rates: [rate("Inside Dhaka", 60.5, { freeOver: 999.99 })],
+        }, BDT)).rejects.toMatchObject({
+            status: 400,
+            details: { issues: [
+                { path: ["rates", 0, "fee"], message: "Taka amounts are whole numbers." },
+                { path: ["rates", 0, "freeOver"], message: "Taka amounts are whole numbers." },
+            ] },
+        });
+        await expect(createDeliveryZone(db, {
+            name: "Inside Dhaka",
+            locationIds: ["dhaka"],
+            rates: [rate("Inside Dhaka", 60.5)],
+        }, { code: "USD", decimalPlaces: 2 })).resolves.toBeTruthy();
+    });
+
     it("keeps a location in at most one zone", async () => {
         const { db } = seedLocations();
         await createDeliveryZone(db, { name: "Inside Dhaka", locationIds: ["dhaka"], rates: [rate("Inside Dhaka", 60)] }, BDT);
@@ -183,30 +203,30 @@ describe("delivery zone editing", () => {
         await updateDeliveryZone(db, id, { name: "Dhaka", locationIds: ["dhaka"], rates: [rate("Inside Dhaka", 70)] }, 1, BDT);
         await expect(updateDeliveryZone(db, id, { name: "Stale", locationIds: ["dhaka"], rates: [rate("Inside Dhaka", 50)] }, 1, BDT))
             .rejects.toMatchObject({ status: 409, code: "SETTINGS_REVISION_CONFLICT" });
-        const [zone] = (await listDeliveryZones(db, BDT)).zones;
+        const [zone] = (await listDeliveryZones(db, BDT.decimalPlaces)).zones;
         expect(zone).toMatchObject({ name: "Dhaka", revision: 2, rates: [{ name: "Inside Dhaka", fee: 70 }] });
     });
 
     it("rejects the second of two same-second Everywhere else saves from the same revision", async () => {
         const { db } = seedLocations();
         await updateEverywhereElseRates(db, [rate("Standard", 60)], 0, BDT);
-        const { revision } = (await listDeliveryZones(db, BDT)).everywhereElse;
+        const { revision } = (await listDeliveryZones(db, BDT.decimalPlaces)).everywhereElse;
         await updateEverywhereElseRates(db, [rate("Standard", 80)], revision, BDT);
         await expect(updateEverywhereElseRates(db, [rate("Standard", 90)], revision, BDT))
             .rejects.toMatchObject({ status: 409, code: "SETTINGS_REVISION_CONFLICT" });
-        expect((await listDeliveryZones(db, BDT)).everywhereElse.rates).toMatchObject([{ name: "Standard", fee: 80 }]);
+        expect((await listDeliveryZones(db, BDT.decimalPlaces)).everywhereElse.rates).toMatchObject([{ name: "Standard", fee: 80 }]);
     });
 
     it("keeps rate ids across edits, soft-deletes removed rates and lets two rates swap names", async () => {
         const { db, sqlite } = seedLocations();
         await updateEverywhereElseRates(db, [rate("Regular", 60), rate("Express", 120)], 0, BDT);
-        const before = await listDeliveryZones(db, BDT);
+        const before = await listDeliveryZones(db, BDT.decimalPlaces);
         const [regular, express] = before.everywhereElse.rates;
         await updateEverywhereElseRates(db, [
             { ...express!, name: "Regular" },
             { ...regular!, name: "Express" },
         ], before.everywhereElse.revision, BDT);
-        const after = await listDeliveryZones(db, BDT);
+        const after = await listDeliveryZones(db, BDT.decimalPlaces);
         expect(after.everywhereElse.rates.map(({ id, name }) => ({ id, name }))).toEqual([
             { id: express!.id, name: "Regular" },
             { id: regular!.id, name: "Express" },
@@ -240,10 +260,10 @@ describe("delivery zone editing", () => {
     it("starts three Dhaka-centric zones from the store's own locations", async () => {
         const { db } = seedLocations();
         await updateEverywhereElseRates(db, [rate("Old flat charge", 50)], 0, BDT);
-        const { revision } = (await listDeliveryZones(db, BDT)).everywhereElse;
+        const { revision } = (await listDeliveryZones(db, BDT.decimalPlaces)).everywhereElse;
         await applyDeliveryZoneTemplate(db, "dhaka_three_zone", revision, BDT);
 
-        const view = await listDeliveryZones(db, BDT);
+        const view = await listDeliveryZones(db, BDT.decimalPlaces);
         expect(view.zones.map((zone) => ({ name: zone.name, locations: zone.locations.map((l) => l.id), fee: zone.rates[0]!.fee })))
             .toEqual([
                 { name: "Inside Dhaka", locations: ["dhaka"], fee: 70 },

@@ -114,4 +114,35 @@ describe("promotion draft validation", () => {
             expectedRevision: 3,
         }).success).toBe(true);
     });
+
+    it("refuses paisa in a taka discount, minimum or budget", () => {
+        const result = createPromotionDraftSchema.safeParse({
+            ...validDraft(),
+            maxDiscountSpendMinor: 50_050,
+            budgetCurrencyCode: "BDT",
+            conditions: [{ kind: "minimum_merchandise_subtotal", config: { amountMinor: 1_050, currencyCode: "BDT" } }],
+            effects: [{
+                kind: "fixed_amount_off",
+                target: "order",
+                allocation: "once",
+                config: { amountMinor: 4_050, currencyCode: "BDT" },
+            }],
+        });
+        expect(result.success).toBe(false);
+        const issues = result.success ? [] : result.error.issues
+            .filter((issue) => issue.message === "Taka amounts are whole numbers.")
+            .map((issue) => issue.path.join("."));
+        expect(issues.sort()).toEqual(["conditions.0.config.amountMinor", "effects.0.config.amountMinor", "maxDiscountSpendMinor"]);
+
+        expect(createPromotionDraftSchema.safeParse({
+            ...validDraft(),
+            effects: [{
+                kind: "fixed_amount_off",
+                target: "order",
+                allocation: "once",
+                config: { amountMinor: 4_050, currencyCode: "USD" },
+            }],
+            conditions: [],
+        }).error?.issues ?? []).toEqual([]);
+    });
 });

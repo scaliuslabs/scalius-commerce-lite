@@ -68,18 +68,18 @@ describe("order writes repeated by a double click", () => {
     it("records a cash refund once when the same request is sent twice (R2-ORD-01)", async () => {
         const id = await collectedOrder();
         const requestKey = crypto.randomUUID();
-        const request = { orderId: id, amount: 500.5, reason: "Customer asked", manualSettlementConfirmed: true, requestKey };
+        const request = { orderId: id, amount: 500, reason: "Customer asked", manualSettlementConfirmed: true, requestKey };
 
         const first = await processRefund(db, request);
         const second = await processRefund(db, request);
 
-        expect(first).toMatchObject({ success: true, amount: 500.5 });
-        expect(second).toMatchObject({ success: true, amount: 500.5, replayed: true });
+        expect(first).toMatchObject({ success: true, amount: 500 });
+        expect(second).toMatchObject({ success: true, amount: 500, replayed: true });
         expect(second.refundNotification).toBeUndefined();
         expect(one("SELECT count(*) AS n FROM order_payments WHERE order_id = ? AND payment_type = 'refund'", id))
             .toEqual({ n: 1 });
         expect(one("SELECT paid_amount_minor, payment_status FROM orders WHERE id = ?", id))
-            .toEqual({ paid_amount_minor: 117950, payment_status: "partially_refunded" });
+            .toEqual({ paid_amount_minor: 118000, payment_status: "partially_refunded" });
 
         // The same key can't be reused for a different amount.
         await expect(processRefund(db, { ...request, amount: 100 })).rejects.toThrow("already used");

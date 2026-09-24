@@ -227,14 +227,14 @@ describe("gateway kernel with a newly registered adapter", () => {
   it("refunds through the adapter in integer minor units, once, and never beyond the paid amount", async () => {
     await capture("pay_1", 10_000);
 
-    const refund = await processRefund(db, { orderId: "order_1", amount: 40.5, reason: "damaged" });
-    expect(refund).toMatchObject({ success: true, gateway: "fakepay", amount: 40.5, isFullRefund: false, refundId: "fr_1" });
-    expect(state.refunds).toEqual([expect.objectContaining({ amountMinor: 4_050, currency: "BDT", secondaryRef: "txn_pay_1" })]);
-    expect(orderState()).toMatchObject({ status: OrderStatus.DELIVERED, payment_status: PaymentStatus.PARTIALLY_REFUNDED, paid_amount_minor: 5_950 });
+    const refund = await processRefund(db, { orderId: "order_1", amount: 40, reason: "damaged" });
+    expect(refund).toMatchObject({ success: true, gateway: "fakepay", amount: 40, isFullRefund: false, refundId: "fr_1" });
+    expect(state.refunds).toEqual([expect.objectContaining({ amountMinor: 4_000, currency: "BDT", secondaryRef: "txn_pay_1" })]);
+    expect(orderState()).toMatchObject({ status: OrderStatus.DELIVERED, payment_status: PaymentStatus.PARTIALLY_REFUNDED, paid_amount_minor: 6_000 });
 
-    await expect(processRefund(db, { orderId: "order_1", amount: 60, reason: "again" })).rejects.toThrow(/exceeds paid amount/);
+    await expect(processRefund(db, { orderId: "order_1", amount: 61, reason: "again" })).rejects.toThrow(/exceeds paid amount/);
     await processRefund(db, { orderId: "order_1", reason: "rest" });
-    expect(state.refunds.map((entry) => entry.amountMinor)).toEqual([4_050, 5_950]);
+    expect(state.refunds.map((entry) => entry.amountMinor)).toEqual([4_000, 6_000]);
     expect(orderState()).toMatchObject({ status: OrderStatus.REFUNDED, payment_status: PaymentStatus.REFUNDED, paid_amount_minor: 0 });
     await expect(processRefund(db, { orderId: "order_1", reason: "third" })).rejects.toThrow();
     expect(state.refunds).toHaveLength(2);

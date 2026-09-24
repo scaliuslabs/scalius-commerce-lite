@@ -22,6 +22,13 @@ export const appliedDiscountLineSchema = z.object({
   shippingAmount: z.number().openapi({ description: "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line." }),
 });
 
+/** An applied discount in a cart quote. */
+export const quotedDiscountLineSchema = appliedDiscountLineSchema.extend({
+  replaces: z.string().optional().openapi({
+    description: "A code only: the automatic discount it replaced, because the code saves more and the two can't be combined.",
+  }),
+});
+
 /** A discount an order used, as receipts and order pages show it. */
 export const orderDiscountLineSchema = appliedDiscountLineSchema.extend({
   kind: z.enum(["buy_x_get_y", "product", "order", "shipping"]).openapi({

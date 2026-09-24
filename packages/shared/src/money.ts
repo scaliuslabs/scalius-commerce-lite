@@ -64,6 +64,47 @@ export function cashRoundingMinor(currencyCode: string): number {
   return currencyCode.trim().toUpperCase() === "BDT" ? 100 : 1;
 }
 
+/** Why a Bangladesh-taka amount with paisa is refused. */
+export const WHOLE_TAKA_MESSAGE = "Taka amounts are whole numbers.";
+
+/**
+ * True when the currency's cash is whole units only (BDT): every amount a
+ * merchant enters or a buyer pays is a multiple of `cashRoundingMinor`.
+ */
+export function requiresWholeCashAmounts(currencyCode: string): boolean {
+  return cashRoundingMinor(currencyCode) > 1;
+}
+
+/** True when the amount can be paid in the currency's cash (BDT: whole taka). */
+export function isWholeCashAmountMinor(amountMinor: number, currencyCode: string): boolean {
+  return Number.isSafeInteger(amountMinor) && amountMinor % cashRoundingMinor(currencyCode) === 0;
+}
+
+/** Half-up to the currency's cash unit (BDT: whole taka); other currencies are unchanged. */
+export function roundToCashMinor(amountMinor: number, currencyCode: string): number {
+  const unit = cashRoundingMinor(currencyCode);
+  if (unit === 1) return amountMinor;
+  return Math.floor((amountMinor + unit / 2) / unit) * unit;
+}
+
+export class WholeCashAmountError extends RangeError {
+  constructor() {
+    super(WHOLE_TAKA_MESSAGE);
+    this.name = "WholeCashAmountError";
+  }
+}
+
+/**
+ * A merchant-entered decimal amount (price, fixed discount, delivery charge,
+ * threshold, refund, manual adjustment) in minor units. In BDT it must be
+ * whole taka, else `WholeCashAmountError`; other currencies keep minor units.
+ */
+export function toCashMinor(amount: number, decimalPlaces: number, currencyCode: string): number {
+  const minor = toMinor(amount, decimalPlaces);
+  if (!isWholeCashAmountMinor(minor, currencyCode)) throw new WholeCashAmountError();
+  return minor;
+}
+
 /**
  * `baseMinor × basisPoints / 10000`, rounded half-up to a multiple of the
  * currency's cash rounding unit and never above the base.

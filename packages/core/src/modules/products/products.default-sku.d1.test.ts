@@ -123,6 +123,17 @@ describe("simple product default SKU inventory on D1 storage", () => {
     expect(movementQuantities(id)).toEqual([]);
   });
 
+  it("refuses a taka price or flat discount with paisa and creates nothing", async () => {
+    await expect(createProduct(db, createProductSchema.parse({ ...productInput, price: 249.5 })))
+      .rejects.toMatchObject({ status: 400, message: "Taka amounts are whole numbers." });
+    await expect(createProduct(db, createProductSchema.parse({
+      ...productInput,
+      discountType: "flat",
+      discountAmount: 10.25,
+    }))).rejects.toMatchObject({ status: 400, message: "Taka amounts are whole numbers." });
+    expect(sqlite.prepare("SELECT count(*) AS n FROM products").get()).toEqual({ n: 0 });
+  });
+
   it("rejects a quantity without tracking and inventory beside an option matrix", () => {
     expect(createProductSchema.safeParse({
       ...productInput,

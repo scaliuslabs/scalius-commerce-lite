@@ -86,6 +86,13 @@ describe("checkout flow preview policy", () => {
         })).toContain("sslRange");
     });
 
+    it("asks for whole taka in a BDT store and keeps decimals for other currencies", () => {
+        const advance = { checkoutMode: "all", partialPaymentEnabled: true, partialPaymentAmount: 99.5, codEnabled: true, activeOnlineMethodCount: 1, sslCommerzEnabled: false };
+        expect(issues({ ...advance, wholeTaka: true })).toContain("wholeTaka");
+        expect(issues({ ...advance, wholeTaka: true, partialPaymentAmount: 100 })).not.toContain("wholeTaka");
+        expect(issues({ ...advance, wholeTaka: false })).not.toContain("wholeTaka");
+    });
+
     it.each([5, 500001])("does not apply SSLCommerz's BDT range to other online gateways (%s)", (amount) => {
         expect(issues({
             checkoutMode: "all",

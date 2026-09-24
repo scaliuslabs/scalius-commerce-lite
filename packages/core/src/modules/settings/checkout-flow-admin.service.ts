@@ -6,6 +6,7 @@ import {
     type CheckoutMode,
 } from "./checkout-flow";
 import { checkoutDocument, type CheckoutFlowSettings } from "./documents";
+import { readStoreCurrency, toStoreMinor } from "./store-money";
 
 export interface CheckoutFlowSettingsDocument extends CheckoutFlowSettings {
     /** 0 until the first save. */
@@ -43,6 +44,8 @@ export async function saveCheckoutFlowSettingsDocument(
         availablePaymentMethods: input.availablePaymentMethods,
     });
     if (issues.length > 0) throw new ValidationError(issues.join(" "));
+    // The advance a buyer pays online is money like any other: whole taka in BDT.
+    if (input.partialPaymentEnabled) toStoreMinor(input.partialPaymentAmount, await readStoreCurrency(db));
 
     const { value, revision } = await checkoutDocument.write(db, {
         guestCheckoutEnabled: input.guestCheckoutEnabled,

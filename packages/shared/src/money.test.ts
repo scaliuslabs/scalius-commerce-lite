@@ -6,7 +6,10 @@ import {
   percentOfMinor,
   fromMinor,
   percentToBps,
+  roundToCashMinor,
+  toCashMinor,
   toMinor,
+  WHOLE_TAKA_MESSAGE,
 } from "./money";
 
 describe("toMinor / fromMinor", () => {
@@ -61,5 +64,23 @@ describe("percentage discounts", () => {
     expect(percentOfMinor(205_000, 1_500, "USD")).toBe(30_750);
     expect(percentOfMinor(40, 10_000, "BDT")).toBe(40);
     expect(cashRoundingMinor(" bdt ")).toBe(100);
+  });
+});
+
+describe("whole-taka amounts", () => {
+  it("accepts whole taka and refuses paisa in BDT; other currencies keep minor units", () => {
+    expect(toCashMinor(60, 2, "BDT")).toBe(6_000);
+    expect(toCashMinor(1_250, 2, "bdt")).toBe(125_000);
+    expect(() => toCashMinor(60.5, 2, "BDT")).toThrow(WHOLE_TAKA_MESSAGE);
+    expect(() => toCashMinor(0.01, 2, "BDT")).toThrow(WHOLE_TAKA_MESSAGE);
+    expect(toCashMinor(60.5, 2, "USD")).toBe(6_050);
+    expect(toCashMinor(0.01, 2, "EUR")).toBe(1);
+  });
+
+  it("rounds existing amounts half-up to whole taka, and leaves other currencies alone", () => {
+    expect(roundToCashMinor(6_049, "BDT")).toBe(6_000);
+    expect(roundToCashMinor(6_050, "BDT")).toBe(6_100);
+    expect(roundToCashMinor(6_000, "BDT")).toBe(6_000);
+    expect(roundToCashMinor(6_049, "USD")).toBe(6_049);
   });
 });

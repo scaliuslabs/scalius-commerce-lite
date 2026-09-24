@@ -12,6 +12,7 @@ import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
+import { useWholeCashAmounts } from "~/components/admin/shared/MoneyInput";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { apiClient, apiData } from "~/lib/api";
@@ -141,23 +142,34 @@ function emptyDraft(): RateDraft {
   };
 }
 
-type RateErrorKey = "rateNameRequired" | "feeInvalid" | "feeTooHigh" | "freeOverTooHigh" | "pickupAddressRequired";
+type RateErrorKey = "rateNameRequired" | "feeInvalid" | "feeTooHigh" | "freeOverTooHigh" | "pickupAddressRequired" | "wholeTaka";
 
 /** A charge as typed; an empty pickup charge means free pickup. */
 function feeOf(rate: RateDraft): number | null {
   return rate.kind === "pickup" && !rate.fee.trim() ? 0 : parseAmountInput(rate.fee);
 }
 
-/** What's wrong with each field of a charge, or nothing. */
-export function rateErrors(rate: RateDraft): Partial<Record<"name" | "fee" | "freeOver" | "pickupAddress", RateErrorKey>> {
+/**
+ * What's wrong with each field of a charge, or nothing. `wholeTaka`: the
+ * store currency is paid in whole units, so a charge or threshold has no paisa.
+ */
+export function rateErrors(
+  rate: RateDraft,
+  wholeTaka = false,
+): Partial<Record<"name" | "fee" | "freeOver" | "pickupAddress", RateErrorKey>> {
   const fee = feeOf(rate);
   const freeOver = rate.freeOver.trim() ? parseAmountInput(rate.freeOver) : null;
+  const fractional = (amount: number) => wholeTaka && !Number.isInteger(amount);
   return {
     ...(rate.name.trim() ? {} : { name: "rateNameRequired" as const }),
-    ...(fee === null ? { fee: "feeInvalid" as const } : fee > MAX_AMOUNT ? { fee: "feeTooHigh" as const } : {}),
+    ...(fee === null
+      ? { fee: "feeInvalid" as const }
+      : fee > MAX_AMOUNT ? { fee: "feeTooHigh" as const } : fractional(fee) ? { fee: "wholeTaka" as const } : {}),
     ...(rate.freeOver.trim() && freeOver === null
       ? { freeOver: "feeInvalid" as const }
-      : freeOver !== null && freeOver > MAX_AMOUNT ? { freeOver: "freeOverTooHigh" as const } : {}),
+      : freeOver !== null && freeOver > MAX_AMOUNT
+        ? { freeOver: "freeOverTooHigh" as const }
+        : freeOver !== null && fractional(freeOver) ? { freeOver: "wholeTaka" as const } : {}),
     ...(rate.kind === "pickup" && !rate.pickupAddress.trim() ? { pickupAddress: "pickupAddressRequired" as const } : {}),
   };
 }
@@ -195,13 +207,14 @@ function RatesEditor({
 }) {
   const t = useMessages(shippingMessages);
   const { symbol } = useCurrency();
+  const wholeTaka = useWholeCashAmounts();
   const update = (index: number, patch: Partial<RateDraft>) =>
     onChange(rates.map((rate, i) => (i === index ? { ...rate, ...patch } : rate)));
   return (
     <section className="space-y-4 border-t border-border pt-4">
       <h3 className="text-heading-sm">{t("charges")}</h3>
       {rates.map((rate, index) => {
-        const errors = rateErrors(rate);
+        const errors = rateErrors(rate, wholeTaka);
         const id = (field: string) => `rate-${index}-${field}`;
         return (
           <fieldset key={rate.key} className="space-y-4 border-t border-border pt-4 first-of-type:border-t-0 first-of-type:pt-0">
@@ -237,7 +250,7 @@ function RatesEditor({
               >
                 <Input
                   id={id("fee")}
-                  inputMode="decimal"
+                  inputMode={wholeTaka ? "numeric" : "decimal"}
                   autoComplete="off"
                   value={rate.fee}
                   aria-describedby={rate.kind === "pickup" ? `${id("fee")}-note` : undefined}
@@ -253,7 +266,7 @@ function RatesEditor({
             >
               <Input
                 id={id("freeOver")}
-                inputMode="decimal"
+                inputMode={wholeTaka ? "numeric" : "decimal"}
                 autoComplete="off"
                 className="sm:max-w-48"
                 value={rate.freeOver}
@@ -520,6 +533,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
   const common = useMessages(settingsMessages);
   const refresh = useRefreshZones();
   const onConflict = useConflictReload();
+  const wholeTaka = useWholeCashAmounts();
   const [saved] = useState(() => ({
     name: zone?.name ?? "",
     places: zone?.locations ?? [],
@@ -555,7 +569,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
     fields: fieldId,
     dirty: JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
-    invalid: !draft.name.trim() || draft.places.length === 0 || draft.rates.some((rate) => Object.keys(rateErrors(rate)).length > 0),
+    invalid: !draft.name.trim() || draft.places.length === 0 || draft.rates.some((rate) => Object.keys(rateErrors(rate, wholeTaka)).length > 0),
     save: () => save.mutateAsync(),
     discard: () => setDraft(saved),
   });
@@ -594,6 +608,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
 
 function EverywhereElseForm({ everywhereElse }: { everywhereElse: DeliveryZones["everywhereElse"] }) {
   const refresh = useRefreshZones();
+  const wholeTaka = useWholeCashAmounts();
   const onConflict = useConflictReload();
   const [saved] = useState(() => everywhereElse.rates.map(toDraft));
   const [rates, setRates] = useState(saved);
@@ -607,7 +622,7 @@ function EverywhereElseForm({ everywhereElse }: { everywhereElse: DeliveryZones[
     fields: fieldId,
     dirty: JSON.stringify(rates) !== JSON.stringify(saved),
     saving: save.isPending,
-    invalid: rates.some((rate) => Object.keys(rateErrors(rate)).length > 0),
+    invalid: rates.some((rate) => Object.keys(rateErrors(rate, wholeTaka)).length > 0),
     save: () => save.mutateAsync(),
     discard: () => setRates(saved),
   });

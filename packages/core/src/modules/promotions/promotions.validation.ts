@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isWholeCashAmountMinor, WHOLE_TAKA_MESSAGE } from "@scalius/shared/money";
 
 import { checkPromotionRule, PROMOTION_SCOPE_LIMIT } from "./promotions.evaluator";
 
@@ -111,11 +112,34 @@ const promotionRuleShape = {
     effects: z.array(promotionEffectInputSchema).min(1).max(2),
 } as const;
 
+/** In BDT every amount (a fixed discount, a minimum, a Buy X amount, a budget) is whole taka. */
+function requireWholeCashAmounts(rule: Parameters<typeof checkPromotionRule>[0], context: z.RefinementCtx): void {
+    const check = (amountMinor: number | null | undefined, currencyCode: string | null | undefined, path: (string | number)[]) => {
+        if (amountMinor != null && currencyCode && !isWholeCashAmountMinor(amountMinor, currencyCode)) {
+            context.addIssue({ code: "custom", path, message: WHOLE_TAKA_MESSAGE });
+        }
+    };
+    rule.conditions.forEach((condition, index) => {
+        if (condition.kind === "minimum_merchandise_subtotal") {
+            check(condition.config.amountMinor, condition.config.currencyCode, ["conditions", index, "config", "amountMinor"]);
+        }
+    });
+    rule.effects.forEach((effect, index) => {
+        if (effect.kind === "fixed_amount_off") {
+            check(effect.config.amountMinor, effect.config.currencyCode, ["effects", index, "config", "amountMinor"]);
+        } else if (effect.kind === "percentage_off" && effect.config.buy) {
+            check(effect.config.buy.amountMinor, effect.config.buy.currencyCode, ["effects", index, "config", "buy", "amountMinor"]);
+        }
+    });
+    check(rule.maxDiscountSpendMinor, rule.budgetCurrencyCode, ["maxDiscountSpendMinor"]);
+}
+
 function refinePromotionRule(
     rule: Parameters<typeof checkPromotionRule>[0] & { timezone: string },
     context: z.RefinementCtx,
 ): void {
     checkPromotionRule(rule, context);
+    requireWholeCashAmounts(rule, context);
     try {
         new Intl.DateTimeFormat("en", { timeZone: rule.timezone }).format(0);
     } catch {

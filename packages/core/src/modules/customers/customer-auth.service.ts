@@ -492,12 +492,12 @@ async function resolveActiveCustomerLocation(
 
     const zone = locationMap.get(input.zone);
     if (!zone || zone.type !== "zone" || zone.parentId !== city.id || zone.isActive !== true || zone.deletedAt != null) {
-        throw new ValidationError("Selected zone is no longer available for the chosen city.");
+        throw new ValidationError("Selected thana is no longer available for the chosen city.");
     }
 
     const area = input.area ? locationMap.get(input.area) : null;
     if (input.area && (!area || area.type !== "area" || area.parentId !== zone.id || area.isActive !== true || area.deletedAt != null)) {
-        throw new ValidationError("Selected area is no longer available for the chosen zone.");
+        throw new ValidationError("Selected area is no longer available for the chosen thana.");
     }
 
     return {

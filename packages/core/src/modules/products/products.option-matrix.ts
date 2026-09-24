@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { percentToBps, toMinor } from "@scalius/shared/money";
-import { readStoreDecimalPlaces } from "./products.money";
+import { readStoreCurrency, toStoreMinor } from "../settings/store-money";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
     buildBatchGuard,
@@ -452,10 +452,10 @@ export async function saveProductOptionMatrix(
     adminUserId?: string,
 ): Promise<{ aggregateRevision: number }> {
     const input = parseProductOptionMatrix(rawInput);
-    const [product, decimalPlaces] = await Promise.all([db.select({ id: products.id, isActive: products.isActive })
+    const [product, currency] = await Promise.all([db.select({ id: products.id, isActive: products.isActive })
         .from(products)
         .where(and(eq(products.id, productId), isNull(products.deletedAt)))
-        .get(), readStoreDecimalPlaces(db)]);
+        .get(), readStoreCurrency(db)]);
     if (!product) throw new NotFoundError("Product not found");
     if (product.isActive) {
         const unpriced = input.variants.findIndex((variant) => variant.price <= 0);
@@ -880,13 +880,13 @@ export async function saveProductOptionMatrix(
             imageId: variant.imageId,
             weight: variant.weight,
             sku: variant.sku,
-            priceMinor: toMinor(variant.price, decimalPlaces),
+            priceMinor: toStoreMinor(variant.price, currency),
             trackInventory: variant.trackInventory,
             barcode: variant.barcode,
             barcodeType: variant.barcodeType,
             discountType: variant.discountType,
             discountBps: variant.discountType === "percentage" ? percentToBps(variant.discountPercentage) : 0,
-            discountAmountMinor: variant.discountType === "flat" ? toMinor(variant.discountAmount ?? 0, decimalPlaces) : 0,
+            discountAmountMinor: variant.discountType === "flat" ? toStoreMinor(variant.discountAmount ?? 0, currency) : 0,
             updatedAt: sql`unixepoch()`,
         };
         if (!existing) {

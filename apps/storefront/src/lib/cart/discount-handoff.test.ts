@@ -32,7 +32,7 @@ import {
 } from "../checkout/session-state";
 import { rememberSubmittedCart } from "../checkout/receipt-finalization";
 import { findNamedCheckoutControl } from "../checkout/form-controls";
-import { checkoutInformationFields, enhanceCheckoutFields } from "../checkout/field-validation";
+import { checkoutInformationFields, enhanceCheckoutFields, setFieldError } from "../checkout/field-validation";
 import { storefrontSourcePath } from "../test-source-paths";
 import {
   initCartFunctionality,
@@ -60,6 +60,7 @@ vi.mock("../checkout/tax-quote-client", () => ({
   fetchAuthoritativeTaxQuote: taxQuoteMocks.fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError: class TaxQuoteCartChangedError extends Error {},
   TaxQuoteDeliveryRateError: class TaxQuoteDeliveryRateError extends Error {},
+  TaxQuoteDeliveryLocationError: class TaxQuoteDeliveryLocationError extends Error {},
 }));
 
 /** The rates the API offers for the form's address (Dhaka / Banani). */
@@ -147,8 +148,10 @@ function renderCartDom(): void {
         <p id="customerEmail-error" class="hidden"></p>
         <textarea id="shippingAddress" name="shippingAddress">Synthetic checkout address</textarea>
         <p id="shippingAddressError" class="hidden"></p>
-        <input id="checkout-city" name="city" value="city_dhaka" />
-        <input id="checkout-zone" name="zone" value="zone_banani" />
+        <div data-location-fields>
+          <input id="checkout-city" name="city" value="city_dhaka" />
+          <input id="checkout-zone" name="zone" value="zone_banani" />
+        </div>
         <p id="shippingLocationError" class="hidden"></p>
         <div data-shipping-methods data-free-text="Free" data-free-over-text="Free over {amount}"
           data-fee-changed-text="${ENGLISH_CHECKOUT_LANGUAGE_DATA.deliveryFeeChangedText}"
@@ -241,6 +244,7 @@ async function startCartPage(): Promise<void> {
     findNamedCheckoutControl,
     checkoutInformationFields,
     enhanceCheckoutFields,
+    setFieldError,
     hideCheckoutLoadingOverlay: vi.fn(),
     showCheckoutLoadingOverlay: vi.fn(),
   };
@@ -428,6 +432,28 @@ describe("cart discount checkout handoff", () => {
     expect(window.lastShippingEventDetail?.fee).toBe(80);
     deliveryRates.mockReset();
     deliveryRates.mockResolvedValue([STANDARD]);
+  });
+
+  it("says once, at the thana, that the merchant removed it, and Place order goes back there (R3-SB-04)", async () => {
+    await startCartPage();
+    window.dispatchEvent(new CustomEvent("delivery-location-unavailable", { detail: { field: "zone" } }));
+    const error = document.getElementById("shippingLocationError")!;
+    expect(error.textContent).toBe("That thana is no longer available. Choose another.");
+    expect(error.classList).not.toContain("hidden");
+    expect(document.getElementById("checkout-zone")?.getAttribute("aria-invalid")).toBe("true");
+
+    vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({
+      success: false,
+      error: "Selected thana is no longer available for the chosen city.",
+      details: { reason: "delivery_location_unavailable", field: "zone" },
+    }), { status: 400, headers: { "Content-Type": "application/json" } }));
+    submitCheckout();
+    await settleCheckout();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(document.activeElement?.id).toBe("checkout-zone");
+    expect(document.getElementById("checkoutFormMessage")?.classList).toContain("hidden");
+    expect(document.body.textContent).not.toContain("Selected thana is no longer available");
+    expect(document.body.textContent?.match(/That thana is no longer available/g)).toHaveLength(1);
   });
 
   it("asks for a delivery option when none applies to the address", async () => {

@@ -38,9 +38,16 @@ describe("NumberInput", () => {
     host.remove();
   });
 
-  function Harness({ initial }: { initial: number | null }) {
+  function Harness({ initial, wholeUnitsMessage }: { initial: number | null; wholeUnitsMessage?: string }) {
     const [value, setValue] = useState(initial);
-    return <NumberInput aria-label="Price" value={value} onValueChange={(next) => { onValueChange(next); setValue(next); }} />;
+    return (
+      <NumberInput
+        aria-label="Price"
+        value={value}
+        wholeUnitsMessage={wholeUnitsMessage}
+        onValueChange={(next) => { onValueChange(next); setValue(next); }}
+      />
+    );
   }
 
   it("reports a change only when the number changes, so focus and Tab alone never dirty a form", () => {
@@ -71,5 +78,18 @@ describe("NumberInput", () => {
     act(() => type(input, "5x"));
     expect(onValueChange).toHaveBeenLastCalledWith(Number.NaN);
     expect(input.value).toBe("5x");
+  });
+
+  it("takes no decimal point for whole-taka money and says why at the field", () => {
+    act(() => root.render(<Harness initial={60} wholeUnitsMessage="Taka amounts are whole numbers." />));
+    const input = host.querySelector("input")!;
+    expect(input.inputMode).toBe("numeric");
+    act(() => type(input, "60.5"));
+    expect(onValueChange).not.toHaveBeenCalled();
+    expect(input.value).toBe("60");
+    expect(input.validationMessage).toBe("Taka amounts are whole numbers.");
+    act(() => type(input, "65"));
+    expect(onValueChange).toHaveBeenLastCalledWith(65);
+    expect(input.validationMessage).toBe("");
   });
 });

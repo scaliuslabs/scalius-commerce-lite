@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 76,
-  name: "0076_guest_record_links",
+  version: 79,
+  name: "0079_whole_taka_amounts",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -158,8 +158,13 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "0fa004dc4ff1f70f010f91526b9a9f571ad2b8af382277503613fc445d933597",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 76,
+    name: "0076_guest_record_links",
     sourceSha256: "728ad7d908c014099cbc7bc8a70441867568585ddc9e9ba2dae46776106bbbe6",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "a88163d1389ab6e37e1812c5d11a35bfdb01e692be58fbdf2c328bc6c5ee631c",
   },
 ] as const;
 

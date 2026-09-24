@@ -7,7 +7,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
-import { NumberInput } from "~/components/ui/number-input";
+import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { NativeSelect } from "~/components/ui/native-select";
@@ -672,7 +672,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             {refundMutation.isError ? <Alert variant="destructive">{orderErrorMessage(refundMutation.error)}</Alert> : null}
             <div className="space-y-2">
               <Label htmlFor="refundAmount">{t("refund.amount", { symbol })}</Label>
-              <NumberInput
+              <MoneyInput
+                currencyCode={order.currencyCode ?? ""}
                 id="refundAmount"
                 value={refundAmount}
                 disabled={isRefundLocked}

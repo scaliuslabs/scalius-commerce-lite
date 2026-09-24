@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
+import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
@@ -788,7 +789,7 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
 }) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
-  const { fmt, salePrice } = useCurrency();
+  const { code: currencyCode, fmt, salePrice } = useCurrency();
   const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
   const [query, setQuery] = React.useState("");
   const [page, setPage] = React.useState(0);
@@ -847,7 +848,8 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
     const sale = saleOf(variant);
     return (
       <div className="space-y-1">
-        <NumberInput
+        <MoneyInput
+          currencyCode={currencyCode}
           value={variant.price}
           aria-invalid={Boolean(error)}
           aria-label={t("priceFor", { name: nameOf(variant) })}
@@ -933,7 +935,7 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
             <strong className="font-medium">{r("selected", { count: selected.size })}</strong>
             <Button type="button" variant="link" size="sm" onClick={() => setSelected(new Set())}>{t("clearSelection")}</Button>
           </span>
-          <NumberInput value={bulkPrice} onValueChange={setBulkPrice} placeholder={t("price")} aria-label={t("price")} aria-invalid={bulkPrice !== null && !Number.isFinite(bulkPrice)} className="w-24" />
+          <MoneyInput currencyCode={currencyCode} value={bulkPrice} onValueChange={setBulkPrice} placeholder={t("price")} aria-label={t("price")} aria-invalid={bulkPrice !== null && !Number.isFinite(bulkPrice)} className="w-24" />
           <NumberInput value={bulkStock} integer onValueChange={setBulkStock} placeholder={t("quantity")} aria-label={t("quantity")} aria-invalid={bulkStock !== null && !Number.isInteger(bulkStock)} className="w-24" />
           <VariantImagePicker
             value={bulkImageId}
@@ -1261,6 +1263,7 @@ function DiscountInput({ variant, name, invalid, onChange }: {
   onChange: (patch: Partial<DraftVariant>) => void;
 }) {
   const t = useMessages(productMessages);
+  const { code: currencyCode } = useCurrency();
   const amount = variant.discountType === "flat" ? variant.discountAmount ?? 0 : variant.discountPercentage ?? 0;
   const [mode, setMode] = React.useState<"none" | "percentage" | "flat">(
     amount > 0 ? variant.discountType : "none",
@@ -1286,14 +1289,21 @@ function DiscountInput({ variant, name, invalid, onChange }: {
         <option value="percentage">{t("discountPercentage")}</option>
         <option value="flat">{t("discountFixed")}</option>
       </NativeSelect>
-      {mode !== "none" ? (
+      {mode === "flat" ? (
+        <MoneyInput
+          currencyCode={currencyCode}
+          value={amount}
+          aria-invalid={invalid}
+          aria-label={t("discountValueFor", { name })}
+          onValueChange={(next) => onChange({ discountAmount: next ?? 0 })}
+          className="w-20"
+        />
+      ) : mode === "percentage" ? (
         <NumberInput
           value={amount}
           aria-invalid={invalid}
           aria-label={t("discountValueFor", { name })}
-          onValueChange={(next) => onChange(mode === "flat"
-            ? { discountAmount: next ?? 0 }
-            : { discountPercentage: next ?? 0 })}
+          onValueChange={(next) => onChange({ discountPercentage: next ?? 0 })}
           className="w-20"
         />
       ) : null}

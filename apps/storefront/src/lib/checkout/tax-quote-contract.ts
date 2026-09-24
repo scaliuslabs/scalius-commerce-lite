@@ -68,6 +68,8 @@ export interface CheckoutDiscountLine {
   amount: number;
   /** Off delivery: shown on the delivery line, never as a discount line. */
   shippingAmount: number;
+  /** A code only: the automatic discount it replaced (it saves more; they can't be combined). */
+  replaces?: string;
 }
 
 export interface CheckoutOfferProduct {
@@ -475,6 +477,7 @@ export function parseDiscountFacts(data: Record<string, unknown>): CheckoutDisco
         code: line.code === null ? null : requiredString(line.code, MAX_CODE_LENGTH),
         amount: nonNegativeAmount(line.amount),
         shippingAmount: nonNegativeAmount(line.shippingAmount),
+        ...(line.replaces === undefined ? {} : { replaces: requiredString(line.replaces, 160) }),
       };
     }),
     offers: offers.map(parseOffer),

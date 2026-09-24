@@ -17,7 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "~/components/ui/form";
-import { NumberInput } from "~/components/ui/number-input";
+import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
@@ -73,7 +73,7 @@ function useDeliveryZones() {
 /** Payment card: delivery charge, discount and the order total from the server quote. */
 export function SummarySection() {
   const { form, refs, handleKeyDown, isEdit, localTotals, manualQuote } = useOrderForm();
-  const { fmt } = useCurrency();
+  const { fmt, code } = useCurrency();
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
   const [city, zone, area, shippingMethodId] = useWatch({
@@ -157,7 +157,8 @@ export function SummarySection() {
               <FormItem>
                 <FormLabel>{t("deliveryCharge")}</FormLabel>
                 <FormControl>
-                  <NumberInput
+                  <MoneyInput
+                    currencyCode={code}
                     placeholder="0"
                     name={field.name}
                     disabled={field.disabled}
@@ -188,7 +189,8 @@ export function SummarySection() {
               <FormItem>
                 <FormLabel>{t("discount")}</FormLabel>
                 <FormControl>
-                  <NumberInput
+                  <MoneyInput
+                    currencyCode={code}
                     placeholder="0"
                     aria-invalid={discountNeedsCorrection || undefined}
                     aria-describedby={discountNeedsCorrection

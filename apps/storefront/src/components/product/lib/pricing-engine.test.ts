@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateVariantPrice,
+  formatDiscountBadge,
   getBuyerVariantPricePresentation,
 } from "./pricing-engine";
 import { formatMoney } from "@scalius/shared/currency";
@@ -140,5 +141,19 @@ describe("buyer variant pricing", () => {
     expect(
       getBuyerVariantPricePresentation(productPricing, [sku, { ...sku, price: 9_990 }]).isStartingAt,
     ).toBe(true);
+  });
+});
+
+describe("discount badge", () => {
+  it("shows every discount the same way, as the share saved, never more than the price shows", () => {
+    // 10% off and ৳400 off ৳2,000 read alike in one grid.
+    expect(formatDiscountBadge(1_000, 900)).toBe("-10%");
+    expect(formatDiscountBadge(2_000, 1_600)).toBe("-20%");
+    // ৳400 off ৳2,190 saves 18.26%: rounded down.
+    expect(formatDiscountBadge(2_190, 1_790)).toBe("-18%");
+    // A tiny saving still says there is one; no saving has no badge.
+    expect(formatDiscountBadge(10_000, 9_990)).toBe("-1%");
+    expect(formatDiscountBadge(1_000, 1_000)).toBeNull();
+    expect(formatDiscountBadge(0, 0)).toBeNull();
   });
 });

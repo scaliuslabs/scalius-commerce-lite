@@ -35,8 +35,10 @@ import {
     presentCatalogPrice,
     readStoreDecimalPlaces,
     storeCurrencyCodeSql,
+    storeCurrencyFromCode,
     storeDecimalPlacesFromCode,
 } from "./products.money";
+import { readStoreCurrency, toStoreMinor } from "../settings/store-money";
 import { bpsToPercent, fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
@@ -974,9 +976,9 @@ export async function createProduct(
         : data.defaultSku?.sku ? [{ sku: data.defaultSku.sku, field: "defaultSku.sku" }] : []);
 
     const productId = "prod_" + nanoid();
-    const decimalPlaces = await readStoreDecimalPlaces(db);
-    const productPrice = catalogPriceColumns(data, decimalPlaces);
-    const priceMinor = toMinor(data.price, decimalPlaces);
+    const currency = await readStoreCurrency(db);
+    const productPrice = catalogPriceColumns(data, currency);
+    const priceMinor = toStoreMinor(data.price, currency);
     const baseDefaultVariant = defaultVariantValues(productId, priceMinor);
     const defaultVariant = {
         ...baseDefaultVariant,
@@ -1095,7 +1097,7 @@ export async function createProduct(
                 imageId: matrixVariant.imageId,
                 weight: matrixVariant.weight,
                 sku: matrixVariant.sku.trim(),
-                priceMinor: toMinor(matrixVariant.price, decimalPlaces),
+                priceMinor: toStoreMinor(matrixVariant.price, currency),
                 stock: 0,
                 reservedStock: 0,
                 preorderStock: 0,
@@ -1108,7 +1110,7 @@ export async function createProduct(
                     ? percentToBps(matrixVariant.discountPercentage)
                     : 0,
                 discountAmountMinor: matrixVariant.discountType === "flat"
-                    ? toMinor(matrixVariant.discountAmount ?? 0, decimalPlaces)
+                    ? toStoreMinor(matrixVariant.discountAmount ?? 0, currency)
                     : 0,
                 version: 1,
                 stockVersion: 1,
@@ -1228,8 +1230,9 @@ export async function updateProduct(
 
     await assertActiveAttributeAssignments(db, data.attributes ?? []);
     const decimalPlaces = storeDecimalPlacesFromCode(existingProduct.storeCurrencyCode);
-    const productPrice = catalogPriceColumns(data, decimalPlaces);
-    const priceMinor = toMinor(data.price, decimalPlaces);
+    const currency = { code: storeCurrencyFromCode(existingProduct.storeCurrencyCode), decimalPlaces };
+    const productPrice = catalogPriceColumns(data, currency);
+    const priceMinor = toStoreMinor(data.price, currency);
 
     const attributeValuesToInsert = (data.attributes ?? [])
         .filter((attr) => attr.attributeId && attr.value.trim())

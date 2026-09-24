@@ -11,7 +11,7 @@ import {
 } from "@scalius/database/schema";
 import { listOrderDiscountLines, quoteStorefrontDiscount, type StorefrontDiscountQuote } from "@scalius/core/modules/promotions";
 import {
-  appliedDiscountLineSchema,
+  quotedDiscountLineSchema,
   orderDiscountLineSchema,
   presentOrderDiscountLines,
   discountCodesSchema,
@@ -1262,7 +1262,7 @@ const taxQuoteResponseSchema = z.object({
   totalMinor: z.number().int(),
   totalAmount: z.number(),
   shippingMethod: storefrontShippingMethodSnapshotSchema,
-  discounts: z.array(appliedDiscountLineSchema).openapi({
+  discounts: z.array(quotedDiscountLineSchema).openapi({
     description: "One line per applied discount (automatic and code), with its own amount.",
   }),
   offers: z.array(discountOfferSchema).max(3).openapi({
