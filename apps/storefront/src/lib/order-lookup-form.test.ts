@@ -2,14 +2,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
-import { readOrderLookupInput } from "./order-lookup";
+import { getOrderLookupFieldErrors } from "./order-lookup";
 import { enhanceOrderCodeForm } from "./order-lookup-form";
 
-function renderForm() {
+function renderForm({ errorSlots = false } = {}) {
+  const slot = (name: string) => (errorSlots ? `<p id="${name}Error" data-field-error="${name}" hidden></p>` : "");
   document.body.innerHTML = `
     <form data-order-code-form data-send-url="/api/order-lookup/send-code" data-verify-url="/api/order-lookup/verify">
-      <input name="reference" value="#1001" />
-      <input name="phone" value="01712345678" />
+      <input name="reference" value="#1001" required />${slot("reference")}
+      <input name="phone" value="01712345678" required />${slot("phone")}
       <p data-order-code-order hidden>Order number <span data-order-number></span></p>
       <div data-order-code-step hidden><input name="code" /></div>
       <p data-order-code-message></p>
@@ -22,9 +23,7 @@ function renderForm() {
     verifyCode: "View order",
     codeSent: copy.trackOrderCodeSentText,
     unavailable: copy.trackOrderUnavailableText,
-    validate: (fields) => (readOrderLookupInput(fields.reference ?? "", fields.phone ?? "").ok
-      ? null
-      : copy.trackOrderPhoneInvalidText),
+    validate: (fields) => getOrderLookupFieldErrors(copy, fields.reference ?? "", fields.phone ?? ""),
   });
   const submit = form.querySelector<HTMLButtonElement>("[data-order-code-submit]")!;
   const resend = form.querySelector<HTMLButtonElement>("[data-order-code-resend]")!;
@@ -33,6 +32,8 @@ function renderForm() {
     submit,
     resend,
     message: () => form.querySelector("[data-order-code-message]")!.textContent,
+    input: (name: string) => form.querySelector<HTMLInputElement>(`input[name='${name}']`)!,
+    fieldError: (name: string) => form.querySelector<HTMLElement>(`[data-field-error='${name}']`)!,
     orderLine: () => form.querySelector<HTMLElement>("[data-order-code-order]")!,
     storeContactHidden: () => form.querySelector<HTMLElement>("[data-store-contact]")!.hidden,
     codeStepHidden: () => form.querySelector<HTMLElement>("[data-order-code-step]")!.hidden,
@@ -140,6 +141,46 @@ describe("order code form", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(view.message()).toBe(copy.trackOrderPhoneInvalidText);
+  });
+
+  it("shows each bad field's message under it and focuses the first, instead of the browser tooltip", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const view = renderForm({ errorSlots: true });
+    view.input("reference").value = "";
+    view.input("phone").value = "";
+
+    await submitWith(view.form, view.submit);
+
+    expect(view.form.noValidate).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    for (const [name, message] of [["reference", copy.trackOrderNumberInvalidText], ["phone", copy.trackOrderPhoneInvalidText]] as const) {
+      expect(view.fieldError(name).hidden).toBe(false);
+      expect(view.fieldError(name).textContent).toBe(message);
+      expect(view.input(name).getAttribute("aria-invalid")).toBe("true");
+      expect(view.input(name).getAttribute("aria-describedby")).toBe(`${name}Error`);
+    }
+    expect(document.activeElement).toBe(view.input("reference"));
+    expect(view.message()).toBe("");
+
+    view.input("reference").value = "#1001";
+    view.input("reference").dispatchEvent(new Event("input", { bubbles: true }));
+    expect(view.fieldError("reference").hidden).toBe(true);
+    expect(view.input("reference").hasAttribute("aria-invalid")).toBe(false);
+    expect(view.input("reference").hasAttribute("aria-describedby")).toBe(false);
+    expect(view.fieldError("phone").hidden).toBe(false);
+  });
+
+  it("asks for the code under its field when View order is pressed without one", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(reply({ success: true, resendAfterSeconds: 60 })));
+    const view = renderForm();
+    await submitWith(view.form, view.submit);
+
+    await submitWith(view.form, view.submit);
+
+    expect(view.message()).toBe(copy.paymentRecoveryEnterCodeText);
+    expect(view.input("code").getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(view.input("code"));
   });
 
   it("says how many attempts are left, and offers a new code when none are", async () => {

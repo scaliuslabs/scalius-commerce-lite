@@ -13,6 +13,7 @@ import { listOrderDiscountLines, quoteStorefrontDiscount, type StorefrontDiscoun
 import {
   appliedDiscountLineSchema,
   orderDiscountLineSchema,
+  presentOrderDiscountLines,
   discountCodesSchema,
   discountOfferSchema,
   presentStorefrontDiscountQuote,
@@ -28,7 +29,8 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
-import { getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/customers/customers.service";
+import { getBuyerOrderTracking, getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/customers/customers.service";
+import { buyerOrderTrackingSchema } from "../schemas/order-tracking";
 import { issueAccountOwnerReceipt } from "@scalius/core/modules/customers/order-account-claim";
 import { sendOrderLookupOtp, verifyOrderLookupOtp } from "@scalius/core/modules/orders/order-lookup";
 import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/order-money";
@@ -586,6 +588,8 @@ const orderReceiptSchema = z.object({
   discounts: z.array(orderDiscountLineSchema),
   /** The buyer's order note. */
   notes: z.string().nullable(),
+  /** Where the order is: shown when the receipt is opened to track it. */
+  tracking: buyerOrderTrackingSchema,
   taxAmountMinor: z.number().int(),
   totalAmountMinor: z.number().int().nullable(),
   taxLabel: z.string().nullable(),
@@ -980,7 +984,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     throw new NotFoundError("Order receipt not found");
   }
 
-  const [items, supportState, discountLines] = await Promise.all([
+  const [items, supportState, discountLines, tracking] = await Promise.all([
     db
       .select({
         id: orderItems.id,
@@ -1002,6 +1006,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       .where(eq(orderItems.orderId, id)),
     getReceiptOrderSupportRequestStateForOrder(db, order),
     listOrderDiscountLines(db, id),
+    getBuyerOrderTracking(db, order),
   ]);
 
   const money = orderMoneyAmounts(order);
@@ -1027,15 +1032,9 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       shippingMethodBaseAmountMinor: order.shippingMethodBaseAmountMinor,
       shippingFeeWaived: order.shippingFeeWaived,
       discountAmountMinor: order.discountAmountMinor,
-      discounts: discountLines.map((line) => ({
-        promotionId: line.promotionId,
-        title: line.title,
-        code: line.code,
-        kind: line.kind,
-        amount: fromMinor(line.amountMinor, order.currencyDecimalPlaces),
-        shippingAmount: fromMinor(line.shippingAmountMinor, order.currencyDecimalPlaces),
-      })),
+      discounts: presentOrderDiscountLines(discountLines, order.currencyDecimalPlaces),
       notes: order.notes?.trim() || null,
+      tracking,
       taxAmountMinor: order.taxAmountMinor,
       totalAmountMinor: order.totalAmountMinor,
       taxLabel: order.taxLabel,

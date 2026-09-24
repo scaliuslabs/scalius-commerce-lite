@@ -48,7 +48,7 @@ describe("customer sign-in UI model", () => {
       ],
     });
     expect(checkNewAccount(ui, { name: "Rahim", phone: "0171", email: "" })).toEqual({
-      ok: false, errors: [{ field: "phone", message: "Enter a valid mobile number, like 01712345678." }],
+      ok: false, errors: [{ field: "phone", message: "Enter a Bangladeshi mobile number (01XXXXXXXXX)." }],
     });
     expect(checkNewAccount(ui, { name: " Rahim ", phone: "01712-345678", email: "" })).toEqual({
       ok: true, account: { name: "Rahim", phone: "+8801712345678" },

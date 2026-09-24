@@ -32,6 +32,12 @@ vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
   listOrderDiscountLines: vi.fn(async () => []),
 }));
 
+// The tracked-order view is covered on the real schema by orders-owner-receipt.d1.test.ts.
+vi.mock("@scalius/core/modules/customers/customers.service", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/customers/customers.service")>(),
+  getBuyerOrderTracking: vi.fn(async () => ({ progress: { steps: [], outcome: null }, timeline: [], shipments: [] })),
+}));
+
 const orderRow = {
   id: "order_1",
   customerId: "cust_internal",

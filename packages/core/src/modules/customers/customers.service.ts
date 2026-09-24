@@ -1203,6 +1203,85 @@ export function getCustomerPaymentSessionOrderForDetail(order: CustomerOwnedOrde
     };
 }
 
+/** A courier tracking link a buyer may follow: http(s) only. */
+function buyerTrackingUrl(value: string | null): string | null {
+    if (!value) return null;
+    try {
+        const url = new URL(value);
+        return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Where an order is, for the tracked-order view of the receipt: the same step
+ * tracker and dated timeline as the account order page, plus each parcel's
+ * courier and tracking reference. The caller has already proved the viewer.
+ */
+export async function getBuyerOrderTracking(
+    db: Database,
+    order: { id: string; status: string; createdAt: number | null },
+) {
+    const [shipments, payments, statusEvents, refunds, requests] = await Promise.all([
+        db
+            .select({
+                providerName: deliveryProviders.name,
+                courierName: deliveryShipments.courierName,
+                status: deliveryShipments.status,
+                trackingId: deliveryShipments.trackingId,
+                trackingUrl: deliveryShipments.trackingUrl,
+                createdAt: sql<number>`CAST(${deliveryShipments.createdAt} AS INTEGER)`,
+            })
+            .from(deliveryShipments)
+            .leftJoin(deliveryProviders, eq(deliveryProviders.id, deliveryShipments.providerId))
+            .where(eq(deliveryShipments.orderId, order.id))
+            .orderBy(desc(deliveryShipments.createdAt)),
+        db
+            .select({
+                id: orderPayments.id,
+                status: orderPayments.status,
+                createdAt: sql<number>`CAST(${orderPayments.createdAt} AS INTEGER)`,
+                updatedAt: sql<number>`CAST(${orderPayments.updatedAt} AS INTEGER)`,
+            })
+            .from(orderPayments)
+            .where(eq(orderPayments.orderId, order.id)),
+        db
+            .select({
+                notificationType: orderNotificationOutbox.notificationType,
+                createdAt: orderNotificationOutbox.createdAt,
+            })
+            .from(orderNotificationOutbox)
+            .where(eq(orderNotificationOutbox.orderId, order.id)),
+        listOrderRefundAttempts(db, order.id, { audience: "customer" }),
+        listOrderSupportRequests(db, order.id),
+    ]);
+
+    const { progress, timeline } = buildCustomerOrderTracking({
+        order,
+        statusEvents,
+        shipments: shipments.map((shipment) => ({ ...shipment, createdAt: timestampToIso(shipment.createdAt) })),
+        payments: payments.map((payment) => ({
+            ...payment,
+            createdAt: timestampToIso(payment.createdAt),
+            updatedAt: timestampToIso(payment.updatedAt),
+        })),
+        refunds,
+        requests: requests.map(customerSupportRequestView),
+    });
+
+    return {
+        progress,
+        timeline,
+        shipments: shipments.map((shipment) => ({
+            statusLabel: customerShipmentStatusLabel(shipment.status),
+            courierName: shipment.courierName?.trim() || shipment.providerName?.trim() || null,
+            trackingId: shipment.trackingId?.trim() || null,
+            trackingUrl: buyerTrackingUrl(shipment.trackingUrl),
+        })),
+    };
+}
+
 export async function getCustomerOrderDetail(
     db: Database,
     customerId: string,

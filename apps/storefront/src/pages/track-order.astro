@@ -14,6 +14,7 @@ import {
   NO_CODE_CHANNEL,
   getOrderCodeFailureText,
   formatCountdown,
+  getOrderLookupFieldErrors,
   normalizeOrderReference,
   readOrderLookupInput,
 } from "@/lib/order-lookup";
@@ -52,6 +53,8 @@ let failed = false;
 let noCodeChannel = false;
 let resendAfterSeconds = 0;
 let verified: VerifiedOrderReceipt | null = null;
+// Each field's own message under it, like checkout.
+let fieldErrors: Partial<Record<"reference" | "phone" | "code", string>> = {};
 
 if (isPost) {
   const fields = (await readOrderCodeFields(Astro.request)) ?? {};
@@ -62,10 +65,10 @@ if (isPost) {
   failed = true;
   if (!input.ok) {
     codeSent = false;
-    message = input.field === "reference" ? copy.trackOrderNumberInvalidText : copy.trackOrderPhoneInvalidText;
+    fieldErrors = getOrderLookupFieldErrors(copy, reference, phone);
   } else if (fields.intent === "verify") {
     if (!fields.code) {
-      message = copy.paymentRecoveryEnterCodeText;
+      fieldErrors = { code: copy.paymentRecoveryEnterCodeText };
     } else {
       const result = await verifyOrderLookupCode({ reference: input.reference, phone: input.phone, code: fields.code });
       if (result.ok) verified = result.data;
@@ -90,7 +93,12 @@ const verifiedRedirect = verified ? verifiedReceiptResponse(verified, "redirect"
 if (verifiedRedirect) return verifiedRedirect;
 
 const fieldClass =
-  "min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20";
+  "min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 aria-[invalid=true]:border-destructive";
+const errorClass = "text-sm text-destructive";
+const firstInvalid = (["reference", "phone", "code"] as const).find((field) => fieldErrors[field]);
+const invalid = (field: "reference" | "phone" | "code", errorId: string) => fieldErrors[field]
+  ? { "aria-invalid": "true" as const, "aria-describedby": errorId }
+  : {};
 const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
 ---
 
@@ -116,15 +124,18 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
       >
         <div class="grid gap-2">
           <label for="trackOrderReference" class="text-sm font-medium text-foreground">{copy.orderReceiptOrderNumberText}</label>
-          <input id="trackOrderReference" name="reference" value={reference} placeholder="#1001" autocomplete="off" required maxlength="40" class={fieldClass} />
+          <input id="trackOrderReference" name="reference" value={reference} placeholder="#1001" autocomplete="off" required maxlength="40" class={fieldClass} autofocus={firstInvalid === "reference"} {...invalid("reference", "trackOrderReferenceError")} />
+          <p id="trackOrderReferenceError" data-field-error="reference" class={errorClass} hidden={!fieldErrors.reference}>{fieldErrors.reference}</p>
         </div>
         <div class="grid gap-2">
           <label for="trackOrderPhone" class="text-sm font-medium text-foreground">{copy.customerPhoneLabel}</label>
-          <input id="trackOrderPhone" name="phone" value={phone} type="tel" inputmode="tel" autocomplete="tel-national" placeholder="01XXXXXXXXX" required maxlength="20" class={fieldClass} autofocus={!isPost && Boolean(reference)} />
+          <input id="trackOrderPhone" name="phone" value={phone} type="tel" inputmode="tel" autocomplete="tel-national" placeholder="01XXXXXXXXX" required maxlength="20" class={fieldClass} autofocus={firstInvalid === "phone" || (!firstInvalid && !isPost && Boolean(reference))} {...invalid("phone", "trackOrderPhoneError")} />
+          <p id="trackOrderPhoneError" data-field-error="phone" class={errorClass} hidden={!fieldErrors.phone}>{fieldErrors.phone}</p>
         </div>
         <div class="grid gap-2" data-order-code-step hidden={!codeSent}>
           <label for="trackOrderCode" class="text-sm font-medium text-foreground">{copy.paymentRecoveryVerificationCodeText}</label>
-          <input id="trackOrderCode" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" class={`${fieldClass} font-mono tracking-[0.3em]`} autofocus={codeSent} />
+          <input id="trackOrderCode" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" class={`${fieldClass} font-mono tracking-[0.3em]`} autofocus={firstInvalid === "code" || (!firstInvalid && codeSent)} {...invalid("code", "trackOrderCodeError")} />
+          <p id="trackOrderCodeError" data-field-error="code" class={errorClass} hidden={!fieldErrors.code}>{fieldErrors.code}</p>
         </div>
 
         <p data-order-code-message aria-live="polite" class={`min-h-5 text-sm ${failed ? "text-destructive" : "text-muted-foreground"}`}>{message}</p>
@@ -161,7 +172,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
 
 <script>
   import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
-  import { readOrderLookupInput } from "@/lib/order-lookup";
+  import { getOrderLookupFieldErrors } from "@/lib/order-lookup";
   import { enhanceOrderCodeForm } from "@/lib/order-lookup-form";
 
   // The page always inlines its copy above this module.
@@ -172,11 +183,7 @@ const serializedCopy = serializeJsonForInlineScript({ languageData: copy });
       verifyCode: copy.orderReceiptViewOrderText,
       codeSent: copy.trackOrderCodeSentText,
       unavailable: copy.trackOrderUnavailableText,
-      validate: (fields) => {
-        const input = readOrderLookupInput(fields.reference ?? "", fields.phone ?? "");
-        if (input.ok) return null;
-        return input.field === "reference" ? copy.trackOrderNumberInvalidText : copy.trackOrderPhoneInvalidText;
-      },
+      validate: (fields) => getOrderLookupFieldErrors(copy, fields.reference ?? "", fields.phone ?? ""),
     });
   }
 </script>

@@ -123,8 +123,9 @@ function verifiedResult(
   return { ok: true, data: { orderId, receiptToken, redirectUrl: redirectUrl(orderId, result.data) } };
 }
 
-function receiptUrl(orderId: string): string {
-  return `/order-success?${new URLSearchParams({ orderId })}`;
+/** A tracked order opens as a status page, not the checkout confirmation. */
+function trackedReceiptUrl(orderId: string): string {
+  return `/order-success?${new URLSearchParams({ orderId, view: "status" })}`;
 }
 
 /** Track your order: the buyer holds the number and phone, so the API says where the code went. */
@@ -142,7 +143,7 @@ export async function verifyOrderLookupCode(input: { reference: string; phone: s
       fallbackCode: "ORDER_LOOKUP_VERIFICATION_FAILED",
     }),
     null,
-    receiptUrl,
+    trackedReceiptUrl,
     "ORDER_LOOKUP_RECEIPT_UNAVAILABLE",
   );
 }

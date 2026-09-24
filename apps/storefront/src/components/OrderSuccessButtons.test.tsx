@@ -190,6 +190,31 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     expect(button("Save to my account")?.disabled).toBe(false);
   });
 
+  it("offers Continue shopping and Track your order on the fresh confirmation", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    await renderReceipt(true);
+
+    expect(host.querySelector('a[href="/"]')?.textContent).toBe("Continue shopping");
+    expect(host.querySelector('a[href="/track-order"]')?.textContent).toBe("Track your order");
+    expect(host.textContent).toContain("Sign in to see this order in your account");
+  });
+
+  it("as a status page, drops Continue shopping and the sign-in-to-track upsell but keeps help", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    await act(async () => {
+      root.render(
+        <OrderSuccessButtons orderId="ord_1" accountLinked accountPrefill={prefill} statusView copy={BANGLA_CHECKOUT_LANGUAGE_DATA} />,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(host.querySelector('a[href="/"]')).toBeNull();
+    expect(host.textContent).not.toContain(BANGLA_CHECKOUT_LANGUAGE_DATA.orderReceiptAccountSignInText);
+    expect(host.textContent).toContain(BANGLA_CHECKOUT_LANGUAGE_DATA.orderReceiptHelpText);
+    expect(host.querySelector('a[href="/track-order"]')?.textContent).toBe(BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderText);
+    expect(button(BANGLA_CHECKOUT_LANGUAGE_DATA.orderReceiptPrintText)).toBeDefined();
+  });
+
   it("renders only the actions returned by eligible-only policy projection", () => {
     act(() => {
       root.render(

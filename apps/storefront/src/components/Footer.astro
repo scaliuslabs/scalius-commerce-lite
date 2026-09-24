@@ -16,6 +16,7 @@ import {
   getStorefrontPrefetchAttribute,
 } from "@/lib/prefetch-policy";
 import { telHref } from "@/lib/store-identity";
+import { TRACK_ORDER_PATH, placeTrackOrderLink } from "@/lib/footer-links";
 
 interface Props {
   footerData: FooterData;
@@ -90,11 +91,13 @@ function convertFlatMenuToNested(menu: FooterMenu): FooterMenuLink[] {
 }
 
 // Convert all menus to have nested links structure
-const menus: Array<FooterMenu & { links: FooterMenuLink[] }> = rawMenus.map(
-  (menu) => ({
+// "Track your order" sits in the Help column when the store has one.
+const { menus, inBottomRow: trackOrderInBottomRow } = placeTrackOrderLink(
+  rawMenus.map((menu): FooterMenu & { links: FooterMenuLink[] } => ({
     ...menu,
     links: convertFlatMenuToNested(menu),
-  })
+  })),
+  "Track your order",
 );
 
 // Policy pages are always one tap away (payment gateways require visible
@@ -209,9 +212,11 @@ if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
           <span class="text-center sm:text-left">
             © {new Date().getFullYear()}{copyrightName && <> <span class="font-semibold">{copyrightName}</span></>}. All rights reserved.
           </span>
-          <a href="/track-order" class="inline-flex min-h-11 items-center underline underline-offset-4 sm:min-h-0">
-            Track your order
-          </a>
+          {trackOrderInBottomRow && (
+            <a href={TRACK_ORDER_PATH} class="inline-flex min-h-11 items-center underline underline-offset-4 sm:min-h-0">
+              Track your order
+            </a>
+          )}
         </div>
 
         {

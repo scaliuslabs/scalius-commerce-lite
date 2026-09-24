@@ -12,6 +12,7 @@ import { getAreas, getCities, getZones } from "@/lib/api/shipping";
 import { getShippingAddressError } from "@/lib/checkout/shipping-address";
 import { getProductImageUrl } from "@/lib/product-media";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import {
@@ -322,7 +323,7 @@ export async function initializeAccountPage(): Promise<void> {
     [fName, () => fName.value.trim() ? null : "Enter your full name."],
     [fAddress, () => getShippingAddressError(fAddress.value)],
     [fCity, () => fCity.value ? null : "Choose a city."],
-    [fZone, () => fCity.value && !fZone.value ? "Choose a zone." : null],
+    [fZone, () => fCity.value && !fZone.value ? copy.zoneRequiredText : null],
   ];
   function validate(show: "all" | "shown"): boolean {
     let firstInvalid: HTMLInputElement | HTMLSelectElement | null = null;
@@ -379,7 +380,7 @@ export async function initializeAccountPage(): Promise<void> {
     setStatus(hasUnavailableLocation()
       ? "Your saved delivery location is no longer available. Choose an available location or clear it before saving."
       : fCity.value && !fZone.value && fZone.options.length <= 1
-        ? "No zones are available for this city. Choose another city."
+        ? "No thanas are available for this city. Choose another city."
         : "");
   }
 
@@ -415,7 +416,7 @@ export async function initializeAccountPage(): Promise<void> {
     const request = ++zoneRead;
     ++areaRead;
     const cityId = fCity.value;
-    setLocationOptions(fZone, [], "Select a zone");
+    setLocationOptions(fZone, [], copy.selectZonePlaceholder);
     setLocationOptions(fArea, [], "Select an area (optional)");
     fZone.disabled = true;
     fArea.disabled = true;
@@ -424,7 +425,7 @@ export async function initializeAccountPage(): Promise<void> {
     const zones = await getZones(cityId);
     if (accountWindow.__scaliusAccountInitRun !== runId || request !== zoneRead) return;
     if (!zones) return showLocationFailure(() => loadZones(savedZone, zoneName, savedArea, areaName));
-    const zoneAvailable = setLocationOptions(fZone, zones, "Select a zone", savedZone, zoneName);
+    const zoneAvailable = setLocationOptions(fZone, zones, copy.selectZonePlaceholder, savedZone, zoneName);
     fZone.disabled = false;
     if (savedZone && zoneAvailable) return loadAreas(savedArea, areaName);
     setLocationOptions(fArea, [], "Select an area (optional)", savedArea, areaName);
@@ -444,7 +445,7 @@ export async function initializeAccountPage(): Promise<void> {
     if (customer.city && cityAvailable) {
       return loadZones(customer.zone ?? "", customer.zoneName, customer.area ?? "", customer.areaName);
     }
-    setLocationOptions(fZone, [], "Select a zone", customer.zone ?? "", customer.zoneName);
+    setLocationOptions(fZone, [], copy.selectZonePlaceholder, customer.zone ?? "", customer.zoneName);
     setLocationOptions(fArea, [], "Select an area (optional)", customer.area ?? "", customer.areaName);
     updateLocationReadiness();
   }

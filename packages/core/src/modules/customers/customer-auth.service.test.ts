@@ -87,7 +87,7 @@ const verifyPhone = (phone: string, code: string, account?: NewAccountDetails) =
 
 async function createEmailAccount(email: string, phone: string, name = "Buyer Five") {
   const code = await sendEmailCode(email);
-  await expect(verifyEmail(email, code)).resolves.toEqual({ status: "needs_account_details" });
+  await expect(verifyEmail(email, code)).resolves.toMatchObject({ status: "needs_account_details" });
   const created = await verifyEmail(email, code, { name, phone });
   if (created.status !== "signed_in") throw new Error("account was not created");
   return created;
@@ -292,7 +292,7 @@ describe("guest checkout contacts never lock a buyer out (BA-01)", () => {
 
     // The inbox owner proves the email: they are a new buyer, not "the other account".
     const code = await sendEmailCode(BUYER_EMAIL);
-    await expect(verifyEmail(BUYER_EMAIL, code)).resolves.toEqual({ status: "needs_account_details" });
+    await expect(verifyEmail(BUYER_EMAIL, code)).resolves.toEqual({ status: "needs_account_details", suggestion: null });
     const own = await verifyEmail(BUYER_EMAIL, code, { name: "Buyer Five", phone: BUYER_PHONE });
     expect(own.status).toBe("signed_in");
     if (own.status !== "signed_in" || other.status !== "signed_in") return;
@@ -309,7 +309,7 @@ describe("one sign-in flow", () => {
     const code = await sendEmailCode("new@example.test");
     expect(customerRows()).toEqual([]);
 
-    await expect(verifyEmail("new@example.test", code)).resolves.toEqual({ status: "needs_account_details" });
+    await expect(verifyEmail("new@example.test", code)).resolves.toEqual({ status: "needs_account_details", suggestion: null });
     // The proven code stays usable for the details step; details are validated.
     await expect(verifyEmail("new@example.test", code, { name: " ", phone: BUYER_PHONE }))
       .rejects.toThrow("Enter your name.");
@@ -323,6 +323,36 @@ describe("one sign-in flow", () => {
     ]);
     // A used code cannot be replayed.
     await expect(verifyEmail("new@example.test", code)).rejects.toThrow("That code was already used.");
+  });
+
+  it("pre-fills a new buyer from their latest order and saves its address only when asked (R2-SJ-09)", async () => {
+    await placeGuestOrder({ phone: STRANGER_PHONE, email: "Rahim@Example.test", name: "Old Name" });
+    await placeGuestOrder({ phone: BUYER_PHONE, email: "rahim@example.test", name: "Rahim Uddin" });
+    const orderNumber = sqlite.prepare(
+      "SELECT order_number AS n FROM orders WHERE customer_phone = ? ORDER BY created_at DESC LIMIT 1",
+    ).get(BUYER_PHONE)?.n;
+
+    const code = await sendEmailCode("rahim@example.test");
+    await expect(verifyEmail("rahim@example.test", code)).resolves.toEqual({
+      status: "needs_account_details",
+      suggestion: {
+        name: "Rahim Uddin",
+        phone: BUYER_PHONE,
+        email: "rahim@example.test",
+        address: { orderNumber, text: "House 9, Road 9, Mirpur, Dhaka" },
+      },
+    });
+
+    const created = await verifyEmail("rahim@example.test", code, { name: "Rahim Uddin", phone: BUYER_PHONE, saveOrderAddress: true });
+    if (created.status !== "signed_in") throw new Error("account was not created");
+    expect(customerById(created.customer.customerId!)).toMatchObject({ address: "House 9, Road 9, Mirpur", zoneName: "Mirpur" });
+
+    // Without asking, nothing from the order is saved.
+    await placeGuestOrder({ phone: STRANGER_PHONE, email: "karim@example.test", name: "Karim" });
+    const karimCode = await sendEmailCode("karim@example.test");
+    const karim = await verifyEmail("karim@example.test", karimCode, { name: "Karim", phone: STRANGER_PHONE });
+    if (karim.status !== "signed_in") throw new Error("account was not created");
+    expect(customerById(karim.customer.customerId!)).toMatchObject({ address: null, zoneName: null });
   });
 
   it("reveals nothing about accounts to someone without the code", async () => {
@@ -411,7 +441,7 @@ describe("codes and limits (BA-02, BA-15)", () => {
     expect((ceiling as RateLimitError).message).toBe("Too many codes. Enter the latest code we sent.");
     const expiresAt = Number(sqlite.prepare("SELECT expires_at AS e FROM customer_auth_otp_challenges").get()?.e);
     expect(expiresAt - Math.floor(Date.now() / 1000)).toBeGreaterThan(20 * 60);
-    await expect(verifyEmail(BUYER_EMAIL, latest)).resolves.toEqual({ status: "needs_account_details" });
+    await expect(verifyEmail(BUYER_EMAIL, latest)).resolves.toEqual({ status: "needs_account_details", suggestion: null });
   });
 
   it("limits codes per email, not per shared carrier IP", async () => {

@@ -9,7 +9,7 @@
 // block anyone from signing in.
 
 import { nanoid } from "nanoid";
-import { customers, customerSessions, deliveryLocations } from "@scalius/database/schema";
+import { customers, customerSessions, deliveryLocations, orders } from "@scalius/database/schema";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -119,6 +119,19 @@ export interface NewAccountDetails {
     name: string;
     phone?: string;
     email?: string;
+    /** Save the delivery address of the latest order placed with the proven contact. */
+    saveOrderAddress?: boolean;
+}
+
+/**
+ * What the store already knows about a new buyer, from the latest order placed
+ * with the email/phone they just proved: shown pre-filled, never saved unasked.
+ */
+export interface NewAccountSuggestion {
+    name: string | null;
+    phone: string | null;
+    email: string | null;
+    address: { orderNumber: number | null; text: string } | null;
 }
 
 export interface VerifyOtpInput {
@@ -135,6 +148,7 @@ export type VerifyOtpResult =
     | {
         /** The code is right but this email/phone has no account: ask for name (and phone). */
         status: "needs_account_details";
+        suggestion: NewAccountSuggestion | null;
     }
     | {
         status: "signed_in";
@@ -646,8 +660,9 @@ export async function verifyOtp(
         if (owner.kind === "deleted") {
             throw new ValidationError("This account was closed. Contact the store to restore it.");
         }
-        newAccount = await prepareNewAccount(db, input, identifier, channel, policy, phoneCountryPolicy);
-        if (!newAccount) return { status: "needs_account_details" };
+        const latestOrder = await latestOrderForProvenContact(db, input.method, identifier);
+        newAccount = await prepareNewAccount(db, input, identifier, channel, policy, phoneCountryPolicy, latestOrder);
+        if (!newAccount) return { status: "needs_account_details", suggestion: suggestNewAccount(latestOrder) };
     }
     await claimCustomerAuthOtpChallenge(db, challengeInput);
 
@@ -693,6 +708,56 @@ function markProven(row: CustomerRow, method: "email" | "phone", at: Date): Cust
     };
 }
 
+type LatestContactOrder = Awaited<ReturnType<typeof latestOrderForProvenContact>>;
+
+/** The latest order placed with a contact the buyer has just proven by code. */
+async function latestOrderForProvenContact(db: Database, method: "email" | "phone", identifier: string) {
+    return await db
+        .select({
+            orderNumber: orders.orderNumber,
+            customerName: orders.customerName,
+            customerPhone: orders.customerPhone,
+            customerEmail: orders.customerEmail,
+            shippingAddress: orders.shippingAddress,
+            city: orders.city,
+            zone: orders.zone,
+            area: orders.area,
+            cityName: orders.cityName,
+            zoneName: orders.zoneName,
+            areaName: orders.areaName,
+        })
+        .from(orders)
+        .where(and(
+            method === "email"
+                ? sql`lower(trim(${orders.customerEmail})) = ${identifier}`
+                : eq(orders.customerPhone, identifier),
+            isNull(orders.deletedAt),
+        ))
+        .orderBy(desc(orders.createdAt))
+        .limit(1)
+        .get() ?? null;
+}
+
+function suggestNewAccount(order: LatestContactOrder | null): NewAccountSuggestion | null {
+    if (!order) return null;
+    const address = order.shippingAddress?.trim();
+    return {
+        name: order.customerName?.trim() || null,
+        phone: order.customerPhone?.trim() || null,
+        email: order.customerEmail?.trim() || null,
+        address: address
+            ? {
+                orderNumber: order.orderNumber ?? null,
+                // "House 9, Mirpur" + Mirpur, Dhaka reads "House 9, Mirpur, Dhaka".
+                text: [order.areaName, order.zoneName, order.cityName].reduce<string>((text, part) => {
+                    const value = part?.trim();
+                    return value && !text.toLowerCase().includes(value.toLowerCase()) ? `${text}, ${value}` : text;
+                }, address),
+            }
+            : null,
+    };
+}
+
 /**
  * Validates the details a new buyer adds after proving an email or phone
  * that has no account. Returns null when the details were not sent yet.
@@ -704,6 +769,7 @@ async function prepareNewAccount(
     channel: CustomerAuthOtpChannel,
     policy: CustomerAuthPolicyConfig,
     phoneCountryPolicy: PhoneCountryPolicy,
+    latestOrder: LatestContactOrder | null,
 ): Promise<{ row: CustomerRow; write: SQLiteBatchItem } | null> {
     if (!input.account) return null;
     const name = input.account.name?.trim();
@@ -736,6 +802,18 @@ async function prepareNewAccount(
         name,
         email,
         phone,
+        // Asked for by the buyer, and read here from the order, never from the request.
+        ...(input.account.saveOrderAddress && latestOrder?.shippingAddress?.trim()
+            ? {
+                address: latestOrder.shippingAddress.trim(),
+                city: latestOrder.city,
+                zone: latestOrder.zone,
+                area: latestOrder.area,
+                cityName: latestOrder.cityName,
+                zoneName: latestOrder.zoneName,
+                areaName: latestOrder.areaName,
+            }
+            : {}),
         ...proof,
         createdAt: now,
         updatedAt: now,

@@ -8,6 +8,7 @@ import {
 import {
   formatCountdown,
   getOrderCodeFailureText,
+  getOrderLookupFieldErrors,
   normalizeOrderReference,
   readOrderLookupInput,
 } from "./order-lookup";
@@ -43,6 +44,17 @@ describe("order lookup input", () => {
     expect(readOrderLookupInput("", "")).toEqual({ ok: false, field: "reference" });
     expect(readOrderLookupInput("1001", "0171234")).toEqual({ ok: false, field: "phone" });
     expect(readOrderLookupInput("1001", "01212345678")).toEqual({ ok: false, field: "phone" });
+  });
+
+  it("gives every field its own message at once", () => {
+    expect(getOrderLookupFieldErrors(en, "", "")).toEqual({
+      reference: en.trackOrderNumberInvalidText,
+      phone: en.trackOrderPhoneInvalidText,
+    });
+    expect(getOrderLookupFieldErrors(BANGLA_CHECKOUT_LANGUAGE_DATA, "#1001", "0171234")).toEqual({
+      phone: BANGLA_CHECKOUT_LANGUAGE_DATA.trackOrderPhoneInvalidText,
+    });
+    expect(getOrderLookupFieldErrors(en, "১০০১", "০১৭১২-৩৪৫৬৭৮")).toEqual({});
   });
 });
 

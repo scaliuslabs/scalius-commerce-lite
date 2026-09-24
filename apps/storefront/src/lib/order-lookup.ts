@@ -41,6 +41,20 @@ export function readOrderLookupInput(reference: string, phone: string): OrderLoo
   return { ok: true, reference: normalizedReference, phone: normalizedPhone };
 }
 
+export type OrderLookupFieldErrors = Partial<Record<"reference" | "phone", string>>;
+
+/** Each lookup field's own message, so the form shows every problem at once. */
+export function getOrderLookupFieldErrors(
+  copy: Pick<CheckoutLanguageData, "trackOrderNumberInvalidText" | "trackOrderPhoneInvalidText">,
+  reference: string,
+  phone: string,
+): OrderLookupFieldErrors {
+  return {
+    ...(normalizeOrderReference(reference) ? {} : { reference: copy.trackOrderNumberInvalidText }),
+    ...(normalizeBdMobile(phone) ? {} : { phone: copy.trackOrderPhoneInvalidText }),
+  };
+}
+
 /** 45 → "0:45", 120 → "2:00". */
 export function formatCountdown(totalSeconds: number): string {
   const seconds = Math.max(0, Math.ceil(totalSeconds));

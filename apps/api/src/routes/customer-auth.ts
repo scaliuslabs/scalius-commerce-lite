@@ -37,6 +37,9 @@ import {
 } from "@scalius/core/modules/customers/customers.service";
 import { claimGuestOrderToAccount } from "@scalius/core/modules/customers/order-account-claim";
 import { linkVerifiedContactOrders } from "@scalius/core/modules/customers/customer-identity";
+import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
+import { orderDiscountLineSchema, presentOrderDiscountLines } from "../schemas/storefront-discounts";
+import { buyerOrderProgressSchema, buyerOrderTimelineSchema } from "../schemas/order-tracking";
 import {
   createCustomerOrderSupportRequest,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
@@ -197,6 +200,9 @@ const verifyOtpRoute = createRoute({
               name: z.string().trim().max(120),
               phone: z.string().trim().max(32).optional(),
               email: z.string().trim().max(254).optional(),
+              saveOrderAddress: z.boolean().optional().openapi({
+                description: "Save the delivery address of the latest order placed with the proven contact (from `suggestion.address`).",
+              }),
             }).optional().openapi({ description: "Only for a new account, after status needs_account_details" }),
           }),
         },
@@ -212,6 +218,17 @@ const verifyOtpRoute = createRoute({
             status: z.enum(["signed_in", "needs_account_details"]),
             customer: customerAuthProfileSchema.optional(),
             isNewUser: z.boolean().optional(),
+            suggestion: z.object({
+              name: z.string().nullable(),
+              phone: z.string().nullable(),
+              email: z.string().nullable(),
+              address: z.object({
+                orderNumber: z.number().int().nullable(),
+                text: z.string(),
+              }).nullable(),
+            }).nullable().optional().openapi({
+              description: "With needs_account_details: what the latest order placed with the proven contact says, to pre-fill.",
+            }),
           })),
         },
       },
@@ -235,7 +252,7 @@ app.openapi(verifyOtpRoute, async (c) => {
     sessionHashKey: getCustomerSessionHashKey(env),
   });
   if (result.status === "needs_account_details") {
-    return ok(c, { status: result.status });
+    return ok(c, { status: result.status, suggestion: result.suggestion });
   }
 
   const { sameSite, domainAttr } = getCookieConfig(
@@ -821,27 +838,10 @@ const customerOrderDetailSchema = z.object({
     collectedAt: nullableTimestampSchema,
     updatedAt: nullableTimestampSchema,
   }).passthrough().nullable(),
-  progress: z.object({
-    steps: z.array(z.object({
-      key: z.enum(["placed", "confirmed", "shipped", "delivered"]),
-      label: z.string(),
-      done: z.boolean(),
-      happenedAt: nullableTimestampSchema,
-    })),
-    outcome: z.object({
-      key: z.string(),
-      label: z.string(),
-      happenedAt: nullableTimestampSchema,
-    }).nullable(),
-  }),
-  timeline: z.array(z.object({
-    id: z.string(),
-    type: z.enum(["order", "payment", "refund", "request"]),
-    status: z.string(),
-    label: z.string(),
-    happenedAt: nullableTimestampSchema,
-    details: z.string().nullable().optional(),
-  })),
+  progress: buyerOrderProgressSchema,
+  timeline: buyerOrderTimelineSchema,
+  /** Each discount the order used: `amount` off the items, `shippingAmount` off delivery. */
+  discounts: z.array(orderDiscountLineSchema),
   paymentRecovery: customerPaymentRecoverySchema,
 });
 
@@ -878,8 +878,9 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
 
   const orderId = c.req.valid("param").id;
   const order = await getCustomerOwnedOrderForDetail(c.get("db"), session.customerId, orderId);
-  const [detail, paymentRecovery] = await Promise.all([
+  const [detail, discountLines, paymentRecovery] = await Promise.all([
     getCustomerOrderDetailForOrder(c.get("db"), order),
+    listOrderDiscountLines(c.get("db"), orderId),
     resolveCustomerPaymentSessionRecovery(c, {
       orderId,
       expectedCustomerId: session.customerId,
@@ -887,7 +888,11 @@ app.openapi(getCustomerOrderDetailRoute, async (c) => {
     }),
   ]);
 
-  return ok(c, { ...detail, paymentRecovery });
+  return ok(c, {
+    ...detail,
+    discounts: presentOrderDiscountLines(discountLines, order.currencyDecimalPlaces),
+    paymentRecovery,
+  });
 });
 
 const createCustomerOrderSupportRequestRoute = createRoute({
