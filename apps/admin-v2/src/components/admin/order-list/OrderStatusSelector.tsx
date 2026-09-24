@@ -3,7 +3,7 @@ import { ChevronDown, LoaderCircle } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
-import { getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy";
+import { getAdminOrderStatusOptions, type AdminOrderStatusFacts } from "~/lib/admin-order-status-policy";
 import { useMessages } from "~/i18n";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 
@@ -15,8 +15,8 @@ const LazyOrderStatusSelectorMenu = lazy(() =>
 
 interface OrderStatusSelectorProps {
   status: string;
-  paymentStatus: string | null;
-  paidAmount: number;
+  /** Payment and delivery facts that decide which next statuses can be chosen. */
+  facts: AdminOrderStatusFacts;
   isLoading: boolean;
   /** Why the status can't change right now; the selector is read-only when set. */
   lockedReason?: string;
@@ -26,8 +26,7 @@ interface OrderStatusSelectorProps {
 /** Order status with an inline menu of the allowed next statuses. */
 export function OrderStatusSelector({
   status,
-  paymentStatus,
-  paidAmount,
+  facts,
   isLoading,
   lockedReason,
   onStatusUpdate,
@@ -53,7 +52,7 @@ export function OrderStatusSelector({
   );
 
   // A final status (e.g. Cancelled) reads as plain status, without a menu that offers nothing.
-  if (lockedReason || getAdminOrderStatusTransitions(status, { paymentStatus, paidAmount }).length === 0) {
+  if (lockedReason || getAdminOrderStatusOptions(status, facts).length === 0) {
     return (
       <Badge variant={statusBadgeVariant(status, "order")} title={lockedReason}>
         {label}
@@ -83,8 +82,7 @@ export function OrderStatusSelector({
     <Suspense fallback={trigger}>
       <LazyOrderStatusSelectorMenu
         status={status}
-        paymentStatus={paymentStatus}
-        paidAmount={paidAmount}
+        facts={facts}
         open={open}
         onOpenChange={setOpen}
         onStatusUpdate={onStatusUpdate}

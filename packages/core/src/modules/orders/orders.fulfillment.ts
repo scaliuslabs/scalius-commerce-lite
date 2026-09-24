@@ -1708,9 +1708,14 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     const isDeliveredOrCompleted = nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED;
     if (isDeliveredOrCompleted) {
         const currency = resolveOrderCurrencySnapshot(existingOrder);
+        // A partly refunded order was paid in full: its net paid amount is
+        // below the total because money went back, not because any is owed.
+        const partlyRefunded = existingOrder.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
         const hasMoneyDue = existingOrder.balanceDueMinor > 0
-            || existingOrder.totalAmountMinor > existingOrder.paidAmountMinor;
-        if (hasMoneyDue || existingOrder.paymentStatus !== PaymentStatus.PAID) {
+            || (!partlyRefunded && existingOrder.totalAmountMinor > existingOrder.paidAmountMinor);
+        const settled = existingOrder.paymentStatus === PaymentStatus.PAID
+            || existingOrder.paymentStatus === PaymentStatus.PARTIALLY_REFUNDED;
+        if (hasMoneyDue || !settled) {
             throw new ValidationError(
                 existingOrder.paymentMethod === PaymentMethod.COD
                     ? "Mark the cash as collected first."
