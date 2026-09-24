@@ -129,18 +129,6 @@ export function validateAndFormatPhone(
 }
 
 /**
- * Format E.164 phone for display (international format).
- */
-export function formatPhoneForDisplay(e164: string): string {
-  try {
-    const parsed = parsePhoneNumber(e164);
-    return parsed ? parsed.formatInternational() : e164;
-  } catch {
-    return e164;
-  }
-}
-
-/**
  * Format E.164 phone to local/national format for delivery providers.
  * E.g., "+8801712345678" → "01712345678" (strips country code, keeps leading 0)
  * Falls back to stripping "+" if parsing fails.

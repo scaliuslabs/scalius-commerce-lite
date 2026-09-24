@@ -2,10 +2,6 @@ import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, Palette, Store, Truck } from "lucide-react";
-import {
-  getApiV1AdminInventoryAlerts,
-  getApiV1AdminOrders,
-} from "@scalius/api-client/sdk";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
@@ -17,20 +13,35 @@ import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { DashboardSalesChart } from "~/components/admin/DashboardSalesChart";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
-import { apiData } from "~/lib/api";
 import { canAccessAdminPath } from "~/lib/admin-access";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { dashboardActivityQueryOptions, dashboardSummaryQueryOptions } from "~/lib/api-query-options/dashboard-home";
+import {
+  HOME_FEED_STALE_TIME_MS,
+  dashboardActivityQueryOptions,
+  dashboardSummaryQueryOptions,
+  homeLowStockQueryOptions,
+  homeOpenOrdersQueryOptions,
+} from "~/lib/api-query-options/dashboard-home";
+import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
 import { countFeedGaps, feedDiagnosticsQueryOptions, navigationPlacementsQueryOptions } from "~/lib/api-query-options/online-store";
-import { formatDateTime, formatNumber, translate, useMessages } from "~/i18n";
+import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { homeMessages } from "~/i18n/home";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/")({
-  loader: ({ context: { queryClient } }) => {
+  // Every Home read starts here, in one round trip, rather than after the
+  // page's code has loaded and rendered.
+  loader: ({ context: { queryClient, permissions, isSuperAdmin } }) => {
+    const canOpen = (to: string) => canAccessAdminPath(to, { permissions, isSuperAdmin });
     void queryClient.prefetchQuery(dashboardSummaryQueryOptions());
     void queryClient.prefetchQuery(dashboardActivityQueryOptions());
+    void queryClient.prefetchQuery(currencySettingsQueryOptions());
+    if (canOpen("/admin/orders")) void queryClient.prefetchQuery(homeOpenOrdersQueryOptions());
+    if (canOpen("/admin/inventory")) void queryClient.prefetchQuery(homeLowStockQueryOptions());
+    if (canOpen("/admin/online-store/preferences")) void queryClient.prefetchQuery({ ...feedDiagnosticsQueryOptions(), staleTime: HOME_FEED_STALE_TIME_MS });
+    if (canOpen("/admin/online-store/navigation")) void queryClient.prefetchQuery(navigationPlacementsQueryOptions());
   },
-  head: () => ({ meta: [{ title: translate(homeMessages, "home") }] }),
+  head: () => pageHead("home"),
   errorComponent: RouteErrorComponent,
   component: HomePage,
 });
@@ -48,22 +59,14 @@ function HomePage() {
   const canOpen = (to: string) => canAccessAdminPath(to, { permissions, isSuperAdmin });
   const summary = useQuery(dashboardSummaryQueryOptions());
   const activity = useQuery(dashboardActivityQueryOptions());
-  const openOrders = useQuery({
-    queryKey: ["home", "open-orders"],
-    queryFn: () => apiData(getApiV1AdminOrders({ query: { view: "unfulfilled", limit: 1 } })),
-    enabled: canOpen("/admin/orders"),
-  });
-  const lowStock = useQuery({
-    queryKey: ["home", "low-stock"],
-    queryFn: () => apiData(getApiV1AdminInventoryAlerts({ query: { status: "active" } })),
-    enabled: canOpen("/admin/inventory"),
-  });
+  const openOrders = useQuery({ ...homeOpenOrdersQueryOptions(), enabled: canOpen("/admin/orders") });
+  const lowStock = useQuery({ ...homeLowStockQueryOptions(), enabled: canOpen("/admin/inventory") });
   // Store readiness (Shopify's Home tasks): products the product feed leaves
   // out for a fixable reason, and a storefront header without a menu.
   const feed = useQuery({
     ...feedDiagnosticsQueryOptions(),
     enabled: canOpen("/admin/online-store/preferences"),
-    staleTime: 5 * 60_000,
+    staleTime: HOME_FEED_STALE_TIME_MS,
   });
   const placements = useQuery({ ...navigationPlacementsQueryOptions(), enabled: canOpen("/admin/online-store/navigation") });
 

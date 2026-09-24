@@ -1,8 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ForgotPasswordForm } from "~/components/auth/ForgotPasswordForm";
-import { translate } from "~/i18n";
-import { authMessages } from "~/i18n/auth";
 import { readDashboardSession } from "~/lib/auth-guards";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/auth/forgot-password")({
   beforeLoad: async () => {
@@ -11,7 +10,7 @@ export const Route = createFileRoute("/auth/forgot-password")({
     if (session && !session.user.mustChangePassword) throw redirect({ to: "/admin" });
     return { signedInEmail: session?.user.email };
   },
-  head: () => ({ meta: [{ title: `${translate(authMessages, "forgotTitle")} · Scalius` }] }),
+  head: () => pageHead("forgotPassword"),
   component: ForgotPasswordPage,
 });
 

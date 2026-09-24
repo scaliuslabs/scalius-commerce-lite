@@ -8,7 +8,7 @@ import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions"
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { formatLocationParts } from "~/lib/location-presentation";
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { customerContactLinks } from "./contact-links";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import type { Order } from "./types";

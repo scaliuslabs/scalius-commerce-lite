@@ -24,9 +24,10 @@ import { sortHeader } from "~/components/admin/resource/columns";
 import { AttributeDialog } from "~/components/admin/attributes-manager/components/AttributeDialog";
 import { AttributeValueEditor } from "~/components/admin/attributes-manager/components/AttributeValueEditor";
 import { AttributeValuesViewer } from "~/components/admin/attributes-manager/components/AttributeValuesViewer";
-import { formatNumber, translate, useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 import { dataTableMessages } from "~/i18n/data-table";
+import { pageHead } from "~/i18n/page-titles";
 
 const validateAttributeSearch = createListSearchValidator(
   ["name", "slug", "filterable", "updatedAt"] as const,
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/admin/attributes")({
   validateSearch: validateAttributeSearch,
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("attributes", deps), deps.q))),
-  head: () => ({ meta: [{ title: translate(catalogMessages, "attributes") }] }),
+  head: () => pageHead("attributes"),
   component: AttributesPage,
   errorComponent: RouteErrorComponent,
 });

@@ -20,10 +20,10 @@ import {
   summarizeDraft,
   validateDraft,
   type DiscountDraft,
-  type DiscountType,
   type Scope,
   type SummaryFormat,
 } from "./discount-form";
+import type { DiscountType } from "./discount-kinds";
 import { ScopeField, useScopeItems, useScopeLabel } from "./ScopeField";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";

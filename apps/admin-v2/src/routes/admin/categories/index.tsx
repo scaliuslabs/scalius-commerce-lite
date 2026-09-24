@@ -24,8 +24,9 @@ import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
 import { Badge } from "~/components/ui/badge";
 import { DateText, Thumb, sortHeader } from "~/components/admin/resource/columns";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
+import { pageHead } from "~/i18n/page-titles";
 
 const STATUSES = ["published", "draft", "internal"] as const;
 const validateBase = createListSearchValidator(["name", "status", "createdAt", "updatedAt"] as const, { sort: "updatedAt" });
@@ -50,7 +51,7 @@ export const Route = createFileRoute("/admin/categories/")({
   validateSearch: validateCategorySearch,
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("categories", deps, "status"), deps.q))),
-  head: () => ({ meta: [{ title: translate(catalogMessages, "categories") }] }),
+  head: () => pageHead("categories"),
   component: CategoriesPage,
   errorComponent: RouteErrorComponent,
 });

@@ -7,8 +7,7 @@ import {
 import { validateAbandonedCheckoutSearch } from "~/lib/abandoned-checkout-route-state";
 import type { SearchValidatorInput } from "~/lib/list-helpers";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { translate } from "~/i18n";
-import { orderListMessages } from "~/i18n/order-list";
+import { pageHead } from "~/i18n/page-titles";
 
 /** Page, sort and order live in the URL; the search term stays in this tab's session. */
 function validateSearch(search: SearchValidatorInput<AbandonedCheckoutListState>): AbandonedCheckoutListState {
@@ -25,9 +24,7 @@ export const Route = createFileRoute("/admin/orders/_list/abandoned")({
       stripSearchParams({ page: 1, limit: 20, sort: "updatedAt", order: "desc" }),
     ],
   },
-  head: () => ({
-    meta: [{ title: `${translate(orderListMessages, "abandonedTitle")} | Scalius` }],
-  }),
+  head: () => pageHead("abandonedCheckouts"),
   errorComponent: RouteErrorComponent,
   component: AbandonedCheckoutsPage,
 });

@@ -18,6 +18,7 @@ import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
 import { apiData } from "~/lib/api";
 import { getAdminRouteContext } from "~/lib/admin-route-context";
+import { pageTitleMessages } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/invoice/$orderId")({
   // Same sign-in gates as the admin shell; the invoice API enforces RBAC.
@@ -32,8 +33,8 @@ export const Route = createFileRoute("/invoice/$orderId")({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       {
         title: loaderData
-          ? `${translate(orderDetailMessages, "invoice.title")} ${formatOrderNumber(loaderData.order.orderNumber, loaderData.order.id)} | Scalius`
-          : `${translate(orderDetailMessages, "invoice.title")} | Scalius`,
+          ? `${translate(pageTitleMessages, "invoice")} ${formatOrderNumber(loaderData.order.orderNumber, loaderData.order.id)} · Scalius`
+          : `${translate(pageTitleMessages, "invoice")} · Scalius`,
       },
     ],
   }),

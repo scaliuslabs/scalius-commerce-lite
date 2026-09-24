@@ -32,7 +32,7 @@ All phone numbers are validated and stored in **E.164 format** (e.g. `+880171234
 
 - **`phoneNumberSchema`** (`@scalius/shared/customer-utils`): Zod transform that calls `validateAndFormatPhone()` -- validates via `libphonenumber-js` and returns E.164. Used in admin CRUD validation.
 - **`validateAndFormatPhone()`** (`@scalius/shared/customer-utils`): Validates any phone input and returns E.164. Supports all international formats. Optionally applies the merchant include/exclude country policy from the `customer_countries` settings document. Customer auth and the trusted admin customer/manual-order write boundaries enforce that policy; dashboard phone pickers are guidance, not authority.
-- **`formatPhoneForDisplay()`** (`@scalius/shared/customer-utils`): Converts E.164 back to international display format (e.g. `+880 1712-345678`).
+- **`formatPhoneForDisplay()`** (`@scalius/shared/phone-input`): Shows an E.164 number for reading (`+880 1712 345678`; other countries as `+44 7700900123`) without phone metadata, so dashboard lists stay light.
 
 Both admin-created and storefront-created customers now use the same E.164 format, eliminating the previous format mismatch.
 
@@ -153,7 +153,7 @@ Customer account order history uses keyset pagination over `(orders.createdAt, o
 ## Dependencies
 
 - `@scalius/database` -- `customers`, `customerHistory`, `customerAuthOtpChallenges`, `customerAuthOtpRateLimits`, `customerSessions`, `authOtpDeliveryReceipts`, `deliveryLocations`, `deliveryShipments`, `deliveryProviders`, `settings`, `orders`
-- `@scalius/shared/customer-utils` -- `phoneNumberSchema`, `validateAndFormatPhone`, `isValidPhoneNumber`, `formatPhoneForDisplay`, `calculateCustomerStats`
+- `@scalius/shared/customer-utils` -- `phoneNumberSchema`, `validateAndFormatPhone`, `isValidPhoneNumber`, `calculateCustomerStats`; `@scalius/shared/phone-input` -- `formatPhoneForDisplay`
 - `@scalius/core/errors` -- `ValidationError`, `ForbiddenError`, `RateLimitError`, `ServiceUnavailableError`
 - `@scalius/core/search` -- `ftsMatch` for FTS5 search
 - Cloudflare KV (`CACHE` binding) -- no customer-auth OTP send/verify/session authority; legacy/generic cache binding only

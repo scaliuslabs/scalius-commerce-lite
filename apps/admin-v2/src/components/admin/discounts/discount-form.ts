@@ -9,9 +9,8 @@ import { requiresWholeCashAmounts } from "@scalius/shared/money";
 import type { DiscountMessageKey } from "~/i18n/discounts";
 import type { DiscountInput, DiscountRecord } from "~/lib/api-query-options/discounts";
 import { ADMIN_TIME_ZONE } from "~/lib/admin-time";
+import type { DiscountType } from "./discount-kinds";
 
-export const DISCOUNT_TYPES = ["products", "buy_get", "order", "shipping"] as const;
-export type DiscountType = (typeof DISCOUNT_TYPES)[number];
 export type DiscountClass = "product" | "order" | "shipping";
 export type ScopeKind = "products" | "collections";
 

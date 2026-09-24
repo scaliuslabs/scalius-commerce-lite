@@ -17,7 +17,8 @@ import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import { apiData } from "~/lib/api";
-import { getAdminUsers, getRbacRoles, type AdminUser, type RbacRole } from "~/lib/api-query-options/rbac";
+import type { AdminUser, RbacRole } from "~/lib/api-query-options/rbac";
+import { rolesQuery, staffQuery } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
@@ -35,9 +36,6 @@ import {
   staffActions,
   togglePermissions,
 } from "./staff-access";
-
-export const staffQuery = { queryKey: queryKeys.adminUsers.list(), queryFn: getAdminUsers };
-export const rolesQuery = { queryKey: queryKeys.rbac.roles(), queryFn: getRbacRoles };
 
 export type UsersMessages = (key: keyof typeof usersMessages.en, vars?: Record<string, string | number>) => string;
 

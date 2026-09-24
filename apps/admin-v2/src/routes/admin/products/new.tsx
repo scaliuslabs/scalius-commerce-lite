@@ -8,8 +8,7 @@ import { DEFAULT_PRODUCT_CONDITION, type Category } from "~/components/admin/pro
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
 import type { OptionMatrixEditorHandle, ProductCreateComposition } from "~/components/admin/product-form/variants/option-matrix-editor-model";
-import { translate } from "~/i18n";
-import { productMessages } from "~/i18n/products";
+import { pageHead } from "~/i18n/page-titles";
 
 const OptionMatrixEditor = lazy(() =>
   import("~/components/admin/product-form/variants/OptionMatrixEditor").then((module) => ({
@@ -45,7 +44,7 @@ export const Route = createFileRoute("/admin/products/new")({
       queryClient.ensureQueryData(seoSettingsQueryOptions()).catch(() => null),
     ]);
   },
-  head: () => ({ meta: [{ title: `${translate(productMessages, "addProduct")} | Scalius Admin` }] }),
+  head: () => pageHead("addProduct"),
   errorComponent: RouteErrorComponent,
   component: NewProductPage,
 });

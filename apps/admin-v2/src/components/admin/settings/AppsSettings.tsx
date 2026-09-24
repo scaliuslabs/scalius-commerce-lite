@@ -8,7 +8,6 @@ import {
   deleteApiV1AdminFraudCheckerById,
   getApiV1AdminAnalytics,
   getApiV1AdminAnalyticsByIdSource,
-  getApiV1AdminSettingsMetaConversions,
   getApiV1AdminSettingsMetaConversionsLogs,
   postApiV1AdminAnalytics,
   postApiV1AdminAnalyticsByIdToggle,
@@ -48,6 +47,7 @@ import {
   fraudCheckerProvidersQueryOptions,
   type FraudCheckerProvider,
 } from "~/lib/api-query-options/fraud-checker";
+import { metaQuery, trackingQuery } from "~/lib/api-query-options/settings-screens";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { analyticsFormSchema } from "~/lib/form-schemas";
 import { queryKeys } from "~/lib/query-keys";
@@ -99,12 +99,6 @@ function secretInputProps(value: string, onChange: (value: string) => void) {
 type ScriptSummary = ApiResult<typeof getApiV1AdminAnalytics>["scripts"][number];
 type ScriptSource = ApiResult<typeof getApiV1AdminAnalyticsByIdSource>;
 type Placement = "head" | "body_start" | "body_end";
-
-const TRACKING_PARAMS = { page: 1, limit: 100, sort: "name", order: "asc", trashed: "false" } as const;
-export const trackingQuery = {
-  queryKey: queryKeys.analytics.list(TRACKING_PARAMS),
-  queryFn: () => apiData(getApiV1AdminAnalytics({ query: TRACKING_PARAMS })),
-};
 
 const SCRIPT_MARKS: Partial<Record<string, ProviderMarkId>> = {
   google_analytics: "google-analytics",
@@ -488,10 +482,6 @@ export function TrackingCard() {
 
 type MetaLog = ApiResult<typeof getApiV1AdminSettingsMetaConversionsLogs>["logs"][number];
 
-export const metaQuery = {
-  queryKey: queryKeys.settings.metaConversions(),
-  queryFn: () => apiData(getApiV1AdminSettingsMetaConversions()),
-};
 const EVENTS_PARAMS = { page: 1, limit: 20 } as const;
 
 interface MetaDraft {

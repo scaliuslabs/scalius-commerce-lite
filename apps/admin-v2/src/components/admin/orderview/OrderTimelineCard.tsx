@@ -22,6 +22,7 @@ import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useAddOrderComment, useDeleteOrderComment } from "~/lib/api-mutations/orders";
 import { orderTimelineQueryOptions } from "~/lib/api-query-options/orders";
+import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
 import { describeTimelineEvent } from "~/lib/order-timeline-display";
 import { formatOrderTimestamp } from "./formatters";
@@ -41,7 +42,8 @@ export function OrderTimelineCard({ order }: { order: Order }) {
   // One key per draft: a double Post adds the comment once; a new draft gets a new key.
   const requestKey = useRef<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const query = useQuery({ ...orderTimelineQueryOptions(order.id), enabled: hydrated });
+  // The page's loader read this with the order; revisits within the window reuse it.
+  const query = useQuery({ ...orderTimelineQueryOptions(order.id), enabled: hydrated, staleTime: ORDER_DETAIL_PREFETCH_STALE_MS });
   const mutation = useAddOrderComment();
   const deleteMutation = useDeleteOrderComment();
   const saved = resolveSavedOrderMoneySummary(order);

@@ -3,10 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import {
-  getApiV1AdminSettingsMedia,
   getApiV1AdminSettingsPlatform,
-  getApiV1AdminSettingsSecurity,
-  getApiV1AdminSettingsSecurityRuntimeSources,
   postApiV1AdminSettingsMedia,
   postApiV1AdminSettingsSecurity,
   postApiV1CacheClear,
@@ -21,7 +18,6 @@ import {
 } from "@scalius/shared/platform-config";
 import {
   normalizeMerchantCspSource,
-  parseMerchantCspSources,
   serializeMerchantCspSources,
   type CspSourceProblem,
 } from "@scalius/shared/security-csp";
@@ -33,14 +29,18 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  mediaQuery,
+  platformQuery,
+  trustedWebsitesQuery,
+  type MediaValues,
+} from "~/lib/api-query-options/settings-screens";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { advancedSettingsMessages } from "~/i18n/settings-advanced";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
-import { platformQuery } from "./StoreSettings";
 
 type Platform = Omit<ApiResult<typeof getApiV1AdminSettingsPlatform>, "revision">;
 type Handoff = Platform["identityHandoff"];
@@ -144,22 +144,6 @@ function OriginList({
 
 // ── Trusted websites (storefront content security policy) ───────────────
 
-export const trustedWebsitesQuery = {
-  queryKey: queryKeys.settings.security(),
-  // Platform origins are always trusted, so only merchant additions show.
-  queryFn: async () => {
-    const [security, inherited] = await Promise.all([
-      apiData(getApiV1AdminSettingsSecurity()),
-      apiData(getApiV1AdminSettingsSecurityRuntimeSources()),
-    ]);
-    const platform = new Set(inherited.map((source) => source.source).filter(Boolean));
-    return {
-      sources: parseMerchantCspSources(security.cspAllowedDomains).filter((source) => !platform.has(source)),
-      revision: security.revision,
-    };
-  },
-};
-
 export function TrustedWebsitesCard() {
   const t = useMessages(advancedSettingsMessages);
   const common = useMessages(settingsMessages);
@@ -193,27 +177,6 @@ export function TrustedWebsitesCard() {
 }
 
 // ── Image delivery ──────────────────────────────────────────────────────
-
-interface MediaValues {
-  canonicalCdnUrl: string;
-  aliases: string;
-}
-
-export const mediaQuery = {
-  queryKey: queryKeys.settings.media(),
-  queryFn: async (): Promise<MediaValues & { revision: number }> => {
-    const data = (await apiData(getApiV1AdminSettingsMedia())) as {
-      canonicalCdnUrl?: string;
-      canonicalHostAliases?: string[];
-      revision: number;
-    };
-    return {
-      canonicalCdnUrl: data.canonicalCdnUrl ?? "",
-      aliases: (data.canonicalHostAliases ?? []).join("\n"),
-      revision: data.revision,
-    };
-  },
-};
 
 function hostsFromLines(value: string): string[] {
   return value

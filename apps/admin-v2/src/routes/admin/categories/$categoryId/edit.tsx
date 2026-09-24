@@ -4,8 +4,7 @@ import { CategoryForm } from "~/components/admin/CategoryForm";
 import { categoryQueryOptions } from "~/lib/api-query-options/categories";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
-import { translate } from "~/i18n";
-import { categoryFormMessages } from "~/i18n/category-form";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
   loader: async ({ params, context: { queryClient } }) => {
@@ -23,9 +22,7 @@ export const Route = createFileRoute("/admin/categories/$categoryId/edit")({
       });
     }
   },
-  head: () => ({
-    meta: [{ title: translate(categoryFormMessages, "category") }],
-  }),
+  head: () => pageHead("category"),
   errorComponent: RouteErrorComponent,
   component: EditCategoryPage,
 });

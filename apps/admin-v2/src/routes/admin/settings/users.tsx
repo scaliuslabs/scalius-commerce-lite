@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
-import { RolesCard, StaffCard, rolesQuery, staffQuery } from "~/components/admin/settings/UsersSettings";
+import { RolesCard, StaffCard } from "~/components/admin/settings/UsersSettings";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { usePermissions } from "~/contexts/PermissionContext";
+import { rolesQuery, staffQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/users")({

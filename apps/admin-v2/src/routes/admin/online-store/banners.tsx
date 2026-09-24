@@ -6,8 +6,7 @@ import {
   homepageSectionsQueryOptions,
 } from "~/lib/api-query-options/online-store";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { translate } from "~/i18n";
-import { onlineStoreMessages } from "~/i18n/online-store";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/online-store/banners")({
   loader: ({ context: { queryClient } }) => Promise.all([
@@ -15,7 +14,7 @@ export const Route = createFileRoute("/admin/online-store/banners")({
     queryClient.ensureQueryData(homepageSectionsQueryOptions()),
     queryClient.ensureQueryData(categoryFormOptionsQueryOptions()),
   ]),
-  head: () => ({ meta: [{ title: `${translate(onlineStoreMessages, "bannersTitle")} | Scalius` }] }),
+  head: () => pageHead("homepageBanners"),
   component: BannersPage,
   errorComponent: RouteErrorComponent,
 });
