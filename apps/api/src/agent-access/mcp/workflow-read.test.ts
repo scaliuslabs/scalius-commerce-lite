@@ -21,6 +21,7 @@ vi.mock("../../generated/agent-operations.gen", async (importOriginal) => {
   return {
     ...generated,
     AGENT_WORKFLOW_CATALOG: buildAgentWorkflowCatalog(generated.AGENT_OPERATIONS, {
+      componentSchemas: generated.AGENT_COMPONENT_SCHEMAS,
       requireCuratedCards: true,
     }),
   };

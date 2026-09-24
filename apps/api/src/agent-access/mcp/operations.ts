@@ -1,5 +1,9 @@
-import { AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
+import { AGENT_COMPONENT_SCHEMAS, AGENT_OPERATIONS_BY_ID } from "../../generated/agent-operations.gen";
 import type { AgentOperationManifestEntry } from "../../openapi/agent-operation-manifest";
+import {
+  referencedComponentSchemas,
+  resolveComponentSchemaRef,
+} from "../../openapi/component-schema-refs";
 import { loadAgentAccessBackend } from "../backend";
 import type { AgentResource, AgentPrincipal } from "../types";
 
@@ -53,6 +57,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const MAX_COMPACT_SCHEMA_DEPTH = 7;
 
+/** A schema node with a shared component reference resolved (shallow). */
+function schemaNode(value: unknown): unknown {
+  return resolveComponentSchemaRef(value, AGENT_COMPONENT_SCHEMAS);
+}
+
 function compactSchemaType(schema: Record<string, unknown>): string {
   if (typeof schema.type === "string") return schema.type;
   if (Array.isArray(schema.type)) {
@@ -66,8 +75,11 @@ function compactSchemaType(schema: Record<string, unknown>): string {
   return "unknown";
 }
 
-function compactSchemaDetails(schema: Record<string, unknown>, depth = 0): Record<string, unknown> {
-  const itemSchema = isRecord(schema.items) ? schema.items : null;
+function compactSchemaDetails(node: Record<string, unknown>, depth = 0): Record<string, unknown> {
+  const resolved = schemaNode(node);
+  const schema = isRecord(resolved) ? resolved : node;
+  const items = schemaNode(schema.items);
+  const itemSchema = isRecord(items) ? items : null;
   const alternatives = Array.isArray(schema.oneOf)
     ? schema.oneOf
     : Array.isArray(schema.anyOf)
@@ -102,7 +114,8 @@ function compactSchemaDetails(schema: Record<string, unknown>, depth = 0): Recor
   };
 }
 
-function compactSchema(schema: unknown, depth = 0): Record<string, unknown> {
+function compactSchema(node: unknown, depth = 0): Record<string, unknown> {
+  const schema = schemaNode(node);
   if (!isRecord(schema)) return { type: "unknown" };
   const required = new Set(
     Array.isArray(schema.required)
@@ -141,7 +154,8 @@ function compactInputContract(inputSchema: unknown) {
   const jsonMedia = content && isRecord(content["application/json"])
     ? content["application/json"]
     : null;
-  const bodySchema = jsonMedia && isRecord(jsonMedia.schema) ? jsonMedia.schema : null;
+  const jsonSchema = jsonMedia ? schemaNode(jsonMedia.schema) : null;
+  const bodySchema = isRecord(jsonSchema) ? jsonSchema : null;
   const properties = bodySchema && isRecord(bodySchema.properties)
     ? Object.keys(bodySchema.properties)
     : [];
@@ -201,10 +215,20 @@ function describeOperationCompact(operation: AgentOperationManifestEntry) {
   return description;
 }
 
+/**
+ * The full description is self-contained: shared schemas the operation's
+ * schemas refer to come along once, under `components.schemas`, which is
+ * where their `#/components/schemas/<name>` references point.
+ */
 function describeOperationFull(operation: AgentOperationManifestEntry) {
+  const schemas = referencedComponentSchemas(
+    [operation.inputSchema, operation.outputSchema],
+    AGENT_COMPONENT_SCHEMAS,
+  );
   return {
     ...describeOperationCompact(operation),
     inputSchema: operation.inputSchema,
     outputSchema: operation.outputSchema,
+    ...(Object.keys(schemas).length > 0 ? { components: { schemas } } : {}),
   };
 }
