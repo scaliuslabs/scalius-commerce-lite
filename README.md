@@ -202,6 +202,7 @@ pnpm dev:setup            # Install, write .dev.vars, migrate D1, create admin
 pnpm dev:setup --env-only # Repair missing .dev.vars keys only
 pnpm dev:reset            # Wipe local D1/KV/R2/cache state and recreate the admin
 pnpm dev:admin:create | dev:admin:reset | dev:admin:status
+node scripts/catalog-scale-seed.mjs --state <dir>  # 30k-product load catalogue (docs/STOREFRONT-PERFORMANCE.md)
 
 # Database
 pnpm db:generate          # Generate Drizzle migrations from schema changes

@@ -294,6 +294,32 @@ From Bangladesh, some ISPs reach Cloudflare in Europe (MXP, MAD, CDG, MRS) as
 often as in SIN or HKG, which adds 150-450 ms per TLS connection. Read the colo
 from `cf-ray` before blaming the server.
 
+### Catalogue-scale load data
+
+`scripts/catalog-scale-seed.mjs` fills a migrated local D1 state that you own
+with a deterministic Startech-sized store: 30,000 products, about 83,000 SKUs,
+400 categories, a 300-value Brand attribute plus 30 spec attributes, 75,000
+images, 50 collections, 20,000 customers and 50,000 orders (about 40 s). It
+refuses the shared repo `.wrangler` state and a state that already has
+products.
+
+```sh
+SCALIUS_WRANGLER_STATE=/tmp/catalog-scale/state node scripts/deploy.mjs --migrate-only --local
+node scripts/catalog-scale-seed.mjs --state /tmp/catalog-scale/state
+```
+
+Two opt-in harnesses read it (both skip unless their variable is set):
+
+- `scripts/catalog-scale-profile.test.ts` runs API routes in-process on a
+  Miniflare D1 over a copy of that state and reports, per route, p50/p95,
+  D1 statements, dependent waves and `rows_read` (`CATALOG_SCALE_STATE`,
+  `CATALOG_SCALE_TARGETS`, `CATALOG_SCALE_OUT`; see its header).
+- `apps/storefront/src/lib/route-tests/api/catalog-feed-scale.test.ts` walks
+  the whole XML product feed against a running local API
+  (`CATALOG_SCALE_API`) and reports reads, time, heap and size per window.
+
+Findings and measured timings: `audit/rewrite-2026-09-23/CATALOG-SCALE.md`.
+
 ## Images
 
 - Uploaded images get WebP renditions `media/<id>.<ext>/<w>.webp` on a fixed
