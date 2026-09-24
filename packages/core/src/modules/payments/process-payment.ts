@@ -22,7 +22,7 @@ import { ConflictError } from "@scalius/core/errors";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import type { PaymentType, ProcessPaymentParams } from "./types";
 import { isOnlinePaymentMethod } from "./gateways/registry";
-import { validateTransition } from "../orders/order-state-machine";
+import { validateTransition } from "../orders/status/state-machine";
 import {
   assertNoActiveShipmentClaim,
   hasActiveShipmentClaim,

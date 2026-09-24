@@ -3,11 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import {
-  currencyDocument,
-  customerAuthDocument,
-  emailDocument,
-} from "@scalius/core/modules/settings/documents";
+import { currencyDocument, customerAuthDocument, emailDocument } from "@scalius/core/modules/settings";
 
 import { ValidationError } from "../../../utils/api-error";
 import { errorResponseFromError } from "../../../utils/api-response";
@@ -28,7 +24,8 @@ const mocks = vi.hoisted(() => ({
   readFirebaseSettings: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/settings/checkout-readiness", () => ({
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
   getCheckoutReadiness: mocks.getCheckoutReadiness,
   getCustomerSignInReadiness: mocks.getCustomerSignInReadiness,
   CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE: {
@@ -36,25 +33,16 @@ vi.mock("@scalius/core/modules/settings/checkout-readiness", () => ({
     message:
       "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.",
   },
+  getCheckoutFlowSettingsDocument: mocks.getCheckoutFlowSettingsDocument,
+  saveCheckoutFlowSettingsDocument: mocks.saveCheckoutFlowSettingsDocument,
 }));
-
-vi.mock("@scalius/core/modules/settings/checkout-flow-admin.service", async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import("@scalius/core/modules/settings/checkout-flow-admin.service")
-  >();
-  return {
-    ...actual,
-    getCheckoutFlowSettingsDocument: mocks.getCheckoutFlowSettingsDocument,
-    saveCheckoutFlowSettingsDocument: mocks.saveCheckoutFlowSettingsDocument,
-  };
-});
 
 vi.mock("../../../utils/cache-generation", () => ({
   bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 
-vi.mock("@scalius/core/modules/payments/gateway-settings", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/payments/gateway-settings")>()),
+vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments")>()),
   getActivePaymentMethods: mocks.getActivePaymentMethods,
 }));
 

@@ -338,7 +338,8 @@ ledger. Every migration from 0050 onward must:
   source SHA-256 ledger row; and
 - be listed in the runtime release manifest used by `/readyz`.
 
-The current release is `0062_identity_handoff_audit`. The release chain also
+The current release is the one `CURRENT_DATABASE_SCHEMA` names in
+`src/schema-contract.ts` (`0082_theme_document_v4` at this writing). The release chain also
 demonstrates that the runner and its tests must handle contiguous releases
 rather than assuming the ledger contains only its bootstrap row. Release 0055
 is a forward-only PostgreSQL convergence migration: schema-54

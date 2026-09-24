@@ -25,8 +25,11 @@ import {
   getApiV1AdminSettingsSslcommerz,
   getApiV1AdminSettingsStripe,
 } from "@scalius/api-client/sdk";
-import type { MessageLanguage } from "@scalius/core/modules/notifications/message-copy";
-import type { EmailStore, NotificationTemplates } from "@scalius/core/modules/notifications/notification-templates";
+import type {
+  MessageLanguage,
+  EmailStore,
+  NotificationTemplates,
+} from "@scalius/core/modules/notifications/browser";
 import { normalizeCustomerAuthPolicy } from "@scalius/shared/customer-auth-policy";
 import type { getCountries } from "@scalius/shared/customer-utils";
 import { parseMerchantCspSources } from "@scalius/shared/security-csp";

@@ -8,16 +8,16 @@ import {
   getBarcodeIdentityKey,
   normalizeBarcodeValue,
 } from "@scalius/shared/barcode-identity";
-import { productVariantBarcodeIdentityEquals } from "../products/products.variant-identity";
-import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
-import { variantOptionLabelSql } from "../products/products.option-model";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../products/products.money";
+import { productVariantBarcodeIdentityEquals } from "../products/variant-identity";
+import { operationalSkuRowPredicate } from "../products/public-eligibility";
+import { variantOptionLabelSql } from "../products/option-model";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../products/money";
 import { fromMinor } from "@scalius/shared/money";
 import { executeInventoryOperation } from "./inventory-operations";
 import {
   loadProductMediaProjections,
   resolveSkuImageRepresentation,
-} from "../products/products.media";
+} from "../products/media";
 
 export interface StockAdjustResult {
   variantId: string;

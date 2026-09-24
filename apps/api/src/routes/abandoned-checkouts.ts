@@ -8,7 +8,7 @@ import { getClientIp } from "@scalius/shared/rate-limit";
 import { isWithinRateLimit } from "../utils/rate-limit";
 import { RateLimitError, ValidationError } from "../utils/api-error";
 import { messageResponse, errorResponses } from "../schemas/responses";
-import { normalizeAbandonedCheckoutSnapshot } from "@scalius/core/modules/orders";
+import { normalizeAbandonedCheckoutSnapshot } from "@scalius/core/modules/checkout";
 
 import { ok } from "../utils/api-response";
 const app = new OpenAPIHono<{ Bindings: Env }>();

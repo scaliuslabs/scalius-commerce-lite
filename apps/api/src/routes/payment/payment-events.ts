@@ -8,15 +8,15 @@ import { eq } from "drizzle-orm";
 import type { Context } from "hono";
 import type { Database } from "@scalius/database/client";
 import { orders, PaymentStatus } from "@scalius/database/schema";
-import { getPaymentGateway } from "@scalius/core/modules/payments/gateways/registry";
 import {
+  getPaymentGateway,
+  REFUND_OBSERVED_EVENT_TYPE,
   PaymentProviderError,
   type GatewayRequest,
   type GatewaySettings,
   type PaymentEvent,
   type PaymentGateway,
-} from "@scalius/core/modules/payments/gateways/port";
-import { REFUND_OBSERVED_EVENT_TYPE } from "@scalius/core/modules/payments/refund-reconciliation";
+} from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { NotFoundError, ServiceUnavailableError, ValidationError } from "../../utils/api-error";
 import {

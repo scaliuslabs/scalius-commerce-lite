@@ -16,10 +16,10 @@ import {
   updateTaxClassification,
   updateTaxRate,
   updateTaxSettings,
-  type TaxJurisdictionType,
 } from "@scalius/core/modules/tax";
+import { type TaxJurisdictionType } from "@scalius/core/modules/tax/browser";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
-import { resolveActiveDeliveryLocationNames } from "@scalius/core/modules/orders/delivery-location-validation";
+import { resolveActiveDeliveryLocationNames } from "@scalius/core/modules/delivery";
 import { created, ok } from "../../utils/api-response";
 import {
   conflictResponse,

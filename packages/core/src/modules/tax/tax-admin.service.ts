@@ -19,8 +19,8 @@ import { nanoid } from "nanoid";
 import type { TaxJurisdictionType } from "./types";
 import {
     executeProductAggregateMutationBatch,
-} from "../products/products.aggregate-revision";
-import { variantOptionLabelSql } from "../products/products.option-model";
+} from "../products/aggregate-revision";
+import { variantOptionLabelSql } from "../products/option-model";
 
 const DEFAULT_SETTINGS = {
     id: "default" as const,

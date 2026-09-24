@@ -8,7 +8,7 @@ import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { effectiveLowStockThresholdSql, inventorySettingsDocument, isLowStockThresholdEnabled } from "./low-stock-policy";
 import { lowStockThresholdSchema } from "./inventory.validation";
-import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
+import { operationalSkuRowPredicate } from "../products/public-eligibility";
 
 /**
  * Result of a low-stock check, for observability.

@@ -28,7 +28,7 @@ import type {
 } from "./types";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { fromMinor } from "@scalius/shared/money";
-import { formatOrderMoney } from "../orders/order-money";
+import { formatOrderMoney } from "../orders/money";
 import { computePaymentStateAfterPayment } from "./payment-state";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 

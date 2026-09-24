@@ -1,23 +1,36 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import * as ProductsAdmin from "@scalius/core/modules/products/products.admin";
-import * as ProductsVariants from "@scalius/core/modules/products/products.variants";
-import { createProductSchema, updateProductSchema } from "@scalius/core/modules/products/products.validation";
 import {
+    bulkDeleteProducts,
+    bulkUpdateProducts,
+    deleteProduct,
+    permanentlyDeleteProduct,
+    restoreProduct,
+    createProduct,
+    duplicateProduct,
+    updateProduct,
+    getProductDetails,
+    getProductStats,
+    getProductsByIds,
+    listProductAgentSummaries,
+    listProducts,
+    createVariant,
+    deleteVariant,
+    getProductVariants,
+    lookupByBarcode,
+    updateVariant,
+    createProductSchema,
+    updateProductSchema,
     productOptionMatrixSchema,
     saveProductOptionMatrix,
-} from "@scalius/core/modules/products/products.option-matrix";
-import {
-    createVariantSchema,
-    updateVariantSchema
-} from "@scalius/core/modules/products/products.types";
-import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
-import {
     getProductSemanticSection,
     productSemanticSectionPatchSchema,
     productSemanticSectionQuerySchema,
     productSemanticSectionSchema,
     updateProductSemanticSection,
-} from "@scalius/core/modules/products/products.semantic-sections";
+    createVariantSchema,
+    updateVariantSchema,
+} from "@scalius/core/modules/products";
+import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { ConflictError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
@@ -215,7 +228,7 @@ const statsRoute = createRoute({
 
 app.openapi(statsRoute, async (c) => {
     const db = c.get("db");
-    const stats = await ProductsAdmin.getProductStats(db);
+    const stats = await getProductStats(db);
     return ok(c, stats);
 });
 
@@ -337,7 +350,7 @@ const barcodeLookupRoute = createRoute({
 app.openapi(barcodeLookupRoute, async (c) => {
     const db = c.get("db");
     const { barcode } = c.req.valid("query");
-    const result = await ProductsVariants.lookupByBarcode(db, barcode);
+    const result = await lookupByBarcode(db, barcode);
     if (!result) {
         throw new NotFoundError("No variant found with this barcode");
     }
@@ -377,7 +390,7 @@ const listRoute = createRoute({
 app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
-    const result = await ProductsAdmin.listProducts(db, {
+    const result = await listProducts(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || undefined,
@@ -422,7 +435,7 @@ const listAgentSummariesRoute = createRoute({
 app.openapi(listAgentSummariesRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
-    const result = await ProductsAdmin.listProductAgentSummaries(db, {
+    const result = await listProductAgentSummaries(db, {
         page: query.page,
         limit: query.limit,
         search: query.search || undefined,
@@ -467,7 +480,7 @@ const getByIdsRoute = createRoute({
 app.openapi(getByIdsRoute, async (c) => {
     const db = c.get("db");
     const { ids } = c.req.valid("query");
-    const products = await ProductsAdmin.getProductsByIds(db, parseLookupIds(ids));
+    const products = await getProductsByIds(db, parseLookupIds(ids));
     return ok(c, { products });
 });
 
@@ -497,7 +510,7 @@ const createProductRoute = createRoute({
 
 app.openapi(createProductRoute, async (c) => {
     const db = c.get("db");
-    const result = await ProductsAdmin.createProduct(db, c.req.valid("json"));
+    const result = await createProduct(db, c.req.valid("json"));
     await bumpCacheGeneration(c);
     return created(c, result);
 });
@@ -532,7 +545,7 @@ const bulkDeleteRoute = createRoute({
 app.openapi(bulkDeleteRoute, async (c) => {
     const db = c.get("db");
     const data = c.req.valid("json");
-    const result = await ProductsAdmin.bulkDeleteProducts(db, data.products, data.permanent);
+    const result = await bulkDeleteProducts(db, data.products, data.permanent);
     const deletedIds = result.outcomes
         .filter((outcome) => outcome.status === "deleted")
         .map((outcome) => outcome.id);
@@ -586,7 +599,7 @@ const bulkUpdateRoute = createRoute({
 app.openapi(bulkUpdateRoute, async (c) => {
     const db = c.get("db");
     const { products, ...changes } = c.req.valid("json");
-    const result = await ProductsAdmin.bulkUpdateProducts(db, products, changes);
+    const result = await bulkUpdateProducts(db, products, changes);
     if (result.products.length > 0) await bumpCacheGeneration(c);
     return ok(c, result);
 });
@@ -627,7 +640,7 @@ app.openapi(duplicateProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const { name } = c.req.valid("json");
     // A draft is not buyer-visible, so no cache generation bump.
-    return created(c, await ProductsAdmin.duplicateProduct(db, id, name));
+    return created(c, await duplicateProduct(db, id, name));
 });
 
 // ── Bounded Product Sections ──
@@ -754,7 +767,7 @@ const getByIdRoute = createRoute({
 app.openapi(getByIdRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const product = await ProductsAdmin.getProductDetails(db, id);
+    const product = await getProductDetails(db, id);
     if (!product) throw new NotFoundError("Product not found");
     return ok(c, product);
 });
@@ -785,7 +798,7 @@ app.openapi(updateProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const result = await ProductsAdmin.updateProduct(db, id, data);
+        const result = await updateProduct(db, id, data);
         await bumpCacheGeneration(c);
         return ok(c, result);
     } catch (error: unknown) {
@@ -823,7 +836,7 @@ app.openapi(deleteProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
-    const result = await ProductsAdmin.deleteProduct(db, id, expectedAggregateRevision);
+    const result = await deleteProduct(db, id, expectedAggregateRevision);
     await bumpCacheGeneration(c);
     return ok(c, result);
 });
@@ -853,7 +866,7 @@ app.openapi(restoreProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
-    const result = await ProductsAdmin.restoreProduct(db, id, expectedAggregateRevision);
+    const result = await restoreProduct(db, id, expectedAggregateRevision);
     await bumpCacheGeneration(c);
     return ok(c, result);
 });
@@ -880,7 +893,7 @@ app.openapi(permanentDeleteRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
-    await ProductsAdmin.permanentlyDeleteProduct(db, id, expectedAggregateRevision);
+    await permanentlyDeleteProduct(db, id, expectedAggregateRevision);
     await bumpCacheGeneration(c);
     return noContent(c);
 });
@@ -911,7 +924,7 @@ app.openapi(createVariantRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const result = await ProductsVariants.createVariant(db, id, data);
+        const result = await createVariant(db, id, data);
         if (!result) throw new NotFoundError("Failed to create variant");
         await bumpCacheGeneration(c);
         return created(c, result);
@@ -946,7 +959,7 @@ const listVariantsRoute = createRoute({
 app.openapi(listVariantsRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const variants = await ProductsVariants.getProductVariants(db, id);
+    const variants = await getProductVariants(db, id);
     return ok(c, { variants });
 });
 
@@ -977,7 +990,7 @@ app.openapi(updateVariantRoute, async (c) => {
     const data = c.req.valid("json");
     const user = c.get("user");
     try {
-        const result = await ProductsVariants.updateVariant(db, id, variantId, data, user?.id);
+        const result = await updateVariant(db, id, variantId, data, user?.id);
         if (!result) throw new NotFoundError("Variant not found");
         await bumpCacheGeneration(c);
         return ok(c, result);
@@ -1016,7 +1029,7 @@ app.openapi(deleteVariantRoute, async (c) => {
     const { id, variantId } = c.req.valid("param");
     const { expectedAggregateRevision } = c.req.valid("query");
     try {
-        const result = await ProductsVariants.deleteVariant(
+        const result = await deleteVariant(
             db,
             id,
             variantId,

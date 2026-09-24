@@ -1,6 +1,5 @@
-import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
-import { deliveryLocations } from "@scalius/database/schema";
+import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
+import { deliveryLocations, deliveryProviders } from "@scalius/database/schema";
 import { eq, and, asc, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import {
@@ -9,9 +8,12 @@ import {
     deleteLocations,
     getLocationById,
     updateLocation,
-} from "@scalius/core/modules/delivery/locations";
+    processPathaoImportChunk,
+    resetPathaoImportProgress,
+    getPathaoImportStatus,
+} from "@scalius/core/modules/delivery";
 import { isReady, readinessMessages } from "@scalius/shared/readiness";
-import { getCheckoutDeliveryReadiness } from "@scalius/core/modules/settings/checkout-readiness";
+import { getCheckoutDeliveryReadiness } from "@scalius/core/modules/settings";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
@@ -562,12 +564,6 @@ app.openapi(deleteLocationRoute, async (c) => {
 
 // ── Pathao Location Import ──────────────────────────────────────────────────
 
-import {
-    processPathaoImportChunk,
-    resetPathaoImportProgress,
-    getPathaoImportStatus,
-} from "@scalius/core/modules/delivery/pathao-location-import";
-import { deliveryProviders } from "@scalius/database/schema";
 
 const pathaoImportStatsSchema = z.object({
     citiesCreated: z.number().int().nonnegative(),

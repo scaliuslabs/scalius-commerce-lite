@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 
-import { listDeliveryRatesForAddress } from "@scalius/core/modules/delivery/zones";
-import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { listDeliveryRatesForAddress } from "@scalius/core/modules/delivery";
+import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { fromMinor } from "@scalius/shared/money";
 
 import { ok } from "../utils/api-response";

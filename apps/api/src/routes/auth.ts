@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { generateToken, revokeToken, getTokenStats } from "../utils/jwt";
 import { authMiddleware } from "../middleware/auth";
-import { firebaseDocument } from "@scalius/core/modules/settings/documents";
+import { firebaseDocument } from "@scalius/core/modules/settings";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 import { successEnvelope, messageResponse, errorResponses } from "../schemas/responses";

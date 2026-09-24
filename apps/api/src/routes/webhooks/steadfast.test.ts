@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import * as schema from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { checkShipmentStatus } from "@scalius/core/modules/delivery/delivery.service";
+import { checkShipmentStatus } from "@scalius/core/modules/delivery";
 
 const mocks = vi.hoisted(() => ({
   verifyDeliveryWebhook: vi.fn(),
@@ -29,7 +29,8 @@ vi.mock("../../utils/webhook-idempotency", async (importOriginal) => {
   };
 });
 
-vi.mock("@scalius/core/modules/delivery/tracking", () => ({
+vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/delivery")>()),
   updateOrderStatusFromShipment: mocks.updateOrderStatusFromShipment,
 }));
 

@@ -5,9 +5,10 @@ import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "./refund-attempt-guard";
 import { paymentMethodLabel } from "./gateways/registry";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";
+import type { ActiveRefundOperationView, OrderRefundAttemptView } from "./refund-attempt-views";
 
 type RefundAttemptVisibilityAudience = "admin" | "customer";
-type RefundAttemptSeverity = "info" | "success" | "warning" | "danger";
+type RefundAttemptSeverity = OrderRefundAttemptView["severity"];
 
 const ACTIVE_REFUND_STATUS_SET = new Set<string>(ACTIVE_REFUND_ATTEMPT_STATUSES);
 
@@ -36,58 +37,6 @@ export interface RefundAttemptVisibilityRow {
   failedAt: number | null;
   createdAt: number | null;
   updatedAt: number | null;
-}
-
-export interface OrderRefundAttemptView {
-  id: string;
-  orderId: string;
-  amount: number;
-  currency: string;
-  gateway: string;
-  status: string;
-  providerStatus: string | null;
-  active: boolean;
-  severity: RefundAttemptSeverity;
-  label: string;
-  message: string;
-  createdAt: string | null;
-  updatedAt: string | null;
-  nextProbeAt: string | null;
-  lastProbeAt: string | null;
-  refundedAt: string | null;
-  failedAt: string | null;
-  reason?: string;
-  refundPaymentId?: string;
-  sourcePaymentId?: string;
-  sourceTransactionId?: string | null;
-  refundReference?: string;
-  providerRefundId?: string | null;
-  providerCorrelationId?: string | null;
-  allocationIndex?: number;
-  allocationCount?: number;
-  attempts?: number;
-  lastError?: string | null;
-}
-
-export interface ActiveRefundOperationView {
-  active: true;
-  status: string;
-  severity: RefundAttemptSeverity;
-  label: string;
-  message: string;
-  amount: number;
-  currency: string;
-  gateway: string;
-  attemptCount: number;
-  nextProbeAt: string | null;
-  lastProbeAt: string | null;
-  providerStatus: string | null;
-  reason?: string | null;
-  sourceTransactionId?: string | null;
-  providerRefundId?: string | null;
-  providerCorrelationId?: string | null;
-  refundReference?: string | null;
-  lastError?: string | null;
 }
 
 function timestampToIso(timestamp: number | null | undefined): string | null {

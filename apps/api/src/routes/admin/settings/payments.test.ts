@@ -2,14 +2,14 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { getSSLCommerzSettings, getStripeSettings } from "@scalius/core/modules/payments/gateway-settings";
+import { getSSLCommerzSettings, getStripeSettings } from "@scalius/core/modules/payments";
 import {
     checkoutDocument,
     currencyDocument,
     paymentMethodsDocument,
     sslcommerzDocument,
     stripeDocument,
-} from "@scalius/core/modules/settings/documents";
+} from "@scalius/core/modules/settings";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 

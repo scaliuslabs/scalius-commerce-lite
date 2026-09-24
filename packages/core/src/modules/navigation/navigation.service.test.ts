@@ -15,7 +15,7 @@ vi.mock("../categories/categories.storefront", () => ({
     getPublicCategoryById: mocks.getPublicCategoryById,
 }));
 
-vi.mock("../products/products.storefront", () => ({
+vi.mock("../catalog/listing", () => ({
     getStorefrontProducts: mocks.getStorefrontProducts,
 }));
 

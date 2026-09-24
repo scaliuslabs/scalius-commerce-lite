@@ -4,10 +4,10 @@
 import { productAttributes, productAttributeValues, products } from "@scalius/database/schema";
 import { eq, and, isNull, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { publicProductHasBuyerResolvableSku } from "../products/products.public-eligibility";
+import { publicProductHasBuyerResolvableSku } from "../products/public-eligibility";
 import { ValidationError } from "@scalius/core/errors";
 import { ftsMatch } from "../../search/fts5";
-import { OPTION_FACET_PREFIX } from "../products/products.storefront";
+import { OPTION_FACET_PREFIX } from "../catalog/facets";
 
 export interface PublicAttributeFilter {
     id: string;

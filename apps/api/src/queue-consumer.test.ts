@@ -57,7 +57,8 @@ vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
 }));
 
-vi.mock("@scalius/core/modules/payments/process-payment", () => ({
+vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments")>()),
   processPaymentConfirmed: mocks.processPaymentConfirmed,
   processPaymentFailed: mocks.processPaymentFailed,
   releaseOrderInventory: mocks.releaseOrderInventory,
@@ -67,20 +68,23 @@ vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
   processExistingMetaPurchaseOutboxForOrder: mocks.processExistingMetaPurchaseOutboxForOrder,
 }));
 
-vi.mock("@scalius/core/modules/notifications/notifications.service", () => ({
+vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/notifications")>()),
   sendOrderNotificationEmail: mocks.sendOrderNotificationEmail,
   sendOrderNotification: mocks.sendOrderNotification,
   sendStaffOrderEmails: mocks.sendStaffOrderEmails,
-}));
-
-vi.mock("@scalius/core/modules/notifications", () => ({
   claimOrderNotificationOutboxForProcessing: mocks.claimOrderNotificationOutboxForProcessing,
   markOrderNotificationOutboxDeadLettered: mocks.markOrderNotificationOutboxDeadLettered,
   markOrderNotificationOutboxProcessingFailed: mocks.markOrderNotificationOutboxProcessingFailed,
   markOrderNotificationOutboxSent: mocks.markOrderNotificationOutboxSent,
+  readStoreIdentity: mocks.readStoreIdentity,
+  getNotificationProviderBlock: mocks.getNotificationProviderBlock,
+  isNotificationProviderBreakerFailure: mocks.isNotificationProviderBreakerFailure,
+  markNotificationProviderBlocked: mocks.markNotificationProviderBlocked,
 }));
 
-vi.mock("@scalius/core/modules/customers/otp-delivery-receipts", () => ({
+vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/customers")>()),
   createAuthOtpDeliveryTarget: mocks.createAuthOtpDeliveryTarget,
   claimAuthOtpDeliveryReceipt: mocks.claimAuthOtpDeliveryReceipt,
   getAuthOtpDeliveryRetryDelaySeconds: mocks.getAuthOtpDeliveryRetryDelaySeconds,
@@ -90,11 +94,6 @@ vi.mock("@scalius/core/modules/customers/otp-delivery-receipts", () => ({
   markAuthOtpDeliveryReceiptSkipped: mocks.markAuthOtpDeliveryReceiptSkipped,
   markAuthOtpDeliveryReceiptSkippedByDeliveryKey: mocks.markAuthOtpDeliveryReceiptSkippedByDeliveryKey,
   createAuthOtpProviderClientReference: mocks.createAuthOtpProviderClientReference,
-}));
-
-vi.mock("@scalius/core/modules/notifications/store-messages", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@scalius/core/modules/notifications/store-messages")>(),
-  readStoreIdentity: mocks.readStoreIdentity,
 }));
 
 vi.mock("@scalius/core/integrations/email", () => ({
@@ -114,12 +113,6 @@ vi.mock("@scalius/core/integrations/sms", () => ({
   getActiveSmsProvider: mocks.getActiveSmsProvider,
 }));
 
-vi.mock("@scalius/core/modules/notifications/notification-provider-health", () => ({
-  getNotificationProviderBlock: mocks.getNotificationProviderBlock,
-  isNotificationProviderBreakerFailure: mocks.isNotificationProviderBreakerFailure,
-  markNotificationProviderBlocked: mocks.markNotificationProviderBlocked,
-}));
-
 vi.mock("./utils/encryption-key", () => ({
   getCredentialEncryptionKey: mocks.getCredentialEncryptionKey,
 }));
@@ -130,7 +123,8 @@ vi.mock("./utils/order-notification-queue", () => ({
   enqueueOrderRefundNotificationForOrder: mocks.enqueueOrderRefundNotificationForOrder,
 }));
 
-vi.mock("@scalius/core/modules/settings/settings.service", () => ({
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
   getAdminNotificationChannels: mocks.getAdminNotificationChannels,
 }));
 
@@ -151,7 +145,7 @@ import {
   handleQueueBatch,
   type PaymentQueueMessage,
 } from "./queue-consumer";
-import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/customers/customer-auth.service";
+import { deriveCustomerAuthOtpDeliveryCode } from "@scalius/core/modules/customers";
 import { customerAuthOtpChallenges, orderPaymentRecoveryChallenges } from "@scalius/database/schema";
 import { encodeEncryptedCredential, encryptCredentials } from "@scalius/core/utils/credential-encryption";
 

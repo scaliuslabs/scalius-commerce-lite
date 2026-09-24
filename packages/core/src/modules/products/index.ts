@@ -1,14 +1,19 @@
-// src/modules/products/index.ts
-export * from "./products.types";
-export * from "./products.admin";
-export * from "./products.storefront";
-export * from "./products.recommendations";
-export * from "./products.feed-diagnostics";
-export * from "./products.feed-row-preview";
-export * from "./products.variants";
-export * from "./products.option-model";
-export * from "./products.option-matrix";
-export * from "./products.validation";
-export * from "./products.media";
-export * from "./products.semantic-sections";
-export * from "./products.storefront-sections";
+// Products domain: the merchant-edited product aggregate — products, SKUs
+// (variants), options, media, validation and the aggregate revision — plus the
+// product rules other domains read through: public eligibility, buyer
+// pricing and money. Buyer-facing catalogue reads live in modules/catalog.
+export * from "./types";
+export * from "./admin/write";
+export * from "./admin/read";
+export * from "./admin/lifecycle";
+export * from "./variants";
+export * from "./option-model";
+export * from "./option-matrix";
+export * from "./validation";
+export * from "./media";
+export * from "./semantic-sections";
+export * from "./money";
+export * from "./public-eligibility";
+export * from "./buyer-projection";
+export * from "./variant-identity";
+export * from "./aggregate-revision";

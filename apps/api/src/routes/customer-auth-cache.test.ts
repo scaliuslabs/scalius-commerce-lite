@@ -29,7 +29,8 @@ const mocks = vi.hoisted(() => ({
   validateReceiptToken: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
+vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/customers")>()),
   sendOtp: mocks.sendOtp,
   verifyOtp: mocks.verifyOtp,
   deleteCustomerAuthOtpChallenge: mocks.deleteCustomerAuthOtpChallenge,
@@ -42,27 +43,18 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
   getAccountPhoneVerificationPrompt: vi.fn(async () => null),
   COOKIE_NAME: "cs_tok",
   SESSION_TTL_SECONDS: 2_592_000,
-}));
-
-vi.mock("@scalius/core/modules/customers/customers.service", () => ({
   getCustomerOrders: mocks.getCustomerOrders,
   getCustomerOrderDetail: mocks.getCustomerOrderDetail,
   getCustomerOwnedOrderForDetail: mocks.getCustomerOwnedOrderForDetail,
   getCustomerOrderDetailForOrder: mocks.getCustomerOrderDetailForOrder,
   getCustomerPaymentSessionOrderForDetail: mocks.getCustomerPaymentSessionOrderForDetail,
+  claimGuestOrderToAccount: mocks.claimGuestOrderToAccount,
+  linkVerifiedContactOrders: mocks.linkVerifiedContactOrders,
 }));
 
 vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/promotions")>()),
   listOrderDiscountLines: mocks.listOrderDiscountLines,
-}));
-
-vi.mock("@scalius/core/modules/customers/order-account-claim", () => ({
-  claimGuestOrderToAccount: mocks.claimGuestOrderToAccount,
-}));
-
-vi.mock("@scalius/core/modules/customers/customer-identity", () => ({
-  linkVerifiedContactOrders: mocks.linkVerifiedContactOrders,
 }));
 
 vi.mock("../utils/order-receipt-token", () => ({

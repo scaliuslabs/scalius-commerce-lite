@@ -8,13 +8,15 @@ const mocks = vi.hoisted(() => ({
   resolveThemePreviewSession: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/storefront/storefront.service", () => ({
+vi.mock("@scalius/core/modules/storefront", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/storefront")>()),
   getHomepageData: vi.fn(),
   getLayoutData: vi.fn(),
   getPageRenderData: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/settings/site-settings.service", () => ({
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
   resolveThemePreviewSession: mocks.resolveThemePreviewSession,
 }));
 

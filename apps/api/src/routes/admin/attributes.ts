@@ -10,7 +10,7 @@ import {
     addValueSchema,
     updateValueSchema,
     deleteValueSchema,
-} from "@scalius/core/modules/attributes/attributes.validation";
+} from "@scalius/core/modules/attributes/browser";
 import {
     listAttributes,
     listAttributeAgentSummaries,
@@ -25,7 +25,7 @@ import {
     addAttributeValue,
     renameAttributeValue,
     deleteAttributeValue,
-} from "@scalius/core/modules/attributes/attributes.service";
+} from "@scalius/core/modules/attributes";
 import { ok, created, noContent } from "../../utils/api-response";
 import {
     successEnvelope,

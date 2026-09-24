@@ -7,7 +7,7 @@ import {
   postApiV1AdminCollectionsByIdProducts,
   postApiV1AdminProductsBulkUpdate,
 } from "@scalius/api-client/sdk";
-import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
+import { normalizeCollectionConfig } from "@scalius/core/modules/collections/browser";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
