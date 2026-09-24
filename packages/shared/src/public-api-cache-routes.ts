@@ -10,7 +10,7 @@
  * or uncached route.
  */
 
-interface PublicApiCacheRoute {
+export interface PublicApiCacheRoute {
   path: string;
   exact?: boolean;
   isEligible?: (url: URL) => boolean;
@@ -31,7 +31,7 @@ function isHeroRequestEligible(url: URL): boolean {
   );
 }
 
-const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
+export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/products" },
   { path: "/api/v1/categories" },
   { path: "/api/v1/collections" },

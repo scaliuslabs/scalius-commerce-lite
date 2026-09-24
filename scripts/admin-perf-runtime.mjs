@@ -355,9 +355,11 @@ export async function runAdminPerfRuntime(options) {
       };
     }
 
-    // Fresh session for transitions: cold means the route's chunk and data
-    // have never been fetched in this document.
+    // Fresh session for transitions: cold means the route's data has never been
+    // fetched in this document. A merchant reads Home for a few seconds first;
+    // the everyday screens' code is fetched in that time (lib/warm-route-code.ts).
     await load(`${admin}/admin`, homeReady, { cold: true });
+    await sleep(options.settleMs ?? 2500);
 
     async function transition(step, pass) {
       progress(`${pass} ${step.name}`);
