@@ -4,6 +4,9 @@
 
 The measured stable-release performance baseline, retained optimizations, and
 rewrite thresholds are recorded in [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEASE.md).
+How a storefront page renders from one API batch, the per-page API and D1
+budgets, API placement, and `pnpm perf:storefront` are in
+[STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md).
 
 
 ## System Overview

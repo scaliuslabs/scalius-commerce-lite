@@ -4,7 +4,7 @@
 
 import { getConfiguredSdkClient } from "./transport";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
-import { getRuntime } from "./runtime";
+import { applyPlatformOrigins, getRuntime } from "./runtime";
 import { unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
 import type {
@@ -189,16 +189,20 @@ async function fetchLayoutData(): Promise<LayoutData | null> {
 }
 
 /**
- * Fetches all layout data in a single consolidated request. The middleware
- * makes this read first (it also carries the platform origins and CSP
- * sources), and every later call in the same request reuses that one promise.
+ * The request's one layout read. It also carries the platform origins and
+ * CSP sources, which are applied to the request runtime as soon as it
+ * resolves; every later call in the same request reuses that one promise.
+ * Pages start it together with their own reads so they travel in one batch.
  *
  * @returns A promise resolving to LayoutData or null on failure.
  */
 export function getLayoutData(): Promise<LayoutData | null> {
   const runtime = getRuntime();
   if (!runtime) return fetchLayoutData();
-  runtime.layout ??= fetchLayoutData();
+  runtime.layout ??= fetchLayoutData().then((layout) => {
+    applyPlatformOrigins(layout);
+    return layout;
+  });
   return runtime.layout;
 }
 
