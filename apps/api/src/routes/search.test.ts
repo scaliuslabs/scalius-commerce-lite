@@ -118,6 +118,23 @@ describe("public search route", () => {
     ]).toHaveLength(5);
   });
 
+  it("asks for typo correction and tells the buyer which query the results are for", async () => {
+    mocks.search.mockResolvedValueOnce({
+      products: [{ id: "prod_kettle", name: "Copper Tea Kettle", slug: "copper-kettle", price: 1200 }],
+      pages: [],
+      categories: [],
+      correctedQuery: "kettle",
+    });
+
+    const { app, db } = createTestApp();
+    const response = await app.request("/api/v1/search?q=kettel", {}, createSearchEnv());
+    const body = await response.json() as { data?: { query?: string; correctedQuery?: string | null } };
+
+    expect(response.status).toBe(200);
+    expect(mocks.search).toHaveBeenCalledWith(db, "kettel", expect.objectContaining({ correctTypos: true }));
+    expect(body.data).toMatchObject({ query: "kettel", correctedQuery: "kettle" });
+  });
+
   it("treats punctuation-only search as empty before rate limiting or database work", async () => {
     const { app } = createTestApp();
     const response = await app.request("/api/v1/search?q=!!!!", {}, createSearchEnv());

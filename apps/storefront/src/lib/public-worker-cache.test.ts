@@ -1,3 +1,6 @@
+// @vitest-environment node
+// happy-dom drops Set-Cookie from constructed Responses (a forbidden response
+// header in browsers), which would hide the "never cache cookies" guard.
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -171,7 +174,7 @@ describe("servePublicStorefrontRequest", () => {
     );
     expect(render).toHaveBeenCalledTimes(1);
     expect(second.headers.get("X-Cache-Status")).toBe("HIT");
-    expect(second.headers.get("Cache-Control")).toBe("no-cache, no-store, must-revalidate");
+    expect(second.headers.get("Cache-Control")).toBe("no-cache");
     expect(await second.text()).toBe("<html>page</html>");
   });
 

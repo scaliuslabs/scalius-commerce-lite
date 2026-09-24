@@ -912,7 +912,8 @@ describe("Facebook product feed route", () => {
 
     expect(response.status).toBe(200);
     expect(body.match(/<item>/g)).toHaveLength(1);
-    expect(body).toContain("<g:id>prod_simple</g:id>");
+    // A simple product is identified by its one default SKU (matches Product JSON-LD sku).
+    expect(body).toContain("<g:id>SIMPLE-SHIRT</g:id>");
     expect(body).toContain("<g:gtin>8801234567890</g:gtin>");
     expect(body).not.toContain("<g:identifier_exists>no</g:identifier_exists>");
   });

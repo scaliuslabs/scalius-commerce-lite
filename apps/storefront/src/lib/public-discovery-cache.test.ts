@@ -58,11 +58,10 @@ describe("public discovery cache policy", () => {
 
     const htmlResponse = new Response("ok");
     applyBrowserCachePolicyForPublicResponse(htmlResponse, "/products/fish");
-    expect(htmlResponse.headers.get("Cache-Control")).toBe(
-      "no-cache, no-store, must-revalidate",
-    );
-    expect(htmlResponse.headers.get("Pragma")).toBe("no-cache");
-    expect(htmlResponse.headers.get("Expires")).toBe("0");
+    // Revalidated on every load, yet eligible for the back/forward cache.
+    expect(htmlResponse.headers.get("Cache-Control")).toBe("no-cache");
+    expect(htmlResponse.headers.has("Pragma")).toBe(false);
+    expect(htmlResponse.headers.has("Expires")).toBe(false);
   });
 
   it("recognizes only successful public discovery responses", () => {

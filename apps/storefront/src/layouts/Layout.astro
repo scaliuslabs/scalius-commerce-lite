@@ -20,6 +20,12 @@ import {
   buildOnlineStoreJsonLd,
 } from "@/lib/commerce-structured-data";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
+import {
+  buildDocumentTitle,
+  resolveStoreName,
+  resolveStorePhone,
+  resolveStoreSocialLinks,
+} from "@/lib/store-identity";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import {
   buildStorefrontThemeTokens,
@@ -49,6 +55,8 @@ interface Props {
   // SEO props — per CAN-01, CAN-02, OG-01 through OG-05, SEO-05, SEO-06
   canonicalUrl?: string;
   ogImage?: string;
+  /** Share image used only when neither the page nor the store sets one. */
+  fallbackOgImage?: string;
   ogType?: "website" | "product" | "article";
   ogPrice?: string;
   ogCurrency?: string;
@@ -67,6 +75,7 @@ const {
   layoutData: providedLayoutData,
   canonicalUrl,
   ogImage,
+  fallbackOgImage,
   ogType = "website",
   ogPrice,
   ogCurrency,
@@ -139,9 +148,17 @@ const faviconUrl = headerData?.favicon?.src
 
 // --- SEO: store name, Organization JSON-LD, WebSite JSON-LD (per SEO-05, SEO-06) ---
 const businessInfo = layoutData?.business;
-const storeSchemaName =
-  businessInfo?.companyName?.trim() || businessInfo?.legalName?.trim() || null;
-const ogSiteName = storeSchemaName ?? "Store";
+const storeSchemaName = resolveStoreName(businessInfo);
+const documentTitle = buildDocumentTitle(title, storeSchemaName);
+const storePhone = resolveStorePhone(businessInfo, headerData.contact.phone);
+const storeSocial = resolveStoreSocialLinks(
+  [headerData.social, footerData.social],
+  storePhone,
+);
+// Open Graph locale from the document language and the store's country.
+const ogLocale = `${documentLanguage}_${
+  /^(bangladesh|bd)$/i.test(businessInfo?.country?.trim() ?? "") ? "BD" : "US"
+}`;
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData?.seo?.returnPolicy,
@@ -193,7 +210,8 @@ const absoluteOgImageUrl = toAbsoluteStorefrontSeoUrl(
   ogImage ||
     (socialImage
       ? mediaImageUrl(socialImage, MEDIA_DISCOVERY_IMAGE_WIDTH)
-      : undefined),
+      : undefined) ||
+    fallbackOgImage,
 );
 
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
@@ -316,28 +334,21 @@ if (!window.$RefreshReg$) {
     <script is:inline set:html={runtimeGlobalsScript} />
     {partytownBootstrap && <script is:inline set:html={partytownBootstrap} />}
 
-    <!-- Prevent browser from caching this HTML -->
-    <meta
-      http-equiv="Cache-Control"
-      content="no-cache, no-store, must-revalidate"
-    />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <link rel="icon" href={faviconUrl} />
     <meta name="generator" content={Astro.generator} />
-    <title>{title}</title>
+    <title>{documentTitle}</title>
     {description && <meta name="description" content={description} />}
 
     {/* Canonical URL — per CAN-01, CAN-02 */}
     {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
 
     {/* Open Graph tags — per OG-01 through OG-05 */}
-    <meta property="og:site_name" content={ogSiteName} />
+    {storeSchemaName && <meta property="og:site_name" content={storeSchemaName} />}
+    <meta property="og:locale" content={ogLocale} />
     <meta property="og:type" content={ogType} />
     <meta property="og:title" content={title} />
     {description && <meta property="og:description" content={description} />}
@@ -387,13 +398,26 @@ if (!window.$RefreshReg$) {
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
 
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-background focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-foreground focus:shadow-lg"
+    >
+      Skip to content
+    </a>
+
     <div class="site-wrapper grow">
       {
         !hideHeader && (
-          <Header headerData={headerData} navigation={navigationData} />
+          <Header
+            headerData={headerData}
+            navigation={navigationData}
+            storeName={storeSchemaName}
+            storePhone={storePhone}
+            social={storeSocial}
+          />
         )
       }
-      <main class="w-full h-full mb-3">
+      <main id="main-content" tabindex="-1" class="w-full h-full mb-3 focus:outline-none">
         <slot />
       </main>
     </div>
@@ -401,7 +425,13 @@ if (!window.$RefreshReg$) {
     {
       !hideFooter && (
         <div class="storefront-deferred-region">
-          <Footer footerData={footerData} />
+          <Footer
+            footerData={footerData}
+            storeName={storeSchemaName}
+            storePhone={storePhone}
+            social={storeSocial}
+            policies={layoutData?.policies ?? []}
+          />
         </div>
       )
     }

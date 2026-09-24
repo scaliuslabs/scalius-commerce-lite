@@ -8,8 +8,13 @@ import { and, or, sql, type SQL } from "drizzle-orm";
 const FTS5_SPECIAL_CHARS = /["\-*(){}[\]^~:\\/<>|@#&+!?.,'=\u0964\u0965]/g;
 const MAX_SEARCH_TOKENS = 8;
 
-function sanitizeSearchTokens(input: string): string[] {
-  const cleaned = input.replace(FTS5_SPECIAL_CHARS, " ").trim();
+/**
+ * Splits buyer/admin input into bounded search tokens. Input is NFC-normalized
+ * first so Bangla typed through different keyboards (for example a precomposed
+ * or decomposed য়) produces one token form.
+ */
+export function sanitizeSearchTokens(input: string): string[] {
+  const cleaned = input.normalize("NFC").replace(FTS5_SPECIAL_CHARS, " ").trim();
   if (!cleaned) return [];
   return cleaned
     .split(/\s+/)

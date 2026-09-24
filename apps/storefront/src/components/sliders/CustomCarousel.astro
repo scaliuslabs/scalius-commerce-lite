@@ -23,13 +23,15 @@ interface Props {
   interval?: number;
 }
 
+// Slides advance every 6 s (WCAG 2.2.2 needs a pause control, provided below).
 const {
   images,
   height,
   type,
   autoRotate = true,
-  interval = 3000,
+  interval = 6000,
 } = Astro.props;
+const canRotate = autoRotate && images.length > 1;
 const presentation = HERO_SLIDE_PRESENTATION[type];
 const viewportMedia =
   type === "desktop" ? "(min-width: 768px)" : "(max-width: 767px)";
@@ -43,8 +45,11 @@ if (images.length === 0) return;
 <div
   class={`${type}-carousel relative w-full overflow-hidden rounded-xl`}
   style={`height: ${height}px;`}
+  role="region"
+  aria-roledescription="carousel"
+  aria-label="Featured"
   data-carousel-type={type}
-  data-auto-rotate={autoRotate}
+  data-auto-rotate={canRotate}
   data-interval={interval}
 >
   <div class="carousel-container relative w-full h-full">
@@ -54,6 +59,7 @@ if (images.length === 0) return;
         images.map((image: Props["images"][0], index: number) => {
           const SlideFrame = image.link ? "a" : "div";
           const isExternal = image.link?.startsWith("https://");
+          const headline = image.title?.trim();
           const focalPoint = image.focalPoint ?? HERO_SLIDE_DEFAULT_FOCAL_POINT;
           // One rendition at the authored slide width keeps the rendered
           // <source> identical to the eager LCP preload in pages/index.astro.
@@ -61,15 +67,18 @@ if (images.length === 0) return;
           return (
             <div
               class={`slide absolute inset-0 transition-opacity duration-500 ${index === 0 ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+              role="group"
+              aria-roledescription="slide"
+              aria-label={`${index + 1} of ${images.length}`}
+              aria-hidden={index === 0 ? undefined : "true"}
+              inert={index === 0 ? undefined : true}
               data-slide-index={index}
             >
               <SlideFrame
                 href={image.link || undefined}
                 data-astro-prefetch={getStorefrontPrefetchAttribute(image.link, Astro.url)}
                 class={`slide-link group block h-full w-full ${image.link ? "cursor-pointer" : "cursor-default"}`}
-                aria-label={
-                  image.link ? image.title || `Slide ${index + 1}` : undefined
-                }
+                aria-label={image.link && !headline ? `Slide ${index + 1}` : undefined}
                 target={isExternal ? "_blank" : undefined}
                 rel={isExternal ? "noopener noreferrer" : undefined}
               >
@@ -81,7 +90,7 @@ if (images.length === 0) return;
                   />
                   <img
                     src={transparentPixel}
-                    alt={image.title || `Slide ${index + 1}`}
+                    alt=""
                     width={presentation.width}
                     height={height}
                     class="h-full w-full object-cover"
@@ -92,8 +101,15 @@ if (images.length === 0) return;
                   />
                 </picture>
 
-                {image.link && (
-                  <div class="absolute inset-0 bg-black/0 transition-colors duration-300 group-hover:bg-black/20" />
+                {headline && (
+                  <div class="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 via-black/30 to-transparent px-5 pb-12 pt-16 text-white md:px-10 md:pb-14">
+                    <p class="max-w-xl text-xl font-bold leading-tight md:text-4xl">{headline}</p>
+                    {image.link && (
+                      <span class="mt-3 inline-flex min-h-11 items-center rounded-full bg-white px-5 text-sm font-semibold text-neutral-900 transition-transform group-hover:scale-[1.03]">
+                        Shop now
+                      </span>
+                    )}
+                  </div>
                 )}
               </SlideFrame>
             </div>
@@ -101,6 +117,22 @@ if (images.length === 0) return;
         })
       }
     </div>
+
+    {
+      canRotate && (
+        <button
+          type="button"
+          class="absolute bottom-0 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full text-white"
+          aria-label="Pause slideshow"
+          data-carousel-pause
+        >
+          <span class="flex h-7 w-7 items-center justify-center rounded-full bg-black/50">
+            <svg data-icon-pause viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="currentColor" aria-hidden="true"><path d="M7 5h3v14H7zM14 5h3v14h-3z" /></svg>
+            <svg data-icon-play viewBox="0 0 24 24" class="hidden h-3.5 w-3.5" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+          </span>
+        </button>
+      )
+    }
 
     {/* Navigation dots - Enhanced visibility */}
     {
@@ -134,7 +166,7 @@ if (images.length === 0) return;
         <>
           <button
             type="button"
-            class="nav-button absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-white/80 text-gray-800 z-10 hover:bg-white transition-colors shadow-lg backdrop-blur-sm border border-white/20"
+            class="nav-button absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-background/85 text-foreground z-10 hover:bg-background transition-colors shadow-lg backdrop-blur-sm"
             aria-label="Previous slide"
             data-nav="prev"
           >
@@ -155,7 +187,7 @@ if (images.length === 0) return;
           </button>
           <button
             type="button"
-            class="nav-button absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-white/80 text-gray-800 z-10 hover:bg-white transition-colors shadow-lg backdrop-blur-sm border border-white/20"
+            class="nav-button absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full bg-background/85 text-foreground z-10 hover:bg-background transition-colors shadow-lg backdrop-blur-sm"
             aria-label="Next slide"
             data-nav="next"
           >
@@ -197,6 +229,9 @@ if (images.length === 0) return;
       slideLoads = new Map<number, Promise<void>>();
       disposed: boolean = false;
       isHovering: boolean = false;
+      hasFocus: boolean = false;
+      isPaused: boolean = false;
+      pauseButton: HTMLButtonElement | null = null;
       touchStartX: number = 0;
       touchEndX: number = 0;
       isSwiping: boolean = false;
@@ -264,6 +299,34 @@ if (images.length === 0) return;
             }
           });
         }
+
+        // Buyer-controlled pause (WCAG 2.2.2); focus inside also pauses.
+        this.pauseButton = this.carousel.querySelector<HTMLButtonElement>(
+          "[data-carousel-pause]",
+        );
+        this.pauseButton?.addEventListener("click", () => {
+          this.isPaused = !this.isPaused;
+          this.pauseButton!.setAttribute(
+            "aria-label",
+            this.isPaused ? "Play slideshow" : "Pause slideshow",
+          );
+          this.pauseButton!
+            .querySelector("[data-icon-pause]")
+            ?.classList.toggle("hidden", this.isPaused);
+          this.pauseButton!
+            .querySelector("[data-icon-play]")
+            ?.classList.toggle("hidden", !this.isPaused);
+          this.syncAutoRotation();
+        });
+        this.carousel.addEventListener("focusin", () => {
+          this.hasFocus = true;
+          this.stopAutoRotation();
+        });
+        this.carousel.addEventListener("focusout", (event) => {
+          if (this.carousel.contains(event.relatedTarget as Node | null)) return;
+          this.hasFocus = false;
+          this.syncAutoRotation();
+        });
 
         // Pause auto-rotation on hover
         this.carousel.addEventListener("mouseenter", () => {
@@ -339,6 +402,8 @@ if (images.length === 0) return;
         if (
           this.disposed ||
           !this.autoRotate ||
+          this.isPaused ||
+          this.hasFocus ||
           this.isHovering ||
           this.isSwiping ||
           !this.isVisible()
@@ -373,6 +438,8 @@ if (images.length === 0) return;
       syncAutoRotation() {
         if (
           this.autoRotate &&
+          !this.isPaused &&
+          !this.hasFocus &&
           this.isVisible() &&
           !this.isHovering &&
           !this.isSwiping
@@ -451,12 +518,12 @@ if (images.length === 0) return;
           return;
         }
 
-        // Hide current slide
-        this.slides[this.currentIndex].classList.remove("opacity-100");
-        this.slides[this.currentIndex].classList.add(
-          "opacity-0",
-          "pointer-events-none",
-        );
+        // Hide current slide; hidden slides leave the tab order (WCAG 2.4.3).
+        const previousSlide = this.slides[this.currentIndex];
+        previousSlide.classList.remove("opacity-100");
+        previousSlide.classList.add("opacity-0", "pointer-events-none");
+        previousSlide.inert = true;
+        previousSlide.setAttribute("aria-hidden", "true");
 
         // Update nav dots
         if (this.navDots[this.currentIndex]) {
@@ -476,11 +543,11 @@ if (images.length === 0) return;
 
         // Show new slide
         this.currentIndex = index;
-        this.slides[this.currentIndex].classList.remove(
-          "opacity-0",
-          "pointer-events-none",
-        );
-        this.slides[this.currentIndex].classList.add("opacity-100");
+        const nextSlide = this.slides[this.currentIndex];
+        nextSlide.classList.remove("opacity-0", "pointer-events-none");
+        nextSlide.classList.add("opacity-100");
+        nextSlide.inert = false;
+        nextSlide.removeAttribute("aria-hidden");
 
         // Update nav dots
         if (this.navDots[this.currentIndex]) {
@@ -605,10 +672,5 @@ if (images.length === 0) return;
       0 0 5px rgba(0, 0, 0, 0.3),
       0 0 3px rgba(255, 255, 255, 0.2);
     transition: all 0.2s ease;
-  }
-
-  /* Enhance title visibility */
-  .slide-link h2 {
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
   }
 </style>

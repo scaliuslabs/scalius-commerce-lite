@@ -130,7 +130,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
             data-image-stage="mobile"
             data-mobile-image-trigger
             class:list={[
-              "mobile-media-stage relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-gray-50 text-left transition-transform duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black lg:hidden motion-reduce:transition-none",
+              "mobile-media-stage relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-muted text-left transition-transform duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground lg:hidden motion-reduce:transition-none",
               initialMedia?.item.kind === "video" && "hidden",
             ]}
             aria-label="Open product image zoom"
@@ -158,13 +158,13 @@ const hasMultipleMedia = optimizedMedia.length > 1;
           <div
             data-image-stage="desktop"
             class:list={[
-              "relative hidden aspect-square w-full cursor-zoom-in overflow-hidden rounded-xl bg-gray-50 lg:block",
+              "relative hidden aspect-square w-full cursor-zoom-in overflow-hidden rounded-xl bg-muted lg:block",
               initialMedia?.item.kind === "video" && "lg:!hidden",
             ]}
           >
             <div
               data-desktop-image-zoom
-              class="group relative aspect-square w-full cursor-crosshair overflow-hidden rounded-xl border border-gray-100 bg-white"
+              class="group relative aspect-square w-full cursor-crosshair overflow-hidden rounded-xl border border-border bg-background"
               style="contain: layout style;"
             >
               <img
@@ -180,12 +180,12 @@ const hasMultipleMedia = optimizedMedia.length > 1;
               />
               <div
                 data-desktop-zoom-layer
-                class="pointer-events-none absolute inset-0 bg-white bg-no-repeat opacity-0 transition-opacity duration-150 motion-reduce:transition-none"
+                class="pointer-events-none absolute inset-0 bg-background bg-no-repeat opacity-0 transition-opacity duration-150 motion-reduce:transition-none"
                 aria-hidden="true"
               >
               </div>
               <div
-                class="pointer-events-none absolute right-3 bottom-3 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-600 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 motion-reduce:transition-none"
+                class="pointer-events-none absolute right-3 bottom-3 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 motion-reduce:transition-none"
               >
                 Zoom
               </div>
@@ -195,19 +195,19 @@ const hasMultipleMedia = optimizedMedia.length > 1;
           <div
             data-video-stage
             class:list={[
-              "mobile-media-stage relative aspect-square w-full overflow-hidden rounded-lg bg-gray-100 lg:rounded-xl",
+              "mobile-media-stage relative aspect-square w-full overflow-hidden rounded-lg bg-muted lg:rounded-xl",
               initialMedia?.item.kind !== "video" && "hidden",
             ]}
           >
             <div
               data-video-placeholder
               class:list={[
-                "pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center gap-2 bg-gray-100 text-gray-500",
+                "pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center gap-2 bg-muted text-muted-foreground",
                 initialMedia?.posterUrl && "hidden",
               ]}
             >
               <span
-                class="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-white shadow-sm"
+                class="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background shadow-sm"
                 aria-hidden="true"
               >
                 <Play className="ml-0.5 h-5 w-5 fill-current" />
@@ -247,11 +247,11 @@ const hasMultipleMedia = optimizedMedia.length > 1;
               <button
                 type="button"
                 data-scroll-control="mobile-up"
-                class="pointer-events-none absolute -top-1 left-0 right-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-black motion-reduce:transition-none"
+                class="pointer-events-none absolute -top-1 left-0 right-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
                 aria-label="Scroll product media up"
                 tabindex="-1"
               >
-                <span class="rounded-full border border-gray-100 bg-white p-0.5 text-gray-500 shadow-xs">
+                <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
                   <ChevronUp className="h-3 w-3" />
                 </span>
               </button>
@@ -265,7 +265,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                   {optimizedMedia.map((itemData, index) => (
                     <button
                       type="button"
-                      class="thumbnail-btn snap-start group relative aspect-square w-full min-h-11 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-white transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:scale-95 motion-reduce:transition-none"
+                      class="thumbnail-btn snap-start group relative aspect-square w-full min-h-11 shrink-0 overflow-hidden rounded-lg border border-border bg-background transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground active:scale-95 motion-reduce:transition-none"
                       data-gallery-thumbnail
                       data-product-media-id={itemData.item.id}
                       data-media-id={itemData.item.mediaId}
@@ -305,7 +305,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                         />
                       ) : (
                         <span
-                          class="flex h-full w-full items-center justify-center bg-gray-100 text-gray-500"
+                          class="flex h-full w-full items-center justify-center bg-muted text-muted-foreground"
                           aria-hidden="true"
                         >
                           <Video className="h-5 w-5" />
@@ -332,7 +332,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                         class:list={[
                           "thumb-ring pointer-events-none absolute inset-0 rounded-lg border-2 border-transparent transition-colors duration-200 motion-reduce:transition-none",
                           itemData.item.id === featuredMedia?.id &&
-                            "!border-black",
+                            "!border-foreground",
                         ]}
                         aria-hidden="true"
                       />
@@ -344,11 +344,11 @@ const hasMultipleMedia = optimizedMedia.length > 1;
               <button
                 type="button"
                 data-scroll-control="mobile-down"
-                class="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-black motion-reduce:transition-none"
+                class="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
                 aria-label="Scroll product media down"
                 tabindex="-1"
               >
-                <span class="rounded-full border border-gray-100 bg-white p-0.5 text-gray-500 shadow-xs">
+                <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
                   <ChevronDown className="h-3 w-3" />
                 </span>
               </button>
@@ -364,11 +364,11 @@ const hasMultipleMedia = optimizedMedia.length > 1;
           <button
             type="button"
             data-scroll-control="desktop-up"
-            class="pointer-events-none absolute -top-1 left-0 right-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-black motion-reduce:transition-none"
+            class="pointer-events-none absolute -top-1 left-0 right-0 z-10 flex h-11 items-start justify-center opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
             aria-label="Scroll product media up"
             tabindex="-1"
           >
-            <span class="rounded-full border border-gray-100 bg-white p-0.5 text-gray-500 shadow-xs">
+            <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
               <ChevronUp className="h-4 w-4" />
             </span>
           </button>
@@ -381,7 +381,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
             {optimizedMedia.map((itemData, index) => (
               <button
                 type="button"
-                class="thumbnail-btn snap-start group relative aspect-square w-full min-h-11 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-white transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black active:scale-95 motion-reduce:transition-none"
+                class="thumbnail-btn snap-start group relative aspect-square w-full min-h-11 shrink-0 overflow-hidden rounded-lg border border-border bg-background transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground active:scale-95 motion-reduce:transition-none"
                 data-gallery-thumbnail
                 data-product-media-id={itemData.item.id}
                 data-media-id={itemData.item.mediaId}
@@ -417,7 +417,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                   />
                 ) : (
                   <span
-                    class="flex h-full w-full items-center justify-center bg-gray-100 text-gray-500"
+                    class="flex h-full w-full items-center justify-center bg-muted text-muted-foreground"
                     aria-hidden="true"
                   >
                     <Video className="h-5 w-5" />
@@ -442,7 +442,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                   data-thumb-ring
                   class:list={[
                     "thumb-ring pointer-events-none absolute inset-0 rounded-lg border-2 border-transparent transition-colors duration-200 motion-reduce:transition-none",
-                    itemData.item.id === featuredMedia?.id && "!border-black",
+                    itemData.item.id === featuredMedia?.id && "!border-foreground",
                   ]}
                   aria-hidden="true"
                 />
@@ -453,11 +453,11 @@ const hasMultipleMedia = optimizedMedia.length > 1;
           <button
             type="button"
             data-scroll-control="desktop-down"
-            class="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-black motion-reduce:transition-none"
+            class="pointer-events-none absolute bottom-0 left-0 right-0 z-10 flex h-11 items-end justify-center pb-1 opacity-0 transition-opacity duration-300 focus-visible:outline-2 focus-visible:outline-foreground motion-reduce:transition-none"
             aria-label="Scroll product media down"
             tabindex="-1"
           >
-            <span class="rounded-full border border-gray-100 bg-white p-0.5 text-gray-500 shadow-xs">
+            <span class="rounded-full border border-border bg-background p-0.5 text-muted-foreground shadow-xs">
               <ChevronDown className="h-4 w-4" />
             </span>
           </button>
@@ -532,7 +532,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
   .custom-scrollbar:hover::-webkit-scrollbar-thumb {
     background-color: #94a3b8;
   }
-  .thumbnail-btn .thumb-ring.\!border-black {
+  .thumbnail-btn .thumb-ring.\!border-foreground {
     border-color: #000 !important;
   }
   @media (max-width: 1023px) {

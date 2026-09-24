@@ -17,13 +17,14 @@ describe("static sitemap route", () => {
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
   });
 
-  it("emits static crawlable URLs by default", async () => {
+  it("emits the homepage as the only static URL", async () => {
     const response = await GET({} as never);
     const body = await response.text();
 
     expect(response.status).toBe(200);
     expect(body).toContain("https://storefront.example.test/");
-    expect(body).toContain("https://storefront.example.test/search");
+    // Internal search results are never advertised for indexing.
+    expect(body).not.toContain("/search");
     expect(body).not.toContain("/cart");
   });
 });

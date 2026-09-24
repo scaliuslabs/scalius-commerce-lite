@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     syncCacheGenerationMirror: vi.fn(),
     enqueueOrderRefundNotificationForOrder: vi.fn(),
     failStaleQueuedPaymentWebhookEvents: vi.fn(),
+    backfillMissingMediaVariants: vi.fn(),
   };
 });
 
@@ -69,6 +70,10 @@ vi.mock("@scalius/core/modules/payments", () => ({
   reconcileExternalRefundWebhooks: mocks.reconcileExternalRefundWebhooks,
 }));
 
+vi.mock("@scalius/core/modules/media", () => ({
+  backfillMissingMediaVariants: mocks.backfillMissingMediaVariants,
+}));
+
 vi.mock("./utils/cache-generation", () => ({
   bumpCacheGeneration: mocks.bumpCacheGeneration,
   syncCacheGenerationMirror: mocks.syncCacheGenerationMirror,
@@ -87,6 +92,7 @@ import {
   ABANDONED_CHECKOUT_SWEEP_LIMIT,
   EMPTY_ABANDONED_CHECKOUT_MAX_AGE_MINUTES,
   INVENTORY_EXPIRY_SWEEP_LIMIT,
+  MEDIA_RENDITION_BACKFILL_LIMIT,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
   CUSTOMER_SESSION_SWEEP_LIMIT,
@@ -232,6 +238,7 @@ describe("runScheduledMaintenance", () => {
       limit: STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT,
       hasMore: false,
     });
+    mocks.backfillMissingMediaVariants.mockResolvedValue({ scanned: 0, generated: 0, failed: 0 });
   });
 
   afterEach(() => {
@@ -529,6 +536,30 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.cleanupExpiredCustomerAuthOtpRateLimits).toHaveBeenCalled();
     expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
     expect(mocks.cleanupExpiredScannerTokenClaims).toHaveBeenCalled();
+  });
+
+  it("backfills media renditions only with the Images binding and bumps the generation only when one was saved", async () => {
+    const images = { info: vi.fn() };
+    const env = { ...createEnv(), IMAGES: images } as unknown as Env;
+
+    await runScheduledMaintenance(createEnv(), createExecutionContext());
+    expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
+
+    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 2, generated: 0, failed: 2 });
+    await runScheduledMaintenance(env, createExecutionContext());
+    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledWith(
+      mocks.db,
+      env.BUCKET,
+      images,
+      { limit: MEDIA_RENDITION_BACKFILL_LIMIT },
+    );
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
+    const executionCtx = createExecutionContext();
+    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 3, generated: 2, failed: 1 });
+    await runScheduledMaintenance(env, executionCtx);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith({ env, executionCtx });
   });
 
   it("logs operation and run failure timings before rethrowing scheduled errors", async () => {
