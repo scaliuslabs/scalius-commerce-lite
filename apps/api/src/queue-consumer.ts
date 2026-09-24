@@ -14,6 +14,7 @@
 //   payment.event    → core payments process-payment.ts (one type for every gateway)
 //   order.notif      → src/modules/notifications/notifications.service.ts
 //   auth.send_otp    → inline below (WhatsApp + email; SMS providers TBD)
+//   media.render_variants → core media renderMissingMediaVariants (delayed after upload)
 //
 // TODO: When 5-6 SMS providers are implemented, extract auth.send_otp to
 //       src/modules/notifications/otp.handler.ts
@@ -67,7 +68,12 @@ import {
   type AuthOtpDeliveryReceiptResult,
 } from "@scalius/core/modules/customers/otp-delivery-receipts";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
+import {
+  renderMissingMediaVariants,
+  type MediaVariantsQueueMessage,
+} from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
+import { bumpCacheGeneration } from "./utils/cache-generation";
 import { logOpsEvent } from "./utils/ops-log";
 import {
   markWebhookEventFailed,
@@ -244,7 +250,7 @@ export type AuthOtpQueueMessage =
  * Each message is processed independently; failures are retried by Cloudflare.
  */
 export async function handleQueueBatch(
-  batch: MessageBatch<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage>,
+  batch: MessageBatch<QueueBody>,
   env: Env,
   executionCtx?: ExecutionContext,
 ): Promise<void> {
@@ -263,7 +269,7 @@ export async function handleQueueBatch(
     batch.messages,
     QUEUE_BATCH_CONCURRENCY_LIMIT,
     (msg) => processQueueMessage(
-      msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage>,
+      msg as unknown as Message<QueueBody>,
       db,
       env,
       executionCtx,
@@ -285,7 +291,7 @@ export async function handleQueueBatch(
       console.error(`[Queue] Failed to process message ${msg.id}:`, result.status === "rejected" ? result.reason : "unknown");
       await markPaymentWebhookEventFailedOnTerminalAttempt(
         db,
-        msg as unknown as Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage>,
+        msg as unknown as Message<QueueBody>,
         result.reason,
       );
       msg.retry({ delaySeconds: getQueueRetryDelaySeconds(result.reason) });
@@ -684,7 +690,7 @@ async function archiveAuthOtpDlqMessage(
  * Process a single payment, notification, or OTP queue message.
  */
 async function processQueueMessage(
-  msg: Message<PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage>,
+  msg: Message<QueueBody>,
   db: ReturnType<typeof getDb>,
   env: Env,
   executionCtx?: ExecutionContext,
@@ -824,6 +830,19 @@ async function processQueueMessage(
       break;
     }
 
+    // ── Media renditions ───────────────────────────────────────────────────
+    // Delayed after an upload; skips media whose renditions already exist.
+    // A render failure is acked: the scheduled backfill retries it.
+
+    case "media.render_variants": {
+      const images = env.IMAGES;
+      if (!images) break;
+      const outcome = await renderMissingMediaVariants(db, payload.mediaId, env.BUCKET, images);
+      // Rendition URLs replace the published image URLs.
+      if (outcome === "generated") await bumpCacheGeneration({ env, executionCtx });
+      break;
+    }
+
     default: {
       const messageType = (payload as Record<string, unknown>).type;
       console.warn("[Queue] Unsupported message type:", messageType);
@@ -836,7 +855,7 @@ async function processQueueMessage(
   }
 }
 
-type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage;
+export type QueueBody = PaymentQueueMessage | AuthOtpQueueMessage | OrderNotificationQueueMessage | MediaVariantsQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 
 function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {
