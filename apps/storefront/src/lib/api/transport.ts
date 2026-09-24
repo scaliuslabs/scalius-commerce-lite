@@ -43,6 +43,7 @@ import type { Client } from "@scalius/api-client/factory";
 import {
   INTERNAL_SERVICE_ORIGIN,
   LOCAL_DEVELOPMENT_PLATFORM_CONFIG,
+  isInternalServiceUrl,
 } from "@scalius/shared/platform-config";
 
 // Resolved per request, never at module init: this module loads once per Worker
@@ -362,7 +363,12 @@ export async function apiFetch(
     let response: Response;
     if (import.meta.env.SSR && backendApi && url.startsWith(getApiBaseUrl())) {
       usedServiceBinding = true;
-      const serviceBindingTimeout = canFallbackToHttp
+      // The short deadline only buys an HTTPS retry. A read addressed to the
+      // internal origin (the platform API URL is not known yet, as for a
+      // render's first batch) has no public URL to retry, so cutting it short
+      // would only turn a slow cold read into an error page.
+      const canRetryOverHttps = canFallbackToHttp && !isInternalServiceUrl(url);
+      const serviceBindingTimeout = canRetryOverHttps
         ? Math.min(timeout, SERVICE_BINDING_READ_TIMEOUT_MS)
         : timeout;
       try {
@@ -379,7 +385,7 @@ export async function apiFetch(
           "Storefront API service binding",
         );
       } catch (error: unknown) {
-        if (!canFallbackToHttp) {
+        if (!canRetryOverHttps) {
           throw error;
         }
         console.warn(
