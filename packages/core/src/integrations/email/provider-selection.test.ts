@@ -77,7 +77,7 @@ describe("email provider selection", () => {
     });
     expect(send).toHaveBeenCalledWith({
       to: "buyer@example.com",
-      from: { email: "orders@example.com" },
+      from: "orders@example.com",
       subject: "Order received",
       html: "<p>Thanks</p>",
       text: undefined,
@@ -194,7 +194,8 @@ describe("email provider selection", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue({}) });
     vi.stubGlobal("fetch", fetchMock);
     const message = { to: "buyer@example.com", subject: "Order", html: "<p>Order</p>", fromName: storeName };
-    const safeName = 'River "&" Loom Bcc: attacker@example.test';
+    // Header-safe: quotes, angle brackets and line breaks never reach the From header.
+    const safeName = "River & Loom Bcc: attacker@example.test";
 
     await sendEmail(message, { env: { EMAIL: { send: cloudflareSend } }, settings: baseSettings });
     await sendEmail(message, { settings: { ...baseSettings, provider: "resend", resendApiKey: "re_key", hasResendApiKey: true } });
@@ -202,7 +203,7 @@ describe("email provider selection", () => {
 
     expect(cloudflareSend.mock.calls[0]![0].from).toEqual({ email: "orders@example.com", name: safeName });
     expect(JSON.parse(fetchMock.mock.calls[0]![1].body).from)
-      .toBe('"River \\"&\\" Loom Bcc: attacker@example.test" <orders@example.com>');
+      .toBe('"River & Loom Bcc: attacker@example.test" <orders@example.com>');
     expect(JSON.parse(fetchMock.mock.calls[1]![1].body).From).toEqual({ Email: "orders@example.com", Name: safeName });
 
     // Without a store name every provider keeps the bare configured address.

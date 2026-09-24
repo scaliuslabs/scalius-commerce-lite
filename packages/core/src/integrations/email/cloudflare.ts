@@ -28,9 +28,10 @@ export class CloudflareEmailProvider implements EmailProvider {
     }
 
     const settings = await getEmailRuntimeSettings(context);
+    const sender = resolveSender({ from, fromName }, settings);
     const result = await binding.send({
       to,
-      from: resolveSender({ from, fromName }, settings),
+      from: sender.name ? sender : sender.email,
       subject,
       html,
       text,
