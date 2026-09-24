@@ -147586,7 +147586,13 @@
                                     "type": "string",
                                     "nullable": true
                                   },
+                                  "kind": {
+                                    "type": "string"
+                                  },
                                   "amount": {
+                                    "type": "number"
+                                  },
+                                  "shippingAmount": {
                                     "type": "number"
                                   }
                                 },
@@ -148425,7 +148431,13 @@
                                     "type": "string",
                                     "nullable": true
                                   },
+                                  "kind": {
+                                    "type": "string"
+                                  },
                                   "amount": {
+                                    "type": "number"
+                                  },
+                                  "shippingAmount": {
                                     "type": "number"
                                   }
                                 },

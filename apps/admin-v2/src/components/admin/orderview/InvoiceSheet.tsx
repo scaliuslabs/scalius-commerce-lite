@@ -16,6 +16,7 @@ import {
   resolveSavedOrderMoneySummary,
 } from "~/lib/order-tax-presentation";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
+import { summarizeOrderDiscounts } from "~/lib/order-discount-summary";
 import { formatLocationParts } from "~/lib/location-presentation";
 import { taxLabelText } from "./OrderItemsCard";
 
@@ -49,17 +50,39 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
     businessInfo.email,
     businessInfo.taxId ? `${t("invoice.taxId")}: ${businessInfo.taxId}` : null,
   ].filter(Boolean);
-  const discounts: Array<[string, string]> = (order.discounts ?? []).length > 0
-    ? (order.discounts ?? []).map((entry) => [
-        entry.code ? t("summary.discountCode", { code: entry.code }) : entry.name,
-        `−${money(entry.amount)}`,
-      ])
-    : (saved ? saved.discountMinor : discount) > 0
-      ? [[t("summary.discount"), `−${saved ? minor(saved.discountMinor) : money(discount)}`]]
-      : [];
+  const decimals = saved?.decimalPlaces ?? 2;
+  const amount = (minorAmount: number) => (saved ? minor(minorAmount) : money(minorAmount / 10 ** decimals));
+  const discountSummary = summarizeOrderDiscounts({
+    discounts: order.discounts ?? [],
+    shippingMinor: saved ? saved.shippingMinor : Math.round(order.shippingCharge * 10 ** decimals),
+    discountMinor: saved ? saved.discountMinor : Math.round(discount * 10 ** decimals),
+    decimalPlaces: decimals,
+  });
+  // Delivery savings on the delivery line ("Free (CODE)", the fee noted), item savings one line each.
+  const deliveryValue = [
+    discountSummary.deliveryChargedMinor === 0 && discountSummary.deliveryStruckMinor !== null
+      ? t("delivery.free")
+      : amount(discountSummary.deliveryChargedMinor),
+    discountSummary.deliveryDiscountNames.length > 0 ? ` (${discountSummary.deliveryDiscountNames.join(", ")})` : "",
+  ].join("");
+  const deliveryDetails = [
+    delivery.details,
+    discountSummary.deliveryStruckMinor !== null
+      ? t("invoice.deliveryWas", { amount: amount(discountSummary.deliveryStruckMinor) })
+      : null,
+  ].filter(Boolean).join(" ");
+  const discounts: Array<[string, string]> = [
+    ...discountSummary.itemDiscounts.map(({ name, amountMinor }): [string, string] => [
+      `${t("summary.discount")} · ${name}`,
+      `−${amount(amountMinor)}`,
+    ]),
+    ...(discountSummary.otherDiscountMinor > 0
+      ? [[t("summary.discount"), `−${amount(discountSummary.otherDiscountMinor)}`] as [string, string]]
+      : []),
+  ];
   const totals: Array<[string, string, string?]> = [
     [t("summary.subtotal"), saved ? minor(saved.subtotalMinor) : money(order.totalAmount - order.shippingCharge + discount)],
-    [delivery.label, saved ? minor(saved.shippingMinor) : money(order.shippingCharge), delivery.details],
+    [delivery.label, deliveryValue, deliveryDetails],
     ...discounts,
     ...(saved && saved.taxMinor > 0
       ? [[

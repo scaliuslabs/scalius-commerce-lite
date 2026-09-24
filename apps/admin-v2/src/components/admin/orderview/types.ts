@@ -193,7 +193,11 @@ export interface OrderDiscount {
   name: string;
   code: string | null;
   method: "automatic" | "code";
+  kind: "buy_x_get_y" | "product" | "order" | "shipping";
+  /** Everything the discount saved, items and delivery. */
   amount: number;
+  /** The part off delivery, shown on the delivery line. */
+  shippingAmount: number;
 }
 
 export type OrderEditLockReason =

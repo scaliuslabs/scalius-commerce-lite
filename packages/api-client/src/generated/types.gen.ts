@@ -40551,7 +40551,9 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                 discounts?: Array<{
                     name: string;
                     code: string | null;
+                    kind?: string;
                     amount: number;
+                    shippingAmount?: number;
                 }>;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -40764,7 +40766,9 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                 discounts?: Array<{
                     name: string;
                     code: string | null;
+                    kind?: string;
                     amount: number;
+                    shippingAmount?: number;
                 }>;
                 createdAt: string | number;
                 updatedAt: string | number;

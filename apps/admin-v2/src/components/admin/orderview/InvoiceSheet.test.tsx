@@ -49,4 +49,25 @@ describe("InvoiceSheet", () => {
     expect(totals).toContain(`${en["payment.refunded"]}−1,600`);
     expect(totals).toContain(`${en["payment.net"]}880`);
   });
+
+  it("prints delivery savings on the delivery line and item savings as Discount · Title (CODE)", async () => {
+    const discounted = {
+      ...document_,
+      order: {
+        ...document_.order,
+        totalAmount: 2115, shippingCharge: 80, discountAmount: 365, refundedAmount: 0,
+        discounts: [
+          { name: "Amount off order", code: "R2MKTORD15", kind: "order", amount: 285, shippingAmount: 0 },
+          { name: "Free delivery", code: "FREESHIP", kind: "shipping", amount: 80, shippingAmount: 80 },
+        ],
+      },
+    } as unknown as InvoiceDocument;
+    await act(async () => root.render(<InvoiceSheet document={discounted} />));
+    const totals = [...host.querySelectorAll(".invoice-totals div")].map((row) => row.textContent ?? "");
+    expect(totals).toContain(`${en["delivery.label"]}${en["invoice.deliveryWas"].replace("{amount}", "80")}${en["delivery.free"]} (FREESHIP)`);
+    expect(totals).toContain(`${en["summary.discount"]} · Amount off order (R2MKTORD15)−285`);
+    expect(totals.filter((row) => row.startsWith(en["summary.discount"]))).toHaveLength(1);
+    // 2,400 − 285 + 0 delivery = 2,115.
+    expect(totals).toContain(`${en["summary.total"]}2,115`);
+  });
 });

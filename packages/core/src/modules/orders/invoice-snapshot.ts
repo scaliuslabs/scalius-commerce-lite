@@ -68,8 +68,12 @@ export interface InvoiceOrderSnapshot {
   balanceDue: number | null;
   /** Money given back so far (major units); a partial refund shows as a credit line. */
   refundedAmount?: number;
-  /** Each discount applied at checkout (major units). */
-  discounts?: Array<{ name: string; code: string | null; amount: number }>;
+  /**
+   * Each discount applied at checkout (major units): `amount` is everything it
+   * saved, `shippingAmount` the part off delivery (shown on the delivery line).
+   * Invoices issued before the split carry no `shippingAmount`.
+   */
+  discounts?: Array<{ name: string; code: string | null; kind?: string; amount: number; shippingAmount?: number }>;
   createdAt: string | number;
   updatedAt: string | number;
   items: InvoiceOrderItemSnapshot[];
@@ -179,7 +183,9 @@ export function snapshotInvoiceOrder(
     discounts: (order.discounts ?? []).map((discount) => ({
       name: discount.name,
       code: discount.code,
+      ...(discount.kind ? { kind: discount.kind } : {}),
       amount: discount.amount,
+      shippingAmount: discount.shippingAmount ?? 0,
     })),
     createdAt: timestamp(order.createdAt),
     updatedAt: timestamp(order.updatedAt),
