@@ -71,7 +71,7 @@ const V3_CLASSIC = {
     "theme-card-min-phone": "9.25rem", "theme-card-min-tablet": "11rem", "theme-card-min-desktop": "12.5rem",
     "theme-grid-gap-phone": "0.5rem", "theme-grid-gap-desktop": "1rem", "theme-container-width": "90rem",
   },
-  sections: ["hero", "collections", "categories", "delivery"],
+  sections: ["hero", "collections", "category-tiles", "usp-strip"],
 } as const;
 
 describe("storefront theme document v4", () => {
