@@ -7,7 +7,12 @@ import {
 } from "./tax-quote-contract";
 import { cartItemVariantLabel } from "../cart/item-options";
 import type { CartValidationIssue } from "../api/orders";
-import { isDeliveryRateUnavailable, parseTaxQuoteCartIssues } from "./tax-quote-error-contract";
+import {
+  isDeliveryRateUnavailable,
+  parseTaxQuoteCartIssues,
+  unavailableDeliveryLocation,
+  type DeliveryLocationLevel,
+} from "./tax-quote-error-contract";
 
 const TAX_QUOTE_ENDPOINT = "/api/checkout/tax-quote";
 const TAX_QUOTE_TIMEOUT_MS = 10_000;
@@ -45,6 +50,14 @@ export class TaxQuoteDeliveryRateError extends Error {
   constructor() {
     super("The chosen delivery option isn't available for this address.");
     this.name = "TaxQuoteDeliveryRateError";
+  }
+}
+
+/** The chosen city, thana or area is gone: clear it and ask the buyer again. */
+export class TaxQuoteDeliveryLocationError extends Error {
+  constructor(public readonly field: DeliveryLocationLevel) {
+    super("The chosen delivery area is no longer available.");
+    this.name = "TaxQuoteDeliveryLocationError";
   }
 }
 
@@ -147,6 +160,8 @@ export async function fetchAuthoritativeTaxQuote(
       const issues = parseTaxQuoteCartIssues(payload);
       if (issues.length > 0) throw new TaxQuoteCartChangedError(issues);
       if (isDeliveryRateUnavailable(payload)) throw new TaxQuoteDeliveryRateError();
+      const locationGone = unavailableDeliveryLocation(payload);
+      if (locationGone) throw new TaxQuoteDeliveryLocationError(locationGone);
       throw new TaxQuoteUnavailableError();
     }
     const quote = parseTaxQuoteEnvelope(await response.json());
@@ -174,6 +189,7 @@ export async function fetchAuthoritativeTaxQuote(
   } catch (error) {
     if (error instanceof TaxQuoteCartChangedError) throw error;
     if (error instanceof TaxQuoteDeliveryRateError) throw error;
+    if (error instanceof TaxQuoteDeliveryLocationError) throw error;
     if (error instanceof TaxQuoteUnavailableError) throw error;
     if (error instanceof TaxQuoteContractError) throw new TaxQuoteUnavailableError();
     throw new TaxQuoteUnavailableError();

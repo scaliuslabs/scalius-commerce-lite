@@ -11,6 +11,7 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
+import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
@@ -200,7 +201,8 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
             </div>
             <div className="space-y-2">
               <Label htmlFor="fulfill-amount">{t("fulfill.amount")}</Label>
-              <NumberInput
+              <MoneyInput
+                currencyCode={order.currencyCode ?? ""}
                 id="fulfill-amount"
                 value={shipmentAmount}
                 aria-invalid={Boolean(errors.amount) || undefined}

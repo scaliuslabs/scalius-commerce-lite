@@ -263,6 +263,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 79,
+        name: "0079_whole_taka_amounts",
+        sqliteStatements: 9,
+        postgresStatements: 9,
+      },
     ]);
   });
 
@@ -388,6 +394,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 74, name: "0074_verified_customer_identity" },
           { version: 75, name: "0075_theme_layout_reset" },
           { version: 76, name: "0076_guest_record_links" },
+          { version: 79, name: "0079_whole_taka_amounts" },
         ],
       });
     } finally {

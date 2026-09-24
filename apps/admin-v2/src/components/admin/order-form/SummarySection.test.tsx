@@ -114,6 +114,7 @@ vi.mock("./OrderFormContext", () => ({
 
 vi.mock("~/hooks/use-currency", () => ({
   useCurrency: () => ({
+    code: "BDT",
     fmt: (n: number) => `${n < 0 ? "-" : ""}৳${Math.abs(n).toFixed(2)}`,
   }),
 }));

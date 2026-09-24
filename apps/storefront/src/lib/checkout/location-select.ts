@@ -109,6 +109,11 @@ function selectedName(select: HTMLSelectElement | null): string {
 export interface LocationSelectsController {
   selection(): LocationSelection;
   prefill(detail: LocationPrefillDetail): Promise<void>;
+  /**
+   * The chosen city, thana or area is gone: clear it (and what depends on
+   * it) and list that level again without it.
+   */
+  forget(level: "city" | "zone" | "area"): Promise<void>;
 }
 
 /** Long zone lists (Dhaka has hundreds) get a type-to-filter box above them. */
@@ -206,6 +211,9 @@ export function enhanceLocationSelects(
       if (retry) retry.hidden = false;
       return [];
     }
+    // People look for a place by name: sort without regard to case, in the page's language.
+    const collator = new Intl.Collator(select.ownerDocument.documentElement.lang || undefined, { sensitivity: "base", numeric: true });
+    result = [...result].sort((left, right) => collator.compare(left.name, right.name));
     select.append(...result.map((item) => createOption(select, item.name, item.id)));
     select.disabled = result.length === 0;
     if (select === zone) {
@@ -266,6 +274,34 @@ export function enhanceLocationSelects(
 
   return {
     selection,
+    async forget(level) {
+      if (level === "city") {
+        city.value = "";
+        onCity();
+        return;
+      }
+      if (level === "zone") {
+        reset(area);
+        if (!city.value) {
+          reset(zone);
+          notify();
+          return;
+        }
+        const reloading = load(zone, "zones", city.value);
+        notify();
+        await reloading;
+        return;
+      }
+      if (!area) return;
+      if (!zone.value) {
+        reset(area);
+        notify();
+        return;
+      }
+      const reloading = load(area, "areas", zone.value);
+      notify();
+      await reloading;
+    },
     async prefill(detail) {
       const cityOption = resolveLocationOption(optionsOf(city), detail.city, detail.cityName);
       if (!cityOption) return;

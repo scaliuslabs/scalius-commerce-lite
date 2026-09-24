@@ -2339,6 +2339,10 @@ export type PostApiV1DiscountsValidateResponses = {
                  * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
                  */
                 shippingAmount: number;
+                /**
+                 * A code only: the automatic discount it replaced, because the code saves more and the two can't be combined.
+                 */
+                replaces?: string;
             }>;
             offers: Array<{
                 promotionId: string;
@@ -12841,6 +12845,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                  * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
                  */
                 shippingAmount: number;
+                /**
+                 * A code only: the automatic discount it replaced, because the code saves more and the two can't be combined.
+                 */
+                replaces?: string;
             }>;
             /**
              * Automatic Buy X get Y discounts the buyer has earned but not claimed: the items to get are not in the cart yet.

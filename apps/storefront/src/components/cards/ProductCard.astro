@@ -33,11 +33,7 @@ const card = layout.productCard;
 
 const hasDiscount = product.discountedPrice < product.price;
 const pricePrefix = product.priceVaries ? "From " : "";
-const discountBadge = formatDiscountBadge(
-  product.discountType,
-  product.discountPercentage,
-  product.discountAmount,
-);
+const discountBadge = formatDiscountBadge(product.price, product.discountedPrice);
 const soldOut = product.availableForSale === false;
 const productHref = `/products/${product.slug}`;
 

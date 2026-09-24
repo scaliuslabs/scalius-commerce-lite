@@ -46,6 +46,7 @@ import {
 import { OfficialProviderMark } from "./provider-marks";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
+import { useWholeCashAmounts } from "../shared/MoneyInput";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading, useCloseSettingsDialog } from "./SettingsPage";
 import { currencyQuery, platformQuery } from "./StoreSettings";
 
@@ -553,6 +554,7 @@ export function PaymentOptionsCard() {
   const canEdit = useCanEditPayments();
   const methods = useQuery(paymentMethodsQuery);
   const { codEnabled, online } = usableMethods(methods.data);
+  const wholeTaka = useWholeCashAmounts();
   const issuesFor = (draft: CheckoutFlow) =>
     getCheckoutFlowPreviewIssues({
       checkoutMode: draft.checkoutMode,
@@ -563,6 +565,7 @@ export function PaymentOptionsCard() {
       codEnabled,
       activeOnlineMethodCount: online.length,
       sslCommerzEnabled: online.includes("sslcommerz"),
+      wholeTaka,
     });
   const { values, setValue, isLoaded, isLoadError, refetch } = useCheckoutFlowForm((draft) => issuesFor(draft).length === 0, t("optionsTitle"));
   if (isLoadError) return <SettingsLoadFailure title={t("loadFlow")} onRetry={refetch} />;
@@ -608,13 +611,13 @@ export function PaymentOptionsCard() {
           <Input
             id="advance-amount"
             type="number"
-            inputMode="decimal"
+            inputMode={wholeTaka ? "numeric" : "decimal"}
             min="0"
-            step="0.01"
+            step={wholeTaka ? "1" : "0.01"}
             className="max-w-40"
             value={Number.isFinite(values.partialPaymentAmount) ? values.partialPaymentAmount : ""}
             disabled={!canEdit}
-            aria-invalid={issues.includes("amountInvalid") || issues.includes("sslRange")}
+            aria-invalid={issues.includes("amountInvalid") || issues.includes("sslRange") || issues.includes("wholeTaka")}
             aria-describedby="advance-amount-note"
             onChange={(event) => setValue("partialPaymentAmount", Number(event.target.value))}
           />

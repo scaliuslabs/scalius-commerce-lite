@@ -68,7 +68,7 @@ function manualOrder(overrides: Record<string, unknown> = {}) {
     notes: null,
     items: [{ productId: "tee", variantId: "tee_sku", quantity: 3 }],
     discountAmount: 1,
-    shippingCharge: 60.1,
+    shippingCharge: 60,
     ...overrides,
   };
 }
@@ -87,14 +87,19 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     seedCatalog(false);
 
     // 999 × 0.875 = 874.125 paisa rounds half-up to whole taka (900); 3 × 900 = 2700;
-    // taxable 2700 − 100 = 2600; VAT 260 rounds to whole taka (300). Shipping keeps its exact paisa.
+    // taxable 2700 − 100 = 2600; VAT 260 rounds to whole taka (300). Merchant-entered
+    // amounts are whole taka: a delivery charge with paisa is refused.
     await expect(quoteManualOrder(db, manualOrder())).resolves.toMatchObject({
       subtotalAmount: 27,
-      shippingAmount: 60.1,
+      shippingAmount: 60,
       discountAmount: 1,
       taxAmount: 3,
-      totalAmount: 89.1,
+      totalAmount: 89,
     });
+    await expect(createOrder(db, manualOrder({ shippingCharge: 60.1 }), "admin_1"))
+      .rejects.toMatchObject({ status: 400, message: "Taka amounts are whole numbers." });
+    await expect(createOrder(db, manualOrder({ discountAmount: 0.5 }), "admin_1"))
+      .rejects.toMatchObject({ status: 400, message: "Taka amounts are whole numbers." });
     const created = await createOrder(db, manualOrder(), "admin_1");
 
     const order = get(`
@@ -103,12 +108,12 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
       FROM orders WHERE id = ?`, created.id);
     expect(order).toEqual({
       subtotal_amount_minor: 2700,
-      shipping_amount_minor: 6010,
+      shipping_amount_minor: 6000,
       discount_amount_minor: 100,
       tax_amount_minor: 300,
-      total_amount_minor: 8910,
+      total_amount_minor: 8900,
       paid_amount_minor: 0,
-      balance_due_minor: 8910,
+      balance_due_minor: 8900,
     });
     expect(Number(order.subtotal_amount_minor) + Number(order.shipping_amount_minor)
       - Number(order.discount_amount_minor) + Number(order.tax_amount_minor)).toBe(order.total_amount_minor);
@@ -130,7 +135,7 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
 
     // Gross 2600 already contains VAT: 2600 × 1000 / 11000 = 236.36 paisa, shown as whole taka (200).
     const quote = await quoteManualOrder(db, manualOrder());
-    expect(quote).toMatchObject({ subtotalAmount: 27, taxAmount: 2, totalAmount: 86.1 });
+    expect(quote).toMatchObject({ subtotalAmount: 27, taxAmount: 2, totalAmount: 86 });
   });
 
   it("settles a deposit then the balance to exactly the order total", async () => {
@@ -168,12 +173,14 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
       .toEqual({ cod_status: "collected", collected_amount_minor: 10_000 });
     expect(get("SELECT count(*) AS n, sum(amount_minor) AS total FROM order_payments")).toEqual({ n: 1, total: 10_000 });
 
-    // 40.5 BDT is converted once to 4050 paisa; the order keeps the exact remainder.
+    // A taka refund is whole taka: 40.5 is refused, 40 is converted once to 4000 paisa.
     await expect(processRefund(db, { orderId: "order_cod", amount: 40.5, reason: "damaged", manualSettlementConfirmed: true }))
-      .resolves.toMatchObject({ success: true, amount: 40.5, isFullRefund: false });
+      .rejects.toMatchObject({ status: 400, message: "Taka amounts are whole numbers." });
+    await expect(processRefund(db, { orderId: "order_cod", amount: 40, reason: "damaged", manualSettlementConfirmed: true }))
+      .resolves.toMatchObject({ success: true, amount: 40, isFullRefund: false });
     expect(get("SELECT status, payment_status, paid_amount_minor, balance_due_minor FROM orders"))
-      .toEqual({ status: "delivered", payment_status: "partially_refunded", paid_amount_minor: 5_950, balance_due_minor: 0 });
-    expect(get("SELECT amount_minor FROM order_payments WHERE payment_type = 'refund'")).toEqual({ amount_minor: 4_050 });
+      .toEqual({ status: "delivered", payment_status: "partially_refunded", paid_amount_minor: 6_000, balance_due_minor: 0 });
+    expect(get("SELECT amount_minor FROM order_payments WHERE payment_type = 'refund'")).toEqual({ amount_minor: 4_000 });
   });
 
   it("derives feed and cart prices from minor units without float drift", async () => {

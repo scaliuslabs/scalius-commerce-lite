@@ -11,6 +11,7 @@ import {
     updateEverywhereElseRates,
 } from "@scalius/core/modules/delivery/zones";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
+import { readStoreCurrency } from "@scalius/core/modules/settings/store-money";
 
 import { ok, created, noContent } from "../../../utils/api-response";
 import { successEnvelope, noContentResponse, errorResponses, conflictResponse } from "../../../schemas/responses";
@@ -114,7 +115,7 @@ const createZoneRoute = createRoute({
 
 app.openapi(createZoneRoute, async (c) => {
     const db = c.get("db");
-    const result = await createDeliveryZone(db, c.req.valid("json"), await storeDecimalPlaces(db));
+    const result = await createDeliveryZone(db, c.req.valid("json"), await readStoreCurrency(db));
     await bumpCacheGeneration(c);
     return created(c, result);
 });
@@ -141,7 +142,7 @@ const everywhereElseRoute = createRoute({
 app.openapi(everywhereElseRoute, async (c) => {
     const db = c.get("db");
     const { rates, expectedRevision } = c.req.valid("json");
-    const result = await updateEverywhereElseRates(db, rates, expectedRevision, await storeDecimalPlaces(db));
+    const result = await updateEverywhereElseRates(db, rates, expectedRevision, await readStoreCurrency(db));
     await bumpCacheGeneration(c);
     return ok(c, result);
 });
@@ -175,7 +176,7 @@ const templateRoute = createRoute({
 app.openapi(templateRoute, async (c) => {
     const db = c.get("db");
     const { template, expectedRevision } = c.req.valid("json");
-    await applyDeliveryZoneTemplate(db, template, expectedRevision, await storeDecimalPlaces(db));
+    await applyDeliveryZoneTemplate(db, template, expectedRevision, await readStoreCurrency(db));
     await bumpCacheGeneration(c);
     return noContent(c);
 });
@@ -204,7 +205,7 @@ app.openapi(updateZoneRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const { expectedRevision, ...zone } = c.req.valid("json");
-    const result = await updateDeliveryZone(db, id, zone, expectedRevision, await storeDecimalPlaces(db));
+    const result = await updateDeliveryZone(db, id, zone, expectedRevision, await readStoreCurrency(db));
     await bumpCacheGeneration(c);
     return ok(c, result);
 });

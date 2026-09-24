@@ -4,6 +4,7 @@
  * the discounts catalog) and the live summary. Pure, so it is unit tested.
  */
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { requiresWholeCashAmounts } from "@scalius/shared/money";
 
 import type { DiscountMessageKey } from "~/i18n/discounts";
 import type { DiscountInput, DiscountRecord } from "~/lib/api-query-options/discounts";
@@ -124,6 +125,7 @@ export function amountError(value: string, currencyCode: string): DiscountMessag
   const match = /^(\d+)(?:\.(\d+))?$/u.exec(latinDigits(value).trim());
   if (!match) return "errorAmount";
   if ((match[2]?.length ?? 0) > precision) return precision === 0 ? "errorWholeAmount" : "errorDecimals";
+  if (requiresWholeCashAmounts(currencyCode) && /[1-9]/u.test(match[2] ?? "")) return "errorWholeTaka";
   const major = Number(`${match[1]}.${match[2] ?? "0"}`);
   if (major <= 0) return "errorAmount";
   return major > MAX_AMOUNT_MAJOR ? "errorAmountMax" : null;

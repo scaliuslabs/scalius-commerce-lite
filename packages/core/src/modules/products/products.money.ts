@@ -13,6 +13,7 @@ import {
 } from "@scalius/shared/currency";
 import { currencyDocument } from "../settings/documents";
 import { getCurrencyConfig } from "../settings/settings.service";
+import { toStoreMinor, type StoreCurrency } from "../settings/store-money";
 import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
 import type { BuyerCatalogPricingProjection } from "./products.buyer-projection";
 
@@ -189,14 +190,14 @@ export interface CatalogPriceInput {
 }
 
 /** Decimal catalog price fields from a request as stored minor-unit columns (only the fields present). */
-export function catalogPriceColumns(input: CatalogPriceInput, decimalPlaces: number) {
+export function catalogPriceColumns(input: CatalogPriceInput, currency: StoreCurrency) {
     return {
-        ...(input.price !== undefined ? { priceMinor: toMinor(input.price, decimalPlaces) } : {}),
+        ...(input.price !== undefined ? { priceMinor: toStoreMinor(input.price, currency) } : {}),
         ...(input.discountPercentage !== undefined
             ? { discountBps: percentToBps(input.discountPercentage) }
             : {}),
         ...(input.discountAmount !== undefined
-            ? { discountAmountMinor: input.discountAmount == null ? 0 : toMinor(input.discountAmount, decimalPlaces) }
+            ? { discountAmountMinor: input.discountAmount == null ? 0 : toStoreMinor(input.discountAmount, currency) }
             : {}),
     };
 }

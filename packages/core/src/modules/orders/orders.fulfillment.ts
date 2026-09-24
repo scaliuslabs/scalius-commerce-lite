@@ -1,6 +1,7 @@
 // src/modules/orders/orders.fulfillment.ts
 // Fulfillment and status update functions for orders.
 
+import { toStoreMinor } from "../settings/store-money";
 import type { Database } from "@scalius/database/client";
 import { hasOrderEvent, recordOrderEvent } from "./order-timeline";
 import {
@@ -1194,7 +1195,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             if (typeof requestedAmount !== "number" || !Number.isFinite(requestedAmount) || requestedAmount <= 0) {
                 throw new ValidationError("COD collected amount must be a positive finite number.");
             }
-            const requestedAmountMinor = toMinor(requestedAmount, currency.decimalPlaces);
+            const requestedAmountMinor = toStoreMinor(requestedAmount, currency);
             const existingCodCollection = await getRecordedCodCollection(db, orderId, currency);
             const collection = existingCodCollection
                 ? null
@@ -1487,6 +1488,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         status: orders.status,
         fulfillmentStatus: orders.fulfillmentStatus,
         version: orders.version,
+        currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
         shipmentClaimId: orders.shipmentClaimId,
         shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
@@ -1581,7 +1583,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         rawStatus: ShipmentStatus.IN_TRANSIT,
         note: (body.note as string | undefined) ?? null,
         shipmentItems: JSON.stringify(lines),
-        shipmentAmountMinor: shipmentAmount == null ? null : toMinor(shipmentAmount, order.currencyDecimalPlaces),
+        shipmentAmountMinor: shipmentAmount == null ? null : toStoreMinor(shipmentAmount, resolveOrderCurrencySnapshot(order)),
         isFinalShipment,
         metadata: requestKey ? JSON.stringify({ requestKey }) : null,
         createdAt: now, updatedAt: now,

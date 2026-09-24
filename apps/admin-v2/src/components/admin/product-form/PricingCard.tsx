@@ -11,6 +11,7 @@ import {
 import { NativeSelect } from "@/components/ui/native-select";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
+import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
@@ -18,7 +19,7 @@ import type { ProductFormValues } from "./types";
 
 export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }) {
   const t = useMessages(productMessages);
-  const { symbol, fmt, salePrice } = useCurrency();
+  const { symbol, code, fmt, salePrice } = useCurrency();
   const [discountShown, setDiscountShown] = useState(false);
   const [price, discountType, discountPercentage, discountAmount] = useWatch({
     control: form.control,
@@ -43,7 +44,8 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
             <FormItem>
               <FormLabel>{t("priceLabel", { symbol })}</FormLabel>
               <FormControl>
-                <NumberInput
+                <MoneyInput
+                  currencyCode={code}
                   ref={field.ref}
                   name={field.name}
                   placeholder="0.00"
@@ -97,14 +99,27 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
                     {discountType === "flat" ? t("discountAmountLabel", { symbol }) : t("discountPercentLabel")}
                   </FormLabel>
                   <FormControl>
-                    <NumberInput
-                      ref={field.ref}
-                      name={field.name}
-                      placeholder="0"
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      onBlur={field.onBlur}
-                    />
+                    {/* A flat discount is money (whole taka in BDT); a percentage is not. */}
+                    {discountType === "flat" ? (
+                      <MoneyInput
+                        currencyCode={code}
+                        ref={field.ref}
+                        name={field.name}
+                        placeholder="0"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        onBlur={field.onBlur}
+                      />
+                    ) : (
+                      <NumberInput
+                        ref={field.ref}
+                        name={field.name}
+                        placeholder="0"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        onBlur={field.onBlur}
+                      />
+                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>

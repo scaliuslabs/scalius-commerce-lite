@@ -161,20 +161,16 @@ export function formatPrice(price: number, currencySymbol?: string): string {
   return formatMoney(price, currencySymbol ? { symbol: currencySymbol } : undefined);
 }
 
-/** Discount badge: "-20%" for a percentage, "-৳200" for a fixed amount. */
-export function formatDiscountBadge(
-  discountType: DiscountType,
-  discountPercentage: number | null | undefined,
-  discountAmount: number | null | undefined,
-  currencySymbol?: string,
-): string | null {
-  if (discountType === "percentage" && discountPercentage && discountPercentage > 0) {
-    return `-${Math.round(discountPercentage)}%`;
-  }
-  if (discountType === "flat" && discountAmount && discountAmount > 0) {
-    return `-${formatPrice(discountAmount, currencySymbol)}`;
-  }
-  return null;
+/**
+ * Discount badge, one format for every discount so a grid reads the same:
+ * the share of the price the buyer saves ("-20%"), for a percentage or a
+ * fixed amount off alike. Rounded down so it never promises more than the
+ * struck-through price shows; the amount itself is on the price line.
+ */
+export function formatDiscountBadge(originalPrice: number, finalPrice: number): string | null {
+  if (!(originalPrice > 0) || !(finalPrice < originalPrice)) return null;
+  const percent = Math.floor(((originalPrice - Math.max(finalPrice, 0)) / originalPrice) * 100);
+  return `-${Math.max(1, percent)}%`;
 }
 
 /** Final price of one SKU; see `calculateVariantPrice`. */

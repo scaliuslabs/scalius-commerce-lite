@@ -93,6 +93,21 @@ export function parseTaxQuoteCartIssues(payload: unknown): CartValidationIssue[]
   });
 }
 
+/** Mirrors core `DELIVERY_LOCATION_UNAVAILABLE_REASON`. */
+export const DELIVERY_LOCATION_UNAVAILABLE_REASON = "delivery_location_unavailable";
+
+export type DeliveryLocationLevel = "city" | "zone" | "area";
+
+/**
+ * The city, thana or area the buyer chose is gone (the merchant removed it):
+ * the level to clear and ask again, or null for any other answer.
+ */
+export function unavailableDeliveryLocation(payload: unknown): DeliveryLocationLevel | null {
+  const details = issueDetails(payload);
+  if (details?.reason !== DELIVERY_LOCATION_UNAVAILABLE_REASON) return null;
+  return details.field === "city" || details.field === "zone" || details.field === "area" ? details.field : null;
+}
+
 /** Mirrors core `DELIVERY_RATE_UNAVAILABLE_REASON`. */
 export const DELIVERY_RATE_UNAVAILABLE_REASON = "delivery_rate_unavailable";
 

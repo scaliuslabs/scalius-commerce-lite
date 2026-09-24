@@ -19,6 +19,7 @@ interface Props {
   loadingText: string;
   feeChangedText: string;
   replacedText: string;
+  replacedSameFeeText: string;
   goneText: string;
 }
 
@@ -38,6 +39,7 @@ const { shippingMethods, shippingMethodLabel, ...copy } = Astro.props;
   data-loading-text={copy.loadingText}
   data-fee-changed-text={copy.feeChangedText}
   data-replaced-text={copy.replacedText}
+  data-replaced-same-fee-text={copy.replacedSameFeeText}
   data-gone-text={copy.goneText}
 >
   <script is:inline type="application/json" data-shipping-rates set:html={serializeJsonForInlineScript(shippingMethods)} />

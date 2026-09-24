@@ -44,7 +44,7 @@ function createTestApp() {
 const insideDhaka = {
   name: "Inside Dhaka",
   locationIds: ["dhaka"],
-  rates: [{ name: "Inside Dhaka", fee: 60.5, freeOver: 1500, isActive: true }],
+  rates: [{ name: "Inside Dhaka", fee: 60, freeOver: 1500, isActive: true }],
 };
 
 describe("delivery zone settings API", () => {
@@ -60,9 +60,22 @@ describe("delivery zone settings API", () => {
       data: { zones: Array<{ name: string; locations: Array<{ id: string }>; rates: Array<{ fee: number; freeOver: number }> }> };
     };
     expect(list.data.zones).toMatchObject([
-      { name: "Inside Dhaka", locations: [{ id: "dhaka" }], rates: [{ fee: 60.5, freeOver: 1500 }] },
+      { name: "Inside Dhaka", locations: [{ id: "dhaka" }], rates: [{ fee: 60, freeOver: 1500 }] },
     ]);
   }, 20_000); // The first test also builds the migrated SQLite database; give it room under a loaded suite.
+
+  it("refuses paisa in a taka charge with a 400 naming the field", async () => {
+    const { send } = createTestApp();
+    const response = await send("POST", "/admin/settings/shipping-methods", {
+      ...insideDhaka,
+      rates: [{ name: "Inside Dhaka", fee: 60.5, freeOver: 1500, isActive: true }],
+    });
+    expect(response.status).toBe(400);
+    const body = JSON.stringify(await response.json());
+    expect(body).toContain("Taka amounts are whole numbers.");
+    expect(body).toContain("fee");
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+  });
 
   it("answers a huge charge with a 400 naming the field, never a 500", async () => {
     const { send } = createTestApp();
@@ -97,7 +110,7 @@ describe("delivery zone settings API", () => {
       };
       return body.data.shippingMethods.map((rate) => `${rate.name} ${rate.fee}/${rate.freeOver}/${rate.kind}`);
     };
-    expect(await names("?cityId=dhaka&zoneId=mirpur")).toEqual(["Inside Dhaka 60.5/1500/delivery"]);
+    expect(await names("?cityId=dhaka&zoneId=mirpur")).toEqual(["Inside Dhaka 60/1500/delivery"]);
     expect(await names("?cityId=ctg")).toEqual(["Outside Dhaka 120/null/delivery"]);
     expect(await names("")).toHaveLength(2);
   });

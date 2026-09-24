@@ -52,6 +52,7 @@ import {
 import type { ReservationEntry } from "../inventory";
 import { getPaymentGateway, isOnlinePaymentMethod, listPaymentGateways } from "../payments/gateways/registry";
 import { listOrderDiscountLines } from "../promotions/order-discount-lines";
+import { toStoreMinor } from "../settings/store-money";
 
 import { sql, desc, eq, inArray, isNotNull, isNull, notInArray, and, type SQL } from "drizzle-orm";
 import { guestRecordForPhone } from "../customers/customer-identity";
@@ -517,8 +518,8 @@ async function prepareManualOrderQuote(
     });
     const money = calculateManualOrderMoney(
         trackedItems,
-        toMinor(data.shippingCharge, currency.decimalPlaces),
-        toMinor(data.discountAmount ?? 0, currency.decimalPlaces),
+        toStoreMinor(data.shippingCharge, currency),
+        toStoreMinor(data.discountAmount ?? 0, currency),
         currency,
     );
     const allocationLineIds = trackedItems.map((item, index) =>

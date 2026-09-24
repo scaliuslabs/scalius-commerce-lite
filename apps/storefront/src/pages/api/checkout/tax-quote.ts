@@ -9,9 +9,12 @@ import {
   TAX_QUOTE_MAX_RESPONSE_BYTES,
 } from "@/lib/checkout/tax-quote-contract";
 import {
+  DELIVERY_LOCATION_UNAVAILABLE_REASON,
   DELIVERY_RATE_UNAVAILABLE_REASON,
   isDeliveryRateUnavailable,
   parseTaxQuoteCartIssues,
+  unavailableDeliveryLocation,
+  type DeliveryLocationLevel,
 } from "@/lib/checkout/tax-quote-error-contract";
 import { getCustomerSessionTokenFromCookie } from "../../../lib/customer-session-cookie";
 
@@ -150,6 +153,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (!upstream.ok) {
       let itemIssues: CartValidationIssue[] = [];
       let deliveryRateUnavailable = false;
+      let locationGone: DeliveryLocationLevel | null = null;
       try {
         const text = await readBoundedBody(
           upstream.body,
@@ -158,6 +162,7 @@ export const POST: APIRoute = async ({ request }) => {
         const payload = JSON.parse(text);
         itemIssues = parseTaxQuoteCartIssues(payload);
         deliveryRateUnavailable = isDeliveryRateUnavailable(payload);
+        locationGone = unavailableDeliveryLocation(payload);
       } catch {
         itemIssues = [];
       }
@@ -169,7 +174,9 @@ export const POST: APIRoute = async ({ request }) => {
             ? { details: { itemIssues } }
             : deliveryRateUnavailable
               ? { details: { reason: DELIVERY_RATE_UNAVAILABLE_REASON } }
-              : {}),
+              : locationGone
+                ? { details: { reason: DELIVERY_LOCATION_UNAVAILABLE_REASON, field: locationGone } }
+                : {}),
         },
         safeUpstreamFailureStatus(upstream.status),
       );

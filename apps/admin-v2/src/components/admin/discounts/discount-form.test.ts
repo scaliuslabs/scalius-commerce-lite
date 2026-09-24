@@ -95,7 +95,7 @@ describe("discount form model", () => {
 
   it("round-trips every discount type through the API rule", () => {
     const drafts: DiscountDraft[] = [
-      draft("products", { valueKind: "fixed", value: "50.5", appliesTo: { kind: "products", ids: ["prod_1"] } }),
+      draft("products", { valueKind: "fixed", value: "55", appliesTo: { kind: "products", ids: ["prod_1"] } }),
       draft("products", { valueKind: "fixed", value: "50", oncePerOrder: true, appliesTo: { kind: "products", ids: ["prod_1"] } }),
       draft("order", { value: "10", minimum: "amount", minimumValue: "1000", hasEnd: true, endDate: "2026-10-01", endTime: "23:59" }),
       draft("products", {
@@ -145,6 +145,11 @@ describe("discount form model", () => {
     expect(draftToInput(draft("order", { valueKind: "fixed", value: "১৫০০" }), "BDT").effects[0]!.config)
       .toMatchObject({ amountMinor: 150_000 });
     expect(order({ value: "10.555" })).toEqual({ value: "errorDecimals" });
+    // Taka amounts are whole numbers; another currency keeps its decimals.
+    expect(order({ value: "10.50" })).toEqual({ value: "errorWholeTaka" });
+    expect(order({ value: "10.00" })).toEqual({});
+    expect(order({ value: "5", minimum: "amount", minimumValue: "999.5" })).toEqual({ minimumValue: "errorWholeTaka" });
+    expect(validateDraft(draft("order", { value: "10.50", valueKind: "fixed" }), "USD", NOW_SECONDS)).toEqual({});
     expect(order({ value: "0" })).toEqual({ value: "errorAmount" });
     expect(order({ value: "abc" })).toEqual({ value: "errorAmount" });
     expect(order({ value: "1000000" })).toEqual({});

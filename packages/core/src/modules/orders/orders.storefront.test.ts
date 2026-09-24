@@ -1207,7 +1207,7 @@ describe("createStorefrontOrder delivery-location verification", () => {
           createLocation({ id: "city_1", name: "Dhaka", type: "city", parentId: null }),
         ],
       }),
-    ).rejects.toThrow("Selected zone is no longer available for the chosen city.");
+    ).rejects.toThrow("Selected thana is no longer available for the chosen city.");
 
     await expect(
       placeOrder({
@@ -1216,7 +1216,7 @@ describe("createStorefrontOrder delivery-location verification", () => {
           createLocation({ id: "zone_1", name: "Wrong Type", type: "area", parentId: "city_1" }),
         ],
       }),
-    ).rejects.toThrow("Selected zone is no longer available for the chosen city.");
+    ).rejects.toThrow("Selected thana is no longer available for the chosen city.");
 
     await expect(
       placeOrder({
@@ -1225,7 +1225,7 @@ describe("createStorefrontOrder delivery-location verification", () => {
           createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_2" }),
         ],
       }),
-    ).rejects.toThrow("Selected zone is no longer available for the chosen city.");
+    ).rejects.toThrow("Selected thana is no longer available for the chosen city.");
 
     await expect(
       placeOrder({
@@ -1234,7 +1234,7 @@ describe("createStorefrontOrder delivery-location verification", () => {
           createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1", isActive: false }),
         ],
       }),
-    ).rejects.toThrow("Selected zone is no longer available for the chosen city.");
+    ).rejects.toThrow("Selected thana is no longer available for the chosen city.");
   });
 
   it("rejects areas that are missing, wrong-type, inactive, or not children of the zone", async () => {
@@ -1246,7 +1246,7 @@ describe("createStorefrontOrder delivery-location verification", () => {
           createLocation({ id: "zone_1", name: "Mirpur", type: "zone", parentId: "city_1" }),
         ],
       }),
-    ).rejects.toThrow("Selected area is no longer available for the chosen zone.");
+    ).rejects.toThrow("Selected area is no longer available for the chosen thana.");
 
     await expect(
       placeOrder({
@@ -1257,7 +1257,7 @@ describe("createStorefrontOrder delivery-location verification", () => {
           createLocation({ id: "area_1", name: "Wrong Type", type: "zone", parentId: "zone_1" }),
         ],
       }),
-    ).rejects.toThrow("Selected area is no longer available for the chosen zone.");
+    ).rejects.toThrow("Selected area is no longer available for the chosen thana.");
 
     await expect(
       placeOrder({
@@ -1268,7 +1268,7 @@ describe("createStorefrontOrder delivery-location verification", () => {
           createLocation({ id: "area_1", name: "Section 10", type: "area", parentId: "zone_2" }),
         ],
       }),
-    ).rejects.toThrow("Selected area is no longer available for the chosen zone.");
+    ).rejects.toThrow("Selected area is no longer available for the chosen thana.");
 
     await expect(
       placeOrder({
@@ -1279,7 +1279,7 @@ describe("createStorefrontOrder delivery-location verification", () => {
           createLocation({ id: "area_1", name: "Section 10", type: "area", parentId: "zone_1", isActive: false }),
         ],
       }),
-    ).rejects.toThrow("Selected area is no longer available for the chosen zone.");
+    ).rejects.toThrow("Selected area is no longer available for the chosen thana.");
   });
 });
 

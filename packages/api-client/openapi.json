@@ -8011,6 +8011,10 @@
                               "shippingAmount": {
                                 "type": "number",
                                 "description": "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line."
+                              },
+                              "replaces": {
+                                "type": "string",
+                                "description": "A code only: the automatic discount it replaced, because the code saves more and the two can't be combined."
                               }
                             },
                             "required": [
@@ -46479,6 +46483,10 @@
                               "shippingAmount": {
                                 "type": "number",
                                 "description": "Off delivery: shown on the delivery line (\"Free\" with the fee struck through), never as a discount line."
+                              },
+                              "replaces": {
+                                "type": "string",
+                                "description": "A code only: the automatic discount it replaced, because the code saves more and the two can't be combined."
                               }
                             },
                             "required": [

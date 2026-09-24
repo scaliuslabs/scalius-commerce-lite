@@ -3,6 +3,7 @@
 // Allocates a refund across the order's captured payments, claims it locally,
 // then dispatches each allocation through its gateway adapter (gateways/port.ts).
 
+import { toStoreMinor } from "../settings/store-money";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import {
     orders,
@@ -1162,7 +1163,7 @@ export async function processRefund(
     }
     const refundAmount = params.amount === undefined
         ? paidAmount
-        : toMinor(params.amount, currency.decimalPlaces);
+        : toStoreMinor(params.amount, currency);
 
     if (refundAmount <= 0) {
         throw new ValidationError("Refund amount must be greater than zero");

@@ -45,7 +45,8 @@ function setup(options: {
       data-waived-text="Normally {fee}; waived." data-pickup-from-text="Pick up from {address}"
       data-choose-address-text="Choose your city and zone." data-no-delivery-text="We don't deliver here yet."
       data-failed-text="Couldn't load." data-retry-text="Retry" data-loading-text="Loading…"
-      data-fee-changed-text="Delivery fee changed from {old} to {new}." data-replaced-text="{old} is gone, so {new} is selected."
+      data-fee-changed-text="Delivery fee changed from {old} to {new}." data-replaced-text="{old} is gone, so {new} is selected. Delivery was {oldFee}, now {newFee}."
+      data-replaced-same-fee-text="{old} is gone, so {new} ({fee}) is selected."
       data-gone-text="{old} is gone.">
       <script type="application/json" data-shipping-rates>${JSON.stringify([standard, ctg, pickup])}</script>
       <fieldset id="shippingMethods"><p data-shipping-note></p><p data-shipping-notice class="hidden"></p><div data-shipping-options></div></fieldset>
@@ -181,11 +182,26 @@ describe("delivery options follow the address", () => {
     await methods.setAddress(DHAKA);
     offered = [rate("standard", 80)];
     await expect(methods.recheck()).resolves.toBe(true);
-    expect(document.querySelector("[data-shipping-notice]")!.textContent).toBe("zone60 is gone, so standard ৳80 is selected.");
+    expect(document.querySelector("[data-shipping-notice]")!.textContent)
+      .toBe("zone60 is gone, so standard is selected. Delivery was ৳60, now ৳80.");
     expect(options().find(({ checked }) => checked)?.id).toBe("standard");
     // Choosing an option clears the notice.
     document.querySelector<HTMLInputElement>('input[value="standard"]')!.dispatchEvent(new Event("change", { bubbles: true }));
     expect(document.querySelector("[data-shipping-notice]")!.classList.contains("hidden")).toBe(true);
+  });
+
+  it("says delivery went from Free to a fee, and gives a same-priced replacement its fee", async () => {
+    let offered = [rate("zone0", 0), rate("standard", 80)];
+    const { methods } = setup({ loadRates: async () => offered });
+    await methods.setAddress(DHAKA);
+    offered = [rate("standard", 80)];
+    await expect(methods.recheck()).resolves.toBe(true);
+    expect(document.querySelector("[data-shipping-notice]")!.textContent)
+      .toBe("zone0 is gone, so standard is selected. Delivery was Free, now ৳80.");
+
+    offered = [rate("other", 80)];
+    await expect(methods.recheck()).resolves.toBe(true);
+    expect(document.querySelector("[data-shipping-notice]")!.textContent).toBe("standard is gone, so other (৳80) is selected.");
   });
 
   it("ignores rates that arrive for an address the buyer already left", async () => {

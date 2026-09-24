@@ -45,6 +45,7 @@ export interface ShippingMethodsCopy {
   loadingText: string;
   feeChangedText: string;
   replacedText: string;
+  replacedSameFeeText: string;
   goneText: string;
 }
 
@@ -120,7 +121,6 @@ export function enhanceShippingMethods(
   const list = container?.querySelector<HTMLElement>("[data-shipping-options]");
   const note = container?.querySelector<HTMLElement>("[data-shipping-note]");
   const notice = container?.querySelector<HTMLElement>("[data-shipping-notice]");
-  const fieldset = container?.querySelector<HTMLElement>("fieldset");
   if (!container || !list || !note) return null;
 
   const data = container.dataset;
@@ -136,6 +136,7 @@ export function enhanceShippingMethods(
     loadingText: data.loadingText || "",
     feeChangedText: data.feeChangedText || "",
     replacedText: data.replacedText || "",
+    replacedSameFeeText: data.replacedSameFeeText || "",
     goneText: data.goneText || "",
   };
   let initialRates: DeliveryRate[] = [];
@@ -271,8 +272,10 @@ export function enhanceShippingMethods(
     if (!notice) return;
     notice.textContent = message;
     notice.classList.toggle("hidden", !message);
-    fieldset?.classList.toggle("ring-2", Boolean(message));
-    fieldset?.classList.toggle("ring-destructive", Boolean(message));
+    // Frame the options, not the fieldset: a fieldset's edge runs through its legend.
+    for (const name of ["rounded-lg", "ring-2", "ring-destructive", "ring-offset-2"]) {
+      list?.classList.toggle(name, Boolean(message));
+    }
     if (message) container.scrollIntoView?.({ behavior: "smooth", block: "center" });
   };
 
@@ -289,10 +292,19 @@ export function enhanceShippingMethods(
     }
     const replacement = selectedRate();
     return replacement
-      ? formatCheckoutLanguageText(copy.replacedText, {
-          old: previous.name,
-          new: `${replacement.name} ${money(replacement)}`,
-        })
+      ? replacement.fee === previous.fee
+        ? formatCheckoutLanguageText(copy.replacedSameFeeText, {
+            old: previous.name,
+            new: replacement.name,
+            fee: money(replacement),
+          })
+        // Say how much delivery went up or down: "Delivery was Free, now ৳80."
+        : formatCheckoutLanguageText(copy.replacedText, {
+            old: previous.name,
+            new: replacement.name,
+            oldFee: money(previous),
+            newFee: money(replacement),
+          })
       : formatCheckoutLanguageText(copy.goneText, { old: previous.name });
   };
 

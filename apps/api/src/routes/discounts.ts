@@ -9,7 +9,7 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
-  appliedDiscountLineSchema,
+  quotedDiscountLineSchema,
   discountCodesSchema,
   discountOfferSchema,
   presentStorefrontDiscountQuote,
@@ -54,7 +54,7 @@ const validateDiscountRoute = createRoute({
       description: "Cart discount preview",
       content: { "application/json": { schema: successEnvelope(z.object({
         totalDiscount: z.number(),
-        discounts: z.array(appliedDiscountLineSchema),
+        discounts: z.array(quotedDiscountLineSchema),
         offers: z.array(discountOfferSchema),
         rejectedCodes: z.array(rejectedDiscountCodeSchema),
       })) } },

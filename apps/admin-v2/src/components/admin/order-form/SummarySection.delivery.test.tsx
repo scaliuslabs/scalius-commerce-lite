@@ -32,7 +32,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
 }));
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("~/contexts/PermissionContext", () => ({ usePermissions: () => ({ hasPermission: () => true }) }));
-vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (n: number) => `৳${n}` }) }));
+vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ code: "BDT", fmt: (n: number) => `৳${n}` }) }));
 
 import { Form } from "~/components/ui/form";
 import { OrderFormProvider } from "./OrderFormContext";
