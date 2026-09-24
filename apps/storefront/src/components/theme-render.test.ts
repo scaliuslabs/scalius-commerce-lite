@@ -34,7 +34,9 @@ import {
   productCardImageSizes,
   productGridFirstRow,
   productGridFluidCss,
+  productGridSpec,
 } from "@/lib/product-card-layout";
+import { CARD_IMAGE_DIMENSIONS } from "@/components/cards/card-model";
 import { homepageLeadSection } from "@/lib/homepage-sections";
 import {
   productGalleryMainSlot,
@@ -411,7 +413,7 @@ describe("storefront theme render matrix", () => {
     const themeCss = Array.from(page.querySelectorAll("style"))
       .map((style) => style.textContent ?? "")
       .find((text) => text.startsWith(":root, .site-root"))!;
-    const fluid = productGridFluidCss(layout.grid);
+    const fluid = productGridFluidCss(productGridSpec(layout.grid, theme.tokens.imageRatio));
     expect(themeCss).toContain(`--theme-card-min-phone: ${layout.grid.cardMin.phone}`);
     expect(themeCss).toContain(`--grid-card-min-fluid: ${fluid.cardMin}`);
     expect(themeCss).toContain(`--grid-gap-fluid: ${fluid.gap}`);
@@ -574,22 +576,25 @@ function assertFooter(page: Document, style: string, options: { business: boolea
 }
 
 function assertCards(document: Document, theme: StorefrontThemeDocument) {
-  const layout = resolveLayout(theme);
+  const { layout, resolved } = requestThemeFor(theme, STORE_SHAPE);
   const containerWidth = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
-  const firstRow = productGridFirstRow(layout.grid, containerWidth);
+  const grid = productGridSpec(layout.grid, theme.tokens.imageRatio);
+  const firstRow = productGridFirstRow(grid, containerWidth);
   const card = layout.productCard;
   const cards = Array.from(document.querySelectorAll('[data-theme-component="product-card"]'));
   expect(cards).toHaveLength(Object.keys(CARD_PRODUCTS).length);
   const [onSale, withOptions, soldOut, plain] = cards as [Element, Element, Element, Element];
 
   cards.forEach((element, index) => {
+    // The resolved card variant, in the theme's photo ratio (a token).
+    expect(element.getAttribute("data-card-variant")).toBe(resolved.blocks.card.variant);
+    expect(element.getAttribute("data-card-ratio")).toBe(theme.tokens.imageRatio);
     const media = element.querySelector(".product-card-media")!;
-    expect(media.classList.contains(card.imageRatio === "portrait" ? "aspect-[4/5]" : "aspect-square")).toBe(true);
     const photo = media.querySelector("img")!;
     // `sizes` follows the density's fluid grid within the container cap.
-    expect(photo.getAttribute("sizes")).toBe(productCardImageSizes(layout.grid, containerWidth));
+    expect(photo.getAttribute("sizes")).toBe(productCardImageSizes(grid, containerWidth));
     expect(photo.getAttribute("sizes")).toMatch(/^\(max-width: \d+px\) calc\(100vw - \d+px\), \(max-width: \d+px\) calc\(50vw - \d+px\), /);
-    expect(photo.getAttribute("height")).toBe(card.imageRatio === "portrait" ? "500" : "400");
+    expect(photo.getAttribute("height")).toBe(String(CARD_IMAGE_DIMENSIONS[theme.tokens.imageRatio].height));
     // First row eager, a phone row (the first two photos) high priority.
     expect(photo.getAttribute("loading")).toBe(index < firstRow ? "eager" : "lazy");
     expect(photo.getAttribute("fetchpriority")).toBe(index < 2 && index < firstRow ? "high" : "auto");
@@ -598,36 +603,24 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
     expect(links.length).toBeLessThanOrEqual(2);
   });
 
-  // Hover photo only for portrait cards (and only with a second photo).
+  // Hover photo only where the card shows one (and only with a second photo).
   expect(Boolean(onSale.querySelector(".product-card-hover-image"))).toBe(card.hoverImage);
   expect(Boolean(withOptions.querySelector(".product-card-hover-image"))).toBe(card.hoverImage);
   expect(plain.querySelector(".product-card-hover-image")).toBeNull();
 
-  // Buy now only for quick cards, only in stock without options; it sits
-  // above the stretched card link and is a 44px target.
+  // A buy action only on cards with one, only in stock without options; it
+  // sits above the stretched card link. The card matrix
+  // (cards/product-card.render.test.ts) covers each anatomy in detail.
   const buyNow = (element: Element) => element.querySelector('a[href^="/buy/"]');
   expect(Boolean(buyNow(onSale))).toBe(card.quickBuy);
   expect(Boolean(buyNow(plain))).toBe(card.quickBuy);
   expect(buyNow(withOptions)).toBeNull();
   expect(buyNow(soldOut)).toBeNull();
-  // Quick cards without Buy now keep its space so prices align across a row.
-  const spacer = (element: Element) => element.querySelector("[data-quick-buy-spacer]");
-  expect(Boolean(spacer(withOptions))).toBe(card.quickBuy);
-  expect(Boolean(spacer(soldOut))).toBe(card.quickBuy);
-  expect(spacer(onSale)).toBeNull();
-  if (card.quickBuy) {
-    expect(buyNow(onSale)!.className).toMatch(/\brelative\b.*\bz-10\b/);
-    expect(buyNow(onSale)!.className).toContain("min-h-11");
-    // Its accessible name starts with the visible words (WCAG 2.5.3).
-    expect(buyNow(onSale)!.hasAttribute("aria-label")).toBe(false);
-    expect(buyNow(onSale)!.textContent?.replace(/\s+/g, " ").trim()).toBe("Buy now: Product sale");
-  }
+  if (card.quickBuy) expect(buyNow(onSale)!.className).toMatch(/\b(?:relative|absolute)\b.*\bz-10\b/);
 
   // The discount badge sits on the photo or next to the price.
-  const imageBadge = onSale.querySelector(".product-card-media span.bg-destructive");
-  const priceBadge = onSale.querySelector("p span.text-destructive");
-  expect(Boolean(imageBadge)).toBe(card.badge === "image");
-  expect(Boolean(priceBadge)).toBe(card.badge === "price");
+  expect(Boolean(onSale.querySelector(".product-card-media [data-card-discount]"))).toBe(card.badge === "image");
+  expect(Boolean(onSale.querySelector(".product-card-price-row [data-card-discount]"))).toBe(card.badge === "price");
   expect(soldOut.textContent).toContain("Sold out");
 }
 

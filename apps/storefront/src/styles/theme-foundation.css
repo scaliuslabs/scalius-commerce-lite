@@ -81,6 +81,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  /* The header's surface and ink follow the header tone token (light, dark
+     or the brand colour): `bg-header text-header-foreground`. */
+  --color-header: var(--theme-header-background, var(--background));
+  --color-header-foreground: var(--theme-header-foreground, var(--foreground));
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: calc(var(--radius) + 1px);
@@ -162,6 +166,47 @@ body {
   /* Uppercase labels (badges, eyebrows) open up a little. */
   .site-root :where(.uppercase) {
     letter-spacing: var(--theme-label-tracking, 0.06em);
+  }
+
+  /* Heading case (Theme -> Style): uppercase page and section titles, never
+     product names. */
+  .site-root[data-theme-heading-case="uppercase"]
+    :where(h1, h2, .section-heading):not([data-theme-component="product-card"] *) {
+    text-transform: uppercase;
+    letter-spacing: var(--theme-label-tracking, 0.06em);
+  }
+
+  /* Type scale (Theme -> Style). Titles relative to body text: h1 and
+     section titles at the scale's ratio on computers and half the step on
+     phones. `retail` is today's scale, so its headings keep their own sizes;
+     flat (Star Tech 22/15) and display (Dawn 40/16) resize section titles.
+     Page titles opt in with `--theme-h1-size` / `--theme-h1-weight`. */
+  .site-root {
+    --theme-h1-size: calc(var(--text-base) * (1 + (var(--theme-h1-ratio, 1.8) - 1) * 0.5));
+    --theme-section-size: min(calc(var(--text-base) * (1 + (var(--theme-section-ratio, 2) - 1) * 0.5)), 1.75rem);
+  }
+
+  @media (min-width: 64rem) {
+    .site-root {
+      --theme-h1-size: calc(var(--text-base) * var(--theme-h1-ratio, 1.8));
+      --theme-section-size: min(calc(var(--text-base) * var(--theme-section-ratio, 2)), 2.5rem);
+    }
+  }
+
+  .site-root:is([data-theme-type-scale="flat"], [data-theme-type-scale="display"]) .section-heading {
+    font-size: var(--theme-section-size);
+    font-weight: var(--theme-section-weight, 700);
+  }
+}
+
+/* Space between homepage sections follows the density. */
+.site-root {
+  --theme-section-gap: var(--theme-section-gap-phone, 2rem);
+}
+
+@media (min-width: 64rem) {
+  .site-root {
+    --theme-section-gap: var(--theme-section-gap-desktop, 3rem);
   }
 }
 
@@ -283,9 +328,11 @@ html {
   transform: scale(0.98);
 }
 
-/* Product cards: the surface language per Style. */
+/* Product cards: the surface language per Style. Card corners follow the
+   radius token, capped at 20px (Apple Gadgets' soft cards). */
 .site-root [data-theme-component="product-card"] {
-  border-radius: calc(var(--radius) * 1.5);
+  min-width: 0;
+  border-radius: min(calc(var(--radius) * 1.5), 1.25rem);
   transition:
     border-color var(--theme-duration) var(--theme-ease),
     box-shadow var(--theme-duration) var(--theme-ease);
@@ -334,6 +381,181 @@ html {
 .site-root[data-theme-card-style="flat"] [data-theme-component="product-card"] .product-card-body {
   padding-inline: 0;
   padding-bottom: 0;
+}
+
+/* The card photo box: the image ratio and fit tokens (contain: catalogue
+   photos on the card colour with a margin; cover: lifestyle photos). The box
+   has its size before the photo loads, so a grid never shifts. */
+.site-root .product-card-media {
+  aspect-ratio: var(--theme-image-ratio, 1 / 1);
+}
+
+.site-root .product-card-photo {
+  object-fit: var(--theme-image-fit, cover);
+}
+
+.site-root[data-theme-image-fit="contain"] .product-card-media {
+  background: var(--card);
+}
+
+.site-root[data-theme-image-fit="contain"] .product-card-photo {
+  padding: 6%;
+}
+
+/* No photo: the product's initial on the muted surface, in the same box. */
+.site-root .product-card-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  container-type: size;
+  background: var(--muted);
+  color: color-mix(in oklab, var(--muted-foreground) 55%, var(--muted));
+  font-family: var(--theme-font-heading);
+  font-weight: var(--theme-heading-weight, 650);
+  font-size: 36cqmin;
+  line-height: 1;
+  user-select: none;
+}
+
+/* The title link stretches over the card but sits inside the clamped title
+   (overflow hidden), so its own outline would be clipped to an underline.
+   The focus ring goes on the card instead, inset so no scroller clips it. */
+.site-root .product-card-link:focus-visible {
+  outline: none;
+}
+
+.site-root [data-theme-component="product-card"]:has(.product-card-link:focus-visible) {
+  outline: 3px solid var(--ring);
+  outline-offset: -3px;
+}
+
+/* The hover photo exists only where hover exists. */
+@media (hover: hover) and (pointer: fine) {
+  .site-root .product-card-hover-image {
+    display: block;
+  }
+}
+
+/* Card anatomy (every variant but `standard`): density sets the type sizes
+   and spacing, the type scale sets the price weight. Phones keep 14px
+   titles (Bangla legibility) and 44px actions. */
+.site-root {
+  --card-pad: 0.75rem;
+  --card-gap: 0.375rem;
+  --card-title-size: 0.875rem;
+  --card-price-size: 1rem;
+  --card-meta-size: 0.8125rem;
+  --card-price-weight: 800;
+  --card-row-media: 7.5rem;
+}
+
+.site-root[data-theme-density="dense"] {
+  --card-pad: 0.5rem;
+  --card-gap: 0.25rem;
+}
+
+.site-root[data-theme-density="comfortable"] {
+  --card-pad: 1rem;
+  --card-gap: 0.5rem;
+  --card-price-size: 1.0625rem;
+}
+
+@media (min-width: 40rem) {
+  .site-root {
+    --card-pad: 1rem;
+    --card-title-size: 0.9375rem;
+    --card-price-size: 1.125rem;
+  }
+
+  .site-root[data-theme-density="dense"] {
+    --card-pad: 0.625rem;
+    --card-title-size: 0.875rem;
+    --card-price-size: 1.0625rem;
+  }
+
+  .site-root[data-theme-density="comfortable"] {
+    --card-pad: 1.25rem;
+    --card-title-size: 1rem;
+    --card-price-size: 1.25rem;
+  }
+
+  .site-root[data-theme-density="airy"] {
+    --card-pad: 0.75rem;
+    --card-price-size: 1rem;
+  }
+}
+
+.site-root[data-theme-type-scale="flat"] {
+  --card-price-weight: 600;
+}
+
+.site-root[data-theme-type-scale="display"] {
+  --card-price-weight: 400;
+}
+
+@layer components {
+  .site-root .product-card-stack {
+    gap: var(--card-gap);
+    padding: var(--card-pad);
+  }
+
+  .site-root .product-card-name {
+    font-size: var(--card-title-size);
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .site-root .product-card-price {
+    font-size: var(--card-price-size);
+    font-weight: var(--card-price-weight);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  .site-root .product-card-meta {
+    font-size: var(--card-meta-size);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Card actions: the button shape token; 44px touch targets, the density's
+   control height for a mouse. */
+.site-root .product-card-action {
+  min-height: 2.75rem;
+  border-radius: var(--theme-button-radius, var(--radius));
+}
+
+.site-root .product-card-round-action {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-root .product-card-action {
+    min-height: var(--theme-control-height, 2.75rem);
+  }
+}
+
+/* List rows (ProductGrid `phoneLayout="list-row"`): below the tablet step,
+   one card per row with the photo beside the text (Amazon, Target, Star
+   Tech phone listings). Every card variant keeps its own anatomy. */
+@container product-grid (width < 36rem) {
+  .product-grid[data-phone-layout="list-row"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-root .product-grid[data-phone-layout="list-row"] > [data-theme-component="product-card"] {
+    display: grid;
+    grid-template-columns: var(--card-row-media) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .site-root .product-grid[data-phone-layout="list-row"] > [data-theme-component="product-card"] .product-card-body {
+    min-height: 100%;
+    padding-inline: 0.75rem;
+  }
 }
 
 /* Photos: a restrained 1.03 zoom on hover (portrait cards cross-fade to the
