@@ -98,12 +98,23 @@ body {
   overflow-x: clip;
 }
 
-html {
-  font-size: calc(100% * var(--theme-type-scale, 1));
+/* Fluid type on one modular scale (about 1.125 on phones, 1.2 on wide
+   screens). The density's --theme-type-scale scales the fluid part; the
+   floors keep Bangla and Latin text readable on phones (small text stays
+   0.875rem, body never below 0.9375rem) and the root font size stays 16px,
+   so rem-based tap targets (44px) and grid maths hold. */
+@theme {
+  --text-base: clamp(0.9375rem, calc((0.875rem + 0.2vw) * var(--theme-type-scale, 1)), 1rem);
+  --text-lg: clamp(1rem, calc((0.95rem + 0.3vw) * var(--theme-type-scale, 1)), 1.125rem);
+  --text-xl: clamp(1.0625rem, calc((1rem + 0.45vw) * var(--theme-type-scale, 1)), 1.25rem);
+  --text-2xl: clamp(1.1875rem, calc((1.05rem + 0.75vw) * var(--theme-type-scale, 1)), 1.5rem);
+  --text-3xl: clamp(1.375rem, calc((1.15rem + 1.2vw) * var(--theme-type-scale, 1)), 1.875rem);
+  --text-4xl: clamp(1.625rem, calc((1.3rem + 1.7vw) * var(--theme-type-scale, 1)), 2.25rem);
 }
 
 body {
   @apply bg-background text-foreground;
+  font-size: var(--text-base);
   font-feature-settings:
     "rlig" 1,
     "calt" 1;
@@ -125,24 +136,14 @@ body {
   max-width: var(--theme-container-width, 80rem);
 }
 
-.site-root[data-theme-density="compact"]
-  [data-theme-component="button"]:not([data-theme-size="icon"]),
-.site-root[data-theme-density="compact"] [data-theme-component="input"] {
-  height: 2.25rem;
-}
-
-.site-root[data-theme-density="airy"]
-  [data-theme-component="button"]:not([data-theme-size="icon"]),
-.site-root[data-theme-density="airy"] [data-theme-component="input"] {
-  height: 2.75rem;
-}
-
-.site-root[data-theme-button-style="soft"]
-  [data-theme-component="button"][data-theme-variant="default"] {
-  background: color-mix(in oklch, var(--primary) 14%, transparent) !important;
-  border-color: color-mix(in oklch, var(--primary) 28%, transparent) !important;
-  color: var(--primary) !important;
-  box-shadow: none !important;
+/* Compact density tightens controls only for a mouse; touch keeps 44px
+   targets (WCAG 2.5.5). */
+@media (hover: hover) and (pointer: fine) {
+  .site-root[data-theme-density="compact"]
+    [data-theme-component="button"]:not([data-theme-size="icon"]),
+  .site-root[data-theme-density="compact"] [data-theme-component="input"] {
+    height: 2.25rem;
+  }
 }
 
 .site-root[data-theme-button-style="outline"]
@@ -217,38 +218,35 @@ html {
   scroll-padding-top: calc(var(--header-height, 3.5rem) + 0.5rem);
 }
 
-/* Product grids follow the theme's products-per-row (Theme → Layout):
-   1 or 2 on phones, up to 3 on tablets, the chosen 2/3/4 on desktop. Grids
-   beside a filter sidebar reach the desktop count only on wide screens. */
-.site-root {
-  --grid-mobile: 2;
-  --grid-desktop: 4;
+/* Fluid product grids (Theme -> Layout -> Density). The frame is an
+   inline-size container, so a grid beside the filter sidebar simply has less
+   room. Columns auto-fill at the density's minimum card width, which steps
+   phone (below 36rem) -> tablet -> desktop (from 60rem). Between the steps
+   the minimum and the gap grow with the container (`cqi`, the
+   --grid-*-fluid values Layout.astro emits from productGridFluidCss()), so
+   the column count only ever grows with width. lib/product-card-layout.ts
+   models the same grid for image `sizes`; a test keeps the steps equal. */
+.product-grid-frame {
+  container: product-grid / inline-size;
 }
-.site-root[data-theme-grid-mobile="1"] { --grid-mobile: 1; }
-.site-root[data-theme-grid-desktop="2"] { --grid-desktop: 2; }
-.site-root[data-theme-grid-desktop="3"] { --grid-desktop: 3; }
 
 .product-grid {
+  --card-min: var(--theme-card-min-phone, 9.75rem);
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(var(--grid-mobile), minmax(0, 1fr));
+  gap: var(--theme-grid-gap-phone, 0.75rem);
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--card-min), 100%), 1fr));
 }
 
-@media (min-width: 40rem) {
+@container product-grid (min-width: 36rem) {
   .product-grid {
-    gap: 1rem;
-    grid-template-columns: repeat(min(var(--grid-desktop), 3), minmax(0, 1fr));
+    --card-min: var(--grid-card-min-fluid, var(--theme-card-min-tablet, 13rem));
+    gap: var(--grid-gap-fluid, var(--theme-grid-gap-desktop, 1.5rem));
   }
 }
 
-@media (min-width: 64rem) {
-  .product-grid:not(.product-grid--beside-filters) {
-    grid-template-columns: repeat(var(--grid-desktop), minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 80rem) {
-  .product-grid--beside-filters {
-    grid-template-columns: repeat(var(--grid-desktop), minmax(0, 1fr));
+@container product-grid (min-width: 60rem) {
+  .product-grid {
+    --card-min: var(--theme-card-min-desktop, 15rem);
+    gap: var(--theme-grid-gap-desktop, 1.5rem);
   }
 }

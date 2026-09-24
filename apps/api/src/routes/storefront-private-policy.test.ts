@@ -1,5 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { storefrontStylePresetTheme } from "@scalius/shared/storefront-theme";
 
 import { errorResponseFromError } from "../utils/api-response";
 
@@ -41,7 +42,7 @@ describe("storefront private cache policy", () => {
   it("resolves an exact theme preview snapshot without public caching", async () => {
     const token = `tpv_${"a".repeat(48)}`;
     mocks.resolveThemePreviewSession.mockResolvedValue({
-      theme: { density: "compact", colors: {} },
+      theme: storefrontStylePresetTheme("marketplace"),
       draftRevision: 7,
       basePublishedRevision: 4,
       expiresAt: 1_900_000_000,
@@ -61,7 +62,7 @@ describe("storefront private cache policy", () => {
       "private, no-cache, no-store, must-revalidate",
     );
     await expect(response.json()).resolves.toMatchObject({
-      data: { draftRevision: 7, theme: { density: "compact" } },
+      data: { draftRevision: 7, theme: storefrontStylePresetTheme("marketplace") },
     });
     expect(mocks.resolveThemePreviewSession).toHaveBeenCalledWith({}, token);
   });

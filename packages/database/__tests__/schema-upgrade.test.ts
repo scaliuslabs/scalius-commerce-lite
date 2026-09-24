@@ -269,6 +269,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 2,
         postgresStatements: 2,
       },
+      {
+        version: 78,
+        name: "0078_theme_document_v2",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -395,6 +401,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 75, name: "0075_theme_layout_reset" },
           { version: 76, name: "0076_guest_record_links" },
           { version: 77, name: "0077_optioned_product_price" },
+          { version: 78, name: "0078_theme_document_v2" },
         ],
       });
     } finally {

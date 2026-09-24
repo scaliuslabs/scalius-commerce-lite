@@ -3,6 +3,7 @@
 // filter sheet/sidebar, sort, applied-filter chips, grid and pagination.
 import type { BuyerPriceRange, Product, ProductFacet } from "@/lib/api";
 import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
 import AppliedCatalogFilters from "./AppliedCatalogFilters.astro";
 import CatalogFilters from "./CatalogFilters.astro";
 import CatalogPagination from "./CatalogPagination.astro";
@@ -108,7 +109,7 @@ const pageUrl = (page: number) =>
       aria-labelledby="mobile-filter-title"
       class="fixed inset-0 z-60 hidden bg-black/50 lg:static lg:z-0 lg:block lg:w-80 lg:shrink-0 lg:bg-transparent"
     >
-      <div class="flex h-full w-full flex-col bg-background text-foreground lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:shadow-sm">
+      <div class="filter-sheet flex max-h-[88dvh] w-full flex-col rounded-t-2xl bg-background text-foreground lg:h-full lg:sticky lg:top-[calc(var(--header-height,4rem)+1rem)] lg:max-h-[calc(100dvh-var(--header-height,4rem)-2rem)] lg:w-full lg:overflow-hidden lg:rounded-lg lg:border lg:border-border lg:shadow-sm">
         <div class="flex items-center justify-between border-b border-border bg-background p-4 lg:hidden">
           <h2 id="mobile-filter-title" class="text-lg font-semibold">Filters</h2>
           <button
@@ -179,22 +180,36 @@ const pageUrl = (page: number) =>
       <slot name="empty" />
     ) : (
       <Fragment>
-        <div class="product-grid product-grid--beside-filters mb-8">
+        <ProductGrid class="mb-8">
           {products.map((product, index) => (
             <ProductCard
               product={product}
               currencySymbol={currencySymbol}
               currencyCode={currencyCode}
-              priority={index < 2}
+              index={index}
+              aboveFold
+              context={showControls ? "beside-filters" : "grid"}
               headingLevel="h2"
             />
           ))}
-        </div>
+        </ProductGrid>
         <CatalogPagination page={pagination.page} totalPages={pagination.totalPages} getPageUrl={pageUrl} />
       </Fragment>
     )}
   </div>
 </div>
+
+<style>
+  /* Phones and tablets: filters open as a bottom sheet over a dimmed page
+     (tapping the dim area closes it); sort is the native picker. */
+  @media (max-width: 63.99rem) {
+    #filter-section:not(.hidden) {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+  }
+</style>
 
 <script>
   import { setupCatalogFilterDialog } from "@/lib/catalog-filter-dialog";

@@ -14,13 +14,13 @@ import {
   hasProductImage,
   PRODUCT_IMAGE_FALLBACK,
 } from "@/lib/product-media";
-import type { StorefrontProductThumbnailPlacement } from "@scalius/shared/storefront-theme";
+import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-theme";
 
 interface Props {
   product: Product;
   media: ProductMedia[];
-  /** Theme → Product page: thumbnails beside or below the main photo. */
-  thumbnails?: StorefrontProductThumbnailPlacement;
+  /** Theme -> Layout -> Product page: thumbnails beside or below the main photo. */
+  thumbnails?: ResolvedStorefrontThemeLayout["productPage"]["thumbnails"];
 }
 
 const { product, media, thumbnails = "beside" } = Astro.props;

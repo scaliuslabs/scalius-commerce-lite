@@ -41,7 +41,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
     headerData.topBar.text.trim().length > 0 && (
       <div class="relative z-50 bg-primary text-primary-foreground overflow-hidden shrink-0 w-full h-8 sm:h-9 flex items-center justify-center border-b border-white/10">
         <div class="max-w-7xl mx-auto px-4 w-full">
-          <p class="text-[10px] sm:text-xs font-medium text-center tracking-[0.15em] uppercase opacity-90 truncate">
+          <p class="text-xs sm:text-[0.8125rem] font-medium text-center tracking-[0.08em] uppercase truncate">
             {headerData.topBar.text}
           </p>
         </div>
@@ -57,7 +57,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <!-- ROW 1 -->
     <div
-      class="flex items-center justify-between h-14 lg:h-18 group-[.is-scrolled]/header:lg:h-16 gap-4 relative z-20 transition-[height] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
+      class="header-row flex items-center justify-between h-14 lg:h-18 group-[.is-scrolled]/header:lg:h-16 gap-4 relative z-20 transition-[height] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
     >
       <div class="flex items-center shrink-0 lg:hidden z-30 gap-2">
         <button
@@ -65,6 +65,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
           type="button"
           class="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:bg-accent"
           aria-label="Open menu"
+          aria-haspopup="dialog"
           aria-controls="mobile-menu-panel"
           aria-expanded="false"
         >
@@ -79,6 +80,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
             variant === "marketplace" && "hidden",
           ]}
           aria-label="Search"
+          aria-haspopup="dialog"
         >
           <Search className="h-5 w-5 stroke-[1.5]" />
         </button>
@@ -139,6 +141,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
             type="button"
             class="header-scroll-search absolute inset-y-0 right-0 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label="Search"
+            aria-haspopup="dialog"
           >
             <Search className="h-5 w-5 stroke-[1.5]" />
           </button>
@@ -195,6 +198,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
             id="cart-button"
             class="relative flex h-11 min-w-11 cursor-pointer items-center gap-2 rounded-full pl-1.5 active:scale-[0.98] lg:gap-3 lg:pl-2"
             aria-label="Open shopping cart"
+            aria-haspopup="dialog"
           >
             <span
               id="cart-total-display"
@@ -225,7 +229,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
 
     {
       variant === "marketplace" && (
-        <div class="pb-3 lg:hidden">
+        <div class="header-mobile-search pb-2 lg:hidden">
           <SearchBar mobileView />
         </div>
       )
@@ -436,6 +440,21 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
 
     #main-header[data-header-style="marketplace"] .header-compact-center {
       display: none;
+    }
+  }
+
+  /* Phones and tablets condense on scroll (the same is-scrolled state as the
+     desktop header): a shorter bar, and the marketplace search row folds
+     into the search icon. Tap targets stay 44px. */
+  @media (max-width: 63.99rem) {
+    #main-header.is-scrolled .header-row {
+      height: 3rem;
+    }
+    #main-header[data-header-style="marketplace"].is-scrolled .header-mobile-search {
+      display: none;
+    }
+    #main-header[data-header-style="marketplace"].is-scrolled #mobile-search-toggle {
+      display: flex;
     }
   }
 

@@ -102,3 +102,36 @@ describe("search palette keyboard (WAI-ARIA combobox)", () => {
     expect(document.querySelector<HTMLAnchorElement>("a[href='/search']")?.textContent).toContain("Browse all products");
   });
 });
+
+describe("search palette focus return (R3-MOB-07)", () => {
+  const settle = () => act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  });
+
+  async function openFrom(opener: HTMLElement) {
+    opener.focus();
+    await act(async () => {
+      document.dispatchEvent(new CustomEvent("open-search-palette"));
+    });
+    await settle();
+    expect(document.activeElement).toBe(input());
+  }
+
+  it("returns focus to the control that opened search on Esc and on the close button", async () => {
+    await press("Escape");
+    const opener = document.createElement("button");
+    opener.textContent = "Search";
+    document.body.append(opener);
+
+    await openFrom(opener);
+    await press("Escape");
+    expect(input()).toBeNull();
+    expect(document.activeElement).toBe(opener);
+
+    await openFrom(opener);
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>("button[aria-label='Close search']")!.click();
+    });
+    expect(document.activeElement).toBe(opener);
+  });
+});

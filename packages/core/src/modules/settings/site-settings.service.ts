@@ -27,10 +27,10 @@ import {
 } from "@scalius/core/errors";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import {
-  listInvalidStorefrontThemeSettingsEntries,
-  parseStorefrontThemeSettings,
-  sanitizeStorefrontThemeSettings,
-  type StorefrontThemeSettings,
+  DEFAULT_STOREFRONT_THEME,
+  parseStoredStorefrontThemeDocument,
+  storefrontThemeDocumentSchema,
+  type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { mergeSeoDiscoverySettings, type SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { mergeSeoReturnPolicySettings, type SeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
@@ -79,12 +79,12 @@ export async function readSettingsForEdit<T extends object>(
 }
 
 export interface ThemeSettingsDocument {
-  theme: StorefrontThemeSettings;
+  theme: StorefrontThemeDocument;
   revision: number;
 }
 
 export interface ThemeDraftDocument {
-  theme: StorefrontThemeSettings;
+  theme: StorefrontThemeDocument;
   revision: number;
   basePublishedRevision: number;
   updatedAt: Date | null;
@@ -104,7 +104,7 @@ export interface ThemeVersionDocument extends ThemeSettingsDocument {
 }
 
 export interface ThemePreviewSessionDocument {
-  theme: StorefrontThemeSettings;
+  theme: StorefrontThemeDocument;
   draftRevision: number;
   basePublishedRevision: number;
   expiresAt: Date;
@@ -125,42 +125,15 @@ function assertPresentationRevision(expectedRevision: number): void {
   }
 }
 
-function parseAuthoritativeThemeSettings(value: string): StorefrontThemeSettings {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
+/** Stored theme rows are read strictly; an unreadable one fails closed. */
+function parseAuthoritativeThemeSettings(value: string): StorefrontThemeDocument {
+  const theme = parseStoredStorefrontThemeDocument(value);
+  if (!theme) {
     throw new ServiceUnavailableError(
       "Published storefront style is unreadable. Re-save it before editing.",
     );
   }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new ServiceUnavailableError(
-      "Published storefront style is unreadable. Re-save it before editing.",
-    );
-  }
-  const record = parsed as Record<string, unknown>;
-  // Flat color maps are the pre-semantic versioned document and are upgraded
-  // on read. Fully semantic documents must remain exact and fail closed.
-  const isSemanticDocument = [
-    "colors",
-    "typography",
-    "cornerStyle",
-    "density",
-    "containerWidth",
-    "components",
-  ].some((key) => key in record);
-  if (isSemanticDocument) {
-    const invalid = listInvalidStorefrontThemeSettingsEntries(record);
-    const missingRequiredSection = !("colors" in record);
-    if (missingRequiredSection || invalid.length > 0) {
-      throw new ServiceUnavailableError(
-        "Published storefront style contains unsupported values. Re-save it before editing.",
-      );
-    }
-  }
-  return sanitizeStorefrontThemeSettings(record);
+  return theme;
 }
 
 function assertNonnegativeRevision(value: number, label: string): void {
@@ -169,12 +142,21 @@ function assertNonnegativeRevision(value: number, label: string): void {
   }
 }
 
-function serializeThemeSettings(theme: StorefrontThemeSettings): {
-  theme: StorefrontThemeSettings;
+function serializeThemeSettings(theme: StorefrontThemeDocument): {
+  theme: StorefrontThemeDocument;
   serialized: string;
 } {
-  const sanitized = sanitizeStorefrontThemeSettings(theme);
-  return { theme: sanitized, serialized: JSON.stringify(sanitized) };
+  const result = storefrontThemeDocumentSchema.safeParse(theme);
+  if (!result.success) {
+    throw new ValidationError(
+      result.error.issues[0]?.message ?? "The storefront style is not a valid theme document.",
+      result.error.issues.map((issue) => ({
+        path: issue.path.map(String).join("."),
+        message: issue.message,
+      })),
+    );
+  }
+  return { theme: result.data, serialized: JSON.stringify(result.data) };
 }
 
 const THEME_REVISION_CONFLICT_SENTINEL = "THEME_REVISION_CONFLICT";
@@ -408,7 +390,7 @@ function themeSettingsDocumentFromRow(
 
 /** No published row yet: revision 0 lets the first writer claim revision 1. */
 function unpublishedThemeSettings(): ThemeSettingsDocument {
-  return { theme: parseStorefrontThemeSettings(undefined), revision: 0 };
+  return { theme: structuredClone(DEFAULT_STOREFRONT_THEME), revision: 0 };
 }
 
 export async function getThemeSettings(
@@ -465,7 +447,7 @@ export async function getThemeWorkspace(
 
 export async function saveThemeDraft(
   db: Database,
-  theme: StorefrontThemeSettings,
+  theme: StorefrontThemeDocument,
   expectedDraftRevision: number,
   basePublishedRevision: number,
   actorId: string | null = null,
@@ -542,7 +524,7 @@ export async function saveThemeDraft(
 
 export async function rebaseThemeDraft(
   db: Database,
-  theme: StorefrontThemeSettings,
+  theme: StorefrontThemeDocument,
   expectedDraftRevision: number,
   basePublishedRevision: number,
   actorId: string | null = null,
@@ -649,7 +631,7 @@ function publishedThemeWriteStatement(
 async function runThemePublishBatch(
   db: Database,
   options: {
-    theme: StorefrontThemeSettings;
+    theme: StorefrontThemeDocument;
     expectedPublishedRevision: number;
     expectedDraftRevision?: number;
     actorId: string | null;
@@ -741,7 +723,7 @@ async function runThemePublishBatch(
 
 export async function saveThemeSettings(
   db: Database,
-  theme: StorefrontThemeSettings,
+  theme: StorefrontThemeDocument,
   expectedRevision: number,
   actorId: string | null = null,
 ): Promise<ThemeSettingsDocument> {

@@ -1,0 +1,40 @@
+---
+// The product page's photo + details grid (Theme -> Layout -> Product page):
+// `beside` puts the gallery next to the details from 64rem; `stacked` puts
+// the photos on top and the details centred below on every screen.
+import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-theme";
+
+interface Props {
+  gallery: ResolvedStorefrontThemeLayout["productPage"]["gallery"];
+}
+
+const { gallery } = Astro.props;
+---
+
+<div
+  class="product-layout grid grid-cols-1 gap-x-10 gap-y-2 lg:grid-cols-12 lg:gap-y-8"
+  data-gallery={gallery}
+>
+  <slot />
+</div>
+
+<style>
+  /* Stacked product page: photos full width on top, details centred below. */
+  @media (min-width: 64rem) {
+    .product-layout[data-gallery="stacked"] > :global(*) {
+      grid-column: 1 / -1;
+      width: 100%;
+      max-width: 48rem;
+      margin-inline: auto;
+    }
+    .product-layout[data-gallery="stacked"] :global(.gallery-layout) {
+      position: static;
+    }
+    /* Keep the name and price near the fold under the square photo and its
+       thumbnail strip: on a short landscape screen (1024x768) the photo
+       shrinks to fit, never below 24rem. */
+    .product-layout[data-gallery="stacked"] > :global(#product-gallery) {
+      max-width: max(24rem, min(36rem, calc(100svh - 20rem)));
+    }
+  }
+</style>
