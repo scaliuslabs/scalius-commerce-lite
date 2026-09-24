@@ -114,6 +114,8 @@ describe("MCP operation descriptions", () => {
       schema: {
         type: "object",
         fields: [
+          // Settings saves carry the revision they read (a stale one gets a 409).
+          { name: "expectedRevision", required: true, type: "integer", minimum: 0 },
           { name: "provider", required: false, type: "string", enum: ["cloudflare", "resend"] },
           { name: "apiKey", required: false, type: "string", maxLength: 512 },
           { name: "sender", required: false, type: "string", maxLength: 320 },
