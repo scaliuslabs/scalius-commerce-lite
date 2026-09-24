@@ -3488,6 +3488,12 @@
                                   "title": {
                                     "type": "string"
                                   },
+                                  "heading": {
+                                    "type": "string"
+                                  },
+                                  "buttonLabel": {
+                                    "type": "string"
+                                  },
                                   "link": {
                                     "type": "string"
                                   },
@@ -3515,6 +3521,8 @@
                                   "id",
                                   "url",
                                   "title",
+                                  "heading",
+                                  "buttonLabel",
                                   "link",
                                   "focalPoint"
                                 ]
@@ -3566,6 +3574,12 @@
                                   "title": {
                                     "type": "string"
                                   },
+                                  "heading": {
+                                    "type": "string"
+                                  },
+                                  "buttonLabel": {
+                                    "type": "string"
+                                  },
                                   "link": {
                                     "type": "string"
                                   },
@@ -3593,6 +3607,8 @@
                                   "id",
                                   "url",
                                   "title",
+                                  "heading",
+                                  "buttonLabel",
                                   "link",
                                   "focalPoint"
                                 ]
@@ -3644,6 +3660,12 @@
                                   "title": {
                                     "type": "string"
                                   },
+                                  "heading": {
+                                    "type": "string"
+                                  },
+                                  "buttonLabel": {
+                                    "type": "string"
+                                  },
                                   "link": {
                                     "type": "string"
                                   },
@@ -3671,6 +3693,8 @@
                                   "id",
                                   "url",
                                   "title",
+                                  "heading",
+                                  "buttonLabel",
                                   "link",
                                   "focalPoint"
                                 ]
@@ -3703,6 +3727,12 @@
                               "title": {
                                 "type": "string"
                               },
+                              "heading": {
+                                "type": "string"
+                              },
+                              "buttonLabel": {
+                                "type": "string"
+                              },
                               "link": {
                                 "type": "string"
                               },
@@ -3730,6 +3760,8 @@
                               "id",
                               "url",
                               "title",
+                              "heading",
+                              "buttonLabel",
                               "link",
                               "focalPoint"
                             ]
@@ -3874,6 +3906,12 @@
                                   "title": {
                                     "type": "string"
                                   },
+                                  "heading": {
+                                    "type": "string"
+                                  },
+                                  "buttonLabel": {
+                                    "type": "string"
+                                  },
                                   "link": {
                                     "type": "string"
                                   },
@@ -3901,6 +3939,8 @@
                                   "id",
                                   "url",
                                   "title",
+                                  "heading",
+                                  "buttonLabel",
                                   "link",
                                   "focalPoint"
                                 ]
@@ -84219,11 +84259,16 @@
                               "childCount": {
                                 "type": "integer",
                                 "minimum": 0
+                              },
+                              "targetTitle": {
+                                "type": "string",
+                                "nullable": true
                               }
                             },
                             "required": [
                               "item",
-                              "childCount"
+                              "childCount",
+                              "targetTitle"
                             ]
                           }
                         },
@@ -111437,7 +111482,7 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 10
+              "maximum": 50
             },
             "required": false,
             "name": "sampleLimit",
@@ -111598,7 +111643,7 @@
                                     "reason"
                                   ]
                                 },
-                                "maxItems": 10
+                                "maxItems": 50
                               }
                             },
                             "required": [
@@ -130386,6 +130431,12 @@
                                   "minLength": 1,
                                   "maxLength": 160
                                 },
+                                "heading": {
+                                  "type": "string"
+                                },
+                                "buttonLabel": {
+                                  "type": "string"
+                                },
                                 "link": {
                                   "type": "string",
                                   "maxLength": 2048
@@ -130414,6 +130465,8 @@
                                 "id",
                                 "url",
                                 "title",
+                                "heading",
+                                "buttonLabel",
                                 "link",
                                 "focalPoint"
                               ]
@@ -130770,6 +130823,14 @@
                           "minLength": 1,
                           "maxLength": 160
                         },
+                        "heading": {
+                          "type": "string",
+                          "maxLength": 160
+                        },
+                        "buttonLabel": {
+                          "type": "string",
+                          "maxLength": 40
+                        },
                         "link": {
                           "type": "string",
                           "maxLength": 2048
@@ -130863,6 +130924,12 @@
                                 "minLength": 1,
                                 "maxLength": 160
                               },
+                              "heading": {
+                                "type": "string"
+                              },
+                              "buttonLabel": {
+                                "type": "string"
+                              },
                               "link": {
                                 "type": "string",
                                 "maxLength": 2048
@@ -130891,6 +130958,8 @@
                               "id",
                               "url",
                               "title",
+                              "heading",
+                              "buttonLabel",
                               "link",
                               "focalPoint"
                             ]
@@ -131310,6 +131379,12 @@
                                 "minLength": 1,
                                 "maxLength": 160
                               },
+                              "heading": {
+                                "type": "string"
+                              },
+                              "buttonLabel": {
+                                "type": "string"
+                              },
                               "link": {
                                 "type": "string",
                                 "maxLength": 2048
@@ -131338,6 +131413,8 @@
                               "id",
                               "url",
                               "title",
+                              "heading",
+                              "buttonLabel",
                               "link",
                               "focalPoint"
                             ]
@@ -131700,6 +131777,14 @@
                           "minLength": 1,
                           "maxLength": 160
                         },
+                        "heading": {
+                          "type": "string",
+                          "maxLength": 160
+                        },
+                        "buttonLabel": {
+                          "type": "string",
+                          "maxLength": 40
+                        },
                         "link": {
                           "type": "string",
                           "maxLength": 2048
@@ -131792,6 +131877,12 @@
                                 "minLength": 1,
                                 "maxLength": 160
                               },
+                              "heading": {
+                                "type": "string"
+                              },
+                              "buttonLabel": {
+                                "type": "string"
+                              },
                               "link": {
                                 "type": "string",
                                 "maxLength": 2048
@@ -131820,6 +131911,8 @@
                               "id",
                               "url",
                               "title",
+                              "heading",
+                              "buttonLabel",
                               "link",
                               "focalPoint"
                             ]
@@ -132256,6 +132349,12 @@
                                 "minLength": 1,
                                 "maxLength": 160
                               },
+                              "heading": {
+                                "type": "string"
+                              },
+                              "buttonLabel": {
+                                "type": "string"
+                              },
                               "link": {
                                 "type": "string",
                                 "maxLength": 2048
@@ -132284,6 +132383,8 @@
                               "id",
                               "url",
                               "title",
+                              "heading",
+                              "buttonLabel",
                               "link",
                               "focalPoint"
                             ]

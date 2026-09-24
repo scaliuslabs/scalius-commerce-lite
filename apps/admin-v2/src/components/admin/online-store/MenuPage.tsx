@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ListTree, Plus } from "lucide-react";
@@ -9,6 +9,7 @@ import {
   patchApiV1AdminNavigationMenusByMenuId,
   postApiV1AdminNavigationMenusByMenuIdItemsByItemIdMove,
   postApiV1AdminNavigationMenusByMenuIdPublish,
+  postApiV1AdminNavigationMenusByMenuIdRestore,
   postApiV1AdminNavigationMenusByMenuIdRollback,
 } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
@@ -54,11 +55,6 @@ function MenuEditor({ menuId }: { menuId: string }) {
   const [deletingItem, setDeletingItem] = useState<NavigationMenuItemRow | null>(null);
   const [removing, setRemoving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  // A deleted menu has nothing left to save: leave without the unsaved-changes prompt.
-  const [deleted, setDeleted] = useState(false);
-  useEffect(() => {
-    if (deleted) void navigate({ to: "/admin/online-store/navigation" });
-  }, [deleted, navigate]);
   const nameChanged = name.trim() !== menu.name;
   const unpublished = menu.revision !== menu.publishedRevision;
   // Item edits are kept on the server until saved, so they survive a reload: say so.
@@ -68,7 +64,7 @@ function MenuEditor({ menuId }: { menuId: string }) {
   useSaveBar({
     label: menu.name,
     fields: { name: "menu-name" },
-    dirty: !deleted && (nameChanged || unpublished),
+    dirty: nameChanged || unpublished,
     saving,
     invalid: !name.trim(),
     save: async () => {
@@ -143,7 +139,8 @@ function MenuEditor({ menuId }: { menuId: string }) {
       await queryClient.invalidateQueries({ queryKey: navigationMenusQueryOptions().queryKey });
       toast.success(t("menuDeleted"));
       setConfirmDelete(false);
-      setDeleted(true);
+      // A deleted menu has nothing left to save: leave without the unsaved-changes prompt.
+      await navigate({ to: "/admin/online-store/navigation", ignoreBlocker: true });
     } catch (error) {
       toast.error(t("deleteFailed"), { description: actionErrorText(error) });
       setDeleting(false);
@@ -235,7 +232,46 @@ function MenuEditor({ menuId }: { menuId: string }) {
   );
 }
 
+/** An old link to a deleted menu: say so instead of editing a menu that no longer exists. */
+function DeletedMenu({ menuId }: { menuId: string }) {
+  const t = useMessages(onlineStoreMessages);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { data: menu } = useSuspenseQuery(navigationMenuQueryOptions(menuId));
+  const [restoring, setRestoring] = useState(false);
+  const restore = async () => {
+    setRestoring(true);
+    try {
+      await apiData(postApiV1AdminNavigationMenusByMenuIdRestore({
+        path: { menuId: menu.id },
+        body: { expectedRevision: menu.revision },
+      }));
+      toast.success(t("menuRestored"));
+    } catch (error) {
+      toast.error(t("saveFailed"), { description: actionErrorText(error) });
+    } finally {
+      setRestoring(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.navigation.menus() });
+    }
+  };
+  return (
+    <OnlineStorePage title={menu.name} back={{ to: "/admin/online-store/navigation", label: t("navigationTitle") }}>
+      <Card className="flex flex-col items-center gap-3 p-8 text-center">
+        <p className="text-body">{t("menuWasDeleted")}</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button type="button" variant="outline" onClick={() => void navigate({ to: "/admin/online-store/navigation" })}>
+            {t("navigationTitle")}
+          </Button>
+          <Button type="button" loading={restoring} onClick={() => void restore()}>{t("restoreMenu")}</Button>
+        </div>
+      </Card>
+    </OnlineStorePage>
+  );
+}
+
 export function MenuPage({ menuId }: { menuId: string }) {
+  const { data: menu } = useSuspenseQuery(navigationMenuQueryOptions(menuId));
+  if (menu.deletedAt) return <DeletedMenu menuId={menuId} />;
   return (
     <SaveBarProvider>
       <MenuEditor menuId={menuId} />

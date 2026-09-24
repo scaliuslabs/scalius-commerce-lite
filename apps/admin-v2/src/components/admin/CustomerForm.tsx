@@ -130,7 +130,13 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
               <FormItem>
                 <FormLabel>{t("email")}</FormLabel>
                 <FormControl>
-                  <Input type="email" {...field} value={field.value || ""} />
+                  {/* Email is optional: clearing it removes it. */}
+                  <Input
+                    type="email"
+                    {...field}
+                    value={field.value || ""}
+                    onChange={(event) => field.onChange(event.target.value.trim() ? event.target.value : null)}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

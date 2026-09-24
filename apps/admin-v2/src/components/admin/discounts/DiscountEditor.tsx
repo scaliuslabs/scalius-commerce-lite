@@ -44,6 +44,7 @@ import { AdminApiResponseError, readPromotionRevisionConflict } from "~/lib/admi
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { discountQueryOptions, discountsQueryOptions, type DiscountRecord } from "~/lib/api-query-options/discounts";
 import {
+  discountFailureText,
   useCreateDiscount,
   useDeleteDiscount,
   useSetDiscountActive,
@@ -295,7 +296,10 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
 
   /** Activate/Delete lost a race with another save: say so and offer their version. */
   function showConflict(error: unknown) {
-    if (!readPromotionRevisionConflict(error)) return;
+    if (!readPromotionRevisionConflict(error)) {
+      toast.error(discountFailureText(error));
+      return;
+    }
     setConflict(true);
     toast.error(t("conflictTitle"));
   }

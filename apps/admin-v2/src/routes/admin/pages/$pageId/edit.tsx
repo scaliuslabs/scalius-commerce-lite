@@ -8,7 +8,12 @@ import { toPageFormValues } from "~/lib/page-form-values";
 import { translate } from "~/i18n";
 import { pageFormMessages } from "~/i18n/page-form";
 
+/** Pages opened from elsewhere return there: only these known places (no free-form URLs). */
+const RETURN_TO = { policies: "/admin/settings/policies" } as const;
+
 export const Route = createFileRoute("/admin/pages/$pageId/edit")({
+  validateSearch: (search: Record<string, unknown>): { from?: keyof typeof RETURN_TO } =>
+    typeof search.from === "string" && search.from in RETURN_TO ? { from: search.from as keyof typeof RETURN_TO } : {},
   loader: async ({ context: { queryClient }, params }) => {
     const data = await queryClient
       .ensureQueryData({
@@ -28,12 +33,13 @@ export const Route = createFileRoute("/admin/pages/$pageId/edit")({
 
 function EditPagePage() {
   const { pageId } = Route.useParams();
+  const { from } = Route.useSearch();
   const { data } = useSuspenseQuery(pageQueryOptions(pageId));
   const page = toPageFormValues(data);
 
   return (
     <div className="container max-w-7xl py-4 pb-8">
-      <PageForm defaultValues={page} isEdit={true} />
+      <PageForm defaultValues={page} isEdit={true} backUrl={from ? RETURN_TO[from] : undefined} />
     </div>
   );
 }

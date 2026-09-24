@@ -41,6 +41,7 @@ import { Route as AdminDiscountsDiscountIdRouteImport } from './routes/admin/dis
 import { Route as AdminDiscountsNewRouteImport } from './routes/admin/discounts/new'
 import { Route as AdminInventoryIndexRouteImport } from './routes/admin/inventory/index'
 import { Route as AdminInventoryLabelsRouteImport } from './routes/admin/inventory/labels'
+import { Route as AdminOnlineStoreIndexRouteImport } from './routes/admin/online-store/index'
 import { Route as AdminOnlineStoreBannersRouteImport } from './routes/admin/online-store/banners'
 import { Route as AdminOnlineStorePreferencesRouteImport } from './routes/admin/online-store/preferences'
 import { Route as AdminOnlineStoreThemeRouteImport } from './routes/admin/online-store/theme'
@@ -241,6 +242,11 @@ const AdminInventoryIndexRoute = AdminInventoryIndexRouteImport.update({
 const AdminInventoryLabelsRoute = AdminInventoryLabelsRouteImport.update({
   id: '/inventory/labels',
   path: '/inventory/labels',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOnlineStoreIndexRoute = AdminOnlineStoreIndexRouteImport.update({
+  id: '/online-store/',
+  path: '/online-store/',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminOnlineStoreBannersRoute = AdminOnlineStoreBannersRouteImport.update({
@@ -513,6 +519,7 @@ export interface FileRoutesByFullPath {
   '/admin/customers/': typeof AdminCustomersIndexRoute
   '/admin/discounts/': typeof AdminDiscountsIndexRoute
   '/admin/inventory/': typeof AdminInventoryIndexRoute
+  '/admin/online-store/': typeof AdminOnlineStoreIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
@@ -584,6 +591,7 @@ export interface FileRoutesByTo {
   '/admin/customers': typeof AdminCustomersIndexRoute
   '/admin/discounts': typeof AdminDiscountsIndexRoute
   '/admin/inventory': typeof AdminInventoryIndexRoute
+  '/admin/online-store': typeof AdminOnlineStoreIndexRoute
   '/admin/pages': typeof AdminPagesIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
@@ -659,6 +667,7 @@ export interface FileRoutesById {
   '/admin/customers/': typeof AdminCustomersIndexRoute
   '/admin/discounts/': typeof AdminDiscountsIndexRoute
   '/admin/inventory/': typeof AdminInventoryIndexRoute
+  '/admin/online-store/': typeof AdminOnlineStoreIndexRoute
   '/admin/pages/': typeof AdminPagesIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
@@ -735,6 +744,7 @@ export interface FileRouteTypes {
     | '/admin/customers/'
     | '/admin/discounts/'
     | '/admin/inventory/'
+    | '/admin/online-store/'
     | '/admin/pages/'
     | '/admin/products/'
     | '/admin/settings/'
@@ -806,6 +816,7 @@ export interface FileRouteTypes {
     | '/admin/customers'
     | '/admin/discounts'
     | '/admin/inventory'
+    | '/admin/online-store'
     | '/admin/pages'
     | '/admin/products'
     | '/admin/settings'
@@ -880,6 +891,7 @@ export interface FileRouteTypes {
     | '/admin/customers/'
     | '/admin/discounts/'
     | '/admin/inventory/'
+    | '/admin/online-store/'
     | '/admin/pages/'
     | '/admin/products/'
     | '/admin/settings/'
@@ -1138,6 +1150,13 @@ declare module '@tanstack/react-router' {
       path: '/inventory/labels'
       fullPath: '/admin/inventory/labels'
       preLoaderRoute: typeof AdminInventoryLabelsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/online-store/': {
+      id: '/admin/online-store/'
+      path: '/online-store'
+      fullPath: '/admin/online-store/'
+      preLoaderRoute: typeof AdminOnlineStoreIndexRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/online-store/banners': {
@@ -1526,6 +1545,7 @@ interface AdminRouteChildren {
   AdminCustomersIndexRoute: typeof AdminCustomersIndexRoute
   AdminDiscountsIndexRoute: typeof AdminDiscountsIndexRoute
   AdminInventoryIndexRoute: typeof AdminInventoryIndexRoute
+  AdminOnlineStoreIndexRoute: typeof AdminOnlineStoreIndexRoute
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
   AdminArticlesArticleIdEditRoute: typeof AdminArticlesArticleIdEditRoute
@@ -1567,6 +1587,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCustomersIndexRoute: AdminCustomersIndexRoute,
   AdminDiscountsIndexRoute: AdminDiscountsIndexRoute,
   AdminInventoryIndexRoute: AdminInventoryIndexRoute,
+  AdminOnlineStoreIndexRoute: AdminOnlineStoreIndexRoute,
   AdminPagesIndexRoute: AdminPagesIndexRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,
   AdminArticlesArticleIdEditRoute: AdminArticlesArticleIdEditRoute,

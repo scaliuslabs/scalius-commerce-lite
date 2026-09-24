@@ -5,7 +5,6 @@ import { ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, Palette, Stor
 import {
   getApiV1AdminInventoryAlerts,
   getApiV1AdminOrders,
-  getApiV1AdminSettingsSeoFeedDiagnostics,
 } from "@scalius/api-client/sdk";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
@@ -22,7 +21,7 @@ import { apiData } from "~/lib/api";
 import { canAccessAdminPath } from "~/lib/admin-access";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { dashboardActivityQueryOptions, dashboardSummaryQueryOptions } from "~/lib/api-query-options/dashboard-home";
-import { navigationPlacementsQueryOptions } from "~/lib/api-query-options/online-store";
+import { countFeedGaps, feedDiagnosticsQueryOptions, navigationPlacementsQueryOptions } from "~/lib/api-query-options/online-store";
 import { formatDateTime, formatNumber, translate, useMessages } from "~/i18n";
 import { homeMessages } from "~/i18n/home";
 
@@ -37,9 +36,6 @@ export const Route = createFileRoute("/admin/")({
 });
 
 type HomeKey = keyof (typeof homeMessages)["en"];
-
-/** Feed exclusions a merchant fixes on the product (not a deliberate setting). */
-const FIXABLE_FEED_REASONS = new Set(["missing_image", "non_positive_price", "no_buyer_sku", "inconsistent_option_axes"]);
 
 /** Today's date in store time (Asia/Dhaka) as YYYY-MM-DD, matching the activity feed. */
 const storeToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
@@ -65,8 +61,7 @@ function HomePage() {
   // Store readiness (Shopify's Home tasks): products the product feed leaves
   // out for a fixable reason, and a storefront header without a menu.
   const feed = useQuery({
-    queryKey: ["home", "feed-diagnostics"],
-    queryFn: () => apiData(getApiV1AdminSettingsSeoFeedDiagnostics()),
+    ...feedDiagnosticsQueryOptions(),
     enabled: canOpen("/admin/online-store/preferences"),
     staleTime: 5 * 60_000,
   });
@@ -100,9 +95,7 @@ function HomePage() {
   const today = days.find((day) => day.date === storeToday());
   const openCount = openOrders.data?.pagination.total ?? 0;
   const lowCount = lowStock.data?.alerts.length ?? 0;
-  const feedGaps = feed.data?.policy.productCatalogEnabled
-    ? feed.data.reasons.filter((entry) => FIXABLE_FEED_REASONS.has(entry.reason)).reduce((sum, entry) => sum + entry.products, 0)
-    : 0;
+  const feedGaps = countFeedGaps(feed.data);
   const needsHeaderMenu = placements.data !== undefined && !placements.data.some(({ placement, menuDeletedAt, publicationItemCount }) =>
     placement.surface === "header" && placement.isEnabled && !menuDeletedAt && (publicationItemCount ?? 0) > 0);
   const caughtUp = openCount === 0 && lowCount === 0 && feedGaps === 0 && !needsHeaderMenu;
@@ -218,7 +211,8 @@ function Metric({ label, value, change }: { label: string; value: string; change
     <Card>
       <CardHeader className="space-y-1">
         <p className="text-body text-muted-foreground">{label}</p>
-        <p className="text-heading-xl font-semibold tabular-nums">{value}</p>
+        {/* Big numbers (৳10,00,000+) shrink on narrow cards instead of spilling out. */}
+        <p className="text-heading-lg font-semibold tabular-nums wrap-anywhere sm:text-heading-xl">{value}</p>
         {/* Compare only against a real baseline: no badge when last month had nothing. */}
         {typeof change === "number" ? (
           <p className="text-body text-muted-foreground">

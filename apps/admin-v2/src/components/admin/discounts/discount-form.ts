@@ -111,8 +111,11 @@ export const MAX_AMOUNT_MAJOR = 1_000_000;
 export const MAX_QUANTITY = 10_000;
 
 /** Bengali digits (০-৯) typed on a Bangla keyboard → Latin, so every number field accepts them. */
+/** A number as merchants type it: Bangla digits become Latin, and grouping commas ("1,000", "1,00,000") are dropped. */
 export function latinDigits(value: string): string {
-  return value.replace(/[০-৯]/gu, (digit) => String(digit.charCodeAt(0) - 0x09e6));
+  return value
+    .replace(/[০-৯]/gu, (digit) => String(digit.charCodeAt(0) - 0x09e6))
+    .replace(/(?<=\d),(?=\d)/gu, "");
 }
 
 /** Why an amount can't be saved, or null when it can. */
@@ -498,9 +501,14 @@ export function describeValue(draft: DiscountDraft, currencyCode: string, format
   if (draft.type === "order") return { key: "listValueOrder", vars: { value } };
   if (draft.type === "products") return { key: "listValueProducts", vars: { value, scope: format.scope(draft.appliesTo) } };
   const get = format.number(draft.getQuantity);
-  return draft.buyKind === "quantity"
-    ? { key: "listValueBuyGet", vars: { buy: format.number(draft.buyValue), get } }
-    : { key: "listValueSpendGet", vars: { value: format.money(draft.buyValue), get } };
+  // A partial gift names its discount, so "Buy 1 get 1" always means free.
+  const percent = draft.getValueKind === "percentage" ? `${format.number(draft.getValue)}%` : null;
+  if (draft.buyKind === "quantity") {
+    const vars = { buy: format.number(draft.buyValue), get };
+    return percent ? { key: "listValueBuyGetPercent", vars: { ...vars, percent } } : { key: "listValueBuyGet", vars };
+  }
+  const vars = { value: format.money(draft.buyValue), get };
+  return percent ? { key: "listValueSpendGetPercent", vars: { ...vars, percent } } : { key: "listValueSpendGet", vars };
 }
 
 /** The Summary card: one line per fact, only once that fact is complete and valid. */

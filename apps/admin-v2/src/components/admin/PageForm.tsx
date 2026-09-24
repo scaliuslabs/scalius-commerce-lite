@@ -33,6 +33,8 @@ import { toCreatePageInput, toUpdatePageInput } from "@/lib/page-form-input";
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
   isEdit?: boolean;
+  /** Where the back arrow goes instead of the list (a page opened from Settings → Policies). */
+  backUrl?: string;
   contentType?: "page" | "article";
 }
 
@@ -68,7 +70,7 @@ function ArticleTagsInput({ value, onChange }: { value: string[]; onChange: (val
   );
 }
 
-export function PageForm({ defaultValues, isEdit = false, contentType = "page" }: PageFormProps) {
+export function PageForm({ defaultValues, isEdit = false, contentType = "page", backUrl }: PageFormProps) {
   const navigate = useNavigate();
   const t = useMessages(pageFormMessages);
   const { getStorefrontPath } = useStorefrontUrl();
@@ -193,8 +195,10 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page" }
   return (
     <FormContainer
       heading={isEdit ? defaultValues?.title || t(isArticle ? "blogPost" : "page") : t(isArticle ? "addBlogPost" : "addPage")}
+      unsavedLabel={isEdit ? undefined : t(isArticle ? "unsavedBlogPost" : "unsavedPage")}
+      savedMessage={isEdit ? undefined : t(isArticle ? "blogPostCreated" : "pageCreated")}
       isSubmitting={isSubmitting}
-      backUrl={isArticle ? "/admin/articles" : "/admin/pages"}
+      backUrl={backUrl ?? (isArticle ? "/admin/articles" : "/admin/pages")}
       canSave={canSave}
       form={form}
       onSave={submitEntity}

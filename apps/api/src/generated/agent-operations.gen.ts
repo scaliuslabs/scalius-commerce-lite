@@ -19401,6 +19401,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "minLength": 1,
                         "maxLength": 160
                       },
+                      "heading": {
+                        "type": "string",
+                        "maxLength": 160
+                      },
+                      "buttonLabel": {
+                        "type": "string",
+                        "maxLength": 40
+                      },
                       "link": {
                         "type": "string",
                         "maxLength": 2048
@@ -19490,6 +19498,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -19518,6 +19532,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -19657,6 +19673,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -19685,6 +19707,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -19815,6 +19839,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "minLength": 1,
                       "maxLength": 160
                     },
+                    "heading": {
+                      "type": "string"
+                    },
+                    "buttonLabel": {
+                      "type": "string"
+                    },
                     "link": {
                       "type": "string",
                       "maxLength": 2048
@@ -19843,6 +19873,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "id",
                     "url",
                     "title",
+                    "heading",
+                    "buttonLabel",
                     "link",
                     "focalPoint"
                   ]
@@ -20002,6 +20034,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -20030,6 +20068,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -20156,6 +20196,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "minLength": 1,
                         "maxLength": 160
                       },
+                      "heading": {
+                        "type": "string",
+                        "maxLength": 160
+                      },
+                      "buttonLabel": {
+                        "type": "string",
+                        "maxLength": 40
+                      },
                       "link": {
                         "type": "string",
                         "maxLength": 2048
@@ -20244,6 +20292,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -20272,6 +20326,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -26546,11 +26602,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "childCount": {
                     "type": "integer",
                     "minimum": 0
+                  },
+                  "targetTitle": {
+                    "type": "string",
+                    "nullable": true
                   }
                 },
                 "required": [
                   "item",
-                  "childCount"
+                  "childCount",
+                  "targetTitle"
                 ]
               }
             },
@@ -50139,7 +50200,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 10
+            "maximum": 50
           },
           "required": false,
           "name": "sampleLimit",
@@ -50296,7 +50357,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "reason"
                       ]
                     },
-                    "maxItems": 10
+                    "maxItems": 50
                   }
                 },
                 "required": [
@@ -71254,6 +71315,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71281,6 +71348,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71404,6 +71473,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71431,6 +71506,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71482,6 +71559,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71509,6 +71592,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71560,6 +71645,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71587,6 +71678,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71619,6 +71712,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "title": {
                     "type": "string"
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string"
                   },
@@ -71646,6 +71745,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
