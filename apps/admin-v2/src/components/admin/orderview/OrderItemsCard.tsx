@@ -15,6 +15,7 @@ import {
   resolveSavedOrderMoneySummary,
 } from "~/lib/order-tax-presentation";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
+import { summarizeOrderDiscounts } from "~/lib/order-discount-summary";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import type { Order } from "./types";
 
@@ -48,45 +49,56 @@ export function OrderItemsCard({ order }: { order: Order }) {
   const returnsQuery = useQuery({ ...orderReturnsQueryOptions(order.id), enabled: hydrated });
   const returned = useMemo(() => returnedQuantities(returnsQuery.data?.returns ?? []), [returnsQuery.data]);
   const saved = resolveSavedOrderMoneySummary(order);
-  const money = (major: number) => (saved ? formatSavedMinorAmount(Math.round(major * 10 ** saved.decimalPlaces), saved) : fmt(major));
-  const minor = (amount: number) => formatSavedMinorAmount(amount, saved!);
-  // A waived fee reads "Free" on the delivery line itself, so its details don't repeat it.
-  const waived = order.shippingFeeWaived === true;
+  const decimals = saved?.decimalPlaces ?? 2;
+  const minor = (amount: number) => (saved ? formatSavedMinorAmount(amount, saved) : fmt(amount / 10 ** decimals));
+  // A saving on delivery reads on the delivery line itself, so its details don't repeat a waiver.
   const delivery = resolveDeliveryMethodPresentation({ ...order, shippingFeeWaived: false }, saved);
-  const waivedFee = waived && saved && Number(order.shippingMethodBaseAmountMinor) > 0
-    ? minor(Number(order.shippingMethodBaseAmountMinor))
-    : null;
   // totalAmount is the grand total; the legacy subtotal is derived from it.
   const legacySubtotal = order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0);
-  const hasDiscount = saved ? saved.discountMinor > 0 : (order.discountAmount ?? 0) > 0;
-  // One line per applied discount: its code (or name) links to it, then its title once if that says more.
-  const discounts: SummaryRow[] = order.discounts.length > 0
-    ? order.discounts.map((discount) => {
-        const title = discount.code ?? discount.name;
-        return {
-          label: (
-            <>
-              <Link to="/admin/discounts/$discountId" params={{ discountId: discount.promotionId }} className="text-link hover:underline">
-                {title}
-              </Link>
-              {discount.name && discount.name !== title ? ` · ${discount.name}` : null}
-            </>
-          ),
-          value: `−${money(discount.amount)}`,
-        };
-      })
-    : hasDiscount
-      // A manual order discount has no promotion behind it.
-      ? [{ label: t("summary.discount"), value: `−${saved ? minor(saved.discountMinor) : fmt(order.discountAmount ?? 0)}` }]
-      : [];
+  const discountSummary = summarizeOrderDiscounts({
+    discounts: order.discounts,
+    shippingMinor: saved ? saved.shippingMinor : Math.round(order.shippingCharge * 10 ** decimals),
+    discountMinor: saved ? saved.discountMinor : Math.round((order.discountAmount ?? 0) * 10 ** decimals),
+    decimalPlaces: decimals,
+    waivedFeeMinor: order.shippingFeeWaived === true ? Number(order.shippingMethodBaseAmountMinor) || null : null,
+  });
+  const deliveryCharged = discountSummary.deliveryChargedMinor === 0 && discountSummary.deliveryStruckMinor !== null
+    ? t("delivery.free")
+    : minor(discountSummary.deliveryChargedMinor);
+  const deliveryCodes = discountSummary.deliveryDiscountNames.length > 0
+    ? ` (${discountSummary.deliveryDiscountNames.join(", ")})`
+    : "";
+  // One line per discount on the items: "Discount · Title (CODE)", the name linking to it.
+  const discounts: SummaryRow[] = [
+    ...discountSummary.itemDiscounts.map(({ discount, name, amountMinor }) => ({
+      label: (
+        <>
+          {t("summary.discount")} ·{" "}
+          <Link to="/admin/discounts/$discountId" params={{ discountId: discount.promotionId }} className="text-link hover:underline">
+            {name}
+          </Link>
+        </>
+      ),
+      value: `−${minor(amountMinor)}`,
+    })),
+    // A manual order discount has no promotion behind it.
+    ...(discountSummary.otherDiscountMinor > 0
+      ? [{ label: t("summary.discount"), value: `−${minor(discountSummary.otherDiscountMinor)}` }]
+      : []),
+  ];
 
   const summary: SummaryRow[] = [
     { label: t("summary.subtotal"), value: saved ? minor(saved.subtotalMinor) : fmt(legacySubtotal) },
     {
       label: delivery.label,
-      value: waived
-        ? <>{waivedFee ? <s className="text-muted-foreground">{waivedFee}</s> : null} {t("delivery.free")}</>
-        : saved ? minor(saved.shippingMinor) : fmt(order.shippingCharge),
+      value: (
+        <>
+          {discountSummary.deliveryStruckMinor !== null
+            ? <><s className="text-muted-foreground">{minor(discountSummary.deliveryStruckMinor)}</s>{" "}</>
+            : null}
+          {deliveryCharged}{deliveryCodes}
+        </>
+      ),
       detail: delivery.details,
     },
     ...discounts,

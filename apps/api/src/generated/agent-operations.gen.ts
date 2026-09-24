@@ -36405,7 +36405,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "string",
                         "nullable": true
                       },
+                      "kind": {
+                        "type": "string"
+                      },
                       "amount": {
+                        "type": "number"
+                      },
+                      "shippingAmount": {
                         "type": "number"
                       }
                     },
@@ -36928,7 +36934,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "string",
                         "nullable": true
                       },
+                      "kind": {
+                        "type": "string"
+                      },
                       "amount": {
+                        "type": "number"
+                      },
+                      "shippingAmount": {
                         "type": "number"
                       }
                     },
