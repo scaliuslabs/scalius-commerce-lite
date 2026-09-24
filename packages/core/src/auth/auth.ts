@@ -16,7 +16,6 @@ import { createTwoFactorRecoveryCodeStorage, generateRecoveryCodes } from "./two
 import {
   PASSWORD_RESET_TTL_SECONDS,
   STAFF_INVITE_TTL_SECONDS,
-  readStoreName,
   sendStaffPasswordChangedEmail,
   staffInviteEmail,
   staffPasswordResetEmail,
@@ -27,6 +26,7 @@ import {
   AUTH_PASSWORD_MIN_LENGTH,
 } from "./credential-account";
 import { retryTransientD1 } from "../utils/transient-d1";
+import { readStoreName } from "../modules/notifications/store-messages";
 
 function getEmailRuntimeContext(env: Env) {
   const source = env as Record<string, unknown>;

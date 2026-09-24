@@ -1,12 +1,13 @@
-// Store identity for buyer messages (name, logo, language) and the
+// Store identity for buyer and staff messages (name, logo, language) and the
 // one-time-code message built from it.
 import type { Database } from "@scalius/database/client";
 import { checkoutLanguages } from "@scalius/database/schema";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { mediaOriginalUrl } from "@scalius/shared/media-variants";
+import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { and, eq, isNull } from "drizzle-orm";
-import { businessDocument, headerDocument, type BusinessInfo } from "../settings/documents";
+import { businessDocument, headerDocument, platformDocument, type BusinessInfo } from "../settings/documents";
 import { selectSettingsDocuments } from "../settings/settings-store";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 import { storeHeaderHtml, type EmailStore } from "./notification-templates";
@@ -15,6 +16,34 @@ export interface StoreIdentity extends EmailStore {
   /** Bangla when the active checkout language is Bangla, else English. */
   language: MessageLanguage;
   business: BusinessInfo;
+  /** True when no business name is set and `name` is the Store URL's host. */
+  nameFromAddress: boolean;
+}
+
+/**
+ * The store's name in every buyer and staff message (headers, sender name,
+ * `{{store_name}}`): the business name, else the legal name, else the Store
+ * URL's host (e.g. `shop.example.com`). Null only while none of them is set.
+ */
+export function storeDisplayName(
+  business: Pick<BusinessInfo, "companyName" | "legalName">,
+  storefrontUrl: string,
+): string | null {
+  const businessName = business.companyName.trim() || business.legalName.trim();
+  if (businessName) return businessName;
+  const origin = normalizeStorefrontOrigin(storefrontUrl);
+  return origin ? new URL(origin).host.replace(/^www\./, "") : null;
+}
+
+/** Only the store's display name, for staff emails. A failed read returns null: the email still goes, unbranded. */
+export async function readStoreName(db: Database): Promise<string | null> {
+  try {
+    const rows = await selectSettingsDocuments(db, [businessDocument, platformDocument]);
+    const [business, platform] = await Promise.all([businessDocument.fromRows(rows), platformDocument.fromRows(rows)]);
+    return storeDisplayName(business.value, platform.value.storefrontUrl);
+  } catch {
+    return null;
+  }
 }
 
 /** Bangla when the active checkout language is Bangla, else English. */
@@ -27,16 +56,22 @@ export async function readStoreLanguage(db: Database): Promise<MessageLanguage> 
 
 export async function readStoreIdentity(db: Database): Promise<StoreIdentity> {
   const [rows, language] = await Promise.all([
-    selectSettingsDocuments(db, [businessDocument, headerDocument]),
+    selectSettingsDocuments(db, [businessDocument, headerDocument, platformDocument]),
     readStoreLanguage(db),
   ]);
-  const [business, header] = await Promise.all([businessDocument.fromRows(rows), headerDocument.fromRows(rows)]);
+  const [business, header, platform] = await Promise.all([
+    businessDocument.fromRows(rows),
+    headerDocument.fromRows(rows),
+    platformDocument.fromRows(rows),
+  ]);
   const logo = header.value.logo as { src?: unknown } | undefined;
+  const name = storeDisplayName(business.value, platform.value.storefrontUrl);
   return {
-    name: business.value.companyName.trim() || business.value.legalName.trim() || null,
+    name,
     logoUrl: typeof logo?.src === "string" ? absoluteHttpUrl(mediaOriginalUrl(logo.src.trim())) : null,
     language,
     business: business.value,
+    nameFromAddress: name !== null && !storeDisplayName(business.value, ""),
   };
 }
 

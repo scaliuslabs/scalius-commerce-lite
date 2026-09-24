@@ -11,6 +11,6 @@ export const Route = createFileRoute("/auth/login")({
 });
 
 function LoginPage() {
-  const { signIn } = Route.useRouteContext();
-  return <LoginForm signIn={signIn} />;
+  const { signIn, signedOut } = Route.useRouteContext();
+  return <LoginForm signIn={signIn} signedOut={signedOut} />;
 }

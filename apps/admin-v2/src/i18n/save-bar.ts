@@ -54,6 +54,9 @@ export const saveBarMessages = defineMessages({
     offline: "Couldn't reach the server. Check your connection and try again.",
     conflict: "Someone else changed these settings since you opened them.",
     reloadKeepEdits: "Reload and keep my edits",
+    retryBar: "Couldn't save · Retry",
+    conflictBar: "Changed by someone else · Reload",
+    retry: "Retry",
   },
   bn: {
     unsavedChanges: "সেভ করা হয়নি",
@@ -78,5 +81,8 @@ export const saveBarMessages = defineMessages({
     offline: "সার্ভারে পৌঁছানো যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
     conflict: "আপনি খোলার পর অন্য কেউ এই সেটিংস বদলেছেন।",
     reloadKeepEdits: "নতুনটা লোড করুন, আমার বদল রাখুন",
+    retryBar: "সেভ হয়নি · আবার চেষ্টা করুন",
+    conflictBar: "অন্য কেউ বদলেছেন · রিলোড করুন",
+    retry: "আবার চেষ্টা করুন",
   },
 });

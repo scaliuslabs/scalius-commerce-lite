@@ -81,7 +81,12 @@ async function createTestApp(stored: Stored = {}, site: { partialPaymentEnabled?
             },
         requestEnv,
     );
-    return { request, db, sqlite, failNextWrite: () => { failNextWrite = true; } };
+    const remove = (path: string, expectedRevision = loadedRevision(path)) => app.request(
+        `/api/v1/admin/settings${path}`,
+        { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedRevision }) },
+        env,
+    );
+    return { request, remove, db, sqlite, failNextWrite: () => { failNextWrite = true; } };
 }
 
 /** The raw stored document (secrets as ciphertext), or `{}` before the first save. */
@@ -362,6 +367,51 @@ describe("payment settings", () => {
                 await request("/sslcommerz", { enabled: true }),
                 "Add the store password to turn on SSLCommerz.",
             );
+        });
+
+        it.each([
+            ["/stripe", { stripe: liveStripe }, { secretKey: "", publishableKey: "", webhookSecret: "", enabled: false }],
+            ["/sslcommerz", { sslcommerz: liveSsl }, { storeId: "", storePassword: "", sandbox: true, enabled: false }],
+        ] as const)("removes every saved %s key, turns it off and takes it out of checkout", async (path, stored, cleared) => {
+            const gateway = path.slice(1);
+            const { request, remove, sqlite } = await createTestApp({
+                ...stored,
+                payment_methods: { enabledMethods: [gateway, "cod"], defaultMethod: gateway },
+            } as Stored);
+
+            const response = await remove(path);
+
+            expect(response.status, await response.clone().text()).toBe(200);
+            expect(storedRows(sqlite, gateway)).toEqual(cleared);
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
+            // Nothing reads as saved any more.
+            const read = await (await request(path)).json() as { data: Record<string, unknown> };
+            expect(JSON.stringify(read.data)).not.toContain(MASKED);
+            expect(mocks.bumpCacheGeneration).toHaveBeenCalledOnce();
+        });
+
+        it("refuses to remove the keys of the last payment method checkout can use, like turning it off", async () => {
+            const { remove, sqlite } = await createTestApp({
+                stripe: liveStripe,
+                payment_methods: { enabledMethods: ["stripe"], defaultMethod: "stripe" },
+            });
+            const before = storedRows(sqlite, "stripe");
+
+            await expectValidationError(await remove("/stripe"));
+            expect(storedRows(sqlite, "stripe")).toEqual(before);
+            expect(storedRows(sqlite, "payment_methods")).toEqual({ enabledMethods: ["stripe"], defaultMethod: "stripe" });
+            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+        });
+
+        it("refuses a removal based on keys someone else has since changed", async () => {
+            const { remove, sqlite } = await createTestApp({ stripe: liveStripe });
+            const before = storedRows(sqlite, "stripe");
+
+            const response = await remove("/stripe", 0);
+
+            expect(response.status).toBe(409);
+            expect(storedRows(sqlite, "stripe")).toEqual(before);
+            expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
         });
 
         it("keeps a compatible online gateway when partial payments require one", async () => {

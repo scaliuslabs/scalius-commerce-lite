@@ -33,9 +33,8 @@ import {
     markNotificationProviderBlocked,
 } from "./notification-provider-health";
 import { ORDER_NOTIFICATION_LABELS, type OrderNotificationType } from "./notification-types";
-import { composeOrderEmail, composeStaffOrderEmail, readOrderMessageContext } from "./order-email";
+import { composeOrderEmail, composeOrderSms, composeStaffOrderEmail, readOrderMessageContext } from "./order-email";
 import { notificationsDocument } from "../settings/documents";
-import { renderTemplate } from "./notification-templates";
 import { getNotificationTemplates } from "./notification-templates.service";
 
 interface OrderNotificationData {
@@ -91,6 +90,11 @@ const EMPTY_DISPATCH_RESULT: OrderNotificationDispatchResult = {
 };
 
 const MAX_ORDER_NOTIFICATION_DELIVERY_ATTEMPTS = 8;
+
+const CUSTOMER_CHANNELS = new Set(["email", "sms", "whatsapp"]);
+
+/** The skipped-receipt reason when every customer channel is off for the event. */
+export const NOTIFICATION_TURNED_OFF = "notification_turned_off";
 
 const NON_RETRYABLE_DISPATCH_ERROR_PATTERNS = [
     /no configured .*provider/i,
@@ -535,11 +539,28 @@ export async function sendOrderNotificationEmail(
         storefrontUrl: typeof options.env?.STOREFRONT_URL === "string" ? options.env.STOREFRONT_URL : undefined,
     }, db));
     const templates = once(async () => (await getNotificationTemplates(db, (await context()).language)).templates);
-    const smsMessage = async () => renderTemplate((await templates()).sms[type].body, (await context()).variables);
+    const smsMessage = async () => composeOrderSms(await context(), (await templates()).sms[type].body);
 
     const receiptEnabled = Boolean(db && options.outboxId);
     const receiptDb = receiptEnabled ? db : undefined;
     const outboxId = options.outboxId;
+
+    // The merchant turned this message off: the order's log says so ("Not sent")
+    // instead of showing the message as sent.
+    if (receiptDb && outboxId && !enabledChannels.some((channel) => CUSTOMER_CHANNELS.has(channel))) {
+        outcomes.push(await recordSkippedDelivery({
+            db: receiptDb,
+            outboxId,
+            orderId,
+            notificationType: type,
+            channel: "email",
+            provider: "email",
+            recipient: email || `missing-email:${orderId}`,
+            recipientMasked: email ? maskEmail(email) : "missing-email",
+            reason: NOTIFICATION_TURNED_OFF,
+        }));
+        return buildDispatchResult(outcomes);
+    }
 
     if (enabledChannels.includes("email")) {
         const composeEmail = async () => composeOrderEmail(await context(), (await templates()).email[type]);
