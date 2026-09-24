@@ -15,6 +15,7 @@ import {
   postApiV1AdminMediaUploadsByIdComplete,
   putApiV1AdminMediaFoldersById,
 } from "@scalius/api-client/sdk";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { apiData, type ApiBody, type ApiResult } from "~/lib/api";
 import type {
   CursorPagination,
@@ -34,7 +35,6 @@ const MEDIA_API = withDashboardBasePath("/api/v1/admin/media");
 interface ApiEnvelope<T> {
   success?: boolean;
   data?: T;
-  error?: string | { message?: string };
 }
 
 export type MediaFileDto = ApiResult<typeof getApiV1AdminMedia>["files"][number];
@@ -86,17 +86,9 @@ function toFolder(folder: MediaFolderDto): MediaFolder {
 // transport sends JSON text bodies only.
 async function parseDirectResponse<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
-  let body: ApiEnvelope<T>;
-  try {
-    body = (await response.json()) as ApiEnvelope<T>;
-  } catch {
-    throw new Error(mediaText("requestFailed", { status: String(response.status) }));
-  }
-  if (!response.ok || body.success === false) {
-    const message = typeof body.error === "string" ? body.error : body.error?.message;
-    throw new Error(message || mediaText("requestFailed", { status: String(response.status) }));
-  }
-  if (body.data === undefined) throw new Error(mediaText("serverError"));
+  const failed = () => new AdminApiResponseError(mediaText("serverError"), response.ok ? 502 : response.status);
+  const body = (await response.json().catch(() => null)) as ApiEnvelope<T> | null;
+  if (!response.ok || !body || body.success === false || body.data === undefined) throw failed();
   return body.data;
 }
 
@@ -243,7 +235,7 @@ export class MediaApiClient {
       credentials: "same-origin",
       cache: "no-store",
     });
-    if (!response.ok) throw new Error(mediaText("requestFailed", { status: String(response.status) }));
+    if (!response.ok) throw new AdminApiResponseError(mediaText("serverError"), response.status);
     return response.blob();
   }
 

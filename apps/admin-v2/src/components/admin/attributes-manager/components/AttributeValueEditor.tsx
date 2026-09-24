@@ -18,7 +18,7 @@ import { useDebounce } from "~/hooks/use-debounce";
 import { formatNumber, useMessages } from "~/i18n";
 import { attributeValueMessages } from "~/i18n/attributes";
 import { apiData } from "~/lib/api";
-import { getServerFnError } from "~/lib/api-helpers";
+import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { attributeValuesQueryOptions } from "~/lib/api-query-options/attributes";
 import { queryKeys } from "~/lib/query-keys";
 import type { AttributeValue, AttributeValuesViewerProps } from "../types";
@@ -75,8 +75,11 @@ export function AttributeValueEditor({
     if (totalPages > 0 && page > totalPages) setPage(totalPages);
   }, [page, valuesQuery.data?.totalPages]);
 
-  /** Runs one write at a time and keeps the dialog busy until the list shows its result. */
-  async function run(key: string, write: () => Promise<unknown>, success: string, failure: string, done: () => void) {
+  /**
+   * Runs one write at a time and keeps the dialog busy until the list shows its result.
+   * `value` names the value a conflict is about ("Cotton already exists").
+   */
+  async function run(key: string, write: () => Promise<unknown>, success: string, failure: string, done: () => void, value?: string) {
     if (commandInFlight.current || !attributeId) return;
     commandInFlight.current = true;
     setSavingValue(key);
@@ -86,7 +89,9 @@ export function AttributeValueEditor({
       done();
       await queryClient.invalidateQueries({ queryKey: queryKeys.attributes.all }, { throwOnError: false });
     } catch (error: unknown) {
-      toast.error(getServerFnError(error, failure));
+      toast.error(value && isAdminApiConflictError(error) ? t("alreadyExists", { value }) : failure);
+      // A value renamed or deleted elsewhere: show the list as it is now.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.attributes.all }, { throwOnError: false });
     } finally {
       commandInFlight.current = false;
       setSavingValue(null);
@@ -105,6 +110,7 @@ export function AttributeValueEditor({
         setNewValue("");
         setIsAddingNew(false);
       },
+      value,
     );
   };
 
@@ -123,6 +129,7 @@ export function AttributeValueEditor({
         setEditingValue(null);
         setEditedValue("");
       },
+      next,
     );
   };
 

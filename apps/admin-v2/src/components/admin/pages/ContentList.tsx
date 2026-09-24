@@ -23,19 +23,28 @@ import { DateText, sortHeader } from "~/components/admin/resource/columns";
 import { formatDateTime, useMessages } from "~/i18n";
 import { contentMessages } from "~/i18n/content";
 import { pageListQueryParams, type validatePageSearch } from "./page-list-state";
+import { readListSearch, useListSearch } from "~/lib/list-search";
 
 type ContentType = "page" | "article";
 
 const INVALIDATE = [queryKeys.pages.all];
 const claims = (rows: PageListItem[]) => rows.map((row) => ({ id: row.id, expectedRevision: row.revision }));
 
-export function contentListQuery(type: ContentType, search: ReturnType<typeof validatePageSearch>) {
-  return pagesQueryOptions({ ...pageListQueryParams(search), contentType: type === "article" ? "article" : undefined });
+/** The list's session search key (list-search.ts). */
+const listName = (type: ContentType) => (type === "article" ? "articles" : "pages");
+
+export function contentListQuery(
+  type: ContentType,
+  search: ReturnType<typeof validatePageSearch>,
+  term = readListSearch(listName(type)),
+) {
+  return pagesQueryOptions({ ...pageListQueryParams(search, term), contentType: type === "article" ? "article" : undefined });
 }
 
 /** Pages and blog posts share one list; only paths and copy differ. */
 export function ContentList({ type, search }: { type: ContentType; search: ReturnType<typeof validatePageSearch> }) {
   const t = useMessages(contentMessages);
+  const [term] = useListSearch(listName(type));
   const { hasPermission } = usePermissions();
   const { getStorefrontPath } = useStorefrontUrl();
   const canEdit = hasPermission(PERMISSIONS.PAGES_EDIT);
@@ -95,8 +104,9 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
         </Button>
       ) : null}
       search={search}
-      query={contentListQuery(type, search)}
-      pageQuery={(page, limit) => contentListQuery(type, { ...search, page, limit })}
+      list={listName(type)}
+      query={contentListQuery(type, search, term)}
+      pageQuery={(page, limit) => contentListQuery(type, { ...search, page, limit }, term)}
       dataKey="pages"
       columns={columns}
       invalidate={INVALIDATE}

@@ -78,7 +78,7 @@ omits this internal composition flag.
 | `getCollectionById` | `(db, id)` | Excludes soft-deleted collections; returns null if not found |
 | `getCollectionsByIds` | `(db, ids)` | Batch lookup by IDs, preserving requested order, excluding soft-deleted collections, and capped at 90 IDs |
 | `getCollectionCategoryOptions` | `(db)` | Lightweight non-deleted category options for collection builders |
-| `listCollectionProductOptions` | `(db, { page?, limit?, search?, categoryIds? })` | Stable name/ID pagination for the collection picker; FTS search and OR-matched categories run in one two-statement D1 batch. Category IDs are deduplicated and capped at 90 so search/limit/offset binds stay below D1's 100-parameter ceiling. |
+| `listCollectionProductOptions` | `(db, { page?, limit?, search?, categoryIds? })` | Collection picker rows (price, optioned variant count, sellable tracked stock), newest first when opened and A-Z when searching; FTS search and OR-matched categories run in one two-statement D1 batch. Category IDs are deduplicated and capped at 90 so search/limit/offset binds stay below D1's 100-parameter ceiling. |
 
 The admin collection picker calls only `listCollectionProductOptions` through
 `GET /admin/collections/product-options`. Search is debounced and every filter

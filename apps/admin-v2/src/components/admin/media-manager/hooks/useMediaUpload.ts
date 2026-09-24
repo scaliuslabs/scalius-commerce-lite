@@ -2,24 +2,26 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MEDIA_MAX_FILES_PER_UPLOAD,
   MEDIA_MULTIPART_PART_SIZE_BYTES,
+  MEDIA_SIGNATURE_READ_BYTES,
+  getMediaPolicy,
+  normalizeMediaMimeType,
   validateMediaFileMetadata,
+  validateMediaSignature,
 } from "@scalius/shared/media-policy";
 import { toast } from "sonner";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { mediaText as t } from "~/i18n/media";
-import { MediaApiClient } from "../api";
-import type { LibraryMediaFile, MediaCapability, UploadQueueItem } from "../types";
+import { MediaApiClient, type MediaUploadSession } from "../api";
+import type { LibraryMediaFile, MediaCapability, UploadError, UploadQueueItem } from "../types";
 import { readIntrinsicMediaMetadata } from "../utils/intrinsic-metadata";
 import { canEncodeMediaVariants, encodeMediaVariants } from "../utils/media-variants";
 
 const MAX_CONCURRENT_FILES = 2;
-const UNFINISHED_UPLOAD_STATUSES = new Set<UploadQueueItem["status"]>([
-  "queued",
-  "initiating",
-  "uploading",
-  "paused",
-  "completing",
-  "failed",
-]);
+/** A finished row stays long enough to read "Uploaded", then leaves the panel. */
+export const DONE_ROW_MS = 2500;
+const IN_FLIGHT = new Set<UploadQueueItem["status"]>(["queued", "uploading", "processing"]);
+/** Server session states a retry continues instead of starting over. */
+const RESUMABLE = new Set<MediaUploadSession["state"]>(["initiated", "uploading", "completing", "committed"]);
 
 interface UseMediaUploadOptions {
   capability: MediaCapability;
@@ -31,161 +33,176 @@ function queueId(): string {
   return `upload_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function byId(items: UploadQueueItem[], id: string): UploadQueueItem | undefined {
+  return items.find((item) => item.id === id);
+}
+
+function notSupported(capability: MediaCapability): UploadError {
+  return capability === "image" ? "notImage" : capability === "video" ? "notVideo" : "notMedia";
+}
+
+/** Checks type, size and the file's real content before anything is sent. */
+async function checkFile(file: File, capability: MediaCapability): Promise<UploadError | null> {
+  const metadata = validateMediaFileMetadata({ filename: file.name, mimeType: file.type, size: file.size });
+  if (!metadata.ok) {
+    const mimeType = normalizeMediaMimeType(file.type);
+    const policy = mimeType ? getMediaPolicy(mimeType) : null;
+    if (policy && file.size > policy.maxBytes) return policy.kind === "video" ? "videoTooLarge" : "imageTooLarge";
+    return notSupported(capability);
+  }
+  if (capability !== "both" && metadata.value.kind !== capability) return notSupported(capability);
+  const head = await file.slice(0, MEDIA_SIGNATURE_READ_BYTES).arrayBuffer();
+  return validateMediaSignature(head, metadata.value.mimeType).ok ? null : notSupported(capability);
+}
+
+/** Server rejections become the same plain reasons as the client checks; never raw server text. */
+function serverError(error: unknown, item: UploadQueueItem, capability: MediaCapability, rejectsContent: boolean): UploadError {
+  if (!(error instanceof AdminApiResponseError)) return "failed";
+  if (error.status === 413) return item.kind === "video" ? "videoTooLarge" : "imageTooLarge";
+  if (rejectsContent && [400, 415, 422].includes(error.status)) return notSupported(capability);
+  return "failed";
+}
+
 export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMediaUploadOptions) {
   const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const queueRef = useRef<UploadQueueItem[]>([]);
   const activeCountRef = useRef(0);
   const controllersRef = useRef(new Map<string, AbortController>());
-  const mountedRef = useRef(true);
+  const timersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const aliveRef = useRef(false);
+  const onCompleteRef = useRef(onUploadComplete);
+  onCompleteRef.current = onUploadComplete;
   const pumpRef = useRef<() => void>(() => undefined);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    controllersRef.current.forEach((controller) => controller.abort());
+  // Set in the effect body (not at declaration) so StrictMode's replayed
+  // mount turns it back on; a stale `false` here froze every row at "Waiting".
+  useEffect(() => {
+    aliveRef.current = true;
+    const controllers = controllersRef.current;
+    const timers = timersRef.current;
+    return () => {
+      aliveRef.current = false;
+      controllers.forEach((controller) => controller.abort());
+      timers.forEach(clearTimeout);
+    };
   }, []);
 
+  const inFlight = queue.some((item) => IN_FLIGHT.has(item.status));
   useEffect(() => {
-    if (!queue.some((item) => UNFINISHED_UPLOAD_STATUSES.has(item.status))) return;
-
+    if (!inFlight) return;
+    // A browser File can't be recovered after this document closes.
     const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
-      // The server-side multipart session is durable, but a browser File cannot
-      // be recovered after this document closes. Keep the merchant from
-      // accidentally discarding the only client-side handle needed to resume.
       event.preventDefault();
       event.returnValue = "";
     };
-
     window.addEventListener("beforeunload", warnBeforeLeaving);
     return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
-  }, [queue]);
+  }, [inFlight]);
 
-  const mutate = useCallback((id: string, update: Partial<UploadQueueItem>) => {
-    queueRef.current = queueRef.current.map((item) => item.id === id ? { ...item, ...update } : item);
-    if (mountedRef.current) setQueue(queueRef.current);
+  const commit = useCallback((next: UploadQueueItem[]) => {
+    queueRef.current = next;
+    if (aliveRef.current) setQueue(next);
   }, []);
+  const mutate = useCallback((id: string, update: Partial<UploadQueueItem>) => {
+    commit(queueRef.current.map((item) => item.id === id ? { ...item, ...update } : item));
+  }, [commit]);
+  const remove = useCallback((id: string) => {
+    commit(queueRef.current.filter((item) => item.id !== id));
+  }, [commit]);
 
   const runItem = useCallback(async (id: string) => {
-    let item = queueRef.current.find((candidate) => candidate.id === id);
-    if (!item || item.status !== "initiating") return;
-    const intrinsicMetadata = readIntrinsicMediaMetadata(item.file, item.kind);
+    const item = byId(queueRef.current, id);
+    if (!item?.kind) return;
+    const file = item.file;
+    const intrinsicMetadata = readIntrinsicMediaMetadata(file, item.kind);
     // Renditions encode while the parts upload; null falls back to the server.
-    const encodedVariants = canEncodeMediaVariants(item.file.type)
-      ? encodeMediaVariants(item.file)
-      : Promise.resolve(null);
-    let sessionId = item.sessionId;
-    let failedPart: number | null = null;
+    const encodedVariants = canEncodeMediaVariants(file.type) ? encodeMediaVariants(file) : Promise.resolve(null);
+    const stillWanted = () => aliveRef.current && byId(queueRef.current, id) !== undefined;
+    let rejectsContent = true;
     try {
-      let session;
-      if (sessionId) {
-        session = await MediaApiClient.getUpload(sessionId);
-      } else {
+      // Retry continues the server session where it stopped.
+      let session: MediaUploadSession | null = item.sessionId
+        ? await MediaApiClient.getUpload(item.sessionId).catch(() => null)
+        : null;
+      if (!session || !RESUMABLE.has(session.state)) {
         session = await MediaApiClient.initiateUpload({
-          filename: item.file.name,
-          mimeType: item.file.type,
-          size: item.file.size,
+          filename: file.name,
+          mimeType: file.type,
+          size: file.size,
           folderId: folderId ?? null,
         });
-        sessionId = session.id;
       }
-
-      const uploadedParts = new Set(session.uploadedParts?.map((part) => part.partNumber) ?? []);
-      item = queueRef.current.find((candidate) => candidate.id === id);
-      if (!item) return;
-      if (item.status === "cancelled") {
-        // Cancellation can race session initiation, which is not abortable in the
-        // browser. Once the server returns the new session ID, clean it up rather
-        // than reviving the local queue item or leaking multipart state.
-        try {
-          await MediaApiClient.abortUpload(session.id);
-        } catch {
-          mutate(id, {
-            status: "paused",
-            sessionId: session.id,
-            error: t("cancelUnconfirmed"),
-          });
-        }
+      if (!stillWanted()) {
+        // Removed while the session was being created: clean it up server-side.
+        void MediaApiClient.abortUpload(session.id).catch(() => undefined);
         return;
       }
-      mutate(id, {
-        sessionId,
-        expectedParts: session.expectedParts,
-        uploadedParts: [...uploadedParts].sort((a, b) => a - b),
-        status: item.status === "paused" ? "paused" : "uploading",
-        error: null,
-        warning: null,
-        failedPart: null,
-      });
-      if (item.status === "paused") return;
+      mutate(id, { sessionId: session.id });
 
+      const uploaded = new Set(session.uploadedParts?.map((part) => part.partNumber) ?? []);
+      const uploadedBytes = () => [...uploaded].reduce((total, number) =>
+        total + Math.min(MEDIA_MULTIPART_PART_SIZE_BYTES, file.size - (number - 1) * MEDIA_MULTIPART_PART_SIZE_BYTES), 0);
+      mutate(id, { progress: Math.round((uploadedBytes() / file.size) * 95) });
       for (let partNumber = 1; partNumber <= session.expectedParts; partNumber += 1) {
-        item = queueRef.current.find((candidate) => candidate.id === id);
-        if (!item || item.status === "paused" || item.status === "cancelled") return;
-        if (uploadedParts.has(partNumber)) continue;
-        failedPart = partNumber;
+        if (!stillWanted()) return;
+        if (uploaded.has(partNumber)) continue;
+        rejectsContent = partNumber === 1;
         const start = (partNumber - 1) * MEDIA_MULTIPART_PART_SIZE_BYTES;
-        const end = Math.min(start + MEDIA_MULTIPART_PART_SIZE_BYTES, item.file.size);
         const controller = new AbortController();
         controllersRef.current.set(id, controller);
-        await MediaApiClient.uploadPart(session.id, partNumber, item.file.slice(start, end), controller.signal);
+        await MediaApiClient.uploadPart(session.id, partNumber, file.slice(start, start + MEDIA_MULTIPART_PART_SIZE_BYTES), controller.signal);
         controllersRef.current.delete(id);
-        uploadedParts.add(partNumber);
-        const completedBytes = [...uploadedParts].reduce((total, number) => {
-          const partStart = (number - 1) * MEDIA_MULTIPART_PART_SIZE_BYTES;
-          return total + Math.min(MEDIA_MULTIPART_PART_SIZE_BYTES, item!.file.size - partStart);
-        }, 0);
-        mutate(id, {
-          uploadedParts: [...uploadedParts].sort((a, b) => a - b),
-          progress: Math.min(95, Math.round((completedBytes / item.file.size) * 95)),
-          failedPart: null,
-        });
+        uploaded.add(partNumber);
+        mutate(id, { progress: Math.round((uploadedBytes() / file.size) * 95) });
       }
+      rejectsContent = false;
 
-      item = queueRef.current.find((candidate) => candidate.id === id);
-      if (!item || item.status === "paused" || item.status === "cancelled") return;
-      mutate(id, { status: "completing", progress: 97 });
+      if (!stillWanted()) return;
+      mutate(id, { status: "processing", progress: 100 });
       const variants = await encodedVariants;
-      let file = await MediaApiClient.completeUpload(session.id, variants ? "client" : "server");
-      let warning: string | null = null;
+      let result = await MediaApiClient.completeUpload(session.id, variants ? "client" : "server");
+      let warning: UploadQueueItem["warning"] = null;
       if (variants) {
         try {
-          file = await MediaApiClient.saveVariants(file.id, variants);
+          result = await MediaApiClient.saveVariants(result.id, variants);
         } catch {
-          warning = t("variantsNotSaved");
+          warning = "variantsNotSaved";
         }
       } else {
         const metadata = await intrinsicMetadata;
-        if (metadata && !(file.width && file.height)) {
+        if (metadata && !(result.width && result.height)) {
           try {
-            file = await MediaApiClient.updateFile(file, metadata);
+            result = await MediaApiClient.updateFile(result, metadata);
           } catch {
-            warning = t("metadataNotSaved");
+            warning = "metadataNotSaved";
           }
         }
       }
-      mutate(id, { status: "complete", progress: 100, result: file, warning });
-      onUploadComplete?.([file]);
+      if (!aliveRef.current) return;
+      onCompleteRef.current?.([result]);
+      if (!byId(queueRef.current, id)) return;
+      mutate(id, { status: "done", result, warning });
+      // Rows with a warning stay until the merchant dismisses them.
+      if (!warning) {
+        const timer = setTimeout(() => {
+          timersRef.current.delete(timer);
+          remove(id);
+        }, DONE_ROW_MS);
+        timersRef.current.add(timer);
+      }
     } catch (error) {
       controllersRef.current.delete(id);
-      const current = queueRef.current.find((candidate) => candidate.id === id);
-      if (!current || current.status === "cancelled") return;
-      if (error instanceof DOMException && error.name === "AbortError") {
-        if (current.status !== "paused") mutate(id, { status: "paused" });
-        return;
-      }
-      mutate(id, {
-        status: "failed",
-        failedPart,
-        error: error instanceof Error ? error.message : t("uploadFailed"),
-      });
+      if (!stillWanted() || (error instanceof DOMException && error.name === "AbortError")) return;
+      mutate(id, { status: "failed", error: serverError(error, item, capability, rejectsContent) });
     }
-  }, [folderId, mutate, onUploadComplete]);
+  }, [capability, folderId, mutate, remove]);
 
   const pump = useCallback(() => {
     while (activeCountRef.current < MAX_CONCURRENT_FILES) {
       const next = queueRef.current.find((item) => item.status === "queued");
       if (!next) break;
       activeCountRef.current += 1;
-      mutate(next.id, { status: "initiating" });
+      mutate(next.id, { status: "uploading" });
       void runItem(next.id).finally(() => {
         activeCountRef.current -= 1;
         pumpRef.current();
@@ -201,81 +218,38 @@ export function useMediaUpload({ capability, folderId, onUploadComplete }: UseMe
       toast.error(t("tooManyFiles", { count: MEDIA_MAX_FILES_PER_UPLOAD }));
       return;
     }
-
-    const accepted: UploadQueueItem[] = [];
-    const rejected: string[] = [];
-    for (const file of incoming) {
-      const validation = validateMediaFileMetadata({ filename: file.name, mimeType: file.type, size: file.size });
-      if (!validation.ok) {
-        rejected.push(`${file.name}: ${validation.error}`);
-        continue;
-      }
-      if (capability !== "both" && validation.value.kind !== capability) {
-        rejected.push(`${file.name}: ${t(capability === "image" ? "imagesOnly" : "videosOnly")}`);
-        continue;
-      }
-      accepted.push({
+    const items = await Promise.all(incoming.map(async (file): Promise<UploadQueueItem> => {
+      const error = await checkFile(file, capability);
+      return {
         id: queueId(),
         file,
-        kind: validation.value.kind,
-        status: "queued",
+        kind: error ? null : file.type.startsWith("video/") ? "video" : "image",
+        status: error ? "failed" : "queued",
         progress: 0,
-        uploadedParts: [],
-        expectedParts: Math.ceil(file.size / MEDIA_MULTIPART_PART_SIZE_BYTES),
         sessionId: null,
-        failedPart: null,
-        error: null,
+        error,
         warning: null,
         result: null,
-      });
-    }
-    if (rejected.length) {
-      toast.error(rejected.length === 1 ? t("notAddedOne") : t("notAddedMany", { count: rejected.length }), {
-        description: rejected.slice(0, 3).join("\n"),
-      });
-    }
-    if (!accepted.length) return;
-    queueRef.current = [...queueRef.current.filter((item) => !["complete", "cancelled"].includes(item.status)), ...accepted];
-    setQueue(queueRef.current);
+      };
+    }));
+    commit([...queueRef.current, ...items]);
     pumpRef.current();
-  }, [capability]);
+  }, [capability, commit]);
 
-  const pause = useCallback((id: string) => {
-    const item = queueRef.current.find((candidate) => candidate.id === id);
-    if (!item || !["initiating", "uploading"].includes(item.status)) return;
-    mutate(id, { status: "paused" });
-    controllersRef.current.get(id)?.abort();
-  }, [mutate]);
-
-  const resume = useCallback((id: string) => {
-    const item = queueRef.current.find((candidate) => candidate.id === id);
-    if (!item || !["paused", "failed"].includes(item.status)) return;
-    mutate(id, { status: "queued", error: null, failedPart: null });
+  const retry = useCallback((id: string) => {
+    if (byId(queueRef.current, id)?.error !== "failed") return;
+    mutate(id, { status: "queued", error: null });
     pumpRef.current();
   }, [mutate]);
 
-  const cancel = useCallback((id: string) => {
-    const item = queueRef.current.find((candidate) => candidate.id === id);
-    if (!item || ["complete", "cancelled"].includes(item.status)) return;
-    mutate(id, { status: "cancelled", error: null });
+  /** Removes a row; an upload still in flight is stopped and its server session dropped. */
+  const dismiss = useCallback((id: string) => {
+    const item = byId(queueRef.current, id);
+    if (!item) return;
+    remove(id);
     controllersRef.current.get(id)?.abort();
-    if (item.sessionId) void MediaApiClient.abortUpload(item.sessionId).catch(() => {
-      mutate(id, { status: "paused", error: t("cancelUnconfirmed") });
-    });
-  }, [mutate]);
+    if (item.sessionId && item.status !== "done") void MediaApiClient.abortUpload(item.sessionId).catch(() => undefined);
+  }, [remove]);
 
-  const clearFinished = useCallback(() => {
-    queueRef.current = queueRef.current.filter((item) => !["complete", "cancelled"].includes(item.status));
-    setQueue(queueRef.current);
-  }, []);
-
-  return {
-    queue,
-    isUploading: queue.some((item) => ["queued", "initiating", "uploading", "completing"].includes(item.status)),
-    uploadFiles,
-    pause,
-    resume,
-    cancel,
-    clearFinished,
-  };
+  return { queue, isUploading: inFlight, uploadFiles, retry, dismiss };
 }

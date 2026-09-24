@@ -5,7 +5,7 @@ import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
 import { MediaWorkspace } from "./MediaWorkspace";
 import { useMediaManager } from "./hooks/useMediaManager";
-import { mediaLimitKey, type MediaManagerProps } from "./types";
+import { chooseKey, mediaLimitKey, type MediaManagerProps } from "./types";
 
 type MediaManagerInternalProps = MediaManagerProps & {
   open: boolean;
@@ -54,7 +54,7 @@ export function MediaManager({
     // eslint-disable-next-line shadcn/require-static-classes -- callers add layout only (z-index over the fullscreen editor)
     <DialogContent className={cn("flex h-[94svh] max-h-[860px] w-full flex-col gap-0 overflow-hidden p-0 sm:w-[96vw] sm:max-w-6xl", dialogClassName)}>
       <div className="flex flex-col gap-1 border-b py-3 pl-4 pr-14">
-        <DialogTitle>{t(capability === "image" ? "chooseImage" : capability === "video" ? "chooseVideo" : "chooseFile")}</DialogTitle>
+        <DialogTitle>{t(chooseKey(capability, !!onSelectMultiple))}</DialogTitle>
         <DialogDescription>{t(mediaLimitKey(capability))}</DialogDescription>
       </div>
       <MediaWorkspace manager={manager} capability={capability} picker multiple={!!onSelectMultiple} onSelect={onSelect ? (file) => { onOpenChange(false); onSelect(file); } : undefined} onClose={() => onOpenChange(false)} />

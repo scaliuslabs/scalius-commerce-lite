@@ -44,12 +44,13 @@ export const OrganizationCard = memo(function OrganizationCard({ form, categorie
         <FormField
           control={form.control}
           name="categoryId"
-          render={({ field }) => (
+          render={({ field, fieldState }) => (
             <FormItem>
               <FormLabel>{t("category")}</FormLabel>
               <CategoryCombobox
                 categories={availableCategories}
                 selectedId={field.value}
+                invalid={Boolean(fieldState.error)}
                 onSelect={field.onChange}
                 onCreated={(category) => {
                   setAvailableCategories((current) => [...current, category]);
@@ -70,11 +71,13 @@ function CategoryCombobox({
   selectedId,
   onSelect,
   onCreated,
+  invalid = false,
 }: {
   categories: Category[];
   selectedId: string;
   onSelect: (categoryId: string) => void;
   onCreated: (category: Category) => void;
+  invalid?: boolean;
 }) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
@@ -129,7 +132,7 @@ function CategoryCombobox({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" className="w-full justify-between">
+        <Button variant="outline" role="combobox" aria-invalid={invalid || undefined} className="w-full justify-between">
           <span className={cn("truncate", !selected && "text-muted-foreground")}>
             {selected ? (selectedStatus ? `${selected.name} · ${selectedStatus}` : selected.name) : t("chooseCategory")}
           </span>

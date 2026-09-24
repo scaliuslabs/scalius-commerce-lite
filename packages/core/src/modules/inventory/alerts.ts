@@ -2,10 +2,12 @@
 // Low-stock alert creation and management.
 // Called after stock deductions to check if any variant has dropped below threshold.
 
-import { eq, and, ne, sql } from "drizzle-orm";
+import { eq, and, ne, isNull, sql } from "drizzle-orm";
 import { productVariants, productLowStockAlerts } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
+import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { isLowStockThresholdEnabled } from "./low-stock-policy";
+import { lowStockThresholdSchema } from "./inventory.validation";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 
 /**
@@ -84,20 +86,17 @@ export async function checkAndAlertLowStock(
     return null;
   }
 
-  if (
-    !variant.trackInventory ||
-    !isLowStockThresholdEnabled(variant.lowStockThreshold)
-  ) {
-    await resolveInactiveLowStockAlert(
-      db,
-      variantId,
-      variant.stock - variant.reservedStock,
-    );
+  const available = variant.stock - variant.reservedStock;
+  // A sold-out SKU always needs review; an alert level also flags low stock.
+  const threshold = isLowStockThresholdEnabled(variant.lowStockThreshold)
+    ? variant.lowStockThreshold
+    : 0;
+  if (!variant.trackInventory || (threshold === 0 && available > 0)) {
+    await resolveInactiveLowStockAlert(db, variantId, available);
     return null;
   }
 
-  const available = variant.stock - variant.reservedStock;
-  const isLow = available <= variant.lowStockThreshold;
+  const isLow = available <= threshold;
 
   const result: LowStockAlertResult = {
     isLow,
@@ -105,7 +104,7 @@ export async function checkAndAlertLowStock(
     alertReactivated: false,
     alertResolved: false,
     availableStock: available,
-    threshold: variant.lowStockThreshold,
+    threshold,
     variantId,
     productId: variant.productId,
   };
@@ -130,7 +129,7 @@ export async function checkAndAlertLowStock(
         variantId,
         productId: variant.productId,
         currentQty: available,
-        threshold: variant.lowStockThreshold,
+        threshold,
         alertStatus: "active",
         alertSentAt: now,
         createdAt: now,
@@ -143,7 +142,7 @@ export async function checkAndAlertLowStock(
         .update(productLowStockAlerts)
         .set({
           currentQty: available,
-          threshold: variant.lowStockThreshold,
+          threshold,
           alertStatus: "active",
           alertSentAt: now,
           acknowledgedAt: null,
@@ -153,11 +152,12 @@ export async function checkAndAlertLowStock(
         .where(eq(productLowStockAlerts.variantId, variantId));
       result.alertReactivated = true;
     } else {
-      // Already active or acknowledged — just update currentQty
+      // Already active or acknowledged: refresh the quantity and alert level.
       await db
         .update(productLowStockAlerts)
         .set({
           currentQty: available,
+          threshold,
           updatedAt: sql`unixepoch()`,
         })
         .where(eq(productLowStockAlerts.variantId, variantId));
@@ -201,4 +201,40 @@ export async function acknowledgeLowStockAlert(
     )
     .returning({ id: productLowStockAlerts.id });
   return acknowledged.length === 1;
+}
+
+/**
+ * Set a tracked SKU's alert level (`null` turns it off) and re-check its alert
+ * at once. This is not a stock mutation: no movement row, no stockVersion.
+ * The level shapes the buyer availability band, so the caller bumps the
+ * public cache generation after this commits.
+ */
+export async function setLowStockThreshold(
+  db: Database,
+  variantId: string,
+  lowStockThreshold: number | null,
+): Promise<{ variantId: string; lowStockThreshold: number | null }> {
+  const parsed = lowStockThresholdSchema.safeParse(lowStockThreshold);
+  if (!parsed.success) {
+    throw new ValidationError(parsed.error.issues[0]?.message ?? "Enter a whole number.", {
+      field: "lowStockThreshold",
+    });
+  }
+  const updated = await db
+    .update(productVariants)
+    .set({ lowStockThreshold: parsed.data, updatedAt: sql`unixepoch()` })
+    .where(and(
+      eq(productVariants.id, variantId),
+      eq(productVariants.trackInventory, true),
+      isNull(productVariants.deletedAt),
+      sql`EXISTS (
+        SELECT 1 FROM products
+        WHERE products.id = ${productVariants.productId} AND products.deleted_at IS NULL
+      )`,
+      operationalSkuRowPredicate(),
+    ))
+    .returning({ id: productVariants.id });
+  if (updated.length !== 1) throw new NotFoundError("Variant not found");
+  await checkAndAlertLowStock(db, variantId);
+  return { variantId, lowStockThreshold: parsed.data };
 }

@@ -12,38 +12,37 @@ describe("Media route state", () => {
       folder: "../../unsafe",
       kind: "document",
       sort: "random",
-      search: 42,
     })).toEqual({
       view: undefined,
       folder: undefined,
       kind: undefined,
       sort: undefined,
-      search: undefined,
     });
   });
 
-  it("restores the exact safe folder, kind, sort, view, and bounded query", () => {
+  it("never reads a search term from the address", () => {
+    expect(validateMediaSearch({ search: "01712345678" })).not.toHaveProperty("search");
+  });
+
+  it("restores the exact safe folder, kind, sort and view, with the term from the session", () => {
     const routeSearch = validateMediaSearch({
       view: "trash",
       folder: "folder_Abc-123_xyz",
       kind: "video",
       sort: "name-desc",
-      search: `walkthrough\u0000${"x".repeat(240)}`,
     });
-    const workspace = mediaRouteSearchToWorkspaceState(routeSearch);
 
-    expect(routeSearch.search).not.toContain("\u0000");
-    expect(routeSearch.search).toHaveLength(200);
-    expect(workspace).toMatchObject({
+    expect(mediaRouteSearchToWorkspaceState(routeSearch, "walkthrough")).toEqual({
       view: "trash",
       folderId: "folder_Abc-123_xyz",
+      search: "walkthrough",
       kind: "video",
       sortBy: "filename",
       sortOrder: "desc",
     });
   });
 
-  it("omits defaults while preserving a meaningful workspace address", () => {
+  it("writes only the filters to the address, never the search term", () => {
     expect(mediaWorkspaceStateToRouteSearch({
       view: "ready",
       folderId: "all",
@@ -56,7 +55,6 @@ describe("Media route state", () => {
       folder: undefined,
       kind: undefined,
       sort: undefined,
-      search: undefined,
     });
 
     expect(mediaWorkspaceStateToRouteSearch({
@@ -71,7 +69,6 @@ describe("Media route state", () => {
       folder: "unfiled",
       kind: "image",
       sort: "smallest",
-      search: "campaign",
     });
   });
 });

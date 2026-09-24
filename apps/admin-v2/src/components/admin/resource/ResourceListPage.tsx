@@ -12,6 +12,7 @@ import { createActionsColumn, createSelectColumn } from "~/components/admin/data
 import { flexRender, type ColumnDef, type Row } from "~/components/admin/data-table/table-config";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { createDataSelector, type ListSearchParams } from "~/lib/list-helpers";
+import { useListSearch } from "~/lib/list-search";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
@@ -39,6 +40,8 @@ export interface ResourceLifecycle<T> {
   canDelete: boolean;
   /** Per-row guard for permanent delete (e.g. records tied to orders). */
   canDeleteRow?: (row: T) => boolean;
+  /** Says why `count` selected rows stay in Trash, shown before a bulk permanent delete. */
+  deleteBlockedNote?: (count: number) => string;
   /** Runs one action for one or more rows; send revision claims from the rows. */
   run: (action: ResourceAction, rows: T[]) => Promise<unknown>;
 }
@@ -47,8 +50,13 @@ export interface ResourceListPageProps<T extends { id: string }> {
   title: string;
   /** Header buttons; the create action goes last. */
   actions?: ReactNode;
-  /** The route's validated search (page, limit, search, sort, order, trashed…). */
+  /** The route's validated search (page, limit, sort, order, trashed…). */
   search: ListSearchParams & Record<string, unknown>;
+  /**
+   * The list's name for its search term, which is kept in the session and
+   * never in the URL (`useListSearch`); build `query` with the same term.
+   */
+  list: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   query: UseQueryOptions<any, any, any, any>;
   /**
@@ -66,6 +74,10 @@ export interface ResourceListPageProps<T extends { id: string }> {
   empty: { icon: ComponentType<{ className?: string }>; title: string; description: string; action?: ReactNode };
   /** Extra tabs next to All, stored in `search[views.param]`. */
   views?: { param: string; tabs: ReadonlyArray<IndexTab<string>> };
+  /** Says what the search matches, e.g. "Search by title, SKU or barcode". */
+  searchPlaceholder?: string;
+  /** URL params set by `filters`; they mark the list filtered and "Clear filters" resets them. */
+  filterParams?: readonly string[];
   filters?: ReactNode;
   lifecycle?: ResourceLifecycle<T>;
   /** Extra bulk buttons for the non-trash tabs; call `done` after success. */
@@ -91,7 +103,9 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const trashed = search.trashed;
-  const [confirm, setConfirm] = useState<{ action: "trash" | "delete"; rows: T[] } | null>(null);
+  const [term, setTerm] = useListSearch(props.list);
+  // `kept`: selected rows a permanent delete leaves in Trash (canDeleteRow is false).
+  const [confirm, setConfirm] = useState<{ action: "trash" | "delete"; rows: T[]; kept: number } | null>(null);
 
   const setSearch = useCallback(
     (updates: Record<string, unknown>) =>
@@ -120,10 +134,14 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   const { mutate } = mutation;
   const request = useCallback(
     (action: ResourceAction, rows: T[]) => {
-      if (action === "restore") mutate({ action, rows });
-      else setConfirm({ action, rows });
+      if (action === "restore") {
+        mutate({ action, rows });
+        return;
+      }
+      const deletable = action === "delete" && lifecycle?.canDeleteRow ? rows.filter(lifecycle.canDeleteRow) : rows;
+      setConfirm({ action, rows: deletable, kept: rows.length - deletable.length });
     },
-    [mutate],
+    [lifecycle, mutate],
   );
 
   const { rowTo, viewUrl, rowActions, rowLabel, columns: contentColumns } = props;
@@ -215,7 +233,8 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
       page: 1,
     });
 
-  const filtered = Boolean(search.search) || currentView !== "all";
+  const filterParams = props.filterParams ?? [];
+  const filtered = Boolean(term) || currentView !== "all" || filterParams.some((param) => search[param] !== undefined);
   const Icon = props.empty.icon;
   const emptyState = trashed
     ? { icon: Icon, title: t("trashEmpty"), description: "" }
@@ -225,7 +244,18 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
           title: t("noResults"),
           description: t("noResultsHint"),
           action: (
-            <Button variant="outline" size="sm" onClick={() => setSearch({ search: undefined, ...(viewParam ? { [viewParam]: undefined } : {}), page: 1 })}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setTerm("");
+                setSearch({
+                  ...(viewParam ? { [viewParam]: undefined } : {}),
+                  ...Object.fromEntries(filterParams.map((param) => [param, undefined])),
+                  page: 1,
+                });
+              }}
+            >
               {t("clearFilters")}
             </Button>
           ),
@@ -257,7 +287,13 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         </Button>
       ) : null}
       {trashed && lifecycle?.canDelete ? (
-        <Button variant="destructive" size="sm" onClick={() => request("delete", bulkRows)}>
+        <Button
+          variant="destructive"
+          size="sm"
+          // Offered only when at least one selected row can really be deleted.
+          disabled={Boolean(lifecycle.canDeleteRow) && !bulkRows.some((row) => lifecycle.canDeleteRow!(row))}
+          onClick={() => request("delete", bulkRows)}
+        >
           {t("deletePermanently")}
         </Button>
       ) : null}
@@ -334,9 +370,12 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
             {tabBar}
             <div className="px-2 pt-2">
               <DataTableToolbar
-                searchValue={search.search}
-                onSearchChange={(value) => setSearch({ search: value || undefined, page: 1 })}
-                searchPlaceholder={t("search")}
+                searchValue={term}
+                onSearchChange={(value) => {
+                  setTerm(value);
+                  if (search.page !== 1) setSearch({ page: 1 });
+                }}
+                searchPlaceholder={props.searchPlaceholder ?? t("search")}
                 selectedCount={bulkRows.length}
                 filters={props.filters}
                 bulkActions={bulkButtons}
@@ -351,8 +390,15 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         onOpenChange={(open) => {
           if (!open && !mutation.isPending) setConfirm(null);
         }}
-        title={t(confirm?.action === "delete" ? "deleteTitle" : "trashTitle", { count })}
-        description={t(confirm?.action === "delete" ? "deleteBody" : "trashBody")}
+        title={
+          count === 1 && rowLabel
+            ? t(confirm?.action === "delete" ? "deleteOneTitle" : "trashOneTitle", { name: rowLabel(confirm!.rows[0]!) })
+            : t(confirm?.action === "delete" ? "deleteTitle" : "trashTitle", { count })
+        }
+        description={[
+          t(confirm?.action === "delete" ? "deleteBody" : count === 1 ? "trashBodyOne" : "trashBody"),
+          confirm?.kept ? lifecycle?.deleteBlockedNote?.(confirm.kept) : undefined,
+        ].filter(Boolean).join(" ")}
         confirmLabel={t(confirm?.action === "delete" ? "deletePermanently" : "moveToTrash")}
         loadingLabel={t("working")}
         cancelLabel={t("cancel")}

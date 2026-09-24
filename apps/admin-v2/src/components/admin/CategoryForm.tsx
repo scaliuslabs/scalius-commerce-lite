@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
-import { ReadOnlyNotice } from "@/components/admin/resource/ReadOnlyNotice";
 import { SearchListingCard } from "@/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminCategories, putApiV1AdminCategoriesById } from "@scalius/api-client/sdk";
@@ -91,7 +90,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
   const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<CategoryFormValues>({
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => apiData(postApiV1AdminCategories({ body: toCategoryInput(data) })),
+    createFn: (data) => apiData(postApiV1AdminCategories({ body: { status: data.status, ...toCategoryInput(data) } })),
     updateFn: (data) => {
       if (!data.revision || !Number.isInteger(data.revision) || data.revision < 1) {
         throw new Error(t("reloadToSave"));
@@ -153,7 +152,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
   const description = form.watch("description");
   const errors = form.formState.errors;
   const committedStatus = defaultValues?.status ?? "draft";
-  const cannotPublish = committedStatus !== "published" && publishReadiness?.ready !== true;
+  // An active category with no active products shows an empty page on the store.
+  const staysEmpty = status === "published" && (publishReadiness?.eligibleProductCount ?? 0) === 0;
 
   return (
     <FormContainer
@@ -163,9 +163,10 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
       canSave={canSave}
       form={form}
       onSave={submitEntity}
+      unsavedLabel={isEdit ? undefined : t("unsavedCategory")}
+      savedMessage={t("saved")}
     >
-      {!canSave ? <ReadOnlyNotice /> : null}
-      <fieldset disabled={!canSave} className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="min-w-0 space-y-4 lg:col-span-2">
           <Card>
             <CardContent className="space-y-4 pt-4">
@@ -307,25 +308,22 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                 name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <Select value={field.value} onValueChange={field.onChange} disabled={!isEdit || !canSave}>
+                    <Select value={field.value} onValueChange={field.onChange} disabled={!canSave}>
                       <FormControl>
                         <SelectTrigger aria-label={t("status")}>
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="published">{t("active")}</SelectItem>
                         <SelectItem value="draft">{t("draft")}</SelectItem>
-                        <SelectItem value="published" disabled={cannotPublish}>
-                          {t("published")}
-                        </SelectItem>
                         <SelectItem value="internal">{t("hidden")}</SelectItem>
                       </SelectContent>
                     </Select>
-                    {status === "internal" ? (
-                      <FormDescription>{t("hiddenHelp")}</FormDescription>
-                    ) : status === "draft" && cannotPublish ? (
-                      <FormDescription>{t("needsProducts")}</FormDescription>
-                    ) : null}
+                    <FormDescription>
+                      {t(status === "published" ? "activeHelp" : status === "internal" ? "hiddenHelp" : "draftHelp")}
+                    </FormDescription>
+                    {staysEmpty ? <p className="text-body text-warning">{t("staysEmpty")}</p> : null}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -345,7 +343,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
             </CardContent>
           </Card>
         </div>
-      </fieldset>
+      </div>
     </FormContainer>
   );
 }

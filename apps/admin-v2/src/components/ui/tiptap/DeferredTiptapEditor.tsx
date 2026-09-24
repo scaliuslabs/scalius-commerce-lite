@@ -5,6 +5,8 @@ import { RichContent } from "../rich-content";
 import { Button } from "../button";
 import { Skeleton } from "../skeleton";
 import { TiptapToolbarSkeleton } from "./TiptapToolbarSkeleton";
+import { useMessages } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 let tiptapEditorModulePromise: Promise<{
   default: typeof import("./TiptapEditor").TiptapEditor;
@@ -94,11 +96,15 @@ function EditorLoadingShell({
 export function DeferredTiptapEditor({
   content,
   onChange,
-  placeholder = "Write something...",
+  placeholder: placeholderProp,
   className,
   compact = false,
-  ariaLabel = "Rich text content",
+  ariaLabel: ariaLabelProp,
 }: DeferredTiptapEditorProps) {
+  // Defaults follow the dashboard language.
+  const r = useMessages(resourceMessages);
+  const placeholder = placeholderProp ?? r("writeSomething");
+  const ariaLabel = ariaLabelProp ?? r("richText");
   const isAliveRef = useRef(true);
   const mountRequestedRef = useRef(false);
   const [shouldMountEditor, setShouldMountEditor] = useState(false);

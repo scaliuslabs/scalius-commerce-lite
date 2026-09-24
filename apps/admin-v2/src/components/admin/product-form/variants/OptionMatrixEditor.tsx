@@ -12,16 +12,17 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
+import { detectBarcodeType } from "@scalius/shared/barcode-identity";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
 import {
   putApiV1AdminProductsByIdOptionsMatrix,
@@ -29,8 +30,12 @@ import {
 } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
 import { getServerFnError } from "@/lib/api-helpers";
+import { readApiFieldIssues } from "@/lib/api-field-errors";
 import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-error";
 import { queryKeys } from "@/lib/query-keys";
+import { useCurrency } from "@/hooks/use-currency";
+import { SaveNotCompleted } from "../../shared/SaveBar";
+import { readSkuTaken } from "../hooks/useProductSubmit";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
@@ -41,6 +46,7 @@ import type {
   ProductVariant,
 } from "~/lib/api-query-options/products";
 import {
+  ADVANCED_FIELDS,
   draftId,
   getOptionMatrixIssue,
   getSimpleSkuIssue,
@@ -56,6 +62,8 @@ import {
   followProductDefaults,
   withGuessedOptionType,
   optionTopologySignature,
+  type DraftIssue,
+  type DraftIssueField,
   type DraftOption,
   type DraftVariant,
   type OptionMatrixEditorHandle,
@@ -66,10 +74,30 @@ import {
 const MAX_AXES = MAX_PRODUCT_OPTION_AXES;
 const MAX_COMBINATIONS = MAX_PRODUCT_OPTION_COMBINATIONS;
 
+/** Request body field → the editor field that shows it. */
+const SERVER_FIELDS: Record<string, DraftIssueField> = {
+  sku: "sku",
+  price: "price",
+  stock: "stock",
+  expectedStockVersion: "stock",
+  barcode: "barcode",
+  barcodeType: "barcode",
+  weight: "weight",
+  discountType: "discount",
+  discountPercentage: "discount",
+  discountAmount: "discount",
+  imageId: "photo",
+};
+
+/** The message a field shows, if the current (or server's) problem is about it. */
+type IssueFor = (variantId: string | undefined, field: DraftIssueField) => string | undefined;
+
 type OptionMatrixEditorProps = {
   productId?: string;
   productName: string;
   productPrice: number;
+  /** Active products need every variant priced above 0. */
+  requirePositivePrice?: boolean;
   options?: ProductOptionDefinition[];
   variants?: ProductVariant[];
   images: ProductSkuImageChoice[];
@@ -77,6 +105,7 @@ type OptionMatrixEditorProps = {
   onAggregateRevisionChange?: (revision: number) => void;
   onSaved?: () => void;
   onDraftChange?: (composition: ProductCreateComposition | null) => void;
+  /** The draft's problem as one banner line ("M / White: …"), or null. */
   onDraftIssueChange?: (issue: string | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSavingChange?: (saving: boolean) => void;
@@ -87,6 +116,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   productId,
   productName,
   productPrice,
+  requirePositivePrice = false,
   options: savedOptions = [],
   variants: savedVariants = [],
   images,
@@ -107,12 +137,18 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     // New products track quantity by default; saved SKUs keep their setting.
     trackInventory: defaultSku ? defaultSku.trackInventory ?? false : true,
     stock: defaultSku?.stock ?? 0,
+    barcode: defaultSku?.barcode ?? null,
+    barcodeType: (defaultSku?.barcodeType as SimpleSkuDraft["barcodeType"]) ?? null,
+    weight: defaultSku?.weight ?? null,
   }));
   const [simpleStockEdited, setSimpleStockEdited] = React.useState(false);
   const [options, setOptions] = React.useState<DraftOption[]>(() => initialOptions(savedOptions));
   const [variants, setVariants] = React.useState<DraftVariant[]>(() => initialVariants(savedVariants));
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [dirty, setDirty] = React.useState(false);
+  const [revealed, setRevealed] = React.useState(false);
+  const [revealNonce, setRevealNonce] = React.useState(0);
+  const [serverIssue, setServerIssue] = React.useState<DraftIssue | null>(null);
   const [combinationsPending, setCombinationsPending] = React.useState(false);
   const [topologyChanged, setTopologyChanged] = React.useState(false);
   const [excludedCombinationKeys, setExcludedCombinationKeys] = React.useState<Set<string>>(() => new Set(
@@ -131,27 +167,35 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     () => new Map(savedVariants.map((variant) => [variant.id, variant.reservedStock])),
     [savedVariants],
   );
+  const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
+  const nameOf = (variant: DraftVariant) => variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ");
 
   const combinationCount = options.length
     ? options.reduce((total, option) => total * option.values.length, 1)
     : 0;
   const validShape = options.length > 0 && options.every((option) => option.name.trim() && option.values.length > 0);
-  const matrixIssue = getOptionMatrixIssue(
-    options,
-    variants,
-    images,
-    combinationsPending,
+  const matrixIssue = getOptionMatrixIssue(options, variants, images, combinationsPending, {
     committedByVariantId,
     requiredStockAllocation,
     blockedCommittedStock,
-    !dirty,
-  );
+    allowSavedImageRemovalConfirmation: !dirty,
+    requirePositivePrice,
+  });
   // A product without options sells one hidden SKU; edit its inventory directly.
   const simpleMode = options.length === 0 && savedOptions.length === 0 && (!productId || Boolean(defaultSku));
   const simpleCommitted = defaultSku?.reservedStock ?? 0;
   const draftIssue = !simpleMode
     ? matrixIssue
     : dirty || !productId ? getSimpleSkuIssue(simpleSku, simpleCommitted, Boolean(productId)) : null;
+  const lineFor = (issue: DraftIssue) => {
+    const variant = issue.variantId ? variants.find((row) => row.id === issue.variantId) : undefined;
+    return variant ? `${nameOf(variant)}: ${issue.message}` : simpleMode && issue.field ? `${t("inventory")}: ${issue.message}` : issue.message;
+  };
+  const draftLine = draftIssue ? lineFor(draftIssue) : null;
+  // Problems show at their field once the merchant changed something, or after Save was refused.
+  const shownIssue = serverIssue ?? (dirty || revealed ? draftIssue : null);
+  const issueFor: IssueFor = (variantId, field) =>
+    shownIssue && shownIssue.field === field && shownIssue.variantId === variantId ? shownIssue.message : undefined;
 
   React.useEffect(() => {
     if (!onDraftChange) return;
@@ -159,12 +203,27 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     onDraftChange(draftIssue
       ? null
       : simpleMode
-        ? { defaultSku: { ...(sku ? { sku } : {}), trackInventory: simpleSku.trackInventory, stock: simpleSku.trackInventory ? simpleSku.stock : 0 } }
+        ? {
+            defaultSku: {
+              ...(sku ? { sku } : {}),
+              trackInventory: simpleSku.trackInventory,
+              stock: simpleSku.trackInventory ? simpleSku.stock : 0,
+              ...(simpleSku.barcode ? { barcode: simpleSku.barcode, barcodeType: simpleSku.barcodeType } : {}),
+              ...(simpleSku.weight !== null ? { weight: simpleSku.weight } : {}),
+            },
+          }
         : options.length > 0 ? { optionMatrix: { options, variants } } : null);
   }, [draftIssue, onDraftChange, options, simpleMode, simpleSku, variants]);
 
-  React.useEffect(() => onDraftIssueChange?.(draftIssue), [draftIssue, onDraftIssueChange]);
+  React.useEffect(() => onDraftIssueChange?.(draftLine), [draftLine, onDraftIssueChange]);
   React.useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
+
+  const reveal = React.useCallback(() => {
+    setRevealed(true);
+    setRevealNonce((value) => value + 1);
+    const target = serverIssue ?? draftIssue;
+    if (target?.variantId && target.field && ADVANCED_FIELDS.has(target.field)) setExpandedId(target.variantId);
+  }, [draftIssue, serverIssue]);
 
   const stageOptions = React.useCallback((nextOptions: DraftOption[]) => {
     setOptions(nextOptions);
@@ -207,8 +266,15 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
 
   const updateVariant = React.useCallback((id: string, patch: Partial<DraftVariant>) => {
     setVariants((current) => current.map((variant) => variant.id === id ? { ...variant, ...patch } : variant));
+    setServerIssue((current) => (current?.variantId === id ? null : current));
     setDirty(true);
   }, []);
+
+  const updateSimple = (patch: Partial<SimpleSkuDraft>) => {
+    setSimpleSku((current) => ({ ...current, ...patch }));
+    setServerIssue(null);
+    setDirty(true);
+  };
 
   const removeVariants = React.useCallback((ids: ReadonlySet<string>) => {
     if (ids.size === 0 || ids.size >= variants.length) return;
@@ -274,10 +340,12 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           body: {
             selectedOptionValueIds: [],
             imageId: defaultSku.imageId,
-            weight: defaultSku.weight,
+            weight: simpleSku.weight,
             sku: simpleSku.sku.trim(),
             price: productPrice,
             trackInventory: simpleSku.trackInventory,
+            barcode: simpleSku.barcode,
+            barcodeType: simpleSku.barcodeType,
             // Unedited quantity is omitted so a concurrent sale is never overwritten.
             ...(simpleStockEdited && simpleSku.trackInventory
               ? { stock: simpleSku.stock, expectedStockVersion: defaultSku.stockVersion }
@@ -299,6 +367,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     onSuccess: async (result) => {
       onAggregateRevisionChange?.(result.aggregateRevision);
       setDirty(false);
+      setRevealed(false);
       setCombinationsPending(false);
       setTopologyChanged(false);
       setOmittedVariantsByKey(new Map());
@@ -318,26 +387,54 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           queryKey: queryKeys.products.variants(productId!),
         }),
       ]);
-      toast.success(t(simpleMode ? "inventorySaved" : "variantsSaved"));
       onSaved?.();
-    },
-    onError: (error) => {
-      const conflict = readProductRevisionConflict(error);
-      if (conflict) {
-        onRevisionConflict?.(conflict);
-        return;
-      }
-      toast.error(getServerFnError(error, t("saveFailed")));
     },
   });
 
+  /** Puts a server rejection on its field; returns the banner line, or null when it names no field. */
+  const showServerIssue = React.useCallback((path: string, message: string): string | null => {
+    const parts = path.split(".");
+    const rowIndex = parts.findIndex((part) => part === "variants");
+    const field = SERVER_FIELDS[parts[parts.length - 1]!];
+    if (!field) return null;
+    if (rowIndex >= 0) {
+      const variant = variants[Number(parts[rowIndex + 1])];
+      if (!variant) return null;
+      setServerIssue({ message, variantId: variant.id, field });
+      if (ADVANCED_FIELDS.has(field)) setExpandedId(variant.id);
+      setRevealNonce((value) => value + 1);
+      return `${nameOf(variant)}: ${message}`;
+    }
+    setServerIssue({ message, field });
+    return `${t("inventory")}: ${message}`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variants, t]);
+
   React.useEffect(() => onSavingChange?.(mutation.isPending), [mutation.isPending, onSavingChange]);
   React.useImperativeHandle(ref, () => ({
-    save: (revisionOverride) => {
-      if (!productId || !dirty || draftIssue || mutation.isPending) return;
-      mutation.mutate(revisionOverride);
+    save: async (revisionOverride) => {
+      if (!productId || !dirty || mutation.isPending) return;
+      if (draftIssue) {
+        reveal();
+        throw new SaveNotCompleted(lineFor(draftIssue));
+      }
+      try {
+        await mutation.mutateAsync(revisionOverride);
+      } catch (error) {
+        const conflict = readProductRevisionConflict(error);
+        if (conflict) {
+          onRevisionConflict?.(conflict);
+          throw new SaveNotCompleted(t("changedElsewhere"));
+        }
+        const issue = readSkuTaken(error) ?? readApiFieldIssues(error)?.[0];
+        const line = issue ? showServerIssue(issue.path, issue.message) : null;
+        throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed")));
+      }
     },
-  }), [dirty, draftIssue, mutation, productId]);
+    reveal,
+    showServerIssue,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [dirty, draftIssue, mutation, productId, reveal, showServerIssue]);
 
   return (
     <section data-option-matrix data-variant-editor tabIndex={-1} className="space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
@@ -347,42 +444,58 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           <label className="flex min-h-11 items-center gap-2 text-body md:min-h-0">
             <Checkbox
               checked={simpleSku.trackInventory}
-              onCheckedChange={(checked) => {
-                setSimpleSku((current) => ({ ...current, trackInventory: checked === true }));
-                setDirty(true);
-              }}
+              onCheckedChange={(checked) => updateSimple({ trackInventory: checked === true })}
             />
             {t("trackQuantity")}
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             {simpleSku.trackInventory ? (
-              <label className="space-y-1 text-body text-muted-foreground">
-                {t("quantity")}
-                <InventoryQuantityInput
-                  ariaLabel={t("quantity")}
-                  value={simpleSku.stock}
-                  committed={simpleCommitted}
-                  onChange={(stock) => {
-                    setSimpleSku((current) => ({ ...current, stock }));
-                    setSimpleStockEdited(true);
-                    setDirty(true);
-                  }}
-                />
-              </label>
+              <Field label={t("quantity")} error={issueFor(undefined, "stock")}>
+                {(invalid) => (
+                  <InventoryQuantityInput
+                    ariaLabel={t("quantity")}
+                    invalid={invalid}
+                    value={simpleSku.stock}
+                    committed={simpleCommitted}
+                    onChange={(stock) => {
+                      updateSimple({ stock });
+                      setSimpleStockEdited(true);
+                    }}
+                  />
+                )}
+              </Field>
             ) : null}
-            <label className="space-y-1 text-body text-muted-foreground">
-              {t("sku")}
-              <Input
-                value={simpleSku.sku}
-                placeholder={productId ? undefined : t("skuAuto")}
-                onChange={(event) => {
-                  setSimpleSku((current) => ({ ...current, sku: event.target.value }));
-                  setDirty(true);
-                }}
-              />
-            </label>
+            <Field label={t("sku")} error={issueFor(undefined, "sku")}>
+              {(invalid) => (
+                <Input
+                  value={simpleSku.sku}
+                  aria-invalid={invalid}
+                  placeholder={productId ? undefined : t("skuAuto")}
+                  onChange={(event) => updateSimple({ sku: event.target.value })}
+                />
+              )}
+            </Field>
+            <Field label={t("barcode")} help={productId ? undefined : t("barcodeHint")} error={issueFor(undefined, "barcode")}>
+              {(invalid) => (
+                <Input
+                  value={simpleSku.barcode ?? ""}
+                  aria-invalid={invalid}
+                  inputMode="text"
+                  autoComplete="off"
+                  onChange={(event) => updateSimple(barcodePatch(event.target.value))}
+                />
+              )}
+            </Field>
+            <Field label={t("weightGrams")} error={issueFor(undefined, "weight")}>
+              {(invalid) => (
+                <NumberInput
+                  value={simpleSku.weight}
+                  aria-invalid={invalid}
+                  onValueChange={(weight) => updateSimple({ weight })}
+                />
+              )}
+            </Field>
           </div>
-          {draftIssue ? <p className="text-body text-destructive" role="alert">{draftIssue}</p> : null}
         </div>
       ) : null}
 
@@ -429,7 +542,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           {options.length ? (
             <span className="text-muted-foreground tabular-nums">
               <span className={cn(combinationCount > MAX_COMBINATIONS && "text-destructive")}>
-                {t("combinationSummary", { count: combinationCount, max: MAX_COMBINATIONS })}
+                {t("combinationSummary", { count: validShape ? combinationCount : variants.length, max: MAX_COMBINATIONS })}
               </span>
               {" · "}
               {t("optionSummary", { count: options.length, max: MAX_AXES })}
@@ -438,10 +551,10 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         </div>
       </div>
 
-      {/* Problems show once the merchant has entered a value; saving explains them too. */}
-      {matrixIssue && options.some((option) => option.values.length > 0) ? (
+      {/* Option-level problems show once a value is entered; variant problems sit on their field. */}
+      {shownIssue && !shownIssue.field && !simpleMode && options.some((option) => option.values.length > 0) ? (
         <p className="text-body text-destructive" role="alert">
-          {matrixIssue}
+          {lineFor(shownIssue)}
         </p>
       ) : null}
       {variants.length ? (
@@ -449,6 +562,9 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           options={options}
           variants={variants}
           images={images}
+          nameOf={nameOf}
+          issueFor={issueFor}
+          reveal={shownIssue?.variantId ? { variantId: shownIssue.variantId, nonce: revealNonce } : null}
           expandedId={expandedId}
           onExpandedChange={setExpandedId}
           onChange={updateVariant}
@@ -467,6 +583,28 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
 });
 
 OptionMatrixEditor.displayName = "OptionMatrixEditor";
+
+/** Typing or scanning a barcode picks its type (EAN-13, UPC, …); clearing it removes both. */
+function barcodePatch(value: string): Pick<DraftVariant, "barcode" | "barcodeType"> {
+  const barcode = value.trim() ? value : null;
+  return { barcode, barcodeType: barcode ? detectBarcodeType(barcode) : null };
+}
+
+/** A labelled field with its help and its problem underneath (one error indicator: text + border). */
+function Field({ label, help, error, children }: {
+  label: string;
+  help?: string;
+  error?: string;
+  children: (invalid: boolean) => React.ReactNode;
+}) {
+  return (
+    <label className="block space-y-1 text-body text-muted-foreground">
+      {label}
+      {children(Boolean(error))}
+      {error ? <span className="block text-destructive">{error}</span> : help ? <span className="block">{help}</span> : null}
+    </label>
+  );
+}
 
 function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, onRemove }: {
   option: DraftOption;
@@ -494,33 +632,51 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
     setValueInput("");
   };
 
+  // Shopify's option editor: the name (with how customers filter it) on one line, its values below.
   return (
-    <div className="grid gap-2 py-3 sm:grid-cols-12 sm:items-start">
-      <div className="grid grid-cols-3 gap-2 sm:col-span-5">
-        <Input
-          value={option.name}
-          onChange={(event) => onChange({ ...option, name: event.target.value })}
-          placeholder={t("optionNamePlaceholder")}
-          aria-label={t("optionName", { number: index + 1 })}
-          className="col-span-2"
-        />
-        <Select
-          value={option.standardMapping}
-          onValueChange={(value) => onChange({ ...option, standardMapping: value as ProductOptionStandardMapping })}
-        >
-          <SelectTrigger aria-label={t("optionType", { name: optionLabel })} className="min-w-28">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">{t("optionTypeOther")}</SelectItem>
-            <SelectItem value="size">{t("optionTypeSize")}</SelectItem>
-            <SelectItem value="color">{t("optionTypeColor")}</SelectItem>
-            <SelectItem value="material">{t("optionTypeMaterial")}</SelectItem>
-            <SelectItem value="pattern">{t("optionTypePattern")}</SelectItem>
-          </SelectContent>
-        </Select>
+    <div className="space-y-3 py-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="min-w-0 flex-1 basis-48 space-y-1 text-body text-muted-foreground">
+          {t("optionNameLabel")}
+          <Input
+            value={option.name}
+            onChange={(event) => onChange({ ...option, name: event.target.value })}
+            placeholder={t("optionNamePlaceholder")}
+            aria-label={t("optionName", { number: index + 1 })}
+          />
+        </label>
+        <label className="w-full space-y-1 text-body text-muted-foreground sm:w-40">
+          {t("optionFilterAs")}
+          <Select
+            value={option.standardMapping}
+            onValueChange={(value) => onChange({ ...option, standardMapping: value as ProductOptionStandardMapping })}
+          >
+            <SelectTrigger aria-label={t("optionType", { name: optionLabel })}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("optionTypeOther")}</SelectItem>
+              <SelectItem value="size">{t("optionTypeSize")}</SelectItem>
+              <SelectItem value="color">{t("optionTypeColor")}</SelectItem>
+              <SelectItem value="material">{t("optionTypeMaterial")}</SelectItem>
+              <SelectItem value="pattern">{t("optionTypePattern")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </label>
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          <Button type="button" variant="ghost" size="icon" disabled={!canMoveUp} onClick={() => onMove(-1)}>
+            <ArrowUp className="h-4 w-4" /><span className="sr-only">{t("moveOptionUp")}</span>
+          </Button>
+          <Button type="button" variant="ghost" size="icon" disabled={!canMoveDown} onClick={() => onMove(1)}>
+            <ArrowDown className="h-4 w-4" /><span className="sr-only">{t("moveOptionDown")}</span>
+          </Button>
+          <Button type="button" variant="ghost" size="icon" onClick={onRemove}>
+            <Trash2 className="h-4 w-4" /><span className="sr-only">{t("removeOption")}</span>
+          </Button>
+        </div>
       </div>
-      <div className="min-w-0 space-y-2 sm:col-span-5">
+      <div className="space-y-2">
+        <span className="block text-body text-muted-foreground">{t("optionValuesLabel")}</span>
         {option.values.length ? (
           <div className="flex flex-wrap gap-1">
             {option.values.map((value) => (
@@ -553,25 +709,18 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
           aria-label={t("addValueFor", { name: optionLabel })}
         />
       </div>
-      <div className="flex items-center justify-end gap-0.5 sm:col-span-2">
-        <Button type="button" variant="ghost" size="icon" disabled={!canMoveUp} onClick={() => onMove(-1)}>
-          <ArrowUp className="h-4 w-4" /><span className="sr-only">{t("moveOptionUp")}</span>
-        </Button>
-        <Button type="button" variant="ghost" size="icon" disabled={!canMoveDown} onClick={() => onMove(1)}>
-          <ArrowDown className="h-4 w-4" /><span className="sr-only">{t("moveOptionDown")}</span>
-        </Button>
-        <Button type="button" variant="ghost" size="icon" onClick={onRemove}>
-          <Trash2 className="h-4 w-4" /><span className="sr-only">{t("removeOption")}</span>
-        </Button>
-      </div>
     </div>
   );
 }
 
-function VariantMatrix({ options, variants, images, expandedId, onExpandedChange, onChange, onRemove, missingCombinations, onRestoreCombination, onRestoreAll, committedByVariantId, printingDisabled }: {
+function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, expandedId, onExpandedChange, onChange, onRemove, missingCombinations, onRestoreCombination, onRestoreAll, committedByVariantId, printingDisabled }: {
   options: DraftOption[];
   variants: DraftVariant[];
   images: ProductSkuImageChoice[];
+  nameOf: (variant: DraftVariant) => string;
+  issueFor: IssueFor;
+  /** Turn to the page of a variant whose problem was just revealed. */
+  reveal: { variantId: string; nonce: number } | null;
   expandedId: string | null;
   onExpandedChange: (id: string | null) => void;
   onChange: (id: string, patch: Partial<DraftVariant>) => void;
@@ -584,13 +733,13 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
 }) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
+  const { fmt, salePrice } = useCurrency();
   const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
-  const nameOf = (variant: DraftVariant) => variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ");
   const [query, setQuery] = React.useState("");
   const [page, setPage] = React.useState(0);
   const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
-  const [bulkPrice, setBulkPrice] = React.useState("");
-  const [bulkStock, setBulkStock] = React.useState("");
+  const [bulkPrice, setBulkPrice] = React.useState<number | null>(null);
+  const [bulkStock, setBulkStock] = React.useState<number | null>(null);
   const [bulkImageId, setBulkImageId] = React.useState<string | null | undefined>(undefined);
   const filteredVariants = variants.filter((variant) => {
     const needle = normalized(query);
@@ -603,6 +752,15 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
   const safePage = Math.min(page, pageCount - 1);
   const visibleVariants = filteredVariants.slice(safePage * pageSize, (safePage + 1) * pageSize);
   React.useEffect(() => setPage(0), [query, variants.length]);
+  // A revealed problem may sit on another page or be hidden by the search.
+  React.useEffect(() => {
+    if (!reveal) return;
+    const index = variants.findIndex((variant) => variant.id === reveal.variantId);
+    if (index < 0) return;
+    setQuery("");
+    setPage(Math.floor(index / pageSize));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reveal?.nonce]);
   React.useEffect(() => {
     const available = new Set(variants.map((variant) => variant.id));
     setSelected((current) => new Set([...current].filter((id) => available.has(id))));
@@ -617,18 +775,60 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
       return next;
     });
   };
+  const bulkValid = (bulkPrice === null || Number.isFinite(bulkPrice)) && (bulkStock === null || Number.isInteger(bulkStock));
   const applyBulk = () => {
-    const price = bulkPrice === "" ? null : Number(bulkPrice);
-    const stock = bulkStock === "" ? null : Math.trunc(Number(bulkStock));
     selected.forEach((id) => onChange(id, {
-      ...(price !== null && Number.isFinite(price) ? { price: Math.max(0, price) } : {}),
-      ...(stock !== null && Number.isFinite(stock) ? { stock: Math.max(0, stock) } : {}),
+      ...(bulkPrice !== null ? { price: Math.max(0, bulkPrice) } : {}),
+      ...(bulkStock !== null ? { stock: Math.max(0, bulkStock) } : {}),
       ...(bulkImageId !== undefined ? { imageId: bulkImageId } : {}),
     }));
-    setBulkPrice("");
-    setBulkStock("");
+    setBulkPrice(null);
+    setBulkStock(null);
     setBulkImageId(undefined);
   };
+  const saleOf = (variant: DraftVariant) => (Number.isFinite(variant.price) ? salePrice(variant.price, variant) : null);
+  const priceCell = (variant: DraftVariant) => {
+    const error = issueFor(variant.id, "price");
+    const sale = saleOf(variant);
+    return (
+      <div className="space-y-1">
+        <NumberInput
+          value={variant.price}
+          aria-invalid={Boolean(error)}
+          aria-label={t("priceFor", { name: nameOf(variant) })}
+          onValueChange={(price) => onChange(variant.id, { price: price ?? Number.NaN })}
+        />
+        {error ? <p className="text-body text-destructive">{error}</p> : null}
+        {!error && !issueFor(variant.id, "discount") && sale !== null ? (
+          <p className="text-right text-body text-muted-foreground tabular-nums">{t("salePrice", { amount: fmt(sale) })}</p>
+        ) : null}
+      </div>
+    );
+  };
+  const stockCell = (variant: DraftVariant) => {
+    const error = issueFor(variant.id, "stock");
+    return (
+      <div className="space-y-1">
+        <InventoryQuantityInput
+          ariaLabel={t("quantityFor", { name: nameOf(variant) })}
+          invalid={Boolean(error)}
+          value={variant.stock}
+          committed={committedByVariantId.get(variant.id) ?? 0}
+          onChange={(stock) => onChange(variant.id, { stock })}
+        />
+        {error ? <p className="text-body text-destructive">{error}</p> : null}
+      </div>
+    );
+  };
+  const photoPicker = (variant: DraftVariant) => (
+    <VariantImagePicker
+      value={variant.imageId}
+      images={images}
+      invalid={Boolean(issueFor(variant.id, "photo"))}
+      label={t("photoFor", { name: nameOf(variant) })}
+      onChange={(imageId) => onChange(variant.id, { imageId: imageId ?? null })}
+    />
+  );
   return (
     <div className="border-t">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b py-2">
@@ -673,9 +873,9 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
       </div>
       {selected.size > 0 ? (
         <div className="flex flex-wrap items-center gap-2 border-b bg-muted px-2 py-2 text-body">
-          <strong>{r("selected", { count: selected.size })}</strong>
-          <Input type="number" min={0} value={bulkPrice} onChange={(event) => setBulkPrice(event.target.value)} placeholder={t("price")} aria-label={t("price")} className="w-24" />
-          <Input type="number" min={0} step={1} value={bulkStock} onChange={(event) => setBulkStock(event.target.value)} placeholder={t("quantity")} aria-label={t("quantity")} className="w-24" />
+          <strong className="font-medium">{r("selected", { count: selected.size })}</strong>
+          <NumberInput value={bulkPrice} onValueChange={setBulkPrice} placeholder={t("price")} aria-label={t("price")} aria-invalid={bulkPrice !== null && !Number.isFinite(bulkPrice)} className="w-24" />
+          <NumberInput value={bulkStock} integer onValueChange={setBulkStock} placeholder={t("quantity")} aria-label={t("quantity")} aria-invalid={bulkStock !== null && !Number.isInteger(bulkStock)} className="w-24" />
           <VariantImagePicker
             value={bulkImageId}
             images={images}
@@ -686,7 +886,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
           <Button
             type="button"
             size="sm"
-            disabled={bulkPrice === "" && bulkStock === "" && bulkImageId === undefined}
+            disabled={!bulkValid || (bulkPrice === null && bulkStock === null && bulkImageId === undefined)}
             onClick={applyBulk}
           >
             {t("apply")}
@@ -735,7 +935,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
               </th>
               <th className="w-14 p-2"><span className="sr-only">{t("photo")}</span></th>
               <th className="p-2 font-medium">{t("variant")}</th>
-              <th className="w-28 p-2 text-right font-medium">{t("price")}</th>
+              <th className="w-32 p-2 text-right font-medium">{t("price")}</th>
               <th className="w-28 p-2 text-right font-medium">{t("quantity")}</th>
               <th className="w-24 p-2"><span className="sr-only">{r("actions")}</span></th>
             </tr>
@@ -749,7 +949,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                     <td className="p-2 text-center">
                       <Checkbox checked={selected.has(variant.id)} onCheckedChange={(checked) => toggleSelected(variant.id, checked === true)} aria-label={r("select", { name: nameOf(variant) })} />
                     </td>
-                    <td className="p-2"><VariantImagePicker value={variant.imageId} images={images} label={t("photoFor", { name: nameOf(variant) })} onChange={(imageId) => onChange(variant.id, { imageId: imageId ?? null })} /></td>
+                    <td className="p-2">{photoPicker(variant)}</td>
                     <td className="p-2">
                       <button type="button" onClick={() => onExpandedChange(expanded ? null : variant.id)} className="flex min-h-10 w-full items-center gap-1.5 rounded-sm text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-expanded={expanded}>
                         {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
@@ -758,16 +958,10 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                           <span className="block truncate font-mono font-normal text-muted-foreground">{variant.sku}</span>
                         </span>
                       </button>
+                      {issueFor(variant.id, "photo") ? <p className="text-body text-destructive">{issueFor(variant.id, "photo")}</p> : null}
                     </td>
-                    <td className="p-2"><NumberInput value={variant.price} onChange={(price) => onChange(variant.id, { price })} ariaLabel={t("priceFor", { name: nameOf(variant) })} /></td>
-                    <td className="p-2">
-                      <InventoryQuantityInput
-                        ariaLabel={t("quantityFor", { name: nameOf(variant) })}
-                        value={variant.stock}
-                        committed={committedByVariantId.get(variant.id) ?? 0}
-                        onChange={(stock) => onChange(variant.id, { stock })}
-                      />
-                    </td>
+                    <td className="p-2">{priceCell(variant)}</td>
+                    <td className="p-2">{stockCell(variant)}</td>
                     <td className="p-2">
                       <div className="flex items-center justify-end">
                       {variant.id.startsWith("var_") && !printingDisabled ? (
@@ -795,7 +989,7 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
                     <tr>
                       <td />
                       <td colSpan={5} className="px-2 pb-4">
-                        <AdvancedSkuFields variant={variant} name={nameOf(variant)} onChange={(patch) => onChange(variant.id, patch)} />
+                        <AdvancedSkuFields variant={variant} name={nameOf(variant)} issueFor={issueFor} onChange={(patch) => onChange(variant.id, patch)} />
                       </td>
                     </tr>
                   ) : null}
@@ -812,8 +1006,8 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
               <label className="flex h-11 w-8 shrink-0 items-center justify-center">
                 <Checkbox checked={selected.has(variant.id)} onCheckedChange={(checked) => toggleSelected(variant.id, checked === true)} aria-label={r("select", { name: nameOf(variant) })} />
               </label>
-              <VariantImagePicker value={variant.imageId} images={images} label={t("photoFor", { name: nameOf(variant) })} onChange={(imageId) => onChange(variant.id, { imageId: imageId ?? null })} />
-              <strong className="min-w-0 flex-1 truncate text-body">{nameOf(variant)}</strong>
+              {photoPicker(variant)}
+              <strong className="min-w-0 flex-1 truncate text-body font-medium">{nameOf(variant)}</strong>
               <Button
                 type="button"
                 variant="ghost"
@@ -846,10 +1040,10 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <label className="space-y-1 text-body text-muted-foreground">{t("price")}<NumberInput value={variant.price} onChange={(price) => onChange(variant.id, { price })} ariaLabel={t("priceFor", { name: nameOf(variant) })} /></label>
-              <label className="space-y-1 text-body text-muted-foreground">{t("quantity")}<InventoryQuantityInput ariaLabel={t("quantityFor", { name: nameOf(variant) })} value={variant.stock} committed={committedByVariantId.get(variant.id) ?? 0} onChange={(stock) => onChange(variant.id, { stock })} /></label>
+              <div className="space-y-1 text-body text-muted-foreground">{t("price")}{priceCell(variant)}</div>
+              <div className="space-y-1 text-body text-muted-foreground">{t("quantity")}{stockCell(variant)}</div>
             </div>
-            {expandedId === variant.id ? <AdvancedSkuFields variant={variant} name={nameOf(variant)} onChange={(patch) => onChange(variant.id, patch)} /> : null}
+            {expandedId === variant.id ? <AdvancedSkuFields variant={variant} name={nameOf(variant)} issueFor={issueFor} onChange={(patch) => onChange(variant.id, patch)} /> : null}
           </div>
         ))}
       </div>
@@ -873,38 +1067,26 @@ function VariantMatrix({ options, variants, images, expandedId, onExpandedChange
   );
 }
 
-function CompactInput({ value, onChange, ariaLabel }: { value: string; onChange: (value: string) => void; ariaLabel: string }) {
-  return <Input value={value} onChange={(event) => onChange(event.target.value)} aria-label={ariaLabel} />;
-}
-
-function NumberInput({ value, onChange, ariaLabel, integer = false }: { value: number; onChange: (value: number) => void; ariaLabel: string; integer?: boolean }) {
-  const [draft, setDraft] = React.useState(String(value));
-  React.useEffect(() => setDraft(String(value)), [value]);
-  const commit = () => {
-    const parsed = Number(draft);
-    if (draft.trim() === "" || !Number.isFinite(parsed)) {
-      setDraft(String(value));
-      return;
-    }
-    const next = Math.max(0, integer ? Math.trunc(parsed) : parsed);
-    setDraft(String(next));
-    onChange(next);
-  };
-  return <Input type="number" min={0} step={integer ? 1 : "any"} value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={commit} aria-label={ariaLabel} />;
-}
-
-function InventoryQuantityInput({ value, committed, onChange, ariaLabel }: {
+function InventoryQuantityInput({ value, committed, onChange, ariaLabel, invalid = false }: {
   value: number;
   committed: number;
   onChange: (value: number) => void;
   ariaLabel?: string;
+  invalid?: boolean;
 }) {
   const t = useMessages(productMessages);
   const available = Math.max(0, value - committed);
   return (
     <div className="space-y-1">
-      <NumberInput value={value} integer onChange={onChange} ariaLabel={ariaLabel ?? t("quantity")} />
-      {committed > 0 ? (
+      <NumberInput
+        value={value}
+        integer
+        aria-invalid={invalid}
+        aria-label={ariaLabel ?? t("quantity")}
+        // Empty or not a number stays visible as a problem instead of turning into 0.
+        onValueChange={(next) => onChange(next ?? Number.NaN)}
+      />
+      {committed > 0 && Number.isFinite(value) ? (
         <p className="text-right text-body text-muted-foreground tabular-nums" title={t("inOpenOrders", { onHand: value, committed })}>
           {t("availableToSell", { count: available })}
         </p>
@@ -914,25 +1096,36 @@ function InventoryQuantityInput({ value, committed, onChange, ariaLabel }: {
 }
 
 // Variant photo = an exact product image, or null to use the product's main photo.
-function VariantImagePicker({ value, images, onChange, label, allowNoChange = false }: {
+function VariantImagePicker({ value, images, onChange, label, allowNoChange = false, invalid = false }: {
   value: string | null | undefined;
   images: ProductSkuImageChoice[];
   onChange: (value: string | null | undefined) => void;
   label?: string;
   allowNoChange?: boolean;
+  invalid?: boolean;
 }) {
   const t = useMessages(productMessages);
-  const selected = images.find((image) => image.id === value);
+  const selectedIndex = images.findIndex((image) => image.id === value);
+  const selected = images[selectedIndex];
+  // Every photo is named by its position and description, so similar photos can be told apart.
+  const photoName = (index: number) => {
+    const image = images[index]!;
+    return [
+      t("photoNumberOf", { number: index + 1, total: images.length }),
+      image.altText || null,
+      image.status === "trashed" ? t("mediaInTrash") : null,
+    ].filter(Boolean).join(", ");
+  };
   const state = value === undefined
     ? t("photoNoChange")
-    : value === null
+    : value === null || !selected
       ? t("mainPhoto")
-      : `${selected?.altText || t("photo")}${selected?.status === "trashed" ? ` (${t("mediaInTrash")})` : ""}`;
+      : photoName(selectedIndex);
   const triggerLabel = `${label ?? t("variantPhoto")}: ${state}`;
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="icon" className="overflow-hidden" aria-label={triggerLabel}>
+        <Button type="button" variant="outline" size="icon" className="overflow-hidden" aria-label={triggerLabel} aria-invalid={invalid || undefined}>
           {selected
             ? <img
                 src={mediaImageUrl(selected.url, 80)}
@@ -972,13 +1165,14 @@ function VariantImagePicker({ value, images, onChange, label, allowNoChange = fa
                 type="button"
                 disabled={unavailable}
                 onClick={() => onChange(image.id)}
-                aria-label={`${image.altText || t("photoNumber", { number: index + 1 })}${image.status === "trashed" ? ` (${t("mediaInTrash")})` : ""}`}
+                aria-label={photoName(index)}
+                aria-pressed={value === image.id}
                 className={cn(
                   "relative aspect-square overflow-hidden rounded border-2",
                   value === image.id ? "border-primary" : "border-transparent",
                   unavailable && "cursor-not-allowed opacity-45",
                 )}
-                title={image.status === "trashed" ? t("mediaInTrash") : image.altText || undefined}
+                title={photoName(index)}
               >
                 <img
                   src={mediaImageUrl(image.url, 96)}
@@ -998,7 +1192,12 @@ function VariantImagePicker({ value, images, onChange, label, allowNoChange = fa
   );
 }
 
-function DiscountInput({ variant, name, onChange }: { variant: DraftVariant; name: string; onChange: (patch: Partial<DraftVariant>) => void }) {
+function DiscountInput({ variant, name, invalid, onChange }: {
+  variant: DraftVariant;
+  name: string;
+  invalid: boolean;
+  onChange: (patch: Partial<DraftVariant>) => void;
+}) {
   const t = useMessages(productMessages);
   const amount = variant.discountType === "flat" ? variant.discountAmount ?? 0 : variant.discountPercentage ?? 0;
   const [mode, setMode] = React.useState<"none" | "percentage" | "flat">(
@@ -1029,15 +1228,13 @@ function DiscountInput({ variant, name, onChange }: { variant: DraftVariant; nam
         </SelectContent>
       </Select>
       {mode !== "none" ? (
-        <Input
-          type="number"
-          min={0}
-          max={mode === "percentage" ? 100 : undefined}
+        <NumberInput
           value={amount}
+          aria-invalid={invalid}
           aria-label={t("discountValueFor", { name })}
-          onChange={(event) => onChange(mode === "flat"
-            ? { discountAmount: Math.max(0, event.target.valueAsNumber || 0) }
-            : { discountPercentage: Math.min(100, Math.max(0, event.target.valueAsNumber || 0)) })}
+          onValueChange={(next) => onChange(mode === "flat"
+            ? { discountAmount: next ?? 0 }
+            : { discountPercentage: next ?? 0 })}
           className="w-20"
         />
       ) : null}
@@ -1045,55 +1242,68 @@ function DiscountInput({ variant, name, onChange }: { variant: DraftVariant; nam
   );
 }
 
-function AdvancedSkuFields({ variant, name, onChange }: { variant: DraftVariant; name: string; onChange: (patch: Partial<DraftVariant>) => void }) {
+function AdvancedSkuFields({ variant, name, issueFor, onChange }: {
+  variant: DraftVariant;
+  name: string;
+  issueFor: IssueFor;
+  onChange: (patch: Partial<DraftVariant>) => void;
+}) {
   const t = useMessages(productMessages);
   const isUnsavedSku = variant.id.startsWith("draft_");
+  const errorOf = (field: DraftIssueField) => issueFor(variant.id, field);
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      <label className="space-y-1 text-body text-muted-foreground">
-        {t("sku")}
-        <CompactInput value={variant.sku} onChange={(sku) => onChange({ sku })} ariaLabel={t("skuFor", { name })} />
-      </label>
-      <label className="space-y-1 text-body text-muted-foreground">
-        {t("discount")}
-        <DiscountInput variant={variant} name={name} onChange={onChange} />
-      </label>
-      <label className="space-y-1 text-body text-muted-foreground">
-        {t("barcodeType")}
-        <Select value={variant.barcodeType ?? "none"} onValueChange={(value) => onChange({ barcodeType: value === "none" ? null : value as DraftVariant["barcodeType"], barcode: value === "none" ? null : variant.barcode })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">{t(isUnsavedSku ? "barcodeAuto" : "noBarcode")}</SelectItem>
-            <SelectItem value="ean13">EAN-13</SelectItem>
-            <SelectItem value="upc">UPC</SelectItem>
-            <SelectItem value="isbn">ISBN</SelectItem>
-            <SelectItem value="gtin">GTIN</SelectItem>
-            <SelectItem value="code128">Code 128</SelectItem>
-            <SelectItem value="custom">{t("barcodeCustom")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </label>
-      <label className="space-y-1 text-body text-muted-foreground">
-        {t("barcode")}
-        <Input
-          value={variant.barcode ?? ""}
-          disabled={!variant.barcodeType}
-          placeholder={!variant.barcodeType ? t(isUnsavedSku ? "barcodeAutoHint" : "noBarcode") : undefined}
-          aria-label={t("barcodeFor", { name })}
-          onChange={(event) => onChange({ barcode: event.target.value || null })}
-        />
-      </label>
-      <label className="space-y-1 text-body text-muted-foreground">
-        {t("weightGrams")}
-        <Input
-          type="number"
-          min={0}
-          inputMode="numeric"
-          value={variant.weight ?? ""}
-          aria-label={t("weightFor", { name })}
-          onChange={(event) => onChange({ weight: event.target.value === "" ? null : Math.max(0, event.target.valueAsNumber || 0) })}
-        />
-      </label>
+      <Field label={t("sku")} error={errorOf("sku")}>
+        {(invalid) => (
+          <Input value={variant.sku} aria-invalid={invalid} onChange={(event) => onChange({ sku: event.target.value })} aria-label={t("skuFor", { name })} />
+        )}
+      </Field>
+      <Field label={t("discount")} error={errorOf("discount")}>
+        {(invalid) => <DiscountInput variant={variant} name={name} invalid={invalid} onChange={onChange} />}
+      </Field>
+      {/* Scan or type: the type is picked from the code, and can still be changed. */}
+      <Field label={t("barcode")} help={isUnsavedSku && !variant.barcode ? t("barcodeHint") : undefined} error={errorOf("barcode")}>
+        {(invalid) => (
+          <Input
+            value={variant.barcode ?? ""}
+            aria-invalid={invalid}
+            aria-label={t("barcodeFor", { name })}
+            autoComplete="off"
+            onChange={(event) => onChange(barcodePatch(event.target.value))}
+          />
+        )}
+      </Field>
+      <Field label={t("barcodeType")}>
+        {() => (
+          <Select
+            value={variant.barcodeType ?? "none"}
+            onValueChange={(value) => onChange(value === "none"
+              ? { barcodeType: null, barcode: null }
+              : { barcodeType: value as DraftVariant["barcodeType"] })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t(isUnsavedSku ? "barcodeAuto" : "noBarcode")}</SelectItem>
+              <SelectItem value="ean13">EAN-13</SelectItem>
+              <SelectItem value="upc">UPC</SelectItem>
+              <SelectItem value="isbn">ISBN</SelectItem>
+              <SelectItem value="gtin">GTIN</SelectItem>
+              <SelectItem value="code128">Code 128</SelectItem>
+              <SelectItem value="custom">{t("barcodeCustom")}</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+      </Field>
+      <Field label={t("weightGrams")} error={errorOf("weight")}>
+        {(invalid) => (
+          <NumberInput
+            value={variant.weight}
+            aria-invalid={invalid}
+            aria-label={t("weightFor", { name })}
+            onValueChange={(weight) => onChange({ weight })}
+          />
+        )}
+      </Field>
       <label className="flex min-h-11 items-center gap-2 text-body md:min-h-8">
         <Switch checked={variant.trackInventory} onCheckedChange={(trackInventory) => onChange({ trackInventory })} />
         {t("trackQuantity")}

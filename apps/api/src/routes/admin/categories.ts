@@ -306,7 +306,7 @@ const createCategoryRoute = createRoute({
             content: { "application/json": { schema: successEnvelope(z.object({
                 id: z.string(),
                 revision: z.number().int().min(1),
-                status: z.literal("draft"),
+                status: categoryStatusSchema,
             })) } },
         },
         ...errorResponses,
