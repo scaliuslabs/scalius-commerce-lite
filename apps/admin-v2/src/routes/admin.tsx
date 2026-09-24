@@ -62,7 +62,8 @@ function AdminLayout() {
     <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
       <AdminSessionSync />
       {/* The near-black frame: the top bar sits on it, and the light sheet
-          (sidebar + page) is tucked under it with a 12px top-left corner. */}
+          (sidebar + page) is tucked under it with 12px corners on both top
+          edges, as in Shopify. */}
       {/* The frame never scrolls: `main` is the only scroller and the containing
           block for anything absolutely positioned inside the page, so focus,
           dialogs and hidden inputs can't grow the document (clip, unlike
@@ -81,7 +82,7 @@ function AdminLayout() {
         <div className="flex min-w-0 flex-1 flex-col bg-topbar">
         <AdminNavigationProgress />
         <AdminHeader user={user} nav={nav} canOpen={canOpen} showMenu={!inSettings} />
-        <div className="flex min-h-0 flex-1 overflow-clip rounded-tl-xl bg-background">
+        <div className="flex min-h-0 flex-1 overflow-clip rounded-t-xl bg-background">
           {inSettings ? null : <AppSidebar nav={nav} showSettings={canOpen(SETTINGS_ITEM.to)} />}
           <main
             id="admin-main-scroll"

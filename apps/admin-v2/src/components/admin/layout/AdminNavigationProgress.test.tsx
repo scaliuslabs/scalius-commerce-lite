@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ADMIN_NAVIGATION_PROGRESS_DELAY_MS,
-  ADMIN_NAVIGATION_PROGRESS_MIN_VISIBLE_MS,
+  ADMIN_NAVIGATION_PROGRESS_FINISH_MS,
   AdminNavigationProgressView,
 } from "./AdminNavigationProgress";
 
@@ -58,9 +58,10 @@ describe("AdminNavigationProgress", () => {
     const progress = progressElement();
     expect(progress).not.toBeNull();
     expect(progress?.getAttribute("aria-hidden")).toBe("true");
-    expect(progress?.firstElementChild?.className).toContain(
-      "motion-reduce:animate-none",
-    );
+    expect(progress?.getAttribute("data-state")).toBe("loading");
+    // 3px in the accent colour: visible on the black top bar in both themes.
+    expect(progress?.className).toContain("h-[3px]");
+    expect(progress?.firstElementChild?.className).toContain("bg-topbar-progress");
     expect(host.querySelector('[role="status"]')?.textContent).toBe(
       "Loading next page",
     );
@@ -72,12 +73,23 @@ describe("AdminNavigationProgress", () => {
     expect(progressElement()).not.toBeNull();
 
     render(false);
+    // The finish: the bar runs to the end and fades before it goes.
+    expect(progressElement()?.getAttribute("data-state")).toBe("done");
     act(() =>
-      vi.advanceTimersByTime(ADMIN_NAVIGATION_PROGRESS_MIN_VISIBLE_MS - 1),
+      vi.advanceTimersByTime(ADMIN_NAVIGATION_PROGRESS_FINISH_MS - 1),
     );
     expect(progressElement()).not.toBeNull();
 
     act(() => vi.advanceTimersByTime(1));
     expect(progressElement()).toBeNull();
+  });
+
+  it("starts again at once when another navigation begins during the finish", () => {
+    render(true);
+    act(() => vi.advanceTimersByTime(ADMIN_NAVIGATION_PROGRESS_DELAY_MS));
+    render(false);
+    render(true);
+    act(() => vi.advanceTimersByTime(0));
+    expect(progressElement()?.getAttribute("data-state")).toBe("loading");
   });
 });

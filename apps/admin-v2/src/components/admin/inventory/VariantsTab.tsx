@@ -231,7 +231,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       setLimit(nextLimit);
     },
     onSortingChange: (field, order) => {
-      setSort({ field: field as VariantSort["field"], order });
+      setSort(field ? { field: field as VariantSort["field"], order: order ?? "asc" } : { field: "available", order: "asc" });
       setPage(1);
     },
     defaultPageSize: 50,
@@ -285,6 +285,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
         pageSizeOptions={[20, 50, 100]}
         mobileCardRenderer={mobileCard}
         layoutKey="inventory-variants"
+        defaultSortLabel={false}
         toolbar={<div className="px-2 pt-2"><DataTableToolbar
             searchValue={search}
             onSearchChange={(value) => onFiltersChange({ q: value })}

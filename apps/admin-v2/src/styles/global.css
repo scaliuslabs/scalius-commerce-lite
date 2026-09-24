@@ -73,6 +73,11 @@
   --topbar-foreground: #dcdcdc;
   --topbar-subdued: #282828;
   --topbar-hover: #333333;
+  /* The page-loading bar: the accent, bright enough on the black top bar in both themes. */
+  --topbar-progress: #4b9bff;
+  /* The page scrollbar (#admin-main-scroll): a dark grey thumb on the light frame. */
+  --scrollbar-thumb: #8a8a8a;
+  --scrollbar-thumb-hover: #616161;
 
   --sidebar: #ebebeb;
   --sidebar-foreground: #303030;
@@ -156,6 +161,10 @@
   --topbar-foreground: #dcdcdc;
   --topbar-subdued: #282828;
   --topbar-hover: #333333;
+  /* The page-loading bar: the accent, bright enough on the black top bar in both themes. */
+  --topbar-progress: #4b9bff;
+  --scrollbar-thumb: #8a8a8a;
+  --scrollbar-thumb-hover: #b5b5b5;
 
   --sidebar: #151515;
   --sidebar-foreground: #e3e3e3;
@@ -210,6 +219,7 @@
   --color-topbar-foreground: var(--topbar-foreground);
   --color-topbar-subdued: var(--topbar-subdued);
   --color-topbar-hover: var(--topbar-hover);
+  --color-topbar-progress: var(--topbar-progress);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-hover: var(--sidebar-hover);
@@ -432,7 +442,7 @@ body:has([data-save-bar]) [data-topbar-search] {
 
 /*
  * Shopify's navigation tree: a 1px line runs from the parent's icon down the
- * sub-items and turns into the active child with a 4px rounded elbow.
+ * sub-items and turns into the active child with an 8px rounded elbow.
  * Applied automatically to SidebarMenuSub; nothing to add in feature code.
  */
 [data-sidebar="menu-sub"] > li {
@@ -456,7 +466,8 @@ body:has([data-save-bar]) [data-topbar-search] {
 [data-sidebar="menu-sub"] > li:has([data-active="true"])::before {
   height: 50%;
   border-bottom: 1px solid var(--muted-foreground);
-  border-bottom-left-radius: 4px;
+  /* A soft curve into the active child, as in Shopify's navigation. */
+  border-bottom-left-radius: 0.5rem;
 }
 
 /* Start at the parent's 20px icon (rows are 44px on phones, 28px from md). */
@@ -507,5 +518,91 @@ body.editor-fullscreen-active [data-slot="dialog-content"] {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Page-loading bar (AdminNavigationProgress): a quick start to about a third,
+ * then a slowing crawl that never reaches the end on its own; when the page
+ * is ready it runs to 100% and fades. Reduced motion: a full bar, no motion.
+ */
+@keyframes admin-progress-crawl {
+  0% { transform: scaleX(0); }
+  8% { transform: scaleX(0.35); }
+  100% { transform: scaleX(0.92); }
+}
+
+[data-admin-navigation-progress] > div {
+  transform-origin: left center;
+  border-radius: 0 9999px 9999px 0;
+}
+
+[data-admin-navigation-progress][data-state="loading"] > div {
+  animation: admin-progress-crawl 10s cubic-bezier(0.08, 0.8, 0.2, 1) forwards;
+}
+
+[data-admin-navigation-progress][data-state="done"] > div {
+  transform: scaleX(1);
+  transition: transform 180ms ease-out;
+}
+
+[data-admin-navigation-progress][data-state="done"] {
+  opacity: 0;
+  transition: opacity 200ms ease-in 180ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-admin-navigation-progress] > div {
+    animation: none !important;
+    transform: none;
+    transition: none;
+  }
+}
+
+/*
+ * The page's own scrollbar (Shopify's): thin and always visible, a dark grey
+ * thumb with a hover state, inset from the frame's rounded top corner.
+ * Firefox takes the standard properties; Chromium and Safari drop to their
+ * scrollbar pseudo-elements, which alone allow the hover and the inset.
+ */
+#admin-main-scroll,
+[data-settings-scroll] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  #admin-main-scroll,
+  [data-settings-scroll] {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+
+  #admin-main-scroll::-webkit-scrollbar,
+  [data-settings-scroll]::-webkit-scrollbar {
+    width: 12px;
+  }
+
+  #admin-main-scroll::-webkit-scrollbar-track,
+  [data-settings-scroll]::-webkit-scrollbar-track {
+    background: transparent;
+    /* Clear of the frame's 12px corner. */
+    margin-block: 12px;
+  }
+
+  #admin-main-scroll::-webkit-scrollbar-thumb,
+  [data-settings-scroll]::-webkit-scrollbar-thumb {
+    min-height: 40px;
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-color: var(--scrollbar-thumb);
+    background-clip: padding-box;
+  }
+
+  #admin-main-scroll::-webkit-scrollbar-thumb:hover,
+  #admin-main-scroll::-webkit-scrollbar-thumb:active,
+  [data-settings-scroll]::-webkit-scrollbar-thumb:hover,
+  [data-settings-scroll]::-webkit-scrollbar-thumb:active {
+    background-color: var(--scrollbar-thumb-hover);
   }
 }

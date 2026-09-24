@@ -24,6 +24,7 @@ import { Badge } from "~/components/ui/badge";
 import { DateText, sortHeader } from "~/components/admin/resource/columns";
 import { translate, useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
+import { dataTableMessages } from "~/i18n/data-table";
 
 const validateCollectionSearch = createListSearchValidator(
   ["name", "presentation", "isActive", "sortOrder", "updatedAt"] as const,
@@ -57,6 +58,7 @@ function CollectionsPage() {
   const search = Route.useSearch();
   const [term] = useListSearch("collections");
   const t = useMessages(catalogMessages);
+  const tableCopy = useMessages(dataTableMessages);
   const { collections: can } = useCatalogActionPermissions();
   const update = useResourceMutation(
     (action: { kind: "activate" | "deactivate"; ids: string[] } | { kind: "reorder"; items: Array<{ id: string; sortOrder: number; expectedVersion: number }> }) =>
@@ -118,6 +120,7 @@ function CollectionsPage() {
   return (
     <ResourceListPage<CollectionSummaryDto>
       title={t("collections")}
+      defaultSortLabel={tableCopy("manualOrder")}
       actions={can.canCreate ? <Button asChild><Link to="/admin/collections/new">{t("addCollection")}</Link></Button> : null}
       search={search}
       list="collections"
