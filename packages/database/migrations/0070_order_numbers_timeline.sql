@@ -42,4 +42,4 @@ CREATE TABLE `order_events` (
 --> statement-breakpoint
 CREATE INDEX `order_events_order_created_idx` ON `order_events` (`order_id`, `created_at`);
 --> statement-breakpoint
-INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (70, '0070_order_numbers_timeline', 'TODO');
+INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (70, '0070_order_numbers_timeline', 'c25a4602a4cd7bbb42a7d3b8e539c30b553d26c0614cf61395df84ddaf3d6b89');

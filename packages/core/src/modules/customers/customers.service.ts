@@ -893,6 +893,7 @@ export async function getCustomerOrders(
     const customerOrdersQuery = db
         .select({
             id: orders.id,
+            orderNumber: orders.orderNumber,
             invoiceNumber: orders.invoiceNumber,
             status: orders.status,
             ...orderMoneySelection(orders),
@@ -932,6 +933,7 @@ export async function getCustomerOrders(
         }>,
         Array<{
             id: string;
+            orderNumber: number | null;
             invoiceNumber: number | null;
             status: string;
             currencyCode: string;
@@ -1122,6 +1124,7 @@ export async function getCustomerOwnedOrderForDetail(
     const order = await db
         .select({
             id: orders.id,
+            orderNumber: orders.orderNumber,
             invoiceNumber: orders.invoiceNumber,
             status: orders.status,
             ...orderMoneySelection(orders),
@@ -1441,6 +1444,7 @@ export async function getCustomerOrderDetailForOrder(
     return {
         order: {
             id: order.id,
+            orderNumber: order.orderNumber,
             invoiceNumber: order.invoiceNumber,
             status: order.status,
             statusLabel: customerOrderStatusLabel(order.status),

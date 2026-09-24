@@ -31,6 +31,7 @@ async function readOrderEmailContext(db: Database, orderId: string) {
       shippingMethodName: orders.shippingMethodName,
       shippingMethodDescription: orders.shippingMethodDescription,
       accountOwnerCustomerId: orders.accountOwnerCustomerId,
+      orderNumber: orders.orderNumber,
       status: orders.status,
       paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
@@ -59,7 +60,7 @@ async function readOrderEmailContext(db: Database, orderId: string) {
   const order = rows[0]?.order;
   if (!order) throw new Error("Order email details are unavailable");
   const items = rows.flatMap((row) => row.item ? [row.item] : []);
-  return { order: { ...order, orderNumber: null as number | null }, items, store };
+  return { order, items, store };
 }
 
 const CLOSED_STATUSES = new Set(["cancelled", "returned", "refunded", "partially_refunded"]);

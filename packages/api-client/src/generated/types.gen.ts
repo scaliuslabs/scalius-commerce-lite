@@ -1275,6 +1275,10 @@ export type GetApiV1SearchResponses = {
                 slug: string;
             }>;
             query: string;
+            /**
+             * Set when `q` matched nothing and these results are for the closest catalog words instead (typo or Bangla correction).
+             */
+            correctedQuery: string | null;
             timestamp?: string;
         };
     };
@@ -2604,12 +2608,6 @@ export type GetApiV1StorefrontHomepageResponses = {
                 };
                 trustStrip: {
                     enabled: boolean;
-                    items: Array<{
-                        kind: 'delivery' | 'returns';
-                        title: string;
-                        detail: string;
-                        href?: string;
-                    }>;
                 };
             };
         };
@@ -6672,11 +6670,7 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtp
     body: {
         method: 'email' | 'phone';
         channel?: 'email' | 'sms' | 'whatsapp';
-        intent?: 'sign_in' | 'sign_up';
         identifier: string;
-        name?: string;
-        phone?: string;
-        email?: string;
     };
     path: {
         continuationId: string;
@@ -6785,12 +6779,13 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyO
     body: {
         method: 'email' | 'phone';
         channel?: 'email' | 'sms' | 'whatsapp';
-        intent?: 'sign_in' | 'sign_up';
         identifier: string;
-        name?: string;
-        phone?: string;
-        email?: string;
         code: string;
+        account?: {
+            name: string;
+            phone?: string;
+            email?: string;
+        };
     };
     path: {
         continuationId: string;
@@ -6872,12 +6867,13 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyO
 
 export type PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpResponses = {
     /**
-     * Customer authorized
+     * Customer authorized, or the code is right and a new account needs a name
      */
     200: {
         success: true;
         data: {
-            authenticated: true;
+            authenticated: boolean;
+            needsAccountDetails: boolean;
             customer?: {
                 [key: string]: unknown;
             };
@@ -7432,14 +7428,10 @@ export type PostApiV1CustomerAuthSendOtpData = {
     body?: {
         method?: 'email' | 'phone';
         channel?: 'email' | 'sms' | 'whatsapp';
-        intent?: 'sign_in' | 'sign_up';
         /**
          * Email or phone number
          */
         identifier: string;
-        name?: string;
-        phone?: string;
-        email?: string;
     };
     path?: never;
     query?: never;
@@ -7530,12 +7522,13 @@ export type PostApiV1CustomerAuthSendOtpError = PostApiV1CustomerAuthSendOtpErro
 
 export type PostApiV1CustomerAuthSendOtpResponses = {
     /**
-     * OTP sent successfully
+     * Code sent
      */
     200: {
         success: true;
         data: {
-            message?: string;
+            message: string;
+            resendAfterSeconds: number;
         };
     };
 };
@@ -7546,18 +7539,22 @@ export type PostApiV1CustomerAuthVerifyOtpData = {
     body?: {
         method?: 'email' | 'phone';
         channel?: 'email' | 'sms' | 'whatsapp';
-        intent?: 'sign_in' | 'sign_up';
         /**
          * Email or phone number
          */
         identifier: string;
         /**
-         * 6-digit OTP code
+         * 6-digit code
          */
         code: string;
-        name?: string;
-        phone?: string;
-        email?: string;
+        /**
+         * Only for a new account, after status needs_account_details
+         */
+        account?: {
+            name: string;
+            phone?: string;
+            email?: string;
+        };
     };
     path?: never;
     query?: never;
@@ -7648,13 +7645,13 @@ export type PostApiV1CustomerAuthVerifyOtpError = PostApiV1CustomerAuthVerifyOtp
 
 export type PostApiV1CustomerAuthVerifyOtpResponses = {
     /**
-     * OTP verified, session created
+     * Signed in, or the code is right and a new account needs details
      */
     200: {
         success: true;
         data: {
+            status: 'signed_in' | 'needs_account_details';
             customer?: {
-                identifier?: string;
                 email: string;
                 name: string;
                 phone?: string | null;
@@ -7667,7 +7664,6 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
                 zoneName?: string | null;
                 areaName?: string | null;
                 profileComplete: boolean;
-                needsProfileCompletion: boolean;
             };
             isNewUser?: boolean;
         };
@@ -7763,7 +7759,6 @@ export type GetApiV1CustomerAuthMeResponses = {
         data: {
             authenticated: boolean;
             customer?: {
-                identifier?: string;
                 email: string;
                 name: string;
                 phone?: string | null;
@@ -7776,7 +7771,6 @@ export type GetApiV1CustomerAuthMeResponses = {
                 zoneName?: string | null;
                 areaName?: string | null;
                 profileComplete: boolean;
-                needsProfileCompletion: boolean;
             };
         };
     };
@@ -7971,7 +7965,6 @@ export type PutApiV1CustomerAuthProfileResponses = {
         success: true;
         data: {
             customer: {
-                identifier?: string;
                 email: string;
                 name: string;
                 phone?: string | null;
@@ -7984,7 +7977,6 @@ export type PutApiV1CustomerAuthProfileResponses = {
                 zoneName?: string | null;
                 areaName?: string | null;
                 profileComplete: boolean;
-                needsProfileCompletion: boolean;
             };
         };
     };
@@ -8082,8 +8074,12 @@ export type GetApiV1CustomerAuthOrdersResponses = {
         data: {
             orders: Array<{
                 id: string;
+                orderNumber: number | null;
                 invoiceNumber?: number | null;
                 status: string;
+                statusLabel: string;
+                openSupportRequestType: string | null;
+                currencyCode: string;
                 totalAmount: number;
                 paidAmount: number;
                 balanceDue: number;
@@ -8113,6 +8109,7 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                     trackingId: string | null;
                     trackingUrl: string | null;
                     courierName: string | null;
+                    statusLabel: string;
                     lastChecked: NullableTimestamp;
                     updatedAt: NullableTimestamp;
                     createdAt: NullableTimestamp;
@@ -8361,6 +8358,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
         data: {
             order: {
                 id: string;
+                orderNumber: number | null;
                 invoiceNumber: number | null;
                 status: string;
                 totalAmount: number;
@@ -8394,6 +8392,9 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 zoneName: string | null;
                 areaName: string | null;
                 notes: string | null;
+                statusLabel: string;
+                customerName: string;
+                customerPhone: string;
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 [key: string]: unknown;
@@ -8431,6 +8432,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 note: string | null;
                 shipmentAmount: number | null;
                 isFinalShipment: boolean;
+                statusLabel: string;
                 lastChecked: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 createdAt: NullableTimestamp;
@@ -8529,24 +8531,22 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 updatedAt: NullableTimestamp;
                 [key: string]: unknown;
             } | null;
-            notifications: Array<{
-                id: string;
-                notificationType: string;
-                channel: string;
-                status: string;
-                provider: string;
-                providerStatus: string | null;
-                acceptedAt: NullableTimestamp;
-                deliveredAt: NullableTimestamp;
-                failedAt: NullableTimestamp;
-                skippedAt: NullableTimestamp;
-                updatedAt: NullableTimestamp;
-                createdAt: NullableTimestamp;
-                [key: string]: unknown;
-            }>;
+            progress: {
+                steps: Array<{
+                    key: 'placed' | 'confirmed' | 'shipped' | 'delivered';
+                    label: string;
+                    done: boolean;
+                    happenedAt: NullableTimestamp;
+                }>;
+                outcome: {
+                    key: string;
+                    label: string;
+                    happenedAt: NullableTimestamp;
+                } | null;
+            };
             timeline: Array<{
                 id: string;
-                type: 'order' | 'payment' | 'refund' | 'request' | 'shipment' | 'notification';
+                type: 'order' | 'payment' | 'refund' | 'request';
                 status: string;
                 label: string;
                 happenedAt: NullableTimestamp;
@@ -9688,9 +9688,9 @@ export type GetApiV1ProductsData = {
          */
         limit?: number;
         /**
-         * Sort order
+         * Sort order. Defaults to relevance when `search` is set, otherwise newest.
          */
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
         /**
          * Minimum effective buyer-SKU price
          */
@@ -9788,12 +9788,19 @@ export type GetApiV1ProductsResponses = {
             facets: Array<{
                 id: string;
                 name: string;
+                /**
+                 * Query key for this facet: an attribute slug, or `option.<axis>` for a product option such as Size.
+                 */
                 slug: string;
                 values: Array<{
                     value: string;
                     count: number;
                 }>;
             }>;
+            /**
+             * Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).
+             */
+            correctedQuery: string | null;
         };
     };
 };
@@ -11461,6 +11468,223 @@ export type PostApiV1OrdersPaymentRecoveryVerifyOtpResponses = {
 
 export type PostApiV1OrdersPaymentRecoveryVerifyOtpResponse = PostApiV1OrdersPaymentRecoveryVerifyOtpResponses[keyof PostApiV1OrdersPaymentRecoveryVerifyOtpResponses];
 
+export type PostApiV1OrdersLookupSendOtpData = {
+    body: {
+        /**
+         * Order number ("#1001") or order id
+         */
+        reference: string;
+        /**
+         * Phone number used for the order
+         */
+        phone: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/orders/lookup/send-otp';
+};
+
+export type PostApiV1OrdersLookupSendOtpErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersLookupSendOtpError = PostApiV1OrdersLookupSendOtpErrors[keyof PostApiV1OrdersLookupSendOtpErrors];
+
+export type PostApiV1OrdersLookupSendOtpResponses = {
+    /**
+     * Request accepted
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            resendAfterSeconds: number;
+        };
+    };
+};
+
+export type PostApiV1OrdersLookupSendOtpResponse = PostApiV1OrdersLookupSendOtpResponses[keyof PostApiV1OrdersLookupSendOtpResponses];
+
+export type PostApiV1OrdersLookupVerifyOtpData = {
+    body: {
+        /**
+         * Order number ("#1001") or order id
+         */
+        reference: string;
+        /**
+         * Phone number used for the order
+         */
+        phone: string;
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/orders/lookup/verify-otp';
+};
+
+export type PostApiV1OrdersLookupVerifyOtpErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersLookupVerifyOtpError = PostApiV1OrdersLookupVerifyOtpErrors[keyof PostApiV1OrdersLookupVerifyOtpErrors];
+
+export type PostApiV1OrdersLookupVerifyOtpResponses = {
+    /**
+     * Verified
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            receiptToken: string;
+            expiresAt: number;
+        };
+    };
+};
+
+export type PostApiV1OrdersLookupVerifyOtpResponse = PostApiV1OrdersLookupVerifyOtpResponses[keyof PostApiV1OrdersLookupVerifyOtpResponses];
+
 export type GetApiV1OrdersReceiptByIdData = {
     body?: never;
     headers?: {
@@ -11498,7 +11722,11 @@ export type GetApiV1OrdersReceiptByIdResponses = {
         data: {
             order: {
                 id: string;
+                orderNumber: number | null;
                 customerName: string;
+                customerPhone: string;
+                customerEmail: string | null;
+                accountLinked: boolean;
                 shippingAddress: string;
                 totalAmount: number;
                 shippingCharge: number;
@@ -12344,6 +12572,7 @@ export type PostApiV1AdminCategoriesData = {
             size: number;
             createdAt: string | string;
         } | null;
+        status?: 'draft' | 'published' | 'internal';
     };
     path?: never;
     query?: never;
@@ -12441,7 +12670,7 @@ export type PostApiV1AdminCategoriesResponses = {
         data: {
             id: string;
             revision: number;
-            status: 'draft';
+            status: 'draft' | 'published' | 'internal';
         };
     };
 };
@@ -13962,6 +14191,8 @@ export type GetApiV1AdminCollectionsProductOptionsResponses = {
                 categoryName: string | null;
                 isActive: boolean;
                 primaryImage: string | null;
+                variantCount: number;
+                available: number | null;
             }>;
             pagination: {
                 page: number;
@@ -15262,6 +15493,116 @@ export type PutApiV1AdminCollectionsByIdResponses = {
 
 export type PutApiV1AdminCollectionsByIdResponse = PutApiV1AdminCollectionsByIdResponses[keyof PutApiV1AdminCollectionsByIdResponses];
 
+export type PostApiV1AdminCollectionsByIdProductsData = {
+    body: {
+        expectedVersion: number;
+        add?: Array<string>;
+        remove?: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/collections/{id}/products';
+};
+
+export type PostApiV1AdminCollectionsByIdProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminCollectionsByIdProductsError = PostApiV1AdminCollectionsByIdProductsErrors[keyof PostApiV1AdminCollectionsByIdProductsErrors];
+
+export type PostApiV1AdminCollectionsByIdProductsResponses = {
+    /**
+     * Collection products updated
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            version: number;
+        };
+    };
+};
+
+export type PostApiV1AdminCollectionsByIdProductsResponse = PostApiV1AdminCollectionsByIdProductsResponses[keyof PostApiV1AdminCollectionsByIdProductsResponses];
+
 export type DeleteApiV1AdminCollectionsByIdPermanentData = {
     body?: never;
     path: {
@@ -16023,6 +16364,7 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
             }>;
             orders: Array<{
                 id: string;
+                orderNumber: number;
                 totalAmount: number;
                 status: string;
                 createdAt: string | number;
@@ -20895,6 +21237,7 @@ export type GetApiV1AdminInventoryResponses = {
                 preorderStockDelta: number | null;
                 createdAt: string | number;
                 variantSku: string | null;
+                optionLabel: string | null;
                 productName: string | null;
                 actorName: string;
                 actorType: 'system' | 'admin' | 'former_admin';
@@ -21169,6 +21512,10 @@ export type PostApiV1AdminInventoryLabelsArtifactData = {
     body?: {
         format: 'csv' | 'html' | 'pdf';
         mode?: 'job' | 'test';
+        /**
+         * Dashboard language, so printed prices match the preview
+         */
+        locale?: 'en' | 'bn';
         variantIds: Array<string>;
         quantities: {
             [key: string]: number;
@@ -21347,6 +21694,59 @@ export type PostApiV1AdminInventoryByVariantIdAdjustResponses = {
 };
 
 export type PostApiV1AdminInventoryByVariantIdAdjustResponse = PostApiV1AdminInventoryByVariantIdAdjustResponses[keyof PostApiV1AdminInventoryByVariantIdAdjustResponses];
+
+export type PutApiV1AdminInventoryByVariantIdAlertLevelData = {
+    body: {
+        lowStockThreshold: number | null;
+    };
+    path: {
+        variantId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/inventory/{variantId}/alert-level';
+};
+
+export type PutApiV1AdminInventoryByVariantIdAlertLevelErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryByVariantIdAlertLevelError = PutApiV1AdminInventoryByVariantIdAlertLevelErrors[keyof PutApiV1AdminInventoryByVariantIdAlertLevelErrors];
+
+export type PutApiV1AdminInventoryByVariantIdAlertLevelResponses = {
+    /**
+     * Alert level saved
+     */
+    200: {
+        success: true;
+        data: {
+            variantId: string;
+            lowStockThreshold: number | null;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryByVariantIdAlertLevelResponse = PutApiV1AdminInventoryByVariantIdAlertLevelResponses[keyof PutApiV1AdminInventoryByVariantIdAlertLevelResponses];
 
 export type GetApiV1AdminInventoryScannerLookupData = {
     body?: never;
@@ -25653,6 +26053,7 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
             };
             recentOrders: Array<{
                 id: string;
+                orderNumber: number;
                 customerName: string;
                 totalAmount: number;
                 status: string;
@@ -25741,6 +26142,7 @@ export type GetApiV1AdminDashboardSummaryResponses = {
             };
             recentOrders: Array<{
                 id: string;
+                orderNumber: number;
                 customerName: string;
                 totalAmount: number;
                 status: string;
@@ -25820,6 +26222,7 @@ export type GetApiV1AdminDashboardResponses = {
             };
             recentOrders: Array<{
                 id: string;
+                orderNumber: number;
                 customerName: string;
                 totalAmount: number;
                 status: string;
@@ -26470,6 +26873,7 @@ export type PostApiV1AdminFraudCheckerLookupResponses = {
     200: {
         success: true;
         data: {
+            configured: boolean;
             total_parcels?: number;
             total_delivered?: number;
             total_cancel?: number;
@@ -37229,7 +37633,8 @@ export type PutApiV1AdminSettingsCustomerRequestsResponse = PutApiV1AdminSetting
 
 export type PutApiV1AdminOrdersByIdStatusData = {
     body: {
-        status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'partially_refunded' | 'incomplete';
+        status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
+        reason?: 'customer_changed_mind' | 'unreachable' | 'fake_order' | 'out_of_stock' | 'other';
     };
     path: {
         id: string;
@@ -37335,6 +37740,7 @@ export type GetApiV1AdminOrdersByIdCodResponses = {
                 lastAttemptAt: string | number | unknown;
                 codStatus: string;
                 failureReason: string | null;
+                failureNote: string | null;
                 collectedBy: string | null;
                 collectedAmount: number | null;
                 collectedAt: string | number | unknown;
@@ -37486,12 +37892,16 @@ export type GetApiV1AdminOrdersByIdFulfillResponse = GetApiV1AdminOrdersByIdFulf
 
 export type PostApiV1AdminOrdersByIdFulfillData = {
     body: {
+        requestKey?: string;
+        items?: Array<{
+            itemId: string;
+            quantity: number;
+        }>;
         itemIds?: Array<string>;
         trackingId?: string;
         trackingUrl?: string;
         courierName?: string;
         note?: string;
-        isFinalShipment?: boolean;
         shipmentAmount?: number;
     };
     path: {
@@ -38730,6 +39140,7 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
             status: 'draft' | 'issued';
             order: {
                 id: string;
+                orderNumber?: number | null;
                 version: number;
                 customerName: string;
                 customerPhone: string;
@@ -38765,6 +39176,12 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                 fulfillmentStatus: string | null;
                 paidAmount: number | null;
                 balanceDue: number | null;
+                refundedAmount?: number;
+                discounts?: Array<{
+                    name: string;
+                    code: string | null;
+                    amount: number;
+                }>;
                 createdAt: string | number;
                 updatedAt: string | number;
                 items: Array<{
@@ -38935,6 +39352,7 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
             status: 'draft' | 'issued';
             order: {
                 id: string;
+                orderNumber?: number | null;
                 version: number;
                 customerName: string;
                 customerPhone: string;
@@ -38970,6 +39388,12 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                 fulfillmentStatus: string | null;
                 paidAmount: number | null;
                 balanceDue: number | null;
+                refundedAmount?: number;
+                discounts?: Array<{
+                    name: string;
+                    code: string | null;
+                    amount: number;
+                }>;
                 createdAt: string | number;
                 updatedAt: string | number;
                 items: Array<{
@@ -40241,9 +40665,25 @@ export type GetApiV1AdminOrdersCatalogProductsResponses = {
                     name: string;
                 };
                 variantCount: number;
+                /**
+                 * Tracked on-hand units across live SKUs; null when no SKU tracks quantity.
+                 */
+                onHand: number | null;
+                /**
+                 * Some SKUs carry their own discount.
+                 */
+                hasVariantDiscount: boolean;
+                /**
+                 * Trash lists only: stock history blocks permanent delete.
+                 */
+                hasStockHistory: boolean;
                 mediaCount: number;
                 primaryImage: string | null;
                 sku?: string;
+                /**
+                 * Units buyers can still order across active SKUs; null when a SKU has no stock limit.
+                 */
+                availableStock: number | null;
             }>;
             pagination: {
                 page: number;
@@ -40278,13 +40718,17 @@ export type GetApiV1AdminOrdersData = {
          */
         status?: string;
         /**
-         * Filter by order lifecycle view
+         * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.
          */
-        statusGroup?: 'open' | 'in_transit' | 'delivered' | 'closed';
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned';
+        /**
+         * Only orders with an open customer request
+         */
+        openRequest?: 'true' | 'false';
         /**
          * Filter by payment status
          */
-        paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded' | 'failed';
+        paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
         /**
          * Filter by payment method
          */
@@ -40302,9 +40746,9 @@ export type GetApiV1AdminOrdersData = {
          */
         archived?: 'true' | 'false';
         /**
-         * Sort field. Use relevance with a search query to order by FTS rank.
+         * Sort field (default: newest first; relevance when searching).
          */
-        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
+        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'createdAt' | 'updatedAt';
         /**
          * Sort order
          */
@@ -40407,10 +40851,21 @@ export type GetApiV1AdminOrdersResponses = {
                     lastProbeAt: NullableTimestamp;
                     providerStatus: string | null;
                 } | null;
-                fullEditReadiness: {
-                    allowed: boolean;
-                    reason: string | null;
-                };
+                /**
+                 * Sequential store order number, shown as #1001.
+                 */
+                orderNumber: number | null;
+                archivedAt: NullableTimestamp;
+                openRequestType: 'cancel_pre_shipment' | 'return' | 'refund' | null;
+                cod: {
+                    status: string;
+                    deliveryAttempts: number;
+                } | null;
+                /**
+                 * Value of received returns not refunded yet.
+                 */
+                refundDue: number;
+                refundedAmount: number;
             }>;
             pagination: {
                 page: number;
@@ -40532,13 +40987,25 @@ export type GetApiV1AdminOrdersExportData = {
          * Filter by status
          */
         status?: string;
-        statusGroup?: 'open' | 'in_transit' | 'delivered' | 'closed';
-        paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded' | 'failed';
+        /**
+         * Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.
+         */
+        view?: 'unfulfilled' | 'unpaid' | 'cod_to_collect' | 'delivery_failed' | 'returned';
+        openRequest?: 'true' | 'false';
+        /**
+         * Comma-separated order ids (at most 100): export exactly these orders, e.g. the current page or a selection.
+         */
+        ids?: string;
+        /**
+         * One row per order (summary) or one row per item (items).
+         */
+        format?: 'summary' | 'items';
+        paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
         paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
         fulfillmentStatus?: 'pending' | 'partial' | 'complete';
         paymentRecovery?: 'recoverable' | 'awaiting_payment' | 'processing' | 'needs_attention';
         archived?: 'true' | 'false';
-        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
+        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'createdAt' | 'updatedAt';
         order?: 'asc' | 'desc';
         startDate?: string;
         endDate?: string;
@@ -40657,7 +41124,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryData = {
         /**
          * Sort field
          */
-        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
+        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'createdAt' | 'updatedAt';
         /**
          * Sort order
          */
@@ -40831,10 +41298,21 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                     lastProbeAt: NullableTimestamp;
                     providerStatus: string | null;
                 } | null;
-                fullEditReadiness: {
-                    allowed: boolean;
-                    reason: string | null;
-                };
+                /**
+                 * Sequential store order number, shown as #1001.
+                 */
+                orderNumber: number | null;
+                archivedAt: NullableTimestamp;
+                openRequestType: 'cancel_pre_shipment' | 'return' | 'refund' | null;
+                cod: {
+                    status: string;
+                    deliveryAttempts: number;
+                } | null;
+                /**
+                 * Value of received returns not refunded yet.
+                 */
+                refundDue: number;
+                refundedAmount: number;
             }>;
             pagination: {
                 page: number;
@@ -40865,13 +41343,9 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportData = {
          */
         status?: string;
         /**
-         * Filter by order lifecycle view
-         */
-        statusGroup?: 'open' | 'in_transit' | 'delivered' | 'closed';
-        /**
          * Filter by payment status
          */
-        paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded' | 'failed';
+        paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
         /**
          * Filter by payment gateway
          */
@@ -40887,7 +41361,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportData = {
         /**
          * Sort field
          */
-        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'status' | 'createdAt' | 'updatedAt';
+        sort?: 'relevance' | 'customerName' | 'totalAmount' | 'createdAt' | 'updatedAt';
         /**
          * Sort order
          */
@@ -41535,6 +42009,278 @@ export type PostApiV1AdminOrdersBulkShipResponses = {
 
 export type PostApiV1AdminOrdersBulkShipResponse = PostApiV1AdminOrdersBulkShipResponses[keyof PostApiV1AdminOrdersBulkShipResponses];
 
+export type PostApiV1AdminOrdersBulkConfirmData = {
+    body: {
+        orderIds: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/orders/bulk-confirm';
+};
+
+export type PostApiV1AdminOrdersBulkConfirmErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersBulkConfirmError = PostApiV1AdminOrdersBulkConfirmErrors[keyof PostApiV1AdminOrdersBulkConfirmErrors];
+
+export type PostApiV1AdminOrdersBulkConfirmResponses = {
+    /**
+     * Per-order results
+     */
+    200: {
+        success: true;
+        data: {
+            results: Array<{
+                orderId: string;
+                success: boolean;
+                error?: string;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersBulkConfirmResponse = PostApiV1AdminOrdersBulkConfirmResponses[keyof PostApiV1AdminOrdersBulkConfirmResponses];
+
+export type PostApiV1AdminOrdersBulkFulfillData = {
+    body: {
+        orderIds: Array<string>;
+        courierName?: string;
+        note?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/orders/bulk-fulfill';
+};
+
+export type PostApiV1AdminOrdersBulkFulfillErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersBulkFulfillError = PostApiV1AdminOrdersBulkFulfillErrors[keyof PostApiV1AdminOrdersBulkFulfillErrors];
+
+export type PostApiV1AdminOrdersBulkFulfillResponses = {
+    /**
+     * Per-order results
+     */
+    200: {
+        success: true;
+        data: {
+            results: Array<{
+                orderId: string;
+                success: boolean;
+                error?: string;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersBulkFulfillResponse = PostApiV1AdminOrdersBulkFulfillResponses[keyof PostApiV1AdminOrdersBulkFulfillResponses];
+
+export type GetApiV1AdminOrdersByIdTimelineData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/timeline';
+};
+
+export type GetApiV1AdminOrdersByIdTimelineErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdTimelineError = GetApiV1AdminOrdersByIdTimelineErrors[keyof GetApiV1AdminOrdersByIdTimelineErrors];
+
+export type GetApiV1AdminOrdersByIdTimelineResponses = {
+    /**
+     * Timeline
+     */
+    200: {
+        success: true;
+        data: {
+            events: Array<{
+                id: string;
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+                body: string | null;
+                data: {
+                    [key: string]: unknown;
+                } | null;
+                actorName: string | null;
+                createdAt: string | number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminOrdersByIdTimelineResponse = GetApiV1AdminOrdersByIdTimelineResponses[keyof GetApiV1AdminOrdersByIdTimelineResponses];
+
+export type PostApiV1AdminOrdersByIdTimelineData = {
+    body: {
+        body: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/timeline';
+};
+
+export type PostApiV1AdminOrdersByIdTimelineErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdTimelineError = PostApiV1AdminOrdersByIdTimelineErrors[keyof PostApiV1AdminOrdersByIdTimelineErrors];
+
+export type PostApiV1AdminOrdersByIdTimelineResponses = {
+    /**
+     * Comment added
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+            body: string | null;
+            data: {
+                [key: string]: unknown;
+            } | null;
+            actorName: string | null;
+            createdAt: string | number;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdTimelineResponse = PostApiV1AdminOrdersByIdTimelineResponses[keyof PostApiV1AdminOrdersByIdTimelineResponses];
+
 export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkData = {
     body?: never;
     path: {
@@ -41702,14 +42448,13 @@ export type GetApiV1AdminOrdersByIdResponses = {
             totalAmountMinor: number | null;
             taxLabel: string | null;
             pricesIncludeTax: boolean;
-            promotion: {
-                id: string;
-                revision: number;
-                evaluatorVersion: number;
-                method: 'automatic' | 'code';
+            discounts: Array<{
+                promotionId: string;
                 name: string;
                 code: string | null;
-            } | null;
+                method: 'automatic' | 'code';
+                amount: number;
+            }>;
             status: string;
             paymentStatus: string | null;
             paymentMethod: string | null;
@@ -41739,6 +42484,8 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 productImage: string | null;
                 variantLabel: string | null;
                 fulfillmentStatus: string;
+                shippedQuantity: number;
+                inventoryTracked: boolean;
                 unitPriceMinor: number | null;
                 lineSubtotalMinor: number | null;
                 discountAmountMinor: number | null;
@@ -41835,13 +42582,30 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 refundReference?: string | null;
                 lastError?: string | null;
             } | null;
-            fullEditReadiness: {
-                allowed: boolean;
-                reason: string | null;
-            };
-            amendmentReadiness: {
-                allowed: boolean;
-                reason: string | null;
+            /**
+             * Sequential store order number, shown as #1001.
+             */
+            orderNumber: number | null;
+            archivedAt: NullableTimestamp;
+            openRequestType: 'cancel_pre_shipment' | 'return' | 'refund' | null;
+            cod: {
+                status: string;
+                deliveryAttempts: number;
+            } | null;
+            /**
+             * Value of received returns not refunded yet.
+             */
+            refundDue: number;
+            refundedAmount: number;
+            editReadiness: {
+                items: {
+                    allowed: boolean;
+                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                };
+                details: {
+                    allowed: boolean;
+                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                };
             };
             supportRequests: Array<{
                 id: string;
@@ -41867,7 +42631,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
 
 export type GetApiV1AdminOrdersByIdResponse = GetApiV1AdminOrdersByIdResponses[keyof GetApiV1AdminOrdersByIdResponses];
 
-export type PutApiV1AdminOrdersByIdData = {
+export type PutApiV1AdminOrdersByIdDetailsData = {
     body: {
         customerName: string;
         customerPhone: string;
@@ -41876,29 +42640,16 @@ export type PutApiV1AdminOrdersByIdData = {
         city: string;
         zone: string;
         area: string | null;
-        cityName?: string;
-        zoneName?: string;
-        areaName?: string | null;
-        notes: string | null;
-        discountAmount: number | null;
-        shippingCharge: number;
-        items: Array<{
-            productId: string;
-            variantId: string | null;
-            quantity: number;
-            price: number;
-        }>;
         expectedVersion: number;
-        status: string;
     };
     path: {
         id: string;
     };
     query?: never;
-    url: '/api/v1/admin/orders/{id}';
+    url: '/api/v1/admin/orders/{id}/details';
 };
 
-export type PutApiV1AdminOrdersByIdErrors = {
+export type PutApiV1AdminOrdersByIdDetailsErrors = {
     /**
      * Validation error
      */
@@ -41956,21 +42707,22 @@ export type PutApiV1AdminOrdersByIdErrors = {
     };
 };
 
-export type PutApiV1AdminOrdersByIdError = PutApiV1AdminOrdersByIdErrors[keyof PutApiV1AdminOrdersByIdErrors];
+export type PutApiV1AdminOrdersByIdDetailsError = PutApiV1AdminOrdersByIdDetailsErrors[keyof PutApiV1AdminOrdersByIdDetailsErrors];
 
-export type PutApiV1AdminOrdersByIdResponses = {
+export type PutApiV1AdminOrdersByIdDetailsResponses = {
     /**
-     * Order updated
+     * Details saved
      */
     200: {
         success: true;
         data: {
             id: string;
+            version: number;
         };
     };
 };
 
-export type PutApiV1AdminOrdersByIdResponse = PutApiV1AdminOrdersByIdResponses[keyof PutApiV1AdminOrdersByIdResponses];
+export type PutApiV1AdminOrdersByIdDetailsResponse = PutApiV1AdminOrdersByIdDetailsResponses[keyof PutApiV1AdminOrdersByIdDetailsResponses];
 
 export type PostApiV1AdminOrdersByIdRestoreData = {
     body: {
@@ -42077,6 +42829,8 @@ export type GetApiV1AdminOrdersByIdItemsResponses = {
             productImage: string | null;
             variantLabel: string | null;
             fulfillmentStatus: string;
+            shippedQuantity: number;
+            inventoryTracked: boolean;
             unitPriceMinor: number | null;
             lineSubtotalMinor: number | null;
             discountAmountMinor: number | null;
@@ -42374,6 +43128,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
         data: {
             order: {
                 id: string;
+                orderNumber: number | null;
                 version: number;
                 customerName: string;
                 customerPhone: string;
@@ -42390,13 +43145,15 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 updatedAt: string | number;
                 [key: string]: unknown;
             };
-            fullEditReadiness: {
-                allowed: boolean;
-                reason: string | null;
-            };
-            amendmentReadiness: {
-                allowed: boolean;
-                reason: string | null;
+            editReadiness: {
+                items: {
+                    allowed: boolean;
+                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                };
+                details: {
+                    allowed: boolean;
+                    reason: 'shipped' | 'closed' | 'paid' | 'online_payment' | 'discount' | 'history' | 'inventory' | 'archived' | 'busy' | 'unavailable' | null;
+                };
             };
             productsWithVariants: Array<{
                 id: string;
@@ -42450,6 +43207,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
             }>;
             defaultValues: {
                 id: string;
+                orderNumber: number | null;
                 version: number;
                 customerName: string;
                 customerPhone: string;
@@ -42820,6 +43578,18 @@ export type GetApiV1AdminProductsResponses = {
                     name: string;
                 };
                 variantCount: number;
+                /**
+                 * Tracked on-hand units across live SKUs; null when no SKU tracks quantity.
+                 */
+                onHand: number | null;
+                /**
+                 * Some SKUs carry their own discount.
+                 */
+                hasVariantDiscount: boolean;
+                /**
+                 * Trash lists only: stock history blocks permanent delete.
+                 */
+                hasStockHistory: boolean;
                 mediaCount: number;
                 primaryImage: string | null;
                 sku?: string;
@@ -42912,7 +43682,7 @@ export type PostApiV1AdminProductsData = {
          */
         defaultSku?: {
             /**
-             * Omit to use the generated SIMPLE-<productId> SKU.
+             * Omit to generate a readable SKU from the product title.
              */
             sku?: string;
             trackInventory: boolean;
@@ -42920,6 +43690,15 @@ export type PostApiV1AdminProductsData = {
              * Initial on-hand quantity; must be 0 when inventory is not tracked.
              */
             stock: number;
+            /**
+             * Scanned or printed barcode. Omit or null to generate an internal Code 128 barcode.
+             */
+            barcode?: string | null;
+            barcodeType?: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
+            /**
+             * Weight in grams.
+             */
+            weight?: number | null;
         };
     };
     path?: never;
@@ -43378,6 +44157,280 @@ export type PostApiV1AdminProductsBulkDeleteResponses = {
 };
 
 export type PostApiV1AdminProductsBulkDeleteResponse = PostApiV1AdminProductsBulkDeleteResponses[keyof PostApiV1AdminProductsBulkDeleteResponses];
+
+export type PostApiV1AdminProductsBulkUpdateData = {
+    body: {
+        products: Array<{
+            id: string;
+            expectedAggregateRevision: number;
+        }>;
+        isActive?: boolean;
+        categoryId?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/products/bulk-update';
+};
+
+export type PostApiV1AdminProductsBulkUpdateErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsBulkUpdateError = PostApiV1AdminProductsBulkUpdateErrors[keyof PostApiV1AdminProductsBulkUpdateErrors];
+
+export type PostApiV1AdminProductsBulkUpdateResponses = {
+    /**
+     * Products updated
+     */
+    200: {
+        success: true;
+        data: {
+            products: Array<{
+                id: string;
+                aggregateRevision: number;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsBulkUpdateResponse = PostApiV1AdminProductsBulkUpdateResponses[keyof PostApiV1AdminProductsBulkUpdateResponses];
+
+export type PostApiV1AdminProductsByIdDuplicateData = {
+    body: {
+        /**
+         * Title of the copy
+         */
+        name: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/products/{id}/duplicate';
+};
+
+export type PostApiV1AdminProductsByIdDuplicateErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Product revision or domain conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: 'PRODUCT_REVISION_CONFLICT';
+            message: string;
+            details: {
+                expectedRevision: number;
+                currentRevision: number | null;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: 'PRODUCT_MEDIA_SKU_REFERENCE_CONFLICT';
+            message: string;
+            details: {
+                affectedCount: number;
+                affectedAssociationIds: Array<string>;
+                affectedSkus: Array<{
+                    id: string;
+                    sku: string;
+                    imageId: string;
+                }>;
+            };
+        };
+    } | {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsByIdDuplicateError = PostApiV1AdminProductsByIdDuplicateErrors[keyof PostApiV1AdminProductsByIdDuplicateErrors];
+
+export type PostApiV1AdminProductsByIdDuplicateResponses = {
+    /**
+     * Product copied
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+            aggregateRevision: number;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsByIdDuplicateResponse = PostApiV1AdminProductsByIdDuplicateResponses[keyof PostApiV1AdminProductsByIdDuplicateResponses];
 
 export type GetApiV1AdminProductsByIdSectionsBySectionData = {
     body?: never;

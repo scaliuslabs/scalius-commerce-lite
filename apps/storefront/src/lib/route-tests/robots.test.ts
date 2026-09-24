@@ -58,8 +58,10 @@ describe("robots.txt route", () => {
 
     expect(disallowed).toEqual(expect.arrayContaining([
       "/cart$", "/checkout$", "/checkout/", "/account$", "/account/",
-      "/order-success", "/search", "/*?*sortBy=", "/*?*minPrice=",
+      "/order-success", "/track-order", "/search$", "/search?", "/*?*sortBy=", "/*?*minPrice=",
     ]));
+    // A bare "/search" prefix would also block CMS pages such as /searchlight.
+    expect(disallowed).not.toContain("/search");
     // Catalog, content, paginated listings and the feeds stay crawlable.
     for (const path of disallowed) {
       expect(["/products/", "/categories/", "/collections/", "/blog", "/api/product-feed.xml", "/*?*page="])

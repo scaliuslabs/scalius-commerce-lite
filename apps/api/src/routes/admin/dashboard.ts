@@ -77,7 +77,7 @@ const dashboardStatsSchema = z.object({
 
 const recentOrderSchema = z.object({
     id: z.string().max(DASHBOARD_ORDER_ID_MAX_LENGTH),
-    orderNumber: z.number().int(),
+    orderNumber: z.number().int().nullable(),
     customerName: z.string().max(DASHBOARD_CUSTOMER_NAME_MAX_LENGTH),
     totalAmount: z.number(),
     status: z.string().max(DASHBOARD_ORDER_STATUS_MAX_LENGTH),

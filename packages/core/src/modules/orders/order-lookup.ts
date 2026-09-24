@@ -8,6 +8,7 @@ import { orderPaymentRecoveryChallenges, orders } from "@scalius/database/schema
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { toLatinDigits } from "@scalius/shared/phone-input";
+import { parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
 import { isReady } from "@scalius/shared/readiness";
 import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
@@ -44,9 +45,8 @@ export const ORDER_LOOKUP_SENT_MESSAGE =
 export function orderReferenceCondition(reference: string): SQL | null {
     const id = toLatinDigits(reference ?? "").trim().replace(/^#\s*/, "");
     if (!/^[A-Za-z0-9]{4,32}$/.test(id)) return null;
-    // TODO(F4 0070): also match the short order number, e.g.
-    //   const orderNumber = parseOrderNumberSearch(reference);
-    //   if (orderNumber !== null) return or(eq(orders.orderNumber, orderNumber), eq(orders.id, id))
+    const orderNumber = parseOrderNumberSearch(reference ?? "");
+    if (orderNumber !== null) return eq(orders.orderNumber, orderNumber);
     return or(eq(orders.id, id), eq(orders.id, id.toUpperCase()))!;
 }
 

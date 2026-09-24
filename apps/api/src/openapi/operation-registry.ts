@@ -1464,6 +1464,23 @@ export const OPERATIONS = {
       "Service-authenticated storefront proxy accepts a raw OTP and returns a private receipt bearer; use the hosted storefront.payment_recovery continuation.",
   },
 
+  "storefront.orders_lookup_send_otp.send_otp": {
+    exposure: "excluded",
+    risk: "security",
+    openWorld: true,
+    reason:
+      "Public Track-your-order verification sends a code to the contact saved on an order; buyers complete it in the storefront page, not through agents.",
+  },
+
+  "storefront.orders_lookup_verify_otp.verify_otp": {
+    exposure: "excluded",
+    principals: ["internal"],
+    risk: "security",
+    sensitive: true,
+    reason:
+      "Service-authenticated storefront proxy accepts a raw OTP and returns a private receipt bearer for Track your order.",
+  },
+
   "storefront.orders_receipt_support_requests.support_requests": {
     exposure: "excluded",
     openWorld: true,

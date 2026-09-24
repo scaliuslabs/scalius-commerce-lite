@@ -70,7 +70,7 @@ const customerHistoryEntrySchema = z.object({
 
 const customerHistoryOrderSchema = z.object({
     id: z.string(),
-    orderNumber: z.number().int(),
+    orderNumber: z.number().int().nullable(),
     totalAmount: z.number(),
     status: z.string(),
     createdAt: timestampSchema,

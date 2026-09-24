@@ -12732,6 +12732,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id": {
                     "type": "string"
                   },
+                  "orderNumber": {
+                    "type": "integer"
+                  },
                   "totalAmount": {
                     "type": "number"
                   },
@@ -12751,6 +12754,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "required": [
                   "id",
+                  "orderNumber",
                   "totalAmount",
                   "status",
                   "createdAt"
@@ -20501,6 +20505,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "maxLength": 128
                   },
+                  "orderNumber": {
+                    "type": "integer"
+                  },
                   "customerName": {
                     "type": "string",
                     "maxLength": 256
@@ -20525,6 +20532,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "required": [
                   "id",
+                  "orderNumber",
                   "customerName",
                   "totalAmount",
                   "status",
@@ -20850,6 +20858,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "maxLength": 128
                   },
+                  "orderNumber": {
+                    "type": "integer"
+                  },
                   "customerName": {
                     "type": "string",
                     "maxLength": 256
@@ -20874,6 +20885,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "required": [
                   "id",
+                  "orderNumber",
                   "customerName",
                   "totalAmount",
                   "status",
@@ -66888,7 +66900,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "storefront.customer_auth_send_otp.send_otp",
     "method": "POST",
     "pathTemplate": "/api/v1/customer-auth/send-otp",
-    "summary": "Send OTP verification code",
+    "summary": "Send a sign-in code (the same call for new and returning buyers)",
     "tags": [
       "Customer Auth"
     ],
@@ -66922,7 +66934,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "storefront.customer_auth_verify_otp.verify_otp",
     "method": "POST",
     "pathTemplate": "/api/v1/customer-auth/verify-otp",
-    "summary": "Verify OTP and create session",
+    "summary": "Check a sign-in code; signs in, or asks a new buyer for their details",
     "tags": [
       "Customer Auth"
     ],
@@ -69628,41 +69640,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "properties": {
                     "enabled": {
                       "type": "boolean"
-                    },
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "kind": {
-                            "type": "string",
-                            "enum": [
-                              "delivery",
-                              "returns"
-                            ]
-                          },
-                          "title": {
-                            "type": "string"
-                          },
-                          "detail": {
-                            "type": "string"
-                          },
-                          "href": {
-                            "type": "string"
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "title",
-                          "detail"
-                        ]
-                      },
-                      "maxItems": 2
                     }
                   },
                   "required": [
-                    "enabled",
-                    "items"
+                    "enabled"
                   ]
                 }
               },
@@ -71865,6 +71846,73 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "artifactOutput": null,
     "continuationOutput": null,
     "exclusionReason": "Legacy stateless browser cart preflight; use storefront.checkout.validate against authoritative context lines and delivery state.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "storefront.orders_lookup_send_otp.send_otp",
+    "method": "POST",
+    "pathTemplate": "/api/v1/orders/lookup/send-otp",
+    "summary": "Send a code to the contact saved on an order (never reveals whether it matched)",
+    "tags": [
+      "Orders"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "security",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Public Track-your-order verification sends a code to the contact saved on an order; buyers complete it in the storefront page, not through agents.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "storefront.orders_lookup_verify_otp.verify_otp",
+    "method": "POST",
+    "pathTemplate": "/api/v1/orders/lookup/verify-otp",
+    "summary": "Verify an order lookup code and issue a private receipt proof",
+    "tags": [
+      "Orders"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "internal"
+    ],
+    "risk": "security",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": true,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Service-authenticated storefront proxy accepts a raw OTP and returns a private receipt bearer for Track your order.",
     "rbac": {
       "type": "public"
     },
@@ -75093,6 +75141,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "string",
             "enum": [
+              "relevance",
               "newest",
               "price-asc",
               "price-desc",
@@ -75100,11 +75149,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "name-desc",
               "discount"
             ],
-            "default": "newest",
-            "description": "Sort order"
+            "description": "Sort order. Defaults to relevance when `search` is set, otherwise newest."
           },
           "required": false,
-          "description": "Sort order",
+          "description": "Sort order. Defaults to relevance when `search` is set, otherwise newest.",
           "name": "sort",
           "in": "query"
         },
@@ -75349,7 +75397,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "slug": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Query key for this facet: an attribute slug, or `option.<axis>` for a product option such as Size."
                   },
                   "values": {
                     "type": "array",
@@ -75378,13 +75427,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "values"
                 ]
               }
+            },
+            "correctedQuery": {
+              "type": "string",
+              "nullable": true,
+              "description": "Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction)."
             }
           },
           "required": [
             "products",
             "pagination",
             "priceRange",
-            "facets"
+            "facets",
+            "correctedQuery"
           ]
         }
       },
@@ -75785,6 +75840,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "query": {
               "type": "string"
             },
+            "correctedQuery": {
+              "type": "string",
+              "nullable": true,
+              "description": "Set when `q` matched nothing and these results are for the closest catalog words instead (typo or Bangla correction)."
+            },
             "timestamp": {
               "type": "string"
             }
@@ -75793,7 +75853,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "products",
             "pages",
             "categories",
-            "query"
+            "query",
+            "correctedQuery"
           ]
         }
       },

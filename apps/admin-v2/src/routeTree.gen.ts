@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ConnectRouteImport } from './routes/connect'
+import { Route as InvoicesRouteImport } from './routes/invoices'
 import { Route as ScannerRouteImport } from './routes/scanner'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAccessDeniedRouteImport } from './routes/admin/access-denied'
@@ -74,6 +75,7 @@ import { Route as AdminOrdersListAbandonedRouteImport } from './routes/admin/ord
 import { Route as AdminPagesPageIdEditRouteImport } from './routes/admin/pages/$pageId/edit'
 import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/products/$productId/edit'
 import { Route as AdminSettingsShippingAreasRouteImport } from './routes/admin/settings/shipping_.areas'
+import { Route as AdminOrdersListAbandonedCheckoutIdRouteImport } from './routes/admin/orders/_list/abandoned.$checkoutId'
 import { Route as AdminSettingsAgentAccessAuthorizeRequestIdRouteImport } from './routes/admin/settings/agent-access.authorize.$requestId'
 import { Route as AdminSettingsAgentAccessContinueHandoffIdRouteImport } from './routes/admin/settings/agent-access.continue.$handoffId'
 
@@ -95,6 +97,11 @@ const AuthRoute = AuthRouteImport.update({
 const ConnectRoute = ConnectRouteImport.update({
   id: '/connect',
   path: '/connect',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvoicesRoute = InvoicesRouteImport.update({
+  id: '/invoices',
+  path: '/invoices',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScannerRoute = ScannerRouteImport.update({
@@ -415,6 +422,12 @@ const AdminSettingsShippingAreasRoute =
     path: '/shipping/areas',
     getParentRoute: () => AdminSettingsRouteRoute,
   } as any)
+const AdminOrdersListAbandonedCheckoutIdRoute =
+  AdminOrdersListAbandonedCheckoutIdRouteImport.update({
+    id: '/$checkoutId',
+    path: '/$checkoutId',
+    getParentRoute: () => AdminOrdersListAbandonedRoute,
+  } as any)
 const AdminSettingsAgentAccessAuthorizeRequestIdRoute =
   AdminSettingsAgentAccessAuthorizeRequestIdRouteImport.update({
     id: '/agent-access/authorize/$requestId',
@@ -433,6 +446,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
   '/connect': typeof ConnectRoute
+  '/invoices': typeof InvoicesRoute
   '/scanner': typeof ScannerRoute
   '/admin/settings': typeof AdminSettingsRouteRouteWithChildren
   '/admin/access-denied': typeof AdminAccessDeniedRoute
@@ -487,13 +501,14 @@ export interface FileRoutesByFullPath {
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
-  '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRoute
+  '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders/': typeof AdminOrdersListIndexRoute
+  '/admin/orders/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
 }
@@ -501,6 +516,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRouteWithChildren
   '/connect': typeof ConnectRoute
+  '/invoices': typeof InvoicesRoute
   '/scanner': typeof ScannerRoute
   '/admin/access-denied': typeof AdminAccessDeniedRoute
   '/admin/account': typeof AdminAccountRoute
@@ -553,13 +569,14 @@ export interface FileRoutesByTo {
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
-  '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRoute
+  '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/online-store/navigation': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders': typeof AdminOrdersListIndexRoute
+  '/admin/orders/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
 }
@@ -569,6 +586,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
   '/connect': typeof ConnectRoute
+  '/invoices': typeof InvoicesRoute
   '/scanner': typeof ScannerRoute
   '/admin/settings': typeof AdminSettingsRouteRouteWithChildren
   '/admin/access-denied': typeof AdminAccessDeniedRoute
@@ -623,13 +641,14 @@ export interface FileRoutesById {
   '/admin/customers/$customerId/edit': typeof AdminCustomersCustomerIdEditRoute
   '/admin/online-store/navigation/$menuId': typeof AdminOnlineStoreNavigationMenuIdRoute
   '/admin/orders/$orderId/edit': typeof AdminOrdersOrderIdEditRoute
-  '/admin/orders/_list/abandoned': typeof AdminOrdersListAbandonedRoute
+  '/admin/orders/_list/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
   '/admin/settings/shipping_/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders/_list/': typeof AdminOrdersListIndexRoute
+  '/admin/orders/_list/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
 }
@@ -640,6 +659,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/connect'
+    | '/invoices'
     | '/scanner'
     | '/admin/settings'
     | '/admin/access-denied'
@@ -701,6 +721,7 @@ export interface FileRouteTypes {
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
     | '/admin/orders/'
+    | '/admin/orders/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
   fileRoutesByTo: FileRoutesByTo
@@ -708,6 +729,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/connect'
+    | '/invoices'
     | '/scanner'
     | '/admin/access-denied'
     | '/admin/account'
@@ -767,6 +789,7 @@ export interface FileRouteTypes {
     | '/admin/online-store/navigation'
     | '/admin/orders/$orderId'
     | '/admin/orders'
+    | '/admin/orders/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
   id:
@@ -775,6 +798,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/connect'
+    | '/invoices'
     | '/scanner'
     | '/admin/settings'
     | '/admin/access-denied'
@@ -836,6 +860,7 @@ export interface FileRouteTypes {
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
     | '/admin/orders/_list/'
+    | '/admin/orders/_list/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
   fileRoutesById: FileRoutesById
@@ -845,6 +870,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
   ConnectRoute: typeof ConnectRoute
+  InvoicesRoute: typeof InvoicesRoute
   ScannerRoute: typeof ScannerRoute
   InvoiceOrderIdRoute: typeof InvoiceOrderIdRoute
 }
@@ -877,6 +903,13 @@ declare module '@tanstack/react-router' {
       path: '/connect'
       fullPath: '/connect'
       preLoaderRoute: typeof ConnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invoices': {
+      id: '/invoices'
+      path: '/invoices'
+      fullPath: '/invoices'
+      preLoaderRoute: typeof InvoicesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/scanner': {
@@ -1306,6 +1339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsShippingAreasRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
+    '/admin/orders/_list/abandoned/$checkoutId': {
+      id: '/admin/orders/_list/abandoned/$checkoutId'
+      path: '/$checkoutId'
+      fullPath: '/admin/orders/abandoned/$checkoutId'
+      preLoaderRoute: typeof AdminOrdersListAbandonedCheckoutIdRouteImport
+      parentRoute: typeof AdminOrdersListAbandonedRoute
+    }
     '/admin/settings/agent-access/authorize/$requestId': {
       id: '/admin/settings/agent-access/authorize/$requestId'
       path: '/agent-access/authorize/$requestId'
@@ -1364,13 +1404,28 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
 const AdminSettingsRouteRouteWithChildren =
   AdminSettingsRouteRoute._addFileChildren(AdminSettingsRouteRouteChildren)
 
+interface AdminOrdersListAbandonedRouteChildren {
+  AdminOrdersListAbandonedCheckoutIdRoute: typeof AdminOrdersListAbandonedCheckoutIdRoute
+}
+
+const AdminOrdersListAbandonedRouteChildren: AdminOrdersListAbandonedRouteChildren =
+  {
+    AdminOrdersListAbandonedCheckoutIdRoute:
+      AdminOrdersListAbandonedCheckoutIdRoute,
+  }
+
+const AdminOrdersListAbandonedRouteWithChildren =
+  AdminOrdersListAbandonedRoute._addFileChildren(
+    AdminOrdersListAbandonedRouteChildren,
+  )
+
 interface AdminOrdersListRouteChildren {
-  AdminOrdersListAbandonedRoute: typeof AdminOrdersListAbandonedRoute
+  AdminOrdersListAbandonedRoute: typeof AdminOrdersListAbandonedRouteWithChildren
   AdminOrdersListIndexRoute: typeof AdminOrdersListIndexRoute
 }
 
 const AdminOrdersListRouteChildren: AdminOrdersListRouteChildren = {
-  AdminOrdersListAbandonedRoute: AdminOrdersListAbandonedRoute,
+  AdminOrdersListAbandonedRoute: AdminOrdersListAbandonedRouteWithChildren,
   AdminOrdersListIndexRoute: AdminOrdersListIndexRoute,
 }
 
@@ -1487,6 +1542,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
   ConnectRoute: ConnectRoute,
+  InvoicesRoute: InvoicesRoute,
   ScannerRoute: ScannerRoute,
   InvoiceOrderIdRoute: InvoiceOrderIdRoute,
 }
