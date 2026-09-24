@@ -182,6 +182,29 @@ describe("customer checkout prefill", () => {
     expect(readCheckoutFormDraft()?.customerPhone).toBe(customer.phone);
   });
 
+  it("replaces a phone someone typed earlier with the account's phone on sign-in", async () => {
+    const phoneInput = document.getElementById("customerPhone-input")!;
+    const field = document.createElement("div");
+    field.id = "customerPhone-field";
+    field.dataset.defaultCountry = "BD";
+    phoneInput.replaceWith(field);
+    field.append(phoneInput, document.querySelector('input[name="customerPhone"]')!);
+    control("customerName").value = "Draft Person";
+    startCart();
+    const typed = document.getElementById("customerPhone-input") as HTMLInputElement;
+    typed.value = "01799200077";
+    typed.dispatchEvent(new Event("input", { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(120);
+    expect(readCheckoutFormDraft()?.customerPhone).toBe("+8801799200077");
+
+    window.dispatchEvent(new CustomEvent("customer-login", { detail: customer }));
+
+    expect(typed.value).toBe("01712345678");
+    expect(control("customerPhone").value).toBe(customer.phone);
+    expect(control("customerName").value).toBe(customer.name);
+    expect(readCheckoutFormDraft()).toMatchObject({ customerPhone: customer.phone, customerName: customer.name });
+  });
+
   it("captures cleared dependent locations when a different city is selected", async () => {
     writeCheckoutFormDraft({ city: "old_city", zone: "old_zone", area: "old_area" });
     startCart();

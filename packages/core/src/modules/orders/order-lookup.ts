@@ -2,28 +2,25 @@
 // a one-time code sent to the contact SAVED on the order (never to what the
 // visitor types). A correct code issues a private receipt proof, so the buyer
 // lands on the normal receipt / order-status page from any device.
-import { and, desc, eq, gt, isNull, like, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNull, or, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
-import { orderPaymentRecoveryChallenges, orders } from "@scalius/database/schema";
-import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { orders } from "@scalius/database/schema";
+import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
-import { isReady } from "@scalius/shared/readiness";
-import { getEmailProviderReadiness, type EmailRuntimeContext } from "../../integrations/email";
-import { getSmsProviderReadiness } from "../../integrations/sms";
-import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
+import type { EmailRuntimeContext } from "../../integrations/email";
 import { enforceOtpSendRateLimits } from "../customers/customer-auth-rate-limit";
 import { createAuthOtpDeliveryKey } from "../customers/otp-delivery-receipts";
 import type { OtpQueuePayload } from "../customers/otp-transport";
 import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
 import {
     channelToAllowedMethod,
-    hashRecoveryOtpCode,
+    chooseOrderCodeChannel,
+    consumeLatestOrderOtpChallenge,
     hmacSha256Hex,
     persistOrderOtpChallenge,
-    recordWrongOrderOtpAttempt,
     requireOtpHashKey,
     requireRecoveryDeliveryEncryptionKey,
 } from "./order-payment-recovery";
@@ -31,12 +28,8 @@ import { createOrderReceiptToken, recordOrderReceipt } from "./order-receipts";
 
 const ORDER_LOOKUP_PURPOSE = "order_lookup";
 const ORDER_LOOKUP_KEY_PREFIX = "order_lookup:";
-const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const WRONG_CODE_MESSAGE = "That code isn't right. Check it and try again.";
-
-/** Same answer whether or not an order matched: lookups never reveal orders. */
-export const ORDER_LOOKUP_SENT_MESSAGE =
-    "If these details match an order, we've sent a code to the phone number or email saved on it.";
+const NOT_FOUND_MESSAGE = "We couldn't find an order with that number and phone number. Check both and try again.";
 
 /**
  * The order a buyer names: "#1001", "1001" or the internal id. Returns null
@@ -61,8 +54,11 @@ export interface SendOrderLookupOtpInput {
 
 export interface SendOrderLookupOtpResult {
     message: string;
+    /** Masked contact the code went to ("01•••••678" or "b•••@example.com"). */
+    destination: string;
+    channel: CustomerAuthOtpChannel;
     resendAfterSeconds: number;
-    queuePayload: OtpQueuePayload | null;
+    queuePayload: OtpQueuePayload;
     challengeKey?: string;
     deliveryKey?: string;
 }
@@ -98,22 +94,6 @@ async function findLookupOrder(db: Database, condition: SQL, phone: string) {
         .get() ?? null;
 }
 
-/** Store-wide delivery options, independent of any order (so nothing leaks). */
-async function readyLookupChannels(
-    db: Database,
-    input: Pick<SendOrderLookupOtpInput, "emailEnv" | "credentialEncryptionKey">,
-): Promise<{ phone: "sms" | "whatsapp" | null; email: boolean }> {
-    const [sms, whatsApp, email] = await Promise.all([
-        getSmsProviderReadiness(db, input.credentialEncryptionKey),
-        getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey),
-        getEmailProviderReadiness({ db, env: input.emailEnv, encryptionKey: input.credentialEncryptionKey }),
-    ]);
-    return {
-        phone: isReady(sms) ? "sms" : whatsApp.accessToken && whatsApp.phoneNumberId ? "whatsapp" : null,
-        email: isReady(email),
-    };
-}
-
 async function buildLookupChallengeKey(orderId: string, channel: CustomerAuthOtpChannel, target: string, encryptionKey?: string) {
     return `${ORDER_LOOKUP_KEY_PREFIX}${await hmacSha256Hex(
         requireOtpHashKey(encryptionKey),
@@ -127,26 +107,18 @@ export async function sendOrderLookupOtp(
 ): Promise<SendOrderLookupOtpResult> {
     const lookup = parseLookupInput(input.reference, input.phone);
     const deliveryEncryptionKey = requireRecoveryDeliveryEncryptionKey(input.credentialEncryptionKey);
-    const channels = await readyLookupChannels(db, input);
-    if (!channels.phone && !channels.email) {
-        throw new ServiceUnavailableError("Order tracking isn't available right now. Contact the store.");
-    }
-
-    await enforceOtpSendRateLimits(db, {
+    const allowance = await enforceOtpSendRateLimits(db, {
         ip: input.ip,
         identifiers: [`lookup-order:${lookup.referenceKey}`, `lookup-phone:${lookup.phone}`],
         hashKey: input.encryptionKey,
     });
 
-    const notSent = { message: ORDER_LOOKUP_SENT_MESSAGE, resendAfterSeconds: OTP_RESEND_COOLDOWN_SECONDS, queuePayload: null };
+    // The buyer holds both the order number and its phone, so say plainly
+    // whether it matched and where the code went (never a code that can't
+    // arrive). Limits per order number and per phone keep guessing useless.
     const order = await findLookupOrder(db, lookup.condition, lookup.phone);
-    if (!order) return notSent;
-
-    const email = order.customerEmail?.trim().toLowerCase();
-    const channel: CustomerAuthOtpChannel | null = channels.phone ?? (channels.email && email ? "email" : null);
-    if (!channel) return notSent;
-    const method = channel === "email" ? "email" : "phone";
-    const target = channel === "email" ? email! : order.customerPhone;
+    if (!order) throw new NotFoundError(NOT_FOUND_MESSAGE);
+    const { channel, method, target, destination } = await chooseOrderCodeChannel(db, order, input);
 
     const nowSeconds = Math.floor(Date.now() / 1000);
     const deliveryKey = createAuthOtpDeliveryKey();
@@ -164,10 +136,13 @@ export async function sendOrderLookupOtp(
         encryptionKey: input.encryptionKey,
         deliveryEncryptionKey,
         nowSeconds,
+        resendCooldownSeconds: allowance.resendCooldownSeconds,
     });
 
     return {
-        message: ORDER_LOOKUP_SENT_MESSAGE,
+        message: `We sent a code to ${destination}.`,
+        destination,
+        channel,
         resendAfterSeconds: Math.max(0, challenge.resendAvailableAt - nowSeconds),
         queuePayload: {
             type: "auth.send_otp",
@@ -195,45 +170,14 @@ export async function verifyOrderLookupOtp(
     const order = await findLookupOrder(db, lookup.condition, lookup.phone);
     if (!order) throw new ValidationError(WRONG_CODE_MESSAGE);
 
-    const challenge = await db
-        .select()
-        .from(orderPaymentRecoveryChallenges)
-        .where(and(
-            eq(orderPaymentRecoveryChallenges.orderId, order.id),
-            like(orderPaymentRecoveryChallenges.challengeKey, `${ORDER_LOOKUP_KEY_PREFIX}%`),
-        ))
-        .orderBy(desc(orderPaymentRecoveryChallenges.updatedAt))
-        .get();
-    if (!challenge) throw new ValidationError("There's no active code. Send a new code.", { attemptsLeft: 0 });
-
     const nowSeconds = Math.floor(Date.now() / 1000);
-    const codeHash = await hashRecoveryOtpCode(code, challenge.challengeKey, input.encryptionKey);
-    const consumed = await db.update(orderPaymentRecoveryChallenges)
-        .set({
-            status: "consumed",
-            attempts: sql`${orderPaymentRecoveryChallenges.attempts} + 1`,
-            consumedAt: nowSeconds,
-            updatedAt: nowSeconds,
-        })
-        .where(and(
-            eq(orderPaymentRecoveryChallenges.challengeKey, challenge.challengeKey),
-            eq(orderPaymentRecoveryChallenges.status, "pending"),
-            gt(orderPaymentRecoveryChallenges.expiresAt, nowSeconds),
-            sql`${orderPaymentRecoveryChallenges.attempts} < ${orderPaymentRecoveryChallenges.maxAttempts}`,
-            eq(orderPaymentRecoveryChallenges.codeHash, codeHash),
-        ))
-        .returning({ challengeKey: orderPaymentRecoveryChallenges.challengeKey });
-    if (!consumed[0]) {
-        await recordWrongOrderOtpAttempt(db, {
-            challengeKey: challenge.challengeKey,
-            orderId: order.id,
-            method: challenge.method,
-            channel: challenge.channel,
-            identifierHash: challenge.identifierHash,
-            codeHash,
-            nowSeconds,
-        });
-    }
+    await consumeLatestOrderOtpChallenge(db, {
+        orderId: order.id,
+        keyPrefix: ORDER_LOOKUP_KEY_PREFIX,
+        code,
+        encryptionKey: input.encryptionKey,
+        nowSeconds,
+    });
 
     const receiptToken = createOrderReceiptToken();
     const receipt = await recordOrderReceipt(db, {

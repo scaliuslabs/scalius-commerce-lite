@@ -7312,7 +7312,7 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtp
 
 export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpData = {
     body: {
-        channel: 'email' | 'sms' | 'whatsapp';
+        channel?: 'email' | 'sms' | 'whatsapp';
         code: string;
     };
     path: {
@@ -7632,6 +7632,10 @@ export type PostApiV1CustomerAuthVerifyOtpData = {
             name: string;
             phone?: string;
             email?: string;
+            /**
+             * Save the delivery address of the latest order placed with the proven contact (from `suggestion.address`).
+             */
+            saveOrderAddress?: boolean;
         };
     };
     path?: never;
@@ -7744,6 +7748,18 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
                 profileComplete: boolean;
             };
             isNewUser?: boolean;
+            /**
+             * With needs_account_details: what the latest order placed with the proven contact says, to pre-fill.
+             */
+            suggestion?: {
+                name: string | null;
+                phone: string | null;
+                email: string | null;
+                address: {
+                    orderNumber: number | null;
+                    text: string;
+                } | null;
+            } | null;
         };
     };
 };
@@ -8629,6 +8645,23 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 label: string;
                 happenedAt: NullableTimestamp;
                 details?: string | null;
+            }>;
+            discounts: Array<{
+                promotionId: string;
+                title: string;
+                code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
+                amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
+                /**
+                 * The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind.
+                 */
+                kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
             }>;
             paymentRecovery: {
                 eligible: boolean;
@@ -11471,6 +11504,9 @@ export type PostApiV1OrdersPaymentRecoverySendOtpResponses = {
         success: true;
         data: {
             message: string;
+            destination?: string;
+            orderNumber?: number | null;
+            resendAfterSeconds?: number;
         };
     };
 };
@@ -11480,7 +11516,6 @@ export type PostApiV1OrdersPaymentRecoverySendOtpResponse = PostApiV1OrdersPayme
 export type PostApiV1OrdersPaymentRecoveryVerifyOtpData = {
     body: {
         orderId: string;
-        channel: 'email' | 'sms' | 'whatsapp';
         code: string;
     };
     path?: never;
@@ -11657,6 +11692,17 @@ export type PostApiV1OrdersLookupSendOtpErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -11695,12 +11741,14 @@ export type PostApiV1OrdersLookupSendOtpError = PostApiV1OrdersLookupSendOtpErro
 
 export type PostApiV1OrdersLookupSendOtpResponses = {
     /**
-     * Request accepted
+     * Code sent; says where
      */
     200: {
         success: true;
         data: {
             message: string;
+            destination: string;
+            channel: 'email' | 'sms' | 'whatsapp';
             resendAfterSeconds: number;
         };
     };
@@ -11886,6 +11934,38 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
                 }>;
                 notes: string | null;
+                tracking: {
+                    progress: {
+                        steps: Array<{
+                            key: 'placed' | 'confirmed' | 'shipped' | 'delivered';
+                            label: string;
+                            done: boolean;
+                            happenedAt: NullableTimestamp;
+                        }>;
+                        outcome: {
+                            key: string;
+                            label: string;
+                            happenedAt: NullableTimestamp;
+                        } | null;
+                    };
+                    timeline: Array<{
+                        id: string;
+                        type: 'order' | 'payment' | 'refund' | 'request';
+                        status: string;
+                        label: string;
+                        happenedAt: NullableTimestamp;
+                        details?: string | null;
+                    }>;
+                    shipments: Array<{
+                        statusLabel: string;
+                        courierName: string | null;
+                        trackingId: string | null;
+                        /**
+                         * http(s) courier tracking link
+                         */
+                        trackingUrl: string | null;
+                    }>;
+                };
                 taxAmountMinor: number;
                 totalAmountMinor: number | null;
                 taxLabel: string | null;

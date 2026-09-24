@@ -105,6 +105,45 @@ describe("account owner receipt access", () => {
       { promotionId: "promo_ship", title: "Free delivery", code: "SHIPFREE", kind: "shipping", amount: 0, shippingAmount: 80 },
     ]);
     expect(order.notes).toBe("দয়া করে ফোন করুন");
+
+    // The account order page lists the same discounts.
+    const detail = await publicBuyerApp.request(
+      "https://api.example.test/api/v1/customer-auth/orders/ORDEROWNED000001",
+      { headers: { Cookie: `cs_tok=${OWNER_SESSION}` } },
+      env(),
+    );
+    expect(detail.status).toBe(200);
+    const { data: accountOrder } = await detail.json() as { data: { discounts: unknown[] } };
+    expect(accountOrder.discounts).toEqual(order.discounts);
+  });
+
+  it("tells a tracked order where it is: dated steps, and each parcel's courier and tracking link (R2-SJ-04)", async () => {
+    sqlite.exec(`
+      UPDATE orders SET status = 'shipped', created_at = 1790000000 WHERE id = 'ORDEROWNED000001';
+      INSERT INTO order_notification_outbox (id, dedupe_key, order_id, notification_type, source, payload, created_at, updated_at)
+        VALUES ('outbox_confirmed', 'dedupe_confirmed', 'ORDEROWNED000001', 'order_confirmed', 'test', '{}', 1790000600, 1790000600);
+      INSERT INTO delivery_shipments (id, order_id, provider_type, tracking_id, tracking_url, courier_name, status, created_at, updated_at)
+        VALUES ('ship_1', 'ORDEROWNED000001', 'manual', ' PX-1001 ', 'https://track.example.test/PX-1001', 'Pathao', 'in_transit', 1790001200, 1790001200),
+               ('ship_2', 'ORDEROWNED000001', 'manual', NULL, 'javascript:alert(1)', NULL, 'pending', 1790001300, 1790001300);
+    `);
+    const proof = await ownerProof({ Authorization: service(), "X-Customer-Session": OWNER_SESSION });
+    const { data } = await proof.json() as { data: { receiptToken: string } };
+    const { data: { order } } = await (await receipt(data.receiptToken)).json() as {
+      data: { order: { tracking: {
+        progress: { steps: Array<{ key: string; done: boolean; happenedAt: string | null }> };
+        shipments: unknown[];
+      } } };
+    };
+    expect(order.tracking.progress.steps).toEqual([
+      expect.objectContaining({ key: "placed", done: true, happenedAt: new Date(1790000000 * 1000).toISOString() }),
+      expect.objectContaining({ key: "confirmed", done: true, happenedAt: new Date(1790000600 * 1000).toISOString() }),
+      expect.objectContaining({ key: "shipped", done: true, happenedAt: new Date(1790001200 * 1000).toISOString() }),
+      expect.objectContaining({ key: "delivered", done: false, happenedAt: null }),
+    ]);
+    expect(order.tracking.shipments).toEqual([
+      { statusLabel: "Booked with courier", courierName: null, trackingId: null, trackingUrl: null },
+      { statusLabel: "On its way", courierName: "Pathao", trackingId: "PX-1001", trackingUrl: "https://track.example.test/PX-1001" },
+    ]);
   });
 
   it("keeps guests on the proof rule", async () => {

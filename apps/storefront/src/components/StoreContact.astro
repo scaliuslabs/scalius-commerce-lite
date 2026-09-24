@@ -1,0 +1,25 @@
+---
+// "Contact the store: 01711-000000 · shop@example.com" from Business settings.
+// Pages that can hit a dead end (no code channel, a declined request) show it.
+import type { LayoutData } from "@/lib/api";
+import { formatBdMobile } from "@scalius/shared/phone-input";
+
+interface Props {
+  layoutData: LayoutData | null;
+  hidden?: boolean;
+  class?: string;
+}
+
+const { layoutData, hidden = false, class: className = "text-sm text-muted-foreground" } = Astro.props;
+const phone = layoutData?.business?.phone?.trim() || "";
+const email = layoutData?.business?.email?.trim() || "";
+---
+
+{(phone || email) && (
+  <p data-store-contact hidden={hidden} class={className}>
+    Contact the store:
+    {phone && <a href={`tel:${phone}`} class="font-medium text-primary hover:underline">{formatBdMobile(phone)}</a>}
+    {phone && email && " · "}
+    {email && <a href={`mailto:${email}`} class="break-all font-medium text-primary hover:underline">{email}</a>}
+  </p>
+)}

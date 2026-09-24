@@ -12,6 +12,7 @@ import { getAreas, getCities, getZones } from "@/lib/api/shipping";
 import { getShippingAddressError } from "@/lib/checkout/shipping-address";
 import { getProductImageUrl } from "@/lib/product-media";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import {
@@ -184,6 +185,65 @@ async function loadAccountOrders(runId: number): Promise<void> {
   };
 }
 
+function showFieldError(field: HTMLInputElement | HTMLSelectElement, message: string | null): void {
+  const error = byId(`${field.id}Error`);
+  error.textContent = message ?? "";
+  error.classList.toggle("hidden", !message);
+  field.setAttribute("aria-invalid", String(Boolean(message)));
+}
+
+/** Profile → Edit changes the account name only; email and phone stay as verified. */
+function bindProfileNameEditor(
+  runId: number,
+  current: () => CustomerInfo,
+  onSaved: (customer: CustomerInfo) => void,
+): void {
+  const form = byId<HTMLFormElement>("nameForm");
+  const toggle = byId<HTMLButtonElement>("nameToggle");
+  const input = byId<HTMLInputElement>("fieldProfileName");
+  const saveBtn = byId<HTMLButtonElement>("saveNameBtn");
+  const status = byId("nameSaveStatus");
+  const saved = byId("nameSaved");
+  const check = () => (input.value.trim() ? null : "Enter your full name.");
+  const setEditing = (editing: boolean) => {
+    form.classList.toggle("hidden", !editing);
+    toggle.setAttribute("aria-expanded", String(editing));
+    toggle.textContent = editing ? "Cancel" : "Edit";
+    if (!editing) return;
+    saved.classList.add("hidden");
+    status.textContent = "";
+    input.value = current().name ?? "";
+    showFieldError(input, null);
+    input.focus();
+  };
+  setEditing(false);
+  toggle.onclick = () => setEditing(form.classList.contains("hidden"));
+  input.onblur = () => showFieldError(input, check());
+  input.oninput = () => { if (input.getAttribute("aria-invalid") === "true") showFieldError(input, check()); };
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    if (saveBtn.disabled) return;
+    const invalid = check();
+    showFieldError(input, invalid);
+    if (invalid) return input.focus();
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+    status.textContent = "";
+    const name = input.value.trim();
+    const res = await updateCustomerProfile({ name });
+    if (accountWindow.__scaliusAccountInitRun !== runId) return;
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save name";
+    if (!res.success) {
+      status.textContent = res.unavailable ? ACCOUNT_OFFLINE_MESSAGE : res.error || ACCOUNT_OFFLINE_MESSAGE;
+      return;
+    }
+    onSaved(res.customer ?? { ...current(), name });
+    setEditing(false);
+    saved.classList.remove("hidden");
+  };
+}
+
 function hasSavedAddress(customer: CustomerInfo): boolean {
   return Boolean(customer.address?.trim() && customer.city && customer.zone);
 }
@@ -258,22 +318,13 @@ export async function initializeAccountPage(): Promise<void> {
   let zoneRead = 0;
   let areaRead = 0;
 
-  // Blank name, and a partial address, never save.
+  // The same checks as checkout: nothing saves without a full address.
   const errors: Array<[HTMLInputElement | HTMLSelectElement, () => string | null]> = [
     [fName, () => fName.value.trim() ? null : "Enter your full name."],
-    [fAddress, () => addressGiven() ? getShippingAddressError(fAddress.value) : null],
-    [fCity, () => addressGiven() && !fCity.value ? "Choose a city." : null],
-    [fZone, () => addressGiven() && fCity.value && !fZone.value ? "Choose a zone." : null],
+    [fAddress, () => getShippingAddressError(fAddress.value)],
+    [fCity, () => fCity.value ? null : "Choose a city."],
+    [fZone, () => fCity.value && !fZone.value ? copy.zoneRequiredText : null],
   ];
-  function addressGiven(): boolean {
-    return Boolean(fAddress.value.trim() || fCity.value || fZone.value);
-  }
-  function showFieldError(field: HTMLInputElement | HTMLSelectElement, message: string | null): void {
-    const error = byId(`${field.id}Error`);
-    error.textContent = message ?? "";
-    error.classList.toggle("hidden", !message);
-    field.setAttribute("aria-invalid", String(Boolean(message)));
-  }
   function validate(show: "all" | "shown"): boolean {
     let firstInvalid: HTMLInputElement | HTMLSelectElement | null = null;
     for (const [field, check] of errors) {
@@ -329,7 +380,7 @@ export async function initializeAccountPage(): Promise<void> {
     setStatus(hasUnavailableLocation()
       ? "Your saved delivery location is no longer available. Choose an available location or clear it before saving."
       : fCity.value && !fZone.value && fZone.options.length <= 1
-        ? "No zones are available for this city. Choose another city."
+        ? "No thanas are available for this city. Choose another city."
         : "");
   }
 
@@ -365,7 +416,7 @@ export async function initializeAccountPage(): Promise<void> {
     const request = ++zoneRead;
     ++areaRead;
     const cityId = fCity.value;
-    setLocationOptions(fZone, [], "Select a zone");
+    setLocationOptions(fZone, [], copy.selectZonePlaceholder);
     setLocationOptions(fArea, [], "Select an area (optional)");
     fZone.disabled = true;
     fArea.disabled = true;
@@ -374,7 +425,7 @@ export async function initializeAccountPage(): Promise<void> {
     const zones = await getZones(cityId);
     if (accountWindow.__scaliusAccountInitRun !== runId || request !== zoneRead) return;
     if (!zones) return showLocationFailure(() => loadZones(savedZone, zoneName, savedArea, areaName));
-    const zoneAvailable = setLocationOptions(fZone, zones, "Select a zone", savedZone, zoneName);
+    const zoneAvailable = setLocationOptions(fZone, zones, copy.selectZonePlaceholder, savedZone, zoneName);
     fZone.disabled = false;
     if (savedZone && zoneAvailable) return loadAreas(savedArea, areaName);
     setLocationOptions(fArea, [], "Select an area (optional)", savedArea, areaName);
@@ -394,7 +445,7 @@ export async function initializeAccountPage(): Promise<void> {
     if (customer.city && cityAvailable) {
       return loadZones(customer.zone ?? "", customer.zoneName, customer.area ?? "", customer.areaName);
     }
-    setLocationOptions(fZone, [], "Select a zone", customer.zone ?? "", customer.zoneName);
+    setLocationOptions(fZone, [], copy.selectZonePlaceholder, customer.zone ?? "", customer.zoneName);
     setLocationOptions(fArea, [], "Select an area (optional)", customer.area ?? "", customer.areaName);
     updateLocationReadiness();
   }
@@ -471,6 +522,11 @@ export async function initializeAccountPage(): Promise<void> {
     saved.classList.remove("hidden");
   };
 
+  bindProfileNameEditor(runId, () => customer, (saved) => {
+    customer = saved;
+    renderProfile(customer);
+    if (form.classList.contains("hidden")) fName.value = customer.name ?? "";
+  });
   fName.value = customer.name ?? "";
   fAddress.value = customer.address ?? "";
   await loadLocations();

@@ -5,6 +5,7 @@ import { checkoutLanguages } from "@scalius/database/schema";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { mediaOriginalUrl } from "@scalius/shared/media-variants";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { and, eq, isNull } from "drizzle-orm";
 import { businessDocument, headerDocument, platformDocument, type BusinessInfo } from "../settings/documents";
@@ -90,12 +91,12 @@ function absoluteHttpUrl(value: string): string | null {
  */
 export function composeAuthOtpMessage(
   store: Pick<StoreIdentity, "name" | "logoUrl" | "language">,
-  input: { purpose: string | undefined; code: string; name: string },
+  input: { purpose: string | undefined; code: string; name: string; orderNumber?: number | null },
 ) {
   const copy = MESSAGE_COPY[store.language];
   const intro = copy.otp.intro[
     input.purpose === "order_payment_recovery" || input.purpose === "order_lookup" ? input.purpose : "sign_in"
-  ](store.name);
+  ](store.name, input.orderNumber ? formatOrderNumber(input.orderNumber, "") : null);
   const greeting = copy.greeting(input.name.trim());
   const subject = copy.otp.subject(input.code, store.name).replace(/[\r\n]+/g, " ");
   const html = `<!doctype html><html lang="${store.language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head>

@@ -75049,7 +75049,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "storefront.orders_lookup_send_otp.send_otp",
     "method": "POST",
     "pathTemplate": "/api/v1/orders/lookup/send-otp",
-    "summary": "Send a code to the contact saved on an order (never reveals whether it matched)",
+    "summary": "Send a code to the contact saved on an order (order number + its phone)",
     "tags": [
       "Orders"
     ],

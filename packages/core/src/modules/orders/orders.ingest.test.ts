@@ -155,6 +155,13 @@ function createDbMock(options: {
   const customerReads = [...(options.customerReads ?? [])];
   const createReadQuery = (projection: Record<string, unknown>) => ({
     where: vi.fn(() => ({
+      // Awaiting the query is the guest-contact candidate read.
+      then: "phoneVerifiedAt" in projection
+        ? (resolve: (rows: unknown[]) => unknown) => {
+          const row = customerReads.shift();
+          return Promise.resolve(row ? [{ phone: "+8801712345678", email: null, phoneVerifiedAt: null, emailVerifiedAt: null, ...row }] : []).then(resolve);
+        }
+        : undefined,
       get: vi.fn(async () => {
         if ("accountOwnerCustomerId" in projection) return options.existingOrder;
         if ("customerId" in projection) return undefined;

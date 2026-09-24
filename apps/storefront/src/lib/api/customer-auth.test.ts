@@ -5,11 +5,54 @@ import {
   getCustomerOrderDetail,
   getCustomerOrders,
   getCustomerSession,
+  verifyCustomerOtp,
 } from "./customer-auth";
 
 describe("customer auth API helpers", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("passes a new buyer's latest-order suggestion through and sends only the save choice back", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        status: "needs_account_details",
+        suggestion: {
+          name: " R2-SJ Test ", phone: "+8801712345678", email: "",
+          address: { orderNumber: 1057, text: "House 1, Road 2, Mirpur, Dhaka" },
+        },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const input = { method: "email" as const, channel: "email" as const, identifier: "r2-sj@example.test", code: "123456" };
+
+    await expect(verifyCustomerOtp(input)).resolves.toEqual({
+      success: true,
+      status: "needs_account_details",
+      suggestion: {
+        name: "R2-SJ Test", phone: "+8801712345678", email: null,
+        address: { orderNumber: 1057, text: "House 1, Road 2, Mirpur, Dhaka" },
+      },
+    });
+
+    await verifyCustomerOtp({ ...input, account: { name: "R2-SJ Test", phone: "+8801712345678", saveOrderAddress: true } });
+    const [url, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/customer-auth/verify-otp");
+    expect(JSON.parse(String(init.body)).account).toEqual({ name: "R2-SJ Test", phone: "+8801712345678", saveOrderAddress: true });
+  });
+
+  it("reads a missing or malformed suggestion as none", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: { status: "needs_account_details", suggestion: { name: 7, address: { orderNumber: "1057", text: " " } } },
+    }), { status: 200 })));
+    await expect(verifyCustomerOtp({ method: "phone", channel: "sms", identifier: "+8801712345678", code: "123456" }))
+      .resolves.toEqual({
+        success: true,
+        status: "needs_account_details",
+        suggestion: { name: null, phone: null, email: null, address: null },
+      });
   });
 
   it("creates customer-owned payment sessions through the same-origin proxy", async () => {

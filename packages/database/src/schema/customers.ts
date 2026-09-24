@@ -3,14 +3,19 @@
 // authOtpDeliveryReceipts, customerSessions.
 
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
-import type { InferSelectModel } from "drizzle-orm";
+import { sql, type InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 
 export const customers = sqliteTable("customers", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     email: text("email"),
-    phone: text("phone").notNull().unique("customer_phone_unique"),
+    /**
+     * The contact the buyer gave; a claim until proven by code. Only a proven
+     * phone is unique (one account per verified phone), plus one guest record
+     * per phone for the merchant's CRM. Typed phones never block anyone.
+     */
+    phone: text("phone").notNull(),
     address: text("address"),
     city: text("city"),
     zone: text("zone"),
@@ -34,6 +39,15 @@ export const customers = sqliteTable("customers", {
 }, (table) => [
     index("customers_email_idx").on(table.email),
     index("customers_phone_idx").on(table.phone),
+    uniqueIndex("customers_verified_phone_unique")
+        .on(table.phone)
+        .where(sql`${table.phoneVerifiedAt} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+    uniqueIndex("customers_verified_email_unique")
+        .on(sql`lower(${table.email})`)
+        .where(sql`${table.emailVerifiedAt} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+    uniqueIndex("customers_guest_phone_unique")
+        .on(table.phone)
+        .where(sql`${table.accountClaimedAt} IS NULL AND ${table.deletedAt} IS NULL`),
     index("customers_dashboard_activity_idx").on(table.deletedAt, table.createdAt),
 ]);
 

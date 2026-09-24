@@ -9,7 +9,7 @@
 // block anyone from signing in.
 
 import { nanoid } from "nanoid";
-import { customers, customerSessions, deliveryLocations } from "@scalius/database/schema";
+import { customers, customerSessions, deliveryLocations, orders } from "@scalius/database/schema";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -27,12 +27,14 @@ import {
     deleteCustomerAuthOtpChallenge,
     cleanupExpiredCustomerAuthOtpChallenges,
     buildCustomerAuthOtpStorageKey,
+    extendPendingCustomerAuthOtpChallenge,
 } from "./customer-auth-otp-challenges";
 import {
     cleanupExpiredCustomerAuthOtpRateLimits,
     enforceOtpSendRateLimits,
+    OtpContactCeilingError,
 } from "./customer-auth-rate-limit";
-import { buildVerifiedContactOrderLink } from "./order-account-claim";
+import { buildVerifiedContactOrderLink } from "./customer-identity";
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
     isContactFieldRequiredForAuthChannel,
@@ -60,7 +62,6 @@ export const COOKIE_NAME = "cs_tok";
 export const OTP_PREFIX = "cust_otp:";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 export const OTP_TTL_SECONDS = 60 * 5; // 5 minutes
-export const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_ATTEMPTS = 5;
 
 export {
@@ -118,6 +119,19 @@ export interface NewAccountDetails {
     name: string;
     phone?: string;
     email?: string;
+    /** Save the delivery address of the latest order placed with the proven contact. */
+    saveOrderAddress?: boolean;
+}
+
+/**
+ * What the store already knows about a new buyer, from the latest order placed
+ * with the email/phone they just proved: shown pre-filled, never saved unasked.
+ */
+export interface NewAccountSuggestion {
+    name: string | null;
+    phone: string | null;
+    email: string | null;
+    address: { orderNumber: number | null; text: string } | null;
 }
 
 export interface VerifyOtpInput {
@@ -134,6 +148,7 @@ export type VerifyOtpResult =
     | {
         /** The code is right but this email/phone has no account: ask for name (and phone). */
         status: "needs_account_details";
+        suggestion: NewAccountSuggestion | null;
     }
     | {
         status: "signed_in";
@@ -400,7 +415,7 @@ async function resolveProofOwner(
             .select()
             .from(customers)
             .where(and(
-                eq(customers.email, identifier),
+                sql`lower(${customers.email}) = ${identifier}`,
                 isNotNull(customers.emailVerifiedAt),
                 isNotNull(customers.accountClaimedAt),
             ))
@@ -410,10 +425,17 @@ async function resolveProofOwner(
         return verified.deletedAt ? { kind: "deleted" } : { kind: "account", row: verified };
     }
 
-    const row = await db.select().from(customers).where(eq(customers.phone, identifier)).get();
-    if (!row) return { kind: "none" };
-    if (row.deletedAt) return { kind: "deleted" };
-    return row.accountClaimedAt ? { kind: "account", row } : { kind: "guest_profile", row };
+    // A phone owns an account only once proven. Accounts that merely typed
+    // this phone are not candidates; the phone's guest record is.
+    const rows = await db.select().from(customers).where(and(
+        eq(customers.phone, identifier),
+        or(isNotNull(customers.phoneVerifiedAt), isNull(customers.accountClaimedAt)),
+    ));
+    const verified = rows.find((row) => row.accountClaimedAt && row.phoneVerifiedAt && !row.deletedAt);
+    if (verified) return { kind: "account", row: verified };
+    const guest = rows.find((row) => !row.accountClaimedAt && !row.deletedAt);
+    if (guest) return { kind: "guest_profile", row: guest };
+    return rows.some((row) => row.accountClaimedAt && row.phoneVerifiedAt) ? { kind: "deleted" } : { kind: "none" };
 }
 
 async function resolveActiveCustomerLocation(
@@ -519,15 +541,24 @@ export async function sendOtp(
         throw new ServiceUnavailableError(configError);
     }
 
-    await enforceOtpSendRateLimits(db, {
-        ip: input.ip,
-        identifiers: [`${input.method}:${identifier}`],
-        hashKey: input.encryptionKey,
-    });
-
     // D1 is the OTP authority: the challenge row counts attempts and
     // consumes codes atomically. The raw code is never stored or queued.
     const otpKey = await buildCustomerAuthOtpStorageKey(channel, identifier, input.encryptionKey);
+    let allowance: Awaited<ReturnType<typeof enforceOtpSendRateLimits>>;
+    try {
+        allowance = await enforceOtpSendRateLimits(db, {
+            ip: input.ip,
+            identifiers: [`${input.method}:${identifier}`],
+            hashKey: input.encryptionKey,
+        });
+    } catch (error) {
+        // Whoever flooded this contact can't strand its owner: the latest code
+        // already delivered stays usable until requests open again.
+        if (error instanceof OtpContactCeilingError) {
+            await extendPendingCustomerAuthOtpChallenge(db, otpKey, error.retryAfterSeconds ?? OTP_TTL_SECONDS);
+        }
+        throw error;
+    }
     const deliveryKey = createAuthOtpDeliveryKey();
     const code = await deriveCustomerAuthOtpDeliveryCode({
         otpKey,
@@ -545,7 +576,7 @@ export async function sendOtp(
         encryptionKey: input.encryptionKey,
         contactEncryptionKey: input.credentialEncryptionKey,
         ttlSeconds: OTP_TTL_SECONDS,
-        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+        resendCooldownSeconds: allowance.resendCooldownSeconds,
         maxAttempts: OTP_MAX_ATTEMPTS,
     });
 
@@ -629,8 +660,9 @@ export async function verifyOtp(
         if (owner.kind === "deleted") {
             throw new ValidationError("This account was closed. Contact the store to restore it.");
         }
-        newAccount = await prepareNewAccount(db, input, identifier, channel, policy, phoneCountryPolicy);
-        if (!newAccount) return { status: "needs_account_details" };
+        const latestOrder = await latestOrderForProvenContact(db, input.method, identifier);
+        newAccount = await prepareNewAccount(db, input, identifier, channel, policy, phoneCountryPolicy, latestOrder);
+        if (!newAccount) return { status: "needs_account_details", suggestion: suggestNewAccount(latestOrder) };
     }
     await claimCustomerAuthOtpChallenge(db, challengeInput);
 
@@ -676,6 +708,56 @@ function markProven(row: CustomerRow, method: "email" | "phone", at: Date): Cust
     };
 }
 
+type LatestContactOrder = Awaited<ReturnType<typeof latestOrderForProvenContact>>;
+
+/** The latest order placed with a contact the buyer has just proven by code. */
+async function latestOrderForProvenContact(db: Database, method: "email" | "phone", identifier: string) {
+    return await db
+        .select({
+            orderNumber: orders.orderNumber,
+            customerName: orders.customerName,
+            customerPhone: orders.customerPhone,
+            customerEmail: orders.customerEmail,
+            shippingAddress: orders.shippingAddress,
+            city: orders.city,
+            zone: orders.zone,
+            area: orders.area,
+            cityName: orders.cityName,
+            zoneName: orders.zoneName,
+            areaName: orders.areaName,
+        })
+        .from(orders)
+        .where(and(
+            method === "email"
+                ? sql`lower(trim(${orders.customerEmail})) = ${identifier}`
+                : eq(orders.customerPhone, identifier),
+            isNull(orders.deletedAt),
+        ))
+        .orderBy(desc(orders.createdAt))
+        .limit(1)
+        .get() ?? null;
+}
+
+function suggestNewAccount(order: LatestContactOrder | null): NewAccountSuggestion | null {
+    if (!order) return null;
+    const address = order.shippingAddress?.trim();
+    return {
+        name: order.customerName?.trim() || null,
+        phone: order.customerPhone?.trim() || null,
+        email: order.customerEmail?.trim() || null,
+        address: address
+            ? {
+                orderNumber: order.orderNumber ?? null,
+                // "House 9, Mirpur" + Mirpur, Dhaka reads "House 9, Mirpur, Dhaka".
+                text: [order.areaName, order.zoneName, order.cityName].reduce<string>((text, part) => {
+                    const value = part?.trim();
+                    return value && !text.toLowerCase().includes(value.toLowerCase()) ? `${text}, ${value}` : text;
+                }, address),
+            }
+            : null,
+    };
+}
+
 /**
  * Validates the details a new buyer adds after proving an email or phone
  * that has no account. Returns null when the details were not sent yet.
@@ -687,6 +769,7 @@ async function prepareNewAccount(
     channel: CustomerAuthOtpChannel,
     policy: CustomerAuthPolicyConfig,
     phoneCountryPolicy: PhoneCountryPolicy,
+    latestOrder: LatestContactOrder | null,
 ): Promise<{ row: CustomerRow; write: SQLiteBatchItem } | null> {
     if (!input.account) return null;
     const name = input.account.name?.trim();
@@ -711,49 +794,26 @@ async function prepareNewAccount(
         phoneVerifiedAt: input.method === "phone" ? now : null,
     };
 
-    if (input.method === "email") {
-        // The phone is typed, not proven. It is the CRM key, so an unclaimed
-        // profile with that phone is taken over, but its saved address is
-        // kept only when the profile carries the email just proven: typing
-        // a number must not reveal where its owner lives.
-        const existing = await db.select().from(customers).where(eq(customers.phone, phone)).get();
-        if (existing?.deletedAt) {
-            throw new ValidationError("This phone number belongs to a closed account. Contact the store.");
-        }
-        if (existing?.accountClaimedAt) {
-            throw new ValidationError("This phone number is already on another account. Sign in to that account instead.");
-        }
-        if (existing) {
-            const sameBuyer = existing.email?.trim().toLowerCase() === email;
-            const cleared = {
-                name,
-                email,
-                ...(sameBuyer ? {} : {
-                    address: null,
-                    city: null,
-                    zone: null,
-                    area: null,
-                    cityName: null,
-                    zoneName: null,
-                    areaName: null,
-                }),
-                ...proof,
-                updatedAt: now,
-            };
-            return {
-                row: { ...existing, ...cleared },
-                write: db.update(customers)
-                    .set(cleared)
-                    .where(and(eq(customers.id, existing.id), isNull(customers.accountClaimedAt))) as SQLiteBatchItem,
-            };
-        }
-    }
-
+    // A typed phone (email sign-up) is only this account's contact: it never
+    // claims the phone's guest record or another account, and never blocks
+    // anyone. Proving the phone by code is what links its orders.
     const values: CustomerInsertRow = {
         id: `cust_${nanoid()}`,
         name,
         email,
         phone,
+        // Asked for by the buyer, and read here from the order, never from the request.
+        ...(input.account.saveOrderAddress && latestOrder?.shippingAddress?.trim()
+            ? {
+                address: latestOrder.shippingAddress.trim(),
+                city: latestOrder.city,
+                zone: latestOrder.zone,
+                area: latestOrder.area,
+                cityName: latestOrder.cityName,
+                zoneName: latestOrder.zoneName,
+                areaName: latestOrder.areaName,
+            }
+            : {}),
         ...proof,
         createdAt: now,
         updatedAt: now,
@@ -803,19 +863,19 @@ async function createSessionForCustomer(
             updatedAt: nowSeconds,
         }) as SQLiteBatchItem,
     ];
-    const link = buildVerifiedContactOrderLink(db, {
+    statements.push(...buildVerifiedContactOrderLink(db, {
         customerId: row.id,
         email: row.emailVerifiedAt ? row.email : null,
         phone: row.phoneVerifiedAt ? row.phone : null,
-    });
-    if (link) statements.push(link as SQLiteBatchItem);
+    }) as SQLiteBatchItem[]);
 
     try {
         await safeBatch(db, statements);
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        if (message.includes("customers.phone") || message.includes("customer_phone_unique")) {
-            throw new ValidationError("This phone number is already on another account. Sign in to that account instead.");
+        // Only a proven identifier is unique: a concurrent sign-up proved it first.
+        if (message.includes("customers_verified_") || message.includes("UNIQUE constraint failed: customers.")) {
+            throw new ValidationError("This contact was just used to create an account. Sign in instead.");
         }
         console.warn("[CustomerAuth] Account/session persistence failed:", error instanceof Error ? error.name : typeof error);
         throw new ServiceUnavailableError("We couldn't sign you in. Please try again.");
