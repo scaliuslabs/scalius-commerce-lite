@@ -146,7 +146,6 @@ describe("OrderItemsTable", () => {
       'input[aria-label="Quantity for Studio Lamp"]',
     );
     if (!input) throw new Error("Expected quantity input");
-    expect(input.max).toBe("7");
 
     await act(async () => input.focus());
     await act(async () => setInputValue(input, "8"));

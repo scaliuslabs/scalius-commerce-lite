@@ -63,7 +63,7 @@ describe("admin order recovery lifecycle", () => {
   ])("keeps an unknown courier outcome locked after $status in list and detail", async ({ status, activeClaim }) => {
     const recovery = await shipmentRecovery(status, "provider_outcome_unknown", activeClaim);
     expect(recovery).toMatchObject({
-      state: "needs_attention", severity: "danger", activeLock: true,
+      state: "needs_attention", reason: "courier_unconfirmed", severity: "danger", activeLock: true,
       label: "Courier confirmation needed", shipmentId: "shipment",
       canRepair: false, canRefresh: false, canRetryCreate: false, unknownOutcome: true,
     });
@@ -74,7 +74,7 @@ describe("admin order recovery lifecycle", () => {
   it("retains repair for a confirmed provider result with incomplete local finalization", async () => {
     const recovery = await shipmentRecovery("reconcile_required", "pending", false, "consignment_confirmed");
     expect(recovery).toMatchObject({
-      state: "needs_attention", activeLock: true, canRepair: true, canRefresh: true, canRetryCreate: false, unknownOutcome: false,
+      state: "needs_attention", reason: "reconcile_required", activeLock: true, canRepair: true, canRefresh: true, canRetryCreate: false, unknownOutcome: false,
     });
   });
 

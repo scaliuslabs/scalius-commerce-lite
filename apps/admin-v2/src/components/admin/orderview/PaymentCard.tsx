@@ -7,6 +7,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import {
@@ -28,7 +29,7 @@ import { useCurrency } from "~/hooks/use-currency";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { formatNumber, useMessages } from "~/i18n";
-import { orderDetailLabel, orderDetailMessages, type OrderDetailMessageKey } from "~/i18n/order-detail";
+import { orderDetailLabel, orderDetailMessages, refundStateCopy, type OrderDetailMessageKey } from "~/i18n/order-detail";
 import {
   orderMessages,
   paymentMethodLabel,
@@ -127,7 +128,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
 
   const [historyOpen, setHistoryOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
-  const [refundAmount, setRefundAmount] = useState("");
+  const [refundAmount, setRefundAmount] = useState<number | null>(null);
   const [refundAmountError, setRefundAmountError] = useState<string | null>(null);
   const [refundReason, setRefundReason] = useState<string>("requested_by_customer");
   const [manualSettlementConfirmed, setManualSettlementConfirmed] = useState(false);
@@ -159,6 +160,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const webhookIssues = paymentsResult?.paymentWebhookIssues ?? [];
   const refundAttempts: OrderRefundAttempt[] = paymentsResult?.refundAttempts ?? order.refundAttempts ?? [];
   const activeRefund = paymentsResult?.activeRefundOperation ?? order.activeRefundOperation ?? null;
+  const activeRefundCopy = activeRefund
+    ? refundStateCopy(t, activeRefund.status, activeRefund.gateway, paymentMethodLabel(o, activeRefund.gateway))
+    : null;
   const isRefundLocked = Boolean(activeRefund?.active);
   const plan = paymentsResult?.plan ?? null;
   // paidAmount is net of refunds; the gross is what came in.
@@ -259,7 +263,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     codMutation.mutate(body, { onSuccess: () => setCodAction(null) });
   }
 
-  const refundValue = Number.parseFloat(refundAmount);
+  const refundValue = refundAmount ?? Number.NaN;
   const refundAmountProblem = (): string | null =>
     Number.isFinite(refundValue) && refundValue > 0 && refundValue <= paid
       ? null
@@ -320,10 +324,10 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
-        {activeRefund ? (
+        {activeRefundCopy && activeRefund ? (
           <div role="status" className="space-y-1">
-            <p className="font-medium">{activeRefund.label} · {formatCurrencyAmount(activeRefund.amount, activeRefund.currency)}</p>
-            <p className="text-muted-foreground">{activeRefund.message}</p>
+            <p className="font-medium">{activeRefundCopy.label} · {formatCurrencyAmount(activeRefund.amount, activeRefund.currency)}</p>
+            {activeRefundCopy.help ? <p className="text-muted-foreground">{activeRefundCopy.help}</p> : null}
           </div>
         ) : null}
 
@@ -384,7 +388,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
 
         {canShowRecoveryLink ? (
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-muted-foreground">{recovery?.message ?? t("recovery.help")}</p>
+            <p className="text-muted-foreground">{t("recovery.help")}</p>
             <Button type="button" variant="outline" size="sm" onClick={() => void handleCopyRecoveryLink()} loading={recoveryLinkMutation.isPending}>
               {t("recovery.copy")}
             </Button>
@@ -403,7 +407,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             <ul className="divide-y text-muted-foreground">
               {webhookIssues.map((issue) => (
                 <li key={issue.id} className="py-2">
-                  {paymentMethodLabel(o, issue.provider)} · {time(issue.processedAt)} — {issue.message}
+                  <p>{[paymentMethodLabel(o, issue.provider), time(issue.processedAt)].filter(Boolean).join(" · ")}</p>
+                  <p>{t(`webhook.reason.${issue.reason}`, { gateway: paymentMethodLabel(o, issue.provider) })}</p>
+                  {issue.error ? <p className="break-words">{issue.error}</p> : null}
                 </li>
               ))}
             </ul>
@@ -494,13 +500,14 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               {refundAttempts.map((attempt) => {
                 const checking = refundCheckMutation.isPending && refundCheckMutation.variables?.attemptId === attempt.id;
                 const when = time(attempt.refundedAt ?? attempt.failedAt ?? attempt.nextProbeAt ?? attempt.createdAt);
+                const copy = refundStateCopy(t, attempt.status, attempt.gateway, paymentMethodLabel(o, attempt.gateway));
                 return (
                   <li key={attempt.id} className="space-y-1 py-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium">{attempt.label}</span>
+                      <span className="font-medium">{copy.label}</span>
                       <span className="tabular-nums">{formatCurrencyAmount(attempt.amount, attempt.currency)}</span>
                     </div>
-                    {attempt.refundedAt ? null : <p className="text-muted-foreground">{attempt.message}</p>}
+                    {attempt.refundedAt || !copy.help ? null : <p className="text-muted-foreground">{copy.help}</p>}
                     {attempt.lastError ? <p className="break-words text-destructive">{attempt.lastError}</p> : null}
                     <p className="text-muted-foreground">
                       {[attempt.reason ? orderDetailLabel(t, "refund.reason.", attempt.reason) : null, when].filter(Boolean).join(" · ")}
@@ -667,22 +674,17 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             {refundMutation.isError ? <Alert variant="destructive">{orderErrorMessage(refundMutation.error)}</Alert> : null}
             <div className="space-y-2">
               <Label htmlFor="refundAmount">{t("refund.amount", { symbol })}</Label>
-              <Input
+              <NumberInput
                 id="refundAmount"
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0.01"
-                max={paid}
                 value={refundAmount}
                 disabled={isRefundLocked}
                 aria-invalid={Boolean(refundAmountError) || undefined}
                 aria-describedby="refundAmount-help"
-                onChange={(e) => {
-                  setRefundAmount(e.target.value);
+                onValueChange={(value) => {
+                  setRefundAmount(value);
                   if (refundAmountError) setRefundAmountError(null);
                 }}
-                onBlur={() => setRefundAmountError(refundAmount.trim() ? refundAmountProblem() : null)}
+                onBlur={() => setRefundAmountError(refundAmount === null ? null : refundAmountProblem())}
               />
               <p id="refundAmount-help" className={refundAmountError ? "text-destructive" : "text-muted-foreground"}>
                 {refundAmountError ?? (order.refundDue > 0
@@ -733,9 +735,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
 }
 
 /** Only what came back is owed; the rest of a refund is the merchant's call. */
-export function initialRefundAmount(order: Pick<Order, "refundDue" | "paidAmount">): string {
+export function initialRefundAmount(order: Pick<Order, "refundDue" | "paidAmount">): number | null {
   const owed = Math.min(Number(order.refundDue ?? 0), Number(order.paidAmount ?? 0));
-  return owed > 0 ? String(owed) : "";
+  return owed > 0 ? owed : null;
 }
 
 function Row({ label, value }: { label: string; value: string }) {

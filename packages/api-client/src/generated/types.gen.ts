@@ -41898,6 +41898,7 @@ export type GetApiV1AdminOrdersResponses = {
                 } | null;
                 shipmentRecovery: {
                     state: 'none' | 'creating' | 'needs_attention' | 'failed';
+                    reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'creating' | 'claim_expired' | 'failed';
                     severity: 'info' | 'warning' | 'danger';
                     activeLock: boolean;
                     label: string;
@@ -42345,6 +42346,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                 } | null;
                 shipmentRecovery: {
                     state: 'none' | 'creating' | 'needs_attention' | 'failed';
+                    reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'creating' | 'claim_expired' | 'failed';
                     severity: 'info' | 'warning' | 'danger';
                     activeLock: boolean;
                     label: string;
@@ -43593,6 +43595,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
             } | null;
             shipmentRecovery: {
                 state: 'none' | 'creating' | 'needs_attention' | 'failed';
+                reason: 'none' | 'courier_unconfirmed' | 'reconcile_required' | 'creating' | 'claim_expired' | 'failed';
                 severity: 'info' | 'warning' | 'danger';
                 activeLock: boolean;
                 label: string;
@@ -44029,6 +44032,7 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 provider: string;
                 eventType: string;
                 status: 'failed' | 'manual_reconciliation';
+                reason: 'manual_reconciliation' | 'stale' | 'dead_letter' | 'failed';
                 message: string;
                 error: string | null;
                 queueType: string | null;

@@ -42,9 +42,7 @@ const order: Order = {
   editReadiness: { items: { allowed: false, reason: "closed" }, details: { allowed: false, reason: "closed" } },
 };
 const recovery: ShipmentRecovery = {
-  state: "needs_attention", severity: "danger", activeLock: true,
-  label: "Courier confirmation needed",
-  message: "Check the courier portal or contact the courier with this order number before attempting another booking.",
+  state: "needs_attention", reason: "courier_unconfirmed", severity: "danger", activeLock: true,
   shipmentId: "shipment_unknown", status: "reconcile_required", providerType: "pathao",
   canRepair: false, canRefresh: false, canRetryCreate: false, unknownOutcome: true, updatedAt: null,
 };
@@ -89,8 +87,8 @@ describe("ShipmentCard recovery authority", () => {
         shipments: { status, refreshing: false },
         deliveryProviders: { status: "ready", refreshing: false },
       } });
-      expect(host.textContent).toContain("Courier confirmation needed");
-      expect(host.textContent).toContain(recovery.message);
+      expect(host.textContent).toContain(en["shipmentRecovery.courier_unconfirmed"]);
+      expect(host.textContent).toContain(en["shipmentRecovery.courier_unconfirmed.help"]);
       expect(host.textContent).toContain(en["courier.checkTitle"]);
       expect(repairButton()).toBeUndefined();
       expect(mocks.repair).not.toHaveBeenCalled();
@@ -98,7 +96,7 @@ describe("ShipmentCard recovery authority", () => {
   );
 
   it("retains the authorized repair action for incomplete local finalization", async () => {
-    await render({ shipmentRecovery: { ...recovery, canRepair: true, label: "Shipment needs reconciliation" } });
+    await render({ shipmentRecovery: { ...recovery, reason: "reconcile_required", canRepair: true } });
     expect(repairButton()).toBeDefined();
     await act(async () => repairButton()!.click());
     expect(mocks.repair).toHaveBeenCalledExactlyOnceWith({ orderId: order.id, shipmentId: recovery.shipmentId });

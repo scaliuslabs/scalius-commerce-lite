@@ -10,13 +10,14 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useCreateFulfillmentShipment } from "~/lib/api-mutations/orders";
-import { getOrderItemName } from "./order-returns/shared";
+import { clampQuantity, getOrderItemName } from "./order-returns/shared";
 import type { Order, OrderItem } from "./types";
 
 const SENDABLE_ORDER_STATUSES = new Set(["confirmed", "shipped", "delivered"]);
@@ -48,7 +49,7 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
   const [courierName, setCourierName] = useState("");
   const [trackingId, setTrackingId] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
-  const [shipmentAmount, setShipmentAmount] = useState("");
+  const [shipmentAmount, setShipmentAmount] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
   // One key per opened dialog: a double click or retry replays the first shipment.
@@ -61,7 +62,7 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
     setCourierName(t("fulfill.defaultCourier"));
     setTrackingId("");
     setTrackingUrl("");
-    setShipmentAmount("");
+    setShipmentAmount(null);
     setNote("");
     setErrors({});
     requestKey.current = crypto.randomUUID();
@@ -82,7 +83,7 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
     if (lines.length === 0) next.items = t("fulfill.selectItem");
     const url = trackingUrl.trim();
     if (url && !/^https:\/\/[^\s/]+\.[^\s]+$/i.test(url)) next.trackingUrl = t("fulfill.trackingUrlInvalid");
-    const amount = shipmentAmount.trim() ? Number(shipmentAmount) : 0;
+    const amount = shipmentAmount ?? 0;
     if (!Number.isFinite(amount) || amount < 0) next.amount = t("fulfill.amountInvalid");
     return next;
   };
@@ -105,7 +106,7 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
         trackingId: trackingId.trim() || undefined,
         trackingUrl: trackingUrl.trim() || undefined,
         note: note.trim() || undefined,
-        shipmentAmount: shipmentAmount.trim() ? Number(shipmentAmount) : undefined,
+        shipmentAmount: shipmentAmount ?? undefined,
       },
       { onSuccess: () => onOpenChange(false) },
     );
@@ -142,23 +143,19 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
                       </p>
                     </div>
                     {left > 0 ? (
-                      <Input
+                      <NumberInput
                         id={item.id === firstSendableId ? "fulfill-items" : undefined}
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        max={left}
+                        integer
                         className="w-20 shrink-0"
                         aria-label={t("fulfill.quantity", { name })}
                         aria-invalid={Boolean(errors.items) || undefined}
                         aria-describedby={errors.items ? "fulfill-items-error" : undefined}
                         value={quantities[item.id] ?? 0}
                         disabled={mutation.isPending}
-                        onChange={(event) => {
-                          const value = Number.parseInt(event.target.value, 10);
+                        onValueChange={(value) => {
                           setQuantities((current) => ({
                             ...current,
-                            [item.id]: Number.isFinite(value) ? Math.min(left, Math.max(0, value)) : 0,
+                            [item.id]: clampQuantity(value, left),
                           }));
                         }}
                       />
@@ -197,16 +194,12 @@ export function ManualFulfillmentDialog({ order, open, onOpenChange }: {
             </div>
             <div className="space-y-2">
               <Label htmlFor="fulfill-amount">{t("fulfill.amount")}</Label>
-              <Input
+              <NumberInput
                 id="fulfill-amount"
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
                 value={shipmentAmount}
                 aria-invalid={Boolean(errors.amount) || undefined}
                 aria-describedby={errors.amount ? "fulfill-amount-error" : "fulfill-amount-help"}
-                onChange={(e) => setShipmentAmount(e.target.value)}
+                onValueChange={setShipmentAmount}
                 onBlur={() => blur("amount")}
                 disabled={mutation.isPending}
               />

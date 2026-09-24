@@ -12,10 +12,10 @@ export function createReturnCommandKey(action: string): string {
   return `return:${action}:${Date.now().toString(36)}:${fallbackCommandCounter.toString(36)}:${Math.random().toString(36).slice(2)}`;
 }
 
-export function parseReturnQuantity(value: string, max: number): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.min(max, Math.max(0, parsed));
+/** A typed quantity (from `NumberInput`) as a whole number between 0 and `max`; empty or not a number is 0. */
+export function clampQuantity(value: number | null, max: number): number {
+  if (value === null || !Number.isFinite(value)) return 0;
+  return Math.min(max, Math.max(0, Math.trunc(value)));
 }
 
 export function getOrderItemName(item: OrderItem | undefined): string {

@@ -608,6 +608,7 @@ const DEFAULT_PAYMENT_RECOVERY_SUMMARY: OrderPaymentRecoverySummary = {
 
 const DEFAULT_SHIPMENT_RECOVERY_SUMMARY: OrderShipmentRecoverySummary = {
     state: "none",
+    reason: "none",
     severity: "info",
     activeLock: false,
     label: "No shipment recovery",
@@ -849,6 +850,7 @@ function buildShipmentRecoverySummary(
     if (latestShipment?.rawStatus === PROVIDER_OUTCOME_UNKNOWN) {
         return {
             state: "needs_attention",
+            reason: "courier_unconfirmed",
             severity: "danger",
             activeLock: true,
             label: "Courier confirmation needed",
@@ -867,6 +869,7 @@ function buildShipmentRecoverySummary(
     if (status === ShipmentStatus.RECONCILE_REQUIRED) {
         return {
             state: "needs_attention",
+            reason: "reconcile_required",
             severity: "danger",
             activeLock: true,
             label: "Shipment needs reconciliation",
@@ -885,6 +888,7 @@ function buildShipmentRecoverySummary(
     if (hasActiveClaim) {
         return {
             state: "creating",
+            reason: "creating",
             severity: "warning",
             activeLock: true,
             label: "Shipment creation running",
@@ -903,6 +907,7 @@ function buildShipmentRecoverySummary(
     if (hasClaim && status && ![ShipmentStatus.FAILED, ShipmentStatus.CANCELLED].includes(status as typeof ShipmentStatus.FAILED | typeof ShipmentStatus.CANCELLED)) {
         return {
             state: "needs_attention",
+            reason: "claim_expired",
             severity: "danger",
             activeLock: true,
             label: "Shipment recovery required",
@@ -921,6 +926,7 @@ function buildShipmentRecoverySummary(
     if (status === ShipmentStatus.CREATING) {
         return {
             state: "creating",
+            reason: "creating",
             severity: "warning",
             activeLock: true,
             label: "Shipment creation running",
@@ -943,6 +949,7 @@ function buildShipmentRecoverySummary(
     ) {
         return {
             state: "failed",
+            reason: "failed",
             severity: "warning",
             activeLock: false,
             label: "Shipment failed",

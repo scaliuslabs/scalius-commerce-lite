@@ -33,7 +33,7 @@ import {
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useMessages } from "~/i18n";
-import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
+import { orderDetailLabel, orderDetailMessages, shipmentRecoveryCopy } from "~/i18n/order-detail";
 import { fulfillmentStatusLabel, orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import {
@@ -230,7 +230,8 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
   const repairMutation = useReconcileShipment();
   const lookupMutation = useLookupUnknownShipment();
   const lookupKey = useRef<string | null>(null);
-  if (!recovery || recovery.state === "none") return null;
+  const copy = recovery ? shipmentRecoveryCopy(t, recovery.reason) : null;
+  if (!recovery || recovery.state === "none" || !copy) return null;
 
   const blocking = recovery.state === "needs_attention" && recovery.activeLock && Boolean(recovery.shipmentId);
   const canRepair = canManage && blocking && recovery.canRepair;
@@ -248,8 +249,8 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
 
   return (
     <div role="status" className="space-y-2">
-      <p className={cn("font-medium", recovery.severity === "danger" && "text-destructive")}>{recovery.label}</p>
-      {recovery.message ? <p className="text-muted-foreground">{recovery.message}</p> : null}
+      <p className={cn("font-medium", recovery.severity === "danger" && "text-destructive")}>{copy.label}</p>
+      <p className="text-muted-foreground">{copy.help}</p>
       {needsCourierCheck || canRepair ? (
         <div className="flex flex-wrap gap-2">
           {needsCourierCheck && recovery.providerType === "steadfast" ? (

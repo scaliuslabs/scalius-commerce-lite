@@ -43,6 +43,7 @@ describe("order list response projection", () => {
         },
         shipmentRecovery: {
           state: "none",
+          reason: "none",
           severity: "info",
           activeLock: false,
           label: "No shipment recovery",
