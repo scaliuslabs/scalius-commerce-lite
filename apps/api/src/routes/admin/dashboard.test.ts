@@ -98,6 +98,7 @@ describe("Home sales numbers follow the View sales numbers permission", () => {
             .toEqual(["ord_today", "ord_earlier", "ord_last_month"]);
         expect(withOrders.body.data.recentOrders[0]).toEqual({
             id: "ord_today",
+            orderNumber: null,
             customerName: "Ada Lovelace",
             totalAmount: 16_890,
             status: "processing",

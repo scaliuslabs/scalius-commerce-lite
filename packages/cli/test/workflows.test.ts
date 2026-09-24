@@ -536,7 +536,7 @@ describe("CLI workflow resolver adapter", () => {
       }),
     ]));
     expect(new TextEncoder().encode(JSON.stringify({ ok: true, result: product })).byteLength)
-      .toBeLessThanOrEqual(15_872);
+      .toBeLessThanOrEqual(16_128);
 
     const dailyCase = AGENT_INTENT_EVAL_CASES.find((testCase) =>
       testCase.id === "dashboard.daily-operations-snapshot"

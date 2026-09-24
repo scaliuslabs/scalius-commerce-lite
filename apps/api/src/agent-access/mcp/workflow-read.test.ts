@@ -187,17 +187,26 @@ function dailyData(): Record<string, unknown> {
     },
     "dashboard.shipping_methods.list": {
       data: {
-        shippingMethods: [
+        zones: [
           {
-            id: "ship_1",
+            id: "zone_dhaka",
             name: "Inside Dhaka",
-            fee: 80,
-            isActive: true,
-            sortOrder: 1,
             internalProviderToken: "hidden-shipping-token",
           },
         ],
-        pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+        everywhereElse: {
+          rates: [
+            {
+              id: "ship_1",
+              kind: "delivery",
+              name: "Standard delivery",
+              fee: 80,
+              freeOver: 1000,
+              isActive: true,
+              internalProviderToken: "hidden-shipping-token",
+            },
+          ],
+        },
       },
     },
   };
@@ -399,14 +408,15 @@ describe("executeAuthorizedWorkflowRead", () => {
           },
         },
         "readiness.delivery": {
-          shippingMethods: [{
+          zones: [{ id: "zone_dhaka", name: "Inside Dhaka" }],
+          everywhereElseRates: [{
             id: "ship_1",
-            name: "Inside Dhaka",
+            kind: "delivery",
+            name: "Standard delivery",
             fee: 80,
+            freeOver: 1000,
             isActive: true,
-            sortOrder: 1,
           }],
-          pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
         },
       },
     });
@@ -460,9 +470,7 @@ describe("executeAuthorizedWorkflowRead", () => {
       "dashboard.inventory_alerts.list": { query: { status: "active" } },
       "dashboard.checkout.readiness_get": {},
       "dashboard.payments.methods_get": {},
-      "dashboard.shipping_methods.list": {
-        query: { page: 1, limit: 100, sort: "sortOrder", order: "asc" },
-      },
+      "dashboard.shipping_methods.list": {},
     });
     expect(mocks.dispatchAgentOperation.mock.calls.filter(([options]) =>
       options.operation.operationId === "dashboard.orders.payment_recovery_list"
@@ -752,14 +760,11 @@ describe("executeAuthorizedWorkflowRead", () => {
   it("rejects a projected result at or above the 64 KiB boundary", async () => {
     const responses = dailyData();
     const shipping = responses["dashboard.shipping_methods.list"] as {
-      data: { shippingMethods: Array<Record<string, unknown>> };
+      data: { zones: Array<Record<string, unknown>> };
     };
-    shipping.data.shippingMethods = Array.from({ length: 100 }, (_, index) => ({
-      id: `ship_${index}`,
+    shipping.data.zones = Array.from({ length: 100 }, (_, index) => ({
+      id: `zone_${index}`,
       name: "x".repeat(800),
-      fee: 80,
-      isActive: true,
-      sortOrder: index,
     }));
     mocks.dispatchAgentOperation.mockImplementation(async ({
       operation,

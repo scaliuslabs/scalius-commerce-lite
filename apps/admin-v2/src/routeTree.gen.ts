@@ -74,10 +74,13 @@ import { Route as AdminOrdersListIndexRouteImport } from './routes/admin/orders/
 import { Route as AdminOrdersListAbandonedRouteImport } from './routes/admin/orders/_list/abandoned'
 import { Route as AdminPagesPageIdEditRouteImport } from './routes/admin/pages/$pageId/edit'
 import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/products/$productId/edit'
+import { Route as AdminSettingsNotificationsEventRouteImport } from './routes/admin/settings/notifications_.$event'
 import { Route as AdminSettingsShippingAreasRouteImport } from './routes/admin/settings/shipping_.areas'
+import { Route as AdminSettingsUsersUserIdRouteImport } from './routes/admin/settings/users_.$userId'
 import { Route as AdminOrdersListAbandonedCheckoutIdRouteImport } from './routes/admin/orders/_list/abandoned.$checkoutId'
 import { Route as AdminSettingsAgentAccessAuthorizeRequestIdRouteImport } from './routes/admin/settings/agent-access.authorize.$requestId'
 import { Route as AdminSettingsAgentAccessContinueHandoffIdRouteImport } from './routes/admin/settings/agent-access.continue.$handoffId'
+import { Route as AdminSettingsUsersRolesRoleIdRouteImport } from './routes/admin/settings/users_.roles.$roleId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -416,10 +419,22 @@ const AdminProductsProductIdEditRoute =
     path: '/products/$productId/edit',
     getParentRoute: () => AdminRoute,
   } as any)
+const AdminSettingsNotificationsEventRoute =
+  AdminSettingsNotificationsEventRouteImport.update({
+    id: '/notifications_/$event',
+    path: '/notifications/$event',
+    getParentRoute: () => AdminSettingsRouteRoute,
+  } as any)
 const AdminSettingsShippingAreasRoute =
   AdminSettingsShippingAreasRouteImport.update({
     id: '/shipping_/areas',
     path: '/shipping/areas',
+    getParentRoute: () => AdminSettingsRouteRoute,
+  } as any)
+const AdminSettingsUsersUserIdRoute =
+  AdminSettingsUsersUserIdRouteImport.update({
+    id: '/users_/$userId',
+    path: '/users/$userId',
     getParentRoute: () => AdminSettingsRouteRoute,
   } as any)
 const AdminOrdersListAbandonedCheckoutIdRoute =
@@ -438,6 +453,12 @@ const AdminSettingsAgentAccessContinueHandoffIdRoute =
   AdminSettingsAgentAccessContinueHandoffIdRouteImport.update({
     id: '/agent-access/continue/$handoffId',
     path: '/agent-access/continue/$handoffId',
+    getParentRoute: () => AdminSettingsRouteRoute,
+  } as any)
+const AdminSettingsUsersRolesRoleIdRoute =
+  AdminSettingsUsersRolesRoleIdRouteImport.update({
+    id: '/users_/roles/$roleId',
+    path: '/users/roles/$roleId',
     getParentRoute: () => AdminSettingsRouteRoute,
   } as any)
 
@@ -504,13 +525,16 @@ export interface FileRoutesByFullPath {
   '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/admin/settings/notifications/$event': typeof AdminSettingsNotificationsEventRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
+  '/admin/settings/users/$userId': typeof AdminSettingsUsersUserIdRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders/': typeof AdminOrdersListIndexRoute
   '/admin/orders/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
+  '/admin/settings/users/roles/$roleId': typeof AdminSettingsUsersRolesRoleIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -572,13 +596,16 @@ export interface FileRoutesByTo {
   '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/admin/settings/notifications/$event': typeof AdminSettingsNotificationsEventRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
+  '/admin/settings/users/$userId': typeof AdminSettingsUsersUserIdRoute
   '/admin/online-store/navigation': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders': typeof AdminOrdersListIndexRoute
   '/admin/orders/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
+  '/admin/settings/users/roles/$roleId': typeof AdminSettingsUsersRolesRoleIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -644,13 +671,16 @@ export interface FileRoutesById {
   '/admin/orders/_list/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/admin/settings/notifications_/$event': typeof AdminSettingsNotificationsEventRoute
   '/admin/settings/shipping_/areas': typeof AdminSettingsShippingAreasRoute
+  '/admin/settings/users_/$userId': typeof AdminSettingsUsersUserIdRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
   '/admin/orders/_list/': typeof AdminOrdersListIndexRoute
   '/admin/orders/_list/abandoned/$checkoutId': typeof AdminOrdersListAbandonedCheckoutIdRoute
   '/admin/settings/agent-access/authorize/$requestId': typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   '/admin/settings/agent-access/continue/$handoffId': typeof AdminSettingsAgentAccessContinueHandoffIdRoute
+  '/admin/settings/users_/roles/$roleId': typeof AdminSettingsUsersRolesRoleIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -717,13 +747,16 @@ export interface FileRouteTypes {
     | '/admin/orders/abandoned'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/admin/settings/notifications/$event'
     | '/admin/settings/shipping/areas'
+    | '/admin/settings/users/$userId'
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
     | '/admin/orders/'
     | '/admin/orders/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
+    | '/admin/settings/users/roles/$roleId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -785,13 +818,16 @@ export interface FileRouteTypes {
     | '/admin/orders/abandoned'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/admin/settings/notifications/$event'
     | '/admin/settings/shipping/areas'
+    | '/admin/settings/users/$userId'
     | '/admin/online-store/navigation'
     | '/admin/orders/$orderId'
     | '/admin/orders'
     | '/admin/orders/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
+    | '/admin/settings/users/roles/$roleId'
   id:
     | '__root__'
     | '/'
@@ -856,13 +892,16 @@ export interface FileRouteTypes {
     | '/admin/orders/_list/abandoned'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/admin/settings/notifications_/$event'
     | '/admin/settings/shipping_/areas'
+    | '/admin/settings/users_/$userId'
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
     | '/admin/orders/_list/'
     | '/admin/orders/_list/abandoned/$checkoutId'
     | '/admin/settings/agent-access/authorize/$requestId'
     | '/admin/settings/agent-access/continue/$handoffId'
+    | '/admin/settings/users_/roles/$roleId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1332,11 +1371,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProductsProductIdEditRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/settings/notifications_/$event': {
+      id: '/admin/settings/notifications_/$event'
+      path: '/notifications/$event'
+      fullPath: '/admin/settings/notifications/$event'
+      preLoaderRoute: typeof AdminSettingsNotificationsEventRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
     '/admin/settings/shipping_/areas': {
       id: '/admin/settings/shipping_/areas'
       path: '/shipping/areas'
       fullPath: '/admin/settings/shipping/areas'
       preLoaderRoute: typeof AdminSettingsShippingAreasRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
+    '/admin/settings/users_/$userId': {
+      id: '/admin/settings/users_/$userId'
+      path: '/users/$userId'
+      fullPath: '/admin/settings/users/$userId'
+      preLoaderRoute: typeof AdminSettingsUsersUserIdRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
     '/admin/orders/_list/abandoned/$checkoutId': {
@@ -1360,6 +1413,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsAgentAccessContinueHandoffIdRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
+    '/admin/settings/users_/roles/$roleId': {
+      id: '/admin/settings/users_/roles/$roleId'
+      path: '/users/roles/$roleId'
+      fullPath: '/admin/settings/users/roles/$roleId'
+      preLoaderRoute: typeof AdminSettingsUsersRolesRoleIdRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
   }
 }
 
@@ -1376,9 +1436,12 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsTaxesRoute: typeof AdminSettingsTaxesRoute
   AdminSettingsUsersRoute: typeof AdminSettingsUsersRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
+  AdminSettingsNotificationsEventRoute: typeof AdminSettingsNotificationsEventRoute
   AdminSettingsShippingAreasRoute: typeof AdminSettingsShippingAreasRoute
+  AdminSettingsUsersUserIdRoute: typeof AdminSettingsUsersUserIdRoute
   AdminSettingsAgentAccessAuthorizeRequestIdRoute: typeof AdminSettingsAgentAccessAuthorizeRequestIdRoute
   AdminSettingsAgentAccessContinueHandoffIdRoute: typeof AdminSettingsAgentAccessContinueHandoffIdRoute
+  AdminSettingsUsersRolesRoleIdRoute: typeof AdminSettingsUsersRolesRoleIdRoute
 }
 
 const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
@@ -1394,11 +1457,14 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsTaxesRoute: AdminSettingsTaxesRoute,
   AdminSettingsUsersRoute: AdminSettingsUsersRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
+  AdminSettingsNotificationsEventRoute: AdminSettingsNotificationsEventRoute,
   AdminSettingsShippingAreasRoute: AdminSettingsShippingAreasRoute,
+  AdminSettingsUsersUserIdRoute: AdminSettingsUsersUserIdRoute,
   AdminSettingsAgentAccessAuthorizeRequestIdRoute:
     AdminSettingsAgentAccessAuthorizeRequestIdRoute,
   AdminSettingsAgentAccessContinueHandoffIdRoute:
     AdminSettingsAgentAccessContinueHandoffIdRoute,
+  AdminSettingsUsersRolesRoleIdRoute: AdminSettingsUsersRolesRoleIdRoute,
 }
 
 const AdminSettingsRouteRouteWithChildren =
