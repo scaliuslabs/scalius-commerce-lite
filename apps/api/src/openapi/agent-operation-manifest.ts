@@ -1,5 +1,10 @@
 import type { AgentWorkflowCatalog } from "../agent-access/workflows/types";
 import {
+  inlineComponentSchemaRefs,
+  referencedComponentSchemas,
+  type ComponentSchemas,
+} from "./component-schema-refs";
+import {
   CONTINUATION_OUTPUTS,
   DEVICE_OPERATION_IDS,
   ONE_TIME_SECRET_OPERATION_IDS,
@@ -802,41 +807,7 @@ function inputSchema(operation: OpenApiOperationLike): Record<string, unknown> {
   return input;
 }
 
-const COMPONENT_SCHEMA_REF = "#/components/schemas/";
-
-/**
- * Replaces `#/components/schemas/*` references with the component itself so
- * each manifest entry is self-contained: an agent reading one operation sees
- * the whole shape (for example the storefront theme document). A component
- * that refers to itself stays a reference at the second visit.
- */
-export function inlineComponentSchemaRefs(
-  value: unknown,
-  schemas: Record<string, unknown>,
-  visiting: readonly string[] = [],
-): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => inlineComponentSchemaRefs(item, schemas, visiting));
-  }
-  if (!isRecord(value)) return value;
-  const ref = value.$ref;
-  if (typeof ref === "string" && ref.startsWith(COMPONENT_SCHEMA_REF)) {
-    const name = decodeJsonPointerSegment(ref.slice(COMPONENT_SCHEMA_REF.length));
-    const target = schemas[name];
-    if (target === undefined) throw new Error(`Unknown OpenAPI component schema ${ref}.`);
-    if (visiting.includes(name)) return value;
-    const { $ref: _ref, ...siblings } = value;
-    const inlined = inlineComponentSchemaRefs(target, schemas, [...visiting, name]);
-    return Object.keys(siblings).length > 0 && isRecord(inlined)
-      ? { ...inlined, ...inlineComponentSchemaRefs(siblings, schemas, visiting) as Record<string, unknown> }
-      : inlined;
-  }
-  const out: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value)) {
-    out[key] = inlineComponentSchemaRefs(child, schemas, visiting);
-  }
-  return out;
-}
+export { inlineComponentSchemaRefs };
 
 function assertSurfaceMatchesOperationId(
   operationId: string,
@@ -884,13 +855,14 @@ export function buildAgentOperationManifest(
         operation.operationId,
       );
       assertSurfaceMatchesOperationId(operation.operationId, metadata.surface);
-      const operationOutputSchema = inlineComponentSchemaRefs(
-        successOutputSchema(operation.responses),
-        componentSchemas,
-      );
+      // Shared component schemas stay `$ref`s (emitted once beside the
+      // manifest); every reference must resolve.
+      const operationOutputSchema = successOutputSchema(operation.responses);
+      const operationInputSchema = inputSchema(operation);
+      referencedComponentSchemas([operationInputSchema, operationOutputSchema], componentSchemas);
       if (metadata.continuationOutput) {
         assertContinuationOutputSchema(
-          operationOutputSchema,
+          inlineComponentSchemaRefs(operationOutputSchema, componentSchemas),
           metadata.continuationOutput,
           operation.operationId,
         );
@@ -994,7 +966,7 @@ export function buildAgentOperationManifest(
         inputSchema:
           metadata.exposure === "excluded"
             ? null
-            : inlineComponentSchemaRefs(inputSchema(operation), componentSchemas) as Record<string, unknown>,
+            : operationInputSchema,
         outputSchema:
           metadata.exposure === "excluded"
             ? null
@@ -1008,9 +980,28 @@ export function buildAgentOperationManifest(
   );
 }
 
+/**
+ * The component schemas the manifest's operations refer to (directly or
+ * through other components), emitted once as `AGENT_COMPONENT_SCHEMAS`.
+ */
+export function buildAgentComponentSchemas(
+  document: AgentOperationOpenApiDocument,
+  entries: readonly AgentOperationManifestEntry[],
+): Record<string, unknown> {
+  return referencedComponentSchemas(
+    entries.map((entry) => [entry.inputSchema, entry.outputSchema]),
+    (document.components?.schemas ?? {}) as ComponentSchemas,
+  );
+}
+
+/**
+ * The generated module. Values are compact JSON: the manifest is data read
+ * by code and agents, and indentation only adds bytes to the Worker bundle.
+ */
 export function renderAgentOperationManifestModule(
   entries: readonly AgentOperationManifestEntry[],
   workflowCatalog: AgentWorkflowCatalog,
+  componentSchemas: Readonly<Record<string, unknown>> = {},
 ): string {
-  return `// This file is generated from the finalized /api/v1 OpenAPI contract.\n// Do not edit by hand.\n\nimport type { AgentWorkflowCatalog } from "../agent-access/workflows/types";\nimport type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";\n\nexport const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = ${JSON.stringify(entries, null, 2)};\n\nexport const AGENT_OPERATIONS_BY_ID: Readonly<Record<string, AgentOperationManifestEntry>> = Object.freeze(\n  Object.fromEntries(AGENT_OPERATIONS.map((operation) => [operation.operationId, operation])),\n);\n\nexport const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = ${JSON.stringify(workflowCatalog, null, 2)};\n`;
+  return `// This file is generated from the finalized /api/v1 OpenAPI contract.\n// Do not edit by hand.\n\nimport type { AgentWorkflowCatalog } from "../agent-access/workflows/types";\nimport type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";\n\n/** Shared schemas, referenced from operations as \`#/components/schemas/<name>\`. */\nexport const AGENT_COMPONENT_SCHEMAS: Readonly<Record<string, unknown>> = ${JSON.stringify(componentSchemas)};\n\nexport const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = ${JSON.stringify(entries)};\n\nexport const AGENT_OPERATIONS_BY_ID: Readonly<Record<string, AgentOperationManifestEntry>> = Object.freeze(\n  Object.fromEntries(AGENT_OPERATIONS.map((operation) => [operation.operationId, operation])),\n);\n\nexport const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = ${JSON.stringify(workflowCatalog)};\n`;
 }
