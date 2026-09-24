@@ -44,6 +44,7 @@ interface OrdersData {
   customer?: CustomerInfo;
   summary?: CustomerOrdersSummary;
   pagination?: CustomerOrdersPagination;
+  unclaimedGuestOrders?: unknown;
 }
 
 interface SessionData {
@@ -719,6 +720,8 @@ export async function getCustomerOrders(options: {
   customer?: CustomerInfo;
   summary?: CustomerOrdersSummary;
   pagination?: CustomerOrdersPagination;
+  /** Guest records holding more of this buyer's orders under a contact not yet verified. */
+  unclaimedGuestOrders?: UnclaimedGuestOrders[];
   error?: string;
   status?: number;
   unavailable?: boolean;
@@ -749,6 +752,7 @@ export async function getCustomerOrders(options: {
       customer: data.customer,
       ...(data.summary ? { summary: data.summary } : {}),
       ...(data.pagination ? { pagination: data.pagination } : {}),
+      unclaimedGuestOrders: readUnclaimedGuestOrders(data.unclaimedGuestOrders),
     };
   } catch (error: unknown) {
     return {
@@ -758,6 +762,95 @@ export async function getCustomerOrders(options: {
       status: 0,
       unavailable: true,
     };
+  }
+}
+
+/** Orders placed with a phone the signed-in buyer hasn't verified yet. */
+export interface UnclaimedGuestOrders {
+  /** Opaque guest-record id: the only thing sent back to claim them. */
+  id: string;
+  /** Masked phone ("01•••••011"); the full number never reaches the page. */
+  destination: string;
+  orderCount: number;
+  /** False when the store can't send text or WhatsApp codes. */
+  canVerify: boolean;
+}
+
+function readUnclaimedGuestOrders(value: unknown): UnclaimedGuestOrders[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry): UnclaimedGuestOrders[] => {
+    if (!entry || typeof entry !== "object") return [];
+    const raw = entry as Record<string, unknown>;
+    const count = raw.orderCount;
+    if (typeof raw.id !== "string" || !raw.id || typeof raw.destination !== "string" || !raw.destination) return [];
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count < 1) return [];
+    return [{ id: raw.id, destination: raw.destination, orderCount: count, canVerify: raw.canVerify !== false }];
+  });
+}
+
+export type SendGuestOrdersCodeResult =
+  | { success: true; message: string; destination: string; resendAfterSeconds: number }
+  | { success: false; error: string; status: number; retryAfterSeconds?: number };
+
+export type VerifyGuestOrdersResult =
+  | { success: true; movedOrders: number; message: string }
+  | { success: false; error: string; status: number; attemptsLeft?: number };
+
+function guestOrdersUrl(id: string, action: "send-code" | "verify"): string {
+  return authUrl(`guest-orders/${encodeURIComponent(id)}/${action}`);
+}
+
+/** Server messages as they are, even for 503 ("Text message codes are unavailable…"). */
+function guestOrdersFailure(res: Response, raw: AuthApiEnvelope): string {
+  return extractError(raw) || (res.status >= 500 ? UNREACHABLE_MESSAGE : "Something went wrong. Please try again.");
+}
+
+/** Text a code to the phone behind a guest record linked to this account. */
+export async function sendGuestOrdersCode(id: string): Promise<SendGuestOrdersCodeResult> {
+  try {
+    const res = await customerAuthFetch(guestOrdersUrl(id, "send-code"), {
+      method: "POST",
+      credentials: "include",
+    }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
+    const raw = await readEnvelope<{ message?: string; destination?: string; resendAfterSeconds?: number }>(res);
+    const data = raw.data;
+    if (!res.ok || isFailedEnvelope(raw) || !data) {
+      return { success: false, error: guestOrdersFailure(res, raw), status: res.status, retryAfterSeconds: errorDetails(raw).retryAfterSeconds };
+    }
+    const destination = data.destination || "";
+    return {
+      success: true,
+      destination,
+      message: data.message || `We sent a code to ${destination}.`,
+      resendAfterSeconds: data.resendAfterSeconds ?? 60,
+    };
+  } catch (error: unknown) {
+    return { success: false, error: networkErrorMessage(error), status: 0 };
+  }
+}
+
+/** Prove the phone with its code; the guest record's orders move to this account. */
+export async function verifyGuestOrders(id: string, code: string): Promise<VerifyGuestOrdersResult> {
+  try {
+    const res = await customerAuthFetch(guestOrdersUrl(id, "verify"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ code }),
+    }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
+    const raw = await readEnvelope<{ movedOrders?: number; message?: string }>(res);
+    const data = raw.data;
+    if (!res.ok || isFailedEnvelope(raw) || !data) {
+      return { success: false, error: guestOrdersFailure(res, raw), status: res.status, attemptsLeft: errorDetails(raw).attemptsLeft };
+    }
+    const movedOrders = typeof data.movedOrders === "number" ? data.movedOrders : 0;
+    return {
+      success: true,
+      movedOrders,
+      message: data.message || (movedOrders === 1 ? "1 order was added to your account." : `${movedOrders} orders were added to your account.`),
+    };
+  } catch (error: unknown) {
+    return { success: false, error: networkErrorMessage(error), status: 0 };
   }
 }
 

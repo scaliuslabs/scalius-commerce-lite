@@ -5,19 +5,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Database } from "@scalius/database/client";
 import { createMigratedSqlite, createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { RateLimitError, ValidationError } from "../../errors";
+import { ConflictError, NotFoundError, RateLimitError, ServiceUnavailableError, ValidationError } from "../../errors";
 import { createAtomicCheckoutAttempt } from "../orders/checkout-attempts";
 import { commitStorefrontOrderPayload } from "../orders/orders.ingest";
 import type { StorefrontOrderCommitPayload } from "../orders/orders.types";
-import { getCustomerOrders } from "./customers.service";
+import { getCustomerOrders, listCustomers } from "./customers.service";
 import { linkVerifiedContactOrders } from "./customer-identity";
 import {
   buildCustomerAuthOtpStorageKey,
   persistCustomerAuthOtpChallenge,
 } from "./customer-auth-otp-challenges";
 import {
+  canSendPhoneProof,
   cleanupExpiredCustomerSessions,
   deleteCustomerSession,
+  listLinkedGuestRecords,
+  sendLinkedGuestOrdersCode,
+  verifyLinkedGuestOrdersCode,
   deriveCustomerAuthOtpDeliveryCode,
   getCookieConfig,
   getCustomerBySession,
@@ -252,6 +256,107 @@ describe("unverified contacts never change identity (R2-BA-01, R2-MKT-02, R2-BA-
     // The guest record that only held this buyer's order is merged away; one customer per verified identity.
     expect(sqlite.prepare("SELECT deleted_at IS NOT NULL AS retired FROM customers WHERE id = ?").get(guestRecord))
       .toEqual({ retired: 1 });
+  });
+});
+
+describe("an owner's sign-up never splits their customer record silently (R3)", () => {
+  const OWNER_PHONE = "+8801799300011";
+  const OWNER_EMAIL = "r3.owner@example.test";
+  const historyOf = (customerId: string) => sqlite.prepare(
+    "SELECT change_type AS type, order_id AS orderId, related_customer_id AS relatedId FROM customer_history WHERE customer_id = ? AND change_type LIKE 'order_moved_%' ORDER BY order_id",
+  ).all(customerId);
+  const record = (id: string) => sqlite.prepare(
+    "SELECT linked_account_id AS linkedAccountId, deleted_at IS NOT NULL AS retired, phone, phone_verified_at IS NOT NULL AS phoneVerified FROM customers WHERE id = ?",
+  ).get(id);
+
+  async function ownerWithSplitRecord() {
+    const withEmail = await placeGuestOrder({ phone: OWNER_PHONE, email: OWNER_EMAIL, name: "R3 Victim Owner" });
+    const phoneOnly = await placeGuestOrder({ phone: OWNER_PHONE, email: null, name: "R3 Victim Owner" });
+    const guestId = orderLinks(withEmail)!.customerId as string;
+    expect(orderLinks(phoneOnly)!.customerId).toBe(guestId);
+    const owner = await createEmailAccount(OWNER_EMAIL, OWNER_PHONE, "R3 Victim Owner");
+    return { withEmail, phoneOnly, guestId, ownerId: owner.customer.customerId! };
+  }
+
+  it("takes only the orders placed with the proven email, links the guest record and logs each move on both sides", async () => {
+    const { withEmail, phoneOnly, guestId, ownerId } = await ownerWithSplitRecord();
+
+    expect(orderLinks(withEmail)).toEqual({ customerId: ownerId, owner: ownerId });
+    // The phone-only order stays: the account typed that phone but hasn't proven it.
+    expect(orderLinks(phoneOnly)).toEqual({ customerId: guestId, owner: null });
+    expect(record(guestId)).toMatchObject({ linkedAccountId: ownerId, retired: 0 });
+    expect(historyOf(guestId)).toEqual([{ type: "order_moved_out", orderId: withEmail, relatedId: ownerId }]);
+    expect(historyOf(ownerId)).toEqual([{ type: "order_moved_in", orderId: withEmail, relatedId: guestId }]);
+
+    // The buyer is told what is left and where it was placed; the merchant sees whose it is.
+    expect(await listLinkedGuestRecords(db, ownerId)).toEqual([
+      { id: guestId, phone: OWNER_PHONE, destination: "01•••••011", orderCount: 1 },
+    ]);
+    const { customers: listed } = await listCustomers(db, { limit: 50 });
+    expect(listed.find((row) => row.id === guestId)?.linkedAccount).toEqual({ id: ownerId, name: "R3 Victim Owner" });
+    expect(listed.find((row) => row.id === ownerId)?.linkedAccount).toBeNull();
+
+    // Signing in again moves nothing more and logs nothing twice.
+    await linkVerifiedContactOrders(db, ownerId);
+    expect(historyOf(ownerId)).toHaveLength(1);
+  });
+
+  it("adds the rest once the account proves the phone, then retires the guest record out of every list", async () => {
+    const { phoneOnly, guestId, ownerId } = await ownerWithSplitRecord();
+
+    // No text channel locally: the notice can't offer a code, and asking for one says so.
+    expect(await canSendPhoneProof(db, KEY)).toBe(false);
+    await expect(sendLinkedGuestOrdersCode(db, {
+      accountId: ownerId, guestRecordId: guestId, ip: "203.0.113.90", encryptionKey: KEY, credentialEncryptionKey: KEY,
+    })).rejects.toBeInstanceOf(ServiceUnavailableError);
+
+    // A wrong code moves nothing.
+    const code = await issuePhoneCode(OWNER_PHONE);
+    await expect(verifyLinkedGuestOrdersCode(db, { accountId: ownerId, guestRecordId: guestId, code: code === "000000" ? "111111" : "000000", encryptionKey: KEY }))
+      .rejects.toBeInstanceOf(ValidationError);
+    expect(orderLinks(phoneOnly)!.owner).toBeNull();
+
+    await expect(verifyLinkedGuestOrdersCode(db, { accountId: ownerId, guestRecordId: guestId, code, encryptionKey: KEY }))
+      .resolves.toEqual({ movedOrders: 1 });
+    expect(orderLinks(phoneOnly)).toEqual({ customerId: ownerId, owner: ownerId });
+    expect(record(ownerId)).toMatchObject({ phone: OWNER_PHONE, phoneVerified: 1 });
+    expect(record(guestId)).toMatchObject({ linkedAccountId: ownerId, retired: 1 });
+    expect(historyOf(guestId).map((row) => row.orderId)).toContain(phoneOnly);
+    expect(await listLinkedGuestRecords(db, ownerId)).toEqual([]);
+
+    // Merged, not trashed: neither the list, the trash nor search shows it.
+    const active = await listCustomers(db, { limit: 50 });
+    const trash = await listCustomers(db, { limit: 50, showTrashed: true });
+    const search = await listCustomers(db, { limit: 50, search: "R3 Victim" });
+    expect(active.customers.map((row) => row.id)).toEqual([ownerId]);
+    expect(trash.customers).toEqual([]);
+    expect(search.customers.map((row) => row.id)).toEqual([ownerId]);
+  });
+
+  it("offers nothing to a stranger who typed the phone, and refuses a phone another account proved", async () => {
+    const { guestId, ownerId } = await ownerWithSplitRecord();
+    const stranger = await createEmailAccount("stranger.r3@example.test", OWNER_PHONE, "Stranger");
+    const strangerId = stranger.customer.customerId!;
+
+    expect(await listLinkedGuestRecords(db, strangerId)).toEqual([]);
+    const code = await issuePhoneCode(OWNER_PHONE);
+    await expect(verifyLinkedGuestOrdersCode(db, { accountId: strangerId, guestRecordId: guestId, code, encryptionKey: KEY }))
+      .rejects.toBeInstanceOf(NotFoundError);
+
+    // Someone else proves the phone by signing in with it (that claims the guest record as their account).
+    await verifyPhone(OWNER_PHONE, code);
+    expect(record(guestId)).toMatchObject({ linkedAccountId: null });
+    expect(await listLinkedGuestRecords(db, ownerId)).toEqual([]);
+  });
+
+  it("refuses to prove a phone that another account already proved", async () => {
+    const { guestId, ownerId } = await ownerWithSplitRecord();
+    sqlite.prepare(
+      "INSERT INTO customers (id, name, phone, account_claimed_at, phone_verified_at) VALUES ('cust_phone_owner', 'Phone Owner', ?, unixepoch(), unixepoch())",
+    ).run(OWNER_PHONE);
+    const code = await issuePhoneCode(OWNER_PHONE);
+    await expect(verifyLinkedGuestOrdersCode(db, { accountId: ownerId, guestRecordId: guestId, code, encryptionKey: KEY }))
+      .rejects.toBeInstanceOf(ConflictError);
   });
 });
 

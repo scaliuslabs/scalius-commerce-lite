@@ -543,6 +543,8 @@ export const customerSummarySchema = z.object({
   zoneName: z.string().nullable(),
   areaName: z.string().nullable(),
   accountClaimedAt: z.string().nullable(),
+  /** On a guest record: the account that took its orders placed with a contact it proved. */
+  linkedAccount: z.object({ id: z.string(), name: z.string() }).nullable(),
   totalOrders: z.number(),
   totalSpent: z.number(),
   lastOrderAt: z.string().nullable(),

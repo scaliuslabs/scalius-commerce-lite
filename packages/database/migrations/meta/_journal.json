@@ -533,6 +533,13 @@
       "when": 1790300006000,
       "tag": "0075_theme_layout_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "6",
+      "when": 1790300007000,
+      "tag": "0076_guest_record_links",
+      "breakpoints": true
     }
   ]
 }
