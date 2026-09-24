@@ -76,6 +76,8 @@ describe("tax form boundaries", () => {
     expect(percentToBasisPoints("7.255")).toBeNull();
     expect(percentToBasisPoints("100.01")).toBeNull();
     expect(percentToBasisPoints("-1")).toBeNull();
+    expect(percentToBasisPoints("১৫")).toBe(1500);
+    expect(percentToBasisPoints("৭.২৫")).toBe(725);
     expect(basisPointsToPercent(725)).toBe("7.25");
   });
 

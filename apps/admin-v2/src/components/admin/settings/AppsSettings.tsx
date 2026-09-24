@@ -46,6 +46,7 @@ import {
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { usePermissions } from "~/contexts/PermissionContext";
+import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { analyticsScriptTypes, type AnalyticsScriptType } from "~/lib/analytics-script-types";
 import { apiData, type ApiResult } from "~/lib/api";
@@ -503,7 +504,6 @@ export function TrackingCard() {
 
 // ── Facebook & Instagram ────────────────────────────────────────────────
 
-type MetaSettings = NonNullable<ApiResult<typeof getApiV1AdminSettingsMetaConversions>["settings"]>;
 type MetaLog = ApiResult<typeof getApiV1AdminSettingsMetaConversionsLogs>["logs"][number];
 
 export const metaQuery = {
@@ -519,40 +519,47 @@ interface MetaDraft {
   isEnabled: boolean;
 }
 
-function MetaConnectionFields({ settings, canEdit }: { settings: MetaSettings | null; canEdit: boolean }) {
+/** The connection form's copy of the Meta settings, with the revision a save sends back. */
+const metaConnectionQuery = {
+  queryKey: [...metaQuery.queryKey, "connection"],
+  queryFn: async () => {
+    const { settings, revision } = await metaQuery.queryFn();
+    return {
+      pixelId: settings?.pixelId ?? "",
+      accessToken: settings?.accessToken ?? "",
+      testEventCode: settings?.testEventCode ?? "",
+      isEnabled: settings?.isEnabled ?? false,
+      revision,
+    };
+  },
+};
+
+function MetaConnectionFields({ canEdit }: { canEdit: boolean }) {
   const t = useMessages(appsMessages);
   const common = useMessages(settingsMessages);
-  const queryClient = useQueryClient();
-  const [saved] = useState<MetaDraft>(() => ({
-    pixelId: settings?.pixelId ?? "",
-    accessToken: settings?.accessToken ?? "",
-    testEventCode: settings?.testEventCode ?? "",
-    isEnabled: settings?.isEnabled ?? false,
-  }));
-  const [draft, setDraft] = useState(saved);
-  const set = <K extends keyof MetaDraft>(key: K, value: MetaDraft[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
-  const missing = draft.isEnabled && (!draft.pixelId.trim() || !draft.accessToken.trim());
-  const save = useMutation({
-    // Untouched secrets are left out, so the saved ones stay.
-    mutationFn: () =>
+  const { values: draft, setValue: set, isLoaded } = useSettingsForm<MetaDraft>({
+    queryKey: metaConnectionQuery.queryKey,
+    fetchFn: metaConnectionQuery.queryFn,
+    // A secret still showing its mask is left out, so the saved one stays.
+    saveFn: (values, expectedRevision) =>
       apiData(postApiV1AdminSettingsMetaConversions({
         body: {
-          pixelId: draft.pixelId.trim(),
-          isEnabled: draft.isEnabled,
-          ...(draft.accessToken !== saved.accessToken ? { accessToken: draft.accessToken.trim() } : {}),
-          ...(draft.testEventCode !== saved.testEventCode ? { testEventCode: draft.testEventCode.trim() } : {}),
+          pixelId: values.pixelId.trim(),
+          isEnabled: values.isEnabled,
+          ...(values.accessToken !== MASKED_VALUE ? { accessToken: values.accessToken.trim() } : {}),
+          ...(values.testEventCode !== MASKED_VALUE ? { testEventCode: values.testEventCode.trim() } : {}),
+          expectedRevision,
         },
       })),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: metaQuery.queryKey }),
+    invalidateQueryKeys: [metaQuery.queryKey],
+    defaultValues: { pixelId: "", accessToken: "", testEventCode: "", isEnabled: false },
+    errorMessage: common("saveFailed"),
+    canEdit,
+    isValid: (values) => !values.isEnabled || Boolean(values.pixelId.trim() && values.accessToken.trim()),
+    fields: { pixelId: "meta-pixel", accessToken: "meta-token", testEventCode: "meta-test-code" },
   });
-  useSaveBar({
-    dirty: JSON.stringify(draft) !== JSON.stringify(saved),
-    saving: save.isPending,
-    invalid: !canEdit || missing,
-    save: () => save.mutateAsync(),
-    discard: () => setDraft(saved),
-  });
+  if (!isLoaded) return <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" aria-hidden="true" />;
+  const missing = draft.isEnabled && (!draft.pixelId.trim() || !draft.accessToken.trim());
   return (
     <>
       <SettingsField id="meta-pixel" label={t("pixelId")} help={t("pixelHelp")}>
@@ -665,7 +672,7 @@ function FacebookCardBody() {
             title={t("connection")}
             trigger={<SettingsRow label={t("connection")} value={status} disabled={!canEdit} />}
           >
-            <MetaConnectionFields settings={settings} canEdit={canEdit} />
+            <MetaConnectionFields canEdit={canEdit} />
           </SettingsDialog>
           <Dialog>
             <DialogTrigger asChild>

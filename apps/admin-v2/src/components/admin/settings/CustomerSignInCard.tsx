@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { postApiV1AdminSettingsAuth } from "@scalius/api-client/sdk";
 import {
   CUSTOMER_AUTH_OTP_CHANNELS,
@@ -34,7 +35,10 @@ export const signInPolicyQuery = {
   queryKey: [...authQuery.queryKey, "policy"],
   queryFn: async () => {
     const auth = await authQuery.queryFn();
-    return { policy: normalizeCustomerAuthPolicy(auth.customerAuthPolicy, auth.authVerificationMethod) };
+    return {
+      policy: normalizeCustomerAuthPolicy(auth.customerAuthPolicy, auth.authVerificationMethod),
+      revision: auth.revision,
+    };
   },
 };
 
@@ -44,13 +48,18 @@ function emailMode(policy: CustomerAuthPolicyConfig): EmailMode {
   return "none";
 }
 
+/** Codes sent only by email need the email: the shared rule forces it to required. */
+function emailOnly(policy: CustomerAuthPolicyConfig): boolean {
+  return policy.otpChannels.length === 1 && policy.otpChannels[0] === "email";
+}
+
 /** Phone is always required: only the email field is the merchant's choice. */
 function withEmailMode(policy: CustomerAuthPolicyConfig, mode: EmailMode): CustomerAuthPolicyConfig {
-  return {
+  return normalizeCustomerAuthPolicy({
     ...policy,
     requiredContactFields: mode === "required" ? ["phone", "email"] : ["phone"],
     optionalContactFields: mode === "optional" ? ["email"] : [],
-  };
+  });
 }
 
 function withChannel(policy: CustomerAuthPolicyConfig, channel: CustomerAuthOtpChannel): CustomerAuthPolicyConfig {
@@ -58,11 +67,11 @@ function withChannel(policy: CustomerAuthPolicyConfig, channel: CustomerAuthOtpC
   if (on.has(channel)) on.delete(channel);
   else on.add(channel);
   const otpChannels = CUSTOMER_AUTH_OTP_CHANNELS.filter((item) => on.has(item));
-  return {
+  return normalizeCustomerAuthPolicy({
     ...policy,
     otpChannels,
     defaultOtpChannel: otpChannels.includes(policy.defaultOtpChannel) ? policy.defaultOtpChannel : otpChannels[0]!,
-  };
+  });
 }
 
 export function CustomerSignInCard() {
@@ -72,13 +81,18 @@ export function CustomerSignInCard() {
   // Delivery readiness decides which channels can be turned on (fail closed).
   const readiness = useQuery(customerRulesQuery);
   const channelReady = (channel: CustomerAuthOtpChannel) => isReady(readiness.data?.[channel]);
-  const { values, setValue, isLoadError, refetch } = useSettingsForm<{ policy: CustomerAuthPolicyConfig }>({
+  const { values, setValue, isLoadError, refetch } = useSettingsForm<
+    { policy: CustomerAuthPolicyConfig },
+    unknown,
+    { customerAuth: number; whatsapp: number }
+  >({
     label: t("signInTitle"),
     queryKey: signInPolicyQuery.queryKey,
     fetchFn: signInPolicyQuery.queryFn,
-    saveFn: ({ policy }) =>
+    saveFn: ({ policy }, expectedRevision) =>
       apiData(postApiV1AdminSettingsAuth({
         body: {
+          expectedRevision: { customerAuth: expectedRevision.customerAuth },
           authVerificationMethod: getLegacyCustomerAuthMethodForPolicy(policy),
           customerAuthPolicy: {
             otpChannels: [...policy.otpChannels],
@@ -92,7 +106,9 @@ export function CustomerSignInCard() {
     defaultValues: { policy: undefined as unknown as CustomerAuthPolicyConfig },
     errorMessage: common("saveFailed"),
     canEdit,
+    // The first render after the read can still hold the empty default.
     isValid: ({ policy }) =>
+      Boolean(policy) &&
       policy.otpChannels.length > 0 && policy.otpChannels.every((channel) => channelReady(channel)),
   });
   if (isLoadError) return <SettingsLoadFailure title={t("loadSignIn")} onRetry={refetch} />;
@@ -118,7 +134,9 @@ export function CustomerSignInCard() {
               </label>
               {on && !channelReady(channel) ? (
                 <p role="alert" className="pb-1 pl-7 text-body text-destructive">
-                  {t("channelNotReady", { channel: t(channel) })}
+                  <Link to="/admin/settings/notifications" hash="sending" className="underline underline-offset-2">
+                    {t("channelNotReady", { channel: t(channel) })}
+                  </Link>
                 </p>
               ) : null}
             </div>
@@ -150,16 +168,15 @@ export function CustomerSignInCard() {
           value={emailMode(policy)}
           disabled={!canEdit}
           onValueChange={(mode) => setValue("policy", withEmailMode(policy, mode as EmailMode))}
-         
         >
           {(["none", "optional", "required"] as const).map((mode) => (
             <label key={mode} className="flex min-h-11 items-start gap-3 py-3 text-body">
-              <RadioGroupItem className="mt-0.5" value={mode} />
+              <RadioGroupItem className="mt-0.5" value={mode} disabled={mode !== "required" && emailOnly(policy)} />
               {t(mode === "none" ? "emailNone" : mode === "optional" ? "emailOptional" : "emailRequired")}
             </label>
           ))}
         </RadioGroup>
-        <p className="text-body text-muted-foreground">{t("phoneAlways")}</p>
+        <p className="text-body text-muted-foreground">{t(emailOnly(policy) ? "emailOnlyChannel" : "phoneAlways")}</p>
       </fieldset>
     </SettingsCard>
   );

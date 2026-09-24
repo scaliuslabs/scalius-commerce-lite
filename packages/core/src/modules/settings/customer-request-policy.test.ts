@@ -114,7 +114,7 @@ describe("customer request policy", () => {
       cancellationEnabled: false,
       visibility: "show_unavailable",
       unexpected: true,
-    })).resolves.toEqual(expected);
+    })).resolves.toEqual({ policy: expected, revision: 1 });
     await expect(getCustomerRequestPolicy(db)).resolves.toEqual(expected);
   });
 });

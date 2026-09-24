@@ -75,21 +75,30 @@ export function createTwoFactorRecoveryCodeStorage(authSecret: string) {
   };
 }
 
+/** Lower case without the look-alikes i, l, o, 0 and 1, so a code read off paper types back right. */
+const RECOVERY_CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
+
+/** Ten single-use recovery codes like `k7qx4-mn2pa`, for Better Auth and for staged method changes. */
+export function generateRecoveryCodes(): string[] {
+  const size = RECOVERY_CODE_ALPHABET.length;
+  // Drop bytes past the last whole multiple of the alphabet so every character is equally likely.
+  const limit = 256 - (256 % size);
+  return Array.from({ length: BACKUP_CODE_COUNT }, () => {
+    let value = "";
+    while (value.length < BACKUP_CODE_LENGTH) {
+      for (const byte of crypto.getRandomValues(new Uint8Array(BACKUP_CODE_LENGTH * 2))) {
+        if (byte < limit && value.length < BACKUP_CODE_LENGTH) value += RECOVERY_CODE_ALPHABET[byte % size];
+      }
+    }
+    return `${value.slice(0, 5)}-${value.slice(5)}`;
+  });
+}
+
 async function createBackupCodes(authSecret: string): Promise<{
   backupCodes: string[];
   storedBackupCodes: string;
 }> {
-  // Match Better Auth's recovery-code format so the existing verifier can
-  // consume these codes after the staged method change is committed.
-  const backupCodes = Array.from({ length: BACKUP_CODE_COUNT }, () => {
-    const value = generateRandomString(
-      BACKUP_CODE_LENGTH,
-      "a-z",
-      "0-9",
-      "A-Z",
-    );
-    return `${value.slice(0, 5)}-${value.slice(5)}`;
-  });
+  const backupCodes = generateRecoveryCodes();
   const storedBackupCodes = await createTwoFactorRecoveryCodeStorage(
     authSecret,
   ).encrypt(JSON.stringify(backupCodes));

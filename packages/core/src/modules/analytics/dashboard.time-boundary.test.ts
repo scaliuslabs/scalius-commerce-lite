@@ -3,7 +3,9 @@ import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getDailyActivityData, getDashboardSummaryStats } from "./dashboard.service";
+import { getDailyActivityData, getDashboardHomeSummary } from "./dashboard.service";
+
+const summaryStats = async (db: Database) => (await getDashboardHomeSummary(db, 0)).stats;
 
 function epoch(value: string): number {
   return Date.parse(value) / 1000;
@@ -49,7 +51,7 @@ describe("dashboard merchant calendar boundaries", () => {
     insertOrder("current_deleted", 999, "pending", "2026-08-08T00:00:00.000Z", 1);
     insertOrder("previous_deleted", 999, "pending", "2026-07-08T00:00:00.000Z", 1);
 
-    const result = await getDashboardSummaryStats(db);
+    const result = await summaryStats(db);
 
     expect(result.currentMonth).toMatchObject({
       orders: 3,
@@ -71,7 +73,7 @@ describe("dashboard merchant calendar boundaries", () => {
       insertOrder(`current_${index}`, currentValue / currentOrders, "pending", `2026-08-${String(index + 5).padStart(2, "0")}T00:00:00.000Z`);
     }
 
-    const result = await getDashboardSummaryStats(db);
+    const result = await summaryStats(db);
 
     expect(result.currentMonth).toMatchObject({ orderGrowth, revenueGrowth });
   });
@@ -85,7 +87,7 @@ describe("dashboard merchant calendar boundaries", () => {
     insertOrder("previous_tiny", previousValue, "pending", "2026-07-05T00:00:00.000Z");
     insertOrder("current_tiny", currentValue, "pending", "2026-08-05T00:00:00.000Z");
 
-    const result = await getDashboardSummaryStats(db);
+    const result = await summaryStats(db);
 
     expect(result.currentMonth.revenueGrowth).toBeCloseTo(expectedGrowth, 8);
   });
@@ -93,7 +95,7 @@ describe("dashboard merchant calendar boundaries", () => {
   it("returns unavailable growth when the previous month has no baseline", async () => {
     insertOrder("current_only", 100, "pending", "2026-08-05T00:00:00.000Z");
 
-    const result = await getDashboardSummaryStats(db);
+    const result = await summaryStats(db);
 
     expect(result.currentMonth).toMatchObject({
       orders: 1,

@@ -50,7 +50,6 @@ import {
   rollbackThemeSettings,
   createThemePreviewSession,
   saveThemeSettings,
-  getMediaOptimizationSettings,
   isValidMediaHostInput,
   saveMediaOptimizationSettings,
   getSeoSettings,
@@ -59,9 +58,16 @@ import {
   saveStorefrontUrl,
   getHomepagePresentationSettings,
   saveHomepagePresentationSettings,
-  getAllowedCountries,
   saveAllowedCountries,
+  readSettingsForEdit,
 } from "@scalius/core/modules/settings/site-settings.service";
+import {
+  currencyDocument,
+  customerCountriesDocument,
+  mediaDocument,
+  platformDocument,
+  seoDocument,
+} from "@scalius/core/modules/settings/documents";
 import {
   PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT,
   PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT,
@@ -73,7 +79,6 @@ import { bumpCacheGeneration } from "../../../utils/cache-generation";
 import { ok } from "../../../utils/api-response";
 import {
   successEnvelope,
-  messageResponse,
   errorResponses,
   conflictResponse,
   serviceUnavailableResponse,
@@ -81,6 +86,9 @@ import {
 import { readinessSchema } from "../../../schemas/readiness";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+const revisionSchema = z.number().int().nonnegative();
+/** A save answers with the document revision the next save must send back. */
+const savedRevisionResponse = successEnvelope(z.object({ message: z.string(), revision: revisionSchema }));
 // ─────────────────────────────────────────
 // CURRENCY
 // ─────────────────────────────────────────
@@ -100,6 +108,7 @@ const currencySettingsSchema = z.object({
   currencySymbol: z.string().max(CURRENCY_SYMBOL_MAX_LENGTH),
   usdExchangeRate: z.string().max(CURRENCY_EXCHANGE_RATE_MAX_LENGTH),
   currencyCodeLocked: z.boolean(),
+  revision: revisionSchema,
 });
 
 const getCurrencyRoute = createRoute({
@@ -121,10 +130,11 @@ const getCurrencyRoute = createRoute({
 
 app.openapi(getCurrencyRoute, async (c) => {
   const db = c.get("db");
-  const result = await getCurrencySettings(db);
+  const { value: result, revision } = await readSettingsForEdit(db, currencyDocument);
   const currencyCodeLocked = await isCurrencyCodeLocked(db);
   return ok(c, {
     ...result,
+    revision,
     currencySymbol: result.currencySymbol.slice(0, CURRENCY_SYMBOL_MAX_LENGTH),
     usdExchangeRate: result.usdExchangeRate.slice(
       0,
@@ -135,6 +145,7 @@ app.openapi(getCurrencyRoute, async (c) => {
 });
 
 const saveCurrencySchema = z.object({
+  expectedRevision: revisionSchema,
   currencyCode: supportedCurrencyCodeSchema.optional(),
   currencySymbol: z.string().max(CURRENCY_SYMBOL_MAX_LENGTH).optional(),
   usdExchangeRate: z
@@ -163,7 +174,7 @@ const saveCurrencyRoute = createRoute({
   responses: {
     200: {
       description: "Settings saved",
-      content: { "application/json": { schema: messageResponse } },
+      content: { "application/json": { schema: savedRevisionResponse } },
     },
     409: conflictResponse,
     ...errorResponses,
@@ -171,12 +182,11 @@ const saveCurrencyRoute = createRoute({
 });
 
 app.openapi(saveCurrencyRoute, async (c) => {
-  const db = c.get("db");
-  const body = c.req.valid("json");
-  await saveCurrencySettings(db, body);
+  const { expectedRevision, ...body } = c.req.valid("json");
+  const { revision } = await saveCurrencySettings(c.get("db"), body, { expectedRevision });
   await bumpCacheGeneration(c);
 
-  return ok(c, { message: "Currency settings saved successfully" });
+  return ok(c, { message: "Currency settings saved successfully", revision });
 });
 
 // ─────────────────────────────────────────
@@ -973,7 +983,7 @@ const mediaOptimizationSchema = z.object({
 });
 
 function projectMediaOptimizationSettings(
-  settings: Awaited<ReturnType<typeof getMediaOptimizationSettings>>,
+  settings: { canonicalCdnUrl: string; canonicalHostAliases: string[] },
 ) {
   return {
     canonicalCdnUrl: settings.canonicalCdnUrl.slice(0, MEDIA_HOST_MAX_LENGTH),
@@ -983,7 +993,10 @@ function projectMediaOptimizationSettings(
     ).map((host) => host.slice(0, MEDIA_HOST_MAX_LENGTH)),
   };
 }
-const mediaOptimizationSaveResponseSchema = mediaOptimizationSchema.extend({
+const mediaOptimizationDocumentSchema = mediaOptimizationSchema.extend({
+  revision: revisionSchema,
+});
+const mediaOptimizationSaveResponseSchema = mediaOptimizationDocumentSchema.extend({
   message: z.string(),
 });
 
@@ -998,7 +1011,7 @@ const getMediaOptimizationRoute = createRoute({
       description: "Media settings",
       content: {
         "application/json": {
-          schema: successEnvelope(mediaOptimizationSchema),
+          schema: successEnvelope(mediaOptimizationDocumentSchema),
         },
       },
     },
@@ -1007,9 +1020,8 @@ const getMediaOptimizationRoute = createRoute({
 });
 
 app.openapi(getMediaOptimizationRoute, async (c) => {
-  const db = c.get("db");
-  const result = await getMediaOptimizationSettings(db);
-  return ok(c, projectMediaOptimizationSettings(result));
+  const { value, revision } = await readSettingsForEdit(c.get("db"), mediaDocument);
+  return ok(c, { ...projectMediaOptimizationSettings(value), revision });
 });
 
 const saveMediaOptimizationRoute = createRoute({
@@ -1022,7 +1034,9 @@ const saveMediaOptimizationRoute = createRoute({
     body: {
       required: true,
       content: {
-        "application/json": { schema: mediaOptimizationSchema.partial() },
+        "application/json": {
+          schema: mediaOptimizationSchema.partial().extend({ expectedRevision: revisionSchema }),
+        },
       },
     },
   },
@@ -1036,17 +1050,18 @@ const saveMediaOptimizationRoute = createRoute({
       },
     },
     ...errorResponses,
+    409: conflictResponse,
   },
 });
 
 app.openapi(saveMediaOptimizationRoute, async (c) => {
-  const db = c.get("db");
-  const body = c.req.valid("json");
-  const saved = await saveMediaOptimizationSettings(db, body);
+  const { expectedRevision, ...body } = c.req.valid("json");
+  const saved = await saveMediaOptimizationSettings(c.get("db"), body, { expectedRevision });
   await bumpCacheGeneration(c);
   return ok(c, {
     message: "Media settings saved successfully",
-    ...projectMediaOptimizationSettings(saved),
+    ...projectMediaOptimizationSettings(saved.value),
+    revision: saved.revision,
   });
 });
 
@@ -1092,6 +1107,7 @@ function projectSeoSettings(
 }
 
 const seoSettingsSchema = z.object({
+  revision: revisionSchema,
   homepageTitle: z.string().max(SEO_HOMEPAGE_TITLE_MAX_LENGTH),
   homepageMetaDescription: z.string().max(SEO_META_DESCRIPTION_MAX_LENGTH),
   socialImage: z.string().max(SEO_SOCIAL_IMAGE_MAX_LENGTH),
@@ -1133,9 +1149,8 @@ const getSeoRoute = createRoute({
 });
 
 app.openapi(getSeoRoute, async (c) => {
-  const db = c.get("db");
-  const result = await getSeoSettings(db);
-  return ok(c, projectSeoSettings(result));
+  const { value, revision } = await readSettingsForEdit(c.get("db"), seoDocument);
+  return ok(c, { ...projectSeoSettings(value), revision });
 });
 
 const productFeedDiagnosticReasonSchema = z.enum(
@@ -1368,12 +1383,13 @@ const saveSeoReturnPolicySchema = z.object({
     .max(SEO_POLICY_URL_MAX_LENGTH)
     .refine(
       (value) => isValidSeoReturnPolicyUrl(value),
-      "Policy URL must be blank, a same-origin path, or an absolute http(s) URL",
+      "Choose one of your store's pages.",
     )
     .optional(),
 });
 
 const saveSeoSchema = z.object({
+  expectedRevision: revisionSchema,
   homepageTitle: z.string().max(SEO_HOMEPAGE_TITLE_MAX_LENGTH).optional(),
   homepageMetaDescription: z
     .string()
@@ -1406,18 +1422,18 @@ const saveSeoRoute = createRoute({
   responses: {
     200: {
       description: "SEO saved",
-      content: { "application/json": { schema: messageResponse } },
+      content: { "application/json": { schema: savedRevisionResponse } },
     },
     ...errorResponses,
+    409: conflictResponse,
   },
 });
 
 app.openapi(saveSeoRoute, async (c) => {
-  const db = c.get("db");
-  const data = c.req.valid("json");
-  await saveSeoSettings(db, data);
+  const { expectedRevision, ...data } = c.req.valid("json");
+  const { revision } = await saveSeoSettings(c.get("db"), data, { expectedRevision });
   await bumpCacheGeneration(c);
-  return ok(c, { message: "SEO settings saved successfully" });
+  return ok(c, { message: "SEO settings saved successfully", revision });
 });
 
 // ─────────────────────────────────────────
@@ -1440,6 +1456,8 @@ const getStorefrontUrlRoute = createRoute({
           schema: successEnvelope(
             z.object({
               storefrontUrl: z.string().max(STOREFRONT_URL_MAX_LENGTH),
+              /** The platform document's revision (the storefront origin lives there). */
+              revision: revisionSchema,
             }),
           ),
         },
@@ -1451,17 +1469,19 @@ const getStorefrontUrlRoute = createRoute({
 
 app.openapi(getStorefrontUrlRoute, async (c) => {
   const db = c.get("db");
-  const result = await getStorefrontUrlSetting(db);
-  const storefrontUrl = normalizeStorefrontOrigin(result.storefrontUrl);
+  const { value, revision } = await readSettingsForEdit(db, platformDocument);
+  const storefrontUrl = normalizeStorefrontOrigin(value.storefrontUrl);
   return ok(c, {
     storefrontUrl:
       storefrontUrl && storefrontUrl.length <= STOREFRONT_URL_MAX_LENGTH
         ? storefrontUrl
         : "",
+    revision,
   });
 });
 
 const saveStorefrontUrlSchema = z.object({
+  expectedRevision: revisionSchema,
   storefrontUrl: z
     .string()
     .trim()
@@ -1488,18 +1508,18 @@ const saveStorefrontUrlRoute = createRoute({
   responses: {
     200: {
       description: "URL saved",
-      content: { "application/json": { schema: messageResponse } },
+      content: { "application/json": { schema: savedRevisionResponse } },
     },
     ...errorResponses,
+    409: conflictResponse,
   },
 });
 
 app.openapi(saveStorefrontUrlRoute, async (c) => {
-  const db = c.get("db");
-  const { storefrontUrl } = c.req.valid("json");
-  await saveStorefrontUrl(db, storefrontUrl, c.env.CACHE);
+  const { storefrontUrl, expectedRevision } = c.req.valid("json");
+  const { revision } = await saveStorefrontUrl(c.get("db"), storefrontUrl, c.env.CACHE, { expectedRevision });
   await bumpCacheGeneration(c);
-  return ok(c, { message: "Storefront URL saved successfully" });
+  return ok(c, { message: "Storefront URL saved successfully", revision });
 });
 
 // ─────────────────────────────────────────
@@ -1635,6 +1655,7 @@ const getAllowedCountriesRoute = createRoute({
                   .array(countryCodeSchema)
                   .max(COUNTRY_CODE_MAX_COUNT),
                 allowedCountriesMode: z.enum(["include", "exclude"]),
+                revision: revisionSchema,
               })
               .strict(),
           ),
@@ -1647,8 +1668,8 @@ const getAllowedCountriesRoute = createRoute({
 
 app.openapi(getAllowedCountriesRoute, async (c) => {
   const db = c.get("db");
-  const result = await getAllowedCountries(db);
-  return ok(c, projectAllowedCountries(result));
+  const { value, revision } = await readSettingsForEdit(db, customerCountriesDocument);
+  return ok(c, { ...projectAllowedCountries(value), revision });
 });
 
 const saveAllowedCountriesRoute = createRoute({
@@ -1667,6 +1688,7 @@ const saveAllowedCountriesRoute = createRoute({
               .array(countryCodeSchema)
               .max(COUNTRY_CODE_MAX_COUNT),
             mode: z.enum(["include", "exclude"]).optional().default("include"),
+            expectedRevision: revisionSchema,
           }),
         },
       },
@@ -1675,26 +1697,28 @@ const saveAllowedCountriesRoute = createRoute({
   responses: {
     200: {
       description: "Countries saved",
-      content: { "application/json": { schema: messageResponse } },
+      content: { "application/json": { schema: savedRevisionResponse } },
     },
     ...errorResponses,
+    409: conflictResponse,
   },
 });
 
 app.openapi(saveAllowedCountriesRoute, async (c) => {
   const db = c.get("db");
-  const { allowedCountries, mode } = c.req.valid("json");
+  const { allowedCountries, mode, expectedRevision } = c.req.valid("json");
   const projected = projectAllowedCountries({
     allowedCountries,
     allowedCountriesMode: mode,
   });
-  const result = await saveAllowedCountries(
+  const { revision } = await saveAllowedCountries(
     db,
     projected.allowedCountries,
     projected.allowedCountriesMode,
+    { expectedRevision },
   );
   await bumpCacheGeneration(c);
-  return ok(c, { message: "Allowed countries saved", ...result });
+  return ok(c, { message: "Allowed countries saved", revision });
 });
 
 export { app as siteSettingsRoutes };

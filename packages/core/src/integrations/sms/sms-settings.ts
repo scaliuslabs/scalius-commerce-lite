@@ -76,6 +76,8 @@ export interface SmsSettingsData {
   gennetApiToken: string; // masked on GET
   gennetBaseUrl: string;
   gennetSid: string;
+  /** The SMS document revision a save must send back as `expectedRevision`. */
+  revision: number;
 }
 
 /** Stable issue code for SMS provider setup. */
@@ -291,6 +293,7 @@ export async function getSmsSettings(
     gennetApiToken: masked("gennetApiToken"),
     gennetBaseUrl: vals.gennetBaseUrl,
     gennetSid: vals.gennetSid,
+    revision: stored.revision,
   };
 }
 
@@ -316,7 +319,9 @@ export async function saveSmsSettings(
     gennetSid: string;
   }>,
   encryptionKey?: string,
-): Promise<void> {
+  /** The revision the editor loaded; a stale one is a 409 conflict. */
+  options: { expectedRevision?: number } = {},
+): Promise<{ revision: number }> {
   validateSmsSettingsInput(data);
   // A masked or empty secret means "unchanged"; secrets are never cleared here.
   const patch: Partial<SmsSettings> = {};
@@ -325,8 +330,8 @@ export async function saveSmsSettings(
     if (SMS_SECRET_FIELDS.has(field) && (!value || value === MASKED)) continue;
     patch[field] = value;
   }
-  if (Object.keys(patch).length === 0) return;
-  await smsDocument.write(db, patch, { encryptionKey });
+  const { revision } = await smsDocument.write(db, patch, { encryptionKey }, options);
+  return { revision };
 }
 
 const SMS_SECRET_FIELDS = new Set<keyof SmsSettings>([

@@ -2,11 +2,22 @@ import { useCallback, useEffect, useRef, useState, type SetStateAction } from "r
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useSaveBar, type SaveBarEntry } from "~/components/admin/shared/SaveBar";
+import { readSettingsRevisionConflict } from "~/lib/admin-api-error";
+import { translate } from "~/i18n";
+import { saveBarMessages } from "~/i18n/save-bar";
 
-interface UseSettingsFormOptions<T extends object, SaveResult> {
+/**
+ * A settings document's revision as its GET returns it (`data.revision`): a
+ * number, or one number per document for an endpoint that edits several.
+ */
+export type SettingsRevision = number | Record<string, number>;
+
+interface UseSettingsFormOptions<T extends object, SaveResult, R extends SettingsRevision> {
   queryKey: readonly unknown[];
+  /** The GET payload; its `revision` is kept apart from the form values. */
   fetchFn: () => Promise<Partial<T>>;
-  saveFn: (values: T) => Promise<SaveResult>;
+  /** Sends the values with the revision they were loaded at (`expectedRevision`). */
+  saveFn: (values: T, expectedRevision: R) => Promise<SaveResult>;
   resolveSavedValues?: (result: SaveResult, submittedValues: T) => T | undefined;
   defaultValues: T;
   successMessage?: string;
@@ -32,15 +43,34 @@ export function mergeUneditedFields<T extends object>(current: T, baseline: T, i
   return next;
 }
 
+function readRevision(data: unknown): SettingsRevision | undefined {
+  const revision = data && typeof data === "object" ? (data as { revision?: unknown }).revision : undefined;
+  return typeof revision === "number" || (revision !== null && typeof revision === "object")
+    ? revision as SettingsRevision
+    : undefined;
+}
+
+/** The revision travels beside the values, never inside them. */
+function withoutRevision<T extends object>(data: T): T {
+  const { revision: _revision, ...fields } = data as T & { revision?: unknown };
+  return fields as T;
+}
+
+function formValues<T extends object>(defaults: T, data: Partial<T> | undefined): T {
+  return { ...defaults, ...withoutRevision(data ?? {}) } as T;
+}
+
 /**
- * Generic hook for settings forms that follow the common pattern:
- *   1. Fetch settings via TanStack Query
- *   2. Manage N fields as a single object (local state synced from query)
- *   3. Submit all fields via mutation, show toast, invalidate cache
- *
- * Replaces the boilerplate of N useState calls + loading + saving + useEffect + handleSubmit.
+ * One settings card: loads its document, keeps the merchant's draft, and saves
+ * it at the revision it was loaded at. Inside a page save bar the bar owns
+ * Save/Discard and the error banner; a save refused because someone else saved
+ * first offers "Reload and keep my edits" there (never a silent overwrite).
  */
-export function useSettingsForm<T extends object, SaveResult = unknown>({
+export function useSettingsForm<
+  T extends object,
+  SaveResult = unknown,
+  R extends SettingsRevision = number,
+>({
   queryKey,
   fetchFn,
   saveFn,
@@ -53,7 +83,7 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
   canEdit = true,
   label,
   fields,
-}: UseSettingsFormOptions<T, SaveResult>) {
+}: UseSettingsFormOptions<T, SaveResult, R>) {
   const queryClient = useQueryClient();
 
   const { data, dataUpdatedAt, error, isError, isLoading } = useQuery({
@@ -69,7 +99,7 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
   // flashes default values.
   const [{ values, savedValues }, setDraft] = useState(() => {
     const cached = queryClient.getQueryData<Partial<T>>(queryKey as unknown[]);
-    const initial = cached ? ({ ...defaultValues, ...cached } as T) : defaultValues;
+    const initial = cached ? formValues(defaultValues, cached) : defaultValues;
     return { values: initial, savedValues: initial };
   });
   const inSaveBarRef = useRef(false);
@@ -79,7 +109,7 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
   // the same data object. Preserve local edits against the prior saved snapshot.
   useEffect(() => {
     if (data && dataUpdateCount > ignoredReadUpdates.current) {
-      const nextValues = { ...defaultValuesRef.current, ...data } as T;
+      const nextValues = formValues(defaultValuesRef.current, data);
       setDraft((current) => ({
         values: mergeUneditedFields(current.values, current.savedValues, nextValues),
         savedValues: nextValues,
@@ -87,14 +117,33 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
     }
   }, [data, dataUpdatedAt, dataUpdateCount]);
 
+  /** Loads the latest saved version under the draft, keeping edited fields. */
+  const reloadLatest = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: queryKey as unknown[] }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the key's content, not its identity
+    [queryClient, JSON.stringify(queryKey)],
+  );
+
   const mutation = useMutation({
-    mutationFn: saveFn,
+    // The revision the cached document was loaded at. Cards that share a
+    // document read it at save time, so one save bar never conflicts with itself.
+    mutationFn: (draft: T) =>
+      saveFn(draft, readRevision(queryClient.getQueryData(queryKey as unknown[])) as R),
     onSuccess: async (result, submittedValues) => {
+      const savedRevision = readRevision(result);
+      const resolved = resolveSavedValues?.(result, submittedValues);
+      const canonicalValues = resolved && withoutRevision(resolved);
+      if (canonicalValues || savedRevision !== undefined) {
+        await queryClient.cancelQueries({ queryKey: queryKey as unknown[] });
+        queryClient.setQueryData<Partial<T>>(queryKey as unknown[], (cached) => ({
+          ...(canonicalValues ?? cached),
+          ...(savedRevision === undefined ? {} : { revision: savedRevision }),
+        }) as Partial<T>);
+      }
       // Ignore reads published before this write was acknowledged, even if
       // their React effects are still queued.
       ignoredReadUpdates.current =
         queryClient.getQueryState(queryKey as unknown[])?.dataUpdateCount ?? 0;
-      const canonicalValues = resolveSavedValues?.(result, submittedValues);
       const nextValues = canonicalValues ?? submittedValues;
       // Compare with what this request submitted, including edits that revert
       // to the previous saved value while the request is in flight.
@@ -106,10 +155,7 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
       const invalidations = invalidateQueryKeys.map((key) =>
         queryClient.invalidateQueries({ queryKey: key as unknown[] }),
       );
-      if (canonicalValues) {
-        await queryClient.cancelQueries({ queryKey: queryKey as unknown[] });
-        queryClient.setQueryData(queryKey as unknown[], canonicalValues);
-      } else {
+      if (!canonicalValues) {
         invalidations.push(
           queryClient.invalidateQueries({ queryKey: queryKey as unknown[] }),
         );
@@ -121,6 +167,13 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
     onError: (error) => {
       // In a save scope the page banner lists the problem instead.
       if (inSaveBarRef.current) return;
+      if (readSettingsRevisionConflict(error)) {
+        toast.error(translate(saveBarMessages, "conflict"), {
+          duration: 10_000,
+          action: { label: translate(saveBarMessages, "reloadKeepEdits"), onClick: () => void reloadLatest() },
+        });
+        return;
+      }
       toast.error(error instanceof Error && error.message ? error.message : errorMessage);
     },
   });
@@ -159,6 +212,7 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
     fields,
     save: () => mutation.mutateAsync(values),
     discard: reset,
+    reload: reloadLatest,
   });
 
   return {
@@ -173,8 +227,7 @@ export function useSettingsForm<T extends object, SaveResult = unknown>({
     loadError: error,
     isSaving: mutation.isPending,
     handleSubmit,
-    refetch: () =>
-      queryClient.invalidateQueries({ queryKey: queryKey as unknown[] }),
+    refetch: reloadLatest,
   };
 }
 

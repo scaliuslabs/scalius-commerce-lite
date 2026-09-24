@@ -211,7 +211,7 @@ describe("order notification dispatch", () => {
         ]);
     });
 
-    it("keeps support request submission customer-silent if channel settings cannot load", async () => {
+    it("still acknowledges a support request by email if channel settings cannot load", async () => {
         const db = createDb();
         mocks.getNotificationChannels.mockRejectedValueOnce(new Error("settings unavailable"));
 
@@ -225,9 +225,11 @@ describe("order notification dispatch", () => {
             { encryptionKey: "credential-key" },
         );
 
-        expect(result.outcomes).toEqual([]);
         expect(result.hasRetryableFailure).toBe(false);
-        expect(mocks.sendEmail).not.toHaveBeenCalled();
+        expect(mocks.sendEmail).toHaveBeenCalledWith(
+            expect.objectContaining({ to: "buyer@example.com", subject: "Order #order_support support request received" }),
+            expect.anything(),
+        );
         expect(mocks.getActiveSmsProvider).not.toHaveBeenCalled();
         expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
     });
@@ -294,7 +296,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenCalledWith(
             expect.objectContaining({
                 to: "buyer@example.com",
-                subject: "Order #order_partial Partially Refunded",
+                subject: "Order #order_partial partially refunded",
                 html: expect.stringContaining("partial refund"),
             }),
             {
@@ -350,7 +352,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenNthCalledWith(
             1,
             expect.objectContaining({
-                subject: "Order #order_refund_state Refund Processing",
+                subject: "Order #order_refund_state refund processing",
                 html: expect.stringContaining("refund for this order"),
             }),
             {
@@ -362,7 +364,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenNthCalledWith(
             2,
             expect.objectContaining({
-                subject: "Order #order_refund_state Refund Failed",
+                subject: "Order #order_refund_state refund failed",
                 html: expect.stringContaining("couldn&#39;t complete the refund"),
             }),
             {
@@ -415,7 +417,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenCalledWith(
             expect.objectContaining({
                 to: "buyer@example.com",
-                subject: "Order #order_balance Balance Paid",
+                subject: "Order #order_balance balance paid",
                 html: expect.stringContaining("remaining payment"),
             }),
             {
@@ -459,7 +461,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenCalledWith(
             expect.objectContaining({
                 to: "buyer@example.com",
-                subject: "Order #order_2 Received",
+                subject: "Order #order_2 received",
             }),
             {
                 db,
@@ -1108,7 +1110,7 @@ describe("order notification dispatch", () => {
             languageCode: "en_US",
             bodyParameters: [
                 "WhatsApp Customer",
-                "order_wa_1",
+                "#order_wa_1",
                 "Order Shipped",
                 "TRACK123",
             ],

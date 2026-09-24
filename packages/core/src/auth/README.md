@@ -66,11 +66,11 @@ Customer Auth Flow (storefront):
 - **IP detection**: `cf-connecting-ip` then `x-forwarded-for`, IPv6 /64 subnet grouping
 - **Trusted origins**: the resolved dashboard URL (`BETTER_AUTH_URL`) and storefront URL (`STOREFRONT_URL`), both from Platform settings
 - **Password resets**: Better Auth revokes existing sessions after password reset and clears `user.mustChangePassword` only after the reset token is consumed.
-- **Email callbacks**: `sendVerificationEmail`, `sendResetPassword`, and 2FA `sendOTP` all dynamically import `sendEmail` from `../integrations/email` to avoid circular dependencies. All templates use `escapeHtml()` from `@scalius/shared/html-escape`.
+- **Email callbacks**: `sendResetPassword` (staff invite: 7-day link; password reset: 1-hour link; a new link replaces older ones), 2FA `sendOTP` and the password-changed notice render the store-branded templates in `staff-emails.ts` and dynamically import `sendEmail` from `../integrations/email` to avoid circular dependencies.
 
 ### Plugins
 
-1. **twoFactor**: TOTP (6 digits, 30s period) + email OTP (5 min expiry) + 10 backup codes (10 chars each)
+1. **twoFactor**: TOTP (6 digits, 30s period) + email OTP (5 min expiry) + 10 backup codes (`xxxxx-xxxxx`, lower case without i/l/o/0/1)
 2. **admin**: `defaultRole: "user"`, `adminRoles: ["admin"]`
 
 ### Auth Client (admin frontend)
@@ -139,7 +139,7 @@ Authentication strategy:
 2. **Scanner session cookie** -- created only after `<dashboard>/api/scanner-token` atomically consumes a D1 scanner QR-token claim; limited to exact scanner workflow endpoints
 
 Then validates:
-- Invited admins with `user.mustChangePassword = true` are blocked before RBAC except the own-account password-change endpoint. Normal invite onboarding uses Better Auth reset links, so the public `/api/auth/request-password-reset` + `/auth/reset-password` flow clears the flag.
+- Invited admins with `user.mustChangePassword = true` are blocked before RBAC except the own-account password-change endpoint. Invite onboarding uses a Better Auth reset token (`/auth/reset-password#invite=…`); the dashboard checks the token when the page opens, sets the password, clears the flag and signs the person straight in.
 - Invited admins with `user.mustEnrollTwoFactor = true` and `twoFactorEnabled = false` are blocked before RBAC except exact 2FA setup endpoints (`GET /2fa/info`, `POST /2fa/method`).
 - 2FA-enabled admin sessions must have `session.twoFactorVerified = true`, except exact 2FA completion endpoints (`GET /2fa/info`, `POST /2fa/verify`, `POST /2fa/complete-verification`, `POST /2fa/method`).
 - User must have at least one RBAC permission. Super admins receive all permissions through `getUserPermissions()`; do not fall back to legacy `user.role`.

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import type { SendEmailOptions } from "../../integrations/email/provider";
-import { sendOrderNotificationEmail } from "./notifications.service";
+import { sendOrderNotificationEmail, sendStaffOrderEmails } from "./notifications.service";
 import type { OrderNotificationType } from "./notification-types";
 
 const transport = vi.hoisted(() => ({ sendEmail: vi.fn() }));
@@ -92,7 +92,7 @@ describe("customer order email composition and delivery", () => {
     for (const style of ["font-family:Arial,Helvetica,sans-serif", "font-size:16px", "line-height:1.5", "color:#202124", "background:#ffffff", "max-width:560px"]) {
       expect(contentStyle).toContain(style);
     }
-    for (const text of ["River & Loom", "Saved cotton shirt", "Indigo / M", "2 × BDT 100.00", "BDT 200.00", "BDT 60.00", "BDT 20.00", "VAT", "BDT 18.00", "BDT 258.00", "due on delivery"]) {
+    for (const text of ["River & Loom", "Saved cotton shirt", "Indigo / M", "2 × ৳100", "৳200", "৳60", "−৳20", "VAT", "৳18", "৳258", "due on delivery"]) {
       expect(email.visible).toContain(text);
       expect(email.text).toContain(text);
     }
@@ -124,8 +124,8 @@ describe("customer order email composition and delivery", () => {
     await send();
     const email = message();
     expect(email.text).toContain("Saved cotton shirt");
-    expect(email.text).toContain("2 × BDT 100.00 — BDT 200.00");
-    expect(email.text).toContain("Total: BDT 258.00");
+    expect(email.text).toContain("2 × ৳100 — ৳200");
+    expect(email.text).toContain("Total: ৳258");
     expect(email.text).not.toContain("Amended shirt");
     expect(sqlite.prepare("SELECT total_amount_minor FROM orders").get()).toMatchObject({ total_amount_minor: 105800 });
   });
@@ -155,7 +155,7 @@ describe("customer order email composition and delivery", () => {
 
   it.each([
     ["confirmed", "stripe", "paid", 258, 0, "Paid"],
-    ["confirmed", "cod", "partial", 100, 158, "BDT 158.00 due on delivery"],
+    ["confirmed", "cod", "partial", 100, 158, "৳158 due on delivery"],
     ["incomplete", "stripe", "unpaid", 0, 258, "Payment not completed"],
     ["incomplete", "sslcommerz", "failed", 0, 258, "Payment not completed"],
     ["cancelled", "cod", "unpaid", 0, 258, "No payment is due"],
@@ -237,5 +237,60 @@ describe("customer order email composition and delivery", () => {
     expect(email.visible).not.toContain("our store");
     expect(email.visible).toContain("Saved cotton shirt");
     expect(email.text).not.toContain("undefined");
+  });
+
+  it("renders the merchant's saved template, escaped, with the order number fallback", async () => {
+    sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('tpl', 'document', ?, 'json', 'notification_templates')")
+      .run(JSON.stringify({
+        email: { order_confirmed: { subject: "{{store_name}} confirmed {{order_number}}", body: "Hi {{customer_name}} <b>\n\nPay {{cod_amount}} on delivery." } },
+        sms: {},
+      }));
+    await send("order_confirmed", { name: "Rahim <script>" });
+    const email = message();
+    expect(email.subject).toBe("River & Loom confirmed #order_email");
+    expect(email.html).not.toMatch(/<(?:script|b)\b/i);
+    expect(email.visible).toContain("Hi Rahim <script> <b>");
+    expect(email.visible).toContain("Pay ৳258 on delivery.");
+  });
+
+  it("uses the default copy for events the merchant didn't change", async () => {
+    await send("order_confirmed");
+    const email = message();
+    expect(email.subject).toBe("Order #order_email confirmed");
+    expect(email.text).toContain("Hi Email Buyer,\n\nYour order has been confirmed and is being prepared.");
+  });
+
+  it("emails each staff recipient once per new order, even when the outbox row is retried", async () => {
+    sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('notif', 'document', ?, 'json', 'notifications')")
+      .run(JSON.stringify({ staffEmailRecipients: ["owner@shop.test", "buyer@example.test"] }));
+    sqlite.exec(`INSERT INTO order_notification_outbox (id, dedupe_key, order_id, notification_type, source, payload)
+      VALUES ('outbox_new', 'order_created:order_email', 'order_email', 'order_created', 'test', '{}')`);
+    const env = { BETTER_AUTH_URL: "https://admin.shop.test" };
+    const order = { id: "order_email", customerName: "Email Buyer", notificationType: "order_created" as const };
+
+    const first = await sendStaffOrderEmails(db, order, { outboxId: "outbox_new", env });
+    // A customer email to the same address is a different receipt.
+    await sendOrderNotificationEmail("buyer@example.test", "Email Buyer", "order_email", "order_created", undefined, db, { outboxId: "outbox_new", env });
+    const retry = await sendStaffOrderEmails(db, order, { outboxId: "outbox_new", env });
+
+    const calls = transport.sendEmail.mock.calls.map((call) => call[0] as SendEmailOptions);
+    const staff = calls.filter((call) => call.subject.startsWith("[River & Loom]"));
+    expect(staff.map((call) => call.to)).toEqual(["owner@shop.test", "buyer@example.test"]);
+    expect(staff[0]!.subject).toBe("[River & Loom] Order #order_email placed by Email Buyer");
+    expect(staff[0]!.html).toContain('href="https://admin.shop.test/admin/orders/order_email"');
+    expect(staff[0]!.html).not.toContain("/account");
+    expect(calls).toHaveLength(3);
+    expect(first.outcomes.map((outcome) => outcome.status)).toEqual(["accepted", "accepted"]);
+    expect(retry.outcomes.map((outcome) => outcome.status)).toEqual(["accepted", "accepted"]);
+    expect(retry.hasRetryableFailure).toBe(false);
+    expect(JSON.stringify(first.outcomes)).not.toContain("owner@shop.test");
+  });
+
+  it("sends no staff email for other events or when nobody is listed", async () => {
+    const other = await sendStaffOrderEmails(db, { id: "order_email", customerName: "B", notificationType: "order_confirmed" }, { outboxId: "outbox_email" });
+    const nobody = await sendStaffOrderEmails(db, { id: "order_email", customerName: "B", notificationType: "order_created" }, { outboxId: "outbox_email" });
+    expect(other.outcomes).toEqual([]);
+    expect(nobody.outcomes).toEqual([]);
+    expect(transport.sendEmail).not.toHaveBeenCalled();
   });
 });

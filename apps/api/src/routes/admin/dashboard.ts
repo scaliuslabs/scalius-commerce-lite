@@ -1,14 +1,19 @@
 // src/server/routes/admin/dashboard.ts
-// Admin OpenAPI routes for dashboard summary and activity data.
+// Admin OpenAPI routes for the Home summary and daily activity.
+//
+// Home is open to `dashboard.view`, but money is not: every revenue value is
+// null unless the caller also holds `dashboard.analytics` ("View sales
+// numbers"), and the recent-order feed (customer names and order totals) is
+// empty unless they hold `orders.view`. The projection happens here, at the
+// boundary, so no client can read what the role excludes.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import {
-    getDashboardStats,
     getDashboardHomeSummary,
-    getDashboardSummaryStats,
-    getRecentOrders,
     getDailyActivityData,
 } from "@scalius/core/modules/analytics";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 import { ok } from "../../utils/api-response";
 import { successEnvelope } from "../../schemas/responses";
@@ -24,41 +29,27 @@ function boundedText(value: unknown, maximumLength: number): string {
     return typeof value === "string" ? value.slice(0, maximumLength) : "";
 }
 
-function projectRecentOrders(
-    recentOrders: Awaited<ReturnType<typeof getRecentOrders>>,
-) {
-    return recentOrders.slice(0, DASHBOARD_RECENT_ORDER_LIMIT).map((order) => ({
-        id: boundedText(order.id, DASHBOARD_ORDER_ID_MAX_LENGTH),
-        customerName: boundedText(
-            order.customerName,
-            DASHBOARD_CUSTOMER_NAME_MAX_LENGTH,
-        ),
-        totalAmount: order.totalAmount,
-        status: boundedText(order.status, DASHBOARD_ORDER_STATUS_MAX_LENGTH),
-        createdAt: order.createdAt,
-    }));
+/** What this caller may see on Home beyond counts. */
+function homeAccess(c: Context) {
+    const permissions: ReadonlySet<string> = c.get("adminPermissions") ?? new Set();
+    return {
+        sales: permissions.has(PERMISSIONS.DASHBOARD_ANALYTICS),
+        orders: permissions.has(PERMISSIONS.ORDERS_VIEW),
+    };
 }
 
-function projectDailyActivity(
-    activity: Awaited<ReturnType<typeof getDailyActivityData>>,
-) {
-    return activity.slice(0, 90).map((entry) => ({
-        date: boundedText(entry.date, 10),
-        orders: entry.orders,
-        revenue: entry.revenue,
-        newCustomers: entry.newCustomers,
-    }));
-}
+/** Revenue only for callers who may see sales numbers. */
+const money = (value: number, sales: boolean) => (sales ? value : null);
 
-// ─── Inline response schemas ──
+// ─── Response schemas ──
 
 const dashboardStatsSchema = z.object({
     totalProducts: z.number(),
     totalCustomers: z.number(),
-    totalRevenue: z.number(),
     currentMonth: z.object({
         orders: z.number(),
-        revenue: z.number(),
+        /** Null without the "View sales numbers" permission. */
+        revenue: z.number().nullable(),
         orderGrowth: z.number().nullable(),
         revenueGrowth: z.number().nullable(),
         orderStatus: z.object({
@@ -70,7 +61,7 @@ const dashboardStatsSchema = z.object({
     }),
     lastMonth: z.object({
         orders: z.number(),
-        revenue: z.number(),
+        revenue: z.number().nullable(),
     }),
 });
 
@@ -85,42 +76,28 @@ const recentOrderSchema = z.object({
 const dailyActivitySchema = z.object({
     date: z.string().max(10),
     orders: z.number(),
-    revenue: z.number(),
+    /** Null without the "View sales numbers" permission. */
+    revenue: z.number().nullable(),
     newCustomers: z.number(),
 });
 
-const dashboardResponseSchema = successEnvelope(z.object({
-    stats: dashboardStatsSchema,
-    recentOrders: z.array(recentOrderSchema).max(DASHBOARD_RECENT_ORDER_LIMIT),
-    dailyActivityData: z.array(dailyActivitySchema).max(90),
-}));
-
-const dashboardSummaryResponseSchema = successEnvelope(z.object({
-    stats: dashboardStatsSchema,
-    recentOrders: z.array(recentOrderSchema).max(DASHBOARD_RECENT_ORDER_LIMIT),
-}));
-
 const dashboardHomeSummaryResponseSchema = successEnvelope(z.object({
-    stats: dashboardStatsSchema.omit({ totalRevenue: true }),
+    stats: dashboardStatsSchema,
     recentOrders: z.array(recentOrderSchema).max(DASHBOARD_RECENT_ORDER_LIMIT),
-}));
-
-const dashboardMetricsSummaryResponseSchema = successEnvelope(z.object({
-    stats: dashboardStatsSchema.omit({ totalRevenue: true }),
 }));
 
 const dashboardActivityResponseSchema = successEnvelope(z.object({
     dailyActivityData: z.array(dailyActivitySchema).max(90),
 }));
 
-// ── Dashboard Summary ──
+// ── Home summary ──
 
 const dashboardHomeSummaryRoute = createRoute({
     method: "get",
     path: "/home-summary",
     tags: ["Admin - Dashboard"],
-    summary: "Get lightweight dashboard home metrics and recent orders",
-    description: "Answer current-month sales, revenue, customer, order, and recent-order summary questions.",
+    summary: "Get dashboard home metrics and recent orders",
+    description: "Answer current-month order-count, customer and recent-order questions. Revenue values are null unless the caller may view sales numbers; recent orders are empty unless the caller may view orders.",
     operationId: "dashboard.home.summary",
     responses: {
         200: {
@@ -131,72 +108,42 @@ const dashboardHomeSummaryRoute = createRoute({
 });
 
 app.openapi(dashboardHomeSummaryRoute, async (c) => {
-    const db = c.get("db");
-    const summary = await getDashboardHomeSummary(
-        db,
-        DASHBOARD_RECENT_ORDER_LIMIT,
+    const access = homeAccess(c);
+    const { stats, recentOrders } = await getDashboardHomeSummary(
+        c.get("db"),
+        access.orders ? DASHBOARD_RECENT_ORDER_LIMIT : 0,
     );
     return ok(c, {
-        stats: summary.stats,
-        recentOrders: projectRecentOrders(summary.recentOrders),
+        stats: {
+            ...stats,
+            currentMonth: {
+                ...stats.currentMonth,
+                revenue: money(stats.currentMonth.revenue, access.sales),
+                revenueGrowth: access.sales ? stats.currentMonth.revenueGrowth : null,
+            },
+            lastMonth: {
+                ...stats.lastMonth,
+                revenue: money(stats.lastMonth.revenue, access.sales),
+            },
+        },
+        recentOrders: recentOrders.slice(0, DASHBOARD_RECENT_ORDER_LIMIT).map((order) => ({
+            id: boundedText(order.id, DASHBOARD_ORDER_ID_MAX_LENGTH),
+            customerName: boundedText(order.customerName, DASHBOARD_CUSTOMER_NAME_MAX_LENGTH),
+            totalAmount: order.totalAmount,
+            status: boundedText(order.status, DASHBOARD_ORDER_STATUS_MAX_LENGTH),
+            createdAt: order.createdAt,
+        })),
     });
 });
 
-const dashboardMetricsSummaryRoute = createRoute({
-    method: "get",
-    path: "/metrics-summary",
-    tags: ["Admin - Dashboard"],
-    summary: "Get lightweight dashboard metrics summary",
-    operationId: "dashboard.home.metrics",
-    responses: {
-        200: {
-            description: "Dashboard metrics summary data",
-            content: { "application/json": { schema: dashboardMetricsSummaryResponseSchema } },
-        },
-    },
-});
-
-app.openapi(dashboardMetricsSummaryRoute, async (c) => {
-    const db = c.get("db");
-
-    const stats = await getDashboardSummaryStats(db);
-
-    return ok(c, { stats });
-});
-
-const dashboardSummaryRoute = createRoute({
-    method: "get",
-    path: "/summary",
-    tags: ["Admin - Dashboard"],
-    summary: "Get dashboard summary metrics and recent orders",
-    operationId: "dashboard.home.full_summary",
-    responses: {
-        200: {
-            description: "Dashboard summary data",
-            content: { "application/json": { schema: dashboardSummaryResponseSchema } },
-        },
-    },
-});
-
-app.openapi(dashboardSummaryRoute, async (c) => {
-    const db = c.get("db");
-
-    const [stats, recentOrders] = await Promise.all([
-        getDashboardStats(db),
-        getRecentOrders(db, DASHBOARD_RECENT_ORDER_LIMIT),
-    ]);
-
-    return ok(c, { stats, recentOrders: projectRecentOrders(recentOrders) });
-});
-
-// ── Dashboard Activity ──
+// ── Daily activity ──
 
 const dashboardActivityRoute = createRoute({
     method: "get",
     path: "/activity",
     tags: ["Admin - Dashboard"],
     summary: "Get dashboard daily activity chart data",
-    description: "Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days.",
+    description: "Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days. Revenue is null unless the caller may view sales numbers.",
     operationId: "dashboard.home.activity",
     request: {
         query: z.object({
@@ -213,43 +160,17 @@ const dashboardActivityRoute = createRoute({
 });
 
 app.openapi(dashboardActivityRoute, async (c) => {
-    const db = c.get("db");
     const { days } = c.req.valid("query");
-
-    const dailyActivityData = await getDailyActivityData(db, days);
-
-    return ok(c, { dailyActivityData: projectDailyActivity(dailyActivityData) });
-});
-
-// ── Legacy Combined Dashboard ──
-
-const dashboardRoute = createRoute({
-    method: "get",
-    path: "/",
-    tags: ["Admin - Dashboard"],
-    summary: "Get dashboard summary, recent orders, and daily activity",
-    operationId: "dashboard.home.legacy_combined",
-    responses: {
-        200: {
-            description: "Dashboard data",
-            content: { "application/json": { schema: dashboardResponseSchema } },
-        },
-    }
-});
-
-app.openapi(dashboardRoute, async (c) => {
-    const db = c.get("db");
-
-    const [stats, recentOrders, dailyActivityData] = await Promise.all([
-        getDashboardStats(db),
-        getRecentOrders(db, DASHBOARD_RECENT_ORDER_LIMIT),
-        getDailyActivityData(db, 90),
-    ]);
+    const { sales } = homeAccess(c);
+    const activity = await getDailyActivityData(c.get("db"), days);
 
     return ok(c, {
-        stats,
-        recentOrders: projectRecentOrders(recentOrders),
-        dailyActivityData: projectDailyActivity(dailyActivityData),
+        dailyActivityData: activity.slice(0, 90).map((entry) => ({
+            date: boundedText(entry.date, 10),
+            orders: entry.orders,
+            revenue: money(entry.revenue, sales),
+            newCustomers: entry.newCustomers,
+        })),
     });
 });
 

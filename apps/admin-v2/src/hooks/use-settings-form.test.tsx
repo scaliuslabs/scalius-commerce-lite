@@ -338,4 +338,89 @@ describe("useSettingsForm freshness", () => {
       queryKey: ["settings", "canonical"],
     });
   });
+
+  it("sends the loaded revision beside the values, and two cards on one document never conflict with each other", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let stored = { label: "before", caption: "before", revision: 1 };
+    const fetchFn = vi.fn(async () => ({ ...stored }));
+    const save = (field: "label" | "caption") => vi.fn(async (values: Values, expectedRevision: number) => {
+      if (expectedRevision !== stored.revision) throw new Error("stale");
+      stored = { ...stored, [field]: values[field], revision: stored.revision + 1 };
+      return { message: "saved", revision: stored.revision };
+    });
+    const saveLabel = save("label");
+    const saveCaption = save("caption");
+    const hooks: Record<"label" | "caption", HookSnapshot | null> = { label: null, caption: null };
+
+    function Harness() {
+      hooks.label = useSettingsForm<Values, { message: string; revision: number }>({
+        queryKey: ["settings", "shared"],
+        fetchFn,
+        saveFn: saveLabel,
+        defaultValues: { label: "", caption: "" },
+      });
+      hooks.caption = useSettingsForm<Values, { message: string; revision: number }>({
+        queryKey: ["settings", "shared"],
+        fetchFn,
+        saveFn: saveCaption,
+        defaultValues: { label: "", caption: "" },
+      });
+      return null;
+    }
+    await act(async () => {
+      root.render(<QueryClientProvider client={queryClient}><Harness /></QueryClientProvider>);
+    });
+    await vi.waitFor(() => expect(hooks.label?.values.label).toBe("before"));
+    expect(hooks.label!.values).toEqual({ label: "before", caption: "before" });
+
+    act(() => hooks.label!.setValue("label", "new label"));
+    act(() => hooks.caption!.setValue("caption", "new caption"));
+    await act(async () => { await hooks.label!.handleSubmit(); });
+    await act(async () => { await hooks.caption!.handleSubmit(); });
+
+    expect(saveLabel.mock.calls[0]?.[1]).toBe(1);
+    expect(saveCaption.mock.calls[0]?.[1]).toBe(2);
+    expect(stored).toEqual({ label: "new label", caption: "new caption", revision: 3 });
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("outside a page save bar, a conflict offers to reload keeping the edits", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce({ label: "before", caption: "before", revision: 1 })
+      .mockResolvedValue({ label: "before", caption: "theirs", revision: 2 });
+    const hook: { current: HookSnapshot | null } = { current: null };
+    function Harness() {
+      hook.current = useSettingsForm<Values>({
+        queryKey: ["settings", "conflict"],
+        fetchFn,
+        saveFn: async () => {
+          throw Object.assign(new Error("changed"), {
+            status: 409,
+            code: "SETTINGS_REVISION_CONFLICT",
+            details: { document: "demo", expectedRevision: 1, currentRevision: 2 },
+          });
+        },
+        defaultValues: { label: "", caption: "" },
+      });
+      return null;
+    }
+    await act(async () => {
+      root.render(<QueryClientProvider client={queryClient}><Harness /></QueryClientProvider>);
+    });
+    await vi.waitFor(() => expect(hook.current?.values.label).toBe("before"));
+    act(() => hook.current!.setValue("label", "mine"));
+    await act(async () => { await expect(hook.current!.handleSubmit()).rejects.toThrow(); });
+
+    const [message, options] = vi.mocked(toast.error).mock.calls[0] as unknown as [
+      string,
+      { action: { label: string; onClick: () => void } },
+    ];
+    expect(message).toBe("Someone else changed these settings since you opened them.");
+    expect(options.action.label).toBe("Reload and keep my edits");
+    await act(async () => { options.action.onClick(); });
+    await vi.waitFor(() => expect(hook.current?.values.caption).toBe("theirs"));
+    expect(hook.current!.values.label).toBe("mine");
+    expect(hook.current!.isDirty).toBe(true);
+  });
 });

@@ -943,8 +943,8 @@ export const PERMISSION_METADATA: Record<
   },
   [PERMISSIONS.DASHBOARD_ANALYTICS]: {
     name: PERMISSIONS.DASHBOARD_ANALYTICS,
-    displayName: "View Dashboard Analytics",
-    description: "View analytics on the dashboard",
+    displayName: "View Sales Numbers",
+    description: "See sales and revenue totals on the home page",
     resource: "dashboard",
     action: "analytics",
     category: "Dashboard",
@@ -994,4 +994,43 @@ export function getAllPermissions(): PermissionMetadata[] {
 export function isSensitivePermission(permission: string): boolean {
   const meta = PERMISSION_METADATA[permission as keyof typeof PERMISSION_METADATA];
   return meta?.isSensitive ?? false;
+}
+
+const PERMISSION_NAMES = new Set<string>(Object.values(PERMISSIONS));
+
+/**
+ * What a permission needs to be useful: its area's view permission ("Edit
+ * products" needs "View products"; "View sales numbers" needs the home page),
+ * and delete before delete-forever. Roles are saved closed under this, and a
+ * person's effective access drops anything whose prerequisite is missing.
+ */
+export function permissionPrerequisites(permission: string): string[] {
+  const scope = permission.slice(0, permission.lastIndexOf("."));
+  return [`${scope}.view`, ...(permission.endsWith(".permanent_delete") ? [`${scope}.delete`] : [])]
+    .filter((required) => required !== permission && PERMISSION_NAMES.has(required));
+}
+
+/** Ticking a permission ticks what it needs. */
+export function withPrerequisites(permissions: Iterable<string>): Set<string> {
+  const result = new Set(permissions);
+  for (const permission of result) {
+    for (const required of permissionPrerequisites(permission)) result.add(required);
+  }
+  return result;
+}
+
+/** Unticking a permission unticks what depends on it. */
+export function withoutUnmetPrerequisites(permissions: Iterable<string>): Set<string> {
+  const result = new Set(permissions);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const permission of result) {
+      if (permissionPrerequisites(permission).some((required) => !result.has(required))) {
+        result.delete(permission);
+        changed = true;
+      }
+    }
+  }
+  return result;
 }

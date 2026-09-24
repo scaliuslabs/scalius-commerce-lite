@@ -29,10 +29,15 @@ import {
     normalizeCustomerAuthPolicy,
 } from "@scalius/shared/customer-auth-policy";
 import {
-    CheckoutFlowRevisionConflictError,
     getCheckoutFlowSettingsDocument,
     saveCheckoutFlowSettingsDocument,
 } from "@scalius/core/modules/settings/checkout-flow-admin.service";
+import {
+    SettingsRevisionConflictError,
+    selectSettingsDocuments,
+    writeSettingsDocuments,
+    type SettingsDocumentWriteRequest,
+} from "@scalius/core/modules/settings/settings-store";
 import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
 import {
     customerAuthDocument,
@@ -54,9 +59,11 @@ import {
     buildClearNotificationProviderBlocksStatement,
 } from "@scalius/core/modules/notifications/notification-provider-health";
 import {
+    normalizeMerchantCspSource,
     normalizePlatformOrigin,
     parseMerchantCspSources,
     serializeMerchantCspSources,
+    type CspSourceProblem,
 } from "@scalius/shared/security-csp";
 
 import { ok } from "../../../utils/api-response";
@@ -64,7 +71,6 @@ import { ValidationError } from "../../../utils/api-error";
 import {
     conflictResponse,
     successEnvelope,
-    messageResponse,
     errorResponses,
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
@@ -72,6 +78,14 @@ import { readinessSchema } from "../../../schemas/readiness";
 import { isReady, type Readiness } from "@scalius/shared/readiness";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+/** A save that changes a document must say which revision of it the editor loaded. */
+function requireExpectedRevision(value: number | undefined, field: string): number {
+    if (value === undefined) {
+        throw new ValidationError(`expectedRevision.${field} is required to change these settings.`);
+    }
+    return value;
+}
 const MASKED = "••••••••••••";
 const MERCHANT_CSP_INPUT_MAX_LENGTH = 65_536;
 const MERCHANT_CSP_ORIGIN_MAX_LENGTH = 512;
@@ -109,6 +123,32 @@ function normalizeStoredMerchantCspSources(
             )
             .slice(0, MERCHANT_CSP_SOURCE_MAX_COUNT),
     );
+}
+
+const CSP_PROBLEM_MESSAGES: Record<CspSourceProblem, string> = {
+    https: "Use https.",
+    path: "Enter just the site address, without a path.",
+    invalid: "Enter a full address like https://chat.example.com.",
+};
+
+/** A save refuses (never drops) an entry it can't trust, naming the entry and the fix. */
+function assertMerchantCspSourcesValid(value: string): void {
+    const entries = value.split(/[\n,]/).map((entry) => entry.trim()).filter(Boolean);
+    const problems = entries.flatMap((entry) => {
+        const { value: source, error } = normalizeMerchantCspSource(entry);
+        if (error) return [`${entry}: ${CSP_PROBLEM_MESSAGES[error]}`];
+        return source && source.length > MERCHANT_CSP_ORIGIN_MAX_LENGTH
+            ? [`${entry}: ${CSP_PROBLEM_MESSAGES.invalid}`]
+            : [];
+    });
+    if (new Set(entries).size > MERCHANT_CSP_SOURCE_MAX_COUNT) {
+        problems.push(`Add up to ${MERCHANT_CSP_SOURCE_MAX_COUNT} trusted websites.`);
+    }
+    if (problems.length > 0) {
+        throw new ValidationError(problems.join(" "), {
+            issues: problems.map((message) => ({ path: ["cspAllowedDomains"], message })),
+        });
+    }
 }
 
 const inheritedSecuritySourceKindSchema = z.enum([
@@ -320,7 +360,7 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
     const body = c.req.valid("json");
     const current = await getCheckoutFlowSettingsDocument(db);
     if (current.revision !== body.expectedRevision) {
-        throw new CheckoutFlowRevisionConflictError(body.expectedRevision, current.revision);
+        throw new SettingsRevisionConflictError("checkout", body.expectedRevision, current.revision);
     }
     const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     if (!body.guestCheckoutEnabled) {
@@ -349,7 +389,13 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
     return ok(c, saved);
 });
 
+const revisionSchema = z.number().int().nonnegative();
+/** One revision per document /auth edits; a save sends back the ones it touches. */
+const authRevisionsSchema = z.object({ customerAuth: revisionSchema, whatsapp: revisionSchema });
+const savedRevisionResponse = successEnvelope(z.object({ message: z.string(), revision: revisionSchema }));
+
 const authSettingsResponseSchema = z.object({
+    revision: authRevisionsSchema,
     authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS),
     customerAuthPolicy: customerAuthPolicySchema,
     whatsappAccessToken: z.string().max(MASKED.length),
@@ -372,14 +418,16 @@ const getAuthRoute = createRoute({
 app.openapi(getAuthRoute, async (c) => {
     const db = c.get("db");
     const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const [auth, whatsapp] = await Promise.all([
-        customerAuthDocument.read(db),
+    const [auth, whatsapp, whatsappDocumentRead] = await Promise.all([
+        customerAuthDocument.readDetailed(db),
         getWhatsAppCloudApiSettings(db, credentialEncryptionKey),
+        whatsappDocument.readDetailed(db, { encryptionKey: credentialEncryptionKey }),
     ]);
 
     return ok(c, {
-        authVerificationMethod: auth.authVerificationMethod,
-        customerAuthPolicy: auth.policy,
+        revision: { customerAuth: auth.revision, whatsapp: whatsappDocumentRead.revision },
+        authVerificationMethod: auth.value.authVerificationMethod,
+        customerAuthPolicy: auth.value.policy,
         whatsappAccessToken: whatsapp.accessTokenConfigured ? MASKED : "",
         whatsappPhoneNumberId: (whatsapp.phoneNumberId || "").slice(0, WHATSAPP_PHONE_NUMBER_ID_MAX_LENGTH),
         whatsappTemplateName: (whatsapp.authTemplateName || "").slice(0, WHATSAPP_TEMPLATE_NAME_MAX_LENGTH),
@@ -387,6 +435,7 @@ app.openapi(getAuthRoute, async (c) => {
 });
 
 const saveAuthSchema = z.object({
+    expectedRevision: authRevisionsSchema.partial(),
     authVerificationMethod: z.enum(CUSTOMER_AUTH_METHODS).optional(),
     customerAuthPolicy: customerAuthPolicySchema.optional(),
     whatsappAccessToken: z.string().max(WHATSAPP_ACCESS_TOKEN_MAX_LENGTH).optional(),
@@ -410,8 +459,16 @@ const saveAuthRoute = createRoute({
     summary: "Save customer authentication settings",
     request: { body: { required: true, content: { "application/json": { schema: saveAuthSchema } } } },
     responses: {
-        200: { description: "Auth settings saved", content: { "application/json": { schema: messageResponse } } },
+        200: {
+            description: "Auth settings saved",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({ message: z.string(), revision: authRevisionsSchema })),
+                },
+            },
+        },
         ...errorResponses,
+        409: conflictResponse,
         503: serviceUnavailableResponse,
     }
 });
@@ -497,23 +554,47 @@ app.openapi(saveAuthRoute, async (c) => {
         }
     }
 
-    // Credentials first: a policy is never saved that points at credentials
-    // this request failed to store.
+    // Credentials and policy commit together (or not at all), each at the
+    // revision the merchant loaded: a policy never points at credentials this
+    // request failed to store.
+    const writes: SettingsDocumentWriteRequest[] = [];
     if (whatsappProviderTouched) {
-        await whatsappDocument.write(db, whatsappPatch, {
-            encryptionKey: whatsappPatch.accessToken
-                ? requireEncryptionKey(c.env as Record<string, unknown>)
-                : credentialEncryptionKey,
-        }, {
-            after: [buildClearNotificationProviderBlocksStatement(db, { channel: "whatsapp" })],
+        writes.push({
+            document: whatsappDocument,
+            patch: whatsappPatch,
+            ctx: {
+                encryptionKey: whatsappPatch.accessToken
+                    ? requireEncryptionKey(c.env as Record<string, unknown>)
+                    : credentialEncryptionKey,
+            },
+            expectedRevision: requireExpectedRevision(body.expectedRevision.whatsapp, "whatsapp"),
         });
     }
     if (requestedCustomerAuthPolicy) {
-        await customerAuthDocument.write(db, { policy: requestedCustomerAuthPolicy });
+        writes.push({
+            document: customerAuthDocument,
+            patch: { policy: requestedCustomerAuthPolicy },
+            expectedRevision: requireExpectedRevision(body.expectedRevision.customerAuth, "customerAuth"),
+        });
     }
+    if (writes.length > 0) {
+        await writeSettingsDocuments(db, writes, {
+            after: whatsappProviderTouched
+                ? [buildClearNotificationProviderBlocksStatement(db, { channel: "whatsapp" })]
+                : [],
+        });
+    }
+    const rows = await selectSettingsDocuments(db, [customerAuthDocument, whatsappDocument]);
+    const revisionOf = (key: string) => rows.find((row) => row.category === key)?.revision ?? 0;
 
     await bumpCacheGeneration(c);
-    return ok(c, { message: "Auth settings saved successfully" });
+    return ok(c, {
+        message: "Auth settings saved successfully",
+        revision: {
+            customerAuth: revisionOf(customerAuthDocument.key),
+            whatsapp: revisionOf(whatsappDocument.key),
+        },
+    });
 });
 
 // ─────────────────────────────────────────
@@ -527,13 +608,13 @@ const getSecurityRoute = createRoute({
     summary: "Get security settings",
     operationId: "dashboard.security.policy_get",
     responses: {
-        200: { description: "Security settings", content: { "application/json": { schema: successEnvelope(z.object({ cspAllowedDomains: z.string().max(MERCHANT_CSP_OUTPUT_MAX_LENGTH) })) } } },
+        200: { description: "Security settings", content: { "application/json": { schema: successEnvelope(z.object({ cspAllowedDomains: z.string().max(MERCHANT_CSP_OUTPUT_MAX_LENGTH), revision: revisionSchema })) } } },
         ...errorResponses,
     }
 });
 
 app.openapi(getSecurityRoute, async (c) => {
-    const { value: stored } = await securityDocument.readDetailed(
+    const { value: stored, revision } = await securityDocument.readDetailed(
         c.get("db"),
         {},
         { skipCache: true },
@@ -544,6 +625,7 @@ app.openapi(getSecurityRoute, async (c) => {
             stored.cspAllowedDomains,
             c.env as Record<string, unknown>,
         ),
+        revision,
     });
 });
 
@@ -575,6 +657,7 @@ app.openapi(getSecurityRuntimeSourcesRoute, async (c) => {
 });
 
 const saveSecuritySchema = z.object({
+    expectedRevision: revisionSchema,
     cspAllowedDomains: z.string().max(MERCHANT_CSP_INPUT_MAX_LENGTH).optional(),
 });
 
@@ -591,27 +674,30 @@ const saveSecurityRoute = createRoute({
         },
     },
     responses: {
-        200: { description: "Security settings saved", content: { "application/json": { schema: messageResponse } } },
+        200: { description: "Security settings saved", content: { "application/json": { schema: savedRevisionResponse } } },
         ...errorResponses,
+        409: conflictResponse,
     }
 });
 
 app.openapi(saveSecurityRoute, async (c) => {
     const db = c.get("db");
-    const { cspAllowedDomains } = c.req.valid("json");
+    const { cspAllowedDomains, expectedRevision } = c.req.valid("json");
+    let revision = expectedRevision;
 
         if (typeof cspAllowedDomains === "string") {
+            assertMerchantCspSourcesValid(cspAllowedDomains);
             // Writing through refreshes the KV mirror the Partytown proxy reads.
-            await securityDocument.write(db, {
+            ({ revision } = await securityDocument.write(db, {
                 cspAllowedDomains: normalizeStoredMerchantCspSources(
                     cspAllowedDomains,
                     c.env as Record<string, unknown>,
                 ),
-            }, { kv: c.env.CACHE });
+            }, { kv: c.env.CACHE }, { expectedRevision }));
             await bumpCacheGeneration(c);
         }
 
-        return ok(c, { message: "Security settings saved successfully" });
+        return ok(c, { message: "Security settings saved successfully", revision });
 });
 
 // ─────────────────────────────────────────
@@ -633,6 +719,7 @@ const getEmailRoute = createRoute({
             cloudflareBindingConfigured: z.boolean(),
             resendConfigured: z.boolean(),
             readiness: readinessSchema,
+            revision: revisionSchema,
         })) } } },
         ...errorResponses,
     }
@@ -651,9 +738,9 @@ app.openapi(getEmailRoute, async (c) => {
             encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
             settings: emailSettings,
         });
-        const { sender } = (await emailDocument.readDetailed(db, {
+        const { value: { sender }, revision } = await emailDocument.readDetailed(db, {
             encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
-        })).value;
+        });
 
         return ok(c, {
             provider: emailSettings.provider,
@@ -663,10 +750,12 @@ app.openapi(getEmailRoute, async (c) => {
             cloudflareBindingConfigured: emailSettings.cloudflareBindingConfigured,
             resendConfigured: emailSettings.hasResendApiKey,
             readiness: boundedReadiness(emailReadiness),
+            revision,
         });
 });
 
 const saveEmailSchema = z.object({
+    expectedRevision: revisionSchema,
     provider: z.enum(["cloudflare", "resend"]).optional(),
     apiKey: z.string().max(EMAIL_API_KEY_MAX_LENGTH).optional(),
     sender: z.string().max(EMAIL_SENDER_MAX_LENGTH).refine(
@@ -683,15 +772,17 @@ const saveEmailRoute = createRoute({
     summary: "Save email settings (system)",
     request: { body: { required: true, content: { "application/json": { schema: saveEmailSchema } } } },
     responses: {
-        200: { description: "Email settings saved", content: { "application/json": { schema: messageResponse } } },
+        200: { description: "Email settings saved", content: { "application/json": { schema: savedRevisionResponse } } },
         ...errorResponses,
+        409: conflictResponse,
         503: serviceUnavailableResponse,
     }
 });
 
 app.openapi(saveEmailRoute, async (c) => {
     const db = c.get("db");
-        const { apiKey, sender, provider } = c.req.valid("json");
+        const { apiKey, sender, provider, expectedRevision } = c.req.valid("json");
+        let revision = expectedRevision;
         const patch: Partial<EmailSettings> = {};
         const credentialEncryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
         const [currentEmailSettings, customerAuth] = await Promise.all([
@@ -750,16 +841,17 @@ app.openapi(saveEmailRoute, async (c) => {
         }
 
         if (emailSettingsTouched) {
-            await emailDocument.write(db, patch, {
+            ({ revision } = await emailDocument.write(db, patch, {
                 encryptionKey: credentialWriteKey ?? credentialEncryptionKey,
             }, {
+                expectedRevision,
                 after: [buildClearNotificationProviderBlocksStatement(db, { channel: "email" })],
-            });
+            }));
             // Email readiness is projected into the cached public checkout
             // configuration when customer sign-in is required.
             await bumpCacheGeneration(c);
         }
-        return ok(c, { message: "Email settings saved successfully" });
+        return ok(c, { message: "Email settings saved successfully", revision });
 });
 
 // ─────────────────────────────────────────
@@ -773,7 +865,7 @@ const getFirebaseRoute = createRoute({
     tags: ["Admin - Settings"],
     summary: "Get Firebase settings (system)",
     responses: {
-        200: { description: "Firebase settings", content: { "application/json": { schema: successEnvelope(z.object({ serviceAccount: z.string(), publicConfig: z.record(z.string(), z.unknown()) })) } } },
+        200: { description: "Firebase settings", content: { "application/json": { schema: successEnvelope(z.object({ serviceAccount: z.string(), publicConfig: z.record(z.string(), z.unknown()), revision: revisionSchema })) } } },
         ...errorResponses,
     }
 });
@@ -787,10 +879,12 @@ app.openapi(getFirebaseRoute, async (c) => {
     return ok(c, {
         serviceAccount: stored.serviceAccountStored ? MASKED : "",
         publicConfig: stored.publicConfig,
+        revision: stored.revision,
     });
 });
 
 const saveFirebaseSchema = z.object({
+    expectedRevision: revisionSchema,
     serviceAccount: z.string().optional(),
     publicConfig: z.record(z.string(), z.unknown()).optional(),
 });
@@ -803,15 +897,17 @@ const saveFirebaseRoute = createRoute({
     summary: "Save Firebase settings (system)",
     request: { body: { required: true, content: { "application/json": { schema: saveFirebaseSchema } } } },
     responses: {
-        200: { description: "Firebase settings saved", content: { "application/json": { schema: messageResponse } } },
+        200: { description: "Firebase settings saved", content: { "application/json": { schema: savedRevisionResponse } } },
         ...errorResponses,
+        409: conflictResponse,
         503: serviceUnavailableResponse,
     }
 });
 
 app.openapi(saveFirebaseRoute, async (c) => {
     const db = c.get("db");
-    const { serviceAccount, publicConfig } = c.req.valid("json");
+    const { serviceAccount, publicConfig, expectedRevision } = c.req.valid("json");
+    let revision = expectedRevision;
     const patch: Partial<FirebaseSettings> = {};
     let encryptionKey: string | undefined;
     const credentialChanged = typeof serviceAccount === "string" && serviceAccount !== MASKED;
@@ -827,17 +923,18 @@ app.openapi(saveFirebaseRoute, async (c) => {
     }
 
     if (Object.keys(patch).length > 0) {
-        await firebaseDocument.write(db, patch, {
+        ({ revision } = await firebaseDocument.write(db, patch, {
             encryptionKey: encryptionKey
                 ?? getCredentialEncryptionKey(c.env as Record<string, unknown>),
         }, {
+            expectedRevision,
             after: credentialChanged
                 ? [buildClearNotificationProviderBlocksStatement(db, { channel: "push" })]
                 : [],
-        });
+        }));
     }
 
-    return ok(c, { message: "Settings saved successfully" });
+    return ok(c, { message: "Settings saved successfully", revision });
 });
 
 export { app as systemSettingsRoutes };

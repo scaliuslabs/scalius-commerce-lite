@@ -125,10 +125,13 @@ async function saveSettings(
     data: Record<string, unknown>,
 ) {
     const { app, env } = createTestApp(db);
+    // Like the dashboard: send back the revision the settings were loaded at.
+    const loaded = await (await app.request("/api/v1/admin/settings/meta-conversions", { method: "GET" }, env))
+        .json() as { data: { revision: number } };
     const response = await app.request("/api/v1/admin/settings/meta-conversions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ expectedRevision: loaded.data.revision, ...data }),
     }, env);
     const body = await response.json() as {
         success: boolean;

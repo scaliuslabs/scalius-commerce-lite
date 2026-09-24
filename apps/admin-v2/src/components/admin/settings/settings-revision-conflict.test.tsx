@@ -13,6 +13,7 @@ vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
+import { SaveErrorBanner, SaveScope, type SaveScopeState } from "../shared/SaveBar";
 import { useCheckoutFlowForm } from "./PaymentsSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -26,8 +27,15 @@ const flow = (revision: number, overrides: Record<string, unknown> = {}) => ({
   revision,
   ...overrides,
 });
+/** What the API answers when another session saved the document first. */
+const staleRevision = () =>
+  Promise.reject(Object.assign(new Error("These settings changed in another session."), {
+    status: 409,
+    code: "SETTINGS_REVISION_CONFLICT",
+    details: { document: "checkout", expectedRevision: 1, currentRevision: 2 },
+  }));
 
-describe("checkout flow revision safety", () => {
+describe("settings revision conflict", () => {
   let root: Root;
   let container: HTMLDivElement;
 
@@ -41,27 +49,24 @@ describe("checkout flow revision safety", () => {
 
   afterEach(() => {
     act(() => root.unmount());
+    container.remove();
     notifyManager.setNotifyFunction((callback) => callback());
   });
 
-  it("refuses a stale save, keeps the merchant's edit, then saves it on the newer revision", async () => {
+  it("refuses a stale save, offers to reload keeping the edit, then saves it on the newer revision", async () => {
     sdk.getApiV1AdminSettingsCheckoutFlow
       .mockImplementationOnce(() => envelope(flow(1)))
       // Another tab saved a different field in the meantime.
       .mockImplementation(() => envelope(flow(2, { partialPaymentAmount: 500 })));
     sdk.putApiV1AdminSettingsCheckoutFlow
-      .mockImplementationOnce(() =>
-        Promise.reject(Object.assign(new Error("conflict"), {
-          status: 409,
-          code: "CHECKOUT_FLOW_REVISION_CONFLICT",
-          details: { expectedRevision: 1, currentRevision: 2 },
-        })))
-      .mockImplementation(({ body }: { body: Record<string, unknown> }) =>
-        envelope({ ...body, revision: 3 }));
+      .mockImplementationOnce(staleRevision)
+      .mockImplementation(({ body: { expectedRevision: _loaded, ...saved } }: { body: Record<string, unknown> }) =>
+        envelope({ ...saved, revision: 3 }));
 
     const hook: { current: ReturnType<typeof useCheckoutFlowForm> | null } = { current: null };
-    function Harness() {
-      hook.current = useCheckoutFlowForm(() => true);
+    let scope: SaveScopeState | null = null;
+    function Card() {
+      hook.current = useCheckoutFlowForm(() => true, "Checkout");
       return null;
     }
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -69,33 +74,50 @@ describe("checkout flow revision safety", () => {
       root.render(
         <QueryClientProvider client={queryClient}>
           <PermissionProvider isSuperAdmin>
-            <Harness />
+            <SaveScope render={(next) => { scope = next; return null; }}>
+              <SaveErrorBanner />
+              <Card />
+            </SaveScope>
           </PermissionProvider>
         </QueryClientProvider>,
       );
     });
-    await vi.waitFor(() => expect(hook.current?.values.revision).toBe(1));
+    await vi.waitFor(() => expect(hook.current?.isLoaded).toBe(true));
+    // The revision travels beside the values, never inside them.
+    expect(hook.current!.values).not.toHaveProperty("revision");
 
     act(() => hook.current!.setValue("guestCheckoutEnabled", false));
-    await act(async () => {
-      await expect(hook.current!.handleSubmit()).rejects.toThrow();
+    let saved = true;
+    await act(async () => { saved = await scope!.saveAll(); });
+    expect(saved).toBe(false);
+    expect(sdk.putApiV1AdminSettingsCheckoutFlow.mock.calls[0]![0].body).toMatchObject({
+      expectedRevision: 1,
+      guestCheckoutEnabled: false,
     });
-    expect(sdk.putApiV1AdminSettingsCheckoutFlow.mock.calls[0]![0].body).toMatchObject({ expectedRevision: 1, guestCheckoutEnabled: false });
 
-    // The newer version loads underneath the edit: nothing is overwritten.
-    await vi.waitFor(() => expect(hook.current?.values.revision).toBe(2));
+    // Nothing is overwritten and nothing is reloaded behind the merchant's back.
+    expect(container.textContent).toContain("Someone else changed these settings since you opened them.");
+    expect(sdk.getApiV1AdminSettingsCheckoutFlow).toHaveBeenCalledOnce();
     expect(hook.current!.values.guestCheckoutEnabled).toBe(false);
-    expect(hook.current!.values.partialPaymentAmount).toBe(500);
     expect(hook.current!.isDirty).toBe(true);
 
-    await act(async () => {
-      await hook.current!.handleSubmit();
-    });
+    const reload = [...container.querySelectorAll("button")].find((button) => button.textContent === "Reload and keep my edits")!;
+    await act(async () => { reload.click(); });
+    await vi.waitFor(() => expect(hook.current!.values.partialPaymentAmount).toBe(500));
+    // The merchant's edit sits on top of the latest version; the banner is gone.
+    expect(hook.current!.values.guestCheckoutEnabled).toBe(false);
+    expect(hook.current!.isDirty).toBe(true);
+    expect(container.textContent).not.toContain("Someone else changed");
+
+    await act(async () => { saved = await scope!.saveAll(); });
+    expect(saved).toBe(true);
     expect(sdk.putApiV1AdminSettingsCheckoutFlow.mock.calls[1]![0].body).toMatchObject({
       expectedRevision: 2,
       guestCheckoutEnabled: false,
       partialPaymentAmount: 500,
     });
     await vi.waitFor(() => expect(hook.current?.isDirty).toBe(false));
+    // The next save goes out at the revision this one produced.
+    expect(queryClient.getQueryData(["settings", "checkout-flow"])).toMatchObject({ revision: 3 });
   });
 });

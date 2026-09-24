@@ -47,6 +47,7 @@ import {
     createPendingTotpMethodChallenge,
     getTwoFactorMethodChallengeIdentifier,
     readPendingTwoFactorMethodChallenge,
+    sendStaffPasswordChangedEmail,
     verifyPendingTotpCode,
     type ClaimedAdminSetup,
 } from "@scalius/core/auth";
@@ -54,7 +55,7 @@ import { createScannerTokenClaim } from "@scalius/core/auth/scanner-token-claims
 import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 
 import { ok, created } from "../../utils/api-response";
-import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
+import { AppError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
 import {
     conflictResponse,
     errorResponses,
@@ -123,6 +124,21 @@ function generateBootstrapPassword(length = 32): string {
         password += chars[(randomValues[i] ?? 0) % chars.length];
     }
     return password;
+}
+
+/** A wrong, expired or used second-factor code: the person can retry, so never a 5xx. */
+function twoFactorCodeRejected(cause?: unknown): AppError {
+    const code = (cause as { body?: { code?: unknown } } | undefined)?.body?.code;
+    if (code === "ACCOUNT_TEMPORARILY_LOCKED") {
+        return new AppError(429, "TWO_FACTOR_LOCKED", "Too many wrong codes. Try again in 15 minutes");
+    }
+    return code === "OTP_HAS_EXPIRED" || code === "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE"
+        ? new AppError(400, "TWO_FACTOR_CODE_EXPIRED", "The code expired. Send a new code")
+        : new AppError(400, "TWO_FACTOR_CODE_INVALID", "The verification code is wrong");
+}
+
+function twoFactorSetupExpired(): AppError {
+    return new AppError(400, "TWO_FACTOR_SETUP_EXPIRED", "The two-step setup expired. Start again");
 }
 
 function adminPrincipalPredicate() {
@@ -382,7 +398,7 @@ app.openapi(listUsersRoute, async (c) => {
 const createAdminSchema = z.object({
     name: z.string().min(1).max(100),
     email: z.string().email().max(320),
-    roleId: z.string().max(100).optional()
+    roleId: z.string().min(1, "Choose a role").max(100)
 });
 
 const createUserRoute = createRoute({
@@ -428,36 +444,34 @@ app.openapi(createUserRoute, async (c) => {
             throw new ValidationError("BETTER_AUTH_URL or PUBLIC_API_BASE_URL must be configured");
         }
 
-        if (roleId) {
-            const selectedRole = await db
-                .select({ id: roles.id, name: roles.name })
-                .from(roles)
-                .where(eq(roles.id, roleId))
-                .get();
-            if (!selectedRole) throw new ValidationError("Selected role does not exist");
+        const selectedRole = await db
+            .select({ id: roles.id, name: roles.name })
+            .from(roles)
+            .where(eq(roles.id, roleId))
+            .get();
+        if (!selectedRole) throw new ValidationError("Selected role does not exist");
 
-            if (selectedRole.name === "super_admin" && sessionUser.isSuperAdmin !== true) {
-                throw new ForbiddenError("Only the store owner can assign the Super Admin role");
-            }
+        if (selectedRole.name === "super_admin" && sessionUser.isSuperAdmin !== true) {
+            throw new ForbiddenError("Only the store owner can assign the Super Admin role");
+        }
 
-            const callerPermissions = c.get("adminPermissions");
-            if (sessionUser.isSuperAdmin !== true) {
-                const selectedRolePermissions = await db
-                    .select({ name: permissions.name })
-                    .from(rolePermissions)
-                    .innerJoin(
-                        permissions,
-                        eq(rolePermissions.permissionId, permissions.id),
-                    )
-                    .where(eq(rolePermissions.roleId, roleId));
-                const exceedsCallerAuthority = selectedRolePermissions.some(
-                    ({ name: permissionName }) => !callerPermissions.has(permissionName),
+        const callerPermissions = c.get("adminPermissions");
+        if (sessionUser.isSuperAdmin !== true) {
+            const selectedRolePermissions = await db
+                .select({ name: permissions.name })
+                .from(rolePermissions)
+                .innerJoin(
+                    permissions,
+                    eq(rolePermissions.permissionId, permissions.id),
+                )
+                .where(eq(rolePermissions.roleId, roleId));
+            const exceedsCallerAuthority = selectedRolePermissions.some(
+                ({ name: permissionName }) => !callerPermissions.has(permissionName),
+            );
+            if (exceedsCallerAuthority) {
+                throw new ForbiddenError(
+                    "You cannot assign a role with permissions you do not have",
                 );
-                if (exceedsCallerAuthority) {
-                    throw new ForbiddenError(
-                        "You cannot assign a role with permissions you do not have",
-                    );
-                }
             }
         }
 
@@ -868,6 +882,37 @@ app.openapi(setAdminSuspensionRoute, async (c) => {
     });
 });
 
+// ── Remove staff (settings/users; owned by the permissions slice) ──
+// Ends sign-in and access for good while their name stays on history.
+
+const removeStaffRoute = createRoute({
+    method: "post",
+    path: "/users/{id}/remove",
+    operationId: "dashboard.team.users.remove",
+    tags: ["Admin - Auth Management"],
+    summary: "Remove a staff member",
+    description: "Permanently ends the person's sign-in and access (sessions, password, two-step, roles, permissions). Their name stays on orders and history. The store owner and yourself can't be removed.",
+    request: {
+        params: z.object({ id: z.string().max(100) }),
+    },
+    responses: {
+        200: { description: "Staff member removed", content: { "application/json": { schema: messageResponse } } },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(removeStaffRoute, async (c) => {
+    const { id: userId } = c.req.valid("param");
+    const { removeStaffMember } = await import("@scalius/core/auth/rbac/staff-removal");
+    await removeStaffMember(
+        c.get("db"),
+        { actorId: c.get("user").id, userId },
+        c.env.CACHE as KVNamespace | undefined,
+    );
+    return ok(c, { message: "Staff member removed" });
+});
+
 // ─────────────────────────────────────────
 // Profile & Password
 // ─────────────────────────────────────────
@@ -895,41 +940,69 @@ const changePasswordRoute = createRoute({
 });
 
 app.openapi(changePasswordRoute, async (c) => {
+    const session = c.get("session");
+    const sessionUser = c.get("user");
+    const db = c.get("db");
+    const auth = createAuth(c.env);
+    const { currentPassword, newPassword } = c.req.valid("json");
+
+    if (!session) {
+        throw new UnauthorizedError("No active session found");
+    }
+
+    const wrongCurrentPassword = () => new AppError(400, "PASSWORD_INCORRECT", "Current password is incorrect");
+    if (newPassword === currentPassword) {
+        // Say "reused" only once the current password is proven, so this never confirms a guess.
+        const proof = await auth.api.verifyPassword({
+            headers: c.req.raw.headers,
+            body: { password: currentPassword },
+        }).catch(() => null);
+        if (proof?.status !== true) throw wrongCurrentPassword();
+        throw new AppError(400, "PASSWORD_REUSED", "Choose a password you haven't used here");
+    }
+
+    let result: BetterAuthHeadersResult<{ token?: string } | null>;
     try {
-        const session = c.get("session");
-        const sessionUser = c.get("user");
-        const env = c.env;
-        const auth = createAuth(env);
-        const { currentPassword, newPassword } = c.req.valid("json");
-
-        if (!session) {
-            throw new UnauthorizedError("No active session found");
-        }
-
-        const result = await auth.api.changePassword({
+        result = await auth.api.changePassword({
             headers: c.req.raw.headers,
             body: { currentPassword, newPassword, revokeOtherSessions: true },
             returnHeaders: true,
-        }) as BetterAuthHeadersResult<unknown>;
-
-        appendBetterAuthSetCookies(c, result.headers);
-
-        if (!result.response) throw new ValidationError("Unable to change password. Please check your current password.");
-
-        const db = c.get("db");
-        await db
-            .update(user)
-            .set({ mustChangePassword: false, updatedAt: new Date() })
-            .where(eq(user.id, sessionUser.id));
-
-        return ok(c, { message: "Password changed successfully" });
-    } catch (error: unknown) {
-        console.error("Change password error:", error);
-        if (error instanceof Error && (error.message?.includes("password") || error.message?.includes("incorrect"))) {
-            throw new ValidationError("Current password is incorrect");
-        }
+        }) as BetterAuthHeadersResult<{ token?: string } | null>;
+    } catch (error) {
+        if ((error as { body?: { code?: unknown } }).body?.code === "INVALID_PASSWORD") throw wrongCurrentPassword();
         throw error;
     }
+    appendBetterAuthSetCookies(c, result.headers);
+
+    // Better Auth replaces this browser's session. It already passed two-step
+    // verification (the middleware requires it here), so the new session keeps
+    // that instead of challenging the person on their next click.
+    const rotatedToken = getSessionTokenFromSetCookie(result.headers, auth) ?? result.response?.token;
+    const changedAt = new Date();
+    await db.batch([
+        db.update(user)
+            .set({ mustChangePassword: false, updatedAt: changedAt })
+            .where(eq(user.id, sessionUser.id)),
+        ...(rotatedToken && session.twoFactorVerified === true
+            ? [db.update(sessionTable)
+                .set({ twoFactorVerified: true, updatedAt: changedAt })
+                .where(and(eq(sessionTable.token, rotatedToken), eq(sessionTable.userId, sessionUser.id)))]
+            : []),
+    ]);
+
+    const notice = sendStaffPasswordChangedEmail({
+        db,
+        env: c.env as unknown as Record<string, unknown>,
+        dashboardUrl: c.env.BETTER_AUTH_URL,
+        user: { name: sessionUser.name, email: sessionUser.email },
+    });
+    try {
+        c.executionCtx.waitUntil(notice);
+    } catch {
+        await notice;
+    }
+
+    return ok(c, { message: "Password changed successfully" });
 });
 
 const updateProfileSchema = z.object({
@@ -1145,11 +1218,11 @@ app.openapi(start2faMethodChallengeRoute, async (c) => {
                 body: { password },
             });
         } catch {
-            throw new ValidationError("Password confirmation failed");
+            throw new AppError(400, "PASSWORD_INCORRECT", "Password confirmation failed");
         }
     })();
     if (passwordProof.status !== true) {
-        throw new ValidationError("Password confirmation failed");
+        throw new AppError(400, "PASSWORD_INCORRECT", "Password confirmation failed");
     }
 
     const staged = method === "totp"
@@ -1274,8 +1347,8 @@ app.openapi(update2faMethodRoute, async (c) => {
                     token: cookieSessionToken ?? betterAuthResult.response?.token,
                     allowRotatedCookieSession: Boolean(cookieSessionToken),
                 };
-            } catch {
-                throw new ValidationError("The verification code is invalid or expired");
+            } catch (error) {
+                throw twoFactorCodeRejected(error);
             }
         })();
 
@@ -1322,18 +1395,18 @@ app.openapi(update2faMethodRoute, async (c) => {
             sessionUser.id,
             session.id,
         );
+        // Column-typed comparisons: a raw Date inside sql`` cannot be bound by D1.
+        const liveChallenge = and(
+            eq(verification.id, methodInput.challengeId),
+            eq(verification.identifier, identifier),
+            gt(verification.expiresAt, now),
+        );
         const challengeRow = await db
             .select({ value: verification.value })
             .from(verification)
-            .where(and(
-                eq(verification.id, methodInput.challengeId),
-                eq(verification.identifier, identifier),
-                gt(verification.expiresAt, now),
-            ))
+            .where(liveChallenge)
             .get();
-        if (!challengeRow) {
-            throw new ValidationError("The authenticator setup expired or was already used");
-        }
+        if (!challengeRow) throw twoFactorSetupExpired();
 
         const pending = await readPendingTwoFactorMethodChallenge({
             authSecret,
@@ -1343,9 +1416,7 @@ app.openapi(update2faMethodRoute, async (c) => {
             expectedMethod: method,
             now,
         });
-        if (!pending) {
-            throw new ValidationError("The verification method change expired or is invalid");
-        }
+        if (!pending) throw twoFactorSetupExpired();
 
         const existingTwoFactorRows = await db
             .select({ id: twoFactorTable.id })
@@ -1362,10 +1433,7 @@ app.openapi(update2faMethodRoute, async (c) => {
 
             const claimedAt = new Date();
             const emailGuard = buildBatchGuard(db, sql`EXISTS (
-                SELECT 1 FROM ${verification}
-                WHERE ${verification.id} = ${methodInput.challengeId}
-                  AND ${verification.identifier} = ${identifier}
-                  AND ${verification.expiresAt} > ${now}
+                SELECT 1 FROM ${verification} WHERE ${liveChallenge}
             ) AND EXISTS (
                 SELECT 1 FROM ${user}
                 WHERE ${user.id} = ${sessionUser.id}
@@ -1413,18 +1481,12 @@ app.openapi(update2faMethodRoute, async (c) => {
             return ok(c, {});
         }
 
-        if (!("code" in methodInput) || !(await verifyPendingTotpCode(
-            pending.secret,
-            methodInput.code,
-        ))) {
-            throw new ValidationError("The verification code is invalid or expired");
+        if (!(await verifyPendingTotpCode(pending.secret, methodInput.code))) {
+            throw twoFactorCodeRejected();
         }
 
         const authorityGuard = buildBatchGuard(db, sql`EXISTS (
-            SELECT 1 FROM ${verification}
-            WHERE ${verification.id} = ${methodInput.challengeId}
-              AND ${verification.identifier} = ${identifier}
-              AND ${verification.expiresAt} > ${now}
+            SELECT 1 FROM ${verification} WHERE ${liveChallenge}
         ) AND EXISTS (
             SELECT 1 FROM ${user}
             WHERE ${user.id} = ${sessionUser.id}
@@ -1642,6 +1704,7 @@ const accountSessionSchema = z.object({
     deviceLabel: z.string().max(100),
     deviceType: z.enum(["desktop", "mobile", "tablet", "unknown"]),
     networkHint: z.string().max(100).nullable(),
+    localNetwork: z.boolean(),
     twoFactorVerified: z.boolean(),
     impersonated: z.boolean(),
     createdAt: z.string().datetime(),

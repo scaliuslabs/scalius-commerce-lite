@@ -6,13 +6,13 @@
  * dashboard origin. The static SPA reads its route-guard state from
  * `GET /api/auth/dashboard-session`.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { createAuth } from "@scalius/core/auth";
 import { adminPrincipalExists } from "@scalius/core/auth/admin-setup";
 import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
-import { session as sessionTable, user as userTable } from "@scalius/database/schema";
+import { adminInvitations, session as sessionTable, user as userTable, verification } from "@scalius/database/schema";
 import { getAdminSessionFromCookieHeader } from "../middleware/admin-auth";
 import { isForeignDashboardRequest } from "../middleware/cookie-origin-guard";
 
@@ -154,48 +154,102 @@ export async function readDashboardSessionState(
   };
 }
 
-// ── Password reset without the token in a URL ────────────────────────────────
+// ── Password reset and staff invites without the token in a URL ─────────────
 
-async function createResetSession(request: Request): Promise<Response> {
+const RESET_TOKEN_SHAPE = /^[A-Za-z0-9_-]{16,256}$/;
+
+/** The person behind a live reset or invite token, or null when it is used, replaced or expired. */
+async function readResetToken(env: Env, token: string) {
+  const db = getDb(env);
+  return retryTransientD1(() =>
+    db
+      .select({
+        email: userTable.email,
+        invite: sql<number>`${userTable.mustChangePassword} = 1 AND ${adminInvitations.status} = 'pending'`,
+      })
+      .from(verification)
+      .innerJoin(userTable, eq(userTable.id, verification.value))
+      .leftJoin(adminInvitations, eq(adminInvitations.userId, userTable.id))
+      .where(and(
+        eq(verification.identifier, `reset-password:${token}`),
+        gt(verification.expiresAt, new Date()),
+      ))
+      .get(),
+  );
+}
+
+/**
+ * Checks the link when the page opens, so a used or expired link never shows
+ * the password form, and says whether it is a staff invite.
+ */
+async function createResetSession(request: Request, env: Env): Promise<Response> {
   const token = (await readJson(request)).token;
-  if (typeof token !== "string" || token.length < 16 || token.length > 256 || !/^[A-Za-z0-9_-]+$/.test(token)) {
-    return json({ code: "INVALID_RESET_SESSION", message: "This reset link is invalid." }, 400);
+  const live = typeof token === "string" && RESET_TOKEN_SHAPE.test(token) ? await readResetToken(env, token) : null;
+  if (!live) {
+    return json({ code: "INVALID_TOKEN", message: "This link has expired or was already used." }, 400);
   }
-  return json({ status: true }, 200, {
-    "Set-Cookie": resetSessionCookie(token, RESET_SESSION_MAX_AGE_SECONDS),
+  return json({ status: true, purpose: live.invite ? "invite" : "reset" }, 200, {
+    "Set-Cookie": resetSessionCookie(token as string, RESET_SESSION_MAX_AGE_SECONDS),
   });
 }
 
+/**
+ * Sets the new password, then signs the person in with it so they continue
+ * straight to two-step verification (or its first-time setup) instead of
+ * typing the password again.
+ */
 async function resetPasswordFromSession(
   auth: ReturnType<typeof createAuth>,
+  env: Env,
   request: Request,
   basePath: string,
 ): Promise<Response> {
   const token = readCookie(request, RESET_SESSION_COOKIE);
   const newPassword = (await readJson(request)).newPassword;
-  if (!token || typeof newPassword !== "string") {
+  const clearCookie = resetSessionCookie("", 0);
+  const account = token && RESET_TOKEN_SHAPE.test(token) ? await readResetToken(env, token) : null;
+  if (!token || !account || typeof newPassword !== "string") {
     return json(
-      { code: "INVALID_RESET_SESSION", message: "This reset link is invalid or expired." },
+      { code: "INVALID_TOKEN", message: "This link has expired or was already used." },
       400,
-      { "Set-Cookie": resetSessionCookie("", 0) },
+      { "Set-Cookie": clearCookie },
     );
   }
 
-  const target = new URL(request.url);
-  target.pathname = `${basePath}/api/auth/reset-password`;
-  target.search = "";
-  const headers = new Headers(request.headers);
-  headers.set("Content-Type", "application/json");
-  headers.delete("Content-Length");
-  headers.delete("Cookie");
-  const response = await auth.handler(new Request(target, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ newPassword, token }),
-  }));
-  const responseHeaders = new Headers(response.headers);
-  responseHeaders.append("Set-Cookie", resetSessionCookie("", 0));
-  return new Response(response.body, { status: response.status, headers: responseHeaders });
+  const authRequest = (path: string, body: Record<string, unknown>) => {
+    const target = new URL(request.url);
+    target.pathname = `${basePath}/api/auth/${path}`;
+    target.search = "";
+    const headers = new Headers(request.headers);
+    headers.set("Content-Type", "application/json");
+    headers.delete("Content-Length");
+    headers.delete("Cookie");
+    return new Request(target, { method: "POST", headers, body: JSON.stringify(body) });
+  };
+
+  const reset = await auth.handler(authRequest("reset-password", { newPassword, token }));
+  if (!reset.ok) {
+    const headers = new Headers(reset.headers);
+    headers.append("Set-Cookie", clearCookie);
+    return new Response(reset.body, { status: reset.status, headers });
+  }
+
+  const signInRequest = authRequest("sign-in/email", { email: account.email, password: newPassword, rememberMe: true });
+  const signIn = await preferConfiguredTwoFactorMethod(env, signInRequest, await auth.handler(signInRequest.clone() as Request));
+  const headers = new Headers({ "Cache-Control": NO_STORE });
+  headers.append("Set-Cookie", clearCookie);
+  if (!signIn.ok) {
+    // The password is set; the person signs in on the form instead.
+    return Response.json({ status: true, signedIn: false }, { headers });
+  }
+  for (const cookie of signIn.headers.getSetCookie()) headers.append("Set-Cookie", cookie);
+  const result = await signIn.json() as { twoFactorRedirect?: boolean; twoFactorMethods?: unknown[] };
+  return Response.json(
+    result.twoFactorRedirect === true
+      ? { status: true, signedIn: false, twoFactorRedirect: true, twoFactorMethods: result.twoFactorMethods ?? [] }
+      : { status: true, signedIn: true },
+    { headers },
+  );
 }
 
 // ── Better Auth with D1 retries and dashboard 2FA bookkeeping ────────────────
@@ -327,7 +381,7 @@ export async function handleDashboardAuthRequest(
     if (method !== "GET") return json({ success: false, error: "Method not allowed" }, 405);
     return json(await readDashboardSessionState(request, env));
   }
-  if (method === "POST" && route === RESET_SESSION_PATH) return createResetSession(request);
+  if (method === "POST" && route === RESET_SESSION_PATH) return createResetSession(request, env);
 
   // Fresh stores have no Dashboard URL yet: the first admin signs in on the
   // origin they reached, then configures it under Settings -> Platform.
@@ -338,7 +392,7 @@ export async function handleDashboardAuthRequest(
   const auth = createAuth(authEnv);
 
   if (method === "POST" && route === RESET_PASSWORD_SESSION_PATH) {
-    return withNoStore(await resetPasswordFromSession(auth, request, basePath));
+    return withNoStore(await resetPasswordFromSession(auth, authEnv, request, basePath));
   }
   if (BLOCKED_PATHS.has(route) || route === "/api/auth/admin" || route.startsWith("/api/auth/admin/")) {
     return json({ code: "AUTH_ROUTE_NOT_AVAILABLE", message: "This authentication operation is not available." }, 403);

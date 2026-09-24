@@ -15,6 +15,7 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 | `tracking.ts` | Standalone functions: `updateOrderStatusFromShipment()` maps shipment status to order status (with inventory side-effects via `applyInventoryForStatusChange`), `getTrackingUrl()` |
 | `status-mapper.ts` | `mapProviderStatus()` + `ShipmentStatusCode` enum -- normalizes provider-specific statuses to 14 canonical codes |
 | `locations.ts` | Location CRUD and external ID resolution functions |
+| `zones.ts` | Delivery zones and rates (`shipping_methods`). An address resolves to the zone of its most specific assigned place (area > zone > city), else the zoneless "Everywhere else" rates; local pickup rates are store-wide. `resolveDeliveryRate` is the one checkout decision (zone match, active, free-over on the items subtotal before discounts); zone edits CAS on `delivery_zones.revision`, Everywhere-else edits on a settings document revision. |
 | `pathao-location-import.ts` | Chunked bulk import of Pathao cities/zones/areas (excluded from barrel exports) |
 | `providers/pathao.ts` | `PathaoProvider` -- OAuth2 password-grant auth, lazy token caching, location ID mapping |
 | `providers/steadfast.ts` | `SteadfastProvider` -- API key + secret key auth, full-text address construction |

@@ -13,7 +13,7 @@ import { PERMISSIONS, getAllPermissions } from "./permissions";
 // be purged after an intentional manual database reset. Do not retain an
 // in-flight reconciliation Promise or binding-derived state in module scope:
 // Workers may reuse this isolate for a later request or after bindings change.
-const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v4";
+const RBAC_SEED_CACHE_PREFIX = "rbac:seed-current:v5";
 const RBAC_SEED_CACHE_TTL_SECONDS = 6 * 60 * 60;
 
 type SystemRoleSeed = {

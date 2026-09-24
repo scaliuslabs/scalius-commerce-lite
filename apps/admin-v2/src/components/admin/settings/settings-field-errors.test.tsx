@@ -90,7 +90,7 @@ describe("inline validation", () => {
 });
 
 describe("server field errors", () => {
-  it("marks the rejected field in place, lists the rest, focuses the field and clears on edit", async () => {
+  it("marks the rejected field in place (once), lists the rest, focuses the field and clears on edit", async () => {
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
@@ -109,8 +109,10 @@ describe("server field errors", () => {
     expect(input.getAttribute("aria-invalid")).toBe("true");
     expect(container.querySelector("#business-email-note")?.textContent).toBe("Enter an email address like name@example.com.");
     expect(document.activeElement).toBe(input);
-    const banner = container.querySelector("[role=alert]")!.textContent;
-    expect(banner).toContain("Email: Enter an email address like name@example.com.");
+    const banner = container.querySelector(".scroll-mt-4")!.textContent;
+    // One indicator per field: the page banner counts it but doesn't repeat it.
+    expect(banner).toContain("To save, fix 2 problems");
+    expect(banner).not.toContain("Enter an email address");
     // An unplaceable path stays in the banner, named by its card.
     expect(banner).toContain("Store name and contact: Not allowed here");
 
@@ -121,6 +123,52 @@ describe("server field errors", () => {
     });
     expect(input.getAttribute("aria-invalid")).toBeNull();
     expect(container.querySelector("#business-email-note")).toBeNull();
+
+    act(() => root.unmount());
+    container.remove();
+  });
+});
+
+describe("server field errors in a dialog", () => {
+  it("shows a placed field error only next to the field, and no banner when nothing else went wrong", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    let scope: SaveScopeState | null = null;
+    function EmailOnly() {
+      useSaveBar({
+        dirty: true,
+        fields: (path) => `business-${path}`,
+        save: async () => {
+          throw new AdminApiResponseError(JSON.stringify([
+            { origin: "string", code: "invalid_format", format: "email", path: ["email"], message: "Invalid email address" },
+          ]), 400);
+        },
+        discard: () => {},
+      });
+      return (
+        <SettingsField id="business-email" label="Email">
+          <input id="business-email" defaultValue="owner@" />
+        </SettingsField>
+      );
+    }
+    act(() => {
+      root.render(
+        <div role="dialog">
+          <SaveScope render={(next) => { scope = next; return null; }}>
+            <SaveErrorBanner />
+            <EmailOnly />
+          </SaveScope>
+        </div>,
+      );
+    });
+
+    let saved = true;
+    await act(async () => { saved = await scope!.saveAll(); });
+    expect(saved).toBe(false);
+    expect(container.querySelector("#business-email-note")?.textContent).toBe("Enter an email address like name@example.com.");
+    expect(container.querySelector(".scroll-mt-4")).toBeNull();
+    expect(scope!.failed).toBe(true);
 
     act(() => root.unmount());
     container.remove();

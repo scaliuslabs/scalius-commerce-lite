@@ -68,7 +68,7 @@ describe("agent workflow catalog", () => {
       "operations.thirty-day-booked-brief.v1",
     ]);
     expect(catalog.routes).toHaveLength(61);
-    expect(catalog.controls).toHaveLength(32);
+    expect(catalog.controls).toHaveLength(30);
     for (const route of catalog.routes) {
       expect(Buffer.byteLength(JSON.stringify(route)), route.id).toBeLessThanOrEqual(2 * 1024);
     }
@@ -122,7 +122,8 @@ describe("agent workflow catalog", () => {
       control.id === "dashboard.thirty-day-owner-briefing-needs-scope"
     )!;
     expect(Buffer.byteLength(JSON.stringify(ownerBriefScopeControl))).toBeLessThanOrEqual(1_900);
-    expect(Buffer.byteLength(JSON.stringify(OPTIONED_PRODUCT_WORKFLOW))).toBeLessThanOrEqual(15_360);
+    // 15.25 KiB: the store-wide discovery save carries its settings revision.
+    expect(Buffer.byteLength(JSON.stringify(OPTIONED_PRODUCT_WORKFLOW))).toBeLessThanOrEqual(15_616);
     expect(Buffer.byteLength(JSON.stringify(DAILY_OPERATING_SNAPSHOT_WORKFLOW))).toBeLessThanOrEqual(10 * 1024);
     expect(Buffer.byteLength(JSON.stringify(THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW)))
       .toBeLessThanOrEqual(8 * 1024);
@@ -463,21 +464,19 @@ describe("agent workflow catalog", () => {
     ]);
 
     const delivery = workflowStep(daily, "readiness", "delivery").output!;
-    const methods = delivery.selectors.find((selector) =>
-      selector.alias === "shippingMethods"
-    )!;
-    expect(methods.maxItems).toBe(100);
-    expect(methods.fields?.map((field) => field.pointer)).toEqual([
+    const zones = delivery.selectors.find((selector) => selector.alias === "zones")!;
+    expect(zones.maxItems).toBe(100);
+    expect(zones.fields?.map((field) => field.pointer)).toEqual(["/id", "/name"]);
+    const everywhereElse = delivery.selectors.find((selector) => selector.alias === "everywhereElseRates")!;
+    expect(everywhereElse.maxItems).toBe(20);
+    expect(everywhereElse.fields?.map((field) => field.pointer)).toEqual([
       "/id",
+      "/kind",
       "/name",
       "/fee",
+      "/freeOver",
       "/isActive",
-      "/sortOrder",
     ]);
-    expect(
-      delivery.selectors.find((selector) => selector.alias === "pagination")
-        ?.fields?.map((field) => field.pointer),
-    ).toEqual(["/page", "/limit", "/total", "/totalPages"]);
   });
 
   it("keeps the 30-day brief fixed, count-only, and PII-free", () => {

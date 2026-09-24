@@ -21,7 +21,8 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 
 - **Read** (`read`, `readDetailed`, `fromRows` for batched reads): the stored JSON is merged over the defaults and validated. Missing row → defaults (`stored: false`, `revision: 0`). Invalid JSON/schema → defaults with a masked warning. Relational read errors propagate so callers fail closed.
 - **Secrets** (`secretFields`): stored as `enc:` ciphertext encrypted with `CREDENTIAL_ENCRYPTION_KEY`. Reads decrypt strictly with that key; unreadable ciphertext or an obvious placeholder (`isPlaceholderSecret`) reads as the default (not configured) and is reported in `secretErrors` / `secretsConfigured`. A write that leaves a secret field untouched carries its ciphertext verbatim, so non-secret edits never need the key. Secrets are never logged or returned; routes mask them.
-- **Write**: validates the patched (or `replace`d) document, compare-and-swaps on the revision it read, and advances the revision by one. Plain patches retry a lost race; `expectedRevision` callers get a `ConflictError` (or their own `conflict` factory). `before`/`after` statements commit in the same batch (media guards, provider-health clears).
+- **Write**: validates the patched (or `replace`d) document, compare-and-swaps on the revision it read, and advances the revision by one. Every merchant editor sends the revision it loaded (`expectedRevision`); a stale one throws `SettingsRevisionConflictError` (409 `SETTINGS_REVISION_CONFLICT`, details `{ document, expectedRevision, currentRevision }`). Internal plain patches retry a lost race. `writeSettingsDocuments()` commits several documents all-or-nothing; a revision guard leads the batch, so a stale write also rolls back `before`/`after` statements (media guards, provider-health clears).
+- **Admin contract**: every settings GET returns `revision` in `data` (0 = never saved; `/auth` returns one per document it edits), every save requires `expectedRevision` and answers with the new `revision`.
 - **KV mirror** (`cacheKey`, non-secret documents only): `readCached` is KV-first; `writeCached`/`write(..., { kv })` writes through. Used by `platform` (`settings:platform`) and `security` (`settings:security`).
 - **Checkout authority**: the existing `settings_checkout_authority_*` triggers advance `checkout_authority.revision` on every document insert, change, or delete, so in-flight checkouts are fenced against any settings change.
 
@@ -62,7 +63,7 @@ require it.
 `env.STOREFRONT_URL` and the other public origins are resolved at Worker entry
 by `resolvePlatformConfig()` (KV mirror first, then the `platform` document; a
 DB failure resolves the empty configuration so callers fail closed).
-`savePlatformSettings(db, patch, kv?)` validates every field before writing
+`savePlatformSettings(db, patch, kv?, { expectedRevision }?)` validates every field before writing
 (`storefrontUrl` is required and normalized to one HTTPS origin, HTTP loopback
 only for local development) and writes the KV mirror through.
 
@@ -90,8 +91,8 @@ WhatsApp saves require a ready provider that is not paused by
 
 ## Admin routes (`apps/api/src/routes/admin/settings/`)
 
-- `site.ts` -- currency, header/footer (`expectedRevision` CAS, typed `SITE_PRESENTATION_REVISION_CONFLICT`), homepage (CAS + media guard), theme draft/publish, SEO (partial discovery/return-policy patches), storefront URL, allowed countries, notification channels. Saves bump the cache generation after commit.
-- `system.ts` -- customer auth + WhatsApp (policy saves fail closed unless every selected OTP channel is deliverable; WhatsApp token saves require `CREDENTIAL_ENCRYPTION_KEY`, reject placeholders, skip masked values, and clear WhatsApp provider pauses in the same batch), checkout flow (`expectedRevision` CAS, `409 CHECKOUT_FLOW_REVISION_CONFLICT`, revision `0` before the first save), checkout readiness, security (CSP only; never widens API CORS), email, Firebase.
+- `site.ts` -- currency, header/footer (`expectedRevision` CAS), homepage (CAS + media guard), theme draft/publish, SEO (partial discovery/return-policy patches), storefront URL, allowed countries, notification channels. Saves bump the cache generation after commit.
+- `system.ts` -- customer auth + WhatsApp (policy saves fail closed unless every selected OTP channel is deliverable; WhatsApp token saves require `CREDENTIAL_ENCRYPTION_KEY`, reject placeholders, skip masked values, and clear WhatsApp provider pauses in the same batch), checkout flow (`expectedRevision` CAS, revision `0` before the first save), checkout readiness, security (CSP only; never widens API CORS), email, Firebase.
 - `payments.ts` -- payment methods, Stripe, SSLCommerz. Secret saves require `CREDENTIAL_ENCRYPTION_KEY`; enabled saves require non-placeholder credentials.
 - `meta-conversions-admin.ts` -- Meta CAPI settings; a save clears the `meta-capi:browser-events:circuit` KV marker.
 - `business.ts`, `sms.ts`, `platform.ts`.

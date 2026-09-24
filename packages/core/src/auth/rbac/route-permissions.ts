@@ -22,6 +22,13 @@ type RouteConfig = {
 };
 
 /**
+ * Any staff member or agent connection with at least one permission. Unlike
+ * `allowAnyAdmin` (the signed-in person's own account), agent connections with
+ * a scoped grant keep these reads.
+ */
+const ANY_STAFF: PermissionName[] = Object.values(PERMISSIONS);
+
+/**
  * Route permission mapping
  * Keys are URL patterns (glob-like)
  * Values define required permissions per HTTP method
@@ -81,6 +88,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     POST: { permission: PERMISSIONS.PRODUCTS_CREATE },
   },
+  "/api/v1/admin/products/by-ids": {
+    GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.COLLECTIONS_VIEW] },
+  },
   "/api/v1/admin/products/bulk-delete": {
     POST: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
     DELETE: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
@@ -114,45 +124,22 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
-  "/api/products": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    POST: { permission: PERMISSIONS.PRODUCTS_CREATE },
-  },
-  "/api/products/bulk-delete": {
-    POST: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
-    DELETE: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
-  },
-  "/api/products/*": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    DELETE: { permission: PERMISSIONS.PRODUCTS_DELETE },
-  },
-  "/api/products/*/restore": {
-    POST: { permission: PERMISSIONS.PRODUCTS_RESTORE },
-  },
-  "/api/products/*/permanent": {
-    DELETE: { permission: PERMISSIONS.PRODUCTS_PERMANENT_DELETE },
-  },
-  "/api/products/*/variants": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  "/api/products/*/variants/*": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  "/api/products/*/options/matrix": {
-    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
   // =============================================
   // Categories API
   // =============================================
   "/api/v1/admin/categories": {
     GET: { permission: PERMISSIONS.CATEGORIES_VIEW },
     POST: { permission: PERMISSIONS.CATEGORIES_CREATE },
+  },
+  "/api/v1/admin/categories/form-options": {
+    GET: {
+      anyOf: [
+        PERMISSIONS.CATEGORIES_VIEW,
+        PERMISSIONS.PRODUCTS_VIEW,
+        PERMISSIONS.SETTINGS_GENERAL_VIEW,
+        PERMISSIONS.SETTINGS_HEADER_EDIT,
+      ],
+    },
   },
   "/api/v1/admin/categories/bulk-delete": {
     POST: { permission: PERMISSIONS.CATEGORIES_DELETE },
@@ -519,7 +506,8 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   // Attributes API (under /api/v1/admin/)
   // =============================================
   "/api/v1/admin/attributes": {
-    GET: { permission: PERMISSIONS.ATTRIBUTES_VIEW },
+    // The product page names the attributes a product carries.
+    GET: { anyOf: [PERMISSIONS.ATTRIBUTES_VIEW, PERMISSIONS.PRODUCTS_VIEW] },
     POST: { permission: PERMISSIONS.ATTRIBUTES_CREATE },
   },
   "/api/v1/admin/attributes/bulk-delete": {
@@ -587,8 +575,10 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/cache/clear": {
     POST: { permission: PERMISSIONS.SETTINGS_CACHE_MANAGE },
   },
+  // Store-wide display facts (money format, store address, search listing
+  // defaults) are already public on the storefront; every staff screen needs them.
   "/api/v1/admin/settings/currency": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    GET: { anyOf: ANY_STAFF },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/taxes": {
@@ -663,7 +653,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/business": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    GET: { anyOf: [PERMISSIONS.SETTINGS_GENERAL_VIEW, PERMISSIONS.ORDERS_ISSUE_INVOICE] },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/payment-methods": {
@@ -680,6 +670,10 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/settings/customer-requests": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/policies": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    PUT: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
   },
   "/api/v1/admin/settings/stripe": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
@@ -723,7 +717,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.SETTINGS_FOOTER_EDIT },
   },
   "/api/v1/admin/settings/seo": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    GET: { anyOf: ANY_STAFF },
     PUT: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
     POST: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
   },
@@ -747,7 +741,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
   "/api/v1/admin/settings/storefront-url": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    GET: { anyOf: ANY_STAFF },
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
@@ -786,7 +780,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
   },
   "/api/v1/admin/settings/delivery-providers": {
-    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW },
+    GET: {
+      anyOf: [
+        PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW,
+        PERMISSIONS.ORDERS_MANAGE_SHIPMENTS,
+      ],
+    },
     POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
     PUT: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
   },
@@ -796,75 +795,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/settings/delivery-providers/*": {
     GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
-    PUT: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
-    DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
-  },
-  "/api/settings/stripe": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
-  "/api/settings/sslcommerz": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
-  "/api/settings/header": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
-    POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
-  },
-  "/api/settings/footer": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_FOOTER_EDIT },
-    POST: { permission: PERMISSIONS.SETTINGS_FOOTER_EDIT },
-  },
-  "/api/settings/seo": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
-    POST: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
-  },
-  "/api/settings/firebase": {
-    GET: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
-    PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
-    POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
-  },
-  "/api/settings/storefront-url": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
-  "/api/settings/hero-sliders": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
-  },
-  "/api/settings/hero-sliders/*": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
-    DELETE: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
-  },
-  "/api/settings/delivery-locations": {
-    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
-  },
-  "/api/settings/delivery-locations/all": {
-    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
-  },
-  "/api/settings/delivery-locations/import-pathao": {
-    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
-  },
-  "/api/settings/delivery-locations/*": {
-    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
-    DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
-  },
-  "/api/settings/delivery-providers": {
-    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
-  },
-  "/api/settings/delivery-providers/create-test": {
-    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
-  },
-  "/api/settings/delivery-providers/*": {
-    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
     DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_EDIT },
   },
@@ -891,14 +821,7 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
   },
   "/api/v1/admin/settings/shipping-methods/*": {
-    GET: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
-    DELETE: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
-  },
-  "/api/v1/admin/settings/shipping-methods/*/restore": {
-    POST: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
-  },
-  "/api/v1/admin/settings/shipping-methods/*/permanent-delete": {
     DELETE: { permission: PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT },
   },
   "/api/v1/admin/settings/checkout-languages": {
@@ -930,8 +853,10 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
   "/api/v1/admin/settings/notification-channels/admin-channels": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     PUT: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
+  },
+  "/api/v1/admin/settings/notification-channels/templates/test": {
+    POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
   "/api/v1/admin/settings/notification-channels/*": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
@@ -1038,21 +963,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/dashboard/*": {
     GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
   },
-  "/api/dashboard": {
-    GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
-  },
-  "/api/dashboard/*": {
-    GET: { permission: PERMISSIONS.DASHBOARD_VIEW },
-  },
-
-  // =============================================
-  // Team/Admin User Management API
-  // =============================================
-  "/api/auth/admin-users": {
-    GET: { permission: PERMISSIONS.TEAM_VIEW },
-    POST: { permission: PERMISSIONS.TEAM_MANAGE },
-    DELETE: { permission: PERMISSIONS.TEAM_MANAGE },
-  },
 
   // =============================================
   // RBAC API
@@ -1112,13 +1022,6 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/inventory/*/adjust": {
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
-  "/api/inventory/alerts": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
-  "/api/inventory/*/adjust": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
-  },
 
   // =============================================
   // FCM Token API
@@ -1151,6 +1054,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     POST: { permission: PERMISSIONS.TEAM_MANAGE },
   },
   "/api/v1/admin/auth/users/*/resend-setup": {
+    POST: { permission: PERMISSIONS.TEAM_MANAGE },
+  },
+  "/api/v1/admin/auth/users/*/remove": {
     POST: { permission: PERMISSIONS.TEAM_MANAGE },
   },
   "/api/v1/admin/auth/change-password": {
