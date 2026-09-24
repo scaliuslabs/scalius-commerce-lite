@@ -14,6 +14,7 @@ import { client as apiClient } from "@scalius/api-client/client";
 
 import { AdminApiResponseError } from "./admin-api-error";
 import { adminApiReadSignal } from "./admin-api-timeout";
+import { noticeAdminUnauthorized } from "./admin-session-lost";
 import { withDashboardBasePath } from "./dashboard-base-path";
 
 async function fetchAdminApi(request: Request): Promise<Response> {
@@ -21,7 +22,7 @@ async function fetchAdminApi(request: Request): Promise<Response> {
   const body = request.method === "GET" || request.method === "HEAD"
     ? ""
     : await request.text();
-  return fetch(withDashboardBasePath(url.pathname) + url.search, {
+  const response = await fetch(withDashboardBasePath(url.pathname) + url.search, {
     method: request.method,
     headers: request.headers,
     body: body || undefined,
@@ -29,6 +30,9 @@ async function fetchAdminApi(request: Request): Promise<Response> {
     cache: "no-store",
     signal: adminApiReadSignal(request.method, request.signal),
   });
+  // Signed out while the shell was open: leave it rather than show "Couldn't load" everywhere.
+  if (response.status === 401) void noticeAdminUnauthorized();
+  return response;
 }
 
 // The origin is a placeholder: only path + query are used.

@@ -15,6 +15,7 @@ import { useListSearch } from "~/lib/list-search";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
+import { dataTableMessages } from "~/i18n/data-table";
 import { IndexTabs, type IndexTab } from "./IndexTabs";
 import { PageHeader } from "./PageHeader";
 import { EmptyState } from "./EmptyState";
@@ -91,6 +92,8 @@ export interface ResourceListPageProps<T extends { id: string }> {
   canSelectRow?: (row: T) => boolean;
   sortable?: boolean;
   onReorder?: (oldIndex: number, newIndex: number, rows: T[]) => void;
+  /** The list's order when no sort is chosen (the API's default); "Recently updated" unless given. */
+  defaultSortLabel?: string;
 }
 
 /**
@@ -102,6 +105,7 @@ export interface ResourceListPageProps<T extends { id: string }> {
 export function ResourceListPage<T extends { id: string }>(props: ResourceListPageProps<T>) {
   const { search, lifecycle } = props;
   const t = useMessages(resourceMessages);
+  const tableCopy = useMessages(dataTableMessages);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const trashed = search.trashed;
@@ -340,6 +344,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         error={error}
         onRetry={() => void refetch()}
         layoutKey={props.list}
+        defaultSortLabel={props.defaultSortLabel ?? tableCopy("recentlyUpdated")}
         getRowHref={trashed ? undefined : rowTo}
         emptyState={emptyState}
         // Reorder only when the whole list is on screen (at most 90 rows per
