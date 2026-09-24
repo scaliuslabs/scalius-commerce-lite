@@ -19,6 +19,7 @@ import {
   shouldAllowAdminPath,
 } from "~/lib/admin-access";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 
@@ -37,6 +38,10 @@ export const Route = createFileRoute("/admin")({
       throw redirect({ to: ADMIN_ACCESS_DENIED_PATH });
     }
     return authContext;
+  },
+  // The sidebar's "View store" link: read alongside the page's own data.
+  loader: ({ context: { queryClient } }) => {
+    void queryClient.prefetchQuery(storefrontUrlQueryOptions());
   },
   component: AdminLayout,
 });

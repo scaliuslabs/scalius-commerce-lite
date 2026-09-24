@@ -1,14 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { OrderForm } from "~/components/admin/OrderForm";
-import { translate } from "~/i18n";
-import { orderFormMessages } from "~/i18n/order-form";
 import { OrderFormRouteError } from "./-OrderFormRouteError";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/orders/new")({
   // Products and delivery places are searched inside the form; nothing loads up front.
-  head: () => ({
-    meta: [{ title: `${translate(orderFormMessages, "createOrder")} | Scalius` }],
-  }),
+  head: () => pageHead("createOrder"),
   errorComponent: OrderFormRouteError,
   component: NewOrderPage,
 });

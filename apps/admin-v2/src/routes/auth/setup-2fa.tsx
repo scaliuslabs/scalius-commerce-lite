@@ -1,8 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { TwoFactorSetup } from "~/components/auth/TwoFactorSetup";
-import { translate } from "~/i18n";
-import { authMessages } from "~/i18n/auth";
 import { readDashboardSession } from "~/lib/auth-guards";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/auth/setup-2fa")({
   beforeLoad: async () => {
@@ -14,7 +13,7 @@ export const Route = createFileRoute("/auth/setup-2fa")({
     }
     return { userEmail: session.user.email };
   },
-  head: () => ({ meta: [{ title: `${translate(authMessages, "setupTwoFactorTitle")} · Scalius` }] }),
+  head: () => pageHead("setupTwoFactor"),
   component: Setup2faPage,
 });
 

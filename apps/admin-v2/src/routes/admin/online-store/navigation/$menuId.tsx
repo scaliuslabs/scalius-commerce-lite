@@ -5,15 +5,14 @@ import {
   navigationPlacementsQueryOptions,
 } from "~/lib/api-query-options/online-store";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { translate } from "~/i18n";
-import { onlineStoreMessages } from "~/i18n/online-store";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/online-store/navigation/$menuId")({
   loader: ({ context: { queryClient }, params }) => Promise.all([
     queryClient.ensureQueryData(navigationMenuQueryOptions(params.menuId)),
     queryClient.ensureQueryData(navigationPlacementsQueryOptions()),
   ]),
-  head: () => ({ meta: [{ title: `${translate(onlineStoreMessages, "navigationTitle")} | Scalius` }] }),
+  head: () => pageHead("navigation"),
   component: MenuRoute,
   errorComponent: RouteErrorComponent,
 });

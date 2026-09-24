@@ -19,13 +19,13 @@ vi.mock("~/lib/admin-route-context", () => ({
 vi.mock("~/lib/api-query-options/taxes", () => ({
   taxConfigurationQueryOptions: mocks.taxConfigurationQueryOptions,
   taxSettingsQueryOptions: mocks.taxSettingsQueryOptions,
+  firstTaxOverridesQuery: { queryKey: ["settings", "tax-classifications"], queryFn: vi.fn() },
 }));
 vi.mock("~/components/admin/taxes/TaxesSettings", () => ({
   TaxCollectionCard: () => null,
   TaxGroupsCard: () => null,
   TaxRatesCard: () => null,
   TaxOverridesCard: () => null,
-  firstTaxOverridesQuery: { queryKey: ["settings", "tax-classifications"], queryFn: vi.fn() },
 }));
 vi.mock("~/lib/route-error", () => ({
   RouteErrorComponent: () => null,

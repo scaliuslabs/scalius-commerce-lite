@@ -21,9 +21,7 @@ import { SettingsCard, SettingsCardLoading, SettingsPage } from "~/components/ad
 import {
   PermissionChecklist,
   failure,
-  rolesQuery,
   saveFailure,
-  staffQuery,
   useAccessRefresh,
   useRoleName,
   useViewer,
@@ -42,11 +40,13 @@ import {
 } from "~/components/admin/settings/staff-access";
 import { apiClient, apiData } from "~/lib/api";
 import type { AdminUser } from "~/lib/api-query-options/rbac";
+import { rolesQuery, staffQuery } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { usersMessages } from "~/i18n/settings-users";
+import { settingsHead } from "~/components/admin/settings/settings-nav";
 
 // Stopgap until `pnpm generate:sdk` adds postApiV1AdminAuthUsersByIdRemove.
 const removeStaff = (id: string) =>
@@ -60,7 +60,7 @@ const removeStaff = (id: string) =>
 export const Route = createFileRoute("/admin/settings/users_/$userId")({
   loader: ({ context: { queryClient } }) =>
     Promise.allSettled([queryClient.ensureQueryData(staffQuery), queryClient.ensureQueryData(rolesQuery)]),
-  head: () => ({ meta: [{ title: `${translate(settingsNavMessages, "users")} | Scalius Admin` }] }),
+  head: () => settingsHead("users"),
   errorComponent: RouteErrorComponent,
   component: StaffMemberPage,
 });

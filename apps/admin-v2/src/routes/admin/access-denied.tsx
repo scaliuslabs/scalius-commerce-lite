@@ -3,14 +3,15 @@ import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { Lock } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { broadcastAdminSignOut } from "~/components/auth/AdminSessionSync";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { appMessages } from "~/i18n/app";
 import { clearAdminRouteContextCache } from "~/lib/admin-route-context";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { NotFoundState, PageState } from "~/lib/route-error";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/access-denied")({
-  head: () => ({ meta: [{ title: translate(appMessages, "forbiddenTitle") }] }),
+  head: () => pageHead("accessDenied"),
   component: AccessDeniedPage,
 });
 

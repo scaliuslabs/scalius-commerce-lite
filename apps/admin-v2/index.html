@@ -11,6 +11,9 @@
     <link rel="icon" href="/favicon.png" />
     <!-- Theme and language before first paint: the saved choice, else the system theme. -->
     <script>(function(){var d=document.documentElement,t=null,l=null;try{t=localStorage.getItem("theme");l=localStorage.getItem("scalius.dashboard.locale")}catch(e){}d.classList.toggle("dark",t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches);if(l==="bn")d.lang="bn"})()</script>
+    <!-- Every page's first guard reads the session: start that read now, while
+         the app downloads, instead of after it (src/lib/auth-guards.ts). -->
+    <script>(function(){var b=document.querySelector('meta[name="scalius-dashboard-base-path"]').content;if(location.pathname.indexOf(b+"/scanner")===0)return;window.__scaliusSession=fetch(b+"/api/auth/dashboard-session",{credentials:"same-origin",cache:"no-store",headers:{Accept:"application/json"}});window.__scaliusSession.catch(function(){})})()</script>
     <!-- Until the stylesheet arrives: the page colour (--background in both
          themes) and, when the first load takes over a second, a quiet spinner. -->
     <style>

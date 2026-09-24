@@ -16,25 +16,14 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData } from "~/lib/api";
+import { authQuery, customerRulesQuery, signInPolicyQuery } from "~/lib/api-query-options/settings-screens";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { notificationsMessages } from "~/i18n/settings-notifications";
-import { authQuery, customerRulesQuery } from "./NotificationSettings";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsField, SettingsCardLoading } from "./SettingsPage";
 
 type EmailMode = "none" | "optional" | "required";
-
-export const signInPolicyQuery = {
-  queryKey: [...authQuery.queryKey, "policy"],
-  queryFn: async () => {
-    const auth = await authQuery.queryFn();
-    return {
-      policy: normalizeCustomerAuthPolicy(auth.customerAuthPolicy, auth.authVerificationMethod),
-      revision: auth.revision,
-    };
-  },
-};
 
 function emailMode(policy: CustomerAuthPolicyConfig): EmailMode {
   if (policy.requiredContactFields.includes("email")) return "required";

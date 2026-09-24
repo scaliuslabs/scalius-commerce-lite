@@ -7,7 +7,7 @@ import {
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
 import { Input } from "~/components/ui/input";
-import { PoliciesCard, StorePagePicker, policiesQuery, storePagesQuery } from "~/components/admin/settings/PoliciesCard";
+import { PoliciesCard, StorePagePicker } from "~/components/admin/settings/PoliciesCard";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { NativeSelect } from "~/components/ui/native-select";
 import { SettingsLoadFailure } from "~/components/admin/settings/SettingsLoadFailure";
@@ -16,6 +16,7 @@ import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { apiData } from "~/lib/api";
+import { policiesQuery, storePagesQuery } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";

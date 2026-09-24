@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useCurrency } from "~/hooks/use-currency";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
+import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import type { OrderReturnDto } from "~/lib/order-return-workflow";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
@@ -46,7 +47,7 @@ export function OrderItemsCard({ order }: { order: Order }) {
   const { fmt } = useCurrency();
   const hydrated = useHydrated();
   // The Returns card reads the same query; this only reuses it.
-  const returnsQuery = useQuery({ ...orderReturnsQueryOptions(order.id), enabled: hydrated });
+  const returnsQuery = useQuery({ ...orderReturnsQueryOptions(order.id), enabled: hydrated, staleTime: ORDER_DETAIL_PREFETCH_STALE_MS });
   const returned = useMemo(() => returnedQuantities(returnsQuery.data?.returns ?? []), [returnsQuery.data]);
   const saved = resolveSavedOrderMoneySummary(order);
   const decimals = saved?.decimalPlaces ?? 2;

@@ -47,3 +47,12 @@ export const taxClassificationsQueryOptions = (input: {
     staleTime: 15_000,
   });
 };
+
+export const OVERRIDES_PAGE_SIZE = 25;
+
+/** The first page of product tax overrides, as the taxes screen opens. */
+export const firstTaxOverridesQuery = taxClassificationsQueryOptions({
+  kind: "product",
+  page: 1,
+  limit: OVERRIDES_PAGE_SIZE,
+});

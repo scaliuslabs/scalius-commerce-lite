@@ -35,9 +35,10 @@ import {
 import { ProductBulkActions } from "~/components/admin/product-list/ProductBulkActions";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
+import { pageHead } from "~/i18n/page-titles";
 
 const STATUSES = ["active", "draft"] as const;
 const validateBase = createListSearchValidator(["updatedAt", "createdAt", "name", "price", "category"] as const, { sort: "updatedAt" });
@@ -70,7 +71,7 @@ export const Route = createFileRoute("/admin/products/")({
   validateSearch: validateProductSearch,
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("products", deps, "status"), deps.q))),
-  head: () => ({ meta: [{ title: `${translate(productMessages, "products")} | Scalius Admin` }] }),
+  head: () => pageHead("products"),
   component: ProductsPage,
   errorComponent: RouteErrorComponent,
 });

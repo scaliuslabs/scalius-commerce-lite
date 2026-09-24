@@ -32,7 +32,11 @@ export function getRouter() {
     scrollRestoration: true,
     scrollToTopSelectors: ["#admin-main-scroll", "[data-settings-scroll]"],
     scrollRestorationBehavior: "instant",
-    defaultPreload: false,
+    // Hovering or focusing a link fetches the page's code and runs its loader,
+    // so the click lands on data already in flight. React Query owns caching
+    // and freshness, so the router re-runs loaders on every preload.
+    defaultPreload: "intent",
+    defaultPreloadStaleTime: 0,
     // Never replace useful admin content with a route-level loading screen.
     // The persistent admin shell exposes delayed navigation progress without
     // blocking the transition or forcing a minimum pending-screen duration.

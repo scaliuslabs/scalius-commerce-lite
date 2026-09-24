@@ -1,10 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { getApiV1Setup } from "@scalius/api-client/sdk";
 import { SetupForm } from "~/components/auth/SetupForm";
-import { translate } from "~/i18n";
-import { authMessages } from "~/i18n/auth";
 import { apiData } from "~/lib/api";
 import { readDashboardSession } from "~/lib/auth-guards";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/auth/setup")({
   beforeLoad: async () => {
@@ -19,7 +18,7 @@ export const Route = createFileRoute("/auth/setup")({
       .catch(() => false);
     return { setupTokenRequired };
   },
-  head: () => ({ meta: [{ title: `${translate(authMessages, "setupTitle")} · Scalius` }] }),
+  head: () => pageHead("setup"),
   component: SetupPage,
 });
 

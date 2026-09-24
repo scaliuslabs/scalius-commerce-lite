@@ -13,6 +13,9 @@ let cachedAdminRouteContext:
   | null = null;
 let adminRouteContextRefresh: Promise<void> | null = null;
 let adminRouteContextEpoch = 0;
+/** A sensitive route's own server read, shared by a preload and the navigation after it. */
+export const ADMIN_ROUTE_CONTEXT_REVALIDATION_REUSE_MS = 5_000;
+let freshRead: { context: Promise<AdminRouteContext>; epoch: number; startedAt: number } | null = null;
 
 export function clearAdminRouteContextCache() {
   adminRouteContextEpoch += 1;
@@ -95,11 +98,21 @@ export async function getAdminRouteContext(): Promise<AdminRouteContext> {
  * permissions instead of serving the responsive stale-context window.
  */
 export async function getFreshAdminRouteContext(): Promise<AdminRouteContext> {
+  // Hovering a link preloads the route; the click that follows reuses that
+  // same server read instead of asking again.
+  const now = Date.now();
+  if (freshRead && freshRead.epoch === adminRouteContextEpoch && now - freshRead.startedAt < ADMIN_ROUTE_CONTEXT_REVALIDATION_REUSE_MS) {
+    return freshRead.context;
+  }
   clearAdminRouteContextCache();
   const loadEpoch = adminRouteContextEpoch;
-  const context = await adminRouteGuard();
-  if (loadEpoch === adminRouteContextEpoch) {
-    writeAdminRouteContextCache(context);
-  }
+  const context = adminRouteGuard().then((resolved) => {
+    if (loadEpoch === adminRouteContextEpoch) writeAdminRouteContextCache(resolved);
+    return resolved;
+  });
+  freshRead = { context, epoch: loadEpoch, startedAt: now };
+  context.catch(() => {
+    if (freshRead?.context === context) freshRead = null;
+  });
   return context;
 }

@@ -5,8 +5,7 @@ import { pageQueryOptions } from "~/lib/api-query-options/pages";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { nullForAdminApiNotFound } from "~/lib/admin-api-error";
 import { toPageFormValues } from "~/lib/page-form-values";
-import { translate } from "~/i18n";
-import { pageFormMessages } from "~/i18n/page-form";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/articles/$articleId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -20,7 +19,7 @@ export const Route = createFileRoute("/admin/articles/$articleId/edit")({
       throw redirect({ to: "/admin/articles" });
     }
   },
-  head: () => ({ meta: [{ title: translate(pageFormMessages, "blogPost") }] }),
+  head: () => pageHead("blogPost"),
   errorComponent: RouteErrorComponent,
   component: EditArticlePage,
 });

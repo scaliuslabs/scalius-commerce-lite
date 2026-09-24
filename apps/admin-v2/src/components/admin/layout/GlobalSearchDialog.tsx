@@ -25,7 +25,7 @@ import {
   getApiV1AdminPages,
   getApiV1AdminProducts,
 } from "@scalius/api-client/sdk";
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";

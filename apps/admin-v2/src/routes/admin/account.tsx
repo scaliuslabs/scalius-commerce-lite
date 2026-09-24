@@ -8,12 +8,13 @@ import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { SaveBarProvider, SaveErrorBanner } from "~/components/admin/shared/SaveBar";
 import { accountSecurityQueryOptions } from "~/lib/api-query-options/auth-management";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/account")({
   loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(accountSecurityQueryOptions()),
-  head: () => ({ meta: [{ title: translate(shellMessages, "accountTitle") }] }),
+  head: () => pageHead("account"),
   errorComponent: RouteErrorComponent,
   component: AccountPage,
 });

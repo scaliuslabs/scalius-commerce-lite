@@ -10,28 +10,26 @@ import { useSettingsForm } from "~/hooks/use-settings-form";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiClient, apiData } from "~/lib/api";
-import { pagesQueryOptions } from "~/lib/api-query-options/pages";
+import {
+  POLICIES_URL,
+  businessQuery,
+  deliveryZonesQuery,
+  policiesQuery,
+  storePagesQuery,
+  type PoliciesPayload,
+} from "~/lib/api-query-options/settings-screens";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { policiesMessages } from "~/i18n/settings-policies";
-import { deliveryZonesQuery } from "./DeliveryZones";
 import { policyTemplate, type PolicyKind } from "./policy-templates";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, SettingsRow } from "./SettingsPage";
-import { businessQuery } from "./StoreSettings";
 
 const POLICY_KINDS: PolicyKind[] = ["refund", "privacy", "terms", "shipping", "contact"];
 type Policies = Record<PolicyKind, string | null>;
-type PoliciesPayload = Policies & { revision: number };
 
-// Not in the generated SDK yet: the route is new (dashboard.policies.get/update).
-const POLICIES_URL = "/api/v1/admin/settings/policies";
-export const policiesQuery = {
-  queryKey: ["settings", "policies"] as const,
-  queryFn: () => apiData(apiClient.get<{ 200: { success: boolean; data: PoliciesPayload } }>({ url: POLICIES_URL })),
-};
 const savePolicies = (body: Partial<Policies> & { expectedRevision: number }) =>
   apiData(apiClient.put<{ 200: { success: boolean; data: PoliciesPayload } }>({ url: POLICIES_URL, body }));
 
@@ -51,9 +49,6 @@ async function createPolicyPage(body: NewPage) {
     }
   }
 }
-
-/** The store's content pages (drafts too), for linking a policy to one. */
-export const storePagesQuery = pagesQueryOptions({ page: 1, limit: 100, contentType: "page", sort: "title", order: "asc" });
 
 /**
  * Pick one of the store's own pages; never a typed address. `valueOf` picks

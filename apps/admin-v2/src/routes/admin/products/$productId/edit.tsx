@@ -22,6 +22,7 @@ import { nullForAdminApiNotFound, type ProductRevisionConflict } from "~/lib/adm
 import { getServerFnError } from "~/lib/api-helpers";
 import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
+import { pageHead } from "~/i18n/page-titles";
 
 const OptionMatrixEditor = lazy(() =>
   import("~/components/admin/product-form/variants/OptionMatrixEditor").then((module) => ({
@@ -38,7 +39,7 @@ export const Route = createFileRoute("/admin/products/$productId/edit")({
     ]);
     if (!product || (product as ProductDetail).deletedAt) throw redirect({ to: "/admin/products" });
   },
-  head: () => ({ meta: [{ title: `${translate(productMessages, "product")} | Scalius Admin` }] }),
+  head: () => pageHead("product"),
   errorComponent: RouteErrorComponent,
   component: EditProductPage,
 });

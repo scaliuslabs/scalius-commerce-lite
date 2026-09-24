@@ -32,14 +32,9 @@ import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { useListSearch } from "~/lib/list-search";
 import { discountFailureText, useDeleteDiscount, useSetDiscountActive } from "~/lib/api-mutations/discounts";
 import type { DiscountRecord } from "~/lib/api-query-options/discounts";
-
-export const DISCOUNT_TABS = ["all", "active", "scheduled", "expired"] as const;
-export type DiscountTab = (typeof DISCOUNT_TABS)[number];
+import { DISCOUNT_TABS, type DiscountSort, type DiscountTab } from "./discount-kinds";
 
 const TAB_LABEL = { all: "tabAll", active: "tabActive", scheduled: "tabScheduled", expired: "tabExpired" } as const;
-
-export const DISCOUNT_SORTS = ["updated", "titleAsc", "titleDesc", "used", "usedAsc"] as const;
-export type DiscountSort = (typeof DISCOUNT_SORTS)[number];
 
 /** The list's sort in the URL, as the table's column sort (none = newest edits first). */
 const SORT_STATE: Record<DiscountSort, SortingState> = {

@@ -5,7 +5,6 @@ import type { OrderNotificationType } from "@scalius/core/modules/notifications/
 import {
   getApiV1AdminSettingsAuth,
   getApiV1AdminSettingsEmail,
-  getApiV1AdminSettingsFirebase,
   getApiV1AdminSettingsNotificationChannels,
   getApiV1AdminSettingsSms,
   postApiV1AdminSettingsAuth,
@@ -26,10 +25,17 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiBody, type ApiResult } from "~/lib/api";
-import { queryKeys } from "~/lib/query-keys";
+import {
+  authQuery,
+  customerRulesQuery,
+  emailQuery,
+  firebaseQuery,
+  smsQuery,
+} from "~/lib/api-query-options/settings-screens";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
-import { notificationEventMessages, notificationsMessages } from "~/i18n/settings-notifications";
+import { notificationEventMessages } from "~/i18n/notification-events";
+import { notificationsMessages } from "~/i18n/settings-notifications";
 import {
   CUSTOMER_NOTIFICATION_CHANNELS,
   NOTIFICATION_EVENT_GROUPS,
@@ -50,27 +56,6 @@ type EmailSettings = ApiResult<typeof getApiV1AdminSettingsEmail>;
 type SmsSettings = ApiResult<typeof getApiV1AdminSettingsSms>;
 type AuthSettings = ApiResult<typeof getApiV1AdminSettingsAuth>;
 type SmsProvider = NonNullable<SmsSettings["activeProvider"]>;
-
-export const customerRulesQuery = {
-  queryKey: queryKeys.settings.notificationChannels(),
-  queryFn: () => apiData(getApiV1AdminSettingsNotificationChannels()),
-};
-export const emailQuery = {
-  queryKey: queryKeys.settings.email(),
-  queryFn: () => apiData(getApiV1AdminSettingsEmail()),
-};
-export const smsQuery = {
-  queryKey: queryKeys.settings.sms(),
-  queryFn: () => apiData(getApiV1AdminSettingsSms()),
-};
-export const authQuery = {
-  queryKey: queryKeys.settings.auth(),
-  queryFn: () => apiData(getApiV1AdminSettingsAuth()),
-};
-export const firebaseQuery = {
-  queryKey: queryKeys.settings.firebase(),
-  queryFn: () => apiData(getApiV1AdminSettingsFirebase()),
-};
 
 function useCanEditNotifications() {
   return useHasPermission(ADMIN_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT);

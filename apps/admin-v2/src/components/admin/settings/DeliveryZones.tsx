@@ -23,6 +23,12 @@ import {
   type DeliveryLocation,
 } from "~/lib/api-query-options/delivery";
 import { parseAmountInput } from "~/lib/money-input";
+import {
+  ZONES_URL,
+  areaCountsQuery,
+  deliveryZonesQuery,
+  type DeliveryZones,
+} from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { locationMessages } from "~/i18n/location";
@@ -33,50 +39,15 @@ import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, SettingsRow } from "./SettingsPage";
-import { areaCountsQuery } from "./ShippingSettings";
 
-// TODO(sdk): the generated SDK predates delivery zones; switch these raw calls
-// to it after `pnpm generate:sdk`.
-const ZONES_URL = "/api/v1/admin/settings/shipping-methods";
-
-type Kind = "delivery" | "pickup";
-interface Rate {
-  id: string;
-  kind: Kind;
-  name: string;
-  fee: number;
-  freeOver: number | null;
-  description: string | null;
-  pickupAddress: string | null;
-  pickupHours: string | null;
-  isActive: boolean;
-}
-interface Place {
-  id: string;
-  name: string;
-  type: "city" | "zone" | "area";
-  parentName: string | null;
-}
-interface Zone {
-  id: string;
-  name: string;
-  revision: number;
-  locations: Place[];
-  rates: Rate[];
-}
-export interface DeliveryZones {
-  zones: Zone[];
-  everywhereElse: { revision: number; rates: Rate[] };
-}
+type Zone = DeliveryZones["zones"][number];
+type Rate = Zone["rates"][number];
+type Place = Zone["locations"][number];
+type Kind = Rate["kind"];
 
 const json = { "Content-Type": "application/json" };
 const send = (method: "post" | "put" | "delete", url: string, body?: unknown) =>
   apiData(apiClient[method]({ url, headers: json, ...(body === undefined ? {} : { body }) }));
-
-export const deliveryZonesQuery = {
-  queryKey: queryKeys.settings.shippingMethods(),
-  queryFn: () => apiData(apiClient.get<{ 200: { data: DeliveryZones } }>({ url: ZONES_URL })),
-};
 
 function useRefreshZones() {
   const queryClient = useQueryClient();
