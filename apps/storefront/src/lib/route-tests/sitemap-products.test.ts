@@ -91,22 +91,27 @@ describe("products sitemap route", () => {
     expect(body).not.toContain("<changefreq>");
   });
 
-  it("fails closed when a later sitemap product page cannot be read", async () => {
-    mocks.getSitemapProducts
-      .mockResolvedValueOnce({
-        data: [
-          {
-            slug: "hilsa",
-            updatedAt: "2026-06-23T00:00:00.000Z",
-          },
-        ],
-        pagination: { page: 1, limit: 100, total: 101, totalPages: 2 },
-      })
-      .mockResolvedValueOnce(null);
+  it("reads each 5000-URL chunk with one API read at the chunk's own page", async () => {
+    mocks.getSitemapProducts.mockResolvedValueOnce({
+      data: [{ slug: "hilsa", updatedAt: "2026-06-23T00:00:00.000Z" }],
+      pagination: { page: 3, limit: 5000, total: 10_001, totalPages: 3 },
+    });
 
-    const response = await GET(context());
+    const response = await GET(context("https://storefront.example.test/sitemap-products.xml?page=3"));
 
-    expect(response.status).toBe(503);
-    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    expect(response.status).toBe(200);
+    expect(mocks.getSitemapProducts).toHaveBeenCalledTimes(1);
+    expect(mocks.getSitemapProducts).toHaveBeenCalledWith({ page: 3, limit: 5000 });
+  });
+
+  it("answers 404 past the last chunk", async () => {
+    mocks.getSitemapProducts.mockResolvedValueOnce({
+      data: [],
+      pagination: { page: 9, limit: 5000, total: 10_001, totalPages: 3 },
+    });
+
+    const response = await GET(context("https://storefront.example.test/sitemap-products.xml?page=9"));
+
+    expect(response.status).toBe(404);
   });
 });
