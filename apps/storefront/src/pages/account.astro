@@ -1,866 +1,148 @@
 ---
-// src/pages/account.astro
-// Customer dashboard — order history, profile info, and quick actions.
-// Protected: redirects to /cart if not logged in.
-
+// Customer account: profile, delivery details and order history.
 import Layout from "@/layouts/Layout.astro";
 import { getLayoutData } from "@/lib/api";
+import { ACCOUNT_OFFLINE_MESSAGE } from "@/lib/account-format";
 
 const layoutData = await getLayoutData();
+const field = "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 aria-[invalid=true]:border-destructive disabled:opacity-50";
+const label = "mb-1.5 block text-sm font-medium text-foreground";
+const error = "mt-1 hidden text-sm text-destructive";
 ---
 
-<Layout title="My Account" layoutData={layoutData}>
+<Layout title="Account" layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <section class="container max-w-4xl mx-auto px-4 py-8" data-account-page>
-    <!-- Loading state (shown while checking auth) -->
-    <div id="loadingState" class="flex items-center justify-center min-h-[400px]">
-      <div class="text-center">
-        <div class="inline-block w-8 h-8 border-3 border-border border-t-primary rounded-full animate-spin mb-4"></div>
-        <p class="text-sm text-muted-foreground">Loading your account...</p>
-      </div>
+  <section class="container mx-auto max-w-5xl px-4 py-8" data-account-page>
+    <div id="loadingState" class="flex min-h-[400px] items-center justify-center">
+      <p class="text-sm text-muted-foreground">Loading your account…</p>
     </div>
 
-    <!-- Unauthenticated state -->
     <div id="unauthState" class="hidden">
-      <div class="max-w-md mx-auto text-center py-16">
-        <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-muted flex items-center justify-center">
-          <svg class="h-10 w-10 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-          </svg>
-        </div>
-        <h1 class="text-2xl font-bold mb-2">Sign in to view your account</h1>
-        <p class="text-muted-foreground mb-6">View your orders, manage your profile, and more.</p>
-        <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors shadow-sm">
-          Sign In or Create Account
-          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-          </svg>
+      <div class="mx-auto max-w-md py-16 text-center">
+        <h1 class="mb-2 text-2xl font-semibold text-foreground">Sign in to see your orders</h1>
+        <p class="mb-6 text-muted-foreground">Track orders and save your delivery details for faster checkout.</p>
+        <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class="inline-flex min-h-11 items-center rounded-lg bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+          Sign in
         </button>
       </div>
     </div>
 
-    <!-- Temporary account read failure state -->
     <div id="accountError" class="hidden">
-      <div class="max-w-md mx-auto text-center py-16">
-        <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-destructive/10 flex items-center justify-center">
-          <svg class="h-10 w-10 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path>
-          </svg>
-        </div>
-        <h1 class="text-2xl font-bold mb-2">Account is temporarily unavailable</h1>
-        <p id="accountErrorMessage" class="text-muted-foreground mb-6">We could not verify your account right now. Your session may still be active.</p>
-        <button type="button" id="accountRetryBtn" class="inline-flex items-center px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors shadow-sm">
-          Try Again
-        </button>
+      <div class="mx-auto max-w-md py-16 text-center" role="alert">
+        <p class="mb-6 text-foreground">{ACCOUNT_OFFLINE_MESSAGE}</p>
+        <button type="button" id="accountRetryBtn" class="inline-flex min-h-11 items-center rounded-lg bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90">Retry</button>
       </div>
     </div>
 
-    <!-- Authenticated state -->
-    <div id="authState" class="hidden max-w-5xl mx-auto">
-
-      <!-- Top header / Breadcrumb area (optional) -->
-      <div class="flex items-center justify-between mb-8">
-        <h1 class="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">Account Overview</h1>
-        <form method="POST" action="/api/auth/logout" class="ml-4">
-            <button type="submit" class="text-sm font-medium text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-destructive/5">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-              Sign Out
-            </button>
-          </form>
-        <a href="/" class="text-sm font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5">
-          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-          Back to Shop
-        </a>
+    <div id="authState" class="hidden">
+      <div class="mb-8 flex items-center justify-between gap-4">
+        <h1 class="text-2xl font-semibold text-foreground sm:text-3xl">Account</h1>
+        <form method="POST" action="/api/auth/logout" id="signOutForm">
+          <button type="submit" class="inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            Sign out
+          </button>
+        </form>
       </div>
 
-      <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
-        <!-- Sidebar: Profile & Delivery -->
-        <div class="w-full lg:w-1/3 space-y-6">
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-10">
+        <div class="space-y-6">
+          <section class="rounded-xl border border-border bg-card p-5" aria-labelledby="profileHeading">
+            <h2 id="profileHeading" class="text-base font-semibold text-foreground">Profile</h2>
+            <p id="profileName" class="mt-3 break-words text-sm font-medium text-foreground"></p>
+            <p id="profileEmail" class="break-all text-sm text-muted-foreground"></p>
+            <p id="profilePhone" class="text-sm text-muted-foreground"></p>
+          </section>
 
-          <!-- Identity Card -->
-          <div class="bg-muted rounded-2xl p-6 sm:p-8">
-            <div class="flex items-start justify-between mb-6">
-              <div class="h-14 w-14 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-xl font-bold shadow-sm" id="profileAvatar">
-                ?
-              </div>
-              <button id="logoutBtn" class="text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors uppercase tracking-wider">
-                Sign Out
-              </button>
+          <section class="rounded-xl border border-border bg-card p-5" aria-labelledby="deliveryHeading">
+            <div class="flex items-center justify-between gap-3">
+              <h2 id="deliveryHeading" class="text-base font-semibold text-foreground">Delivery details</h2>
+              <button type="button" id="profileToggle" aria-expanded="false" aria-controls="profileForm" class="min-h-11 whitespace-nowrap text-sm font-medium text-primary hover:underline">Edit</button>
             </div>
-            <h2 class="text-xl font-bold text-foreground" id="profileName">Loading...</h2>
-            <p class="text-muted-foreground text-sm mt-1" id="profileEmail"></p>
-            <p class="text-muted-foreground text-sm mt-0.5" id="profilePhone"></p>
-          </div>
-
-          <!-- Quick Stats inline -->
-          <div class="grid grid-cols-2 gap-3" id="statsGrid">
-            <div class="bg-card border border-border rounded-xl p-4 shadow-sm text-center">
-              <p class="text-2xl font-bold text-foreground" id="statTotalOrders">–</p>
-              <p class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mt-1">Orders</p>
-            </div>
-            <div class="bg-card border border-border rounded-xl p-4 shadow-sm text-center">
-              <p class="text-2xl font-bold text-foreground" id="statTotalSpent">–</p>
-              <p class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mt-1">Total Spent</p>
-            </div>
-          </div>
-
-          <!-- Settings / Address Card -->
-          <div class="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-            <button id="profileToggle" class="w-full p-5 flex items-center justify-between text-left hover:bg-muted/50 transition-colors">
-              <span class="text-sm font-bold text-foreground uppercase tracking-wider">Delivery Details</span>
-              <span class="text-xs font-medium text-primary">Edit</span>
-            </button>
-            <div id="profileForm" class="hidden p-5 pt-0 border-t border-border mt-2 space-y-4">
+            <div id="profileSummary" class="mt-2 space-y-0.5 break-words text-sm text-muted-foreground"></div>
+            <p id="profileSaved" role="status" class="mt-2 hidden text-sm text-primary">Address saved</p>
+            <form id="profileForm" method="post" class="mt-4 hidden space-y-4" novalidate>
               <div>
-                <label for="fieldName" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Full Name</label>
-                <input id="fieldName" type="text" class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none" />
+                <label for="fieldName" class={label}>Full name</label>
+                <input id="fieldName" type="text" autocomplete="name" required aria-describedby="fieldNameError" class={field} />
+                <p id="fieldNameError" class={error}></p>
               </div>
               <div>
-                <label for="fieldPhone" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Phone (Read-only)</label>
-                <input id="fieldPhone" type="tel" disabled class="w-full bg-muted border-transparent text-muted-foreground rounded-lg text-sm px-3 py-2.5 cursor-not-allowed outline-none" />
-              </div>
-              <div>
-                <label for="fieldAddress" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Address</label>
-                <input id="fieldAddress" type="text" class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none" placeholder="Apt, Street" />
+                <label for="fieldAddress" class={label}>Address</label>
+                <input id="fieldAddress" type="text" autocomplete="street-address" aria-describedby="fieldAddressError" placeholder="House, road, area" class={field} />
+                <p id="fieldAddressError" class={error}></p>
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label for="fieldCity" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">City</label>
-                  <select id="fieldCity" class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none">
-                    <option value="">City</option>
-                  </select>
+                  <label for="fieldCity" class={label}>City</label>
+                  <select id="fieldCity" aria-describedby="fieldCityError" class={field}><option value="">Select a city</option></select>
+                  <p id="fieldCityError" class={error}></p>
                 </div>
                 <div>
-                  <label for="fieldZone" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Zone</label>
-                  <select id="fieldZone" disabled class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none disabled:opacity-50">
-                    <option value="">Zone</option>
-                  </select>
+                  <label for="fieldZone" class={label}>Zone</label>
+                  <select id="fieldZone" disabled aria-describedby="fieldZoneError" class={field}><option value="">Select a zone</option></select>
+                  <p id="fieldZoneError" class={error}></p>
                 </div>
               </div>
               <div id="profileAreaField" hidden>
-                <label for="fieldArea" class="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Area (optional)</label>
-                <select id="fieldArea" disabled class="w-full bg-muted border-transparent focus:bg-background focus:border-input focus:ring-0 rounded-lg text-sm px-3 py-2.5 text-foreground transition-all outline-none disabled:opacity-50">
-                  <option value="">Select Area (optional)</option>
-                </select>
+                <label for="fieldArea" class={label}>Area (optional)</label>
+                <select id="fieldArea" disabled class={field}><option value="">Select an area (optional)</option></select>
               </div>
-              <button id="saveProfileBtn" disabled class="w-full mt-2 py-2.5 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                Save Address
-              </button>
-              <p id="profileSaveStatus" role="status" aria-live="polite" class="text-xs text-center hidden mt-2"></p>
-              <button id="profileLocationsRetryBtn" type="button" class="hidden w-full min-h-11 text-sm font-semibold text-primary hover:underline">Retry delivery locations</button>
-            </div>
-          </div>
+              <p id="profileSaveStatus" role="status" aria-live="polite" class="hidden text-sm"></p>
+              <button id="profileLocationsRetryBtn" type="button" class="hidden min-h-11 text-sm font-medium text-primary hover:underline">Retry</button>
+              <button id="saveProfileBtn" type="submit" disabled class="min-h-11 w-full rounded-lg bg-primary text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">Save address</button>
+            </form>
+          </section>
         </div>
 
-        <!-- Main Content: Orders -->
-        <div class="w-full lg:w-2/3">
-          <div class="flex items-center justify-between mb-6">
-            <h2 class="text-xl font-bold text-foreground">Order History</h2>
-            <span class="text-xs font-semibold text-muted-foreground tracking-wider uppercase bg-muted px-3 py-1 rounded-full" id="orderCount"></span>
+        <section aria-labelledby="ordersHeading">
+          <div class="mb-4 flex items-baseline justify-between gap-3">
+            <h2 id="ordersHeading" class="text-xl font-semibold text-foreground">Orders</h2>
+            <span id="orderCount" class="text-sm text-muted-foreground"></span>
           </div>
 
-          <!-- Empty state -->
-          <div id="emptyOrders" class="hidden p-12 text-center bg-muted rounded-2xl border border-dashed border-border">
-            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-card shadow-sm flex items-center justify-center">
-              <svg class="h-6 w-6 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
-            </div>
-            <h3 class="text-lg font-bold text-foreground mb-1">No orders yet</h3>
-            <p class="text-sm text-muted-foreground mb-6">When you buy something, your receipt will be here.</p>
-            <a href="/" class="inline-flex items-center px-5 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors">Start Shopping</a>
+          <div id="emptyOrders" class="hidden rounded-xl border border-dashed border-border p-10 text-center">
+            <h3 class="mb-1 text-base font-semibold text-foreground">No orders yet</h3>
+            <p class="mb-6 text-sm text-muted-foreground">Your orders will appear here after you buy something.</p>
+            <a href="/" class="inline-flex min-h-11 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Start shopping</a>
           </div>
 
-          <!-- Error state -->
-          <div id="ordersError" class="hidden p-8 text-center bg-destructive/5 rounded-2xl border border-destructive/20" role="status" aria-live="polite">
-            <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-card shadow-sm flex items-center justify-center">
-              <svg class="h-6 w-6 text-destructive" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path></svg>
-            </div>
-            <h3 class="text-lg font-bold text-foreground mb-1">Order history is temporarily unavailable</h3>
-            <p id="ordersErrorMessage" class="text-sm text-muted-foreground mb-6">We could not load your orders. Your account is still safe.</p>
-            <button type="button" id="ordersRetryBtn" class="inline-flex items-center px-5 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors">Try Again</button>
+          <div id="ordersError" class="hidden rounded-xl border border-border p-8 text-center" role="alert">
+            <p id="ordersErrorMessage" class="mb-4 text-sm text-foreground"></p>
+            <button type="button" id="ordersRetryBtn" class="inline-flex min-h-11 items-center rounded-lg border border-border px-5 text-sm font-medium text-foreground hover:bg-muted">Retry</button>
           </div>
 
-          <!-- Orders list -->
-          <div id="ordersList" class="space-y-4"></div>
+          <div id="ordersList" class="space-y-3"></div>
 
-          <!-- Pagination / Show More -->
-          <div id="showMoreContainer" class="hidden mt-6 text-center">
-            <button id="showMoreBtn" class="inline-flex items-center gap-2 px-6 py-3 bg-muted hover:bg-accent text-foreground text-sm font-semibold rounded-xl transition-colors border border-border shadow-sm">
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-              <span id="showMoreText">Show More</span>
-            </button>
+          <div id="showMoreContainer" class="mt-6 hidden text-center">
+            <button id="showMoreBtn" type="button" class="inline-flex min-h-11 items-center rounded-lg border border-border px-6 text-sm font-medium text-foreground hover:bg-muted">Show more orders</button>
+            <p id="showMoreError" role="status" class="mt-2 text-sm text-destructive"></p>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   </section>
 </Layout>
 
 <script>
-  import { getCustomerSession, getCustomerOrders, logoutCustomer, updateCustomerProfile, type CustomerOrder, type CustomerOrderShipment } from "@/lib/api/customer-auth";
-  import { getCities, getZones, getAreas } from "@/lib/api/shipping";
-  import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
-  import { escapeHtml } from "@scalius/shared/html-escape";
-  import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-  import { getProductImageUrl } from "@/lib/product-media";
-  import { getOrderPaymentPresentation } from "@/lib/order-success-state";
-  import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
+  import { bindSignOut, initializeAccountPage } from "@/lib/account-page";
 
-  type AccountWindow = Window & {
-    __CURRENCY_SYMBOL__?: string;
-    __scaliusAccountPageBound?: boolean;
-    __scaliusAccountInitRun?: number;
-  };
-
+  type AccountWindow = Window & { __scaliusAccountPageBound?: boolean };
   const accountWindow = window as AccountWindow;
-
-
-
-  function formatDate(iso: string | null): string {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Dhaka" });
-  }
-
-  function formatCurrency(amount: number): string {
-    const sym = accountWindow.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
-    return sym + amount.toFixed(0);
-  }
-
-  function getStatusClass(status: string): string {
-    switch(status) {
-      case "pending":
-      case "incomplete":
-        return "bg-muted/50 text-muted-foreground";
-      case "confirmed":
-      case "processing":
-      case "shipped":
-        return "bg-primary/10 text-primary";
-      case "delivered":
-      case "completed":
-        return "bg-primary/20 text-primary";
-      case "cancelled":
-        return "bg-destructive/10 text-destructive";
-      case "returned":
-      case "refunded":
-      case "partially_refunded":
-        return "bg-muted text-muted-foreground";
-      default:
-        return "bg-muted text-muted-foreground";
-    }
-  }
-
-  function formatStatusLabel(status: string): string {
-    return status.replace(/_/g, " ");
-  }
-
-  function toSafeExternalUrl(url: string | null | undefined): string | null {
-    if (!url) return null;
-    try {
-      const parsed = new URL(url, window.location.origin);
-      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
-      return parsed.href;
-    } catch {
-      return null;
-    }
-  }
-
-  function getShipmentTrackingUrl(shipment: CustomerOrderShipment): string | null {
-    const explicitUrl = toSafeExternalUrl(shipment.trackingUrl);
-    if (explicitUrl) return explicitUrl;
-    if (!shipment.trackingId) return null;
-    if (shipment.providerType === "pathao") {
-      return `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(shipment.trackingId)}`;
-    }
-    if (shipment.providerType === "steadfast") {
-      return `https://steadfast.com.bd/t/${encodeURIComponent(shipment.trackingId)}`;
-    }
-    return null;
-  }
-
-  function renderShipmentSummary(order: CustomerOrder): string {
-    const shipment = order.latestShipment;
-    if (!shipment) {
-      return `<div class="mt-4 rounded-xl border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-        Tracking updates will appear here after the merchant creates a shipment.
-      </div>`;
-    }
-
-    const trackingUrl = getShipmentTrackingUrl(shipment);
-    const providerLabel = shipment.providerName || shipment.courierName || shipment.providerType;
-    const checkedLabel = shipment.lastChecked || shipment.updatedAt
-      ? `Updated ${formatDate(shipment.lastChecked || shipment.updatedAt)}`
-      : "";
-
-    return `<div class="mt-4 rounded-xl border border-border bg-muted/30 p-3">
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Delivery status</p>
-          <p class="mt-1 text-sm font-bold capitalize text-foreground">${escapeHtml(formatStatusLabel(shipment.status))}</p>
-          <p class="mt-0.5 text-xs text-muted-foreground">${escapeHtml(providerLabel || "Delivery provider")}${checkedLabel ? ` • ${escapeHtml(checkedLabel)}` : ""}</p>
-        </div>
-        ${shipment.trackingId
-          ? `<div class="text-left sm:text-right">
-              <p class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tracking ID</p>
-              <p class="mt-1 font-mono text-xs text-foreground">${escapeHtml(shipment.trackingId)}</p>
-              ${trackingUrl ? `<a class="mt-1 inline-flex text-xs font-semibold text-primary hover:text-primary/80" href="${escapeHtml(trackingUrl)}" target="_blank" rel="noopener noreferrer" data-astro-prefetch="false">View courier tracking</a>` : ""}
-            </div>`
-          : ""}
-      </div>
-    </div>`;
-  }
-
-  function renderOrderPaymentContext(order: CustomerOrder): string {
-    const payment = getOrderPaymentPresentation(order, ENGLISH_CHECKOUT_LANGUAGE_DATA);
-    const paymentStatus = (order.paymentStatus || "").toLowerCase();
-    const orderStatus = (order.status || "").toLowerCase();
-    const paidAmount = Math.max(0, Number(order.paidAmount ?? 0));
-    const refundLike = ["returned", "refunded", "partially_refunded"].includes(orderStatus) || paymentStatus === "refunded";
-    const paymentFailed = paymentStatus === "failed";
-
-    let tone = "border-border bg-muted/30";
-    let title = `Payment: ${payment.statusLabel}`;
-    let message = paidAmount > 0
-      ? `${formatCurrency(paidAmount)} paid · ${payment.methodLabel}.`
-      : payment.methodLabel;
-
-    if (refundLike) {
-      tone = "border-border bg-muted/40";
-      title = payment.isCod ? payment.statusLabel : "Refund or return update";
-      message = `${payment.methodLabel}. Open the timeline for refund and return details.`;
-    } else if (payment.isClosed) {
-      title = payment.statusLabel;
-    } else if (payment.isCod) {
-      if (payment.balanceDue > 0) title = `${formatCurrency(payment.balanceDue)} ${payment.balanceLabel.toLowerCase()}`;
-    } else if (paymentFailed) {
-      tone = "border-destructive/30 bg-destructive/10";
-      title = "Payment needs attention";
-      message = `${payment.methodLabel} did not complete.`;
-    } else if (payment.balanceDue > 0) {
-      tone = "border-amber-500/30 bg-amber-500/10";
-      title = `${formatCurrency(payment.balanceDue)} ${payment.balanceLabel.toLowerCase()}`;
-    }
-
-    return `<div class="mt-3 rounded-xl border ${tone} p-3 text-xs">
-      <p class="font-semibold text-foreground">${escapeHtml(title)}</p>
-      <p class="mt-0.5 text-muted-foreground">${escapeHtml(message)}</p>
-    </div>`;
-  }
-
-  function renderOrder(order: CustomerOrder): string {
-    const payment = getOrderPaymentPresentation(order, ENGLISH_CHECKOUT_LANGUAGE_DATA);
-    const statusClass = getStatusClass(order.status);
-    const detailsId = `order-details-${order.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-    const detailHref = `/account/orders/${encodeURIComponent(order.id)}`;
-    const itemCount = order.items.reduce((s, i) => s + i.quantity, 0);
-
-    // Item details layout (shown when expanded)
-    const itemDetails = order.items.map((item) => {
-      const imageUrl = getProductImageUrl(item.productImage, 96);
-
-      return `<div class="flex items-start gap-4 py-3">
-        <img src="${escapeHtml(imageUrl)}" alt="" class="w-12 h-12 shrink-0 rounded-md border border-border bg-card object-contain object-center" loading="lazy" />
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-semibold text-foreground truncate">${escapeHtml(item.productName || "Product")}</p>
-          ${item.variantLabel
-            ? `<p class="text-[11px] font-medium text-muted-foreground mt-0.5">${escapeHtml(item.variantLabel)}</p>`
-            : ""}
-        </div>
-        <div class="text-right shrink-0">
-          <p class="text-sm font-bold text-foreground">${formatCurrency(item.quantity * item.price)}</p>
-          <p class="text-[11px] text-muted-foreground mt-0.5">${item.quantity} × ${formatCurrency(item.price)}</p>
-        </div>
-      </div>`;
-    }).join("");
-
-    return `
-      <div class="order-card bg-card border border-border rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-           <div class="min-w-0">
-             <div class="flex min-w-0 flex-wrap items-center gap-3">
-               <span class="min-w-0 break-all text-lg font-bold text-foreground">#${order.id}</span>
-               <span class="min-w-0 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider capitalize ${statusClass}">${escapeHtml(formatStatusLabel(order.status))}</span>
-             </div>
-             <p class="text-sm text-muted-foreground mt-1">${formatDate(order.createdAt)} • ${itemCount} item${itemCount !== 1 ? "s" : ""}</p>
-           </div>
-           <div class="text-left sm:text-right flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-3">
-             <p class="text-xl font-bold text-foreground">${formatCurrency(order.totalAmount)}</p>
-             <div class="flex flex-wrap items-center justify-end gap-3">
-               <button type="button" class="min-h-11 text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors" data-order-toggle="${escapeHtml(detailsId)}" aria-expanded="false" aria-controls="${escapeHtml(detailsId)}">Quick View</button>
-               <a class="inline-flex min-h-11 items-center text-[11px] tracking-wide uppercase font-bold text-primary hover:text-primary/80 transition-colors" href="${escapeHtml(detailHref)}" data-astro-prefetch="false">Full Timeline</a>
-             </div>
-           </div>
-         </div>
-        ${renderShipmentSummary(order)}
-        ${renderOrderPaymentContext(order)}
-        <div id="${escapeHtml(detailsId)}" class="order-details hidden border-t border-border pt-2 mt-4">
-           <div class="divide-y divide-border">
-             ${itemDetails}
-           </div>
-
-           <div class="mt-3 pt-3 border-t border-border flex flex-col items-end gap-1 text-sm bg-muted/50 p-3 rounded-lg">
-             ${order.shippingCharge > 0 ? `<div class="w-full sm:w-64 flex justify-between text-muted-foreground text-xs"><span>Delivery Fee</span><span>${formatCurrency(order.shippingCharge)}</span></div>` : ""}
-             ${(order.discountAmount ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between text-primary text-xs"><span>Discount</span><span>-${formatCurrency(order.discountAmount!)}</span></div>` : ""}
-             <div class="w-full sm:w-64 flex justify-between font-bold text-foreground mt-1 pt-1 border-t border-border"><span>Order Total</span><span>${formatCurrency(order.totalAmount)}</span></div>
-             ${(order.paidAmount ?? 0) > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold text-emerald-600 mt-1 pt-1 border-t border-border"><span>Paid Amount</span><span>${formatCurrency(order.paidAmount)}</span></div>` : ""}
-             ${payment.balanceDue > 0 ? `<div class="w-full sm:w-64 flex justify-between font-bold ${payment.isCod ? "text-foreground" : "text-destructive"} mt-1 pt-0.5"><span>${escapeHtml(payment.balanceLabel)}</span><span>${formatCurrency(payment.balanceDue)}</span></div>` : ""}
-             ${order.shippingAddress ? `<div class="w-full text-left mt-2 text-[11px] text-muted-foreground"><span class="font-semibold text-foreground">Shipped to:</span> ${escapeHtml(order.shippingAddress)}${order.cityName ? `, ${escapeHtml(order.cityName)}` : ""}${order.zoneName ? `, ${escapeHtml(order.zoneName)}` : ""}</div>` : ""}
-           </div>
-        </div>
-      </div>
-    `;
-  }
-
-  function bindOrderDetailToggles(container: HTMLElement): void {
-    container.querySelectorAll<HTMLButtonElement>("[data-order-toggle]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const detailsId = button.dataset.orderToggle;
-        if (!detailsId) return;
-        const details = document.getElementById(detailsId);
-        if (!details) return;
-        const isExpanded = !details.classList.toggle("hidden");
-        button.setAttribute("aria-expanded", String(isExpanded));
-        button.textContent = isExpanded ? "Hide Details" : "View Details";
-      });
-    });
-  }
-
-  async function loadAccountOrders(runId: number): Promise<void> {
-    const ordersList = document.getElementById("ordersList")!;
-    const emptyOrders = document.getElementById("emptyOrders")!;
-    const ordersError = document.getElementById("ordersError")!;
-    const ordersErrorMessage = document.getElementById("ordersErrorMessage")!;
-    const showMoreContainer = document.getElementById("showMoreContainer")!;
-    const ordersRetryBtn = document.getElementById("ordersRetryBtn") as HTMLButtonElement | null;
-    if (ordersRetryBtn) {
-      ordersRetryBtn.disabled = true;
-      ordersRetryBtn.onclick = () => void loadAccountOrders(runId);
-    }
-    ordersList.innerHTML = "";
-    emptyOrders.classList.add("hidden");
-    ordersError.classList.add("hidden");
-    showMoreContainer.classList.add("hidden");
-    document.getElementById("statTotalOrders")!.textContent = "—";
-    document.getElementById("statTotalSpent")!.textContent = "—";
-    document.getElementById("orderCount")!.textContent = "Loading";
-
-    // Fetch orders
-    const result = await getCustomerOrders();
-    if (accountWindow.__scaliusAccountInitRun !== runId) return;
-    if (ordersRetryBtn) ordersRetryBtn.disabled = false;
-
-    // Render stats
-    const orders = result.orders || [];
-    if (!result.success) {
-      const error = result.error || "Please try again in a moment.";
-      const lowerError = error.toLowerCase();
-      const sessionExpired = lowerError.includes("auth") || lowerError.includes("session") || lowerError.includes("login");
-      ordersErrorMessage.textContent = sessionExpired
-        ? "Your session expired. Please sign in again to view your orders."
-        : result.unavailable
-          ? error || "Order history is temporarily unavailable. Please try again."
-          : error;
-      ordersError.classList.remove("hidden");
-      document.getElementById("orderCount")!.textContent = "Unavailable";
-    } else {
-      const summary = result.summary;
-      const totalOrders = summary?.totalOrders ?? orders.length;
-      const totalSpent = summary?.totalSpent ?? orders.reduce((s, o) => s + Math.max(0, o.paidAmount ?? 0), 0);
-      const completed = summary?.completedOrders ?? orders.filter((o) => o.status === "delivered" || o.status === "completed").length;
-      const pending = summary?.pendingOrders ?? orders.filter((o) => o.status === "pending" || o.status === "confirmed" || o.status === "processing").length;
-
-      document.getElementById("statTotalOrders")!.textContent = String(totalOrders);
-      document.getElementById("statTotalSpent")!.textContent = formatCurrency(totalSpent);
-
-      const statCompleted = document.getElementById("statCompleted");
-      if (statCompleted) statCompleted.textContent = String(completed);
-
-      const statPending = document.getElementById("statPending");
-      if (statPending) statPending.textContent = String(pending);
-      let loadedOrders = [...orders];
-      let nextCursor = result.pagination?.nextCursor ?? null;
-      let loadingMoreOrders = false;
-      const updateOrderCount = () => {
-        document.getElementById("orderCount")!.textContent = nextCursor
-          ? `${loadedOrders.length} of ${totalOrders} orders`
-          : `${loadedOrders.length} order${loadedOrders.length !== 1 ? "s" : ""}`;
-      };
-      updateOrderCount();
-
-      if (loadedOrders.length === 0) {
-        emptyOrders.classList.remove("hidden");
-      } else {
-        // Client-side pagination: show ORDERS_PER_PAGE at a time
-        const ORDERS_PER_PAGE = 5;
-        let visibleCount = Math.min(ORDERS_PER_PAGE, loadedOrders.length);
-
-        function renderVisibleOrders() {
-          ordersList.innerHTML = loadedOrders.slice(0, visibleCount).map(renderOrder).join("");
-          bindOrderDetailToggles(ordersList);
-
-          const showMoreText = document.getElementById("showMoreText")!;
-
-          if (visibleCount < loadedOrders.length) {
-            const remaining = loadedOrders.length - visibleCount;
-            showMoreText.textContent = `Show More (${remaining} remaining)`;
-            showMoreContainer.classList.remove("hidden");
-          } else if (nextCursor) {
-            showMoreText.textContent = "Load Older Orders";
-            showMoreContainer.classList.remove("hidden");
-          } else {
-            showMoreContainer.classList.add("hidden");
-          }
-        }
-
-        renderVisibleOrders();
-
-        const showMoreBtn = document.getElementById("showMoreBtn") as HTMLButtonElement | null;
-        if (showMoreBtn) {
-          showMoreBtn.onclick = async () => {
-            if (visibleCount < loadedOrders.length) {
-              visibleCount = Math.min(visibleCount + ORDERS_PER_PAGE, loadedOrders.length);
-              renderVisibleOrders();
-              ordersList.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-              return;
-            }
-
-            if (!nextCursor || loadingMoreOrders) return;
-            loadingMoreOrders = true;
-            showMoreBtn.disabled = true;
-            const showMoreText = document.getElementById("showMoreText")!;
-            showMoreText.textContent = "Loading...";
-            const nextPage = await getCustomerOrders({ cursor: nextCursor });
-            if (accountWindow.__scaliusAccountInitRun !== runId) return;
-            loadingMoreOrders = false;
-            showMoreBtn.disabled = false;
-
-            if (!nextPage.success) {
-              showMoreText.textContent = "Could not load older orders. Try again";
-              return;
-            }
-
-            const existingIds = new Set(loadedOrders.map((order) => order.id));
-            loadedOrders = [
-              ...loadedOrders,
-              ...nextPage.orders.filter((order) => !existingIds.has(order.id)),
-            ];
-            nextCursor = nextPage.pagination?.nextCursor ?? null;
-            visibleCount = Math.min(visibleCount + ORDERS_PER_PAGE, loadedOrders.length);
-            updateOrderCount();
-            renderVisibleOrders();
-            ordersList.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-          };
-        }
-      }
-    }
-
-  }
-
-  async function initializeAccountPage(): Promise<void> {
-    if (!document.querySelector("[data-account-page]")) return;
-
-    const runId = (accountWindow.__scaliusAccountInitRun ?? 0) + 1;
-    accountWindow.__scaliusAccountInitRun = runId;
-
-    const loadingState = document.getElementById("loadingState")!;
-    const unauthState = document.getElementById("unauthState")!;
-    const accountError = document.getElementById("accountError")!;
-    const accountErrorMessage = document.getElementById("accountErrorMessage")!;
-    const authState = document.getElementById("authState")!;
-    const accountRetryBtn = document.getElementById("accountRetryBtn");
-    if (accountRetryBtn) accountRetryBtn.onclick = () => void initializeAccountPage();
-
-    loadingState.classList.remove("hidden");
-    unauthState.classList.add("hidden");
-    accountError.classList.add("hidden");
-    authState.classList.add("hidden");
-
-    // Check session
-    const session = await getCustomerSession();
-    if (accountWindow.__scaliusAccountInitRun !== runId) return;
-
-    if (session.unavailable) {
-      loadingState.classList.add("hidden");
-      accountErrorMessage.textContent = session.error || "We could not verify your account right now. Your session may still be active.";
-      accountError.classList.remove("hidden");
-      return;
-    }
-
-    if (!session.authenticated || !session.customer) {
-      loadingState.classList.add("hidden");
-      unauthState.classList.remove("hidden");
-      return;
-    }
-
-    // Fill profile info
-    const customer = session.customer;
-    document.getElementById("profileAvatar")!.textContent = customer.name.charAt(0).toUpperCase();
-    document.getElementById("profileName")!.textContent = customer.name;
-    document.getElementById("profileEmail")!.textContent = customer.email;
-    if (customer.phone) {
-      document.getElementById("profilePhone")!.textContent = formatPhoneForDisplay(customer.phone);
-    }
-
-    loadingState.classList.add("hidden");
-    authState.classList.remove("hidden");
-
-    const ordersRead = loadAccountOrders(runId);
-
-    // The current /me profile owns delivery details, including intentional blanks.
-    const fName = document.getElementById("fieldName") as HTMLInputElement;
-    const fPhone = document.getElementById("fieldPhone") as HTMLInputElement;
-    const fAddress = document.getElementById("fieldAddress") as HTMLInputElement;
-    const fCity = document.getElementById("fieldCity") as HTMLSelectElement;
-    const fZone = document.getElementById("fieldZone") as HTMLSelectElement;
-    const fArea = document.getElementById("fieldArea") as HTMLSelectElement;
-    const areaField = document.getElementById("profileAreaField")!;
-
-    if (fName) fName.value = customer.name ?? "";
-    if (fPhone) fPhone.value = customer.phone ?? "";
-    if (fAddress) fAddress.value = customer.address ?? "";
-
-    const saveProfileBtn = document.getElementById("saveProfileBtn") as HTMLButtonElement | null;
-    const locationsRetryBtn = document.getElementById("profileLocationsRetryBtn") as HTMLButtonElement | null;
-    const profileSaveStatus = document.getElementById("profileSaveStatus")!;
-    let isSavingProfile = false;
-    let zoneRead = 0;
-    let areaRead = 0;
-    if (saveProfileBtn) saveProfileBtn.disabled = true;
-
-    function hasUnavailableLocation(): boolean {
-      return [fCity, fZone, fArea].some((field) => field.options[field.selectedIndex]?.disabled);
-    }
-
-    function updateProfileSaveAvailability(): void {
-      areaField.hidden = !fArea.value && !Array.from(fArea.options).some((option) => option.value && !option.disabled);
-      if (saveProfileBtn) saveProfileBtn.disabled = isSavingProfile || fCity.disabled
-        || Boolean(fCity.value && (fZone.disabled || !fZone.value))
-        || Boolean(fZone.value && fArea.disabled) || hasUnavailableLocation();
-    }
-
-    function setLocationOptions(field: HTMLSelectElement, options: { id: string; name: string }[], placeholder: string, savedId = "", savedName?: string | null): boolean {
-      field.replaceChildren();
-      [{ id: "", name: placeholder }, ...options].forEach((location) => {
-        const option = document.createElement("option");
-        option.value = location.id;
-        option.textContent = location.name;
-        field.add(option);
-      });
-      const available = !savedId || options.some((option) => option.id === savedId);
-      if (!available) {
-        const unavailable = document.createElement("option");
-        unavailable.value = savedId;
-        unavailable.textContent = `${savedName || "Saved location"} (unavailable)`;
-        unavailable.disabled = true;
-        field.add(unavailable);
-      }
-      field.value = savedId;
-      return available;
-    }
-
-    function updateLocationReadiness(): void {
-      updateProfileSaveAvailability();
-      const message = hasUnavailableLocation()
-        ? "Your saved delivery location is no longer available. Choose an available location or clear it before saving."
-        : fCity.value && !fZone.value
-          ? fZone.options.length > 1 ? "Choose a zone before saving." : "No zones are available for this city. Choose another city or clear it before saving."
-          : "";
-      profileSaveStatus.textContent = message;
-      profileSaveStatus.className = "text-xs text-center text-red-600";
-      profileSaveStatus.classList.toggle("hidden", !message);
-    }
-
-    function showLocationLoading(): void {
-      updateProfileSaveAvailability();
-      locationsRetryBtn?.classList.add("hidden");
-      if (locationsRetryBtn) locationsRetryBtn.onclick = null;
-      profileSaveStatus.textContent = "Loading delivery locations…";
-      profileSaveStatus.className = "text-xs text-center text-muted-foreground";
-    }
-
-    function showLocationFailure(retry: () => Promise<void>): void {
-      profileSaveStatus.textContent = "Your delivery locations could not be loaded. Try again before saving.";
-      profileSaveStatus.className = "text-xs text-center text-red-600";
-      if (locationsRetryBtn) {
-        locationsRetryBtn.onclick = () => void retry();
-        locationsRetryBtn.classList.remove("hidden");
-      }
-    }
-
-    async function loadProfileAreas(savedArea = "", areaName?: string | null): Promise<void> {
-      const request = ++areaRead;
-      const zoneId = fZone.value;
-      setLocationOptions(fArea, [], "Select Area (optional)");
-      fArea.disabled = true;
-      showLocationLoading();
-      if (!zoneId) {
-        updateLocationReadiness();
-        return;
-      }
-      const areas = await getAreas(zoneId);
-      if (accountWindow.__scaliusAccountInitRun !== runId || request !== areaRead) return;
-      if (!areas) {
-        showLocationFailure(() => loadProfileAreas(savedArea, areaName));
-        return;
-      }
-      setLocationOptions(fArea, areas, "Select Area (optional)", savedArea, areaName);
-      fArea.disabled = false;
-      updateLocationReadiness();
-    }
-
-    async function loadProfileZones(savedZone = "", zoneName?: string | null, savedArea = "", areaName?: string | null): Promise<void> {
-      const request = ++zoneRead;
-      ++areaRead;
-      const cityId = fCity.value;
-      setLocationOptions(fZone, [], "Select Zone");
-      setLocationOptions(fArea, [], "Select Area (optional)");
-      fZone.disabled = true;
-      fArea.disabled = true;
-      showLocationLoading();
-      if (!cityId) {
-        updateLocationReadiness();
-        return;
-      }
-      const zones = await getZones(cityId);
-      if (accountWindow.__scaliusAccountInitRun !== runId || request !== zoneRead) return;
-      if (!zones) {
-        showLocationFailure(() => loadProfileZones(savedZone, zoneName, savedArea, areaName));
-        return;
-      }
-      const zoneAvailable = setLocationOptions(fZone, zones, "Select Zone", savedZone, zoneName);
-      fZone.disabled = false;
-      if (savedZone && zoneAvailable) {
-        await loadProfileAreas(savedArea, areaName);
-        return;
-      }
-      setLocationOptions(fArea, [], "Select Area (optional)", savedArea, areaName);
-      updateLocationReadiness();
-    }
-
-    async function initializeProfileLocations(): Promise<void> {
-      fCity.disabled = true;
-      fZone.disabled = true;
-      fArea.disabled = true;
-      showLocationLoading();
-      const cities = await getCities();
-      if (accountWindow.__scaliusAccountInitRun !== runId) return;
-      if (!cities) {
-        showLocationFailure(initializeProfileLocations);
-        return;
-      }
-      const cityAvailable = setLocationOptions(fCity, cities, "Select City", customer.city ?? "", customer.cityName);
-      fCity.disabled = false;
-      if (customer.city && cityAvailable) {
-        await loadProfileZones(customer.zone ?? "", customer.zoneName, customer.area ?? "", customer.areaName);
-        return;
-      }
-      setLocationOptions(fZone, [], "Select Zone", customer.zone ?? "", customer.zoneName);
-      setLocationOptions(fArea, [], "Select Area (optional)", customer.area ?? "", customer.areaName);
-      updateLocationReadiness();
-    }
-
-    // Each parent edit owns a fresh child read, even when changing back to the same ID.
-    fCity.onchange = () => void loadProfileZones();
-    fZone.onchange = () => void loadProfileAreas();
-    fArea.onchange = updateLocationReadiness;
-
-    // Profile toggle
-    const profileToggle = document.getElementById("profileToggle");
-    const profileForm = document.getElementById("profileForm");
-    const profileChevron = document.getElementById("profileChevron");
-    if (profileToggle) profileToggle.onclick = () => {
-      profileForm?.classList.toggle("hidden");
-      profileChevron?.classList.toggle("rotate-180");
-    };
-
-    // Save profile handler
-    if (saveProfileBtn) saveProfileBtn.onclick = async () => {
-      const btn = document.getElementById("saveProfileBtn") as HTMLButtonElement;
-      const status = document.getElementById("profileSaveStatus")!;
-      const originalText = btn.textContent;
-
-      const fName = (document.getElementById("fieldName") as HTMLInputElement).value;
-      const fAddress = (document.getElementById("fieldAddress") as HTMLInputElement).value;
-      const fCity = (document.getElementById("fieldCity") as HTMLSelectElement).value;
-      const fZone = (document.getElementById("fieldZone") as HTMLSelectElement).value;
-      const fArea = (document.getElementById("fieldArea") as HTMLSelectElement).value;
-
-      isSavingProfile = true;
-      btn.disabled = true;
-      btn.textContent = "Saving...";
-      status.textContent = "";
-      status.className = "text-sm hidden";
-
-      const res = await updateCustomerProfile({
-        name: fName,
-        address: fAddress,
-        city: fCity,
-        zone: fZone,
-        area: fArea,
-      });
-
-      if (accountWindow.__scaliusAccountInitRun !== runId) return;
-      isSavingProfile = false;
-      updateProfileSaveAvailability();
-      btn.textContent = originalText;
-      const locationStatus = btn.disabled ? status.textContent : "";
-
-      if (res.success) {
-        if (!locationStatus) {
-          status.textContent = "Profile updated successfully!";
-          status.className = "text-sm text-primary";
-        }
-        // Update name in header if changed
-        if (fName) {
-          document.getElementById("profileName")!.textContent = fName;
-          document.getElementById("profileAvatar")!.textContent = fName.charAt(0).toUpperCase();
-        }
-      } else {
-        status.textContent = [res.error || "Failed to update profile", locationStatus].filter(Boolean).join(" ");
-        status.className = "text-sm text-red-600";
-      }
-    };
-
-    // Logout handler
-    const logoutBtn = document.getElementById("logoutBtn");
-    if (logoutBtn) logoutBtn.onclick = async () => {
-      // Clear the readable host-only auth mirror; the server clears cs_tok.
-      document.cookie = "cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-
-      await logoutCustomer();
-      window.location.href = "/";
-    };
-
-    await initializeProfileLocations();
-    await ordersRead;
-  }
+  const start = () => {
+    bindSignOut();
+    void initializeAccountPage();
+  };
 
   if (!accountWindow.__scaliusAccountPageBound) {
     accountWindow.__scaliusAccountPageBound = true;
-    document.addEventListener("astro:page-load", () => void initializeAccountPage());
-    window.addEventListener("customer-login", () => {
-      void initializeAccountPage();
-    });
+    document.addEventListener("astro:page-load", start);
+    window.addEventListener("customer-login", () => void initializeAccountPage());
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => void initializeAccountPage(), { once: true });
+    document.addEventListener("DOMContentLoaded", start, { once: true });
   } else {
-    void initializeAccountPage();
+    start();
   }
 </script>
-
-<style>
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-  .animate-spin {
-    animation: spin 1s linear infinite;
-  }
-  .border-3 {
-    border-width: 3px;
-  }
-  .order-card {
-    transition: background-color 0.15s ease;
-  }
-</style>

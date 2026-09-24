@@ -22,6 +22,12 @@ const mocks = vi.hoisted(() => ({
     getNotificationProviderBlock: vi.fn(),
     markNotificationProviderBlocked: vi.fn(),
     isNotificationProviderBreakerFailure: vi.fn(),
+    composeOrderEmail: vi.fn(),
+}));
+
+// Email content is composed from the real database in order-email.test.ts.
+vi.mock("./order-email", () => ({
+    composeOrderEmail: mocks.composeOrderEmail,
 }));
 
 vi.mock("../settings/settings.service", () => ({
@@ -189,6 +195,12 @@ describe("order notification dispatch", () => {
             issues: [],
             activeProvider: "smsnetbd",
         });
+        mocks.composeOrderEmail.mockImplementation(async (input: { orderId: string; type: string }) => ({
+            subject: `${input.type} ${input.orderId}`,
+            html: "<p>Order email</p>",
+            text: "Order email",
+            fromName: "River & Loom",
+        }));
     });
 
     it("keeps the shared notification type list complete", () => {
@@ -211,23 +223,29 @@ describe("order notification dispatch", () => {
         ]);
     });
 
-    it("keeps support request submission customer-silent if channel settings cannot load", async () => {
+    it("acknowledges support request submission by email when channel settings cannot load", async () => {
         const db = createDb();
         mocks.getNotificationChannels.mockRejectedValueOnce(new Error("settings unavailable"));
+        mocks.sendEmail.mockResolvedValue({ success: true, provider: "cloudflare", providerRef: "cf_msg_support" });
 
-        const result = await sendOrderNotificationEmail(
+        await sendOrderNotificationEmail(
             "buyer@example.com",
             "Support Buyer",
             "order_support",
             "support_request_submitted",
-            { supportRequestTypeLabel: "refund request" },
+            { supportRequestType: "refund" },
             db,
             { encryptionKey: "credential-key" },
         );
 
-        expect(result.outcomes).toEqual([]);
-        expect(result.hasRetryableFailure).toBe(false);
-        expect(mocks.sendEmail).not.toHaveBeenCalled();
+        expect(mocks.composeOrderEmail).toHaveBeenCalledWith(
+            expect.objectContaining({ orderId: "order_support", type: "support_request_submitted", data: { supportRequestType: "refund" } }),
+            db,
+        );
+        expect(mocks.sendEmail).toHaveBeenCalledWith(
+            expect.objectContaining({ to: "buyer@example.com", subject: "support_request_submitted order_support", fromName: "River & Loom" }),
+            expect.anything(),
+        );
         expect(mocks.getActiveSmsProvider).not.toHaveBeenCalled();
         expect(mocks.sendWhatsAppTemplateMessage).not.toHaveBeenCalled();
     });
@@ -294,8 +312,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenCalledWith(
             expect.objectContaining({
                 to: "buyer@example.com",
-                subject: "Order #order_partial Partially Refunded",
-                html: expect.stringContaining("partial refund"),
+                subject: "order_partially_refunded order_partial",
             }),
             {
                 db,
@@ -350,8 +367,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenNthCalledWith(
             1,
             expect.objectContaining({
-                subject: "Order #order_refund_state Refund Processing",
-                html: expect.stringContaining("refund for this order"),
+                subject: "refund_processing order_refund_state",
             }),
             {
                 db,
@@ -362,8 +378,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenNthCalledWith(
             2,
             expect.objectContaining({
-                subject: "Order #order_refund_state Refund Failed",
-                html: expect.stringContaining("couldn&#39;t complete the refund"),
+                subject: "refund_failed order_refund_state",
             }),
             {
                 db,
@@ -371,8 +386,6 @@ describe("order notification dispatch", () => {
                 encryptionKey: "credential-key",
             },
         );
-        expect(mocks.sendEmail.mock.calls[0]?.[0]?.html).not.toContain("raw provider failure");
-        expect(mocks.sendEmail.mock.calls[1]?.[0]?.html).not.toContain("raw provider failure");
         expect(mocks.sendSms).toHaveBeenNthCalledWith(1, {
             to: "+8801700000000",
             message:
@@ -415,8 +428,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenCalledWith(
             expect.objectContaining({
                 to: "buyer@example.com",
-                subject: "Order #order_balance Balance Paid",
-                html: expect.stringContaining("remaining payment"),
+                subject: "payment_balance_paid order_balance",
             }),
             {
                 db,
@@ -459,7 +471,7 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEmail).toHaveBeenCalledWith(
             expect.objectContaining({
                 to: "buyer@example.com",
-                subject: "Order #order_2 Received",
+                subject: "order_created order_2",
             }),
             {
                 db,

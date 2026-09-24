@@ -19,6 +19,7 @@ const RESERVED_SINGLE_SEGMENT_PATHS = new Set([
   "robots.txt",
   "search",
   "theme-preview",
+  "track-order",
   "ucp",
 ]);
 

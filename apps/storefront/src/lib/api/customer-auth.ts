@@ -1,5 +1,5 @@
 // src/lib/api/customer-auth.ts
-// API client for storefront customer authentication (email OTP).
+// API client for storefront customer sign-in (one-time codes by email, SMS or WhatsApp).
 //
 // All auth requests go through a same-origin proxy (/api/customer-auth/*)
 // so Set-Cookie headers are processed by the browser. Cross-origin
@@ -20,17 +20,17 @@ import {
 interface AuthApiEnvelope<T = unknown> {
   success: boolean;
   data?: T;
-  error?: string | { message?: string };
+  error?: string | { message?: string; details?: { retryAfterSeconds?: number; attemptsLeft?: number } };
 }
 
 interface SendOtpData {
-  retryAfter?: number;
+  resendAfterSeconds?: number;
 }
 
 interface VerifyOtpData {
+  status?: "signed_in" | "needs_account_details";
   customer?: CustomerInfo;
   isNewUser?: boolean;
-  attemptsLeft?: number;
 }
 
 interface ProfileData {
@@ -84,22 +84,34 @@ function isCustomerOrderPaymentSession(value: unknown): value is CustomerOrderPa
   );
 }
 
-export type CustomerAuthIntent = "sign_in" | "sign_up";
 export type CustomerOtpChannel = "email" | "sms" | "whatsapp";
 
 export interface SendCustomerOtpInput {
-  intent: CustomerAuthIntent;
   method: "email" | "phone";
   channel: CustomerOtpChannel;
   identifier: string;
-  name?: string;
+}
+
+export interface NewCustomerAccountDetails {
+  name: string;
   phone?: string;
   email?: string;
 }
 
 export interface VerifyCustomerOtpInput extends SendCustomerOtpInput {
   code: string;
+  /** Only after the server answered `needs_account_details`. */
+  account?: NewCustomerAccountDetails;
 }
+
+export type SendCustomerOtpResult =
+  | { success: true; resendAfterSeconds: number }
+  | { success: false; error: string; retryAfterSeconds?: number };
+
+export type VerifyCustomerOtpResult =
+  | { success: true; status: "signed_in"; customer: CustomerInfo; isNewUser: boolean }
+  | { success: true; status: "needs_account_details" }
+  | { success: false; error: string; attemptsLeft?: number };
 
 /**
  * Build a same-origin customer auth URL.
@@ -147,10 +159,22 @@ async function readEnvelope<T>(res: Response): Promise<AuthApiEnvelope<T>> {
   }
 }
 
+const UNREACHABLE_MESSAGE = "We couldn't reach the store. Check your connection and try again.";
+
 /** Extract a human-readable error message from the API envelope */
 function extractError(raw: AuthApiEnvelope): string | undefined {
   if (!raw.error) return undefined;
   return typeof raw.error === "object" ? raw.error.message : raw.error;
+}
+
+function errorDetails(raw: AuthApiEnvelope): { retryAfterSeconds?: number; attemptsLeft?: number } {
+  return typeof raw.error === "object" && raw.error.details ? raw.error.details : {};
+}
+
+/** Server messages for 4xx; one plain sentence for outages (never "Proxy error"). */
+function failureMessage(res: Response, raw: AuthApiEnvelope): string {
+  if (res.status >= 500 || res.status === 0) return UNREACHABLE_MESSAGE;
+  return extractError(raw) || "Something went wrong. Please try again.";
 }
 
 function isTemporaryReadFailure(status: number): boolean {
@@ -161,14 +185,9 @@ function isFailedEnvelope(raw: AuthApiEnvelope): boolean {
   return raw.success === false;
 }
 
-function networkErrorMessage(error: unknown): string {
-  if (error instanceof DOMException && error.name === "AbortError") {
-    return "Account request timed out. Please try again.";
-  }
-  if (error instanceof Error && error.name === "AbortError") {
-    return "Account request timed out. Please try again.";
-  }
-  return "Network error. Please try again.";
+/** Timeouts and network failures read the same to a buyer. */
+function networkErrorMessage(_error: unknown): string {
+  return UNREACHABLE_MESSAGE;
 }
 
 function clearInFlightCustomerSessionRead(): void {
@@ -192,8 +211,8 @@ export interface CustomerInfo {
   zoneName?: string | null;
   area?: string | null;
   areaName?: string | null;
+  /** A delivery address is saved (checkout can prefill it). */
   profileComplete?: boolean;
-  needsProfileCompletion?: boolean;
 }
 
 export interface AuthState {
@@ -205,11 +224,9 @@ export interface AuthState {
 }
 
 /**
- * Send OTP to customer via email or phone.
+ * Send a sign-in code. The same call for new and returning buyers.
  */
-export async function sendCustomerOtp(
-  input: SendCustomerOtpInput,
-): Promise<{ success: boolean; error?: string; retryAfter?: number }> {
+export async function sendCustomerOtp(input: SendCustomerOtpInput): Promise<SendCustomerOtpResult> {
   try {
     const res = await customerAuthFetch(authUrl("send-otp"), {
       method: "POST",
@@ -218,22 +235,23 @@ export async function sendCustomerOtp(
       body: JSON.stringify(input),
     }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
     const raw = await readEnvelope<SendOtpData>(res);
-    const data = raw.data ?? (raw as unknown as SendOtpData); // Unwrap { success, data: T } envelope
     if (!res.ok || isFailedEnvelope(raw)) {
-      return { success: false, error: extractError(raw), retryAfter: data.retryAfter };
+      return {
+        success: false,
+        error: failureMessage(res, raw),
+        retryAfterSeconds: errorDetails(raw).retryAfterSeconds,
+      };
     }
-    return { success: true };
+    return { success: true, resendAfterSeconds: raw.data?.resendAfterSeconds ?? 60 };
   } catch (error: unknown) {
     return { success: false, error: networkErrorMessage(error) };
   }
 }
 
 /**
- * Verify OTP and create session.
+ * Check a code: signs in, or reports that a new buyer must add details.
  */
-export async function verifyCustomerOtp(
-  input: VerifyCustomerOtpInput,
-): Promise<{ success: boolean; customer?: CustomerInfo; error?: string; attemptsLeft?: number; isNewUser?: boolean; }> {
+export async function verifyCustomerOtp(input: VerifyCustomerOtpInput): Promise<VerifyCustomerOtpResult> {
   try {
     const res = await customerAuthFetch(authUrl("verify-otp"), {
       method: "POST",
@@ -242,12 +260,14 @@ export async function verifyCustomerOtp(
       body: JSON.stringify(input),
     }, CUSTOMER_AUTH_WRITE_TIMEOUT_MS);
     const raw = await readEnvelope<VerifyOtpData>(res);
-    const data = raw.data ?? (raw as unknown as VerifyOtpData); // Unwrap { success, data: T } envelope
-    if (!res.ok || isFailedEnvelope(raw)) {
-      return { success: false, error: extractError(raw), attemptsLeft: data.attemptsLeft };
+    const data = raw.data;
+    if (!res.ok || isFailedEnvelope(raw) || !data?.status) {
+      return { success: false, error: failureMessage(res, raw), attemptsLeft: errorDetails(raw).attemptsLeft };
     }
+    if (data.status === "needs_account_details") return { success: true, status: data.status };
+    if (!data.customer) return { success: false, error: "Something went wrong. Please try again." };
     clearInFlightCustomerSessionRead();
-    return { success: true, customer: data.customer, isNewUser: data.isNewUser };
+    return { success: true, status: "signed_in", customer: data.customer, isNewUser: data.isNewUser === true };
   } catch (error: unknown) {
     return { success: false, error: networkErrorMessage(error) };
   }
@@ -344,6 +364,8 @@ export interface CustomerOrderShipment {
   trackingId: string | null;
   trackingUrl: string | null;
   courierName: string | null;
+  /** Buyer words for the courier state ("On its way"); never provider states. */
+  statusLabel: string;
   lastChecked: string | null;
   updatedAt: string | null;
   createdAt: string | null;
@@ -351,7 +373,12 @@ export interface CustomerOrderShipment {
 
 export interface CustomerOrder {
   id: string;
+  /** Short sequential number ("#1001"); null until the store has one. */
+  orderNumber?: number | null;
   status: string;
+  statusLabel: string;
+  currencyCode: string;
+  openSupportRequestType: string | null;
   totalAmount: number;
   paidAmount: number;
   balanceDue: number;
@@ -424,24 +451,9 @@ export interface CustomerOrderDetailCod {
   updatedAt: string | null;
 }
 
-export interface CustomerOrderDetailNotification {
-  id: string;
-  notificationType: string;
-  channel: string;
-  status: string;
-  provider: string;
-  providerStatus: string | null;
-  acceptedAt: string | null;
-  deliveredAt: string | null;
-  failedAt: string | null;
-  skippedAt: string | null;
-  updatedAt: string | null;
-  createdAt: string | null;
-}
-
 export interface CustomerOrderTimelineEvent {
   id: string;
-  type: "order" | "payment" | "refund" | "request" | "shipment" | "notification";
+  type: "order" | "payment" | "refund" | "request";
   status: string;
   label: string;
   happenedAt: string | null;
@@ -537,10 +549,19 @@ interface CustomerOrderSupportRequestData {
 
 export type CustomerOrderPaymentSession = CustomerOrderPaymentSessionData;
 
+export interface CustomerOrderProgress {
+  steps: Array<{ key: "placed" | "confirmed" | "shipped" | "delivered"; label: string; done: boolean; happenedAt: string | null }>;
+  outcome: { key: string; label: string; happenedAt: string | null } | null;
+}
+
 export interface CustomerOrderDetailOrder {
   id: string;
+  orderNumber?: number | null;
   invoiceNumber: number | null;
   status: string;
+  statusLabel: string;
+  customerName: string;
+  customerPhone: string;
   totalAmount: number;
   paidAmount: number;
   balanceDue: number;
@@ -599,7 +620,7 @@ export interface CustomerOrderDetail {
   supportRequestIntro: string;
   paymentPlan: CustomerOrderDetailPaymentPlan | null;
   cod: CustomerOrderDetailCod | null;
-  notifications: CustomerOrderDetailNotification[];
+  progress: CustomerOrderProgress;
   paymentRecovery: CustomerPaymentRecovery;
   timeline: CustomerOrderTimelineEvent[];
 }

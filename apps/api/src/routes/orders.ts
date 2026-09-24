@@ -21,6 +21,7 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCustomerBySession, getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
 import { getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/customers/customers.service";
+import { sendOrderLookupOtp, verifyOrderLookupOtp } from "@scalius/core/modules/orders/order-lookup";
 import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/order-money";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
@@ -551,6 +552,11 @@ const receiptSupportRequestActionSchema = z.object({
 const orderReceiptSchema = z.object({
   id: z.string(),
   customerName: z.string(),
+  /** The phone the courier calls. The receipt is proof-gated, so the buyer sees their own contact. */
+  customerPhone: z.string(),
+  customerEmail: z.string().nullable(),
+  /** True when the order is saved to a customer account. */
+  accountLinked: z.boolean(),
   shippingAddress: z.string(),
   totalAmount: z.number(),
   shippingCharge: z.number(),
@@ -753,6 +759,111 @@ app.openapi(verifyOrderPaymentRecoveryOtpRoute, async (c) => {
   return ok(c, result);
 });
 
+// ─── Track your order (public lookup) ──────────────────────────────────────
+
+const orderLookupBodySchema = z.object({
+  reference: z.string().trim().min(1).max(64).openapi({ description: 'Order number ("#1001") or order id' }),
+  phone: z.string().trim().min(1).max(32).openapi({ description: "Phone number used for the order" }),
+}).strict();
+
+const sendOrderLookupOtpRoute = createRoute({
+  method: "post",
+  path: "/lookup/send-otp",
+  tags: ["Orders"],
+  summary: "Send a code to the contact saved on an order (never reveals whether it matched)",
+  request: {
+    body: { required: true, content: { "application/json": { schema: orderLookupBodySchema } } },
+  },
+  responses: {
+    200: {
+      description: "Request accepted",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({ message: z.string(), resendAfterSeconds: z.number().int() })),
+        },
+      },
+    },
+    503: serviceUnavailableResponse,
+    ...errorResponses,
+  },
+});
+
+app.openapi(sendOrderLookupOtpRoute, async (c) => {
+  const db = c.get("db");
+  const body = c.req.valid("json");
+  const env = c.env as unknown as Record<string, unknown>;
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+
+  const result = await sendOrderLookupOtp(db, {
+    reference: body.reference,
+    phone: body.phone,
+    ip: getTrustedClientIp(c),
+    emailEnv: env,
+    encryptionKey: getCredentialEncryptionKey(env),
+    credentialEncryptionKey: getCredentialEncryptionKey(env),
+  });
+  if (result.queuePayload) {
+    try {
+      await c.env.JOBS_QUEUE.send(result.queuePayload);
+    } catch (error) {
+      if (result.challengeKey && result.deliveryKey) {
+        await deleteOrderPaymentRecoveryChallenge(db, {
+          challengeKey: result.challengeKey,
+          deliveryKey: result.deliveryKey,
+        }).catch(() => undefined);
+      }
+      console.error("[Orders] Failed to enqueue order lookup code:", error instanceof Error ? error.name : typeof error);
+      throw new ServiceUnavailableError("We couldn't send the code. Please try again.");
+    }
+  }
+  return ok(c, { message: result.message, resendAfterSeconds: result.resendAfterSeconds });
+});
+
+const verifyOrderLookupOtpRoute = createRoute({
+  method: "post",
+  path: "/lookup/verify-otp",
+  tags: ["Orders"],
+  summary: "Verify an order lookup code and issue a private receipt proof",
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: orderLookupBodySchema.extend({ code: z.string().trim().min(4).max(12) }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Verified",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            orderId: z.string(),
+            receiptToken: z.string(),
+            expiresAt: z.number(),
+          })),
+        },
+      },
+    },
+    ...errorResponses,
+  },
+});
+
+app.use("/lookup/verify-otp", authMiddleware);
+app.openapi(verifyOrderLookupOtpRoute, async (c) => {
+  const body = c.req.valid("json");
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  const result = await verifyOrderLookupOtp(c.get("db"), {
+    reference: body.reference,
+    phone: body.phone,
+    code: body.code,
+    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+  });
+  return ok(c, result);
+});
+
 const getOrderReceiptRoute = createRoute({
   method: "get",
   path: "/receipt/{id}",
@@ -795,6 +906,9 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       id: orders.id,
       customerId: orders.customerId,
       customerName: orders.customerName,
+      customerPhone: orders.customerPhone,
+      customerEmail: orders.customerEmail,
+      accountOwnerCustomerId: orders.accountOwnerCustomerId,
       shippingAddress: orders.shippingAddress,
       ...orderMoneySelection(orders),
       currencyCode: orders.currencyCode,
@@ -856,6 +970,9 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     order: {
       id: order.id,
       customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      customerEmail: order.customerEmail,
+      accountLinked: order.accountOwnerCustomerId !== null,
       shippingAddress: order.shippingAddress,
       totalAmount: money.totalAmount,
       shippingCharge: money.shippingCharge,

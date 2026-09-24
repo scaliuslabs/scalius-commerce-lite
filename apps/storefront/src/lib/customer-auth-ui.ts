@@ -1,147 +1,130 @@
 import {
   getCustomerAuthRequestOptions,
   getDefaultCustomerAuthOtpChannel,
-  getLegacyCustomerAuthMethodForPolicy,
   isContactFieldRequiredForAuthChannel,
   isContactFieldVisibleForAuthChannel,
   isCustomerAuthOtpChannel,
   normalizeCustomerAuthPolicy,
-  type CustomerAuthMethod,
   type CustomerAuthOtpChannel,
   type CustomerAuthPolicyConfig,
   type CustomerAuthRequestMethod,
   type CustomerAuthRequestOption,
 } from "@scalius/shared/customer-auth-policy";
-import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
+import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
+import { normalizeBdMobile } from "@scalius/shared/phone-input";
+import { validateStorefrontPhone } from "@/lib/phone-country-policy";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export type FieldNeed = "required" | "optional" | "hidden";
+
 export interface CustomerAuthUiModel {
-  authMethod: CustomerAuthMethod;
   policy: CustomerAuthPolicyConfig;
   otpChannel: CustomerAuthOtpChannel;
   requestMethod: CustomerAuthRequestMethod;
   requestOptions: CustomerAuthRequestOption[];
   currentOption: CustomerAuthRequestOption;
   showMethodSwitcher: boolean;
-  fields: {
-    email: {
-      visible: boolean;
-      required: boolean;
-      primary: boolean;
-      label: string;
-    };
-    phone: {
-      visible: boolean;
-      required: boolean;
-      primary: boolean;
-      label: string;
-    };
-  };
-}
-
-export interface CustomerAuthInputState {
-  authPolicy: unknown;
-  otpChannel: CustomerAuthOtpChannel;
-  intent?: "sign_in" | "sign_up";
-  identifier: string;
-  phoneInput?: string;
-  emailInput?: string;
+  /**
+   * What a new buyer adds after proving this email/phone. The proven
+   * contact itself is never asked again.
+   */
+  newAccount: { phone: FieldNeed; email: FieldNeed };
 }
 
 export function isValidEmail(value: string): boolean {
   return EMAIL_PATTERN.test(value.trim());
 }
 
+/** One sign-in flow; the store's policy only decides channels and extra fields. */
 export function resolveCustomerAuthUi(
   authPolicyInput: unknown,
   otpChannelInput?: CustomerAuthOtpChannel,
-  intent: "sign_in" | "sign_up" = "sign_up",
 ): CustomerAuthUiModel {
   const policy = normalizeCustomerAuthPolicy(authPolicyInput, authPolicyInput);
   const requestOptions = getCustomerAuthRequestOptions(policy);
-  const otpChannel = isCustomerAuthOtpChannel(otpChannelInput)
-    && policy.otpChannels.includes(otpChannelInput)
+  const otpChannel = isCustomerAuthOtpChannel(otpChannelInput) && policy.otpChannels.includes(otpChannelInput)
     ? otpChannelInput
     : getDefaultCustomerAuthOtpChannel(policy);
-  const currentOption = requestOptions.find((option) => option.channel === otpChannel)
-    ?? requestOptions[0];
-  const emailPrimary = currentOption.destinationField === "email";
-  const phonePrimary = currentOption.destinationField === "phone";
-  const showCollectionFields = intent === "sign_up";
-  const emailRequired = emailPrimary || (showCollectionFields && isContactFieldRequiredForAuthChannel(policy, otpChannel, "email"));
-  const phoneRequired = phonePrimary || (showCollectionFields && isContactFieldRequiredForAuthChannel(policy, otpChannel, "phone"));
+  const currentOption = requestOptions.find((option) => option.channel === otpChannel) ?? requestOptions[0]!;
+  const need = (field: "email" | "phone"): FieldNeed => {
+    if (currentOption.destinationField === field) return "hidden";
+    if (isContactFieldRequiredForAuthChannel(policy, otpChannel, field)) return "required";
+    return isContactFieldVisibleForAuthChannel(policy, otpChannel, field) ? "optional" : "hidden";
+  };
 
   return {
-    authMethod: getLegacyCustomerAuthMethodForPolicy(policy),
     policy,
     otpChannel,
     requestMethod: currentOption.method,
     requestOptions,
     currentOption,
     showMethodSwitcher: requestOptions.length > 1,
-    fields: {
-      email: {
-        visible: emailPrimary || (showCollectionFields && isContactFieldVisibleForAuthChannel(policy, otpChannel, "email")),
-        required: emailRequired,
-        primary: emailPrimary,
-        label: emailPrimary
-          ? currentOption.destinationLabel
-          : `Email address (${emailRequired ? "required" : "optional"})`,
-      },
-      phone: {
-        visible: phonePrimary || (showCollectionFields && isContactFieldVisibleForAuthChannel(policy, otpChannel, "phone")),
-        required: phoneRequired,
-        primary: phonePrimary,
-        label: phonePrimary
-          ? currentOption.destinationLabel
-          : `Phone number (${phoneRequired ? "required" : "optional"})`,
-      },
-    },
+    newAccount: { phone: need("phone"), email: need("email") },
   };
 }
 
-export function getCustomerAuthInputError(input: CustomerAuthInputState): string | null {
-  const ui = resolveCustomerAuthUi(input.authPolicy, input.otpChannel, input.intent);
-  const isAccountCreation = input.intent === "sign_up";
-  const emailValue = ui.fields.email.primary ? input.identifier : (input.emailInput ?? "");
-  const phoneValue = ui.fields.phone.primary ? input.identifier : (input.phoneInput ?? "");
+export type ContactCheck = { ok: true; value: string } | { ok: false; message: string };
 
-  if ((ui.fields.email.primary || (isAccountCreation && ui.fields.email.required)) && !isValidEmail(emailValue)) {
-    return ui.fields.email.primary
-      ? "Enter a valid email address."
-      : "Enter a valid email address, or change the login mode.";
-  }
-  if (ui.fields.email.visible && emailValue.trim() && !isValidEmail(emailValue)) {
-    return "Enter a valid email address, or leave it blank.";
-  }
-
-  if ((ui.fields.phone.primary || (isAccountCreation && ui.fields.phone.required)) && (!phoneValue || !isValidPhoneNumber(phoneValue))) {
-    return ui.fields.phone.primary
-      ? `Enter a valid ${ui.currentOption.destinationLabel.toLowerCase()}.`
-      : "Enter a valid phone number for account creation.";
-  }
-  if (ui.fields.phone.visible && phoneValue && !isValidPhoneNumber(phoneValue)) {
-    return "Enter a valid phone number, or leave it blank.";
-  }
-
-  return null;
+/** Accepts Bangla digits and any spacing; returns what the API expects. */
+export function checkPhone(value: string, policy?: PhoneCountryPolicy): ContactCheck {
+  if (!value.trim()) return { ok: false, message: "Enter your phone number." };
+  const bd = normalizeBdMobile(value);
+  if (bd) return { ok: true, value: bd };
+  const result = validateStorefrontPhone(value, policy);
+  return result.ok
+    ? { ok: true, value: result.value }
+    : { ok: false, message: "Enter a valid mobile number, like 01712345678." };
 }
 
-export function getCustomerAuthAlternateIntent(error: string | null | undefined): "sign_in" | "sign_up" | null {
-  const message = error?.toLowerCase() ?? "";
-  if (
-    message.includes("multiple accounts use this email") ||
-    message.includes("deleted customer account") ||
-    message.includes("contact store support")
-  ) {
-    return null;
-  }
-  if (message.includes("sign in instead")) return "sign_in";
-  if (message.includes("create an account instead")) return "sign_up";
-  return null;
+export function checkEmail(value: string): ContactCheck {
+  if (!value.trim()) return { ok: false, message: "Enter your email address." };
+  return isValidEmail(value)
+    ? { ok: true, value: value.trim().toLowerCase() }
+    : { ok: false, message: "Enter a valid email address, like name@example.com." };
 }
 
-export function getCustomerAuthAlternateIntentLabel(intent: "sign_in" | "sign_up"): string {
-  return intent === "sign_in" ? "Sign in with this contact" : "Create an account with this contact";
+export function checkContact(
+  method: CustomerAuthRequestMethod,
+  value: string,
+  policy?: PhoneCountryPolicy,
+): ContactCheck {
+  return method === "email" ? checkEmail(value) : checkPhone(value, policy);
+}
+
+export interface NewAccountInput {
+  name: string;
+  phone: string;
+  email: string;
+}
+
+export type NewAccountCheck =
+  | { ok: true; account: { name: string; phone?: string; email?: string } }
+  | { ok: false; field: "name" | "phone" | "email"; message: string };
+
+export function checkNewAccount(
+  ui: CustomerAuthUiModel,
+  input: NewAccountInput,
+  policy?: PhoneCountryPolicy,
+): NewAccountCheck {
+  const name = input.name.trim();
+  if (!name) return { ok: false, field: "name", message: "Enter your name." };
+  const account: { name: string; phone?: string; email?: string } = { name };
+  if (ui.newAccount.phone !== "hidden" && (ui.newAccount.phone === "required" || input.phone.trim())) {
+    const phone = checkPhone(input.phone, policy);
+    if (!phone.ok) return { ok: false, field: "phone", message: phone.message };
+    account.phone = phone.value;
+  }
+  if (ui.newAccount.email !== "hidden" && (ui.newAccount.email === "required" || input.email.trim())) {
+    const email = checkEmail(input.email);
+    if (!email.ok) return { ok: false, field: "email", message: email.message };
+    account.email = email.value;
+  }
+  return { ok: true, account };
+}
+
+/** "2:00", "0:45": the honest wait shown next to a disabled button. */
+export function formatWait(seconds: number): string {
+  const total = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }

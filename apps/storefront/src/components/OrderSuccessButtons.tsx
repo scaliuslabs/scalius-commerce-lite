@@ -11,11 +11,16 @@ import {
   getOrderReceiptSupportStatusMessage,
 } from "@/lib/order-success-localization";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
+import type { AuthModalPrefill } from "@/components/AuthModal";
 import { AlertCircle, CheckCircle2, HelpCircle, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type OrderSuccessButtonsProps = {
   orderId?: string;
+  /** Saved to some customer account (not necessarily the viewer's). */
+  accountLinked?: boolean;
+  /** The order's own contact, to pre-fill sign-in / create account. */
+  accountPrefill?: AuthModalPrefill;
   supportRequests?: OrderReceiptSupportRequest[];
   supportRequestActions?: OrderReceiptSupportRequestAction[];
   copy: CheckoutLanguageData;
@@ -26,6 +31,9 @@ type SubmitState =
   | { status: "submitting"; message: string | null }
   | { status: "success"; message: string }
   | { status: "error"; message: string };
+
+/** One line per state; "hidden" is an order saved to someone else's account. */
+type AccountCardState = "checking" | "saved" | "save" | "saving" | "sign_in" | "create" | "hidden";
 
 const EMPTY_SUPPORT_REQUESTS: OrderReceiptSupportRequest[] = [];
 const EMPTY_SUPPORT_REQUEST_ACTIONS: OrderReceiptSupportRequestAction[] = [];
@@ -45,14 +53,15 @@ function getSupportToneClass(severity: OrderReceiptSupportRequest["severity"]) {
 
 export default function OrderSuccessButtons({
   orderId,
+  accountLinked = false,
+  accountPrefill,
   supportRequests: initialSupportRequests = EMPTY_SUPPORT_REQUESTS,
   supportRequestActions: initialSupportRequestActions = EMPTY_SUPPORT_REQUEST_ACTIONS,
   copy,
 }: OrderSuccessButtonsProps) {
-  const [isCustomerAuthenticated, setIsCustomerAuthenticated] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [accountSaveState, setAccountSaveState] = useState<SubmitState>({ status: "idle", message: null });
-  const saveAfterAuthRef = useRef(false);
+  const [accountCard, setAccountCard] = useState<AccountCardState>("checking");
+  const [accountSaveFailed, setAccountSaveFailed] = useState(false);
+  const claimAfterAuthRef = useRef(false);
   const [supportRequests, setSupportRequests] = useState(initialSupportRequests);
   const [supportRequestActions, setSupportRequestActions] = useState(initialSupportRequestActions);
   const [selectedSupportType, setSelectedSupportType] = useState<OrderReceiptSupportRequestType | null>(null);
@@ -60,11 +69,9 @@ export default function OrderSuccessButtons({
   const [supportSubmitState, setSupportSubmitState] = useState<SubmitState>({ status: "idle", message: null });
 
   const claimOrderToAccount = useCallback(async () => {
-    if (!orderId) {
-      setAccountSaveState({ status: "error", message: copy.orderReceiptMissingReferenceText });
-      return;
-    }
-    setAccountSaveState({ status: "submitting", message: copy.orderReceiptSavingToAccountText });
+    if (!orderId) return;
+    setAccountCard("saving");
+    setAccountSaveFailed(false);
     try {
       const response = await fetch("/api/order-receipt/claim-account", {
         method: "POST",
@@ -72,67 +79,57 @@ export default function OrderSuccessButtons({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId }),
       });
-      const payload = await response.json().catch(() => null) as {
-        success?: boolean;
-        data?: { orderId?: string; alreadyClaimed?: boolean };
-        error?: string | { message?: string };
-      } | null;
-      if (!response.ok || payload?.success === false) {
-        throw new Error("account_claim_failed");
-      }
-      setAccountSaveState({
-        status: "success",
-        message: payload?.data?.alreadyClaimed
-          ? copy.orderReceiptAlreadySavedText
-          : copy.orderReceiptSavedText,
-      });
+      const payload = await response.json().catch(() => null) as { success?: boolean } | null;
+      if (!response.ok || payload?.success === false) throw new Error("account_claim_failed");
+      setAccountCard("saved");
     } catch {
-      setAccountSaveState({
-        status: "error",
-        message: copy.orderReceiptSaveFailedText,
-      });
+      setAccountCard("save");
+      setAccountSaveFailed(true);
     }
-  }, [copy, orderId]);
+  }, [orderId]);
+
+  /** A signed-in viewer sees "Saved" only for their own account's order. */
+  const resolveSignedInCard = useCallback(async (): Promise<AccountCardState> => {
+    if (!accountLinked) return "save";
+    if (!orderId) return "hidden";
+    try {
+      const response = await fetch(
+        `/api/customer-auth/orders/${encodeURIComponent(orderId)}`,
+        { credentials: "same-origin", cache: "no-store" },
+      );
+      return response.ok ? "saved" : "hidden";
+    } catch {
+      return "hidden";
+    }
+  }, [accountLinked, orderId]);
 
   useEffect(() => {
     let cancelled = false;
-    const authenticated = document.cookie.includes("cs_auth=1");
-    setIsCustomerAuthenticated(authenticated);
-
-    const checkAccountOwnership = async () => {
-      if (authenticated && orderId) {
-        try {
-          const response = await fetch(
-            `/api/customer-auth/orders/${encodeURIComponent(orderId)}`,
-            { credentials: "same-origin", cache: "no-store" },
-          );
-          if (response.ok && !cancelled) {
-            setAccountSaveState({
-              status: "success",
-              message: copy.orderReceiptAlreadySavedText,
-            });
-          }
-        } catch {
-          // Keep the receipt usable and let the explicit save action retry.
-        }
-      }
-      if (!cancelled) setAuthChecked(true);
+    const settle = (state: AccountCardState) => {
+      if (!cancelled) setAccountCard(state);
     };
-    void checkAccountOwnership();
+    if (document.cookie.includes("cs_auth=1")) void resolveSignedInCard().then(settle);
+    else settle(accountLinked ? "sign_in" : "create");
 
     const handleCustomerLogin = () => {
-      setIsCustomerAuthenticated(true);
-      if (saveAfterAuthRef.current) {
-        saveAfterAuthRef.current = false;
+      if (claimAfterAuthRef.current && !accountLinked) {
+        claimAfterAuthRef.current = false;
         void claimOrderToAccount();
+        return;
       }
+      void resolveSignedInCard().then(settle);
     };
     window.addEventListener("customer-login", handleCustomerLogin);
     return () => {
       cancelled = true;
       window.removeEventListener("customer-login", handleCustomerLogin);
     };
-  }, [claimOrderToAccount, copy.orderReceiptAlreadySavedText, orderId]);
+  }, [accountLinked, claimOrderToAccount, resolveSignedInCard]);
+
+  const openAuthForOrder = () => {
+    claimAfterAuthRef.current = true;
+    window.dispatchEvent(new CustomEvent("open-auth-modal", { detail: { prefill: accountPrefill ?? {} } }));
+  };
 
   useEffect(() => {
     setSupportRequests(initialSupportRequests);
@@ -156,33 +153,6 @@ export default function OrderSuccessButtons({
     : null;
   const handlePrintOrder = () => {
     window.print();
-  };
-
-  const handleOpenAuth = (intent: "sign_in" | "sign_up" = "sign_in") => {
-    window.dispatchEvent(new CustomEvent("open-auth-modal", { detail: { intent } }));
-  };
-
-  const handleOpenAccountOrder = () => {
-    if (orderId) {
-      window.location.href = `/account/orders/${encodeURIComponent(orderId)}`;
-      return;
-    }
-    window.location.href = "/account";
-  };
-
-  const handleSaveOrder = (intent: "sign_in" | "sign_up") => {
-    if (isCustomerAuthenticated) {
-      void claimOrderToAccount();
-      return;
-    }
-    saveAfterAuthRef.current = true;
-    setAccountSaveState({
-      status: "idle",
-      message: intent === "sign_up"
-        ? copy.orderReceiptCreateAccountPromptText
-        : copy.orderReceiptSignInPromptText,
-    });
-    handleOpenAuth(intent);
   };
 
   const handleSelectSupportAction = (action: OrderReceiptSupportRequestAction) => {
@@ -297,67 +267,47 @@ export default function OrderSuccessButtons({
         </Button>
       </div>
 
-      {authChecked && (
-        <div className="w-full max-w-xl rounded-xl border border-border bg-muted/30 p-4 text-left">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">
-              {accountSaveState.status === "success"
-                ? copy.orderReceiptSavedAccountTitleText
-                : copy.orderReceiptSaveAccountTitleText}
+      {accountCard !== "checking" && accountCard !== "hidden" && (
+        <div className="flex w-full max-w-xl flex-col gap-3 rounded-xl border border-border p-4 text-left sm:flex-row sm:items-center sm:justify-between">
+          {accountCard === "saved" ? (
+            <p className="text-sm text-foreground">
+              {copy.orderReceiptAccountSavedText} ·{" "}
+              <a
+                href={`/account/orders/${encodeURIComponent(orderId ?? "")}`}
+                data-astro-prefetch="false"
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                {copy.orderReceiptViewOrderText}
+              </a>
             </p>
-            {accountSaveState.status !== "success" && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {copy.orderReceiptSaveAccountHelpText}
+          ) : accountCard === "save" || accountCard === "saving" ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 border-border font-medium"
+              onClick={() => void claimOrderToAccount()}
+              disabled={accountCard === "saving"}
+            >
+              {accountCard === "saving" ? copy.orderReceiptSavingText : copy.orderReceiptSaveToAccountText}
+            </Button>
+          ) : (
+            <>
+              <p className="text-sm text-foreground">
+                {accountCard === "sign_in" ? copy.orderReceiptAccountSignInText : copy.orderReceiptAccountCreateText}
               </p>
-            )}
-          </div>
-          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-            {isCustomerAuthenticated ? (
-              accountSaveState.status === "success" ? (
-                <Button type="button" className="min-h-11 font-medium" onClick={handleOpenAccountOrder}>
-                  {copy.orderReceiptViewInAccountText}
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  className="min-h-11 font-medium"
-                  onClick={() => handleSaveOrder("sign_in")}
-                  disabled={accountSaveState.status === "submitting"}
-                >
-                  {accountSaveState.status === "submitting"
-                    ? copy.orderReceiptSavingText
-                    : copy.orderReceiptSaveToAccountText}
-                </Button>
-              )
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  className="min-h-11 font-medium"
-                  onClick={() => handleSaveOrder("sign_up")}
-                >
-                  {copy.orderReceiptCreateAccountText}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="min-h-11 border-border font-medium"
-                  onClick={() => handleSaveOrder("sign_in")}
-                >
-                  {copy.orderReceiptSignInText}
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-        <div aria-live="polite">
-          {accountSaveState.message ? (
-            <p className={`mt-2 text-sm ${accountSaveState.status === "error" ? "text-destructive" : accountSaveState.status === "success" ? "text-primary" : "text-muted-foreground"}`}>
-              {accountSaveState.message}
-            </p>
-          ) : null}
-        </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 shrink-0 border-border font-medium"
+                onClick={openAuthForOrder}
+              >
+                {accountCard === "sign_in" ? copy.orderReceiptSignInText : copy.orderReceiptCreateAccountText}
+              </Button>
+            </>
+          )}
+          <p aria-live="polite" className="text-sm text-destructive empty:hidden">
+            {accountSaveFailed ? copy.orderReceiptSaveFailedText : ""}
+          </p>
         </div>
       )}
 

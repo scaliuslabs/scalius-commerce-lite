@@ -16,6 +16,7 @@ import { getCheckoutConfig, type CheckoutConfig } from "@/lib/api/checkout";
 import {
   createPurchaseTrackingPayload,
   formatOrderSuccessPaymentMethod,
+  getOrderSuccessNextSteps,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
   shouldClearCheckoutCartForOrder,
@@ -35,7 +36,6 @@ import {
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
-  formatSavedMinorAmount,
   resolveSavedOrderLineMoney,
   resolveSavedOrderMoneySummary,
 } from "@/lib/order-tax-presentation";
@@ -45,13 +45,15 @@ import {
   localizeOrderReceiptGatewayPresentation,
 } from "@/lib/order-success-localization";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
-import { DEFAULT_CURRENCY, formatPrice } from "@scalius/shared/currency";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/currency";
+import { fromMinor } from "@scalius/shared/money";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatBdMobile } from "@scalius/shared/phone-input";
 import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   checkoutLanguageBaseCode,
   formatCheckoutLanguageText,
 } from "@scalius/shared/checkout-language";
-
 
 const legacyProofParams = ["token", "receipt_token", "receiptToken"];
 if (legacyProofParams.some((param) => Astro.url.searchParams.has(param))) {
@@ -62,7 +64,10 @@ if (legacyProofParams.some((param) => Astro.url.searchParams.has(param))) {
   return Astro.redirect(`${cleanUrl.pathname}${cleanUrl.search}`);
 }
 
-const orderId = Astro.url.searchParams.get("orderId");
+// Same shape the receipt proxies accept; anything else is never echoed or looked up.
+const ORDER_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const requestedOrderId = Astro.url.searchParams.get("orderId")?.trim() ?? "";
+const orderId = ORDER_ID_PATTERN.test(requestedOrderId) ? requestedOrderId : "";
 const requestCookieHeader = Astro.request.headers.get("cookie");
 const receiptToken = orderId
   ? readOrderReceiptCookie(requestCookieHeader, orderId)
@@ -88,8 +93,7 @@ let recoveryState: {
   title: string;
   message: string;
   status: number;
-  showRetry: boolean;
-  recoveryUrl?: string;
+  action: { href: string; label: string };
 } | null = null;
 
 const [layoutData, checkoutConfig, checkoutLanguageResponse]: [
@@ -115,6 +119,9 @@ const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
   isDefault: true,
 };
 const copy = checkoutLanguage.languageData;
+// Guests who lost the receipt cookie (another device, or after a week) look it up here.
+const trackOrderAction = { href: "/track-order", label: copy.trackOrderText };
+const retryReceiptAction = { href: Astro.url.pathname + Astro.url.search, label: copy.orderReceiptRetryText };
 
 if (!orderId || !receiptToken) {
   const recoveryUrl = orderId && hostedRecoveryPayment && isHostedPaymentRetryResult(paymentResult)
@@ -129,13 +136,10 @@ if (!orderId || !receiptToken) {
       })()
     : undefined;
   recoveryState = {
-    title: copy.orderReceiptMissingTitleText,
-    message: recoveryUrl
-      ? copy.orderReceiptBrowserRecoveryMessageText
-      : copy.orderReceiptBrowserOnlyMessageText,
+    title: requestedOrderId ? copy.orderReceiptMissingTitleText : copy.orderReceiptIncompleteTitleText,
+    message: recoveryUrl ? copy.orderReceiptBrowserRecoveryMessageText : copy.orderReceiptTrackOrderHelpText,
     status: 400,
-    showRetry: false,
-    recoveryUrl,
+    action: recoveryUrl ? { href: recoveryUrl, label: copy.orderReceiptVerifyRecoveryText } : trackOrderAction,
   };
 } else {
   try {
@@ -145,16 +149,16 @@ if (!orderId || !receiptToken) {
         title: copy.orderReceiptUnavailableTitleText,
         message: copy.orderReceiptPrivateUnavailableMessageText,
         status: 200,
-        showRetry: true,
+        action: retryReceiptAction,
       };
     }
   } catch (e: unknown) {
     if (e instanceof OrderReceiptAccessError && e.status === 404) {
       recoveryState = {
         title: copy.orderReceiptExpiredTitleText,
-        message: copy.orderReceiptExpiredMessageText,
+        message: copy.orderReceiptTrackOrderHelpText,
         status: 404,
-        showRetry: false,
+        action: trackOrderAction,
       };
     } else {
       console.error("Order receipt fetch failed", e instanceof OrderReceiptAccessError ? { status: e.status } : e);
@@ -162,7 +166,7 @@ if (!orderId || !receiptToken) {
         title: copy.orderReceiptUnavailableTitleText,
         message: copy.orderReceiptUnavailableMessageText,
         status: 200,
-        showRetry: true,
+        action: retryReceiptAction,
       };
     }
   }
@@ -241,18 +245,27 @@ const purchaseTrackingPayload =
   order && orderSuccessView?.shouldFinalizeClientSide
     ? createPurchaseTrackingPayload(order, orderItemsFromApi)
     : null;
-const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
-const receiptCurrencySymbol = savedMoneySummary
-  ? `${receiptCurrencyCode} `
-  : currencySymbol;
-const formatReceiptAmount = (amount: number) => formatPrice(amount, {
-  symbol: receiptCurrencySymbol,
-  code: receiptCurrencyCode,
-  precision: savedMoneySummary?.decimalPlaces,
-});
-const legacySubtotal = order
-  ? order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)
-  : 0;
+const formatReceiptAmount = (amount: number) => formatMoney(amount, { code: receiptCurrencyCode });
+// Major units from the saved minor-unit snapshot when complete; legacy decimals otherwise.
+const toMajor = (amountMinor: number) => fromMinor(amountMinor, savedMoneySummary?.decimalPlaces ?? 0);
+const formatReceiptMinor = (amountMinor: number) => formatReceiptAmount(toMajor(amountMinor));
+const receiptMoney = savedMoneySummary
+  ? {
+      subtotal: toMajor(savedMoneySummary.subtotalMinor),
+      shipping: toMajor(savedMoneySummary.shippingMinor),
+      discount: toMajor(savedMoneySummary.discountMinor),
+      tax: toMajor(savedMoneySummary.taxMinor),
+      total: toMajor(savedMoneySummary.totalMinor),
+    }
+  : order
+    ? {
+        subtotal: order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0),
+        shipping: order.shippingCharge,
+        discount: order.discountAmount ?? 0,
+        tax: 0,
+        total: order.totalAmount,
+      }
+    : null;
 const receiptDeliveryLabel = order?.shippingMethodName
   ? formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: order.shippingMethodName })
   : copy.orderReceiptDeliveryText;
@@ -261,7 +274,7 @@ const receiptDeliveryDetails = order?.shippingMethodName
       order.shippingMethodDescription,
       order.shippingFeeWaived && savedMoneySummary && order.shippingMethodBaseAmountMinor != null
         ? formatCheckoutLanguageText(copy.orderReceiptFeeWaivedText, {
-            fee: formatSavedMinorAmount(order.shippingMethodBaseAmountMinor, savedMoneySummary),
+            fee: formatReceiptMinor(order.shippingMethodBaseAmountMinor),
           })
         : null,
     ].filter(Boolean).join(" · ")
@@ -275,6 +288,8 @@ const merchantReceiptName = layoutData?.business?.companyName?.trim()
   || layoutData?.business?.legalName?.trim()
   || null;
 const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.code);
+const orderNumber = order ? formatOrderNumber(order.orderNumber, order.id) : "";
+const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, orderSuccessView.kind, copy) : [];
 ---
 
 <Layout
@@ -300,7 +315,6 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
     <>
     <CheckoutProgress
       current={order.paymentMethod !== "cod" && (orderSuccessView.kind === "payment_pending" || orderSuccessView.kind === "payment_issue") ? "payment" : "confirmation"}
-      paymentRequired={order.paymentMethod !== "cod"}
       copy={copy}
     />
     <div class="order-success-print-header text-center mb-8 animate-fade-in">
@@ -320,6 +334,12 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
       )}
       <h1 class="mb-2 text-2xl font-bold">{orderSuccessView.title}</h1>
       <p class="text-muted-foreground">{orderSuccessView.message}</p>
+      {nextSteps.length > 0 && (
+        <div class="no-print mx-auto mt-5 max-w-xl rounded-xl border border-border p-4 text-left">
+          <h2 class="text-sm font-semibold text-foreground">{copy.orderReceiptNextStepsTitleText}</h2>
+          {nextSteps.map((step) => <p class="mt-1 text-sm text-muted-foreground">{step}</p>)}
+        </div>
+      )}
       {orderSuccessView.kind === "payment_pending" && (
         <div class="mt-3 text-sm text-muted-foreground">
           <p data-payment-status-message aria-live="polite">
@@ -430,7 +450,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
         <div class="space-y-4">
           <div class="flex justify-between">
             <span class="text-muted-foreground">{copy.orderReceiptOrderNumberText}</span>
-            <span class="break-all text-right font-medium">{order.id}</span>
+            <span class="break-all text-right font-medium">{orderNumber}</span>
           </div>
           {orderPlacedAt && <div class="flex justify-between gap-4">
             <span class="text-muted-foreground">{copy.orderReceiptPlacedText}</span>
@@ -454,56 +474,28 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
               >{orderSuccessView.paymentStatusLabel}</span
             >
           </div>
-          {savedMoneySummary ? (
+          {receiptMoney && (
             <div class="space-y-3 border-t border-border pt-4">
               <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{copy.subtotalText}</span>
-                <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.subtotalMinor, savedMoneySummary)}</span>
+                <span class="font-medium">{formatReceiptAmount(receiptMoney.subtotal)}</span>
               </div>
-              <div class="flex justify-between">
+              <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{receiptDeliveryLabel}</span>
-                <span class="font-medium">{savedMoneySummary.shippingMinor === 0 ? copy.freeText : formatSavedMinorAmount(savedMoneySummary.shippingMinor, savedMoneySummary)}</span>
+                <span class="font-medium">{receiptMoney.shipping === 0 ? copy.freeText : formatReceiptAmount(receiptMoney.shipping)}</span>
               </div>
               {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-muted-foreground">{receiptDeliveryDetails}</p>}
-              {savedMoneySummary.discountMinor > 0 && <div class="flex justify-between gap-4">
+              {receiptMoney.discount > 0 && <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{copy.discountText}</span>
-                <span class="font-medium text-foreground">
-                  −{formatSavedMinorAmount(savedMoneySummary.discountMinor, savedMoneySummary)}
-                </span>
+                <span class="font-medium text-foreground">−{formatReceiptAmount(receiptMoney.discount)}</span>
               </div>}
-              {savedMoneySummary.taxMinor > 0 && <div class="flex justify-between gap-4">
+              {savedMoneySummary && receiptMoney.tax > 0 && <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span>
-                <span class="font-medium">{formatSavedMinorAmount(savedMoneySummary.taxMinor, savedMoneySummary)}</span>
+                <span class="font-medium">{formatReceiptAmount(receiptMoney.tax)}</span>
               </div>}
               <div class="flex justify-between gap-4 border-t border-border pt-3">
                 <span class="font-semibold text-foreground">{copy.totalText}</span>
-                <span class="font-semibold text-foreground">{formatSavedMinorAmount(savedMoneySummary.totalMinor, savedMoneySummary)}</span>
-              </div>
-            </div>
-          ) : (
-            <div class="space-y-3 border-t border-border pt-4">
-              <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">{copy.subtotalText}</span>
-                <span class="font-medium">{formatReceiptAmount(legacySubtotal)}</span>
-              </div>
-              {(order.shippingCharge > 0 || order.shippingMethodName) && (
-                <div class="flex justify-between gap-4">
-                  <span class="text-muted-foreground">{receiptDeliveryLabel}</span>
-                  <span class="font-medium">{formatReceiptAmount(order.shippingCharge)}</span>
-                </div>
-              )}
-              {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-muted-foreground">{receiptDeliveryDetails}</p>}
-              {(order.discountAmount ?? 0) > 0 && (
-                <div class="flex justify-between">
-                  <span class="text-muted-foreground">{copy.discountText}</span>
-                  <span class="font-medium text-foreground">
-                    −{formatReceiptAmount(order.discountAmount ?? 0)}
-                  </span>
-                </div>
-              )}
-              <div class="flex justify-between gap-4 border-t border-border pt-3">
-                <span class="font-semibold text-foreground">{copy.totalText}</span>
-                <span class="font-semibold text-foreground">{formatReceiptAmount(order.totalAmount)}</span>
+                <span class="font-semibold text-foreground">{formatReceiptAmount(receiptMoney.total)}</span>
               </div>
             </div>
           )}
@@ -558,6 +550,8 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
           <p class="font-medium text-foreground">{order.customerName}</p>
           <p class="text-muted-foreground">{order.shippingAddress}</p>
           {deliveryLocality && <p class="text-muted-foreground">{deliveryLocality}</p>}
+          {order.customerPhone && <p class="text-muted-foreground">{formatBdMobile(order.customerPhone)}</p>}
+          {order.customerEmail && <p class="break-all text-muted-foreground">{order.customerEmail}</p>}
         </div>
       </div>
 
@@ -606,14 +600,14 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
                       </p>
                     )}
                     <p class="text-sm text-muted-foreground mt-1">
-                      {formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: item.quantity })} × {savedLine && savedMoneySummary
-                        ? formatSavedMinorAmount(savedLine.unitPriceMinor, savedMoneySummary)
+                      {formatCheckoutLanguageText(copy.orderReceiptQuantityText, { quantity: item.quantity })} × {savedLine
+                        ? formatReceiptMinor(savedLine.unitPriceMinor)
                         : formatReceiptAmount(item.price)}
                     </p>
                     {savedLine && savedMoneySummary && savedLine.discountMinor > 0 && (
                       <p class="mt-1 text-xs text-muted-foreground">
                         {formatCheckoutLanguageText(copy.orderReceiptItemDiscountText, {
-                          amount: formatSavedMinorAmount(savedLine.discountMinor, savedMoneySummary),
+                          amount: formatReceiptMinor(savedLine.discountMinor),
                         })}
                       </p>
                     )}
@@ -625,7 +619,7 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
                             : copy.orderReceiptTaxAddedText,
                           {
                             label: savedMoneySummary.taxLabel,
-                            amount: formatSavedMinorAmount(savedLine.taxMinor, savedMoneySummary),
+                            amount: formatReceiptMinor(savedLine.taxMinor),
                           },
                         )}
                       </p>
@@ -635,8 +629,8 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
                   <div class="shrink-0 text-right">
                     {savedLine && savedMoneySummary && <p class="text-xs text-muted-foreground">{copy.orderReceiptLineTotalText}</p>}
                     <p class="font-medium">
-                      {savedLine && savedMoneySummary
-                        ? formatSavedMinorAmount(savedLine.totalMinor, savedMoneySummary)
+                      {savedLine
+                        ? formatReceiptMinor(savedLine.totalMinor)
                         : formatReceiptAmount(item.quantity * item.price)}
                     </p>
                   </div>
@@ -650,6 +644,12 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
 
     <OrderSuccessButtons
       orderId={order.id}
+      accountLinked={order.accountLinked}
+      accountPrefill={{
+        name: order.customerName,
+        phone: order.customerPhone,
+        ...(order.customerEmail ? { email: order.customerEmail } : {}),
+      }}
       supportRequests={order.supportRequests}
       supportRequestActions={order.supportRequestActions}
       copy={copy}
@@ -662,22 +662,13 @@ const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.
           <svg class="h-8 w-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z"></path></svg>
         </div>
         <h1 class="mb-3 text-2xl font-bold text-foreground">{recoveryState?.title}</h1>
-        <p class="mb-4 text-muted-foreground">{recoveryState?.message}</p>
-        {orderId && (
-          <p class="mb-6 rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-            {copy.orderReceiptReferenceText}: <span class="font-mono text-foreground">{orderId}</span>
-          </p>
+        <p class="mb-6 text-muted-foreground">{recoveryState?.message}</p>
+        {recoveryState && (
+          <div class="flex flex-col justify-center gap-3 sm:flex-row">
+            <a href={recoveryState.action.href} data-astro-prefetch={getStorefrontPrefetchAttribute(recoveryState.action.href, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">{recoveryState.action.label}</a>
+            <a href="/" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">{copy.continueShoppingText}</a>
+          </div>
         )}
-        <div class="flex flex-col justify-center gap-3 sm:flex-row">
-          {recoveryState?.recoveryUrl && (
-            <a href={recoveryState.recoveryUrl} data-astro-prefetch={getStorefrontPrefetchAttribute(recoveryState.recoveryUrl, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">{copy.orderReceiptVerifyRecoveryText}</a>
-          )}
-          {recoveryState?.showRetry && (
-            <a href={Astro.url.pathname + Astro.url.search} data-astro-prefetch={getStorefrontPrefetchAttribute(Astro.url.pathname + Astro.url.search, Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">{copy.orderReceiptRetryText}</a>
-          )}
-          <a href="/account" data-astro-prefetch={getStorefrontPrefetchAttribute("/account", Astro.url)} class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90">{copy.paymentRecoveryViewAccountOrdersText}</a>
-          <a href="/" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted">{copy.continueShoppingText}</a>
-        </div>
       </div>
     )}
   </section>

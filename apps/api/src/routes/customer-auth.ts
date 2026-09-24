@@ -1,9 +1,10 @@
 // src/server/routes/customer-auth.ts
-// Customer-facing authentication via email OTP.
+// Customer-facing sign-in with one-time codes (email, SMS or WhatsApp).
 //
 // Endpoints (mounted at /api/v1/customer-auth):
-//   POST /send-otp   — generate & deliver a 6-digit OTP (5-min D1 challenge)
-//   POST /verify-otp — atomically verify OTP, create 30-day D1 session, set cookie
+//   POST /send-otp   — send a 6-digit code (5-min D1 challenge); never reveals accounts
+//   POST /verify-otp — check the code; sign in (30-day D1 session cookie) or ask a
+//                      new buyer for name/phone and create the account
 //   GET  /me         — return session customer info (reads cookie)
 //   POST /logout     — revoke D1 session, clear cookie
 //   PUT  /profile    — update customer profile
@@ -28,21 +29,23 @@ import {
   COOKIE_NAME,
   SESSION_TTL_SECONDS
 } from "@scalius/core/modules/customers/customer-auth.service";
-import { isValidPhoneNumber } from "@scalius/shared/customer-utils";
 import {
   getCustomerOrderDetailForOrder,
   getCustomerOrders,
   getCustomerOwnedOrderForDetail,
   getCustomerPaymentSessionOrderForDetail,
 } from "@scalius/core/modules/customers/customers.service";
-import { claimGuestOrderToAccount } from "@scalius/core/modules/customers/order-account-claim";
+import {
+  claimGuestOrderToAccount,
+  linkVerifiedContactOrders,
+} from "@scalius/core/modules/customers/order-account-claim";
 import {
   createCustomerOrderSupportRequest,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
   getOrderSupportRequestStatusLabel,
 } from "@scalius/core/modules/orders/order-support-requests";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
-import { UnauthorizedError, ValidationError, ForbiddenError, RateLimitError, ServiceUnavailableError } from "../utils/api-error";
+import { UnauthorizedError, ServiceUnavailableError } from "../utils/api-error";
 import {
   conflictResponse,
   errorResponses,
@@ -67,10 +70,8 @@ import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-n
 import { validateReceiptToken } from "../utils/order-receipt-token";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
-const customerAuthIntentSchema = z.enum(["sign_in", "sign_up"]);
 const customerAuthChannelSchema = z.enum(CUSTOMER_AUTH_OTP_CHANNELS);
 const customerAuthProfileSchema = z.object({
-  identifier: z.string().optional(),
   email: z.string(),
   name: z.string(),
   phone: z.string().nullable().optional(),
@@ -83,7 +84,6 @@ const customerAuthProfileSchema = z.object({
   zoneName: z.string().nullable().optional(),
   areaName: z.string().nullable().optional(),
   profileComplete: z.boolean(),
-  needsProfileCompletion: z.boolean(),
 });
 
 function setPrivateNoStoreHeaders(c: Context) {
@@ -115,61 +115,35 @@ async function requireCustomerSession(c: Context<{ Bindings: Env }>) {
 
 // ─── POST /send-otp ──────────────────────────────────────────────────────────
 
+const otpContactSchema = {
+  method: z.enum(["email", "phone"]).optional().default("email"),
+  channel: customerAuthChannelSchema.optional(),
+  identifier: z.string().trim().min(1).max(254).openapi({ description: "Email or phone number" }),
+};
+
 const sendOtpRoute = createRoute({
   method: "post",
   path: "/send-otp",
   tags: ["Customer Auth"],
-  summary: "Send OTP verification code",
+  summary: "Send a sign-in code (the same call for new and returning buyers)",
   request: {
     body: {
       content: {
-        "application/json": {
-	          schema: z.object({
-	            method: z.enum(["email", "phone"]).optional().default("email"),
-	            channel: customerAuthChannelSchema.optional(),
-	            intent: customerAuthIntentSchema.optional().default("sign_in"),
-	            identifier: z.string().openapi({ description: "Email or phone number" }),
-	            name: z.string().optional(),
-	            phone: z.string().optional(),
-	            email: z.string().optional(),
-	          }).superRefine((data, ctx) => {
-	            if (data.method === "phone" && !isValidPhoneNumber(data.identifier)) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Invalid phone number",
-                path: ["identifier"]
-	              });
-	            }
-            if (data.method === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.identifier.trim())) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Invalid email address",
-                path: ["identifier"]
-              });
-            }
-	            if (data.phone && !isValidPhoneNumber(data.phone)) {
-	              ctx.addIssue({
-	                code: z.ZodIssueCode.custom,
-	                message: "Invalid phone number",
-	                path: ["phone"]
-	              });
-	            }
-	            if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
-	              ctx.addIssue({
-	                code: z.ZodIssueCode.custom,
-	                message: "Invalid email address",
-	                path: ["email"]
-	              });
-	            }
-	          })
-        }
-      }
-    }
+        "application/json": { schema: z.object(otpContactSchema) },
+      },
+    },
   },
   responses: {
     200: {
-      description: "OTP sent successfully",
-      content: { "application/json": { schema: successEnvelope(z.object({ message: z.string().optional() })) } },
+      description: "Code sent",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            message: z.string(),
+            resendAfterSeconds: z.number().int(),
+          })),
+        },
+      },
     },
     ...errorResponses,
     503: serviceUnavailableResponse,
@@ -178,61 +152,33 @@ const sendOtpRoute = createRoute({
 
 app.openapi(sendOtpRoute, async (c) => {
   const body = c.req.valid("json");
-	  const method = body.method || "email";
-	  const identifier = body.identifier?.trim().toLowerCase();
-	  const name = body.name?.trim() || "Customer";
-	  const phone = body.phone?.trim();
-	  const email = body.email?.trim().toLowerCase();
-
   const db = c.get("db");
-  const ip = getTrustedClientIp(c);
+  const env = c.env as unknown as Record<string, unknown>;
 
   const result = await sendOtp(db, {
-	    method,
-	    channel: body.channel,
-	    intent: body.intent,
-	    identifier: identifier!,
-	    name,
-	    ip,
-    phone,
-    email,
-    emailEnv: c.env as unknown as Record<string, unknown>,
-    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
-    credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    method: body.method,
+    channel: body.channel,
+    identifier: body.identifier,
+    ip: getTrustedClientIp(c),
+    emailEnv: env,
+    encryptionKey: getCredentialEncryptionKey(env),
+    credentialEncryptionKey: getCredentialEncryptionKey(env),
   });
 
-  if (!result.success) {
-    const status = result.httpStatus || 400;
-    if (status === 429) {
-      throw new RateLimitError(result.error || "Too many requests");
-    }
-    if (status === 403) {
-      throw new ForbiddenError(result.error || "Method disabled");
-    }
-    throw new ValidationError(result.error || "Invalid input");
+  try {
+    await c.env.JOBS_QUEUE.send(result.queuePayload);
+  } catch (error) {
+    await deleteCustomerAuthOtpChallenge(db, {
+      otpKey: result.otpStorageKey,
+      deliveryKey: result.deliveryKey,
+    }).catch((deleteError: unknown) => {
+      console.error("[CustomerAuth] Failed to clear OTP challenge after queue handoff failure:", deleteError instanceof Error ? deleteError.name : typeof deleteError);
+    });
+    console.error("[CustomerAuth] Failed to enqueue OTP delivery:", error instanceof Error ? error.name : typeof error);
+    throw new ServiceUnavailableError("We couldn't send the code. Please try again.");
   }
 
-  // Dispatch OTP delivery to queue
-  if (result.queuePayload) {
-    try {
-      await c.env.JOBS_QUEUE.send(result.queuePayload);
-    } catch (error) {
-      if (result.otpStorageKey) {
-        if (result.deliveryKey) {
-          await deleteCustomerAuthOtpChallenge(db, {
-            otpKey: result.otpStorageKey,
-            deliveryKey: result.deliveryKey,
-          }).catch((deleteError: unknown) => {
-            console.error("[CustomerAuth] Failed to clear OTP challenge after queue handoff failure:", deleteError);
-          });
-        }
-      }
-      console.error("[CustomerAuth] Failed to enqueue OTP delivery:", error);
-      throw new ServiceUnavailableError("Could not queue verification code delivery. Please try again.");
-    }
-  }
-
-  return ok(c, { message: result.message });
+  return ok(c, { message: result.message, resendAfterSeconds: result.resendAfterSeconds });
 });
 
 // ─── POST /verify-otp ────────────────────────────────────────────────────────
@@ -241,60 +187,31 @@ const verifyOtpRoute = createRoute({
   method: "post",
   path: "/verify-otp",
   tags: ["Customer Auth"],
-  summary: "Verify OTP and create session",
+  summary: "Check a sign-in code; signs in, or asks a new buyer for their details",
   request: {
     body: {
       content: {
         "application/json": {
-	          schema: z.object({
-	            method: z.enum(["email", "phone"]).optional().default("email"),
-	            channel: customerAuthChannelSchema.optional(),
-	            intent: customerAuthIntentSchema.optional().default("sign_in"),
-	            identifier: z.string().openapi({ description: "Email or phone number" }),
-            code: z.string().openapi({ description: "6-digit OTP code" }),
-            name: z.string().optional(),
-            phone: z.string().optional(),
-            email: z.string().optional()
-          }).superRefine((data, ctx) => {
-            if (data.method === "phone" && !isValidPhoneNumber(data.identifier)) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Invalid phone number",
-                path: ["identifier"]
-              });
-            }
-            if (data.method === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.identifier.trim())) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Invalid email address",
-                path: ["identifier"]
-              });
-            }
-            if (data.phone && !isValidPhoneNumber(data.phone)) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Invalid phone number",
-                path: ["phone"]
-              });
-            }
-            if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) {
-              ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: "Invalid email address",
-                path: ["email"]
-              });
-            }
-          })
-        }
-      }
-    }
+          schema: z.object({
+            ...otpContactSchema,
+            code: z.string().trim().min(4).max(12).openapi({ description: "6-digit code" }),
+            account: z.object({
+              name: z.string().trim().max(120),
+              phone: z.string().trim().max(32).optional(),
+              email: z.string().trim().max(254).optional(),
+            }).optional().openapi({ description: "Only for a new account, after status needs_account_details" }),
+          }),
+        },
+      },
+    },
   },
   responses: {
     200: {
-      description: "OTP verified, session created",
+      description: "Signed in, or the code is right and a new account needs details",
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
+            status: z.enum(["signed_in", "needs_account_details"]),
             customer: customerAuthProfileSchema.optional(),
             isNewUser: z.boolean().optional(),
           })),
@@ -308,51 +225,32 @@ const verifyOtpRoute = createRoute({
 
 app.openapi(verifyOtpRoute, async (c) => {
   const body = c.req.valid("json");
-  const method = body.method || "email";
-  const identifier = body.identifier?.trim().toLowerCase();
-  const code = body.code?.trim();
-	  const name = body.name?.trim() || "Customer";
-  const phone = body.phone?.trim();
-  const email = body.email?.trim().toLowerCase();
+  const env = c.env as unknown as Record<string, unknown>;
 
-  const db = c.get("db");
-
-  const result = await verifyOtp(db, {
-	    method,
-	    channel: body.channel,
-	    intent: body.intent,
-	    identifier: identifier!,
-    code: code!,
-    name,
-    phone,
-    email,
-    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
-    credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
-    sessionHashKey: getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
+  const result = await verifyOtp(c.get("db"), {
+    method: body.method,
+    channel: body.channel,
+    identifier: body.identifier,
+    code: body.code,
+    account: body.account,
+    encryptionKey: getCredentialEncryptionKey(env),
+    sessionHashKey: getCustomerSessionHashKey(env),
   });
-
-  if (!result.success) {
-    const status = result.httpStatus || 400;
-    if (status === 429) {
-      throw new RateLimitError(result.error || "Too many attempts");
-    }
-    throw new ValidationError(
-      result.error || "Invalid code",
-      result.attemptsLeft !== undefined ? { attemptsLeft: result.attemptsLeft } : undefined
-    );
+  if (result.status === "needs_account_details") {
+    return ok(c, { status: result.status });
   }
 
-  // Set cookies
   const { sameSite, domainAttr } = getCookieConfig(
     c.env.STOREFRONT_URL as string | undefined,
     c.env.CUSTOMER_AUTH_COOKIE_DOMAIN as string | undefined,
   );
-  c.header("Set-Cookie", buildSetCookieHeader(result.session!.token, SESSION_TTL_SECONDS, domainAttr, sameSite));
+  c.header("Set-Cookie", buildSetCookieHeader(result.session.token, SESSION_TTL_SECONDS, domainAttr, sameSite));
   c.header("Set-Cookie", `cs_auth=1; Max-Age=${SESSION_TTL_SECONDS}; Path=/${domainAttr}; SameSite=${sameSite}; Secure`, { append: true });
 
   return ok(c, {
+    status: result.status,
     customer: result.customer,
-    isNewUser: result.isNewUser
+    isNewUser: result.isNewUser,
   });
 });
 
@@ -399,24 +297,8 @@ app.openapi(getMeRoute, async (c) => {
     return ok(c, { authenticated: false });
   }
 
-  return ok(c, {
-    authenticated: true,
-    customer: {
-      email: session.email,
-      name: session.name,
-      phone: session.phone,
-      customerId: session.customerId,
-      address: session.address,
-      city: session.city,
-      zone: session.zone,
-      area: session.area,
-      cityName: session.cityName,
-      zoneName: session.zoneName,
-      areaName: session.areaName,
-      profileComplete: session.profileComplete,
-      needsProfileCompletion: session.needsProfileCompletion,
-    }
-  });
+  const { token: _token, createdAt: _createdAt, expiresAt: _expiresAt, ...customer } = session;
+  return ok(c, { authenticated: true, customer });
 });
 
 // ─── POST /logout ────────────────────────────────────────────────────────────
@@ -510,33 +392,15 @@ const updateProfileRoute = createRoute({
 });
 
 app.openapi(updateProfileRoute, async (c) => {
-  const cookieHeader = c.req.header("Cookie") || null;
-  const token = getSessionCookie(cookieHeader);
-
-  if (!token) {
-    throw new UnauthorizedError("Authentication required");
-  }
-
-  const session = await getCustomerBySession(
-    c.get("db"),
-    token,
-    getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
-  );
-
-  if (!session) {
-    throw new UnauthorizedError("Session expired. Please log in again.");
-  }
-
+  const { session } = await requireCustomerSession(c);
   const body = c.req.valid("json");
 
-  // Sanitize inputs
+  // A blank value is sent through so the service can reject a blank name
+  // instead of silently keeping (or dropping) it.
   const updates: Record<string, string | undefined> = {};
-  if (body.name?.trim()) updates.name = body.name.trim();
-  if (body.address?.trim()) updates.address = body.address.trim();
-  if (body.address !== undefined && !body.address.trim()) updates.address = "";
-  if (body.city !== undefined) updates.city = body.city.trim();
-  if (body.zone !== undefined) updates.zone = body.zone.trim();
-  if (body.area !== undefined) updates.area = body.area.trim();
+  for (const field of ["name", "address", "city", "zone", "area"] as const) {
+    if (body[field] !== undefined) updates[field] = body[field].trim();
+  }
 
   const db = c.get("db");
   const result = await updateCustomerProfile(db, session, updates);
@@ -569,6 +433,9 @@ const getCustomerOrdersRoute = createRoute({
               id: z.string(),
               invoiceNumber: z.number().nullable().optional(),
               status: z.string(),
+              statusLabel: z.string(),
+              openSupportRequestType: z.string().nullable(),
+              currencyCode: z.string(),
               totalAmount: z.number(),
               paidAmount: z.number(),
               balanceDue: z.number(),
@@ -598,6 +465,7 @@ const getCustomerOrdersRoute = createRoute({
                 trackingId: z.string().nullable(),
                 trackingUrl: z.string().nullable(),
                 courierName: z.string().nullable(),
+                statusLabel: z.string(),
                 lastChecked: nullableTimestampSchema,
                 updatedAt: nullableTimestampSchema,
                 createdAt: nullableTimestampSchema,
@@ -680,6 +548,9 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
   }
 
   const db = c.get("db");
+  // Orders placed signed out (any device) with a verified email/phone join
+  // the history here, not only at sign-in.
+  await linkVerifiedContactOrders(db, session.customerId);
   const result = await getCustomerOrders(db, session.customerId, query);
 
   // Merge session data into profile (DB profile wins, session fills gaps)
@@ -870,6 +741,9 @@ const customerOrderDetailSchema = z.object({
     zoneName: z.string().nullable(),
     areaName: z.string().nullable(),
     notes: z.string().nullable(),
+    statusLabel: z.string(),
+    customerName: z.string(),
+    customerPhone: z.string(),
     createdAt: nullableTimestampSchema,
     updatedAt: nullableTimestampSchema,
   }).passthrough(),
@@ -905,6 +779,7 @@ const customerOrderDetailSchema = z.object({
     note: z.string().nullable(),
     shipmentAmount: z.number().nullable(),
     isFinalShipment: z.boolean(),
+    statusLabel: z.string(),
     lastChecked: nullableTimestampSchema,
     updatedAt: nullableTimestampSchema,
     createdAt: nullableTimestampSchema,
@@ -946,23 +821,22 @@ const customerOrderDetailSchema = z.object({
     collectedAt: nullableTimestampSchema,
     updatedAt: nullableTimestampSchema,
   }).passthrough().nullable(),
-  notifications: z.array(z.object({
-    id: z.string(),
-    notificationType: z.string(),
-    channel: z.string(),
-    status: z.string(),
-    provider: z.string(),
-    providerStatus: z.string().nullable(),
-    acceptedAt: nullableTimestampSchema,
-    deliveredAt: nullableTimestampSchema,
-    failedAt: nullableTimestampSchema,
-    skippedAt: nullableTimestampSchema,
-    updatedAt: nullableTimestampSchema,
-    createdAt: nullableTimestampSchema,
-  }).passthrough()),
+  progress: z.object({
+    steps: z.array(z.object({
+      key: z.enum(["placed", "confirmed", "shipped", "delivered"]),
+      label: z.string(),
+      done: z.boolean(),
+      happenedAt: nullableTimestampSchema,
+    })),
+    outcome: z.object({
+      key: z.string(),
+      label: z.string(),
+      happenedAt: nullableTimestampSchema,
+    }).nullable(),
+  }),
   timeline: z.array(z.object({
     id: z.string(),
-    type: z.enum(["order", "payment", "refund", "request", "shipment", "notification"]),
+    type: z.enum(["order", "payment", "refund", "request"]),
     status: z.string(),
     label: z.string(),
     happenedAt: nullableTimestampSchema,

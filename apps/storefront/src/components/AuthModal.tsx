@@ -1,480 +1,200 @@
 // src/components/AuthModal.tsx
-// Global Authentication Modal replacing inline login forms.
-// Intercepts guest checkouts if disabled, allows choosing WhatsApp/Email.
+// The one sign-in dialog (Shopify-style): enter an email or phone, get a
+// code, and you're in. A new buyer adds their name (and phone) after the code
+// proves their contact; nobody is asked whether they "have an account".
 
-import { memo, useCallback, useState, useEffect, useRef, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
-import { sendCustomerOtp, verifyCustomerOtp, getCustomerSession, logoutCustomer, updateCustomerProfile, type AuthState, type CustomerInfo } from "@/lib/api/customer-auth";
+import {
+  getCustomerSession,
+  logoutCustomer,
+  sendCustomerOtp,
+  verifyCustomerOtp,
+  type AuthState,
+  type CustomerInfo,
+} from "@/lib/api/customer-auth";
 import type { CheckoutConfig } from "@/lib/api/checkout";
 import { createApiUrl } from "@/lib/api/transport";
-import type { LocationData } from "@/lib/api";
 import {
-  enhanceLocationSelects,
-  fetchLocationOptions,
-  type LocationPrefillDetail,
-  type LocationSelection,
-} from "@/lib/checkout/location-select";
-import PhoneInput, { getCountries } from "react-phone-number-input";
-import "react-phone-number-input/style.css";
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
-import { FLAG_URL } from "@scalius/shared/phone-flags";
-import type { Country } from "react-phone-number-input";
-import {
-  getDefaultCustomerAuthOtpChannel,
   normalizeCustomerAuthPolicy,
+  getDefaultCustomerAuthOtpChannel,
   type CustomerAuthOtpChannel,
   type CustomerAuthPolicyConfig,
 } from "@scalius/shared/customer-auth-policy";
+import { formatBdMobile } from "@scalius/shared/phone-input";
+import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
-  getCustomerAuthAlternateIntent,
-  getCustomerAuthAlternateIntentLabel,
-  getCustomerAuthInputError,
+  checkContact,
+  checkNewAccount,
+  formatWait,
   resolveCustomerAuthUi,
 } from "@/lib/customer-auth-ui";
-import {
-  hasActivePhoneCountryPolicy,
-  validateStorefrontPhone,
-} from "@/lib/phone-country-policy";
 
-/**
- * Lightweight client-side fetch for checkout config.
- * Avoids importing the full SSR checkout module and its generated SDK/runtime
- * dependencies into the client bundle's critical request chain.
- */
-async function fetchCheckoutConfigClient(): Promise<CheckoutConfig | null> {
+export interface AuthModalPrefill {
+  name?: string;
+  email?: string;
+  phone?: string;
+}
+
+type Step = "contact" | "code" | "details" | "signed_in";
+
+interface AuthSettings {
+  policy: CustomerAuthPolicyConfig;
+  phonePolicy: PhoneCountryPolicy;
+  ready: boolean;
+}
+
+function settingsFromConfig(config: CheckoutConfig | null | undefined): AuthSettings {
+  if (!config) {
+    return { policy: normalizeCustomerAuthPolicy("email"), phonePolicy: { countries: [], mode: "include" }, ready: false };
+  }
+  return {
+    policy: normalizeCustomerAuthPolicy(config.customerAuthPolicy, config.authVerificationMethod),
+    phonePolicy: {
+      countries: Array.isArray(config.allowedCountries) ? config.allowedCountries : [],
+      mode: config.allowedCountriesMode ?? "include",
+    },
+    ready: true,
+  };
+}
+
+async function fetchCheckoutConfig(): Promise<CheckoutConfig | null> {
   try {
     const res = await fetch(createApiUrl("/checkout/config"));
     if (!res.ok) return null;
     const json = await res.json() as { success: boolean; data: CheckoutConfig };
-    return json.data;
+    return json.data ?? null;
   } catch {
     return null;
   }
 }
 
-type AuthRuntimeSettings = {
-  authPolicy: CustomerAuthPolicyConfig;
-  otpChannel: CustomerAuthOtpChannel;
-  allowedCountries: string[];
-  allowedCountriesMode: "include" | "exclude";
-  ready: boolean;
-};
-
-const FALLBACK_AUTH_SETTINGS: AuthRuntimeSettings = {
-  authPolicy: normalizeCustomerAuthPolicy("both"),
-  otpChannel: "email",
-  allowedCountries: [],
-  allowedCountriesMode: "include",
-  ready: false,
-};
-
 function hasCustomerAuthMirrorCookie(): boolean {
-  if (typeof document === "undefined") return false;
-  return document.cookie
-    .split(";")
-    .some((cookie) => cookie.trim().startsWith("cs_auth=1"));
+  return typeof document !== "undefined"
+    && document.cookie.split(";").some((cookie) => cookie.trim().startsWith("cs_auth=1"));
 }
 
-function readInjectedCheckoutConfig(): CheckoutConfig | null {
-  if (typeof window === "undefined") return null;
-  const value = window.__CHECKOUT_CONFIG__;
-  if (!value || typeof value !== "object") return null;
-  return value as CheckoutConfig;
+const inputClass =
+  "h-11 w-full rounded-lg border border-input bg-background px-3 text-base focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60 aria-[invalid=true]:border-destructive";
+const linkButtonClass =
+  "min-h-11 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:text-muted-foreground disabled:no-underline";
+
+/** Counts down once per second; `start(0)` clears it. */
+function useCountdown(): [number, (seconds: number) => void] {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    if (seconds <= 0) return;
+    const id = window.setTimeout(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(id);
+  }, [seconds]);
+  return [seconds, useCallback((value: number) => setSeconds(Math.max(0, Math.ceil(value))), [])];
 }
-
-function resolveAuthSettingsFromCheckoutConfig(config: CheckoutConfig | null): AuthRuntimeSettings {
-  if (!config) return FALLBACK_AUTH_SETTINGS;
-  const authPolicy = normalizeCustomerAuthPolicy(
-    config.customerAuthPolicy,
-    config.authVerificationMethod,
-  );
-  return {
-    authPolicy,
-    otpChannel: getDefaultCustomerAuthOtpChannel(authPolicy),
-    allowedCountries: Array.isArray(config.allowedCountries) ? config.allowedCountries : [],
-    allowedCountriesMode: config.allowedCountriesMode ?? "include",
-    ready: true,
-  };
-}
-
-function readInitialAuthSettings(): AuthRuntimeSettings {
-  return resolveAuthSettingsFromCheckoutConfig(readInjectedCheckoutConfig());
-}
-
-type Step = "input" | "otp" | "profile_setup" | "authenticated";
-type AuthIntent = "sign_in" | "sign_up";
-
-const profileSelectClass =
-  "block min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
-
-/**
- * Native city/zone selects for profile setup. React renders the static markup
- * once; `enhanceLocationSelects` owns the zone options, so the component is
- * memoized to keep React from reconciling those children.
- */
-const ProfileLocationSelects = memo(
-  function ProfileLocationSelects({
-    cities,
-    initialLocation,
-    onChange,
-  }: {
-    cities: LocationData[];
-    initialLocation: LocationPrefillDetail;
-    onChange: (selection: LocationSelection) => void;
-  }) {
-    const rootRef = useRef<HTMLDivElement>(null);
-    const onChangeRef = useRef(onChange);
-    onChangeRef.current = onChange;
-
-    useEffect(() => {
-      const root = rootRef.current;
-      if (!root) return;
-      const controller = new AbortController();
-      const apiBaseUrl = createApiUrl("").replace(/\/$/, "");
-      const selects = enhanceLocationSelects(root, {
-        load: (level, parentId) => fetchLocationOptions(apiBaseUrl, level, parentId),
-        onChange: (selection) => onChangeRef.current(selection),
-        signal: controller.signal,
-      });
-      void selects?.prefill(initialLocation);
-      return () => controller.abort();
-    }, [initialLocation]);
-
-    return (
-      <div ref={rootRef} className="grid gap-3 sm:grid-cols-2" data-loading-text="Loading…">
-        <div className="space-y-1.5">
-          <label htmlFor="profile-city" className="text-sm font-medium">
-            City <span aria-hidden="true" className="ml-0.5 text-destructive">*</span><span className="sr-only"> (required)</span>
-          </label>
-          <select id="profile-city" name="city" required defaultValue="" className={profileSelectClass}>
-            <option value="">Select a city</option>
-            {cities.map((city) => (
-              <option key={city.id} value={city.id}>{city.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor="profile-zone" className="text-sm font-medium">
-            Zone <span aria-hidden="true" className="ml-0.5 text-destructive">*</span><span className="sr-only"> (required)</span>
-          </label>
-          <select id="profile-zone" name="zone" required disabled defaultValue="" className={profileSelectClass}>
-            <option value="">Select a zone</option>
-          </select>
-          <button type="button" hidden data-location-retry="zone" className="text-xs font-medium text-destructive underline underline-offset-2">
-            Could not load zones. Try again
-          </button>
-        </div>
-      </div>
-    );
-  },
-  (previous, next) =>
-    previous.cities === next.cities &&
-    previous.initialLocation === next.initialLocation,
-);
 
 export default function AuthModal() {
-  const initialSettingsRef = useRef<AuthRuntimeSettings | null>(null);
-  if (!initialSettingsRef.current) {
-    initialSettingsRef.current = readInitialAuthSettings();
-  }
-
+  const [settings, setSettings] = useState<AuthSettings>(() => settingsFromConfig(window.__CHECKOUT_CONFIG__ as CheckoutConfig | undefined));
   const [isOpen, setIsOpen] = useState(false);
-  const [step, setStep] = useState<Step>("input");
-  const [authIntent, setAuthIntent] = useState<AuthIntent>("sign_in");
-  const [otpChannel, setOtpChannel] = useState<CustomerAuthOtpChannel>(
-    initialSettingsRef.current.otpChannel,
-  );
-  const [identifier, setIdentifier] = useState("");
-  const [phoneInput, setPhoneInput] = useState("");
-  const [emailInput, setEmailInput] = useState("");
-  const [otp, setOtp] = useState("");
-
-  // Settings injected globally
-  const [authPolicy, setAuthPolicy] = useState<CustomerAuthPolicyConfig>(
-    initialSettingsRef.current.authPolicy,
-  );
-  const [allowedCountries, setAllowedCountries] = useState<string[]>(
-    initialSettingsRef.current.allowedCountries,
-  );
-  const [allowedCountriesMode, setAllowedCountriesMode] = useState<"include" | "exclude">(
-    initialSettingsRef.current.allowedCountriesMode,
-  );
-  const [authPolicyReady, setAuthPolicyReady] = useState(initialSettingsRef.current.ready);
-  const [authPolicyLoading, setAuthPolicyLoading] = useState(false);
-
-  const [customer, setCustomer] = useState<CustomerInfo | null>(null);
-
-  // Profile Setup State
-  const [profileName, setProfileName] = useState("");
-  const [profileAddress, setProfileAddress] = useState("");
-  const [profileCity, setProfileCity] = useState("");
-  const [profileZone, setProfileZone] = useState("");
-  const [profileCityName, setProfileCityName] = useState("");
-  const [profileZoneName, setProfileZoneName] = useState("");
-  const [cities, setCities] = useState<LocationData[]>([]);
-  const [citiesLoading, setCitiesLoading] = useState(false);
-  const [citiesLoadFailed, setCitiesLoadFailed] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<Step>("contact");
+  const [channel, setChannel] = useState<CustomerAuthOtpChannel>(() => getDefaultCustomerAuthOtpChannel(settings.policy));
+  const [contact, setContact] = useState("");
+  const [sentTo, setSentTo] = useState("");
+  const [code, setCode] = useState("");
+  const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null);
+  const [details, setDetails] = useState({ name: "", phone: "", email: "" });
+  const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
   const [error, setError] = useState("");
-  const [countdown, setCountdown] = useState(0);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const otpInputRef = useRef<HTMLInputElement>(null);
+  const [loading, setLoading] = useState(false);
+  const [customer, setCustomer] = useState<CustomerInfo | null>(null);
+  const [resendWait, startResendWait] = useCountdown();
+  const [sendWait, startSendWait] = useCountdown();
+  const inFlight = useRef(false);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
-  const authSettingsPromiseRef = useRef<Promise<void> | null>(null);
-  const sessionPromiseRef = useRef<Promise<void> | null>(null);
-  const submissionInFlightRef = useRef(false);
-  const initialProfileLocation = useMemo(() => ({
-    city: customer?.city ?? "",
-    cityName: customer?.cityName ?? "",
-    zone: customer?.zone ?? "",
-    zoneName: customer?.zoneName ?? "",
-  }), [customer?.city, customer?.cityName, customer?.zone, customer?.zoneName]);
-  const authUi = useMemo(
-    () => resolveCustomerAuthUi(authPolicy, otpChannel, authIntent),
-    [authPolicy, otpChannel, authIntent],
-  );
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const prefillRef = useRef<AuthModalPrefill>({});
 
-  // Compute effective countries list based on mode
-  const effectiveCountries = useMemo((): Country[] | undefined => {
-    if (allowedCountries.length === 0) return undefined;
-    if (allowedCountriesMode === "exclude") {
-      const excluded = new Set(allowedCountries);
-      return getCountries().filter((c) => !excluded.has(c));
-    }
-    return allowedCountries as Country[];
-  }, [allowedCountries, allowedCountriesMode]);
+  const ui = useMemo(() => resolveCustomerAuthUi(settings.policy, channel), [settings.policy, channel]);
+  const isEmail = ui.requestMethod === "email";
+  const locked = attemptsLeft === 0;
 
-  const phoneCountryPolicy = useMemo(
-    () => ({ countries: allowedCountries, mode: allowedCountriesMode }),
-    [allowedCountries, allowedCountriesMode],
-  );
-  const hasActiveCountryPolicy = hasActivePhoneCountryPolicy(phoneCountryPolicy);
-
-  const effectiveDefaultCountry = useMemo(() => {
-    if (effectiveCountries && effectiveCountries.length > 0) {
-      return effectiveCountries[0];
-    }
-    if (hasActiveCountryPolicy) return undefined;
-    return "BD" as Country;
-  }, [effectiveCountries, hasActiveCountryPolicy]);
-
-  const hydrateProfileFields = useCallback((customerData: CustomerInfo) => {
-    setProfileName(customerData.name && customerData.name !== "Customer" ? customerData.name : "");
-    setProfileAddress(customerData.address ?? "");
-    setProfileCity(customerData.city ?? "");
-    setProfileZone(customerData.zone ?? "");
-    setProfileCityName(customerData.cityName ?? "");
-    setProfileZoneName(customerData.zoneName ?? "");
-  }, []);
-
-  const applyAuthSettings = useCallback((settings: AuthRuntimeSettings) => {
-    setAuthPolicy(settings.authPolicy);
-    setOtpChannel(settings.otpChannel);
-    setAllowedCountries(settings.allowedCountries);
-    setAllowedCountriesMode(settings.allowedCountriesMode);
-    setAuthPolicyReady(settings.ready);
-  }, []);
-
-  const ensureAuthSettings = useCallback(() => {
-    if (authPolicyReady) return Promise.resolve();
-    if (authSettingsPromiseRef.current) return authSettingsPromiseRef.current;
-
-    const injected = readInjectedCheckoutConfig();
-    if (injected) {
-      applyAuthSettings(resolveAuthSettingsFromCheckoutConfig(injected));
-      return Promise.resolve();
-    }
-
-    setAuthPolicyLoading(true);
-    authSettingsPromiseRef.current = fetchCheckoutConfigClient()
-      .then((config) => {
-        applyAuthSettings(
-          config
-            ? resolveAuthSettingsFromCheckoutConfig(config)
-            : { ...FALLBACK_AUTH_SETTINGS, ready: true },
-        );
-      })
-      .finally(() => {
-        setAuthPolicyLoading(false);
-        authSettingsPromiseRef.current = null;
-      });
-
-    return authSettingsPromiseRef.current;
-  }, [applyAuthSettings, authPolicyReady]);
-
-  const applyCustomerSession = useCallback((state: AuthState, openIncompleteProfile: boolean) => {
+  const applySession = useCallback((state: AuthState) => {
     if (state.authenticated && state.customer) {
       setCustomer(state.customer);
-      if (state.customer.needsProfileCompletion) {
-        hydrateProfileFields(state.customer);
-        setStep("profile_setup");
-        if (openIncompleteProfile) setIsOpen(true);
-      } else {
-        setStep("authenticated");
-      }
-      return;
-    }
-
-    setCustomer(null);
-    setStep("input");
-  }, [hydrateProfileFields]);
-
-  const hydrateExistingCustomerSession = useCallback((openIncompleteProfile: boolean) => {
-    if (!hasCustomerAuthMirrorCookie()) {
+      setStep("signed_in");
+    } else if (!state.unavailable) {
       setCustomer(null);
-      return Promise.resolve();
-    }
-    if (sessionPromiseRef.current) return sessionPromiseRef.current;
-
-    sessionPromiseRef.current = getCustomerSession()
-      .then((state) => {
-        applyCustomerSession(state, openIncompleteProfile);
-      })
-      .finally(() => {
-        sessionPromiseRef.current = null;
-      });
-
-    return sessionPromiseRef.current;
-  }, [applyCustomerSession]);
-
-  const scheduleCustomerSessionResume = useCallback(() => {
-    const run = () => {
-      if (!hasCustomerAuthMirrorCookie()) return;
-      void hydrateExistingCustomerSession(true);
-    };
-
-    if (typeof window.requestIdleCallback === "function") {
-      window.requestIdleCallback(run, { timeout: 2500 });
-      return;
-    }
-
-    window.setTimeout(run, 1);
-  }, [hydrateExistingCustomerSession]);
-
-  useEffect(() => {
-    const handleOpen = (event?: Event) => {
-      const activeElement = document.activeElement;
-      previouslyFocusedElementRef.current = activeElement instanceof HTMLElement
-        ? activeElement
-        : null;
-      const eventIntent = (event as CustomEvent<{ intent?: AuthIntent }> | undefined)?.detail?.intent;
-      const requestedIntent = eventIntent ?? window.__scaliusAuthModalIntentPending;
-      delete window.__scaliusAuthModalOpenPending;
-      delete window.__scaliusAuthModalIntentPending;
-      if (requestedIntent === "sign_in" || requestedIntent === "sign_up") {
-        setAuthIntent(requestedIntent);
-        setError("");
-        setOtp("");
-      }
-      setIsOpen(true);
-      void ensureAuthSettings();
-      if (hasCustomerAuthMirrorCookie()) {
-        void hydrateExistingCustomerSession(true);
-      }
-    };
-    window.addEventListener("open-auth-modal", handleOpen);
-    if (window.__scaliusAuthModalOpenPending) {
-      handleOpen();
-    } else if (hasCustomerAuthMirrorCookie()) {
-      scheduleCustomerSessionResume();
-    }
-    return () => {
-      window.removeEventListener("open-auth-modal", handleOpen);
-    };
-  }, [ensureAuthSettings, hydrateExistingCustomerSession, scheduleCustomerSessionResume]);
-
-  useEffect(() => {
-    if (authUi.otpChannel !== otpChannel) {
-      setOtpChannel(authUi.otpChannel);
-    }
-  }, [authUi.otpChannel, otpChannel]);
-
-  const loadProfileCities = useCallback(async () => {
-    setCitiesLoading(true);
-    setCitiesLoadFailed(false);
-    try {
-      const response = await fetch(createApiUrl("/locations/cities"), {
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!response.ok) throw new Error("Could not load cities");
-      const payload = await response.json() as { success: boolean; data: LocationData[] };
-      if (payload.success !== true || !Array.isArray(payload.data)) {
-        throw new Error("Could not load cities");
-      }
-      setCities(payload.data);
-    } catch {
-      setCities([]);
-      setCitiesLoadFailed(true);
-    } finally {
-      setCitiesLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    if (step === "profile_setup") void loadProfileCities();
-  }, [loadProfileCities, step]);
+  const methodRef = useRef(ui.requestMethod);
+  methodRef.current = ui.requestMethod;
+  const customerRef = useRef(customer);
+  customerRef.current = customer;
+  const settingsReadyRef = useRef(settings.ready);
+  settingsReadyRef.current = settings.ready;
 
-  // Clear stale profile location labels when the profile step is reset.
-  useEffect(() => {
-    if (step !== "profile_setup" || profileCity) return;
-    setProfileZone("");
-    setProfileCityName("");
-    setProfileZoneName("");
-  }, [profileCity, step]);
-
-  const handleProfileLocationChange = (selection: LocationSelection) => {
-    setProfileCity(selection.cityId);
-    setProfileZone(selection.zoneId);
-    setProfileCityName(selection.cityName);
-    setProfileZoneName(selection.zoneName);
+  const resetFlow = useCallback((prefill: AuthModalPrefill) => {
+    setStep("contact");
+    setCode("");
+    setAttemptsLeft(null);
     setError("");
-  };
+    setFieldError(null);
+    const phone = prefill.phone ? formatBdMobile(prefill.phone) : "";
+    setContact(methodRef.current === "email" ? prefill.email ?? "" : phone);
+    setDetails({ name: prefill.name ?? "", phone, email: prefill.email ?? "" });
+  }, []);
 
-  const dispatchLoginEvent = (customerData: CustomerInfo) => {
-    window.dispatchEvent(new CustomEvent("customer-login", {
-      detail: customerData,
-    }));
-  };
-
-  const handleClose = useCallback(() => {
-    if (step === "profile_setup" && customer?.needsProfileCompletion) {
-      setError("Save your delivery profile or sign out to continue.");
-      return;
-    }
-    setIsOpen(false);
-  }, [customer?.needsProfileCompletion, step]);
-  const handleCloseRef = useRef(handleClose);
   useEffect(() => {
-    handleCloseRef.current = handleClose;
-  }, [handleClose]);
+    const open = (event?: Event) => {
+      const active = document.activeElement;
+      returnFocusRef.current = active instanceof HTMLElement ? active : null;
+      const prefill = (event as CustomEvent<{ prefill?: AuthModalPrefill }> | undefined)?.detail?.prefill
+        ?? window.__scaliusAuthModalPrefillPending
+        ?? {};
+      delete window.__scaliusAuthModalOpenPending;
+      delete window.__scaliusAuthModalPrefillPending;
+      prefillRef.current = prefill;
+      setIsOpen(true);
+      if (!customerRef.current) resetFlow(prefill);
+      if (!settingsReadyRef.current) {
+        void fetchCheckoutConfig().then((config) => {
+          const next = settingsFromConfig(config);
+          setSettings({ ...next, ready: true });
+          setChannel(getDefaultCustomerAuthOtpChannel(next.policy));
+        });
+      }
+      if (hasCustomerAuthMirrorCookie()) void getCustomerSession().then(applySession);
+    };
+    window.addEventListener("open-auth-modal", open);
+    if (window.__scaliusAuthModalOpenPending) open();
+    else if (hasCustomerAuthMirrorCookie()) void getCustomerSession().then(applySession);
+    return () => window.removeEventListener("open-auth-modal", open);
+  }, [applySession, resetFlow]);
 
+  const close = useCallback(() => setIsOpen(false), []);
+
+  // Focus the first field on every step; trap Tab; Esc closes; focus returns.
   useEffect(() => {
     if (!isOpen) return;
-
     const dialog = dialogRef.current;
-    const previousBodyOverflow = document.body.style.overflow;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const focusFrame = window.requestAnimationFrame(() => dialog?.focus());
-
-    const handleDialogKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+    const frame = window.requestAnimationFrame(() => {
+      const first = dialog?.querySelector<HTMLElement>("[data-autofocus]");
+      (first ?? dialog)?.focus();
+    });
+    const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        handleCloseRef.current();
+        close();
         return;
       }
       if (event.key !== "Tab" || !dialog) return;
-
       const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
-        'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled)',
       ));
       const first = focusable[0];
       const last = focusable.at(-1);
-      if (!first || !last) {
-        event.preventDefault();
-        dialog.focus();
-      } else if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+      if (!first || !last) return;
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -482,223 +202,137 @@ export default function AuthModal() {
         first.focus();
       }
     };
-
-    document.addEventListener("keydown", handleDialogKeyDown);
+    document.addEventListener("keydown", onKeyDown);
     return () => {
-      window.cancelAnimationFrame(focusFrame);
-      document.removeEventListener("keydown", handleDialogKeyDown);
-      document.body.style.overflow = previousBodyOverflow;
-      const previouslyFocused = previouslyFocusedElementRef.current;
-      previouslyFocusedElementRef.current = null;
-      window.requestAnimationFrame(() => {
-        if (previouslyFocused?.isConnected) previouslyFocused.focus();
-      });
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      const target = returnFocusRef.current;
+      returnFocusRef.current = null;
+      window.requestAnimationFrame(() => target?.isConnected && target.focus());
     };
-  }, [isOpen]);
+  }, [close, isOpen, step]);
 
-  const startCountdown = (seconds: number) => {
-    setCountdown(seconds);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    countdownRef.current = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) { clearInterval(countdownRef.current!); return 0; }
-        return c - 1;
-      });
-    }, 1000);
+  const run = async (task: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setLoading(true);
+    try {
+      await task();
+    } finally {
+      inFlight.current = false;
+      setLoading(false);
+    }
   };
 
-  useEffect(() => () => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
-  }, []);
-
-  const handleSendOtp = async () => {
-    if (submissionInFlightRef.current || authPolicyLoading) return;
-    const validationError = getCustomerAuthInputError({
-      authPolicy,
-      otpChannel: authUi.otpChannel,
-      intent: authIntent,
-      identifier,
-      phoneInput,
-      emailInput,
-    });
-    if (validationError) {
-      setError(validationError);
+  const sendCode = () => run(async () => {
+    const checked = checkContact(ui.requestMethod, contact, settings.phonePolicy);
+    if (!checked.ok) {
+      setFieldError({ field: "contact", message: checked.message });
       return;
     }
-    const authPhone = authUi.fields.phone.primary ? identifier : phoneInput;
-    if (authUi.fields.phone.visible && authPhone.trim()) {
-      const phoneValidation = validateStorefrontPhone(authPhone, phoneCountryPolicy);
-      if (!phoneValidation.ok) {
-        setError(phoneValidation.message || "Enter a valid phone number.");
-        return;
-      }
-      if (authUi.fields.phone.primary) setIdentifier(phoneValidation.value);
-      else setPhoneInput(phoneValidation.value);
-    }
-    submissionInFlightRef.current = true;
-    setLoading(true);
+    setFieldError(null);
     setError("");
-    const res = await sendCustomerOtp({
-      intent: authIntent,
-      method: authUi.requestMethod,
-      channel: authUi.otpChannel,
-      identifier: identifier.trim(),
-      phone: authUi.fields.phone.primary ? undefined : phoneInput.trim(),
-      email: authUi.fields.email.primary ? undefined : emailInput.trim(),
-    });
-    submissionInFlightRef.current = false;
-    setLoading(false);
-
-    if (res.success) {
-      setStep("otp");
-      startCountdown(120);
-      setTimeout(() => otpInputRef.current?.focus(), 100);
-    } else {
-      setError(res.error || "Failed to send code");
-      if (res.retryAfter) startCountdown(res.retryAfter);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (submissionInFlightRef.current) return;
-    if (!otp.trim() || otp.length !== 6) {
-      setError("Enter the 6-digit verification code");
+    const result = await sendCustomerOtp({ method: ui.requestMethod, channel: ui.otpChannel, identifier: checked.value });
+    if (!result.success) {
+      setError(result.error);
+      if (result.retryAfterSeconds) {
+        if (step === "code") startResendWait(result.retryAfterSeconds);
+        else startSendWait(result.retryAfterSeconds);
+      }
       return;
     }
-    submissionInFlightRef.current = true;
-    setLoading(true);
-    setError("");
-    const res = await verifyCustomerOtp(
-      {
-        intent: authIntent,
-        method: authUi.requestMethod,
-        channel: authUi.otpChannel,
-        identifier: identifier.trim(),
-        code: otp.trim(),
-        name: "",
-        phone: authUi.fields.phone.primary ? undefined : phoneInput.trim(),
-        email: authUi.fields.email.primary ? undefined : emailInput.trim(),
-      },
-    );
-    submissionInFlightRef.current = false;
-    setLoading(false);
+    setSentTo(checked.value);
+    setCode("");
+    setAttemptsLeft(null);
+    startResendWait(result.resendAfterSeconds);
+    setStep("code");
+  });
 
-    if (res.success && res.customer) {
-      setCustomer(res.customer);
-
-      if (res.isNewUser || res.customer.needsProfileCompletion) {
-        hydrateProfileFields(res.customer);
-        setStep("profile_setup");
-      } else {
-        setStep("authenticated");
-        dispatchLoginEvent(res.customer);
-        // Automatically close modal after 1.5s on success
-        setTimeout(() => setIsOpen(false), 1500);
-      }
-    } else {
-      setError(res.error || "Invalid code");
-      if (res.attemptsLeft !== undefined && res.attemptsLeft <= 2) {
-        setError(`${res.error || "Invalid code"} (${res.attemptsLeft} attempt${res.attemptsLeft !== 1 ? "s" : ""} left)`);
-      }
-    }
+  const signedIn = (next: CustomerInfo) => {
+    setCustomer(next);
+    setStep("signed_in");
+    window.dispatchEvent(new CustomEvent("customer-login", { detail: next }));
+    window.setTimeout(() => setIsOpen(false), 1500);
   };
 
-  const handleProfileSubmit = async () => {
-    if (submissionInFlightRef.current || citiesLoading || citiesLoadFailed) return;
-    if (!profileName.trim() || !profileAddress.trim() || !profileCity.trim() || !profileZone.trim()) {
-      setError("Please fill in your name, address, city, and zone.");
+  const verifyCode = (account?: { name: string; phone?: string; email?: string }) => run(async () => {
+    if (!/^\d{6}$/.test(code)) {
+      setFieldError({ field: "code", message: "Enter the 6-digit code." });
       return;
     }
-    submissionInFlightRef.current = true;
-    setLoading(true);
+    setFieldError(null);
     setError("");
-
-    const res = await updateCustomerProfile({
-      name: profileName.trim(),
-      address: profileAddress.trim(),
-      city: profileCity,
-      zone: profileZone,
-      cityName: profileCityName,
-      zoneName: profileZoneName,
+    const result = await verifyCustomerOtp({
+      method: ui.requestMethod,
+      channel: ui.otpChannel,
+      identifier: sentTo,
+      code,
+      ...(account ? { account } : {}),
     });
-    submissionInFlightRef.current = false;
-    setLoading(false);
-
-    if (res.success) {
-      const updatedCustomer = res.customer ?? {
-        ...customer!,
-        name: profileName.trim(),
-        address: profileAddress.trim(),
-        city: profileCity,
-        zone: profileZone,
-        cityName: profileCityName,
-        zoneName: profileZoneName,
-        profileComplete: true,
-        needsProfileCompletion: false,
-      };
-      setCustomer(updatedCustomer);
-      setStep("authenticated");
-      dispatchLoginEvent(updatedCustomer);
-      setTimeout(() => setIsOpen(false), 1500);
-    } else {
-      setError(res.error || "Failed to save profile");
+    if (!result.success) {
+      setAttemptsLeft(result.attemptsLeft ?? null);
+      const left = result.attemptsLeft;
+      setError(left && left <= 2 ? `${result.error} ${left === 1 ? "1 attempt left." : `${left} attempts left.`}` : result.error);
+      if (left === 0) {
+        startResendWait(0);
+        if (step === "details") setStep("code");
+      }
+      return;
     }
+    if (result.status === "needs_account_details") {
+      setStep("details");
+      return;
+    }
+    signedIn(result.customer);
+  });
+
+  const submitDetails = () => {
+    const checked = checkNewAccount(ui, details, settings.phonePolicy);
+    if (!checked.ok) {
+      setFieldError({ field: checked.field, message: checked.message });
+      return;
+    }
+    void verifyCode(checked.account);
   };
 
-  const handleLogout = async () => {
-    // Clear the readable host-only auth mirror; the server clears cs_tok.
+  const signOut = () => run(async () => {
     await logoutCustomer();
     setCustomer(null);
-    setStep("input");
-    setIdentifier("");
-    setPhoneInput("");
-    setEmailInput("");
-    setOtp("");
-    setProfileName("");
-    setProfileAddress("");
-    setProfileCity("");
-    setProfileZone("");
-    setProfileCityName("");
-    setProfileZoneName("");
+    resetFlow({});
     window.dispatchEvent(new CustomEvent("customer-logout"));
-  };
-
-  const alternateAuthIntent = getCustomerAuthAlternateIntent(error);
+  });
 
   if (!isOpen) return null;
 
-  const title = step === "profile_setup"
-    ? "Complete your profile"
-    : step === "otp"
-      ? "Verify your account"
-      : step === "authenticated"
-        ? "You're signed in"
-        : authIntent === "sign_up" ? "Create account" : "Sign in";
+  const title = step === "signed_in"
+    ? "You're signed in"
+    : step === "details" ? "Create your account" : "Sign in";
+  const destinationLabel = isEmail ? "Email" : "Phone number";
+  const errorFor = (field: string) => (fieldError?.field === field ? fieldError.message : "");
 
   return (
     <div
-      className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 p-4 text-foreground"
+      className="fixed inset-0 z-100 flex items-end justify-center bg-black/50 text-foreground sm:items-center sm:p-4"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) handleClose();
+        if (event.target === event.currentTarget) close();
       }}
     >
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl focus:outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="customer-auth-title"
+        className="flex max-h-[calc(100dvh-1rem)] w-full max-w-md flex-col overflow-hidden rounded-t-xl border border-border bg-background shadow-xl focus:outline-none sm:rounded-xl"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
-          <h2 id="customer-auth-title" className="text-xl font-semibold tracking-tight">
-            {title}
-          </h2>
+          <h2 id="customer-auth-title" className="text-xl font-semibold">{title}</h2>
           <button
             type="button"
-            onClick={handleClose}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Close account dialog"
+            onClick={close}
+            aria-label="Close"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -706,263 +340,238 @@ export default function AuthModal() {
 
         <form
           method="post"
-          className="flex min-h-0 flex-1 flex-col"
+          noValidate
           aria-busy={loading}
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
-            if (step === "input") void handleSendOtp();
-            else if (step === "otp") void handleVerifyOtp();
-            else if (step === "profile_setup") void handleProfileSubmit();
+            if (step === "contact") void sendCode();
+            else if (step === "code") void verifyCode();
+            else if (step === "details") submitDetails();
           }}
         >
-          <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
-            {step === "authenticated" && customer && (
+          <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+            {step === "signed_in" && customer && (
               <div className="space-y-1">
                 <p className="font-medium">{customer.name}</p>
-                <p className="break-words text-sm text-muted-foreground">{customer.phone ? formatPhoneForDisplay(customer.phone) : customer.email}</p>
+                <p className="break-words text-sm text-muted-foreground">
+                  {customer.email || (customer.phone ? formatBdMobile(customer.phone) : "")}
+                </p>
               </div>
             )}
 
-            {step === "input" && (
-              <div className="space-y-4">
-                {authPolicyLoading && !authPolicyReady && (
-                  <p role="status" className="text-sm text-muted-foreground">Loading sign-in options…</p>
-                )}
-                {authUi.showMethodSwitcher && (
-                  <div className="flex gap-1 rounded-lg border border-border bg-muted/50 p-1" role="group" aria-label="Verification method">
-                    {authUi.requestOptions.map((option) => (
+            {step === "contact" && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  {isEmail
+                    ? "Enter your email and we'll send you a code. New here? We'll set up your account."
+                    : "Enter your mobile number and we'll text you a code. New here? We'll set up your account."}
+                </p>
+                {ui.showMethodSwitcher && (
+                  <div className="flex gap-1 rounded-lg border border-border bg-muted/50 p-1" role="group" aria-label="Sign in with">
+                    {ui.requestOptions.map((option) => (
                       <button
                         type="button"
                         key={option.channel}
                         disabled={loading}
-                        aria-pressed={otpChannel === option.channel}
-                        className={`min-h-11 flex-1 rounded-md px-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${otpChannel === option.channel ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                        onClick={() => { setOtpChannel(option.channel); setError(""); setIdentifier(""); setPhoneInput(""); setEmailInput(""); }}
+                        aria-pressed={channel === option.channel}
+                        onClick={() => {
+                          setChannel(option.channel);
+                          setFieldError(null);
+                          setError("");
+                          const prefill = prefillRef.current;
+                          setContact(option.method === "email" ? prefill.email ?? "" : prefill.phone ? formatBdMobile(prefill.phone) : "");
+                        }}
+                        className={`min-h-11 flex-1 rounded-md px-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${channel === option.channel ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                       >
-                        {option.label}
+                        {option.method === "email" ? "Email" : option.channel === "whatsapp" ? "WhatsApp" : "Phone"}
                       </button>
                     ))}
                   </div>
                 )}
                 <div className="space-y-1.5">
-                  <label htmlFor="auth-primary-input" className="text-sm font-medium text-foreground">
-                    {authUi.currentOption.destinationLabel}
-                  </label>
-                  {authUi.fields.email.primary ? (
+                  <label htmlFor="auth-contact" className="text-sm font-medium">{destinationLabel}</label>
+                  <div className={isEmail ? "" : "flex items-center gap-2"}>
+                    {!isEmail && <span className="shrink-0 text-base text-muted-foreground" aria-hidden="true">+880</span>}
                     <input
-                      id="auth-primary-input"
-                      type="email"
+                      id="auth-contact"
+                      data-autofocus
+                      type={isEmail ? "email" : "tel"}
+                      inputMode={isEmail ? "email" : "tel"}
+                      autoComplete={isEmail ? "email" : "tel-national"}
+                      placeholder={isEmail ? "name@example.com" : "01XXXXXXXXX"}
                       disabled={loading}
-                      value={identifier}
-                      onChange={(e) => { setIdentifier(e.target.value); setError(""); }}
-                      placeholder="you@example.com"
-                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base transition-all focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                      autoComplete="email"
-                      required
+                      value={contact}
+                      aria-invalid={Boolean(errorFor("contact"))}
+                      aria-describedby={errorFor("contact") ? "auth-contact-error" : undefined}
+                      onChange={(event) => { setContact(event.target.value); setFieldError(null); setError(""); }}
+                      onBlur={() => {
+                        if (!contact.trim()) return;
+                        const checked = checkContact(ui.requestMethod, contact, settings.phonePolicy);
+                        if (!checked.ok) setFieldError({ field: "contact", message: checked.message });
+                        else if (!isEmail) setContact(formatBdMobile(checked.value));
+                      }}
+                      className={inputClass}
                     />
-                  ) : (
-                    <PhoneInput
-                      id="auth-primary-input"
-                      required
-                      disabled={loading}
-                      autoComplete="tel"
-                      international
-                      addInternationalOption={!hasActiveCountryPolicy}
-                      countryCallingCodeEditable={!hasActiveCountryPolicy}
-                      flagUrl={FLAG_URL}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input Country type is narrower than our string union
-                      defaultCountry={effectiveDefaultCountry as any}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input countries prop expects exact Country[] tuple
-                      countries={effectiveCountries as any}
-                      value={identifier}
-                      onChange={(value) => { setIdentifier(value || ""); setError(""); }}
-                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base transition-all focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring [&_.PhoneInputInput]:h-full [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:text-base [&_.PhoneInputInput]:outline-none"
-                    />
-                  )}
+                  </div>
+                  {errorFor("contact") && <p id="auth-contact-error" className="text-sm text-destructive">{errorFor("contact")}</p>}
                 </div>
-
-                {authUi.fields.phone.visible && !authUi.fields.phone.primary && (
-                  <div className="space-y-1.5">
-                    <label htmlFor="auth-phone-input" className="text-sm font-medium text-foreground">{authUi.fields.phone.label}</label>
-                    <PhoneInput
-                      id="auth-phone-input"
-                      required={authUi.fields.phone.required}
-                      disabled={loading}
-                      autoComplete="tel"
-                      international
-                      addInternationalOption={!hasActiveCountryPolicy}
-                      countryCallingCodeEditable={!hasActiveCountryPolicy}
-                      flagUrl={FLAG_URL}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input Country type is narrower than our string union
-                      defaultCountry={effectiveDefaultCountry as any}
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- react-phone-number-input countries prop expects exact Country[] tuple
-                      countries={effectiveCountries as any}
-                      value={phoneInput}
-                      onChange={(value) => { setPhoneInput(value || ""); setError(""); }}
-                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base transition-all focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring [&_.PhoneInputInput]:h-full [&_.PhoneInputInput]:border-none [&_.PhoneInputInput]:bg-transparent [&_.PhoneInputInput]:text-base [&_.PhoneInputInput]:outline-none"
-                    />
-                  </div>
-                )}
-
-                {authUi.fields.email.visible && !authUi.fields.email.primary && (
-                  <div className="space-y-1.5">
-                    <label htmlFor="auth-email-input" className="text-sm font-medium text-foreground">
-                      {authUi.fields.email.label}
-                    </label>
-                    <input
-                      id="auth-email-input"
-                      type="email"
-                      required={authUi.fields.email.required}
-                      disabled={loading}
-                      autoComplete="email"
-                      value={emailInput}
-                      onChange={(e) => { setEmailInput(e.target.value); setError(""); }}
-                      placeholder="you@example.com"
-                      className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base transition-all focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                    />
-                  </div>
-                )}
-              </div>
+              </>
             )}
 
-            {step === "otp" && (
-              <div className="space-y-4">
+            {step === "code" && (
+              <>
                 <p className="break-words text-sm text-muted-foreground">
-                  Enter the 6-digit code sent to <span className="font-medium text-foreground">{identifier}</span>.
+                  Enter the 6-digit code we sent to{" "}
+                  <span className="font-medium text-foreground">{isEmail ? sentTo : formatBdMobile(sentTo)}</span>.
                 </p>
                 <div className="space-y-1.5">
-                  <label htmlFor="customer-otp" className="text-sm font-medium">Verification code</label>
+                  <label htmlFor="customer-otp" className="text-sm font-medium">Code</label>
                   <input
                     id="customer-otp"
-                    ref={otpInputRef}
+                    data-autofocus
                     type="text"
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     pattern="[0-9]{6}"
                     maxLength={6}
-                    required
-                    disabled={loading}
-                    value={otp}
-                    onChange={(event) => { setOtp(event.target.value.replace(/\D/g, "")); setError(""); }}
-                    className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base tracking-[0.3em] focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                    disabled={loading || locked}
+                    value={code}
+                    aria-invalid={Boolean(errorFor("code"))}
+                    onChange={(event) => { setCode(event.target.value.replace(/\D/g, "").slice(0, 6)); setFieldError(null); }}
+                    className={`${inputClass} tracking-[0.3em]`}
                   />
+                  {errorFor("code") && <p className="text-sm text-destructive">{errorFor("code")}</p>}
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-x-3">
                   <button
                     type="button"
                     disabled={loading}
-                    onClick={() => { setStep("input"); setOtp(""); setError(""); }}
+                    onClick={() => { setStep("contact"); setCode(""); setError(""); setAttemptsLeft(null); }}
                     className="min-h-11 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    Change {authUi.currentOption.destinationLabel.toLowerCase()}
+                    {isEmail ? "Use a different email" : "Use a different number"}
                   </button>
-                  {countdown > 0 ? (
-                    <span className="text-sm text-muted-foreground">Resend in {countdown}s</span>
-                  ) : (
-                    <button type="button" disabled={loading} onClick={handleSendOtp} className="min-h-11 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      Resend code
-                    </button>
-                  )}
+                  <button type="button" disabled={loading || resendWait > 0} onClick={() => void sendCode()} className={linkButtonClass}>
+                    {resendWait > 0 ? `Send a new code in ${formatWait(resendWait)}` : "Send a new code"}
+                  </button>
                 </div>
-              </div>
+              </>
             )}
 
-            {step === "profile_setup" && (
-              <fieldset disabled={loading} className="min-w-0 space-y-3" aria-label="Delivery details">
+            {step === "details" && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  {isEmail ? "Your email is confirmed." : "Your number is confirmed."} Add your details to finish.
+                </p>
                 <div className="space-y-1.5">
-                  <label htmlFor="profile-name" className="text-sm font-medium">
-                    Full name <span aria-hidden="true" className="ml-0.5 text-destructive">*</span><span className="sr-only"> (required)</span>
-                  </label>
+                  <label htmlFor="auth-name" className="text-sm font-medium">Full name</label>
                   <input
-                    id="profile-name"
+                    id="auth-name"
+                    data-autofocus
                     type="text"
-                    required
                     autoComplete="name"
-                    value={profileName}
-                    onChange={(event) => { setProfileName(event.target.value); setError(""); }}
-                    className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                    disabled={loading}
+                    value={details.name}
+                    aria-invalid={Boolean(errorFor("name"))}
+                    onChange={(event) => { setDetails((value) => ({ ...value, name: event.target.value })); setFieldError(null); }}
+                    className={inputClass}
                   />
+                  {errorFor("name") && <p className="text-sm text-destructive">{errorFor("name")}</p>}
                 </div>
-                <div className="space-y-1.5">
-                  <label htmlFor="profile-address" className="text-sm font-medium">
-                    Delivery address <span aria-hidden="true" className="ml-0.5 text-destructive">*</span><span className="sr-only"> (required)</span>
-                  </label>
-                  <input
-                    id="profile-address"
-                    type="text"
-                    required
-                    autoComplete="street-address"
-                    value={profileAddress}
-                    onChange={(event) => { setProfileAddress(event.target.value); setError(""); }}
-                    placeholder="House, road and building"
-                    className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                </div>
-                {citiesLoading ? (
-                  <p role="status" className="text-sm text-muted-foreground">Loading locations…</p>
-                ) : citiesLoadFailed ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <p role="alert" className="text-sm text-destructive">Could not load delivery locations.</p>
-                    <button type="button" onClick={() => void loadProfileCities()} className="min-h-11 shrink-0 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      Retry
-                    </button>
+                {ui.newAccount.phone !== "hidden" && (
+                  <div className="space-y-1.5">
+                    <label htmlFor="auth-phone" className="text-sm font-medium">
+                      Phone number{ui.newAccount.phone === "optional" ? " (optional)" : ""}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 text-base text-muted-foreground" aria-hidden="true">+880</span>
+                      <input
+                        id="auth-phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel-national"
+                        placeholder="01XXXXXXXXX"
+                        disabled={loading}
+                        value={details.phone}
+                        aria-invalid={Boolean(errorFor("phone"))}
+                        aria-describedby="auth-phone-help"
+                        onChange={(event) => { setDetails((value) => ({ ...value, phone: event.target.value })); setFieldError(null); }}
+                        className={inputClass}
+                      />
+                    </div>
+                    <p id="auth-phone-help" className="text-sm text-muted-foreground">Couriers call this number to deliver.</p>
+                    {errorFor("phone") && <p className="text-sm text-destructive">{errorFor("phone")}</p>}
                   </div>
-                ) : (
-                  <ProfileLocationSelects
-                    cities={cities}
-                    initialLocation={initialProfileLocation}
-                    onChange={handleProfileLocationChange}
-                  />
                 )}
-              </fieldset>
+                {ui.newAccount.email !== "hidden" && (
+                  <div className="space-y-1.5">
+                    <label htmlFor="auth-email" className="text-sm font-medium">
+                      Email{ui.newAccount.email === "optional" ? " (optional)" : ""}
+                    </label>
+                    <input
+                      id="auth-email"
+                      type="email"
+                      autoComplete="email"
+                      disabled={loading}
+                      value={details.email}
+                      aria-invalid={Boolean(errorFor("email"))}
+                      onChange={(event) => { setDetails((value) => ({ ...value, email: event.target.value })); setFieldError(null); }}
+                      className={inputClass}
+                    />
+                    {errorFor("email") && <p className="text-sm text-destructive">{errorFor("email")}</p>}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           <div className="shrink-0 space-y-3 border-t border-border px-4 py-4 sm:px-6">
             {error && (
-              <div className="space-y-1">
-                <p role="alert" className="text-sm font-medium text-destructive">{error}</p>
-                {alternateAuthIntent && alternateAuthIntent !== authIntent && (step === "input" || step === "otp") && (
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => { setAuthIntent(alternateAuthIntent); setStep("input"); setOtp(""); setError(""); }}
-                    className="min-h-11 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {getCustomerAuthAlternateIntentLabel(alternateAuthIntent)}
-                  </button>
-                )}
-              </div>
+              <p role="alert" className="text-sm font-medium text-destructive">
+                {error}
+                {step === "contact" && sendWait > 0 ? ` Try again in ${formatWait(sendWait)}.` : ""}
+              </p>
             )}
             <div className="flex gap-3">
-              {step === "authenticated" ? (
-                <a href="/account" data-astro-prefetch="false" className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  View account
-                </a>
+              {step === "signed_in" ? (
+                <>
+                  <a
+                    href="/account"
+                    data-astro-prefetch="false"
+                    className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    View account
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => void signOut()}
+                    disabled={loading}
+                    className="min-h-11 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Sign out
+                  </button>
+                </>
               ) : (
                 <button
                   type="submit"
-                  disabled={loading || (step === "input" && (authPolicyLoading || !identifier.trim())) || (step === "otp" && otp.length !== 6) || (step === "profile_setup" && (citiesLoading || citiesLoadFailed || !profileName.trim() || !profileAddress.trim() || !profileCity.trim() || !profileZone.trim()))}
-                  className="min-h-11 flex-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  disabled={
+                    loading
+                    || (step === "contact" && (!contact.trim() || sendWait > 0))
+                    || (step === "code" && (code.length !== 6 || locked))
+                  }
+                  className="min-h-11 flex-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
-                  {step === "profile_setup" ? (loading ? "Saving…" : "Save delivery details") : step === "otp" ? (loading ? "Verifying…" : "Verify code") : authPolicyLoading ? "Loading options…" : loading ? "Sending…" : "Continue"}
-                </button>
-              )}
-              {(step === "authenticated" || (step === "profile_setup" && customer?.needsProfileCompletion)) && (
-                <button type="button" onClick={handleLogout} disabled={loading} className="min-h-11 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  Sign out
+                  {loading
+                    ? step === "contact" ? "Sending…" : step === "code" ? "Checking…" : "Creating account…"
+                    : step === "contact" ? "Send code" : step === "code" ? "Continue" : "Create account"}
                 </button>
               )}
             </div>
-            {step === "input" && (
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => { setAuthIntent(authIntent === "sign_in" ? "sign_up" : "sign_in"); setError(""); setOtp(""); }}
-                className="min-h-11 w-full text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {authIntent === "sign_in" ? "New here? Create account" : "Already have an account? Sign in"}
-              </button>
+            {step === "contact" && (
+              <p className="text-center text-sm text-muted-foreground">
+                Ordered as a guest? <a href="/track-order" className="font-medium text-primary hover:underline">Track your order</a>
+              </p>
             )}
           </div>
         </form>

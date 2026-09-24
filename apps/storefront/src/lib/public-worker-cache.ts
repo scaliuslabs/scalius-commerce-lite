@@ -34,6 +34,7 @@ const RESERVED_TOP_LEVEL_PATHS = new Set([
   "order-success",
   "payment-recovery",
   "products",
+  "track-order",
   "robots.txt",
   "search",
   "sitemap.xml",
