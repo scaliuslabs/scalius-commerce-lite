@@ -445,7 +445,7 @@ app.openapi(sendRecoveryOtpRoute, async (c) => {
       throw new ServiceUnavailableError("Could not queue verification code delivery. Please try again.");
     }
   }
-  return ok(c, { message: GENERIC_RECOVERY_MESSAGE });
+  return ok(c, { message: result.queued ? result.message : GENERIC_RECOVERY_MESSAGE, channel: result.channel });
 });
 
 const verifyRecoveryOtpRoute = createRoute({
@@ -458,7 +458,7 @@ const verifyRecoveryOtpRoute = createRoute({
   request: {
     params: continuationPathSchema,
     body: { required: true, content: { "application/json": { schema: z.object({
-      channel: channelSchema,
+      channel: channelSchema.optional(),
       code: z.string().trim().min(4).max(12),
     }).strict() } } },
   },
@@ -480,7 +480,6 @@ app.openapi(verifyRecoveryOtpRoute, async (c) => {
   const body = c.req.valid("json");
   const result = await verifyOrderPaymentRecoveryOtp(c.get("db"), {
     orderId: continuation.orderId,
-    channel: body.channel,
     code: body.code,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });

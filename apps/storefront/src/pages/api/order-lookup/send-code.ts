@@ -23,5 +23,5 @@ export const POST: APIRoute = async ({ request }) => {
   const result = await sendOrderLookupCode({ reference: input.reference, phone: input.phone });
   return result.ok
     ? orderCodeJsonResponse({ success: true, ...result.data })
-    : orderCodeFailureResponse(result.failure, { includeMessage: true });
+    : orderCodeFailureResponse(result.failure);
 };

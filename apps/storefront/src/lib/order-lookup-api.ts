@@ -2,7 +2,9 @@
 // API calls, used both by the pages' no-JavaScript form posts and by the JSON
 // proxies their scripts call. The receipt token only ever becomes an httpOnly
 // cookie; it is never returned to the browser or logged.
+import { getAccountOwnerReceiptProof } from "@/lib/api/orders";
 import { apiFetch } from "@/lib/api/transport";
+import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
 import {
   DEFAULT_RESEND_AFTER_SECONDS,
@@ -83,10 +85,27 @@ async function postOrderCodeApi(
   }
 }
 
-function sentResult(result: OrderCodeResult<Record<string, unknown>>): OrderCodeResult<{ resendAfterSeconds: number }> {
-  return result.ok
-    ? { ok: true, data: { resendAfterSeconds: positiveSeconds(result.data.resendAfterSeconds) ?? DEFAULT_RESEND_AFTER_SECONDS } }
-    : result;
+/** A send the API accepted. `sent` is false when nothing went out (a neutral answer). */
+export interface OrderCodeSent {
+  sent: boolean;
+  /** The API's sentence: "We sent a code to 01•••••678." or the neutral one. */
+  message: string;
+  resendAfterSeconds: number;
+  orderNumber: number | null;
+}
+
+function sentResult(result: OrderCodeResult<Record<string, unknown>>): OrderCodeResult<OrderCodeSent> {
+  if (!result.ok) return result;
+  const { data } = result;
+  return {
+    ok: true,
+    data: {
+      sent: Boolean(trimmedString(data.destination)),
+      message: trimmedString(data.message),
+      resendAfterSeconds: positiveSeconds(data.resendAfterSeconds) ?? DEFAULT_RESEND_AFTER_SECONDS,
+      orderNumber: typeof data.orderNumber === "number" && Number.isSafeInteger(data.orderNumber) ? data.orderNumber : null,
+    },
+  };
 }
 
 function verifiedResult(
@@ -108,7 +127,7 @@ function receiptUrl(orderId: string): string {
   return `/order-success?${new URLSearchParams({ orderId })}`;
 }
 
-/** Track your order: the API answers the same whether or not anything matched. */
+/** Track your order: the buyer holds the number and phone, so the API says where the code went. */
 export async function sendOrderLookupCode(input: { reference: string; phone: string }) {
   return sentResult(await postOrderCodeApi("/orders/lookup/send-otp", input, {
     auth: false,
@@ -128,49 +147,73 @@ export async function verifyOrderLookupCode(input: { reference: string; phone: s
   );
 }
 
-export async function sendPaymentRecoveryCode(input: { orderId: string; channel?: string }) {
+/** Finish paying: the API picks where a code can reach the buyer, and stays neutral for other orders. */
+export async function sendPaymentRecoveryCode(input: { orderId: string }) {
   return sentResult(await postOrderCodeApi(
     "/orders/payment-recovery/send-otp",
-    { orderId: input.orderId, ...(input.channel ? { channel: input.channel } : {}) },
+    { orderId: input.orderId },
     { auth: false, fallbackCode: "PAYMENT_RECOVERY_SEND_FAILED" },
   ));
 }
 
-export async function verifyPaymentRecoveryCode(input: { orderId: string; channel: string; code: string }) {
+export async function verifyPaymentRecoveryCode(input: { orderId: string; code: string }) {
   return verifiedResult(
     await postOrderCodeApi("/orders/payment-recovery/verify-otp", input, {
       auth: true,
       fallbackCode: "PAYMENT_RECOVERY_VERIFICATION_FAILED",
     }),
     input.orderId,
-    (orderId, data) => {
-      // The receipt reopens on the payment the buyer was finishing.
-      const params = new URLSearchParams({ orderId });
-      const redirect = isRecord(data.redirectParams) ? data.redirectParams : {};
-      for (const key of ["payment", "result", "paymentType"] as const) {
-        const value = trimmedString(redirect[key]);
-        if (value) params.set(key, value);
-      }
-      if (typeof redirect.depositAmount === "number" && Number.isFinite(redirect.depositAmount)) {
-        params.set("depositAmount", String(redirect.depositAmount));
-      }
-      return `/order-success?${params}`;
-    },
+    (orderId, data) => paymentRecoveryReceiptUrl(orderId, isRecord(data.redirectParams) ? data.redirectParams : {}),
     "PAYMENT_RECOVERY_RECEIPT_UNAVAILABLE",
   );
+}
+
+/** The receipt, reopened on the payment the buyer was finishing. */
+export function paymentRecoveryReceiptUrl(orderId: string, redirect: Record<string, unknown>): string {
+  const params = new URLSearchParams({ orderId });
+  for (const key of ["payment", "result", "paymentType"] as const) {
+    const value = trimmedString(redirect[key]);
+    if (value) params.set(key, value);
+  }
+  const deposit = typeof redirect.depositAmount === "string" && redirect.depositAmount.trim()
+    ? Number(redirect.depositAmount)
+    : redirect.depositAmount;
+  if (typeof deposit === "number" && Number.isFinite(deposit)) params.set("depositAmount", String(deposit));
+  return `/order-success?${params}`;
+}
+
+/**
+ * A signed-in owner needs no code: their session proves the order, so they go
+ * straight to the receipt (which says what, if anything, is left to pay).
+ * Null when there is no session or it doesn't own the order.
+ */
+export async function accountOwnerReceiptRedirect(
+  orderId: string,
+  cookieHeader: string | null,
+  search: URLSearchParams,
+): Promise<Response | null> {
+  const sessionToken = getCustomerSessionTokenFromCookie(cookieHeader);
+  if (!orderId || !sessionToken) return null;
+  const receiptToken = await getAccountOwnerReceiptProof(orderId, sessionToken).catch(() => null);
+  if (!receiptToken) return null;
+  const redirectUrl = paymentRecoveryReceiptUrl(orderId, Object.fromEntries(search));
+  return verifiedReceiptResponse({ orderId, receiptToken, redirectUrl }, "redirect");
 }
 
 function orderCodeHeaders(extra?: Record<string, string>): Headers {
   return new Headers({ "Content-Type": "application/json", "Cache-Control": "no-store", ...extra });
 }
 
-/** JSON for the page scripts. `message` is the API's own prose, when asked for. */
-export function orderCodeFailureResponse(failure: OrderCodeFailure, options: { includeMessage: boolean }): Response {
+/** The refusals whose API sentence the buyer sees: no such order, no way to reach them, too many codes. */
+const BUYER_FACING_REFUSALS = new Set([404, 409, 429]);
+
+/** JSON for the page scripts. Other API prose (provider or validation detail) stays on the server. */
+export function orderCodeFailureResponse(failure: OrderCodeFailure): Response {
   const { status, errorCode, message, retryAfterSeconds, attemptsLeft } = failure;
   return new Response(JSON.stringify({
     success: false,
     errorCode,
-    ...(options.includeMessage && message ? { message } : {}),
+    ...(message && BUYER_FACING_REFUSALS.has(status) ? { message } : {}),
     ...(retryAfterSeconds ? { retryAfterSeconds } : {}),
     ...(attemptsLeft !== undefined ? { attemptsLeft } : {}),
   }), {

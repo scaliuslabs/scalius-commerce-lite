@@ -252,6 +252,22 @@ export async function claimCustomerAuthOtpChallenge(
     throw new ValidationError("That code couldn't be checked. Send a new code.", { attemptsLeft: 0 });
 }
 
+/** Keeps the latest pending code usable for up to 30 more minutes. */
+export async function extendPendingCustomerAuthOtpChallenge(
+    db: Database,
+    otpKey: string,
+    seconds: number,
+): Promise<void> {
+    const now = Math.floor(Date.now() / 1000);
+    await db.update(customerAuthOtpChallenges)
+        .set({ expiresAt: now + Math.min(Math.max(seconds, 0), 30 * 60), updatedAt: now })
+        .where(and(
+            eq(customerAuthOtpChallenges.otpKey, otpKey),
+            eq(customerAuthOtpChallenges.status, "pending"),
+            gt(customerAuthOtpChallenges.expiresAt, now),
+        ));
+}
+
 export async function deleteCustomerAuthOtpChallenge(
     db: Database,
     input: { otpKey: string; deliveryKey: string },

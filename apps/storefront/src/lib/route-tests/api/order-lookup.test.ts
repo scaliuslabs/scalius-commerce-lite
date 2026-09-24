@@ -43,11 +43,13 @@ beforeEach(() => {
 });
 
 describe("order lookup send-code proxy", () => {
-  it("sends the normalised order number and phone to the public API", async () => {
+  it("sends the normalised order number and phone, and says where the code went", async () => {
     mocks.apiFetch.mockResolvedValueOnce(apiResponse({
       success: true,
       data: {
-        message: "If these details match an order, we've sent a code to the phone number or email saved on it.",
+        message: "We sent a code to 01•••••678.",
+        destination: "01•••••678",
+        channel: "sms",
         resendAfterSeconds: 45,
       },
     }));
@@ -57,7 +59,9 @@ describe("order lookup send-code proxy", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
-    expect(await response.json()).toEqual({ success: true, resendAfterSeconds: 45 });
+    expect(await response.json()).toEqual({
+      success: true, sent: true, message: "We sent a code to 01•••••678.", resendAfterSeconds: 45, orderNumber: null,
+    });
     expect(apiPath).toBe("/orders/lookup/send-otp");
     expect(JSON.parse(String(init.body))).toEqual({ reference: "1001", phone: "+8801712345678" });
     expect(policy).toEqual({ retries: 0, timeout: 8000, auth: false });
@@ -87,6 +91,22 @@ describe("order lookup send-code proxy", () => {
       message: "Too many codes requested.",
       retryAfterSeconds: 120,
     });
+  });
+
+  it("passes the not-found and no-channel refusals through with their sentence", async () => {
+    const notFound = "We couldn't find an order with that number and phone number. Check both and try again.";
+    const noChannel = "This order has no email address, and this store can't send text messages. Contact the store to check on your order.";
+    mocks.apiFetch
+      .mockResolvedValueOnce(apiResponse({ success: false, error: { code: "NOT_FOUND", message: notFound } }, 404))
+      .mockResolvedValueOnce(apiResponse({ success: false, error: { code: "NO_CODE_CHANNEL", message: noChannel } }, 409));
+
+    const missing = await sendCode(post("send-code", { reference: "1001", phone: "01712345678" }));
+    const unreachable = await sendCode(post("send-code", { reference: "1001", phone: "01712345678" }));
+
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ success: false, errorCode: "NOT_FOUND", message: notFound });
+    expect(unreachable.status).toBe(409);
+    expect(await unreachable.json()).toEqual({ success: false, errorCode: "NO_CODE_CHANNEL", message: noChannel });
   });
 
   it("reads the wait from Retry-After when the body has none", async () => {
@@ -154,12 +174,7 @@ describe("order lookup verify proxy", () => {
 
     expect(response.status).toBe(400);
     expect(response.headers.get("Set-Cookie")).toBeNull();
-    expect(await response.json()).toEqual({
-      success: false,
-      errorCode: "VALIDATION_ERROR",
-      message: "That code isn't right. Check it and try again.",
-      attemptsLeft: 1,
-    });
+    expect(await response.json()).toEqual({ success: false, errorCode: "VALIDATION_ERROR", attemptsLeft: 1 });
   });
 
   it("refuses a success without a receipt proof", async () => {

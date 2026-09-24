@@ -245,6 +245,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 3,
         postgresStatements: 3,
       },
+      {
+        version: 74,
+        name: "0074_verified_customer_identity",
+        sqliteStatements: 7,
+        postgresStatements: 7,
+      },
     ]);
   });
 
@@ -367,6 +373,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 71, name: "0071_buyer_identity" },
           { version: 72, name: "0072_delivery_zones" },
           { version: 73, name: "0073_combinable_discount_codes" },
+          { version: 74, name: "0074_verified_customer_identity" },
         ],
       });
     } finally {

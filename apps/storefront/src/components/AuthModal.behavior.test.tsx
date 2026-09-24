@@ -52,7 +52,7 @@ afterEach(async () => {
   document.body.innerHTML = "";
   delete window.__CHECKOUT_CONFIG__;
   delete window.__scaliusAuthModalOpenPending;
-  delete window.__scaliusAuthModalPrefillPending;
+  delete window.__scaliusAuthModalDetailPending;
   vi.useRealTimers();
 });
 
@@ -100,9 +100,15 @@ describe("sign-in dialog", () => {
     expect(host.querySelector<HTMLInputElement>("#auth-name")?.value).toBe("Rahim Uddin");
     expect(host.querySelector<HTMLInputElement>("#auth-phone")?.value).toBe("01712-345678");
     await type("#auth-name", "");
+    await type("#auth-phone", "");
     await submit();
-    expect(host.textContent).toContain("Enter your name.");
+    expect(host.querySelector("#auth-name-error")?.textContent).toBe("Enter your name.");
+    expect(host.querySelector("#auth-phone-error")?.textContent).toBe("Enter your phone number.");
+    expect(document.activeElement?.id).toBe("auth-name");
     await type("#auth-name", "Rahim Uddin");
+    expect(host.querySelector("#auth-name-error")).toBeNull();
+    expect(host.querySelector("#auth-phone-error")).not.toBeNull();
+    await type("#auth-phone", "01712-345678");
     await submit();
     expect(mocks.verifyCustomerOtp).toHaveBeenLastCalledWith(expect.objectContaining({
       code: "123456",
@@ -131,16 +137,63 @@ describe("sign-in dialog", () => {
   });
 
   it("counts down an honest wait when codes are rate limited, never mentioning IP", async () => {
-    mocks.sendCustomerOtp.mockResolvedValue({
-      success: false, error: "Too many codes requested. Please wait and try again.", retryAfterSeconds: 120,
-    });
+    mocks.sendCustomerOtp.mockResolvedValue({ success: false, error: "Too many codes.", retryAfterSeconds: 120 });
     await open();
     await type("#auth-contact", "rahim@example.test");
     await submit();
-    expect(alertText()).toBe("Too many codes requested. Please wait and try again. Try again in 2:00.");
+    expect(alertText()).toBe("Too many codes. Try again in 2:00.");
     expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
     await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
     expect(alertText()).toContain("Try again in 1:59.");
+  });
+
+  it("returns to the code already sent when the contact's code limit is reached", async () => {
+    mocks.sendCustomerOtp
+      .mockResolvedValueOnce({ success: true, resendAfterSeconds: 60 })
+      .mockResolvedValueOnce({ success: false, error: "Too many codes. Enter the latest code we sent.", retryAfterSeconds: 1800 });
+    await open();
+    await type("#auth-contact", "rahim@example.test");
+    await submit();
+    await act(async () => [...host.querySelectorAll("button")].find((button) => button.textContent === "Use a different email")!.click());
+    expect(title()).toBe("Sign in");
+    await submit();
+    expect(host.querySelector("#customer-otp")).not.toBeNull();
+    expect(alertText()).toBe("Too many codes. Enter the latest code we sent. Try again in 30:00.");
+  });
+
+  it("reopens on the new-account step with the accepted code instead of asking for a new one", async () => {
+    mocks.sendCustomerOtp.mockResolvedValue({ success: true, resendAfterSeconds: 60 });
+    mocks.verifyCustomerOtp
+      .mockResolvedValueOnce({ success: true, status: "needs_account_details" })
+      .mockResolvedValueOnce({ success: true, status: "signed_in", customer, isNewUser: true });
+    await open();
+    await type("#auth-contact", "rahim@example.test");
+    await submit();
+    await type("#customer-otp", "123456");
+    await submit();
+    expect(title()).toBe("Create your account");
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
+    await act(async () => window.dispatchEvent(new CustomEvent("open-auth-modal")));
+
+    expect(title()).toBe("Create your account");
+    await type("#auth-name", "Rahim");
+    await type("#auth-phone", "01712345678");
+    await submit();
+    expect(mocks.sendCustomerOtp).toHaveBeenCalledTimes(1);
+    expect(mocks.verifyCustomerOtp).toHaveBeenLastCalledWith(expect.objectContaining({
+      identifier: "rahim@example.test", code: "123456", account: { name: "Rahim", phone: "+8801712345678" },
+    }));
+    expect(title()).toBe("You're signed in");
+  });
+
+  it("opened from a receipt, offers no guest tracking link and no fixed country prefix", async () => {
+    await open({ prefill: { email: "rahim@example.test" }, source: "receipt" });
+    expect(title()).toBe("Sign in");
+    expect(host.textContent).not.toContain("Track your order");
+    expect(host.textContent).not.toContain("+880");
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
+    await act(async () => window.dispatchEvent(new CustomEvent("open-auth-modal")));
+    expect(host.querySelector('a[href="/track-order"]')?.textContent).toBe("Track your order");
   });
 
   it("closes on Esc and the close button, and shows the signed-in state on reopen", async () => {

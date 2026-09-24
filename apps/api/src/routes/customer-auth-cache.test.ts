@@ -52,6 +52,9 @@ vi.mock("@scalius/core/modules/customers/customers.service", () => ({
 
 vi.mock("@scalius/core/modules/customers/order-account-claim", () => ({
   claimGuestOrderToAccount: mocks.claimGuestOrderToAccount,
+}));
+
+vi.mock("@scalius/core/modules/customers/customer-identity", () => ({
   linkVerifiedContactOrders: mocks.linkVerifiedContactOrders,
 }));
 

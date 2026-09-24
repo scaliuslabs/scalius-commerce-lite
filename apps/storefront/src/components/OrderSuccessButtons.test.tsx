@@ -47,6 +47,15 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     return [...host.querySelectorAll("button")].find((element) => element.textContent === label);
   }
 
+  /** The signed-in account, then each later request's answer. */
+  function stubAccount(account: { phone?: string; email?: string }, ...answers: Response[]) {
+    const fetchMock = vi.fn(async (url: string) => url === "/api/customer-auth/me"
+      ? new Response(JSON.stringify({ success: true, data: { authenticated: true, customer: { name: "Buyer", ...account } } }))
+      : answers.shift() ?? new Response("{}", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
   it("shows a signed-in buyer's own saved order as one line with a link to it", async () => {
     document.cookie = "cs_auth=1; Path=/";
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
@@ -74,15 +83,15 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     expect(button("Sign in")).toBeUndefined();
   });
 
-  it("offers one save action to a signed-in buyer and saves on click", async () => {
+  it("offers one save action to a signed-in buyer who shares the order's phone, and saves on click", async () => {
     document.cookie = "cs_auth=1; Path=/";
-    const fetchMock = vi.fn().mockResolvedValue(
+    const fetchMock = stubAccount(
+      { phone: "+8801712345678", email: "other@example.test" },
       new Response(JSON.stringify({ success: true, data: { orderId: "ord_1" } }), { status: 200 }),
     );
-    vi.stubGlobal("fetch", fetchMock);
 
     await renderReceipt(false);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/order-receipt/claim-account", expect.anything());
     expect(host.querySelectorAll("button")).toHaveLength(2); // print + save
     await act(async () => {
       button("Save to my account")!.click();
@@ -107,11 +116,41 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     act(() => button("Sign in")!.click());
     window.removeEventListener("open-auth-modal", listener);
 
-    expect(opened).toEqual([{ prefill }]);
+    expect(opened).toEqual([{ prefill, source: "receipt" }]);
     expect(button("Create account")).toBeUndefined();
   });
 
-  it("creates an account from the receipt and then saves the order to it", async () => {
+  it("offers no save to a signed-in account that has neither the order's phone nor its email", async () => {
+    document.cookie = "cs_auth=1; Path=/";
+    const fetchMock = stubAccount({ phone: "+8801799200041", email: "someone@example.test" });
+
+    await renderReceipt(false);
+
+    expect(button("Save to my account")).toBeUndefined();
+    expect(host.textContent).not.toContain("Sign in");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("says why the store refused to save the order and drops the button", async () => {
+    document.cookie = "cs_auth=1; Path=/";
+    const reason = "This order was placed with a different phone number and email, so it can't be added to your account.";
+    stubAccount(
+      { email: "rahim@example.test" },
+      new Response(JSON.stringify({ success: false, error: { code: "FORBIDDEN", message: reason } }), { status: 403 }),
+    );
+
+    await renderReceipt(false);
+    await act(async () => {
+      button("Save to my account")!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(host.textContent).toContain(reason);
+    expect(host.textContent).not.toContain("Please try again");
+    expect(button("Save to my account")).toBeUndefined();
+  });
+
+  it("asks a signed-out buyer to sign in, then saves the order to that account", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true, data: { orderId: "ord_1" } }), { status: 200 }),
     );
@@ -121,10 +160,11 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     window.addEventListener("open-auth-modal", listener);
 
     await renderReceipt(false);
-    expect(host.textContent).toContain("Create an account to track this order");
-    act(() => button("Create account")!.click());
+    expect(host.textContent).toContain("Sign in to see this order in your account");
+    expect(button("Create account")).toBeUndefined();
+    act(() => button("Sign in")!.click());
     window.removeEventListener("open-auth-modal", listener);
-    expect(opened).toEqual([{ prefill }]);
+    expect(opened).toEqual([{ prefill, source: "receipt" }]);
     expect(fetchMock).not.toHaveBeenCalled();
 
     await act(async () => {

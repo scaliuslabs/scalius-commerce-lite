@@ -627,7 +627,14 @@ const receiptSupportRequestResponseSchema = z.object({
 
 const orderPaymentRecoveryChannelSchema = z.enum(CUSTOMER_AUTH_OTP_CHANNELS);
 const ORDER_PAYMENT_RECOVERY_GENERIC_MESSAGE =
-  "If this order is eligible for payment recovery, a verification code will be sent to the buyer contact.";
+  "If this order still needs an online payment, we've sent a code to the phone number or email saved on it.";
+const orderCodeSentSchema = z.object({
+  message: z.string(),
+  /** Masked contact the code went to ("01•••••678"); absent when nothing was sent. */
+  destination: z.string().optional(),
+  orderNumber: z.number().int().nullable().optional(),
+  resendAfterSeconds: z.number().int().optional(),
+});
 
 const sendOrderPaymentRecoveryOtpRoute = createRoute({
   method: "post",
@@ -652,7 +659,7 @@ const sendOrderPaymentRecoveryOtpRoute = createRoute({
       description: "Payment recovery code request accepted",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({ message: z.string() })),
+          schema: successEnvelope(orderCodeSentSchema),
         },
       },
     },
@@ -702,7 +709,14 @@ app.openapi(sendOrderPaymentRecoveryOtpRoute, async (c) => {
     }
   }
 
-  return ok(c, { message: ORDER_PAYMENT_RECOVERY_GENERIC_MESSAGE });
+  return result.queued
+    ? ok(c, {
+      message: result.message,
+      destination: result.destination,
+      orderNumber: result.orderNumber,
+      resendAfterSeconds: result.resendAfterSeconds,
+    })
+    : ok(c, { message: ORDER_PAYMENT_RECOVERY_GENERIC_MESSAGE });
 });
 
 const verifyOrderPaymentRecoveryOtpRoute = createRoute({
@@ -717,7 +731,6 @@ const verifyOrderPaymentRecoveryOtpRoute = createRoute({
         "application/json": {
           schema: z.object({
             orderId: z.string().trim().min(1).max(128),
-            channel: orderPaymentRecoveryChannelSchema,
             code: z.string().trim().min(4).max(12),
           }).strict(),
         },
@@ -761,7 +774,6 @@ app.openapi(verifyOrderPaymentRecoveryOtpRoute, async (c) => {
 
   const result = await verifyOrderPaymentRecoveryOtp(db, {
     orderId: body.orderId,
-    channel: body.channel,
     code: body.code,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
@@ -780,19 +792,25 @@ const sendOrderLookupOtpRoute = createRoute({
   method: "post",
   path: "/lookup/send-otp",
   tags: ["Orders"],
-  summary: "Send a code to the contact saved on an order (never reveals whether it matched)",
+  summary: "Send a code to the contact saved on an order (order number + its phone)",
   request: {
     body: { required: true, content: { "application/json": { schema: orderLookupBodySchema } } },
   },
   responses: {
     200: {
-      description: "Request accepted",
+      description: "Code sent; says where",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({ message: z.string(), resendAfterSeconds: z.number().int() })),
+          schema: successEnvelope(z.object({
+            message: z.string(),
+            destination: z.string(),
+            channel: z.enum(CUSTOMER_AUTH_OTP_CHANNELS),
+            resendAfterSeconds: z.number().int(),
+          })),
         },
       },
     },
+    409: conflictResponse,
     503: serviceUnavailableResponse,
     ...errorResponses,
   },
@@ -812,21 +830,24 @@ app.openapi(sendOrderLookupOtpRoute, async (c) => {
     encryptionKey: getCredentialEncryptionKey(env),
     credentialEncryptionKey: getCredentialEncryptionKey(env),
   });
-  if (result.queuePayload) {
-    try {
-      await c.env.JOBS_QUEUE.send(result.queuePayload);
-    } catch (error) {
-      if (result.challengeKey && result.deliveryKey) {
-        await deleteOrderPaymentRecoveryChallenge(db, {
-          challengeKey: result.challengeKey,
-          deliveryKey: result.deliveryKey,
-        }).catch(() => undefined);
-      }
-      console.error("[Orders] Failed to enqueue order lookup code:", error instanceof Error ? error.name : typeof error);
-      throw new ServiceUnavailableError("We couldn't send the code. Please try again.");
+  try {
+    await c.env.JOBS_QUEUE.send(result.queuePayload);
+  } catch (error) {
+    if (result.challengeKey && result.deliveryKey) {
+      await deleteOrderPaymentRecoveryChallenge(db, {
+        challengeKey: result.challengeKey,
+        deliveryKey: result.deliveryKey,
+      }).catch(() => undefined);
     }
+    console.error("[Orders] Failed to enqueue order lookup code:", error instanceof Error ? error.name : typeof error);
+    throw new ServiceUnavailableError("We couldn't send the code. Please try again.");
   }
-  return ok(c, { message: result.message, resendAfterSeconds: result.resendAfterSeconds });
+  return ok(c, {
+    message: result.message,
+    destination: result.destination,
+    channel: result.channel,
+    resendAfterSeconds: result.resendAfterSeconds,
+  });
 });
 
 const verifyOrderLookupOtpRoute = createRoute({

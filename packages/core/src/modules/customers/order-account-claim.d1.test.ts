@@ -38,7 +38,7 @@ describe("guest order account claim", () => {
 
   afterEach(() => sqlite.close());
 
-  it("atomically adds private account ownership without changing the merchant CRM link or metrics", async () => {
+  it("atomically files the receipt-proven order under the account for buyer and merchant alike", async () => {
     await expect(claimGuestOrderToAccount(db, {
       orderId: "order_1",
       customerId: "account_1",
@@ -64,7 +64,7 @@ describe("guest order account claim", () => {
     const account = await db.select({
       totalOrders: customers.totalOrders,
     }).from(customers).where(eq(customers.id, "account_1")).get();
-    expect(claimed).toEqual({ customerId: "guest_crm", accountOwnerCustomerId: "account_1" });
+    expect(claimed).toEqual({ customerId: "account_1", accountOwnerCustomerId: "account_1" });
     expect(account).toEqual({ totalOrders: 0 });
   });
 

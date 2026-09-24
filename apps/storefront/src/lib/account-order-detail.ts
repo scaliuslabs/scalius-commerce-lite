@@ -25,6 +25,7 @@ import {
   formatDeliveryArea,
   orderPaymentLine,
 } from "@/lib/account-format";
+import { addOrderToCart } from "@/lib/account-buy-again";
 import { getProductImageUrl } from "@/lib/product-media";
 import { getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
@@ -440,6 +441,26 @@ async function submitSupportRequest(): Promise<void> {
   await loadOrderDetail();
 }
 
+// ---------- buy again ----------
+
+async function buyAgain(): Promise<void> {
+  const button = byId<HTMLButtonElement>("orderBuyAgain");
+  const message = byId("orderBuyAgainMessage");
+  if (!currentDetail || !button || button.disabled) return;
+  button.disabled = true;
+  if (message) message.textContent = "";
+  const result = await addOrderToCart(currentDetail.items);
+  button.disabled = false;
+  if (!message) return;
+  message.textContent = !result
+    ? ACCOUNT_OFFLINE_MESSAGE
+    : result.added === 0
+      ? "These items are no longer available."
+      : result.missing > 0
+        ? "Some items are no longer available, so they weren't added."
+        : "";
+}
+
 // ---------- page ----------
 
 function renderProgress(detail: AccountOrderDetail): void {
@@ -584,6 +605,8 @@ function renderReturnNotice(): void {
 export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: CheckoutConfig | null): void {
   currentDetail = detail;
   currentCheckoutConfig = checkoutConfig;
+  const buyAgainMessage = byId("orderBuyAgainMessage");
+  if (buyAgainMessage) buyAgainMessage.textContent = "";
   const { order } = detail;
   const title = byId("orderTitle");
   if (title) title.textContent = `Order ${formatOrderNumber(order.orderNumber, order.id)}`;
@@ -606,13 +629,15 @@ function showOnly(state: "loading" | "unauth" | "error" | "content"): void {
   }
 }
 
-function showError(title: string, message: string): void {
+/** A missing order can't be retried; an outage can. */
+function showError(title: string, message: string, retry = true): void {
   currentDetail = null;
   hideRecovery();
   const titleEl = byId("orderErrorTitle");
   const messageEl = byId("orderErrorMessage");
   if (titleEl) titleEl.textContent = title;
   if (messageEl) messageEl.textContent = message;
+  byId("orderRetry")?.classList.toggle("hidden", !retry);
   showOnly("error");
 }
 
@@ -623,7 +648,7 @@ export async function loadOrderDetail(): Promise<void> {
   detailWindow.__scaliusOrderDetailRun = run;
   showOnly("loading");
   const orderId = root.dataset.orderId ?? "";
-  if (!orderId) return showError("Order not found", "This order link is incomplete.");
+  if (!orderId) return showError("Order not found", "This order link is incomplete.", false);
 
   const session = await getCustomerSession();
   if (detailWindow.__scaliusOrderDetailRun !== run) return;
@@ -639,7 +664,7 @@ export async function loadOrderDetail(): Promise<void> {
   if (!result.success || !result.detail) {
     if (result.status === 401) return showOnly("unauth");
     return result.status === 404
-      ? showError("Order not found", "We couldn't find this order in your account.")
+      ? showError("Order not found", "We couldn't find this order in your account.", false)
       : showError("We couldn't reach the store", ACCOUNT_OFFLINE_MESSAGE);
   }
   try {
@@ -668,5 +693,6 @@ export function bindOrderDetailPage(): void {
     if (type === "cancel_pre_shipment" || type === "return" || type === "refund") openSupportForm(type);
   });
   on("orderSupportCancel", () => hideSupportForm());
+  on("orderBuyAgain", () => void buyAgain());
   on("orderSupportSubmit", () => void submitSupportRequest());
 }

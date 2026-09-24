@@ -40,8 +40,10 @@ import {
     getCustomerOrderSupportRequestActions,
     listOrderSupportRequests,
     customerAccountOwnershipCondition,
+    type OrderSupportRequestView,
 } from "../orders/order-support-requests";
 import {
+    CUSTOMER_REQUEST_ACTION_COPY,
     getCustomerRequestIntro,
     getCustomerRequestPolicy,
 } from "../settings/customer-request-policy";
@@ -238,9 +240,17 @@ export interface CustomerOrderTrackingInput {
         label: string;
         reason: string;
         submittedAt: string | null;
+        resolvedAt: string | null;
         updatedAt: string | null;
         createdAt: string | null;
     }>;
+}
+
+/** Buyers read the store email's word, "declined"; the dashboard keeps "Rejected". */
+export function customerSupportRequestView(request: OrderSupportRequestView): OrderSupportRequestView {
+    return request.status === "rejected"
+        ? { ...request, label: `${CUSTOMER_REQUEST_ACTION_COPY[request.type].label} declined` }
+        : request;
 }
 
 const PAYMENT_EVENT_LABELS: Record<string, string> = {
@@ -321,12 +331,14 @@ export function buildCustomerOrderTracking(input: CustomerOrderTrackingInput): {
         });
     }
     for (const request of input.requests) {
+        // A decided request is dated by the decision, an open one by the ask.
+        const decidedAt = request.status === "submitted" ? null : request.resolvedAt ?? request.updatedAt;
         timeline.push({
             id: `request:${request.id}`,
             type: "request",
             status: request.status,
             label: request.label,
-            happenedAt: request.submittedAt ?? request.updatedAt ?? request.createdAt,
+            happenedAt: decidedAt ?? request.submittedAt ?? request.createdAt,
             details: request.reason,
         });
     }
@@ -1206,7 +1218,7 @@ export async function getCustomerOrderDetailForOrder(
 ) {
     const orderId = order.id;
 
-    const [batchedRows, refundAttemptViews, supportRequests, customerRequestPolicy] = await Promise.all([
+    const [batchedRows, refundAttemptViews, supportRequestRows, customerRequestPolicy] = await Promise.all([
         db.batch([
         db
             .select(buildCustomerOrderItemDetailProjection())
@@ -1291,6 +1303,7 @@ export async function getCustomerOrderDetailForOrder(
         listOrderSupportRequests(db, orderId),
         getCustomerRequestPolicy(db),
     ]);
+    const supportRequests = supportRequestRows.map(customerSupportRequestView);
 
     const [items, shipments, payments, plans, codRows, statusEvents] = batchedRows as [
         Array<{

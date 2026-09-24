@@ -35,10 +35,8 @@ import {
   getCustomerOwnedOrderForDetail,
   getCustomerPaymentSessionOrderForDetail,
 } from "@scalius/core/modules/customers/customers.service";
-import {
-  claimGuestOrderToAccount,
-  linkVerifiedContactOrders,
-} from "@scalius/core/modules/customers/order-account-claim";
+import { claimGuestOrderToAccount } from "@scalius/core/modules/customers/order-account-claim";
+import { linkVerifiedContactOrders } from "@scalius/core/modules/customers/customer-identity";
 import {
   createCustomerOrderSupportRequest,
   CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
