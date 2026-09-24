@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
+import { setLocale } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { Order } from "./types";
 import { PaymentCard } from "./PaymentCard";
@@ -35,6 +36,7 @@ vi.mock("~/lib/api-mutations/orders", () => ({
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const en = orderDetailMessages.en;
+const bn = orderDetailMessages.bn;
 
 const order: Order = {
   id: "order_history", version: 1, customerName: "Test buyer", customerPhone: "+8801700000000",
@@ -53,7 +55,7 @@ const attempt: SessionAttempt = {
   createdAt: 1_783_000_000, updatedAt: 1_783_000_060, activeProcessing: false, staleProcessing: false,
 };
 const recovery = {
-  state: "needs_attention" as const, label: "Payment needs attention", message: "Buyer verification is available.",
+  state: "needs_attention" as const,
   gateway: "sslcommerz", paymentType: "full", status: "failed", attempts: 1,
   activeProcessing: false, staleProcessing: false, updatedAt: null,
 };
@@ -78,6 +80,7 @@ describe("PaymentCard", () => {
 
   afterEach(() => {
     act(() => root.unmount());
+    setLocale("en");
     client.clear();
     host.remove();
     document.body.innerHTML = "";
@@ -171,6 +174,31 @@ describe("PaymentCard", () => {
     expect(host.textContent).not.toContain("Partly paid");
   });
 
+  it("words refund states from the dashboard's own catalog, not the server's English", async () => {
+    type RefundAttempt = OrderPaymentsPayload["refundAttempts"][number];
+    const settled = {
+      id: "refund_done", orderId: "order_refunded", amount: 500, currency: "BDT", gateway: "stripe",
+      status: "refunded", providerStatus: "succeeded", active: false, severity: "success",
+      label: "Refund completed", message: "The refund is complete and no longer blocks order actions.",
+      createdAt: "2026-09-20T10:00:00.000Z", updatedAt: "2026-09-20T10:00:00.000Z", nextProbeAt: null,
+      lastProbeAt: null, refundedAt: "2026-09-20T10:00:00.000Z", failedAt: null, reason: "requested_by_customer",
+    } as RefundAttempt;
+    const running = {
+      ...settled, id: "refund_running", gateway: "cod", status: "reconcile_required", active: true,
+      severity: "warning", refundedAt: null, label: "Manual refund recorded, local update pending",
+      message: "The COD repayment was confirmed outside Scalius.",
+    } as RefundAttempt;
+    setLocale("bn");
+    await render(
+      { id: "order_refunded", status: "delivered", paymentMethod: "stripe", paymentStatus: "partially_refunded", paidAmount: 1300, refundedAmount: 500, balanceDue: 0 },
+      { ...emptyPayments, refundAttempts: [running, settled] },
+    );
+    expect(host.textContent).toContain(bn["refundState.refunded"]);
+    expect(host.textContent).toContain(bn["refundState.reconcile_required_cod"]);
+    expect(host.textContent).not.toContain("Refund completed");
+    expect(host.textContent).not.toContain("Manual refund recorded");
+  });
+
   it("shows money still owed for returned items", async () => {
     await render({ id: "order_owed", status: "returned", paymentMethod: "stripe", paymentStatus: "paid", paidAmount: 2480, refundDue: 1600, balanceDue: 0 });
     const rows = [...host.querySelectorAll("dl div")].map((row) => row.textContent);
@@ -224,6 +252,31 @@ describe("PaymentCard", () => {
       expect(mocks.refund).not.toHaveBeenCalled();
       expect(amount.getAttribute("aria-invalid")).toBe("true");
       expect(document.querySelector("#refundAmount-help")?.textContent).toBe(en["refund.amountInvalid"].replace("{amount}", "৳1800"));
+    });
+
+    it("takes a cash refund typed in Bangla digits", async () => {
+      mocks.permissions.canRefundOrders = true;
+      mocks.cod.mockResolvedValue({ tracking: null });
+      await render(codOrder);
+      await act(async () => button(en["refund.recordCash"])!.click());
+      const amount = document.querySelector<HTMLInputElement>("#refundAmount")!;
+      expect(amount.type).toBe("text");
+      expect(amount.inputMode).toBe("decimal");
+
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      await act(async () => {
+        setter.call(amount, "\u09eb\u09e6\u09e6");
+        amount.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(amount.value).toBe("\u09eb\u09e6\u09e6");
+      await act(async () => document.querySelector<HTMLButtonElement>("#manualSettlementConfirmed")!.click());
+      const submit = [...document.querySelectorAll('[role="dialog"] button')]
+        .find((candidate) => candidate.textContent === en["refund.recordCashAmount"].replace("{amount}", "৳500")) as HTMLButtonElement;
+      await act(async () => submit.click());
+      expect(mocks.refund).toHaveBeenCalledWith(
+        { orderId: "order_cod", amount: 500, reason: "requested_by_customer", manualSettlementConfirmed: true },
+        expect.anything(),
+      );
     });
 
     it("hides refunds from merchants without refund permission", async () => {

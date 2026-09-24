@@ -16,20 +16,20 @@ export function OrderLockBadges({ order }: { order: LockedOrder }) {
       {payment && payment.state !== "none" ? (
         <Badge
           variant={payment.state === "needs_attention" ? "destructive" : "outline"}
-          title={payment.message ?? payment.label}
+          title={t(payment.state === "processing" ? "block.paymentSetup" : "block.paymentRecovery")}
         >
           {t(`recovery.${payment.state}`)}
         </Badge>
       ) : null}
       {refund?.active ? (
-        <Badge variant={refund.severity === "danger" ? "destructive" : "outline"} title={refund.message}>
+        <Badge variant={refund.severity === "danger" ? "destructive" : "outline"} title={t("block.refund")}>
           {t("refundInProgress")}
         </Badge>
       ) : null}
       {shipment && shipment.state !== "none" ? (
         <Badge
           variant={shipment.severity === "danger" ? "destructive" : "outline"}
-          title={shipment.message ?? shipment.label}
+          title={t("block.shipment")}
         >
           {t("courierCheck")}
         </Badge>

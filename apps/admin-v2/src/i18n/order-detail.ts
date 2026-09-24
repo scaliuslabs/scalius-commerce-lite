@@ -80,6 +80,10 @@ export const orderDetailMessages = defineMessages({
     "recovery.copyFailed": "Couldn't copy the link. Try again.",
     "webhook.title": "A payment update failed",
     "webhook.help": "Check your payment dashboard before changing this order.",
+    "webhook.reason.manual_reconciliation": "A {gateway} payment update couldn't be applied. Check it in {gateway} and update the order by hand.",
+    "webhook.reason.stale": "A {gateway} payment update didn't finish within six hours. {gateway} will retry it, or check it there.",
+    "webhook.reason.dead_letter": "A {gateway} payment update failed after every retry. Check it in {gateway} before changing the payment.",
+    "webhook.reason.failed": "A {gateway} payment update failed. Check it in {gateway} before changing the payment.",
     "session.title": "Payment attempts",
     "session.processing": "Payment in progress",
     "session.processingHelp": "Payment is still processing. Check again in a few minutes.",
@@ -137,6 +141,21 @@ export const orderDetailMessages = defineMessages({
     "refund.reason.duplicate": "Duplicate order",
     "refund.reason.fraudulent": "Fraud",
     "refund.reason.out_of_stock": "Out of stock",
+    "refundState.pending": "Refund queued",
+    "refundState.pending.help": "Waiting to be sent. Other refunds wait until this one finishes.",
+    "refundState.processing": "Refund in progress",
+    "refundState.processing.help": "{gateway} is working on it. Order, delivery and cash changes wait until it's done.",
+    "refundState.provider_unknown": "Checking the refund",
+    "refundState.provider_unknown.help": "{gateway} didn't confirm the result. Don't refund again until it's confirmed.",
+    "refundState.reconcile_required": "Refund accepted, updating the order",
+    "refundState.reconcile_required.help": "{gateway} accepted the refund. The order updates on its own shortly.",
+    "refundState.reconcile_required_cod": "Cash refund recorded, updating the order",
+    "refundState.reconcile_required_cod.help": "The cash refund is recorded. The order updates on its own shortly.",
+    "refundState.refunded": "Refund completed",
+    "refundState.failed": "Refund failed",
+    "refundState.failed.help": "The refund didn't go through. Check the reason before trying again.",
+    "refundState.other": "Refund update",
+    "refundState.other.help": "Refresh to see the latest.",
 
     "shipments.title": "Delivery",
     "shipments.empty": "No shipments yet.",
@@ -166,6 +185,16 @@ export const orderDetailMessages = defineMessages({
     "courier.details": "Details",
     "courier.detailsPlaceholder": "When you checked, and any support reference",
     "courier.confirm": "I checked this exact order with the courier.",
+    "shipmentRecovery.courier_unconfirmed": "Courier confirmation needed",
+    "shipmentRecovery.courier_unconfirmed.help": "The courier may have booked this order, but it couldn't be confirmed. Check your courier account for this order number before booking again.",
+    "shipmentRecovery.reconcile_required": "Courier booking needs finishing",
+    "shipmentRecovery.reconcile_required.help": "The courier may have the booking, but the order didn't finish updating. Check the shipment before changing this order.",
+    "shipmentRecovery.creating": "Booking the courier",
+    "shipmentRecovery.creating.help": "A courier booking is in progress. Wait for it to finish before editing or sending this order again.",
+    "shipmentRecovery.claim_expired": "Courier booking didn't finish",
+    "shipmentRecovery.claim_expired.help": "An earlier courier booking stopped part-way. Sort out the shipment on this order before booking again.",
+    "shipmentRecovery.failed": "Courier booking failed",
+    "shipmentRecovery.failed.help": "Fix the courier setup or the address, then book again.",
     "fulfill.open": "Own courier",
     "fulfill.title": "Send with your own courier",
     "fulfill.help": "Choose how many of each item your rider is taking.",
@@ -510,6 +539,10 @@ export const orderDetailMessages = defineMessages({
     "recovery.copyFailed": "লিংক কপি হয়নি। আবার চেষ্টা করুন।",
     "webhook.title": "একটি পেমেন্ট আপডেট ব্যর্থ হয়েছে",
     "webhook.help": "অর্ডার বদলানোর আগে পেমেন্ট ড্যাশবোর্ড দেখে নিন।",
+    "webhook.reason.manual_reconciliation": "{gateway} থেকে আসা একটি পেমেন্ট আপডেট প্রয়োগ করা যায়নি। {gateway}-এ দেখে অর্ডারটি নিজে আপডেট করুন।",
+    "webhook.reason.stale": "{gateway}-এর একটি পেমেন্ট আপডেট ছয় ঘণ্টায় শেষ হয়নি। {gateway} আবার চেষ্টা করবে, অথবা সেখানে দেখে নিন।",
+    "webhook.reason.dead_letter": "{gateway}-এর একটি পেমেন্ট আপডেট সব চেষ্টার পরও ব্যর্থ হয়েছে। পেমেন্ট বদলানোর আগে {gateway}-এ দেখে নিন।",
+    "webhook.reason.failed": "{gateway}-এর একটি পেমেন্ট আপডেট ব্যর্থ হয়েছে। পেমেন্ট বদলানোর আগে {gateway}-এ দেখে নিন।",
     "session.title": "পেমেন্টের চেষ্টা",
     "session.processing": "পেমেন্ট চলছে",
     "session.processingHelp": "পেমেন্ট এখনো প্রসেস হচ্ছে। কয়েক মিনিট পর আবার দেখুন।",
@@ -567,6 +600,21 @@ export const orderDetailMessages = defineMessages({
     "refund.reason.duplicate": "ডুপ্লিকেট অর্ডার",
     "refund.reason.fraudulent": "প্রতারণা",
     "refund.reason.out_of_stock": "স্টক নেই",
+    "refundState.pending": "রিফান্ড অপেক্ষমাণ",
+    "refundState.pending.help": "পাঠানোর অপেক্ষায় আছে। এটি শেষ না হওয়া পর্যন্ত অন্য রিফান্ড করা যাবে না।",
+    "refundState.processing": "রিফান্ড চলছে",
+    "refundState.processing.help": "{gateway} রিফান্ডটি প্রসেস করছে। শেষ না হওয়া পর্যন্ত অর্ডার, ডেলিভারি ও ক্যাশের কাজ বন্ধ থাকবে।",
+    "refundState.provider_unknown": "রিফান্ড যাচাই হচ্ছে",
+    "refundState.provider_unknown.help": "{gateway} ফলাফল নিশ্চিত করেনি। নিশ্চিত না হওয়া পর্যন্ত আবার রিফান্ড করবেন না।",
+    "refundState.reconcile_required": "রিফান্ড গৃহীত, অর্ডার আপডেট হচ্ছে",
+    "refundState.reconcile_required.help": "{gateway} রিফান্ড গ্রহণ করেছে। অর্ডারটি একটু পরে নিজে থেকেই আপডেট হবে।",
+    "refundState.reconcile_required_cod": "ক্যাশ রিফান্ড রেকর্ড হয়েছে, অর্ডার আপডেট হচ্ছে",
+    "refundState.reconcile_required_cod.help": "ক্যাশ রিফান্ড রেকর্ড হয়েছে। অর্ডারটি একটু পরে নিজে থেকেই আপডেট হবে।",
+    "refundState.refunded": "রিফান্ড সম্পন্ন",
+    "refundState.failed": "রিফান্ড ব্যর্থ",
+    "refundState.failed.help": "রিফান্ড হয়নি। আবার চেষ্টা করার আগে কারণটি দেখুন।",
+    "refundState.other": "রিফান্ড আপডেট",
+    "refundState.other.help": "সর্বশেষ অবস্থা দেখতে রিফ্রেশ করুন।",
 
     "shipments.title": "ডেলিভারি",
     "shipments.empty": "এখনো কোনো শিপমেন্ট নেই।",
@@ -596,6 +644,16 @@ export const orderDetailMessages = defineMessages({
     "courier.details": "বিস্তারিত",
     "courier.detailsPlaceholder": "কখন দেখেছেন, এবং সাপোর্টের রেফারেন্স থাকলে",
     "courier.confirm": "আমি কুরিয়ারের সাথে ঠিক এই অর্ডারটি যাচাই করেছি।",
+    "shipmentRecovery.courier_unconfirmed": "কুরিয়ার নিশ্চিতকরণ দরকার",
+    "shipmentRecovery.courier_unconfirmed.help": "কুরিয়ার হয়তো অর্ডারটি বুক করেছে, কিন্তু নিশ্চিত করা যায়নি। আবার বুক করার আগে এই অর্ডার নম্বর দিয়ে আপনার কুরিয়ার অ্যাকাউন্ট দেখুন।",
+    "shipmentRecovery.reconcile_required": "কুরিয়ার বুকিং শেষ করা দরকার",
+    "shipmentRecovery.reconcile_required.help": "কুরিয়ারের কাছে বুকিং থাকতে পারে, কিন্তু অর্ডার আপডেট শেষ হয়নি। অর্ডার বদলানোর আগে শিপমেন্টটি দেখুন।",
+    "shipmentRecovery.creating": "কুরিয়ার বুক হচ্ছে",
+    "shipmentRecovery.creating.help": "একটি কুরিয়ার বুকিং চলছে। অর্ডার এডিট বা আবার পাঠানোর আগে এটি শেষ হওয়া পর্যন্ত অপেক্ষা করুন।",
+    "shipmentRecovery.claim_expired": "কুরিয়ার বুকিং শেষ হয়নি",
+    "shipmentRecovery.claim_expired.help": "আগের একটি কুরিয়ার বুকিং মাঝপথে থেমে গেছে। আবার বুক করার আগে এই অর্ডারের শিপমেন্টটি ঠিক করুন।",
+    "shipmentRecovery.failed": "কুরিয়ার বুকিং ব্যর্থ",
+    "shipmentRecovery.failed.help": "কুরিয়ার সেটআপ বা ঠিকানা ঠিক করে আবার বুক করুন।",
     "fulfill.open": "নিজস্ব কুরিয়ার",
     "fulfill.title": "নিজস্ব কুরিয়ারে পাঠান",
     "fulfill.help": "রাইডার প্রতিটি প্রোডাক্ট কতটি নিচ্ছেন লিখুন।",
@@ -874,4 +932,35 @@ export function orderDetailLabel(t: Translate, prefix: string, value: string): s
   if (key in orderDetailMessages.en) return t(key as OrderDetailMessageKey);
   const text = value.replace(/[_-]+/g, " ").trim();
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+const REFUND_STATES_WITH_COPY = new Set(["pending", "processing", "provider_unknown", "reconcile_required", "refunded", "failed"]);
+
+/**
+ * A refund attempt's title and explanation in the merchant's language, from
+ * its stable status code. The server's English prose is never shown.
+ */
+export function refundStateCopy(
+  t: Translate,
+  status: string,
+  gateway: string,
+  gatewayLabel: string,
+): { label: string; help: string | null } {
+  const known = REFUND_STATES_WITH_COPY.has(status) ? status : "other";
+  const state = known === "reconcile_required" && gateway.trim().toLowerCase() === "cod" ? "reconcile_required_cod" : known;
+  const helpKey = `refundState.${state}.help`;
+  return {
+    label: t(`refundState.${state}` as OrderDetailMessageKey),
+    help: helpKey in orderDetailMessages.en ? t(helpKey as OrderDetailMessageKey, { gateway: gatewayLabel }) : null,
+  };
+}
+
+/** A courier booking problem's title and explanation, from its stable reason code. */
+export function shipmentRecoveryCopy(t: Translate, reason: string): { label: string; help: string } | null {
+  const key = `shipmentRecovery.${reason}`;
+  if (!(key in orderDetailMessages.en)) return null;
+  return {
+    label: t(key as OrderDetailMessageKey),
+    help: t(`${key}.help` as OrderDetailMessageKey),
+  };
 }

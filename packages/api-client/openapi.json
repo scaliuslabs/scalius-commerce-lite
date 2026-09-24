@@ -153137,6 +153137,17 @@
                                       "failed"
                                     ]
                                   },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "courier_unconfirmed",
+                                      "reconcile_required",
+                                      "creating",
+                                      "claim_expired",
+                                      "failed"
+                                    ]
+                                  },
                                   "severity": {
                                     "type": "string",
                                     "enum": [
@@ -153185,6 +153196,7 @@
                                 },
                                 "required": [
                                   "state",
+                                  "reason",
                                   "severity",
                                   "activeLock",
                                   "label",
@@ -154646,6 +154658,17 @@
                                       "failed"
                                     ]
                                   },
+                                  "reason": {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "courier_unconfirmed",
+                                      "reconcile_required",
+                                      "creating",
+                                      "claim_expired",
+                                      "failed"
+                                    ]
+                                  },
                                   "severity": {
                                     "type": "string",
                                     "enum": [
@@ -154694,6 +154717,7 @@
                                 },
                                 "required": [
                                   "state",
+                                  "reason",
                                   "severity",
                                   "activeLock",
                                   "label",
@@ -159493,6 +159517,17 @@
                                 "failed"
                               ]
                             },
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "courier_unconfirmed",
+                                "reconcile_required",
+                                "creating",
+                                "claim_expired",
+                                "failed"
+                              ]
+                            },
                             "severity": {
                               "type": "string",
                               "enum": [
@@ -159541,6 +159576,7 @@
                           },
                           "required": [
                             "state",
+                            "reason",
                             "severity",
                             "activeLock",
                             "label",
@@ -161357,6 +161393,15 @@
                                   "manual_reconciliation"
                                 ]
                               },
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "manual_reconciliation",
+                                  "stale",
+                                  "dead_letter",
+                                  "failed"
+                                ]
+                              },
                               "message": {
                                 "type": "string"
                               },
@@ -161388,6 +161433,7 @@
                               "provider",
                               "eventType",
                               "status",
+                              "reason",
                               "message",
                               "error",
                               "queueType",
