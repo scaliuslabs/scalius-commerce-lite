@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { GripVertical, X } from "lucide-react";
+import { GripVertical, Search, X } from "lucide-react";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
@@ -17,6 +17,7 @@ import type { SortableItemRenderProps } from "~/components/admin/shared/Sortable
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { HeroFocalPointEditor } from "./HeroFocalPointEditor";
+import { NavigationResourcePicker } from "./NavigationResourcePicker";
 import { Field } from "./shared";
 
 /** Control ids of one banner, so server errors mark the right field. */
@@ -62,24 +63,23 @@ export function SlideRow({
         >
           <GripVertical />
         </Button>
-        <div
-          // The crop preview follows the merchant's focus point (runtime values as custom properties).
-          style={{
-            "--ratio": `${presentation.width} / ${presentation.height}`,
-            "--focus": getHeroSlideObjectPosition(slide.focalPoint),
-          } as CSSProperties}
-          className={cn(
-            "relative aspect-(--ratio) w-full shrink-0 overflow-clip rounded-md bg-muted",
-            viewport === "desktop" ? "sm:w-44" : "sm:w-32",
-          )}
-        >
-          <img
-            src={mediaImageUrl(slide.url, 640)}
-            alt=""
-            className="size-full object-cover object-(--focus)"
-            loading="lazy"
-            decoding="async"
-          />
+        <div className={cn("flex min-w-0 flex-1 flex-col items-start gap-2 sm:flex-none", viewport === "desktop" ? "sm:w-44" : "sm:w-32")}>
+          <div
+            // The crop preview follows the merchant's focus point (runtime values as custom properties).
+            style={{
+              "--ratio": `${presentation.width} / ${presentation.height}`,
+              "--focus": getHeroSlideObjectPosition(slide.focalPoint),
+            } as CSSProperties}
+            className="aspect-(--ratio) w-full overflow-clip rounded-md bg-muted"
+          >
+            <img
+              src={mediaImageUrl(slide.url, 640)}
+              alt=""
+              className="size-full object-cover object-(--focus)"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
           <HeroFocalPointEditor
             imageId={slide.id}
             imageUrl={slide.url}
@@ -113,10 +113,23 @@ export function SlideRow({
           <Input
             id={linkId}
             value={slide.link}
-            placeholder="/collections/new"
+            placeholder={t("bannerLinkPlaceholder")}
             onChange={(event) => onChange({ link: event.target.value })}
           />
         </Field>
+        <NavigationResourcePicker
+          id={`${linkId}-browse`}
+          type="collection"
+          types={["collection", "category", "product", "page"]}
+          value=""
+          trigger={
+            <Button type="button" variant="outline" size="sm" className="justify-self-start" aria-label={t("browseFor", { number: index + 1 })}>
+              <Search />
+              {t("browse")}
+            </Button>
+          }
+          onValueChange={(option) => onChange({ link: option.url })}
+        />
       </div>
       <Button
         type="button"

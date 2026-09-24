@@ -136,9 +136,12 @@ function readFailure(entry: SaveBarEntry, error: unknown, fieldErrors: Record<st
 export function SaveScope({
   children,
   render,
+  savedMessage,
 }: {
   children: ReactNode;
   render: (state: SaveScopeState) => ReactNode;
+  /** The success toast; "Changes saved" by default, e.g. "Customer created" on a new record. */
+  savedMessage?: string;
 }) {
   const t = useMessages(saveBarMessages);
   const entries = useRef(new Map<string, SaveBarEntry>());
@@ -203,7 +206,7 @@ export function SaveScope({
         setSaving(false);
       }
       setFailure((previous) => ({ errors, fieldErrors, attempt: previous.attempt + 1, reveal: errors.length ? previous.reveal : 0 }));
-      if (errors.length === 0) toast.success(t("saved"));
+      if (errors.length === 0) toast.success(savedMessage ?? t("saved"));
       return errors.length === 0;
     },
     discardAll() {
@@ -285,8 +288,21 @@ export function SaveErrorBanner() {
  * of the top bar on desktop, a full-width strip over it on phones. Discard and
  * leaving the page with unsaved changes both ask first.
  */
-export function SaveBarProvider({ children }: { children: ReactNode }) {
-  return <SaveScope render={(state) => <SaveBar state={state} />}>{children}</SaveScope>;
+export function SaveBarProvider({
+  children,
+  unsavedMessage,
+  savedMessage,
+}: {
+  children: ReactNode;
+  /** Shopify's {adjective}+{noun}: "Unsaved discount" while creating; "Unsaved changes" by default. */
+  unsavedMessage?: string;
+  savedMessage?: string;
+}) {
+  return (
+    <SaveScope savedMessage={savedMessage} render={(state) => <SaveBar state={state} unsavedMessage={unsavedMessage} />}>
+      {children}
+    </SaveScope>
+  );
 }
 
 /** The bar sits on the near-black top bar, so its two buttons use the frame's tokens. */
@@ -295,10 +311,23 @@ const DISCARD_BUTTON =
 const SAVE_BUTTON =
   "relative inline-flex h-11 items-center rounded-lg bg-topbar-foreground px-4 text-body font-medium text-topbar hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 sm:h-8 sm:px-3";
 
-function SaveBar({ state }: { state: SaveScopeState }) {
+function SaveBar({ state, unsavedMessage }: { state: SaveScopeState; unsavedMessage?: string }) {
   const t = useMessages(saveBarMessages);
   const { dirty, busy, invalid, errors, revealed } = state;
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const saveRef = useRef(state.saveAll);
+  saveRef.current = state.saveAll;
+  // Ctrl/⌘+S saves the page from any field while the bar shows.
+  useEffect(() => {
+    if (!dirty) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "s" || !(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      event.preventDefault();
+      if (!busy) void saveRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [dirty, busy]);
   return (
     <>
       <UnsavedChangesGuard isDirty={dirty} isSubmitting={busy} />
@@ -319,13 +348,13 @@ function SaveBar({ state }: { state: SaveScopeState }) {
             <div
               role="region"
               data-save-bar=""
-              aria-label={t("unsavedChanges")}
+              aria-label={unsavedMessage ?? t("unsavedChanges")}
               className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between gap-2 border-b border-topbar-hover bg-topbar px-3 text-topbar-foreground sm:inset-x-auto sm:left-1/2 sm:top-1.5 sm:h-11 sm:min-w-lg sm:-translate-x-1/2 sm:gap-6 sm:rounded-full sm:border sm:pl-4 sm:pr-1"
             >
               <p className="flex min-w-0 items-center gap-2 text-body font-medium" aria-live="polite">
                 <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
                 <span className="truncate">
-                  {errors.length > 0 ? t("notSavedBar") : invalid && revealed ? t("fixErrors") : t("unsavedChanges")}
+                  {errors.length > 0 ? t("notSavedBar") : invalid && revealed ? t("fixErrors") : unsavedMessage ?? t("unsavedChanges")}
                 </span>
               </p>
               <div className="flex shrink-0 gap-1.5">
