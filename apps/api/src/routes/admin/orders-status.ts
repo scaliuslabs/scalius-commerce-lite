@@ -10,7 +10,12 @@ import {
     reconcileOrderShipment,
     resolveUnknownOrderShipment,
 } from "@scalius/core/modules/fulfilment";
-import { recordOrderEvent, updateOrderStatus } from "@scalius/core/modules/orders";
+import {
+    recordOrderEvent,
+    updateOrderStatus,
+    shipmentCreationOptionsSchema,
+    unknownShipmentResolutionSchema,
+} from "@scalius/core/modules/orders";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications/browser";
 import {
     getShipments,
@@ -35,10 +40,6 @@ import {
     enqueueOrderStatusChangeNotification,
 } from "../../utils/order-notification-queue";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
-import {
-    shipmentCreationOptionsSchema,
-    unknownShipmentResolutionSchema,
-} from "@scalius/core/modules/orders/browser";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();

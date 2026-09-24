@@ -13,6 +13,8 @@ import {
     restoreOrder,
     updateOrderDetails,
     type OrderPaymentRecoveryPreview,
+    updateOrderDetailsSchema,
+    restoreOrderSchema,
 } from "@scalius/core/modules/orders";
 import {
     loadVariantSelectedOptions,
@@ -20,7 +22,6 @@ import {
     readStoreDecimalPlaces,
 } from "@scalius/core/modules/products";
 import { fromMinor } from "@scalius/shared/money";
-import { updateOrderDetailsSchema, restoreOrderSchema } from "@scalius/core/modules/orders/browser";
 import {
     orderPayments,
     paymentPlans,

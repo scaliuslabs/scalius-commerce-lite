@@ -5,13 +5,11 @@ import {
     createOrder,
     previewManualOrderAmendment,
     quoteManualOrder,
-} from "@scalius/core/modules/orders";
-import {
     createOrderSchema,
     quoteManualOrderSchema,
     previewManualOrderAmendmentSchema,
     confirmManualOrderAmendmentSchema,
-} from "@scalius/core/modules/orders/browser";
+} from "@scalius/core/modules/orders";
 import { ok, created } from "../../../utils/api-response";
 import {
     successEnvelope,
