@@ -11905,6 +11905,105 @@ export type GetApiV1OrdersReceiptByIdResponses = {
 
 export type GetApiV1OrdersReceiptByIdResponse = GetApiV1OrdersReceiptByIdResponses[keyof GetApiV1OrdersReceiptByIdResponses];
 
+export type PostApiV1OrdersReceiptByIdOwnerProofData = {
+    body?: never;
+    headers?: {
+        'X-Customer-Session'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/owner-proof';
+};
+
+export type PostApiV1OrdersReceiptByIdOwnerProofErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdOwnerProofError = PostApiV1OrdersReceiptByIdOwnerProofErrors[keyof PostApiV1OrdersReceiptByIdOwnerProofErrors];
+
+export type PostApiV1OrdersReceiptByIdOwnerProofResponses = {
+    /**
+     * Receipt proof for the account owner
+     */
+    200: {
+        success: true;
+        data: {
+            orderId: string;
+            receiptToken: string;
+            expiresAt: number;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdOwnerProofResponse = PostApiV1OrdersReceiptByIdOwnerProofResponses[keyof PostApiV1OrdersReceiptByIdOwnerProofResponses];
+
 export type PostApiV1OrdersReceiptByIdSupportRequestsData = {
     body: {
         token: string;
