@@ -1041,6 +1041,8 @@ export type GetApiV1HeroSlidersResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -1058,6 +1060,8 @@ export type GetApiV1HeroSlidersResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -1075,6 +1079,8 @@ export type GetApiV1HeroSlidersResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -1088,6 +1094,8 @@ export type GetApiV1HeroSlidersResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -1152,6 +1160,8 @@ export type GetApiV1HeroSlidersByIdResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -23304,6 +23314,7 @@ export type GetApiV1AdminNavigationMenusByMenuIdItemsResponses = {
                     updatedAt: string | null;
                 };
                 childCount: number;
+                targetTitle: string | null;
             }>;
             nextCursor: string | null;
         };
@@ -35943,6 +35954,8 @@ export type GetApiV1AdminSettingsHeroSlidersResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -35968,6 +35981,8 @@ export type PostApiV1AdminSettingsHeroSlidersData = {
             id: string;
             url: string;
             title: string;
+            heading?: string;
+            buttonLabel?: string;
             link: string;
             focalPoint?: {
                 x: number;
@@ -36076,6 +36091,8 @@ export type PostApiV1AdminSettingsHeroSlidersResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -36200,6 +36217,8 @@ export type DeleteApiV1AdminSettingsHeroSlidersByIdResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -36311,6 +36330,8 @@ export type GetApiV1AdminSettingsHeroSlidersByIdResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -36336,6 +36357,8 @@ export type PutApiV1AdminSettingsHeroSlidersByIdData = {
             id: string;
             url: string;
             title: string;
+            heading?: string;
+            buttonLabel?: string;
             link: string;
             focalPoint?: {
                 x: number;
@@ -36446,6 +36469,8 @@ export type PutApiV1AdminSettingsHeroSlidersByIdResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;

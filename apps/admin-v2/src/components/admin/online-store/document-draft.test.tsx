@@ -56,4 +56,31 @@ describe("online store document draft", () => {
       languageData: { pageTitle: "Pay", placeOrderText: "Confirm order" },
     });
   });
+
+  it("writes a menu web address once: no doubled https://, a scheme added to a bare domain", async () => {
+    const { isWebAddress, normalizeWebAddress } = await import("./shared");
+    expect(normalizeWebAddress("https://https://example.com/blog")).toBe("https://example.com/blog");
+    expect(normalizeWebAddress("https://https//example.com/blog")).toBe("https://example.com/blog");
+    expect(normalizeWebAddress(" example.com ")).toBe("https://example.com");
+    expect(normalizeWebAddress("http://shop.example.com")).toBe("http://shop.example.com");
+    expect(normalizeWebAddress("https://")).toBe("");
+    expect(isWebAddress("https://")).toBe(false);
+    expect(isWebAddress("hello")).toBe(false);
+    expect(isWebAddress("example.com/blog")).toBe(true);
+  });
+
+  it("keeps a removed field removed: Ocean → Classic (no custom colours) never leaves undefined colours", async () => {
+    const { rebaseDraft } = await import("./shared");
+    const ocean = { colors: { background: "#f0f9ff", primary: "#0369a1" }, cornerStyle: "rounded" };
+    const classic = { colors: {}, cornerStyle: "subtle" };
+    // After saving Classic the saved document is the draft itself.
+    const afterSave = rebaseDraft(classic, ocean, structuredClone(classic));
+    expect(afterSave).toEqual(classic);
+    expect(Object.values(afterSave.colors)).toEqual([]);
+    // Someone else's newer save under an unsaved Classic pick: their untouched fields, none of Ocean's colours.
+    const theirs = { colors: { background: "#ffffff", primary: "#0369a1" }, cornerStyle: "rounded" };
+    const rebased = rebaseDraft(classic, ocean, theirs);
+    expect(rebased).toEqual({ colors: {}, cornerStyle: "subtle" });
+    expect(Object.values(rebased.colors).every((value) => typeof value === "string")).toBe(true);
+  });
 });

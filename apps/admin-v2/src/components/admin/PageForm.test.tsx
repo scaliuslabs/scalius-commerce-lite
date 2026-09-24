@@ -173,7 +173,7 @@ describe("PageForm", () => {
         excludeFromSitemap: false,
       }),
     );
-    expect(toastMock.success).toHaveBeenCalledWith("Changes saved");
+    expect(toastMock.success).toHaveBeenCalledWith("Page created");
     expect(navigate).toHaveBeenCalledWith(
       expect.objectContaining({ to: "/admin/pages/$pageId/edit", params: { pageId: "page_new" } }),
     );
