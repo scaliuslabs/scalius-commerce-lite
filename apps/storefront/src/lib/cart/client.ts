@@ -314,17 +314,7 @@ function handleAbandonedCheckout() {
   }, 1500); // Debounce for 1.5 seconds
 }
 
-/**
- * While true, the cart page stays in its loading state even once lines are
- * rendered: the first availability check settles before the cart is shown,
- * so an issue banner or repair action never pushes painted content down
- * (CLS). initCartFunctionality caps the hold.
- */
-let cartRevealHeld = false;
-const CART_REVEAL_HOLD_MS = 1500;
-
-function syncCartPagePresentation(requestedReady: boolean): void {
-  const ready = requestedReady && !cartRevealHeld;
+function syncCartPagePresentation(ready: boolean): void {
   const root = document.getElementById("cartPageRoot");
   const cartItems = document.getElementById("cartItems");
   const cartSummary = document.getElementById("cartSummary");
@@ -874,19 +864,21 @@ export function renderIssueAction(
   );
 }
 
+/**
+ * A line's issue, rendered in the same fixed-height slot as its quantity
+ * and price controls (the controls row), so an availability answer never
+ * changes the line's height. The first issue is shown with its repair
+ * action; the full message stays available as the slot's title.
+ */
 function renderCartItemIssues(cartKey: string): string {
   const issues = cartValidationIssues[cartKey] ?? [];
-  if (issues.length === 0) return "";
-
-  return `<div class="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-xs text-destructive space-y-1">${issues
-    .map(
-      (issue) =>
-        `<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <span>${escapeHtml(issue.message)}</span>
-        ${renderIssueAction(cartKey, issue)}
-      </div>`,
-    )
-    .join("")}</div>`;
+  const issue = issues[0];
+  if (!issue) return "";
+  const message = issues.map((entry) => entry.message).join(" ");
+  return `<div class="mt-2 flex min-h-11 items-center justify-between gap-2" role="alert" data-cart-line-issue title="${escapeHtml(message)}">
+        <p class="line-clamp-2 min-w-0 text-xs font-medium text-destructive">${escapeHtml(issue.message)}</p>
+        <div class="shrink-0">${renderIssueAction(cartKey, issue)}</div>
+      </div>`;
 }
 
 /**
@@ -1019,15 +1011,14 @@ function renderCartLine(cartKey: string, item: VariantCartItem): string {
               <div class="min-w-0"><h3 class="line-clamp-2 text-sm font-medium text-foreground sm:text-base">${safeName}</h3><div class="mt-0.5 text-sm text-muted-foreground">${variantInfo}</div></div>
               <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.removeFromCartText, { item: rawName }))}" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring sm:h-9 sm:w-9" onclick="window.removeFromCart(${jsCartKey})"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
-            <div class="mt-2 flex items-center justify-between gap-2">
+            ${issueBlock || `<div class="mt-2 flex min-h-11 items-center justify-between gap-2">
               <div class="flex h-11 items-center overflow-hidden rounded-md ring-1 ring-inset ring-border sm:h-9">
                 <button type="button" aria-label="${escapeHtml(formatCheckoutLanguageText(copy.decreaseQuantityText, { item: rawName }))}" class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${Math.max(0, item.quantity - 1)})">−</button>
                 <span class="flex h-full w-8 items-center justify-center text-center text-sm tabular-nums text-foreground" aria-live="polite">${item.quantity}</span>
                 <button type="button" aria-label="${increaseLabel}" ${increaseDisabled ? "disabled" : ""} class="${stepperButton}" onclick="window.updateCartQuantity(${jsCartKey}, ${item.quantity + 1})">+</button>
               </div>
               <div class="text-right"><div class="text-sm font-medium tabular-nums text-foreground sm:text-base">${formatMoney(item.price * item.quantity)}</div>${item.quantity > 1 ? `<div class="text-sm tabular-nums text-muted-foreground">${formatMoney(item.price)} ${escapeHtml(copy.eachText)}</div>` : ""}</div>
-            </div>
-            ${issueBlock}
+            </div>`}
           </div>
         </div></li>`;
 }
@@ -1449,23 +1440,14 @@ export async function initCartFunctionality() {
     { signal: runtimeSignal },
   );
 
-  cartRevealHeld = true;
-  let firstValidation: Promise<boolean> = Promise.resolve(true);
-  try {
+  // Lines paint straight from the saved cart; the availability check's
+  // answer lands inside each line's fixed status slot and below the totals,
+  // so it never moves painted content (no CLS, no network-gated first paint).
+  await renderCartItems();
+  if (applyPendingCartRepairState()) {
     await renderCartItems();
-    if (applyPendingCartRepairState()) {
-      await renderCartItems();
-    }
-    firstValidation = validateCartSnapshot();
-    await Promise.race([
-      firstValidation,
-      new Promise((resolve) => setTimeout(resolve, CART_REVEAL_HOLD_MS)),
-    ]);
-  } finally {
-    cartRevealHeld = false;
   }
-  syncCartPagePresentation(true);
-  await firstValidation;
+  await validateCartSnapshot();
   updateCheckoutButtonState();
 }
 
