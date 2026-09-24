@@ -3,6 +3,7 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { Check, Circle } from "lucide-react";
 
 import { cn } from "@scalius/shared/utils";
+import { OVERLAY_COLLISION_PADDING } from "./overlay";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 
@@ -17,7 +18,7 @@ const itemClassName =
 const DropdownMenuContent = React.forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(({ className, sideOffset = 4, collisionPadding = 12, sticky = "always", ...props }, ref) => (
+>(({ className, sideOffset = 4, collisionPadding = OVERLAY_COLLISION_PADDING, sticky = "always", ...props }, ref) => (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.Content
       ref={ref}

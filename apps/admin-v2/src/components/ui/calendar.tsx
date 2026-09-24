@@ -11,7 +11,7 @@ function Calendar({ className, showOutsideDays = true, ...props }: React.Compone
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
-      className={cn("w-fit bg-popover p-3", className)}
+      className={cn("w-fit p-3", className)}
       classNames={{
         months: "relative flex flex-col gap-4 md:flex-row",
         month: "flex w-full flex-col gap-4",

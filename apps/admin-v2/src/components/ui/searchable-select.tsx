@@ -161,10 +161,10 @@ export function SearchableSelect({
           event.preventDefault();
           focusSearch();
         }}
-        className="w-(--radix-popover-trigger-width) min-w-60 overflow-hidden p-0"
+        className="flex w-(--radix-popover-trigger-width) min-w-60 flex-col overflow-hidden p-0"
       >
-        <div>
-          <div className="flex h-11 items-center gap-2 border-b px-3 sm:h-9">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3 sm:h-9">
             <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
             <input
               ref={inputRef}
@@ -208,7 +208,7 @@ export function SearchableSelect({
             role="listbox"
             aria-label="Options"
             data-slot="searchable-select-list"
-            className="max-h-60 overflow-y-auto overscroll-contain p-1.5"
+            className="max-h-60 min-h-0 overflow-y-auto overscroll-contain p-1.5"
           >
             {visibleOptions.length === 0 ? (
               <p className="px-3 py-5 text-center text-body text-muted-foreground">
