@@ -58,6 +58,11 @@ beforeEach(() => {
         </ul>
       </div>
     </div>
+    <nav data-menu-root>
+      <details data-menu="popup" id="m-rail"><summary>All departments</summary>
+        <div data-menu-panel><ul data-menu-list><li><a id="dept" href="/dept">Dept</a></li></ul></div>
+      </details>
+    </nav>
     <a id="outside" href="/elsewhere">Elsewhere</a>`;
 });
 
@@ -159,6 +164,16 @@ describe("details menus", () => {
     // Nothing left to close: the drawer gets it.
     key(document.activeElement!, "Escape");
     expect(drawerKeys).toEqual(["Escape"]);
+  });
+
+  it("opens a menu of its own with Down and enters it", () => {
+    summary("m-rail").focus();
+    key(document.activeElement!, "ArrowDown");
+    expect(menu("m-rail").open).toBe(true);
+    expect(document.activeElement!.id).toBe("dept");
+    key(document.activeElement!, "Escape");
+    expect(menu("m-rail").open).toBe(false);
+    expect(document.activeElement).toBe(summary("m-rail"));
   });
 
   it("drills in with Right and back with Left in a drawer", () => {

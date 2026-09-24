@@ -138,7 +138,15 @@ export function handleMenuKey(event: KeyboardEvent): void {
   }
 
   const list = target.closest("[data-menu-list], [data-menu-bar]");
-  if (!list) return;
+  if (!list) {
+    // A menu on its own (the departments tab): Down opens it and enters.
+    const own = target.matches("summary") ? target.parentElement : null;
+    if (isMenu(own) && key === "ArrowDown") {
+      event.preventDefault();
+      openAndEnter(own);
+    }
+    return;
+  }
   const bar = list.matches("[data-menu-bar]");
   const row = target.closest("li");
   const menu = row ? rowMenu(row) : null;
