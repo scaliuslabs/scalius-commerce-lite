@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 79,
-  name: "0079_whole_taka_amounts",
+  version: 80,
+  name: "0080_whole_taka_amounts",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [

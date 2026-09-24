@@ -1,4 +1,4 @@
--- PostgreSQL sidecar of 0079_whole_taka_amounts: in a BDT store,
+-- PostgreSQL sidecar of 0080_whole_taka_amounts: in a BDT store,
 -- merchant-entered money is rounded half-up to whole taka; a non-zero amount
 -- never becomes zero. Order, payment, refund and ledger rows stay as recorded.
 UPDATE "products" SET
@@ -68,4 +68,4 @@ WHERE "category" = 'checkout' AND "key" = 'document' AND json_valid("value")
     LIMIT 1
   ))), ''), 'BDT') = 'BDT';
 --> statement-breakpoint
-INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (79, '0079_whole_taka_amounts', 'a88163d1389ab6e37e1812c5d11a35bfdb01e692be58fbdf2c328bc6c5ee631c');
+INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (80, '0080_whole_taka_amounts', 'a88163d1389ab6e37e1812c5d11a35bfdb01e692be58fbdf2c328bc6c5ee631c');

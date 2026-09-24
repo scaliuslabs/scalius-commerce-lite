@@ -554,11 +554,11 @@ describe("demo store export fail-closed preconditions", () => {
   it("refuses a source at a different schema revision", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec("UPDATE scalius_schema_migrations SET name = '0079_something_else' WHERE version = 79");
+      database.exec("UPDATE scalius_schema_migrations SET name = '0080_something_else' WHERE version = 80");
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))
-      .rejects.toThrow(/is at schema revision 79\/0079_something_else .* can only be exported at revision 79\/0079_whole_taka_amounts/su);
+      .rejects.toThrow(/is at schema revision 80\/0080_something_else .* can only be exported at revision 80\/0080_whole_taka_amounts/su);
   });
 
   it("refuses a source whose migration digest does not match the canonical migration", async () => {
