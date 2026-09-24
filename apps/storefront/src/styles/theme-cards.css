@@ -8,13 +8,17 @@
  */
 
 /* Product cards: the surface language per Style. Card corners follow the
-   radius token, capped at 20px (Apple Gadgets' soft cards). */
+   radius token; soft corners stop at 20px (Apple Gadgets' soft cards). */
 .site-root [data-theme-component="product-card"] {
   min-width: 0;
-  border-radius: min(calc(var(--radius) * 1.5), 1.25rem);
+  border-radius: calc(var(--radius) * 1.5);
   transition:
     border-color var(--theme-duration) var(--theme-ease),
     box-shadow var(--theme-duration) var(--theme-ease);
+}
+
+.site-root[data-theme-radius="soft"] [data-theme-component="product-card"] {
+  border-radius: 1.25rem;
 }
 
 .site-root[data-theme-card-style="bordered"] [data-theme-component="product-card"] {
@@ -81,7 +85,9 @@
   padding: 6%;
 }
 
-/* No photo: the product's initial on the muted surface, in the same box. */
+/* No photo: the product's initial on the muted surface, in the same box.
+   The box is a size container, so the letter scales with the photo box
+   (a list-row thumbnail or a wide grid card). */
 .site-root .product-card-placeholder {
   position: absolute;
   inset: 0;
@@ -89,12 +95,15 @@
   place-items: center;
   container-type: size;
   background: var(--muted);
-  color: color-mix(in oklab, var(--muted-foreground) 55%, var(--muted));
+  color: color-mix(in oklab, var(--muted-foreground) 40%, var(--muted));
   font-family: var(--theme-font-heading);
   font-weight: var(--theme-heading-weight, 650);
-  font-size: 36cqmin;
   line-height: 1;
   user-select: none;
+}
+
+.site-root .product-card-placeholder > span {
+  font-size: 30cqmin;
 }
 
 /* The title link stretches over the card but sits inside the clamped title
