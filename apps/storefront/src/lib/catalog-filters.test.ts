@@ -102,6 +102,68 @@ describe("catalog filter form", () => {
     expect(window.location.search).toBe("?sortBy=price-asc&q=running+shoe&hasDiscount=true");
   });
 
+  it("waits for the apply button in a filter drawer, even on a computer", () => {
+    const form = renderForm(true, (element) => element.setAttribute("data-catalog-apply", "sheet"));
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+    form.querySelector<HTMLInputElement>("[name=hasDiscount]")!.click();
+
+    expect(window.location.search).toBe("?sortBy=price-asc");
+    expect(form.querySelector("[data-catalog-filter-apply]")!.textContent).toBe("Show products");
+  });
+
+  it("keeps the page size and drops it from the count query", () => {
+    const form = renderForm(true);
+    form.insertAdjacentHTML("afterbegin", '<input type="hidden" name="limit" value="40" />');
+    const params = catalogFilterSearchParams(form);
+    expect(params.get("limit")).toBe("40");
+    expect(catalogCountQuery(params).getAll("limit")).toEqual(["1"]);
+  });
+
+  it("narrows a long facet list as the buyer types, without submitting", () => {
+    document.body.innerHTML = `
+      <form data-catalog-filters>
+        <fieldset>
+          <div data-catalog-facet-search hidden>
+            <input type="search" data-catalog-facet-query />
+            <p data-catalog-facet-search-empty hidden>No matches</p>
+          </div>
+          ${["Asus", "Acer", "Apple"].map((value) => `<label><input type="checkbox" name="brand" value="${value}" data-catalog-facet />${value}</label>`).join("")}
+          <details><summary>Show 1 more</summary><label><input type="checkbox" name="brand" value="Lenovo" data-catalog-facet />Lenovo</label></details>
+        </fieldset>
+      </form>
+    `;
+    vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    setupCatalogFilters();
+    const box = document.querySelector<HTMLElement>("[data-catalog-facet-search]")!;
+    const input = box.querySelector("input")!;
+    expect(box.hidden).toBe(false);
+
+    const visible = () => [...document.querySelectorAll<HTMLLabelElement>("fieldset label")]
+      .filter((label) => !label.hidden)
+      .map((label) => label.textContent!.trim());
+    input.value = "LEN";
+    input.dispatchEvent(new Event("input"));
+    expect(visible()).toEqual(["Lenovo"]);
+    expect(document.querySelector("details")!.open).toBe(true);
+
+    input.value = "zz";
+    input.dispatchEvent(new Event("input"));
+    expect(visible()).toEqual([]);
+    expect(box.querySelector<HTMLElement>("[data-catalog-facet-search-empty]")!.hidden).toBe(false);
+
+    input.value = "";
+    input.dispatchEvent(new Event("input"));
+    expect(visible()).toHaveLength(4);
+    expect(document.querySelector("details")!.open).toBe(false);
+
+    const enter = new KeyboardEvent("keydown", { key: "Enter", cancelable: true });
+    input.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(true);
+    // Typing is not a filter change: nothing navigates.
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(window.location.search).toBe("?sortBy=price-asc");
+  });
+
   it("applies a switch the buyer tapped before the script loaded", () => {
     renderForm(true, (form) => {
       form.querySelector<HTMLInputElement>("[name=hasDiscount]")!.checked = true;
