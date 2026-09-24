@@ -14,7 +14,7 @@
  *   stacked gallery is at most 36rem wide.
  */
 import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-theme";
-import type { ImageSlot } from "@/lib/responsive-image";
+import { capSizesDensity, type ImageSlot } from "@/lib/responsive-image";
 
 export type ProductGalleryLayout = ResolvedStorefrontThemeLayout["productPage"];
 
@@ -53,7 +53,8 @@ export function productGalleryMainSlot(
   const railBeside = hasThumbnails && layout.thumbnails === "beside";
   return {
     width: GALLERY_IMAGE_WIDTHS.main,
-    sizes: [...MOBILE_MAIN_SIZES, ...desktopMainSizes(layout, railBeside)].join(", "),
+    // The LCP photo: DPR 3 phones fetch about 2x pixels (capSizesDensity).
+    sizes: capSizesDensity([...MOBILE_MAIN_SIZES, ...desktopMainSizes(layout, railBeside)].join(", ")),
   };
 }
 

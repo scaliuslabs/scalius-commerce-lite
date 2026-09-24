@@ -407,7 +407,9 @@ describe("storefront theme render matrix", () => {
     // Phones get a phone-sized rendition, and the first slide paints without script.
     const phoneSource = page.querySelector(".mobile-carousel [data-slide-index='0'] source")!;
     expect(phoneSource.getAttribute("srcset")).toContain("https://cdn.shop.test/media/m1.jpg/640.webp 640w");
-    expect(phoneSource.getAttribute("sizes")).toBe("calc(100vw - 2rem)");
+    expect(phoneSource.getAttribute("sizes")).toBe(
+      "(min-resolution: 2.5dppx) calc((100vw - 2rem) * 0.667), calc(100vw - 2rem)",
+    );
     expect(page.querySelector(".desktop-carousel [data-slide-index='0'] source")!.getAttribute("sizes")).toBeNull();
     expect(page.querySelector(".mobile-carousel [data-slide-index='0']")!.classList.contains("opacity-100")).toBe(true);
 
