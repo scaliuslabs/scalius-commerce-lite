@@ -4,13 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { SettingsField } from "~/components/admin/settings/SettingsPage";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { useMessages } from "~/i18n";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
 
@@ -80,38 +74,30 @@ export function AccessFields({
       </fieldset>
       {kind === "pat" ? (
         <SettingsField id="ai-access-resource" label={t("worksWith")}>
-          <Select
+          <NativeSelect
+            id="ai-access-resource"
             value={value.resource}
             disabled={disabled}
             onValueChange={(resource) => onChange({ ...value, resource: resource as AgentResource })}
           >
-            <SelectTrigger id="ai-access-resource">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="dashboard">{t("resource_dashboard")}</SelectItem>
-              <SelectItem value="storefront">{t("resource_storefront")}</SelectItem>
-            </SelectContent>
-          </Select>
+            <option value="dashboard">{t("resource_dashboard")}</option>
+            <option value="storefront">{t("resource_storefront")}</option>
+          </NativeSelect>
         </SettingsField>
       ) : null}
       <SettingsField id="ai-access-expiry" label={t("expiresAfter")}>
-        <Select
+        <NativeSelect
+          id="ai-access-expiry"
           value={String(value.expiresInDays)}
           disabled={disabled}
           onValueChange={(days) => onChange({ ...value, expiresInDays: Number(days) })}
         >
-          <SelectTrigger id="ai-access-expiry">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {EXPIRY_DAYS.filter((days) => days <= max).map((days) => (
-              <SelectItem key={days} value={String(days)}>
-                {days === 365 ? t("oneYear") : t("days", { count: days })}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {EXPIRY_DAYS.filter((days) => days <= max).map((days) => (
+            <option key={days} value={String(days)}>
+              {days === 365 ? t("oneYear") : t("days", { count: days })}
+            </option>
+          ))}
+        </NativeSelect>
       </SettingsField>
     </>
   );

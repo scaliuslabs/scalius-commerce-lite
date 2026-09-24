@@ -38,7 +38,7 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData } from "~/lib/api";
 import {
-  allDeliveryLocationsQueryOptions,
+  deliveryLocationLoader,
   deliveryLocationsQueryOptions,
   deliveryProvidersQueryOptions,
   importPathaoStatusQueryOptions,
@@ -89,7 +89,7 @@ function useRefreshAreas() {
     );
 }
 
-function LocationForm({ level, location, parents }: { level: Level; location: DeliveryLocation | null; parents: DeliveryLocation[] }) {
+function LocationForm({ level, location }: { level: Level; location: DeliveryLocation | null }) {
   const t = useMessages(shippingMessages);
   const common = useMessages(settingsMessages);
   const refresh = useRefreshAreas();
@@ -146,8 +146,10 @@ function LocationForm({ level, location, parents }: { level: Level; location: De
           <SearchableSelect
             id="location-parent"
             value={draft.parentId}
+            selectedLabel={draft.parentId === location?.parentId ? location?.parentPath?.[0] : undefined}
             triggerClassName="w-full"
-            options={parents.map((parent) => ({ value: parent.id, label: parent.name }))}
+            load={deliveryLocationLoader({ type: PARENT[level], includeInactive: true })}
+            queryKey={[...queryKeys.settings.deliveryLocations(), "picker", PARENT[level], null, true]}
             placeholder={t(PARENT[level])}
             searchPlaceholder={t("search")}
             emptyMessage={t("empty")}
@@ -243,6 +245,7 @@ export function DeliveryAreasManager() {
   const [level, setLevel] = useState<Level>("city");
   const [search, setSearch] = useState("");
   const [parentFilter, setParentFilter] = useState("");
+  const [parentFilterLabel, setParentFilterLabel] = useState<string | undefined>();
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<"selected" | "import" | null>(null);
@@ -262,14 +265,8 @@ export function DeliveryAreasManager() {
     }),
     placeholderData: (previous) => previous,
   });
-  const parents = useQuery({
-    ...allDeliveryLocationsQueryOptions({ type: level === "city" ? "city" : PARENT[level] }),
-    enabled: level !== "city",
-  });
   const couriers = useQuery(deliveryProvidersQueryOptions());
   const hasPathao = (couriers.data ?? []).some((courier) => courier.type === "pathao" && courier.isActive);
-  const parentList = level === "city" ? [] : (parents.data?.locations ?? []);
-  const parentName = new Map(parentList.map((parent) => [parent.id, parent.name]));
   const locations = list.data?.locations ?? [];
   const selectedUnder = placesUnder(
     locations
@@ -307,6 +304,7 @@ export function DeliveryAreasManager() {
     setLevel(next);
     setSearch("");
     setParentFilter("");
+    setParentFilterLabel(undefined);
     setPage(1);
     setSelected([]);
   };
@@ -369,7 +367,7 @@ export function DeliveryAreasManager() {
               title={t(`add${level}`)}
               trigger={<Button type="button" size="sm" disabled={!canEdit}>{t(`add${level}`)}</Button>}
             >
-              <LocationForm level={level} location={null} parents={parentList} />
+              <LocationForm level={level} location={null} />
             </SettingsDialog>
           </div>
         }
@@ -393,17 +391,19 @@ export function DeliveryAreasManager() {
               </div>
               {level !== "city" ? (
                 <SearchableSelect
-                  value={parentFilter || "_all"}
+                  value={parentFilter}
+                  selectedLabel={parentFilterLabel}
+                  clearable
                   ariaLabel={t("parent")}
                   triggerClassName="w-full sm:w-56"
-                  options={[
-                    { value: "_all", label: t("allParents") },
-                    ...parentList.map((parent) => ({ value: parent.id, label: parent.name })),
-                  ]}
+                  load={deliveryLocationLoader({ type: PARENT[level], includeInactive: true })}
+                  queryKey={[...queryKeys.settings.deliveryLocations(), "picker", PARENT[level], null, true]}
+                  placeholder={t("allParents")}
                   searchPlaceholder={t("search")}
                   emptyMessage={t("empty")}
-                  onValueChange={(value) => {
-                    setParentFilter(value === "_all" ? "" : value);
+                  onValueChange={(value, option) => {
+                    setParentFilter(value);
+                    setParentFilterLabel(option?.label);
                     changePage(1);
                   }}
                 />
@@ -451,14 +451,14 @@ export function DeliveryAreasManager() {
                           <span className="block truncate text-body font-medium">{location.name}</span>
                           <span className="block truncate text-body text-muted-foreground">
                             {[
-                              location.parentId ? parentName.get(location.parentId) : null,
+                              location.parentPath?.length ? location.parentPath.join(" · ") : null,
                               location.externalIds?.pathao ? t("linkedPathao") : null,
                             ].filter(Boolean).join(" · ")}
                           </span>
                         </button>
                       }
                     >
-                      <LocationForm level={level} location={location} parents={parentList} />
+                      <LocationForm level={level} location={location} />
                     </SettingsDialog>
                     <Switch
                       checked={location.isActive}

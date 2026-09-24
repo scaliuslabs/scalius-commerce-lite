@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { orderFormDataQueryOptions, orderQueryOptions } from "~/lib/api-query-options/orders";
-import { deliveryLocationsQueryOptions } from "~/lib/api-query-options/delivery";
 import { translate, useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 import { OrderFormRouteError } from "../-OrderFormRouteError";
@@ -24,7 +23,6 @@ export const Route = createFileRoute("/admin/orders/$orderId/edit")({
       queryClient.fetchQuery({ ...orderFormDataQueryOptions(params.orderId), staleTime: 0 }),
       // The cash still to collect, for the review's "before → after" line.
       queryClient.ensureQueryData(orderQueryOptions(params.orderId)),
-      queryClient.ensureQueryData(deliveryLocationsQueryOptions({ type: "city" })),
     ]);
     return { ...data, cashToCollect: order.balanceDue };
   },

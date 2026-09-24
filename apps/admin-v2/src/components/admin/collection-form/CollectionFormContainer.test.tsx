@@ -133,17 +133,19 @@ async function click(element: HTMLElement) {
   await act(async () => element.click());
 }
 
-async function choose(triggerLabel: string, option: string) {
-  const trigger = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button[role="combobox"]')).find(
-    (candidate) => candidate.getAttribute("aria-label") === triggerLabel || text(candidate.textContent) === triggerLabel,
+async function choose(selectLabel: string, option: string) {
+  const select = Array.from(document.body.querySelectorAll<HTMLSelectElement>("select")).find(
+    (candidate) =>
+      candidate.getAttribute("aria-label") === selectLabel
+      || text(candidate.selectedOptions[0]?.textContent) === selectLabel,
   );
-  if (!trigger) throw new Error(`Expected a select labeled ${triggerLabel}`);
-  await click(trigger);
-  const item = Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find(
-    (candidate) => text(candidate.textContent) === option,
-  );
+  if (!select) throw new Error(`Expected a select labeled ${selectLabel}`);
+  const item = Array.from(select.options).find((candidate) => text(candidate.textContent) === option);
   if (!item) throw new Error(`Expected option ${option}`);
-  await click(item);
+  await act(async () => {
+    select.value = item.value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
 describe("CollectionForm", () => {

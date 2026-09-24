@@ -31,17 +31,6 @@ export interface Product {
   }[];
 }
 
-export interface DeliveryLocation {
-  id: string;
-  name: string;
-  type: "city" | "zone" | "area";
-  parentId: string | null;
-  externalIds: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-  isActive: boolean;
-  sortOrder: number;
-}
-
 export interface OrderItem {
   orderItemId?: string;
   productId: string;
@@ -110,8 +99,9 @@ export const orderFormSchema = z.object({
   city: z.string().min(1, msg("cityRequired")),
   zone: z.string().min(1, msg("zoneRequired")),
   area: z.string().nullable(),
-  cityName: z.string().optional(),
-  zoneName: z.string().optional(),
+  /** Labels of the chosen places (the server stores the names it validates). */
+  cityName: z.string().nullable().optional(),
+  zoneName: z.string().nullable().optional(),
   areaName: z.string().nullable().optional(),
   notes: z.string().max(500, msg("notesTooLong")).nullable(),
   items: z

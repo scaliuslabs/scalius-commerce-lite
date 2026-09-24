@@ -19,13 +19,7 @@ import {
 } from "~/components/ui/form";
 import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
 import { Loader2, RotateCcw } from "lucide-react";
 import { useOrderForm } from "./OrderFormContext";
@@ -138,7 +132,9 @@ export function SummarySection() {
           {rates.length > 0 ? (
             <div className="space-y-2">
               <Label htmlFor="order-delivery-method">{t("deliveryMethod")}</Label>
-              <Select
+              <SearchableSelect
+                id="order-delivery-method"
+                triggerClassName="w-full"
                 value={pickedRate?.id ?? CUSTOM_CHARGE}
                 onValueChange={(value) => {
                   const rate = rates.find((candidate) => candidate.id === value);
@@ -146,19 +142,11 @@ export function SummarySection() {
                   pickRate(rate);
                   if (!rate) refs.shippingChargeRef.current?.focus();
                 }}
-              >
-                <SelectTrigger id="order-delivery-method" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {rates.map((rate) => (
-                    <SelectItem key={rate.id} value={rate.id}>
-                      {rate.name} · {fmt(rate.fee)}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value={CUSTOM_CHARGE}>{t("customCharge")}</SelectItem>
-                </SelectContent>
-              </Select>
+                options={[
+                  ...rates.map((rate) => ({ value: rate.id, label: `${rate.name} · ${fmt(rate.fee)}` })),
+                  { value: CUSTOM_CHARGE, label: t("customCharge") },
+                ]}
+              />
             </div>
           ) : null}
 

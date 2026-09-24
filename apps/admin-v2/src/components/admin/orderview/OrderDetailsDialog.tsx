@@ -147,7 +147,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
                 </FormItem>
               )}
             />
-            <LocationSelector />
+            <LocationSelector required={{ city: true, zone: true }} />
           </form>
         </Form>
         <DialogFooter>

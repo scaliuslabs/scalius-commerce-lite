@@ -265,17 +265,14 @@ describe("CategoryForm", () => {
   });
 
   async function chooseStatus(label: string) {
-    const status = byLabel<HTMLButtonElement>("Status");
+    const status = byLabel<HTMLSelectElement>("Status");
+    const option = Array.from(status.options).find((candidate) => candidate.textContent === label);
+    if (!option) throw new Error(`No status ${label}`);
     await act(async () => {
-      status.focus();
-      status.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      status.value = option.value;
+      status.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await settle();
-    const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(
-      (candidate) => candidate.textContent === label,
-    );
-    if (!option) throw new Error(`No status ${label}`);
-    await click(option);
   }
 
   it("creates an active category and warns that it stays empty until products are added", async () => {

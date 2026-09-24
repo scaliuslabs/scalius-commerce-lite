@@ -20,13 +20,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -443,16 +437,16 @@ function SmsFields() {
   return (
     <>
       <SettingsField id="sms-provider" label={t("smsProvider")}>
-        <Select value={provider ?? ""} onValueChange={(value) => setValue("activeProvider", value as SmsProvider)}>
-          <SelectTrigger id="sms-provider">
-            <SelectValue placeholder={t("chooseSmsProvider")} />
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(SMS_PROVIDERS) as SmsProvider[]).map((key) => (
-              <SelectItem key={key} value={key}>{SMS_PROVIDERS[key].label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <NativeSelect
+          id="sms-provider"
+          value={provider ?? ""}
+          placeholder={t("chooseSmsProvider")}
+          onValueChange={(value) => setValue("activeProvider", value as SmsProvider)}
+        >
+          {(Object.keys(SMS_PROVIDERS) as SmsProvider[]).map((key) => (
+            <option key={key} value={key}>{SMS_PROVIDERS[key].label}</option>
+          ))}
+        </NativeSelect>
       </SettingsField>
       {provider
         ? SMS_PROVIDERS[provider].fields.map((field) => {

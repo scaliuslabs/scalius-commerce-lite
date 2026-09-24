@@ -18,7 +18,9 @@ import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
+import { EMPTY_LOCATION, LocationPicker, type LocationValue } from "~/components/admin/location/LocationPicker";
+import { deliveryLocationLoader } from "~/lib/api-query-options/delivery";
 import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -207,17 +209,16 @@ export function TaxCollectionCard() {
         onCheckedChange={(on) => setValue("enabled", on)}
       />
       <SettingsField id="tax-default-group" label={t("defaultGroup")} help={t("defaultGroupHelp")} error={errorFor("default")}>
-        <Select
+        <SearchableSelect
+          id="tax-default-group"
+          aria-describedby="tax-default-group-note"
           value={values.defaultTaxClassId ?? NONE}
           disabled={!canEdit}
           onValueChange={(value) => setValue("defaultTaxClassId", value === NONE ? null : value)}
-        >
-          <SelectTrigger id="tax-default-group" aria-describedby="tax-default-group-note"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>{t("none")}</SelectItem>
-            {groups.map((group) => <SelectItem key={group.id} value={group.id}>{groupName(group)}</SelectItem>)}
-          </SelectContent>
-        </Select>
+          options={[{ value: NONE, label: t("none") }, ...groups.map((group) => ({ value: group.id, label: groupName(group) }))]}
+          ariaLabel={t("defaultGroup")}
+          triggerClassName="w-full"
+        />
       </SettingsField>
       <SwitchRow
         label={t("pricesInclude")}
@@ -234,17 +235,16 @@ export function TaxCollectionCard() {
       />
       {values.taxShipping ? (
         <SettingsField id="tax-delivery-group" label={t("deliveryGroup")} error={errorFor("delivery")}>
-          <Select
+          <SearchableSelect
+            id="tax-delivery-group"
+            aria-describedby="tax-delivery-group-note"
             value={values.shippingTaxClassId ?? NONE}
             disabled={!canEdit}
             onValueChange={(value) => setValue("shippingTaxClassId", value === NONE ? null : value)}
-          >
-            <SelectTrigger id="tax-delivery-group" aria-describedby="tax-delivery-group-note"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>{t("sameAsDefault")}</SelectItem>
-              {groups.map((group) => <SelectItem key={group.id} value={group.id}>{groupName(group)}</SelectItem>)}
-            </SelectContent>
-          </Select>
+            options={[{ value: NONE, label: t("sameAsDefault") }, ...groups.map((group) => ({ value: group.id, label: groupName(group) }))]}
+            ariaLabel={t("deliveryGroup")}
+            triggerClassName="w-full"
+          />
         </SettingsField>
       ) : null}
       <SettingsField id="tax-label" label={t("label")} help={t("labelHelp")} error={errorFor("label")}>
@@ -401,6 +401,8 @@ interface RateDraft {
   taxClassId: string;
   jurisdictionType: TaxJurisdictionType;
   jurisdictionId: string;
+  /** The chosen place's name, to show it before the picker loads. */
+  jurisdictionLabel: string;
   priority: string;
   isCompound: boolean;
   isActive: boolean;
@@ -413,6 +415,7 @@ function toRateDraft(rate: TaxRateRecord | null, config: TaxConfigurationPayload
     taxClassId: rate?.taxClassId ?? config.settings.defaultTaxClassId ?? config.classes[0]?.id ?? "",
     jurisdictionType: rate?.jurisdictionType ?? "all",
     jurisdictionId: rate?.jurisdictionId ?? "",
+    jurisdictionLabel: rate?.jurisdictionLabel ?? "",
     priority: String(rate?.priority ?? 0),
     isCompound: rate?.isCompound ?? false,
     isActive: rate?.isActive ?? true,
@@ -433,8 +436,7 @@ function RateForm({ rate, config }: { rate: TaxRateRecord | null; config: TaxCon
 
   const rateBps = percentToBasisPoints(draft.percent);
   const priority = /^\d{1,4}$/.test(draft.priority) && Number(draft.priority) <= 1000 ? Number(draft.priority) : null;
-  const place = resolveJurisdictionSelection(draft.jurisdictionType, draft.jurisdictionId, config.jurisdictions);
-  const places = config.jurisdictions.filter((option) => option.type === draft.jurisdictionType);
+  const place = resolveJurisdictionSelection(draft.jurisdictionType, draft.jurisdictionId, draft.jurisdictionLabel);
   const roles = getRequiredTaxRateRoles(config, rate);
   const breaksCoverage = roles.length > 0 && (!draft.isActive || draft.taxClassId !== rate?.taxClassId);
   const onlyRateNote = roles.length === 2 ? t("onlyRateBoth") : roles[0] === "delivery" ? t("onlyRateDelivery") : t("onlyRateProducts");
@@ -499,42 +501,43 @@ function RateForm({ rate, config }: { rate: TaxRateRecord | null; config: TaxCon
         </SettingsField>
       </div>
       <SettingsField id="tax-rate-group" label={t("rateGroup")}>
-        <Select value={draft.taxClassId} onValueChange={(value) => set("taxClassId", value)}>
-          <SelectTrigger id="tax-rate-group"><SelectValue placeholder={t("chooseGroup")} /></SelectTrigger>
-          <SelectContent>
-            {config.classes.map((group) => <SelectItem key={group.id} value={group.id}>{groupName(group)}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          id="tax-rate-group"
+          value={draft.taxClassId}
+          onValueChange={(value) => set("taxClassId", value)}
+          options={config.classes.map((group) => ({ value: group.id, label: groupName(group) }))}
+          placeholder={t("chooseGroup")}
+          ariaLabel={t("rateGroup")}
+          triggerClassName="w-full"
+        />
       </SettingsField>
       <div className="grid gap-4 sm:grid-cols-2">
         <SettingsField id="tax-rate-where" label={t("where")}>
-          <Select
+          <NativeSelect
+            id="tax-rate-where"
             value={draft.jurisdictionType}
-            onValueChange={(value) => setDraft({ ...draft, jurisdictionType: value as TaxJurisdictionType, jurisdictionId: "" })}
+            onValueChange={(value) =>
+              setDraft({ ...draft, jurisdictionType: value as TaxJurisdictionType, jurisdictionId: "", jurisdictionLabel: "" })}
           >
-            <SelectTrigger id="tax-rate-where"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {(["all", "city", "zone", "area"] as const).map((type) => <SelectItem key={type} value={type}>{t(type)}</SelectItem>)}
-            </SelectContent>
-          </Select>
+            {(["all", "city", "zone", "area"] as const).map((type) => <option key={type} value={type}>{t(type)}</option>)}
+          </NativeSelect>
         </SettingsField>
         {draft.jurisdictionType !== "all" ? (
-          <SettingsField
-            id="tax-rate-place"
-            label={t(draft.jurisdictionType)}
-            error={places.length === 0 ? t("noPlaces") : undefined}
-          >
+          <SettingsField id="tax-rate-place" label={t(draft.jurisdictionType)}>
+            {/* Every active place of this type, searched on the server; its parents tell same-named places apart. */}
             <SearchableSelect
               id="tax-rate-place"
               value={draft.jurisdictionId}
-              options={places.map((option) => ({ value: option.id, label: option.name }))}
-              onValueChange={(value) => set("jurisdictionId", value)}
+              selectedLabel={draft.jurisdictionLabel || undefined}
+              load={deliveryLocationLoader({ type: draft.jurisdictionType })}
+              queryKey={[...queryKeys.settings.deliveryLocations(), "picker", draft.jurisdictionType, null, false]}
+              onValueChange={(value, option) =>
+                setDraft((current) => ({ ...current, jurisdictionId: value, jurisdictionLabel: option?.label ?? "" }))}
               placeholder={t("choosePlace")}
               searchPlaceholder={t("searchPlaces")}
               emptyMessage={t("noMatches")}
               ariaLabel={t(draft.jurisdictionType)}
               required
-              maxVisibleOptions={100}
               triggerClassName="w-full"
             />
           </SettingsField>
@@ -597,13 +600,10 @@ function TryItRow({ config }: { config: TaxConfigurationPayload }) {
   const [price, setPrice] = useState("1000");
   const [delivery, setDelivery] = useState("0");
   const [group, setGroup] = useState(NONE);
-  const [city, setCity] = useState("");
-  const [zone, setZone] = useState("");
-  const [area, setArea] = useState("");
-  const options = (type: "city" | "zone" | "area", parentId: string) =>
-    config.jurisdictions
-      .filter((option) => option.type === type && (type === "city" || option.parentId === parentId))
-      .map((option) => ({ value: option.id, label: option.name }));
+  const [location, setLocation] = useState<LocationValue>(EMPTY_LOCATION);
+  const city = location.city?.id ?? "";
+  const zone = location.zone?.id ?? "";
+  const area = location.area?.id ?? "";
   const amount = Number(price);
   const deliveryAmount = Number(delivery || "0");
   const ready = price.trim() !== "" && amount >= 0 && deliveryAmount >= 0 && Boolean(city && zone);
@@ -623,30 +623,6 @@ function TryItRow({ config }: { config: TaxConfigurationPayload }) {
       })),
   });
   const result = preview.data;
-  const place = (
-    id: string,
-    type: "city" | "zone" | "area",
-    value: string,
-    onChange: (value: string) => void,
-    parentId = "",
-  ) => (
-    <SettingsField id={id} label={t(type)}>
-      <SearchableSelect
-        id={id}
-        value={value}
-        options={options(type, parentId)}
-        onValueChange={onChange}
-        disabled={type !== "city" && !parentId}
-        placeholder={t("choosePlace")}
-        searchPlaceholder={t("searchPlaces")}
-        emptyMessage={t("noMatches")}
-        ariaLabel={t(type)}
-        maxVisibleOptions={100}
-        triggerClassName="w-full"
-      />
-    </SettingsField>
-  );
-
   return (
     <Dialog onOpenChange={() => preview.reset()}>
       <DialogTrigger asChild>
@@ -666,23 +642,22 @@ function TryItRow({ config }: { config: TaxConfigurationPayload }) {
             </SettingsField>
           </div>
           <SettingsField id="tax-try-group" label={t("rateGroup")}>
-            <Select value={group} onValueChange={setGroup}>
-              <SelectTrigger id="tax-try-group"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>{t("useDefault")}</SelectItem>
-                {config.classes.map((item) => <SelectItem key={item.id} value={item.id}>{groupName(item)}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              id="tax-try-group"
+              value={group}
+              onValueChange={setGroup}
+              options={[{ value: NONE, label: t("useDefault") }, ...config.classes.map((item) => ({ value: item.id, label: groupName(item) }))]}
+              ariaLabel={t("rateGroup")}
+              triggerClassName="w-full"
+            />
           </SettingsField>
-          {config.jurisdictions.some((option) => option.type === "city") ? (
-            <div className="grid gap-4 sm:grid-cols-3">
-              {place("tax-try-city", "city", city, (value) => { setCity(value); setZone(""); setArea(""); })}
-              {place("tax-try-zone", "zone", zone, (value) => { setZone(value); setArea(""); }, city)}
-              {place("tax-try-area", "area", area, setArea, zone)}
-            </div>
-          ) : (
-            <p className="text-body text-muted-foreground">{t("noPlaces")}</p>
-          )}
+          <LocationPicker
+            className="sm:grid-cols-3"
+            ids={{ city: "tax-try-city", zone: "tax-try-zone", area: "tax-try-area" }}
+            required={{ city: true, zone: true }}
+            value={location}
+            onChange={setLocation}
+          />
           <Button type="button" disabled={!ready || preview.isPending} onClick={() => preview.mutate()}>
             {preview.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
             {t("calculate")}
@@ -802,13 +777,17 @@ function OverrideForm({ item, groups }: { item: TaxClassificationItem; groups: T
   });
   return (
     <SettingsField id="tax-override-group" label={t("rateGroup")}>
-      <Select value={draft} onValueChange={setDraft}>
-        <SelectTrigger id="tax-override-group"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value={NONE}>{item.kind === "variant" ? t("sameAsProduct") : t("useDefault")}</SelectItem>
-          {groups.map((group) => <SelectItem key={group.id} value={group.id}>{groupName(group)}</SelectItem>)}
-        </SelectContent>
-      </Select>
+      <SearchableSelect
+        id="tax-override-group"
+        value={draft}
+        onValueChange={setDraft}
+        options={[
+          { value: NONE, label: item.kind === "variant" ? t("sameAsProduct") : t("useDefault") },
+          ...groups.map((group) => ({ value: group.id, label: groupName(group) })),
+        ]}
+        ariaLabel={t("rateGroup")}
+        triggerClassName="w-full"
+      />
     </SettingsField>
   );
 }
@@ -896,7 +875,9 @@ export function TaxOverridesCard() {
       }
     >
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Select
+        <NativeSelect
+          className="sm:w-40"
+          aria-label={t("show")}
           value={kind}
           onValueChange={(value) => {
             setKind(value as TaxClassificationKind);
@@ -905,12 +886,9 @@ export function TaxOverridesCard() {
             setPage(1);
           }}
         >
-          <SelectTrigger className="sm:w-40" aria-label={t("show")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="product">{t("products")}</SelectItem>
-            <SelectItem value="variant">{t("variants")}</SelectItem>
-          </SelectContent>
-        </Select>
+          <option value="product">{t("products")}</option>
+          <option value="variant">{t("variants")}</option>
+        </NativeSelect>
         <form
           method="get"
           role="search"

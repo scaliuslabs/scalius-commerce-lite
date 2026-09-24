@@ -36,13 +36,7 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { usePermissions } from "~/contexts/PermissionContext";
@@ -257,18 +251,11 @@ function ScriptForm({ script, scripts }: { script: ScriptSource | null; scripts:
     <>
       {script ? null : (
         <SettingsField id="tracking-service" label={t("service")}>
-          <Select value={draft.type} onValueChange={(value) => changeType(value as AnalyticsScriptType)}>
-            <SelectTrigger id="tracking-service">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {analyticsScriptTypes.map((type) => (
-                <SelectItem key={type} value={type}>
-                  <MarkLabel mark={<ScriptMark type={type} />}>{t(type)}</MarkLabel>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <NativeSelect id="tracking-service" value={draft.type} onValueChange={(value) => changeType(value as AnalyticsScriptType)}>
+            {analyticsScriptTypes.map((type) => (
+              <option key={type} value={type}>{t(type)}</option>
+            ))}
+          </NativeSelect>
         </SettingsField>
       )}
       <SettingsField
@@ -315,16 +302,11 @@ function ScriptForm({ script, scripts }: { script: ScriptSource | null; scripts:
       </SettingsField>
       {isCustom ? (
         <SettingsField id="tracking-placement" label={t("placement")}>
-          <Select value={draft.location} onValueChange={(value) => set("location", value as Placement)}>
-            <SelectTrigger id="tracking-placement">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PLACEMENTS.map((placement) => (
-                <SelectItem key={placement} value={placement}>{t(placement)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <NativeSelect id="tracking-placement" value={draft.location} onValueChange={(value) => set("location", value as Placement)}>
+            {PLACEMENTS.map((placement) => (
+              <option key={placement} value={placement}>{t(placement)}</option>
+            ))}
+          </NativeSelect>
         </SettingsField>
       ) : null}
       {!script && canToggle ? (

@@ -8,13 +8,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
 import { useCurrency } from "@/hooks/use-currency";
@@ -74,26 +68,21 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("discountType")}</FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={(value) => {
-                      field.onChange(value);
-                      form.setValue(value === "flat" ? "discountPercentage" : "discountAmount", 0, {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      });
-                    }}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="percentage">{t("discountPercentage")}</SelectItem>
-                      <SelectItem value="flat">{t("discountFixed")}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      value={field.value}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        form.setValue(value === "flat" ? "discountPercentage" : "discountAmount", 0, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                      }}
+                    >
+                      <option value="percentage">{t("discountPercentage")}</option>
+                      <option value="flat">{t("discountFixed")}</option>
+                    </NativeSelect>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

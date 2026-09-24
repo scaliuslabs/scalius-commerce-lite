@@ -238,7 +238,7 @@ describe("PageForm", () => {
     await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
 
     expect(document.body.textContent).toContain("Only staff who can publish can change this.");
-    expect(byLabel<HTMLButtonElement>("Visibility").disabled).toBe(true);
+    expect(byLabel<HTMLSelectElement>("Visibility").disabled).toBe(true);
     expect(byLabel<HTMLInputElement>("Publish on").disabled).toBe(true);
     expect(byLabel<HTMLInputElement>("Title").disabled).toBe(false);
   });

@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
@@ -53,18 +53,17 @@ export function FolderBrowser({ folders, currentFolderId, onFolderSelect, onFold
 
   return (
     <div className="flex items-center gap-1">
-      <Select value={value} onValueChange={(next) => onFolderSelect(next === "all" ? "all" : next === "unfiled" ? null : next)}>
-        <SelectTrigger aria-label={t("folder")} className="w-40">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">{t("allFolders")}</SelectItem>
-          <SelectItem value="unfiled">{t("unfiled")}</SelectItem>
-          {folders.map((folder) => (
-            <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <SearchableSelect
+        ariaLabel={t("folder")}
+        triggerClassName="w-40"
+        value={value}
+        onValueChange={(next) => onFolderSelect(next === "all" ? "all" : next === "unfiled" ? null : next)}
+        options={[
+          { value: "all", label: t("allFolders") },
+          { value: "unfiled", label: t("unfiled") },
+          ...folders.map((folder) => ({ value: folder.id, label: folder.name })),
+        ]}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="ghost" size="icon" aria-label={t("folderActions")}>

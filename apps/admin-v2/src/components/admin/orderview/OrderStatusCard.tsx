@@ -12,13 +12,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
@@ -127,24 +121,22 @@ export function OrderStatusCard({ order }: { order: Order }) {
       </CardHeader>
       <CardContent className="space-y-2">
         {changeable ? (
-          <Select value={status} onValueChange={change} disabled={statusMutation.isPending}>
-            <SelectTrigger aria-label={t("status.title")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={status}>{orderStatusLabel(o, status)}</SelectItem>
-              {options.map(({ status: value, block }) => (
-                <SelectItem key={value} value={value} disabled={block !== null}>
-                  {block ? (
-                    <span className="flex flex-col items-start">
-                      <span>{orderStatusLabel(o, value)}</span>
-                      <span className="text-muted-foreground">{statusBlockText(block, order, t)}</span>
-                    </span>
-                  ) : orderStatusLabel(o, value)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <NativeSelect
+            value={status}
+            onValueChange={change}
+            disabled={statusMutation.isPending}
+            aria-label={t("status.title")}
+          >
+            <option value={status}>{orderStatusLabel(o, status)}</option>
+            {options.map(({ status: value, block }) => (
+              <option key={value} value={value} disabled={block !== null}>
+                {/* A native option holds text only: the reason follows the greyed-out choice. */}
+                {block
+                  ? `${orderStatusLabel(o, value)} — ${statusBlockText(block, order, t)}`
+                  : orderStatusLabel(o, value)}
+              </option>
+            ))}
+          </NativeSelect>
         ) : (
           // A final or locked status is a fact, not a menu.
           <p className="font-medium">{orderStatusLabel(o, status)}</p>
@@ -166,16 +158,16 @@ export function OrderStatusCard({ order }: { order: Order }) {
           </AlertDialogHeader>
           <div className="space-y-2">
             <Label htmlFor="cancel-reason">{t("cancel.reason")}</Label>
-            <Select value={reason} onValueChange={(value) => setReason(value as CancelReason)}>
-              <SelectTrigger id="cancel-reason">
-                <SelectValue placeholder={t("cancel.reasonPlaceholder")} />
-              </SelectTrigger>
-              <SelectContent>
-                {CANCEL_REASONS.map((value) => (
-                  <SelectItem key={value} value={value}>{t(`cancel.reason.${value}`)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <NativeSelect
+              id="cancel-reason"
+              value={reason}
+              onValueChange={(value) => setReason(value as CancelReason)}
+              placeholder={t("cancel.reasonPlaceholder")}
+            >
+              {CANCEL_REASONS.map((value) => (
+                <option key={value} value={value}>{t(`cancel.reason.${value}`)}</option>
+              ))}
+            </NativeSelect>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("cancel.keep")}</AlertDialogCancel>

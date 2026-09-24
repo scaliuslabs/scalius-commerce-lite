@@ -45506,6 +45506,9 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 city: string;
                 zone: string;
                 area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
                 notes: string | null;
                 discountAmount: number | null;
                 shippingCharge: number;
@@ -45585,6 +45588,9 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 city: string;
                 zone: string;
                 area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
                 notes: string | null;
                 discountAmount: number | null;
                 shippingCharge: number;
@@ -55634,7 +55640,15 @@ export type GetApiV1AdminSettingsDeliveryLocationsData = {
          */
         parentId?: string;
         /**
-         * Search term
+         * One location by ID (to label a saved choice)
+         */
+        id?: string;
+        /**
+         * Only active (true) or inactive (false) locations
+         */
+        isActive?: 'true' | 'false';
+        /**
+         * Search term: part of the name, any script; names starting with it come first
          */
         search?: string;
         /**
@@ -55741,6 +55755,7 @@ export type GetApiV1AdminSettingsDeliveryLocationsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
+                parentPath?: Array<string>;
                 descendants?: {
                     zones: number;
                     areas: number;
@@ -55870,6 +55885,7 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
+                parentPath?: Array<string>;
                 descendants?: {
                     zones: number;
                     areas: number;
@@ -56170,6 +56186,7 @@ export type GetApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
+            parentPath?: Array<string>;
             descendants?: {
                 zones: number;
                 areas: number;
@@ -56292,6 +56309,7 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
+            parentPath?: Array<string>;
             descendants?: {
                 zones: number;
                 areas: number;
