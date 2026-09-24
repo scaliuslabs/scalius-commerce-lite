@@ -72,18 +72,18 @@ function CustomersPage() {
     {
       accessorKey: "name",
       header: sortHeader(t("customer")),
-      meta: { mobile: "primary" },
+      meta: { mobile: "primary", minWidth: 200 },
       cell: ({ row }) => (
         <div className="min-w-0">
           <ResourceRowLink to={search.trashed ? undefined : openTo(row.original)}>{row.original.name || t("unnamed")}</ResourceRowLink>
-          <span className="block truncate text-muted-foreground">{formatPhoneForDisplay(row.original.phone)}</span>
+          <span className="block truncate whitespace-nowrap font-mono text-muted-foreground">{formatPhoneForDisplay(row.original.phone)}</span>
         </div>
       ),
     },
     {
       accessorKey: "totalOrders",
       header: sortHeader(t("orders")),
-      meta: { mobile: "secondary", numeric: true },
+      meta: { mobile: "secondary", numeric: true, priority: 60, minWidth: 100 },
       cell: ({ row }) => {
         const count = row.original.totalOrders;
         return <span className="text-muted-foreground">{count === 1 ? t("orderCountOne") : t("orderCount", { count })}</span>;
@@ -92,10 +92,15 @@ function CustomersPage() {
     {
       accessorKey: "totalSpent",
       header: sortHeader(t("spent")),
-      meta: { mobile: "secondary", numeric: true },
+      meta: { mobile: "secondary", numeric: true, priority: 80, minWidth: 110 },
       cell: ({ row }) => <span className="tabular-nums">{fmt(row.original.totalSpent)}</span>,
     },
-    { accessorKey: "lastOrderAt", header: sortHeader(t("lastOrder")), cell: ({ row }) => <DateText value={row.original.lastOrderAt} /> },
+    {
+      accessorKey: "lastOrderAt",
+      header: sortHeader(t("lastOrder")),
+      meta: { priority: 40, minWidth: 120 },
+      cell: ({ row }) => <DateText value={row.original.lastOrderAt} />,
+    },
   ], [t, fmt, search.trashed]);
 
   return (

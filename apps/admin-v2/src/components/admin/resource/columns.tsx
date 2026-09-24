@@ -4,11 +4,12 @@ import { formatDateTime } from "~/i18n";
 import { DataTableColumnHeader } from "~/components/admin/data-table/DataTableColumnHeader";
 import type { Column, TableRowData } from "~/components/admin/data-table/table-config";
 
-/** Sortable column header: `header: sortHeader(t("updated"))`. */
+/** Sortable column header: `header: sortHeader(t("updated"))`. Its `label` names the column in the column menu. */
 export function sortHeader(title: string) {
-  return function SortHeader<T extends TableRowData>({ column }: { column: Column<T, unknown> }) {
+  function SortHeader<T extends TableRowData>({ column }: { column: Column<T, unknown> }) {
     return <DataTableColumnHeader column={column} title={title} />;
-  };
+  }
+  return Object.assign(SortHeader, { label: title });
 }
 
 /** Locale-aware short date for list cells. */

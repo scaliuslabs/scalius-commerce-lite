@@ -1,10 +1,13 @@
-import { useCallback, useMemo, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import {
   flexRender,
+  type Column,
   type Row,
   type Table,
   type TableRowData,
 } from "./table-config";
+import { columnAttributes } from "./column-attributes";
+import { SELECT_COLUMN } from "./column-layout";
 import {
   DndContext,
   closestCenter,
@@ -21,7 +24,6 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { GripVertical } from "lucide-react";
-import { cn } from "@scalius/shared/utils";
 import {
   Table as UITable,
   TableBody,
@@ -31,10 +33,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
+import { DataTableHeadCell } from "./DataTableBodyRow";
 import { getSortableStyle } from "../shared/sortable-style";
 
 export interface SortableDataTableContentProps<TData extends TableRowData> {
   table: Table<TData>;
+  /** Columns to show, in order (the table's column layout). */
+  columns: Column<TData, unknown>[];
   rows: Row<TData>[];
   hasRows: boolean;
   showInitialLoading: boolean;
@@ -83,6 +88,7 @@ function SortableTableRow<TData extends TableRowData>({
 
 export function SortableDataTableContent<TData extends TableRowData>({
   table,
+  columns,
   rows,
   hasRows,
   showInitialLoading,
@@ -97,6 +103,8 @@ export function SortableDataTableContent<TData extends TableRowData>({
   );
 
   const sortableIds = useMemo(() => rows.map((row) => row.id), [rows]);
+  const headers = new Map(table.getFlatHeaders().map((header) => [header.column.id, header]));
+  const hasSelect = columns.some((column) => column.id === SELECT_COLUMN);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -127,19 +135,8 @@ export function SortableDataTableContent<TData extends TableRowData>({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 <TableHead className="w-[40px]" />
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className={cn(header.getSize() !== 150 && "w-(--column-width)")}
-                    style={{ "--column-width": `${header.getSize()}px` } as CSSProperties}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                  </TableHead>
+                {columns.map((column) => (
+                  <DataTableHeadCell key={column.id} column={column} header={headers.get(column.id)} hasSelect={hasSelect} />
                 ))}
               </TableRow>
             ))}
@@ -148,20 +145,20 @@ export function SortableDataTableContent<TData extends TableRowData>({
             {hasRows ? (
               rows.map((row) => (
                 <SortableTableRow key={row.id} row={row}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </TableCell>
-                  ))}
+                  {columns.map((column) => {
+                    const cell = row.getAllCells().find((candidate) => candidate.column.id === column.id);
+                    return cell ? (
+                      <TableCell key={cell.id} {...columnAttributes(column, hasSelect)}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ) : null;
+                  })}
                 </SortableTableRow>
               ))
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={table.getAllColumns().length + 1}
+                  colSpan={columns.length + 1}
                   className="h-24 text-center"
                 >
                   {showInitialLoading ? (

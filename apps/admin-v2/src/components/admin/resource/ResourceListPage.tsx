@@ -3,13 +3,12 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { hashKey, useMutation, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { DataTable } from "~/components/admin/data-table/DataTable";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
 import type { ExtraAction } from "~/components/admin/data-table/DataTableRowActions";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { createActionsColumn, createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
-import { flexRender, type ColumnDef, type Row } from "~/components/admin/data-table/table-config";
+import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { createDataSelector, type ListSearchParams } from "~/lib/list-helpers";
 import { useListSearch } from "~/lib/list-search";
@@ -96,8 +95,9 @@ export interface ResourceListPageProps<T extends { id: string }> {
 
 /**
  * The one list screen (Polaris IndexTable): header, tabs incl. Trash, search,
- * bulk actions, one confirm dialog, empty state and an automatic phone card
- * built from `meta.mobile` column flags.
+ * bulk actions, one confirm dialog, empty state, the sort and columns menu
+ * (saved per `list`) and the table's automatic phone card built from
+ * `meta.mobile` column flags.
  */
 export function ResourceListPage<T extends { id: string }>(props: ResourceListPageProps<T>) {
   const { search, lifecycle } = props;
@@ -317,36 +317,6 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
     </>
   ) : undefined;
 
-  const mobileCard = (row: Row<T>) => {
-    const cells = row.getVisibleCells();
-    const slot = (name: "primary" | "secondary" | "status") =>
-      cells
-        .filter((cell) => cell.column.columnDef.meta?.mobile === name)
-        .map((cell) => <div key={cell.id} className="min-w-0">{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>);
-    const actionsCell = cells.find((cell) => cell.column.id === "actions");
-    return (
-      <div className="flex items-start gap-3 px-3 py-2.5">
-        {canBulk ? (
-          <Checkbox
-            checked={row.getIsSelected()}
-            disabled={!row.getCanSelect()}
-            onCheckedChange={(value) => row.toggleSelected(Boolean(value))}
-            aria-label={rowLabel ? t("select", { name: rowLabel(row.original) }) : t("selectRow")}
-            className="mt-3"
-          />
-        ) : null}
-        <div className="min-w-0 flex-1 space-y-1">
-          {slot("primary")}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-muted-foreground">{slot("secondary")}</div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {slot("status")}
-          {actionsCell ? flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext()) : null}
-        </div>
-      </div>
-    );
-  };
-
   const count = confirm?.rows.length ?? 0;
   const rowCount = table.getRowModel().rows.length;
   // Nothing created yet: one card with the empty state instead of an empty table.
@@ -369,7 +339,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         isLoading={isLoading}
         error={error}
         onRetry={() => void refetch()}
-        mobileCardRenderer={mobileCard}
+        layoutKey={props.list}
         getRowHref={trashed ? undefined : rowTo}
         emptyState={emptyState}
         // Reorder only when the whole list is on screen (at most 90 rows per
@@ -440,13 +410,13 @@ export function useResourceMutation<V>(fn: (variables: V) => Promise<unknown>, i
   });
 }
 
-/** Link for the primary cell of a resource row (name/title). */
+/** Link for the primary cell of a resource row (name/title): at most two lines. */
 export function ResourceRowLink({ to, children }: { to?: string; children: ReactNode }) {
   return to ? (
-    <Link to={to} className="block truncate font-medium text-foreground hover:underline">
+    <Link to={to} className="line-clamp-2 break-words font-medium text-foreground hover:underline">
       {children}
     </Link>
   ) : (
-    <span className="block truncate font-medium">{children}</span>
+    <span className="line-clamp-2 break-words font-medium">{children}</span>
   );
 }

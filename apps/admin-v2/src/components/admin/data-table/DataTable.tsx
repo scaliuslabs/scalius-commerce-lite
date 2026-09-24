@@ -1,17 +1,22 @@
 import {
   lazy,
   Suspense,
-  type CSSProperties,
+  useLayoutEffect,
+  useRef,
+  useState,
   type MouseEvent,
   type ComponentType,
   type ReactNode,
 } from "react";
 import {
   flexRender,
+  type Column,
   type Row,
   type Table,
   type TableRowData,
 } from "./table-config";
+import { ACTIONS_COLUMN, SELECT_COLUMN, isPrimaryColumn, useColumnLayout, useElementWidth } from "./column-layout";
+import { ColumnMenuContext, DataTableColumnMenu } from "./DataTableColumnMenu";
 import { AlertTriangle } from "lucide-react";
 import {
   Table as UITable,
@@ -29,7 +34,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { DataTablePagination } from "./DataTablePagination";
 import { DataTableLoadingOverlay } from "./DataTableLoadingOverlay";
 import { DataTableEmptyState, type EmptyStateConfig } from "./DataTableEmptyState";
-import { DataTableBodyRow, rowClickHandler } from "./DataTableBodyRow";
+import { DataTableBodyRow, DataTableHeadCell, rowClickHandler } from "./DataTableBodyRow";
 import { useNavigate } from "@tanstack/react-router";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import {
@@ -70,6 +75,13 @@ interface DataTableProps<TData extends TableRowData> {
   variant?: "default" | "card" | "bare";
   /** Opens a row from a click anywhere on it (not on its checkbox, links or menu). */
   getRowHref?: (row: TData) => string | undefined;
+  /**
+   * Names the list for the merchant's saved column choice (this browser
+   * only), e.g. "orders". Without it the choice lasts for the page.
+   */
+  layoutKey?: string;
+  /** False for a list that shows every row at once (no page footer). */
+  paginate?: boolean;
 }
 
 export function DataTable<TData extends TableRowData>({
@@ -88,6 +100,8 @@ export function DataTable<TData extends TableRowData>({
   onReorder,
   variant = "default",
   getRowHref,
+  layoutKey,
+  paginate = true,
 }: DataTableProps<TData>) {
   const t = useMessages(resourceMessages);
   const navigate = useNavigate();
@@ -105,7 +119,33 @@ export function DataTable<TData extends TableRowData>({
   const hasRows = rows.length > 0;
   const showError = Boolean(error) && !isLoading;
   const showInitialLoading = isLoading && !hasRows && !showError;
-  const visibleColumnCount = table.getVisibleLeafColumns().length;
+  // Columns in the merchant's order, minus those hidden by choice or to fit this width.
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const width = useElementWidth(resultsRef);
+  // When the rendered cells still overflow the minimums' estimate, step aside
+  // one more column at a time; sideways scrolling is the last resort.
+  const [extraHidden, setExtraHidden] = useState({ width, count: 0 });
+  const extra = extraHidden.width === width ? extraHidden.count : 0;
+  const layout = useColumnLayout(table, layoutKey ?? null, width - (sortable ? 40 : 0), extra);
+  useLayoutEffect(() => {
+    const rendered = resultsRef.current?.querySelector("table");
+    const frame = rendered?.parentElement;
+    if (!rendered || !frame || !layout.canHideMore || width === 0) return;
+    if (rendered.scrollWidth > frame.clientWidth + 1) setExtraHidden({ width, count: extra + 1 });
+    // Re-measure when the width, the columns shown or the rows change.
+  }, [layout.canHideMore, layout.visible.length, width, extra, rows]);
+  const columns = layout.visible;
+  const visibleColumnCount = columns.length;
+  const hasSelect = columns.some((column) => column.id === SELECT_COLUMN);
+  const headers = new Map(table.getFlatHeaders().map((header) => [header.column.id, header]));
+  const cellsOf = (row: Row<TData>) => {
+    const byColumn = new Map(row.getAllCells().map((cell) => [cell.column.id, cell]));
+    return columns.flatMap((column) => {
+      const cell = byColumn.get(column.id);
+      return cell ? [cell] : [];
+    });
+  };
+  const columnMenu = <DataTableColumnMenu table={table} layout={layout} />;
 
   const renderErrorState = () => (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -131,19 +171,8 @@ export function DataTable<TData extends TableRowData>({
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
             {includeDragColumn && <TableHead className="w-[40px]" />}
-            {headerGroup.headers.map((header) => (
-              <TableHead
-                key={header.id}
-                className={cn(header.getSize() !== 150 && "w-(--column-width)", header.column.columnDef.meta?.numeric && "text-right")}
-                style={{ "--column-width": `${header.getSize()}px` } as CSSProperties}
-              >
-                {header.isPlaceholder
-                  ? null
-                  : flexRender(
-                      header.column.columnDef.header,
-                      header.getContext(),
-                    )}
-              </TableHead>
+            {columns.map((column) => (
+              <DataTableHeadCell key={column.id} column={column} header={headers.get(column.id)} hasSelect={hasSelect} />
             ))}
           </TableRow>
         ))}
@@ -152,20 +181,20 @@ export function DataTable<TData extends TableRowData>({
         {showError ? (
           <TableRow>
             <TableCell
-              colSpan={table.getAllColumns().length + (includeDragColumn ? 1 : 0)}
+              colSpan={visibleColumnCount + (includeDragColumn ? 1 : 0)}
             >
               {renderErrorState()}
             </TableCell>
           </TableRow>
         ) : hasRows ? (
           rows.map((row) => {
-            const cells = row.getVisibleCells();
             return (
               <DataTableBodyRow
                 key={row.id}
-                cells={cells}
+                cells={cellsOf(row)}
                 isSelected={row.getIsSelected()}
                 includeDragColumn={includeDragColumn}
+                hasSelect={hasSelect}
                 onOpen={openRow(row)}
               />
             );
@@ -178,7 +207,7 @@ export function DataTable<TData extends TableRowData>({
         ) : (
           <TableRow>
             <TableCell
-              colSpan={table.getAllColumns().length + (includeDragColumn ? 1 : 0)}
+              colSpan={visibleColumnCount + (includeDragColumn ? 1 : 0)}
               className="h-24 text-center"
             >
               <DataTableEmptyState config={emptyState} />
@@ -189,11 +218,43 @@ export function DataTable<TData extends TableRowData>({
     </UITable>
   );
 
+  // Phones without a list-specific card: the title, then the columns flagged
+  // for the card (or the first number), with the checkbox and row menu.
+  const defaultMobileCard = (row: Row<TData>) => {
+    const cells = row.getAllCells();
+    const render = (cell: (typeof cells)[number]) => (
+      <div key={cell.id} className="min-w-0">{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+    );
+    const slot = (name: "primary" | "secondary" | "status") =>
+      cells.filter((cell) => cell.column.columnDef.meta?.mobile === name);
+    const primary = cells.filter((cell) => isPrimaryColumn(cell.column));
+    const secondary = slot("secondary").length
+      ? slot("secondary")
+      : cells.filter((cell) => cell.column.columnDef.meta?.numeric).slice(0, 1);
+    const select = cells.find((cell) => cell.column.id === SELECT_COLUMN);
+    const actions = cells.find((cell) => cell.column.id === ACTIONS_COLUMN);
+    return (
+      <div className="flex items-start gap-3 px-3 py-2.5">
+        {select ? <div className="mt-3 shrink-0">{render(select)}</div> : null}
+        <div className="min-w-0 flex-1 space-y-1">
+          {primary.map(render)}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-muted-foreground">{secondary.map(render)}</div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {slot("status").map(render)}
+          {actions ? render(actions) : null}
+        </div>
+      </div>
+    );
+  };
+  const mobileCard = mobileCardRenderer ?? defaultMobileCard;
+
   return (
     <div className={cn(isCard && "overflow-clip rounded-xl bg-card shadow-card", className)}>
-      {toolbar}
+      <ColumnMenuContext.Provider value={columnMenu}>{toolbar}</ColumnMenuContext.Provider>
 
       <div
+        ref={resultsRef}
         className={cn("relative", variant === "default" ? "rounded-md border" : "border-t")}
         aria-busy={showInitialLoading || undefined}
         data-data-table-results=""
@@ -203,7 +264,7 @@ export function DataTable<TData extends TableRowData>({
         </span>
         <DataTableLoadingOverlay visible={isFetching && !isLoading && !showError} />
 
-        {isMobile && mobileCardRenderer ? (
+        {isMobile ? (
           // Mobile card view
           <div className="divide-y">
             {showError ? (
@@ -213,7 +274,7 @@ export function DataTable<TData extends TableRowData>({
                 const open = openRow(row);
                 return (
                   <div key={row.id} onClick={rowClickHandler(open)} className={open ? "cursor-pointer" : undefined}>
-                    {mobileCardRenderer(row)}
+                    {mobileCard(row)}
                   </div>
                 );
               })
@@ -231,6 +292,7 @@ export function DataTable<TData extends TableRowData>({
           <Suspense fallback={renderDesktopTable(true)}>
             <SortableDataTableContent
               table={table as unknown as Table<TableRowData>}
+              columns={columns as unknown as Column<TableRowData, unknown>[]}
               rows={rows as unknown as Row<TableRowData>[]}
               hasRows={hasRows}
               showInitialLoading={showInitialLoading}
@@ -243,7 +305,7 @@ export function DataTable<TData extends TableRowData>({
         )}
       </div>
 
-      {!showError && (
+      {!showError && paginate && (
         <DataTablePagination
           table={table}
           pageSizeOptions={pageSizeOptions}
@@ -252,3 +314,4 @@ export function DataTable<TData extends TableRowData>({
     </div>
   );
 }
+

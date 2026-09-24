@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { IdText } from "~/components/admin/data-table/cells";
 import { createFileRoute } from "@tanstack/react-router";
 import { ListTree } from "lucide-react";
 import {
@@ -73,25 +74,26 @@ function AttributesPage() {
     {
       accessorKey: "name",
       header: sortHeader(t("attribute")),
-      meta: { mobile: "primary" },
+      meta: { mobile: "primary", minWidth: 200 },
       cell: ({ row }) =>
         can.canEdit && !search.trashed ? (
-          <button type="button" className="truncate text-left font-medium hover:underline" onClick={() => setEditing(row.original)}>
+          <button type="button" className="line-clamp-2 break-words text-left font-medium hover:underline" onClick={() => setEditing(row.original)}>
             {row.original.name}
           </button>
         ) : (
-          <span className="truncate font-medium">{row.original.name}</span>
+          <span className="line-clamp-2 break-words font-medium">{row.original.name}</span>
         ),
     },
     {
       accessorKey: "slug",
       header: sortHeader(t("handle")),
-      meta: { mobile: "secondary" },
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.slug}</span>,
+      meta: { mobile: "secondary", priority: 60, minWidth: 140 },
+      cell: ({ row }) => <IdText value={row.original.slug} className="text-muted-foreground" />,
     },
     {
       id: "values",
       header: t("values"),
+      meta: { numeric: true, priority: 80, minWidth: 80 },
       cell: ({ row }) => (
         <button
           type="button"
@@ -109,7 +111,7 @@ function AttributesPage() {
     {
       accessorKey: "filterable",
       header: sortHeader(t("filterable")),
-      meta: { mobile: "status" },
+      meta: { mobile: "status", priority: 50, minWidth: 110 },
       cell: ({ row }) => (row.original.filterable ? <StatusBadge tone="neutral">{t("filterableYes")}</StatusBadge> : null),
     },
   ], [t, can.canEdit, search.trashed]);

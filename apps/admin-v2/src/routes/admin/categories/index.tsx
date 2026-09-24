@@ -69,7 +69,7 @@ function CategoriesPage() {
     {
       accessorKey: "name",
       header: sortHeader(t("category")),
-      meta: { mobile: "primary" },
+      meta: { mobile: "primary", minWidth: 240 },
       cell: ({ row }) => (
         <div className="flex min-w-0 items-center gap-3">
           <Thumb src={row.original.imageUrl ? mediaImageUrl(row.original.imageUrl, 160) : null} icon={FolderTree} />
@@ -80,7 +80,7 @@ function CategoriesPage() {
     {
       accessorKey: "status",
       header: sortHeader(t("status")),
-      meta: { mobile: "status" },
+      meta: { mobile: "status", priority: 90, minWidth: 100 },
       cell: ({ row }) => {
         const status = row.original.status;
         return (
@@ -93,20 +93,25 @@ function CategoriesPage() {
     {
       id: "productCount",
       header: t("products"),
-      meta: { mobile: "secondary" },
+      meta: { mobile: "secondary", priority: 70, minWidth: 110 },
       cell: ({ row }) => {
         const count = row.original.productCount ?? 0;
         const label = count === 1 ? t("productCountOne") : t("productCount", { count });
         return count > 0 ? (
-          <Link to="/admin/products" search={{ category: row.original.id } as never} className="text-muted-foreground hover:underline">
+          <Link to="/admin/products" search={{ category: row.original.id } as never} className="whitespace-nowrap text-muted-foreground hover:underline">
             {label}
           </Link>
         ) : (
-          <span className="text-muted-foreground">{label}</span>
+          <span className="whitespace-nowrap text-muted-foreground">{label}</span>
         );
       },
     },
-    { accessorKey: "updatedAt", header: sortHeader(t("updated")), cell: ({ row }) => <DateText value={row.original.updatedAt} /> },
+    {
+      accessorKey: "updatedAt",
+      header: sortHeader(t("updated")),
+      meta: { priority: 40, minWidth: 120 },
+      cell: ({ row }) => <DateText value={row.original.updatedAt} />,
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, search.trashed, can.canEdit]);
 
