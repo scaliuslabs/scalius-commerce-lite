@@ -1,3 +1,5 @@
+import { discountDisplayName } from "@scalius/shared/checkout-language-format";
+
 /**
  * How an order summary shows its discounts (brief decision 4), in minor units
  * so the lines add up exactly: savings on delivery sit on the delivery line
@@ -37,12 +39,6 @@ export interface OrderDiscountSummary<T extends SummaryDiscountInput> {
   otherDiscountMinor: number;
 }
 
-/** "Summer Sale (SAVE10)", "SAVE10" or "Summer Sale". */
-export function discountDisplayName(discount: Pick<SummaryDiscountInput, "name" | "code">): string {
-  const title = discount.name.trim();
-  const code = discount.code?.trim() || null;
-  return code && code !== title ? (title ? `${title} (${code})` : code) : title || code || "";
-}
 
 export function summarizeOrderDiscounts<T extends SummaryDiscountInput>(input: {
   discounts: readonly T[];
@@ -63,7 +59,7 @@ export function summarizeOrderDiscounts<T extends SummaryDiscountInput>(input: {
   const itemDiscounts = input.discounts
     .map((discount) => ({
       discount,
-      name: discountDisplayName(discount),
+      name: discountDisplayName({ title: discount.name, code: discount.code }),
       amountMinor: toMinor(discount.amount) - toMinor(discount.shippingAmount),
     }))
     .filter((line) => line.amountMinor > 0);
