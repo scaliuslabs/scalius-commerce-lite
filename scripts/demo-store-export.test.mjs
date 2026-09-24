@@ -564,7 +564,7 @@ describe("demo store export fail-closed preconditions", () => {
   it("refuses a source whose migration digest does not match the canonical migration", async () => {
     const testCase = newExportCase();
     testCase.mutate((database) => {
-      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 76`);
+      database.exec(`UPDATE scalius_schema_migrations SET source_sha256 = '${"0".repeat(64)}' WHERE version = 78`);
     });
 
     await expect(runDemoStoreExport({ exportDir: testCase.exportDir, sourceDb: testCase.sourceDb }))

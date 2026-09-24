@@ -1,17 +1,18 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Download } from "lucide-react";
+import { Calendar as CalendarIcon, Download } from "lucide-react";
+import type { DateRange } from "react-day-picker";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
 import { NativeSelect } from "~/components/ui/native-select";
 import { inventoryQueryOptions, type InventoryMovement } from "~/lib/api-query-options/inventory";
 import { adminCalendarDateKey } from "~/lib/admin-time";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
+import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
 import { cn } from "@scalius/shared/utils";
 import { IdText } from "~/components/admin/data-table/cells";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
@@ -19,6 +20,7 @@ import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 import { toDate } from "./AlertsTab";
 import { describeMovementNote } from "./movement-note";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
 import {
   MOVEMENT_TYPES,
   movementsQuery,
@@ -84,7 +86,7 @@ function MovementDetails({ movement }: { movement: InventoryMovement }) {
         <>
           {" · "}
           <Link to="/admin/orders/$orderId" params={{ orderId: movement.orderId }} className="hover:underline">
-            {t("order", { id: movement.orderId })}
+            {t("order", { number: formatOrderNumber(movement.orderNumber, movement.orderId) })}
           </Link>
         </>
       ) : null}
@@ -96,6 +98,41 @@ function MovementDetails({ movement }: { movement: InventoryMovement }) {
 interface HistoryTabProps {
   filters: Pick<InventoryFilters, "q" | "type" | "from" | "to">;
   onFiltersChange: InventoryFiltersChange;
+}
+
+const DateRangePickerWithPresets = lazy(() =>
+  import("~/components/admin/order-list/DateRangePickerWithPresets").then((module) => ({
+    default: module.DateRangePickerWithPresets,
+  })),
+);
+
+/** The same date range picker as Orders (presets, one calendar), loaded on first use. */
+function HistoryDateFilter({ from, to, onChange }: {
+  from: string;
+  to: string;
+  onChange: InventoryFiltersChange;
+}) {
+  const t = useMessages(inventoryMessages);
+  const [loadPicker, setLoadPicker] = useState(false);
+  const range: DateRange | undefined = from || to ? { from: parseDateOnly(from), to: parseDateOnly(to) } : undefined;
+  const format = (date: Date) => formatDateTime(date, { dateStyle: "medium", timeZone: undefined });
+  const label = !range?.from ? t("anyDate") : range.to ? `${format(range.from)} – ${format(range.to)}` : format(range.from);
+  const trigger = (
+    <Button type="button" variant="outline" className="w-auto min-w-40 justify-start" aria-label={t("dateRangeLabel", { range: label })} onClick={() => setLoadPicker(true)}>
+      <CalendarIcon className="h-4 w-4" />
+      <span className="truncate">{label}</span>
+    </Button>
+  );
+  if (!loadPicker) return trigger;
+  return (
+    <Suspense fallback={trigger}>
+      <DateRangePickerWithPresets
+        date={range}
+        setDate={(next) => onChange({ from: formatDateOnly(next?.from) ?? "", to: formatDateOnly(next?.to ?? next?.from) ?? "" })}
+        trigger={trigger}
+      />
+    </Suspense>
+  );
 }
 
 export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
@@ -166,22 +203,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
                 <option key={value} value={value}>{t(`type_${value}`)}</option>
               ))}
             </NativeSelect>
-            <Input
-              type="date"
-              className="w-40"
-              aria-label={t("fromDate")}
-              max={endDate || undefined}
-              value={startDate}
-              onChange={(event) => onFiltersChange({ from: event.target.value })}
-            />
-            <Input
-              type="date"
-              className="w-40"
-              aria-label={t("toDate")}
-              min={startDate || undefined}
-              value={endDate}
-              onChange={(event) => onFiltersChange({ to: event.target.value })}
-            />
+            <HistoryDateFilter from={startDate} to={endDate} onChange={onFiltersChange} />
           </>
         )}
         actions={(

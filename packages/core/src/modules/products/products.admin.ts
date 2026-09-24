@@ -47,6 +47,7 @@ import {
     buildProductAggregateRevisionGuard,
     executeProductAggregateMutationBatch,
     isProductAggregateRevisionConflict,
+    productPriceMinorSql,
     readProductAggregateRevisionResult,
     rethrowProductAggregateRevisionConflictIfStale,
     type ProductAggregateRevisionResult,
@@ -60,6 +61,7 @@ import {
     readableDefaultSku,
 } from "./products.variants";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
+import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import {
     loadProductMediaProjections,
     MAX_PRODUCT_MEDIA_ASSOCIATIONS,
@@ -72,6 +74,12 @@ import type {
     ProductMediaProjection,
     ProductMediaProjectionRow,
 } from "./products.media";
+import {
+    buildBuyerCatalogPricingProjection,
+    buyerPriceRangeColumns,
+    presentBuyerPriceRange,
+    type BuyerPriceRange,
+} from "./products.buyer-projection";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 
@@ -514,12 +522,14 @@ export async function listProducts(db: Database, options: {
         .leftJoin(categories, eq(categories.id, products.categoryId))
         .where(whereClause);
 
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const productResultsQuery = db
         .select({
             id: products.id,
             name: products.name,
             slug: products.slug,
             priceMinor: products.priceMinor,
+            ...buyerPriceRangeColumns(buyerPricing),
             description: includeDescription
                 ? products.description
                 : sql<string | null>`NULL`,
@@ -536,6 +546,7 @@ export async function listProducts(db: Database, options: {
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
+        .leftJoin(buyerPricing, eq(buyerPricing.productId, products.id))
         .where(whereClause)
         .limit(limit)
         .offset(offset)
@@ -668,6 +679,7 @@ export async function listProducts(db: Database, options: {
         name: product.name,
         slug: product.slug,
         price: price.price,
+        priceRange: presentBuyerPriceRange(product, decimalPlaces),
         description: product.description,
         isActive: product.isActive,
         discountPercentage: price.discountPercentage,
@@ -741,6 +753,8 @@ export interface ProductPickerSummary {
     id: string;
     name: string;
     price: number;
+    /** What buyers pay; null when the product has no live SKU. */
+    priceRange: BuyerPriceRange | null;
     categoryId: string | null;
     primaryImage: string | null;
     discountPercentage: number | null;
@@ -759,21 +773,25 @@ export async function getProductsByIds(
     if (lookupIds.length === 0) return [];
 
     const orderById = new Map(lookupIds.map((id, index) => [id, index]));
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const [rows, decimalPlaces] = await Promise.all([db
         .select({
             id: products.id,
             name: products.name,
             priceMinor: products.priceMinor,
+            ...buyerPriceRangeColumns(buyerPricing),
             categoryId: products.categoryId,
             discountBps: products.discountBps,
         })
         .from(products)
+        .leftJoin(buyerPricing, eq(buyerPricing.productId, products.id))
         .where(and(inArray(products.id, lookupIds), isNull(products.deletedAt))), readStoreDecimalPlaces(db)]);
 
     const mediaByProduct = await loadProductMediaProjections(db, rows.map((row) => row.id));
-    return rows.map(({ priceMinor, discountBps, ...row }) => ({
+    return rows.map(({ priceMinor, discountBps, buyerFromMinor, buyerToMinor, buyerBaseMinor, ...row }) => ({
         ...row,
         price: fromMinor(priceMinor, decimalPlaces),
+        priceRange: presentBuyerPriceRange({ buyerFromMinor, buyerToMinor, buyerBaseMinor }, decimalPlaces),
         discountPercentage: bpsToPercent(discountBps),
         primaryImage: resolveProductImageRepresentation(mediaByProduct.get(row.id) ?? [])?.url ?? null,
     })).sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
@@ -952,21 +970,26 @@ export async function getCategoryStats(db: Database) {
 
 /**
  * Creates a new product along with ordered media, rich content, and attributes.
- * Checks for slug uniqueness before inserting.
+ * A typed slug that is already in use is refused; an omitted one is derived
+ * from the name and suffixed until it is free.
  * Returns the new product ID on success.
  */
+function isProductSlugConstraintError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return /products(?:_slug_idx|\.slug)/i.test(message);
+}
+
 export async function createProduct(
     db: Database,
     data: CreateProductInput,
 ): Promise<{ id: string; aggregateRevision: number }> {
-    const existingProduct = await db
-        .select({ id: products.id })
-        .from(products)
-        .where(sql`slug = ${data.slug} AND deleted_at IS NULL`)
-        .get();
-
-    if (existingProduct) {
-        throw new ConflictError("A product with this slug already exists");
+    if (data.slug) {
+        const existingProduct = await db
+            .select({ id: products.id })
+            .from(products)
+            .where(eq(products.slug, data.slug))
+            .get();
+        if (existingProduct) throw new ConflictError("A product with this slug already exists");
     }
 
     await assertActiveAttributeAssignments(db, data.attributes ?? []);
@@ -978,7 +1001,10 @@ export async function createProduct(
     const productId = "prod_" + nanoid();
     const currency = await readStoreCurrency(db);
     const productPrice = catalogPriceColumns(data, currency);
-    const priceMinor = toStoreMinor(data.price, currency);
+    // With options, the product price is its lowest variant price (productPriceMinorSql).
+    const priceMinor = data.optionMatrix?.variants.length
+        ? Math.min(...data.optionMatrix.variants.map((variant) => toStoreMinor(variant.price, currency)))
+        : toStoreMinor(data.price, currency);
     const baseDefaultVariant = defaultVariantValues(productId, priceMinor);
     const defaultVariant = {
         ...baseDefaultVariant,
@@ -991,15 +1017,13 @@ export async function createProduct(
     };
     const mediaPlan = await validateProductMediaPlan(db, productId, data.media, false);
 
-    // Drizzle D1 batch() requires specific tuple types
-    const batchOps: [SQLiteBatchItem, ...SQLiteBatchItem[]] = [
-        db.insert(products).values({
+    const productInsert = (slug: string) => db.insert(products).values({
             id: productId,
             name: data.name,
             description: data.description || null,
             priceMinor,
             categoryId: data.categoryId,
-            slug: data.slug,
+            slug,
             metaTitle: data.metaTitle || null,
             metaDescription: data.metaDescription,
             canonicalPath: data.canonicalPath ?? null,
@@ -1015,8 +1039,8 @@ export async function createProduct(
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
             deletedAt: null,
-        }),
-    ];
+        });
+    const batchOps: SQLiteBatchItem[] = [];
 
     if (!data.optionMatrix) {
         batchOps.push(db.insert(productVariants).values(defaultVariant));
@@ -1185,9 +1209,21 @@ export async function createProduct(
         }
     }
 
+    const insertWithSlug = async (slug: string) => {
+        await db.batch([productInsert(slug), ...batchOps]);
+    };
     try {
-        await db.batch(batchOps);
+        if (data.slug) await insertWithSlug(data.slug);
+        else {
+            await insertWithDerivedHandle(
+                { db, table: products, column: products.slug, isHandleConflict: isProductSlugConstraintError },
+                data.name,
+                "product",
+                insertWithSlug,
+            );
+        }
     } catch (error) {
+        if (isProductSlugConstraintError(error)) throw new ConflictError("A product with this slug already exists");
         rethrowProductVariantIdentityConstraint(error);
     }
     return { id: productId, aggregateRevision: 1 };
@@ -1280,7 +1316,7 @@ export async function updateProduct(
             .set({
                 name: data.name,
                 description: data.description,
-                priceMinor,
+                priceMinor: productPriceMinorSql(id, priceMinor),
                 categoryId: data.categoryId,
                 slug: data.slug,
                 metaTitle: data.metaTitle,
@@ -1951,7 +1987,6 @@ export async function duplicateProduct(
 ): Promise<{ id: string; aggregateRevision: number }> {
     const source = await getProductDetails(db, id);
     if (!source || source.deletedAt) throw new NotFoundError("Product not found");
-    if (!source.categoryId) throw new ValidationError("Choose a category for this product before copying it.");
 
     let slug = `${source.slug.slice(0, 90)}-copy`;
     const slugRows = await db

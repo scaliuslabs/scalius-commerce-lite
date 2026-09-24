@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildAgentOperationManifest,
+  inlineComponentSchemaRefs,
   parseAgentOperationMetadata,
   renderAgentOperationManifestModule,
   type AgentOperationMetadata,
@@ -730,5 +731,23 @@ describe("sensitive continuation operation metadata", () => {
         },
       },
     })).toThrowError(/continuationOutput/);
+  });
+
+  it("inlines component schema references so each operation is self-contained", () => {
+    const schemas = {
+      Theme: { type: "object", properties: { layout: { $ref: "#/components/schemas/Layout" }, parent: { $ref: "#/components/schemas/Theme" } } },
+      Layout: { type: "object", properties: { header: { type: "string", enum: ["classic"] } } },
+    };
+    expect(inlineComponentSchemaRefs({ schema: { $ref: "#/components/schemas/Theme" } }, schemas)).toEqual({
+      schema: {
+        type: "object",
+        properties: {
+          layout: { type: "object", properties: { header: { type: "string", enum: ["classic"] } } },
+          // A self-reference stays a reference instead of recursing forever.
+          parent: { $ref: "#/components/schemas/Theme" },
+        },
+      },
+    });
+    expect(() => inlineComponentSchemaRefs({ $ref: "#/components/schemas/Missing" }, schemas)).toThrowError(/Missing/);
   });
 });

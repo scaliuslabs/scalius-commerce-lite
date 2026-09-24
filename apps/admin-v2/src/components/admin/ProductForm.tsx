@@ -46,7 +46,8 @@ import { ProductSearchListing } from "./product-form/ProductSearchListing";
 import { StatusCard } from "./product-form/StatusCard";
 import { OrganizationCard } from "./product-form/OrganizationCard";
 import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
-import { generateSlug, productFieldLabel } from "./product-form/utils";
+import { productFieldLabel } from "./product-form/utils";
+import { autoHandleFor } from "./search-listing/SearchListingCard";
 import {
   DEFAULT_PRODUCT_CONDITION,
   productFormSchema,
@@ -64,6 +65,7 @@ import type { ProductRevisionConflict } from "@/lib/admin-api-error";
 import type {
   OptionMatrixEditorHandle,
   ProductCreateComposition,
+  VariantPriceRange,
 } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
 
@@ -82,6 +84,8 @@ interface ProductFormProps {
     productName: string;
     productPrice: number;
     isActive: boolean;
+    /** The variant editor reports its price range here; with options, variants carry the prices. */
+    onPricesChange: (range: VariantPriceRange | null) => void;
   }) => React.ReactNode;
   /** The variant editor rendered by `optionManager`. */
   matrixRef: React.RefObject<OptionMatrixEditorHandle | null>;
@@ -183,6 +187,7 @@ function ProductEditor({
       slug: "",
       media: [],
       slugEdited: false,
+      variantPriced: false,
       attributes: [],
       additionalInfo: [],
       ...defaultValues,
@@ -215,7 +220,8 @@ function ProductEditor({
   if (draftRef) {
     draftRef.current = () => ({
       values: form.getValues(),
-      changed: (Object.keys(dirtyFields) as Array<keyof ProductFormValues>).filter((key) => key !== "slugEdited"),
+      changed: (Object.keys(dirtyFields) as Array<keyof ProductFormValues>)
+        .filter((key) => key !== "slugEdited" && key !== "variantPriced"),
     });
   }
   React.useEffect(() => {
@@ -226,6 +232,14 @@ function ProductEditor({
     // Applied once, when the form mounts on the latest version.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // With options the variants carry the prices: the product price follows the cheapest one,
+  // as the server keeps it, and is not the merchant's to edit (or a change to save).
+  const [variantPrices, setVariantPrices] = React.useState<VariantPriceRange | null>(null);
+  React.useEffect(() => {
+    form.resetField("variantPriced", { defaultValue: variantPrices !== null });
+    if (variantPrices) form.resetField("price", { defaultValue: variantPrices.min });
+  }, [form, variantPrices]);
 
   /** One line per field that failed the page's own checks, for the save banner. */
   const describeInvalid = (errors: FieldErrors<ProductFormValues>) =>
@@ -271,13 +285,14 @@ function ProductEditor({
   });
   const scope = useSaveScope();
 
-  // New products take their web address from the title until it is edited.
+  // New products show the web address the server will make from the title until it is edited;
+  // an address the merchant didn't type is never sent (see formatFormValuesForSubmission).
   React.useEffect(() => {
     if (isEdit) return;
     const subscription = form.watch((value, { name }) => {
-      if (name === "name" && value.name && !form.getValues("slugEdited")) {
+      if (name === "name" && !form.getValues("slugEdited")) {
         // Re-check only to clear an existing error; never flag the address while the title is typed.
-        form.setValue("slug", generateSlug(value.name), { shouldValidate: Boolean(form.getFieldState("slug").error) });
+        form.setValue("slug", autoHandleFor(value.name ?? "", "product"), { shouldValidate: Boolean(form.getFieldState("slug").error) });
       }
     });
     return () => subscription.unsubscribe();
@@ -344,7 +359,7 @@ function ProductEditor({
             <div className="min-w-0 space-y-4 lg:col-span-2">
               <TitleDescriptionSection form={form} readOnly={readOnly} />
               <ProductImagesSection form={form} readOnly={readOnly} />
-              <PricingCard form={form} />
+              <PricingCard form={form} variantPrices={variantPrices} />
               <Card>
                 <CardHeader>
                   <CardTitle>{t("variants")}</CardTitle>
@@ -376,6 +391,7 @@ function ProductEditor({
                     productName: form.watch("name"),
                     productPrice: Number.isFinite(form.watch("price")) ? form.watch("price") ?? 0 : 0,
                     isActive: form.watch("isActive"),
+                    onPricesChange: setVariantPrices,
                   })}
                 </CardContent>
               </Card>

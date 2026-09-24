@@ -19,12 +19,20 @@ import {
 // Products
 // ─────────────────────────────────────────
 
+/** What buyers pay for a product, as the storefront shows it. */
+export const buyerPriceRangeSchema = z.object({
+  from: z.number().openapi({ description: "The storefront's \"From\" price: the lowest price buyers can pay now." }),
+  to: z.number().openapi({ description: "The highest price in the same buyer pool; equal to from for one price." }),
+  compareAt: z.number().nullable().openapi({ description: "The undiscounted price of the \"From\" SKU when it is on sale." }),
+}).nullable().openapi({ description: "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price." });
+
 /** Product summary — returned by listProducts (admin). */
 export const productSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   slug: z.string(),
   price: z.number(),
+  priceRange: buyerPriceRangeSchema,
   description: z.string().nullable(),
   isActive: z.boolean(),
   discountPercentage: z.number(),

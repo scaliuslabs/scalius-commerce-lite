@@ -1,21 +1,21 @@
 import { useId, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
-import { ArrowDown, ArrowUp } from "lucide-react";
-import type {
-  StorefrontCardBadgePlacement,
-  StorefrontCardImageRatio,
-  StorefrontFooterStyle,
-  StorefrontHeaderStyle,
-  StorefrontHomepageSection,
-  StorefrontProductGalleryLayout,
-  StorefrontProductThumbnailPlacement,
-  StorefrontThemeCornerStyle,
+import { ArrowDown, ArrowUp, Check } from "lucide-react";
+import {
+  STOREFRONT_CARD_STYLE_SPECS,
+  STOREFRONT_PRODUCT_PAGE_SPECS,
+  type StorefrontCardStyle,
+  type StorefrontDensity,
+  type StorefrontFooterStyle,
+  type StorefrontHeaderStyle,
+  type StorefrontProductPageLayout,
+  type StorefrontThemeTokens,
 } from "@scalius/shared/storefront-theme";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { moveHomepageSection } from "./theme-settings";
+import { isThemeSection, moveSection } from "./theme-settings";
 
 /**
  * Visual radio options: a schematic of each choice with its name under it.
@@ -26,30 +26,42 @@ export function VisualChoice<Value extends string>({
   value,
   options,
   onChange,
+  className = "grid-cols-3",
 }: {
   label: string;
-  value: Value;
-  options: ReadonlyArray<{ value: Value; label: string; sketch: ReactNode }>;
+  /** Null when no option matches (a fine-tuned Style). */
+  value: Value | null;
+  options: ReadonlyArray<{ value: Value; label: string; help?: string; sketch: ReactNode }>;
   onChange: (value: Value) => void;
+  /** Grid columns. */
+  className?: string;
 }) {
   const labelId = useId();
   return (
     <div className="space-y-1.5">
-      <p id={labelId} className="text-body font-medium">{label}</p>
+      <p id={labelId} className="sr-only">{label}</p>
       <RadioGroupPrimitive.Root
         aria-labelledby={labelId}
-        value={value}
+        value={value ?? ""}
         onValueChange={(next) => onChange(next as Value)}
-        className={cn("grid gap-3", options.length > 2 ? "grid-cols-3" : "grid-cols-2")}
+        className={cn("grid gap-3", className)}
       >
         {options.map((option) => (
           <RadioGroupPrimitive.Item
             key={option.value}
             value={option.value}
-            className="rounded-xl border bg-card p-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card data-[state=checked]:border-primary data-[state=checked]:outline-1 data-[state=checked]:outline-primary"
+            className="group flex flex-col rounded-xl border bg-card p-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card data-[state=checked]:border-primary data-[state=checked]:outline-1 data-[state=checked]:outline-primary"
           >
             {option.sketch}
-            <span className="block px-1 pt-1.5 pb-0.5 text-body">{option.label}</span>
+            <span className="flex items-start justify-between gap-1 px-1 pt-1.5 text-body font-medium">
+              {option.label}
+              <span className="hidden h-lh items-center group-data-[state=checked]:flex">
+                <Check className="size-4 shrink-0" aria-hidden="true" />
+              </span>
+            </span>
+            {option.help ? (
+              <span className="block px-1 pb-0.5 text-body text-muted-foreground">{option.help}</span>
+            ) : null}
           </RadioGroupPrimitive.Item>
         ))}
       </RadioGroupPrimitive.Root>
@@ -57,50 +69,17 @@ export function VisualChoice<Value extends string>({
   );
 }
 
-/** A short run of mutually exclusive values (products per row). */
-export function SegmentedChoice<Value extends number>({
-  label,
-  value,
-  options,
+/**
+ * Homepage sections in order, each with Move up / Move down (no drag).
+ * Builder sections are listed as custom sections: they move, but are never
+ * edited or removed here.
+ */
+export function HomepageOrder<Section extends { id: string; type: string }>({
+  sections,
   onChange,
 }: {
-  label: string;
-  value: Value;
-  options: ReadonlyArray<{ value: Value; label: string }>;
-  onChange: (value: Value) => void;
-}) {
-  const labelId = useId();
-  return (
-    <div className="space-y-1.5">
-      <p id={labelId} className="text-body font-medium">{label}</p>
-      <RadioGroupPrimitive.Root
-        aria-labelledby={labelId}
-        value={String(value)}
-        onValueChange={(next) => onChange(Number(next) as Value)}
-        orientation="horizontal"
-        className="inline-flex gap-0.5 rounded-lg bg-secondary p-0.5"
-      >
-        {options.map((option) => (
-          <RadioGroupPrimitive.Item
-            key={option.value}
-            value={String(option.value)}
-            className="h-11 min-w-12 rounded-md px-3 text-body tabular-nums hover:bg-secondary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-card data-[state=checked]:shadow-button sm:h-8"
-          >
-            {option.label}
-          </RadioGroupPrimitive.Item>
-        ))}
-      </RadioGroupPrimitive.Root>
-    </div>
-  );
-}
-
-/** Homepage sections in order, each with Move up / Move down (no drag). */
-export function HomepageOrder({
-  order,
-  onChange,
-}: {
-  order: readonly StorefrontHomepageSection[];
-  onChange: (order: StorefrontHomepageSection[]) => void;
+  sections: readonly Section[];
+  onChange: (sections: Section[]) => void;
 }) {
   const t = useMessages(onlineStoreMessages);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
@@ -111,11 +90,11 @@ export function HomepageOrder({
     buttons.current.get(focusNext.current)?.focus();
     focusNext.current = null;
   });
-  const move = (section: StorefrontHomepageSection, delta: -1 | 1) => {
-    const next = moveHomepageSection(order, section, delta);
-    const index = next.indexOf(section);
+  const move = (id: string, delta: -1 | 1) => {
+    const next = moveSection(sections, id, delta);
+    const index = next.findIndex((section) => section.id === id);
     const atEnd = delta < 0 ? index === 0 : index === next.length - 1;
-    focusNext.current = `${section}:${atEnd ? -delta : delta}`;
+    focusNext.current = `${id}:${atEnd ? -delta : delta}`;
     onChange(next);
   };
   const buttonRef = (key: string) => (node: HTMLButtonElement | null) => {
@@ -125,30 +104,32 @@ export function HomepageOrder({
 
   return (
     <ol>
-      {order.map((section, index) => {
-        const name = t(`section_${section}` as const);
+      {sections.map((section, index) => {
+        const name = isThemeSection(section)
+          ? t(`section_${section.type as "hero" | "collections" | "categories" | "delivery"}`)
+          : t("customSection");
         return (
-          <li key={section} className="flex min-h-12 items-center gap-1 border-t border-border py-1 pr-2 pl-4 first:border-t-0">
-            <span className="min-w-0 flex-1 text-body">{name}</span>
+          <li key={section.id} className="flex min-h-12 items-center gap-1 border-t border-border py-1 pr-2 pl-4 first:border-t-0">
+            <span className={cn("min-w-0 flex-1 text-body", !isThemeSection(section) && "text-muted-foreground")}>{name}</span>
             <Button
-              ref={buttonRef(`${section}:-1`)}
+              ref={buttonRef(`${section.id}:-1`)}
               type="button"
               variant="ghost"
               size="icon-sm"
               aria-label={t("moveSectionUp", { name })}
               disabled={index === 0}
-              onClick={() => move(section, -1)}
+              onClick={() => move(section.id, -1)}
             >
               <ArrowUp aria-hidden="true" />
             </Button>
             <Button
-              ref={buttonRef(`${section}:1`)}
+              ref={buttonRef(`${section.id}:1`)}
               type="button"
               variant="ghost"
               size="icon-sm"
               aria-label={t("moveSectionDown", { name })}
-              disabled={index === order.length - 1}
-              onClick={() => move(section, 1)}
+              disabled={index === sections.length - 1}
+              onClick={() => move(section.id, 1)}
             >
               <ArrowDown aria-hidden="true" />
             </Button>
@@ -159,11 +140,11 @@ export function HomepageOrder({
   );
 }
 
-
 /*
  * Schematics. Parts paint with the --sk-* custom properties, so the same
  * drawing shows dashboard tokens in the pickers and a Style's own colours in
- * its preview. Everything is a <span>: sketches sit inside radio buttons.
+ * its preview. Everything is a decorative <span>: sketches sit inside radio
+ * buttons, whose label names the choice.
  */
 
 export interface SketchPalette {
@@ -341,44 +322,82 @@ export function FooterSketch({ kind }: { kind: StorefrontFooterStyle }) {
   );
 }
 
-const CORNERS: Record<StorefrontThemeCornerStyle, string> = {
+const CORNERS: Record<StorefrontThemeTokens["radius"], string> = {
   square: "rounded-none",
   subtle: "rounded-xs",
   rounded: "rounded-sm",
 };
 
-/** One product card: photo, name, price, optional discount badge. */
+/** One product card as its style draws it: photo shape, badge, buy-now button, second photo. */
 export function ProductTile({
-  ratio,
-  badge,
-  corners = "subtle",
+  card,
+  radius = "subtle",
+  badge = false,
   className,
 }: {
-  ratio: StorefrontCardImageRatio;
-  badge?: StorefrontCardBadgePlacement;
-  corners?: StorefrontThemeCornerStyle;
+  card: StorefrontCardStyle;
+  radius?: StorefrontThemeTokens["radius"];
+  /** Draw the discount badge on this tile. */
+  badge?: boolean;
   /** Width cap, so a tall photo still fits the sketch. */
   className: string;
 }) {
+  const spec = STOREFRONT_CARD_STYLE_SPECS[card];
   return (
     <span className={cn("flex w-full min-w-0 flex-col gap-1", className)}>
-      <span className={cn("relative block bg-(--sk-soft)", ratio === "portrait" ? "aspect-3/4" : "aspect-square", CORNERS[corners])}>
-        {badge === "image" ? <span className="absolute top-0.5 left-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
+      <span
+        className={cn(
+          "relative flex overflow-clip bg-(--sk-soft)",
+          spec.imageRatio === "portrait" ? "aspect-3/4" : "aspect-square",
+          CORNERS[radius],
+        )}
+      >
+        {/* The second photo that shows on hover. */}
+        {spec.hoverImage ? <span className="ml-auto w-1/3 bg-(--sk-edge)" /> : null}
+        {badge && spec.badge === "image" ? <span className="absolute top-0.5 left-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
       </span>
       <Line className="w-full" />
       <span className="flex items-center gap-0.5">
         <span className="h-1 w-2.5 rounded-xs bg-(--sk-ink)" />
-        {badge === "price" ? <span className="h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
+        {badge && spec.badge === "price" ? <span className="h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
       </span>
+      {spec.quickBuy ? <span className={cn("h-1.5 w-full bg-(--sk-accent)", CORNERS[radius])} /> : null}
     </span>
   );
 }
 
-export function CardSketch({ ratio, badge }: { ratio: StorefrontCardImageRatio; badge?: StorefrontCardBadgePlacement }) {
+export function CardStyleSketch({ card }: { card: StorefrontCardStyle }) {
   return (
     <Sketch className="flex-row items-start justify-center gap-2">
-      <ProductTile ratio={ratio} badge={badge} className="max-w-9" />
-      <ProductTile ratio={ratio} badge={badge} className="max-w-9" />
+      <ProductTile card={card} badge className="max-w-9" />
+      <ProductTile card={card} className="max-w-9" />
+    </Sketch>
+  );
+}
+
+/**
+ * A computer screen and a phone filled with products: compact fits more,
+ * smaller cards with tighter gaps; comfortable shows fewer, larger ones.
+ * Both keep two products across on phones.
+ */
+export function DensitySketch({ density }: { density: StorefrontDensity }) {
+  const compact = density === "compact";
+  const tiles = (count: number) => Array.from({ length: count }, (_, index) => (
+    <Block key={index} className="aspect-square" />
+  ));
+  return (
+    <Sketch className="flex-row items-start gap-2">
+      <span className={cn("grid flex-1 content-start", compact ? "grid-cols-5 gap-0.5" : "grid-cols-3 gap-1.5")}>
+        {tiles(compact ? 10 : 6)}
+      </span>
+      <span
+        className={cn(
+          "grid w-6 shrink-0 grid-cols-2 content-start rounded-xs border border-(--sk-edge) p-0.5",
+          compact ? "gap-0.5" : "gap-1",
+        )}
+      >
+        {tiles(compact ? 6 : 4)}
+      </span>
     </Sketch>
   );
 }
@@ -392,33 +411,32 @@ const Details = () => (
   </span>
 );
 
-export function GallerySketch({ layout }: { layout: StorefrontProductGalleryLayout }) {
-  return layout === "stacked" ? (
+const Thumbs = ({ className }: { className?: string }) => (
+  <span className={cn("flex shrink-0 gap-0.5", className)}>
+    <Block className="size-2" />
+    <Block className="size-2" />
+    <Block className="size-2" />
+  </span>
+);
+
+export function ProductPageSketch({ layout }: { layout: StorefrontProductPageLayout }) {
+  const spec = STOREFRONT_PRODUCT_PAGE_SPECS[layout];
+  const photo = (
+    <span className={cn("flex min-w-0 gap-0.5", spec.thumbnails === "beside" ? "flex-row" : "flex-col")}>
+      {spec.thumbnails === "beside" ? <Thumbs className="flex-col" /> : null}
+      <Block className={cn("min-w-0 flex-1", spec.gallery === "stacked" ? "h-6" : "aspect-square")} />
+      {spec.thumbnails === "below" ? <Thumbs /> : null}
+    </span>
+  );
+  return spec.gallery === "stacked" ? (
     <Sketch>
-      <Block className="h-7 shrink-0" />
+      {photo}
       <Details />
     </Sketch>
   ) : (
     <Sketch className="flex-row gap-1.5">
-      <Block className="w-1/2" />
+      <span className="w-1/2 shrink-0">{photo}</span>
       <Details />
-    </Sketch>
-  );
-}
-
-export function ThumbnailSketch({ placement }: { placement: StorefrontProductThumbnailPlacement }) {
-  const thumbs = (
-    <>
-      <Block className="size-2.5 shrink-0" />
-      <Block className="size-2.5 shrink-0" />
-      <Block className="size-2.5 shrink-0" />
-    </>
-  );
-  return (
-    <Sketch className={cn("items-center", placement === "beside" && "flex-row justify-center")}>
-      {placement === "beside" ? <span className="flex flex-col gap-1">{thumbs}</span> : null}
-      <Block className="size-12 shrink-0" />
-      {placement === "below" ? <span className="flex gap-1">{thumbs}</span> : null}
     </Sketch>
   );
 }

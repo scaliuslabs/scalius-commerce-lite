@@ -10,12 +10,15 @@ interface Props {
   collection: CollectionWithProducts;
   currencySymbol?: string;
   currencyCode?: string;
+  /** The rail starts in the first viewport (first photos load eagerly). */
+  aboveFold?: boolean;
 }
 
 const {
   collection,
   currencySymbol = DEFAULT_CURRENCY.symbol,
   currencyCode = DEFAULT_CURRENCY.code,
+  aboveFold = false,
 } = Astro.props;
 
 const products = collection.products ?? [];
@@ -71,12 +74,15 @@ const collectionHref = `/collections/${encodeURIComponent(collection.id)}`;
             data-product-rail-track
             class="flex snap-x snap-mandatory gap-3 overflow-x-auto py-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden"
           >
-            {products.map((product) => (
+            {products.map((product, index) => (
               <div class="w-[72%] shrink-0 snap-start sm:w-[calc((100%_-_2rem)/3)] lg:w-[calc((100%_-_3rem)/4)] xl:w-[calc((100%_-_4rem)/5)]">
                 <ProductCard
                   product={product}
                   currencySymbol={currencySymbol}
                   currencyCode={currencyCode}
+                  context="rail"
+                  index={index}
+                  aboveFold={aboveFold}
                 />
               </div>
             ))}

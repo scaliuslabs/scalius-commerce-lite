@@ -74,11 +74,23 @@ describe("AttributeDialog", () => {
     expect(text()).toContain("Enter a name of at least 2 characters.");
   });
 
-  it("asks for an English handle when the name is in Bangla, and saves once it has one", async () => {
+  it("offers a handle made from a Bangla name and leaves it to the server unless one is typed", async () => {
     await render();
 
     await type(field("attribute-name"), "কাপড়");
     expect(field("attribute-handle").value).toBe("");
+    expect(field("attribute-handle").placeholder).toBe("kapor");
+    expect(text()).toContain("Leave empty to make it from the name. If it is taken, a number is added.");
+    await press("Create");
+    expect(api.create).toHaveBeenCalledWith({ body: { name: "কাপড়", slug: undefined, filterable: true } });
+    expect(api.success).toHaveBeenCalledWith("Attribute saved");
+  });
+
+  it("sends a typed handle and still checks it", async () => {
+    await render();
+
+    await type(field("attribute-name"), "কাপড়");
+    await type(field("attribute-handle"), "f");
     await press("Create");
     expect(text()).toContain("Enter at least 2 English letters or numbers, e.g. fabric.");
     expect(api.create).not.toHaveBeenCalled();
@@ -86,7 +98,6 @@ describe("AttributeDialog", () => {
     await type(field("attribute-handle"), "Fabric Type");
     await press("Create");
     expect(api.create).toHaveBeenCalledWith({ body: { name: "কাপড়", slug: "fabric-type", filterable: true } });
-    expect(api.success).toHaveBeenCalledWith("Attribute saved");
     expect(api.close).toHaveBeenCalled();
   });
 

@@ -301,7 +301,9 @@ export function createOrdersCsvArtifactBuilder(
     amountReceived(order),
     order.refundedAmount,
     cashToCollect(order),
-    order.paymentMethod === "cod" ? label(COD_STATUS_LABELS, order.codStatus) : "",
+    order.paymentMethod === "cod" && !["cancelled", "returned"].includes(order.status)
+      ? label(COD_STATUS_LABELS, order.codStatus)
+      : "",
     order.notes,
   ]], maxBytes);
 }

@@ -7,6 +7,7 @@ import {
   securityDocument,
   seoDocument,
 } from "../settings/documents";
+import { DEFAULT_STOREFRONT_THEME, storefrontStylePresetTheme } from "@scalius/shared/storefront-theme";
 import { saveHomepagePresentationSettings } from "../settings/site-settings.service";
 import { getHomepageData, getLayoutData } from "./storefront.service";
 
@@ -37,6 +38,26 @@ describe("storefront layout data", () => {
     const fallback = await getLayoutData(createSqliteD1Database().db);
     expect(layout.currency.code).toBe(fallback.currency.code);
     expect(layout.currency.code).not.toBe("ZZZ");
+  });
+
+  it("renders the published theme whole, or the default whole when the row is unreadable", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const themeWarnings = () => warn.mock.calls.filter(([message]) => String(message).includes("theme"));
+    const { sqlite, db } = createSqliteD1Database();
+    expect((await getLayoutData(db)).theme).toEqual(DEFAULT_STOREFRONT_THEME);
+
+    const boutique = storefrontStylePresetTheme("boutique");
+    sqlite.prepare(`INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
+      VALUES ('default', ?, 1, 1, 1)`).run(JSON.stringify(boutique));
+    expect((await getLayoutData(db)).theme).toEqual(boutique);
+    expect(themeWarnings()).toHaveLength(0);
+
+    const lowContrast = structuredClone(boutique);
+    lowContrast.tokens.colors.foreground = lowContrast.tokens.colors.background;
+    sqlite.prepare("UPDATE theme_settings SET colors = ?").run(JSON.stringify(lowContrast));
+    expect((await getLayoutData(db)).theme).toEqual(DEFAULT_STOREFRONT_THEME);
+    expect(themeWarnings()).toHaveLength(1);
+    warn.mockRestore();
   });
 });
 
@@ -79,6 +100,37 @@ describe("storefront homepage data", () => {
       homepageTitle: "River & Loom",
       homepageMetaDescription: null,
     });
+  });
+
+  it("points hero slides saved with an original upload at its published rendition (R3-MOB-01)", async () => {
+    const { db, sqlite } = createSqliteD1Database();
+    const slide = (id: string, url: string) => ({ id, url, title: `Banner ${id}`, link: "" });
+    sqlite.exec(`
+      INSERT INTO media (id, filename, kind, object_key, size, mime_type, variant_width) VALUES
+        ('m_a', 'a.webp', 'image', 'media/hero_a.webp', 64000, 'image/webp', 1080),
+        ('m_b', 'b.jpg', 'image', 'media/hero_b.jpg', 64000, 'image/jpeg', NULL);
+      INSERT INTO hero_sliders (id, type, images) VALUES
+        ('hero_d', 'desktop', '${JSON.stringify([
+          slide("a", "https://cdn.example.test/media/hero_a.webp"),
+          slide("b", "https://cdn.example.test/media/hero_b.jpg"),
+        ])}'),
+        ('hero_m', 'mobile', '${JSON.stringify([
+          slide("c", "https://cdn.example.test/media/hero_c.webp/960.webp"),
+          slide("a2", "https://cdn.example.test/media/hero_a.webp"),
+        ])}');
+    `);
+
+    const { hero } = await getHomepageData(db);
+    expect(hero.desktop?.images.map((image) => image.url)).toEqual([
+      // Renditions exist: the storefront can now derive srcset and a small preload.
+      "https://cdn.example.test/media/hero_a.webp/1080.webp",
+      // No renditions yet: the original stays.
+      "https://cdn.example.test/media/hero_b.jpg",
+    ]);
+    expect(hero.mobile?.images.map((image) => image.url)).toEqual([
+      "https://cdn.example.test/media/hero_c.webp/960.webp",
+      "https://cdn.example.test/media/hero_a.webp/1080.webp",
+    ]);
   });
 });
 

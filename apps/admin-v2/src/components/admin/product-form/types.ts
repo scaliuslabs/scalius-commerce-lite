@@ -45,7 +45,8 @@ export const productFormSchema = z.object({
     .min(0, msg("priceNegative"))
     .max(MAX_PRODUCT_PRICE, { error: () => translate(productMessages, "issueTooLarge", { max: formatNumber(MAX_PRODUCT_PRICE) }) })
     .nullable(),
-  categoryId: z.string().min(1, msg("chooseCategoryError")),
+  /** Optional, as in Shopify: "" saves the product without one. */
+  categoryId: z.string(),
   isActive: z.boolean(),
   discountType: z.enum(["percentage", "flat"]),
   discountPercentage: z.number(msg("issueNotANumber")).min(0, msg("discountNegative")).nullish(),
@@ -58,11 +59,12 @@ export const productFormSchema = z.object({
   excludeFromSitemap: z.boolean(),
   excludeFromProductFeed: z.boolean(),
   productCondition: z.enum(PRODUCT_CONDITION_VALUES),
+  /** Empty on a new product: the server makes the address from the title. */
   slug: z
     .string()
-    .min(3, msg("webAddressInvalid"))
     .max(100, msg("webAddressInvalid"))
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, msg("webAddressInvalid")),
+    .regex(/^(?:[a-z0-9]+(?:-[a-z0-9]+)*)?$/, msg("webAddressInvalid"))
+    .refine((value) => value === "" || value.length >= 3, msg("webAddressInvalid")),
   media: z.array(
     z.object({
       id: z.string(),
@@ -102,9 +104,15 @@ export const productFormSchema = z.object({
     )
     .optional(),
   slugEdited: z.boolean().optional(),
+  /** The product has options: its variants carry the prices (and their own checks). */
+  variantPriced: z.boolean().optional(),
 }).superRefine((data, ctx) => {
+  // A saved product keeps its web address: clearing it is a mistake, not "make one up".
+  if (data.id && !data.slug) {
+    ctx.addIssue({ code: "custom", message: translate(productMessages, "webAddressInvalid"), path: ["slug"] });
+  }
   // Customers can't buy a product without a price, and feeds reject it.
-  if (data.isActive && (data.price ?? 0) <= 0) {
+  if (data.isActive && !data.variantPriced && (data.price ?? 0) <= 0) {
     const key = data.price === null ? "priceRequired" : "priceAboveZero";
     ctx.addIssue({ code: "custom", message: translate(productMessages, key), path: ["price"] });
   }

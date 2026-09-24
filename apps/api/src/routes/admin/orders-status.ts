@@ -207,6 +207,98 @@ app.openapi(updateStatusRoute, async (c) => {
     return ok(c, { message: result.message });
 });
 
+// ─── POST /:id/mark-delivered ────────────────────────────────────────────────
+
+const markDeliveredRoute = createRoute({
+    operationId: "dashboard.orders.mark_delivered",
+    method: "post",
+    path: "/{id}/mark-delivered",
+    tags: ["Admin - Orders"],
+    summary: "Mark a paid order your own rider delivered in full as delivered",
+    description: "Cash-on-delivery orders are delivered by recording the cash (POST /{id}/cod). Refused while anything is unsent or money is due.",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+        200: {
+            description: "Order delivered",
+            content: { "application/json": { schema: messageResponse } },
+        },
+        ...adminMutationErrorResponses,
+    },
+});
+
+app.openapi(markDeliveredRoute, async (c) => {
+    const db = c.get("db");
+    const orderId = c.req.valid("param").id;
+    const result = await OrdersService.markOrderDelivered(db, orderId);
+    if (result.notification) {
+        await OrdersService.recordOrderEvent(db, {
+            orderId,
+            kind: "status_changed",
+            actorId: actorIdOf(c),
+            requestKey: `mark-delivered:${result.notification.version}`,
+            data: { from: result.notification.previousStatus, to: "delivered" },
+        });
+        await enqueueOrderNotificationMessage({
+            db,
+            queue: c.env.JOBS_QUEUE,
+            message: {
+                type: "order.notification",
+                orderId: result.notification.orderId,
+                customerEmail: result.notification.customerEmail,
+                customerName: result.notification.customerName,
+                notificationType: result.notification.notificationType,
+            },
+            dedupeKey: result.notification.dedupeKey ?? `order_status:${orderId}:${result.notification.notificationType}`,
+            source: "orders-mark-delivered",
+        });
+    }
+    if (result.availabilityTransitionVariantIds?.length) await bumpCacheGeneration(c);
+    return ok(c, { message: result.message });
+});
+
+// ─── POST /:id/shipments/:shipmentId/returned ────────────────────────────────
+
+const parcelReturnedRoute = createRoute({
+    operationId: "dashboard.orders.parcel_returned",
+    method: "post",
+    path: "/{id}/shipments/{shipmentId}/returned",
+    tags: ["Admin - Orders"],
+    summary: "An own-courier parcel of a part-sent order came back: its items go back on the unsent list",
+    request: { params: z.object({ id: z.string(), shipmentId: z.string() }) },
+    responses: {
+        200: {
+            description: "Parcel back; its items can be sent again or the order cancelled",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        orderId: z.string(),
+                        shipmentId: z.string(),
+                        quantity: z.number().int(),
+                        replayed: z.boolean(),
+                    })),
+                },
+            },
+        },
+        ...adminMutationErrorResponses,
+    },
+});
+
+app.openapi(parcelReturnedRoute, async (c) => {
+    const db = c.get("db");
+    const { id: orderId, shipmentId } = c.req.valid("param");
+    const result = await OrdersService.markParcelReturned(db, orderId, shipmentId);
+    if (!result.replayed) {
+        await OrdersService.recordOrderEvent(db, {
+            orderId,
+            kind: "parcel_returned",
+            actorId: actorIdOf(c),
+            requestKey: shipmentId,
+            data: { quantity: result.quantity },
+        });
+    }
+    return ok(c, result);
+});
+
 // ─── GET /:id/cod ────────────────────────────────────────────────────────────
 
 const getCodRoute = createRoute({

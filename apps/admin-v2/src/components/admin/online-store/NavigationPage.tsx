@@ -430,7 +430,7 @@ export function NavigationPage() {
   const t = useMessages(onlineStoreMessages);
   const [adding, setAdding] = useState(false);
   return (
-    <SaveBarProvider>
+    <SaveBarProvider savedMessage={t("navigationSaved")}>
       <OnlineStorePage
         title={t("navigationTitle")}
         actions={

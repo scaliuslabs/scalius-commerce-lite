@@ -86,6 +86,7 @@ const inventoryMovementSchema = z.object({
     id: z.string(),
     variantId: z.string(),
     orderId: z.string().nullable(),
+    orderNumber: z.number().int().nullable().openapi({ description: "The order's short number (#1073); null for movements without an order." }),
     type: z.string(),
     quantity: z.number(),
     previousStock: z.number(),

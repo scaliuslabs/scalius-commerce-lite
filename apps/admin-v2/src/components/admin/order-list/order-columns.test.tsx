@@ -12,6 +12,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OrderListItem } from "@scalius/core/modules/orders/orders.types";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
+import { fitColumns } from "~/components/admin/data-table/column-layout";
 import { getOrderColumns } from "./order-columns";
 import { OrderMobileCard } from "./OrderMobileCard";
 
@@ -106,5 +107,34 @@ describe("order list delivery state", () => {
   it("keeps the courier status while the parcel is simply on its way", async () => {
     const view = await render(<FulfillmentCell row={order({})} />);
     expect(view.textContent).toContain("In transit");
+  });
+});
+
+describe("order columns on a narrow screen", () => {
+  const layout = () => getOrderColumns({ ...handlers, selectable: true }).map((column) => {
+    const id = column.id!;
+    const meta = column.meta as { priority?: number; minWidth?: number; primary?: boolean } | undefined;
+    const locked = id === "select" || id === "actions" || Boolean(meta?.primary);
+    return {
+      id,
+      priority: locked ? Number.POSITIVE_INFINITY : meta?.priority ?? 50,
+      minWidth: meta?.minWidth ?? (id === "select" ? 40 : 56),
+      locked,
+    };
+  });
+  const shownAt = (width: number) => {
+    const hidden = fitColumns(layout(), width);
+    return layout().map((column) => column.id).filter((id) => !hidden.has(id) && id !== "select" && id !== "actions");
+  };
+
+  it("drops Items, then Fulfillment, then Total, Status and Customer; never the order", () => {
+    expect([2000, 800, 700, 600, 450, 300].map(shownAt)).toEqual([
+      ["order", "customer", "total", "fulfillment", "items", "status"],
+      ["order", "customer", "total", "fulfillment", "status"],
+      ["order", "customer", "total", "status"],
+      ["order", "customer", "status"],
+      ["order", "customer"],
+      ["order"],
+    ]);
   });
 });

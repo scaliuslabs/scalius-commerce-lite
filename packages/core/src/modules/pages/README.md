@@ -26,7 +26,7 @@ These flags are passed through the storefront's `Layout` component and respected
 
 ## Slug System
 
-Slugs are validated with regex `^[a-z0-9]+(?:-[a-z0-9]+)*$` (lowercase alphanumeric with hyphens). The admin form auto-generates slugs from the title. The slug prefix in the admin form shows `/` (matching the actual storefront route `/{slug}`). Duplicate slugs are rejected globally across active and trashed pages, and reserved storefront roots are rejected before persistence.
+Slugs are validated with regex `^[a-z0-9]+(?:-[a-z0-9]+)*$` (lowercase alphanumeric with hyphens). A create without a slug derives it from the title (`@scalius/shared/handle`, Bangla transliterated) and suffixes a taken or reserved one with `-2`, `-3`…; a typed slug is validated as before. The slug prefix in the admin form shows `/` (matching the actual storefront route `/{slug}`). Duplicate slugs are rejected globally across active and trashed pages, and reserved storefront roots are rejected before persistence.
 
 On the storefront, `[slug].astro` is the catch-all dynamic route. It performs early validation before making API calls:
 

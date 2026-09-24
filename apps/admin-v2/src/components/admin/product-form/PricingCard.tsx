@@ -16,8 +16,17 @@ import { useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
+import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
 
-export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }) {
+/**
+ * A product without options has one price. With options each variant has its
+ * own, so the card shows their range instead of a price nobody pays (Shopify
+ * hides it too); a product discount still applies to variants without one.
+ */
+export function PricingCard({ form, variantPrices }: {
+  form: UseFormReturn<ProductFormValues>;
+  variantPrices: VariantPriceRange | null;
+}) {
   const t = useMessages(productMessages);
   const { symbol, code, fmt, salePrice } = useCurrency();
   const [discountShown, setDiscountShown] = useState(false);
@@ -30,6 +39,7 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
   const validPrice = Number.isFinite(price) ? price ?? 0 : 0;
   const sale = salePrice(validPrice, { discountType, discountPercentage, discountAmount });
   const hasDiscount = sale !== null;
+  const discountHint = variantPrices ? <p className="text-body text-muted-foreground sm:col-span-2">{t("variantDiscountHint")}</p> : null;
 
   return (
     <Card>
@@ -37,7 +47,17 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
         <CardTitle>{t("pricing")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <FormField
+        {variantPrices ? (
+          <div className="space-y-1">
+            <p className="text-body font-medium">{t("priceLabel", { symbol })}</p>
+            <p className="text-body tabular-nums">
+              {variantPrices.min === variantPrices.max
+                ? fmt(variantPrices.min)
+                : `${fmt(variantPrices.min)}–${fmt(variantPrices.max)}`}
+            </p>
+            <p className="text-body text-muted-foreground">{t("variantPricesHint")}</p>
+          </div>
+        ) : <FormField
           control={form.control}
           name="price"
           render={({ field }) => (
@@ -60,7 +80,7 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
               <FormMessage />
             </FormItem>
           )}
-        />
+        />}
 
         {discountOpen ? (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -125,6 +145,7 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
                 </FormItem>
               )}
             />
+            {discountHint}
           </div>
         ) : (
           <Button type="button" variant="outline" size="sm" onClick={() => setDiscountShown(true)}>

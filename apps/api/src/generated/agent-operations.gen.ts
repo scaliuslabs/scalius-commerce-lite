@@ -4452,7 +4452,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 2,
                   "maxLength": 100,
-                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "description": "Omit to derive the handle from the name; a taken one gets a -2, -3… suffix."
                 },
                 "filterable": {
                   "type": "boolean",
@@ -4469,8 +4470,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 }
               },
               "required": [
-                "name",
-                "slug"
+                "name"
               ]
             }
           }
@@ -5317,7 +5317,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 3,
                   "maxLength": 100,
-                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
                 },
                 "metaTitle": {
                   "type": "string",
@@ -5397,7 +5398,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "required": [
                 "name",
                 "description",
-                "slug",
                 "metaTitle",
                 "metaDescription",
                 "image"
@@ -6806,7 +6806,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -7011,7 +7020,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -7205,7 +7223,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             }
           },
           "required": [
@@ -7435,7 +7462,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "deletedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -7814,7 +7850,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -9070,13 +9115,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "type": "boolean"
                     },
                     "createdAt": {
-                      "$ref": "#/components/schemas/NullableTimestamp"
+                      "type": "string",
+                      "nullable": true,
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
                     },
                     "updatedAt": {
-                      "$ref": "#/components/schemas/NullableTimestamp"
+                      "type": "string",
+                      "nullable": true,
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
                     },
                     "deletedAt": {
-                      "$ref": "#/components/schemas/NullableTimestamp"
+                      "type": "string",
+                      "nullable": true,
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
                     },
                     "metaTitle": {
                       "type": "string",
@@ -9349,13 +9421,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "boolean"
                   },
                   "createdAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "updatedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "deletedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -9526,6 +9625,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "price": {
                     "type": "number"
                   },
+                  "priceRange": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "from": {
+                        "type": "number",
+                        "description": "The storefront's \"From\" price: the lowest price buyers can pay now."
+                      },
+                      "to": {
+                        "type": "number",
+                        "description": "The highest price in the same buyer pool; equal to from for one price."
+                      },
+                      "compareAt": {
+                        "type": "number",
+                        "nullable": true,
+                        "description": "The undiscounted price of the \"From\" SKU when it is on sale."
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to",
+                      "compareAt"
+                    ],
+                    "description": "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price."
+                  },
                   "categoryId": {
                     "type": "string",
                     "nullable": true
@@ -9555,6 +9679,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "name",
                   "price",
+                  "priceRange",
                   "categoryId",
                   "categoryName",
                   "isActive",
@@ -10447,7 +10572,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 3,
                   "maxLength": 100,
-                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "description": "Omit to derive the web address from the title; a taken or reserved one gets a -2, -3… suffix."
                 },
                 "content": {
                   "type": "string"
@@ -10609,7 +10735,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "title",
-                "slug",
                 "content",
                 "metaTitle",
                 "metaDescription"
@@ -10834,7 +10959,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "additionalProperties": {}
             },
             "publishedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "sortOrder": {
               "type": "number"
@@ -10844,13 +10978,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "minimum": 1
             },
             "createdAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "updatedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "deletedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             }
           },
           "required": [
@@ -11171,7 +11332,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "additionalProperties": {}
                   },
                   "publishedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "sortOrder": {
                     "type": "number"
@@ -11181,13 +11351,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minimum": 1
                   },
                   "createdAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "updatedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "deletedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -12442,7 +12639,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "nullable": true
             },
             "accountClaimedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "totalOrders": {
               "type": "number"
@@ -12451,7 +12657,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "number"
             },
             "lastOrderAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "createdAt": {
               "anyOf": [
@@ -12474,7 +12689,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             }
           },
           "required": [
@@ -12646,7 +12870,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "nullable": true
                 },
                 "accountClaimedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "totalOrders": {
                   "type": "number"
@@ -12655,7 +12888,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number"
                 },
                 "lastOrderAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "createdAt": {
                   "anyOf": [
@@ -12678,7 +12920,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "linkedAccount": {
                   "type": "object",
@@ -19770,7 +20021,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             }
           },
           "required": [
@@ -19945,7 +20205,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             }
           },
           "required": [
@@ -20111,7 +20380,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 ]
               },
               "deletedAt": {
-                "$ref": "#/components/schemas/NullableTimestamp"
+                "type": "string",
+                "nullable": true,
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
               }
             },
             "required": [
@@ -20306,7 +20584,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             }
           },
           "required": [
@@ -20564,7 +20851,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             }
           },
           "required": [
@@ -21032,13 +21328,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "alertSentAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "acknowledgedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "resolvedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "createdAt": {
                     "anyOf": [
@@ -22074,6 +22397,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "orderNumber": {
+                    "type": "integer",
+                    "nullable": true,
+                    "description": "The order's short number (#1073); null for movements without an order."
+                  },
                   "type": {
                     "type": "string"
                   },
@@ -22179,6 +22507,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "variantId",
                   "orderId",
+                  "orderNumber",
                   "type",
                   "quantity",
                   "previousStock",
@@ -22231,13 +22560,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "alertSentAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "acknowledgedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "resolvedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "createdAt": {
                     "anyOf": [
@@ -23059,7 +23415,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -23240,7 +23605,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "deletedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -23403,7 +23777,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -23601,10 +23984,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "trashedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -23895,10 +24296,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "trashedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "deletedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "usageCount": {
                     "type": "integer",
@@ -24335,10 +24754,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "trashedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -24544,10 +24981,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "trashedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -24800,10 +25255,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "trashedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -25052,10 +25525,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "trashedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -33279,6 +33770,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "price": {
                     "type": "number"
                   },
+                  "priceRange": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "from": {
+                        "type": "number",
+                        "description": "The storefront's \"From\" price: the lowest price buyers can pay now."
+                      },
+                      "to": {
+                        "type": "number",
+                        "description": "The highest price in the same buyer pool; equal to from for one price."
+                      },
+                      "compareAt": {
+                        "type": "number",
+                        "nullable": true,
+                        "description": "The undiscounted price of the \"From\" SKU when it is on sale."
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to",
+                      "compareAt"
+                    ],
+                    "description": "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price."
+                  },
                   "description": {
                     "type": "string",
                     "nullable": true
@@ -33370,6 +33886,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "name",
                   "slug",
                   "price",
+                  "priceRange",
                   "description",
                   "isActive",
                   "discountPercentage",
@@ -33835,7 +34352,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "cod_returned",
                 "refund_recorded",
                 "return_created",
+                "return_approved",
                 "return_received",
+                "parcel_returned",
                 "request_submitted",
                 "request_resolved",
                 "archived",
@@ -34306,7 +34825,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "nullable": true
             },
             "lastChecked": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "shipmentItems": {
               "type": "string",
@@ -34866,7 +35394,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "boolean"
                   },
                   "deletedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "discountPercentage": {
                     "type": "number",
@@ -34977,7 +35514,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "type": "boolean"
                         },
                         "preorderDate": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
+                          "type": "string",
+                          "nullable": true,
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
                         },
                         "preorderMessage": {
                           "type": "string",
@@ -35030,7 +35576,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           ]
                         },
                         "deletedAt": {
-                          "$ref": "#/components/schemas/NullableTimestamp"
+                          "type": "string",
+                          "nullable": true,
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
                         },
                         "stockVersion": {
                           "type": "number"
@@ -35467,7 +36022,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "nullable": true
                   },
                   "lastChecked": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "shipmentItems": {
                     "type": "string",
@@ -35799,7 +36363,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "itemCount": {
               "type": "number"
@@ -35921,7 +36494,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "nullable": true
                 },
                 "lastChecked": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "updatedAt": {
                   "anyOf": [
@@ -36024,7 +36606,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "boolean"
                 },
                 "updatedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -36085,7 +36676,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "boolean"
                 },
                 "updatedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -36147,22 +36747,76 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "createdAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "updatedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "nextProbeAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "lastProbeAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "refundedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "failedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "reason": {
                     "type": "string"
@@ -36264,10 +36918,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number"
                 },
                 "nextProbeAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "lastProbeAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "providerStatus": {
                   "type": "string",
@@ -36319,7 +36991,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "description": "Sequential store order number, shown as #1001."
             },
             "archivedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "openRequestType": {
               "type": "string",
@@ -36477,16 +37158,52 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "nullable": true
                   },
                   "submittedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "resolvedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "createdAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "updatedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -37048,6 +37765,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "integer",
               "minimum": 0,
               "exclusiveMinimum": true
+            },
+            "refundedSinceIssue": {
+              "type": "number"
             }
           },
           "required": [
@@ -37577,6 +38297,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "integer",
               "minimum": 0,
               "exclusiveMinimum": true
+            },
+            "refundedSinceIssue": {
+              "type": "number"
             }
           },
           "required": [
@@ -38184,7 +38907,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "nullable": true
                       },
                       "lastChecked": {
-                        "$ref": "#/components/schemas/NullableTimestamp"
+                        "type": "string",
+                        "nullable": true,
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
                       },
                       "updatedAt": {
                         "anyOf": [
@@ -38287,7 +39019,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "boolean"
                       },
                       "updatedAt": {
-                        "$ref": "#/components/schemas/NullableTimestamp"
+                        "type": "string",
+                        "nullable": true,
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -38348,7 +39089,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "boolean"
                       },
                       "updatedAt": {
-                        "$ref": "#/components/schemas/NullableTimestamp"
+                        "type": "string",
+                        "nullable": true,
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -38405,10 +39155,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "number"
                       },
                       "nextProbeAt": {
-                        "$ref": "#/components/schemas/NullableTimestamp"
+                        "type": "string",
+                        "nullable": true,
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
                       },
                       "lastProbeAt": {
-                        "$ref": "#/components/schemas/NullableTimestamp"
+                        "type": "string",
+                        "nullable": true,
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
                       },
                       "providerStatus": {
                         "type": "string",
@@ -38436,7 +39204,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "description": "Sequential store order number, shown as #1001."
                   },
                   "archivedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "openRequestType": {
                     "type": "string",
@@ -38537,6 +39314,76 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "required": [
             "orders",
             "pagination"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.mark_delivered",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/{id}/mark-delivered",
+    "summary": "Mark a paid order your own rider delivered in full as delivered",
+    "description": "Cash-on-delivery orders are delivered by recording the cash (POST /{id}/cod). Refused while anything is unsent or money is due.",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.manage_shipments"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "message"
           ]
         }
       },
@@ -39075,6 +39922,95 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.orders.parcel_returned",
+    "method": "POST",
+    "pathTemplate": "/api/v1/admin/orders/{id}/shipments/{shipmentId}/returned",
+    "summary": "An own-courier parcel of a part-sent order came back: its items go back on the unsent list",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.manage_shipments"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "shipmentId",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "orderId": {
+              "type": "string"
+            },
+            "shipmentId": {
+              "type": "string"
+            },
+            "quantity": {
+              "type": "integer"
+            },
+            "replayed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "orderId",
+            "shipmentId",
+            "quantity",
+            "replayed"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.orders.payment_recovery_export",
     "method": "GET",
     "pathTemplate": "/api/v1/admin/orders/payment-recovery/export",
@@ -39423,7 +40359,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "boolean"
                 },
                 "updatedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -39765,7 +40710,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "nullable": true
                       },
                       "lastChecked": {
-                        "$ref": "#/components/schemas/NullableTimestamp"
+                        "type": "string",
+                        "nullable": true,
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
                       },
                       "updatedAt": {
                         "anyOf": [
@@ -39868,7 +40822,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "boolean"
                       },
                       "updatedAt": {
-                        "$ref": "#/components/schemas/NullableTimestamp"
+                        "type": "string",
+                        "nullable": true,
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -39929,7 +40892,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "boolean"
                       },
                       "updatedAt": {
-                        "$ref": "#/components/schemas/NullableTimestamp"
+                        "type": "string",
+                        "nullable": true,
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -39986,10 +40958,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "number"
                       },
                       "nextProbeAt": {
-                        "$ref": "#/components/schemas/NullableTimestamp"
+                        "type": "string",
+                        "nullable": true,
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
                       },
                       "lastProbeAt": {
-                        "$ref": "#/components/schemas/NullableTimestamp"
+                        "type": "string",
+                        "nullable": true,
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
                       },
                       "providerStatus": {
                         "type": "string",
@@ -40017,7 +41007,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "description": "Sequential store order number, shown as #1001."
                   },
                   "archivedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "openRequestType": {
                     "type": "string",
@@ -40406,22 +41405,76 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "createdAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "updatedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "nextProbeAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "lastProbeAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "refundedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "failedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "reason": {
                     "type": "string"
@@ -40523,10 +41576,28 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "number"
                 },
                 "nextProbeAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "lastProbeAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "providerStatus": {
                   "type": "string",
@@ -40684,7 +41755,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "nullable": true
                   },
                   "claimExpiresAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "createdAt": {
                     "anyOf": [
@@ -42905,7 +43985,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "nullable": true
             },
             "lastChecked": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "shipmentItems": {
               "type": "string",
@@ -43896,7 +44985,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "nullable": true
               },
               "lastChecked": {
-                "$ref": "#/components/schemas/NullableTimestamp"
+                "type": "string",
+                "nullable": true,
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
               },
               "shipmentItems": {
                 "type": "string",
@@ -44174,16 +45272,52 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "nullable": true
                 },
                 "submittedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "resolvedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "createdAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "updatedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -44261,16 +45395,52 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "nullable": true
                   },
                   "submittedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "resolvedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "createdAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "updatedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -44382,7 +45552,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "cod_returned",
                       "refund_recorded",
                       "return_created",
+                      "return_approved",
                       "return_received",
+                      "parcel_returned",
                       "request_submitted",
                       "request_resolved",
                       "archived",
@@ -46291,7 +47463,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "boolean"
             },
             "preorderDate": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "preorderMessage": {
               "type": "string",
@@ -46344,7 +47525,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "stockVersion": {
               "type": "number"
@@ -46528,7 +47718,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "boolean"
                   },
                   "preorderDate": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "preorderMessage": {
                     "type": "string",
@@ -46581,7 +47780,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     ]
                   },
                   "deletedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "stockVersion": {
                     "type": "number"
@@ -46963,7 +48171,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "boolean"
             },
             "preorderDate": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "preorderMessage": {
               "type": "string",
@@ -47016,7 +48233,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               ]
             },
             "deletedAt": {
-              "$ref": "#/components/schemas/NullableTimestamp"
+              "type": "string",
+              "nullable": true,
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
             },
             "stockVersion": {
               "type": "number"
@@ -47407,6 +48633,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "categoryId": {
                   "type": "string",
+                  "nullable": true,
                   "minLength": 1
                 },
                 "isActive": {
@@ -47470,7 +48697,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 3,
                   "maxLength": 100,
-                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "description": "Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."
                 },
                 "media": {
                   "type": "array",
@@ -47797,7 +49025,6 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "metaTitle",
                 "metaDescription",
                 "productCondition",
-                "slug",
                 "media"
               ]
             }
@@ -48095,6 +49322,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "price": {
                     "type": "number"
                   },
+                  "priceRange": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "from": {
+                        "type": "number",
+                        "description": "The storefront's \"From\" price: the lowest price buyers can pay now."
+                      },
+                      "to": {
+                        "type": "number",
+                        "description": "The highest price in the same buyer pool; equal to from for one price."
+                      },
+                      "compareAt": {
+                        "type": "number",
+                        "nullable": true,
+                        "description": "The undiscounted price of the \"From\" SKU when it is on sale."
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to",
+                      "compareAt"
+                    ],
+                    "description": "Null when the product has no live SKU. Products with options sell at their variant prices, not the product price."
+                  },
                   "categoryId": {
                     "type": "string",
                     "nullable": true
@@ -48112,6 +49364,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "name",
                   "price",
+                  "priceRange",
                   "categoryId",
                   "primaryImage",
                   "discountPercentage"
@@ -61458,102 +62711,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "theme": {
                   "type": "object",
                   "properties": {
-                    "colors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                    "version": {
+                      "type": "number",
+                      "enum": [
+                        2
+                      ]
                     },
-                    "typography": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "configured",
+                        "custom"
+                      ]
+                    },
+                    "tokens": {
                       "type": "object",
                       "properties": {
-                        "heading": {
+                        "colors": {
+                          "type": "object",
+                          "properties": {
+                            "background": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "border": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "input": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "ring": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            }
+                          },
+                          "required": [
+                            "background",
+                            "foreground",
+                            "card",
+                            "card-foreground",
+                            "popover",
+                            "popover-foreground",
+                            "primary",
+                            "primary-foreground",
+                            "secondary",
+                            "secondary-foreground",
+                            "muted",
+                            "muted-foreground",
+                            "accent",
+                            "accent-foreground",
+                            "destructive",
+                            "destructive-foreground",
+                            "border",
+                            "input",
+                            "ring"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "typography": {
+                          "type": "object",
+                          "properties": {
+                            "heading": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "editorial"
+                              ]
+                            },
+                            "body": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "humanist"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "heading",
+                            "body"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "radius": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
+                            "square",
+                            "subtle",
+                            "rounded"
                           ]
                         },
-                        "body": {
+                        "containerWidth": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        },
-                        "scale": {
-                          "type": "string",
-                          "enum": [
-                            "compact",
                             "standard",
-                            "generous"
+                            "wide"
                           ]
+                        },
+                        "components": {
+                          "type": "object",
+                          "properties": {
+                            "buttons": {
+                              "type": "string",
+                              "enum": [
+                                "solid",
+                                "outline"
+                              ]
+                            },
+                            "inputs": {
+                              "type": "string",
+                              "enum": [
+                                "outlined",
+                                "filled"
+                              ]
+                            },
+                            "cards": {
+                              "type": "string",
+                              "enum": [
+                                "bordered",
+                                "elevated",
+                                "flat"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "buttons",
+                            "inputs",
+                            "cards"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
-                        "heading",
-                        "body",
-                        "scale"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "cornerStyle": {
-                      "type": "string",
-                      "enum": [
-                        "square",
-                        "subtle",
-                        "rounded"
-                      ]
-                    },
-                    "density": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
-                        "comfortable",
-                        "airy"
-                      ]
-                    },
-                    "containerWidth": {
-                      "type": "string",
-                      "enum": [
-                        "focused",
-                        "standard",
-                        "wide"
-                      ]
-                    },
-                    "components": {
-                      "type": "object",
-                      "properties": {
-                        "buttons": {
-                          "type": "string",
-                          "enum": [
-                            "solid",
-                            "soft",
-                            "outline"
-                          ]
-                        },
-                        "inputs": {
-                          "type": "string",
-                          "enum": [
-                            "outlined",
-                            "filled"
-                          ]
-                        },
-                        "cards": {
-                          "type": "string",
-                          "enum": [
-                            "bordered",
-                            "elevated",
-                            "flat"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "buttons",
-                        "inputs",
-                        "cards"
+                        "colors",
+                        "typography",
+                        "radius",
+                        "containerWidth",
+                        "components"
                       ],
                       "additionalProperties": false
                     },
@@ -61576,142 +62933,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "contact"
                           ]
                         },
-                        "productCard": {
-                          "type": "object",
-                          "properties": {
-                            "imageRatio": {
-                              "type": "string",
-                              "enum": [
-                                "square",
-                                "portrait"
-                              ]
-                            },
-                            "hoverImage": {
-                              "type": "boolean"
-                            },
-                            "quickBuy": {
-                              "type": "boolean"
-                            },
-                            "badge": {
-                              "type": "string",
-                              "enum": [
-                                "image",
-                                "price"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "imageRatio",
-                            "hoverImage",
-                            "quickBuy",
-                            "badge"
-                          ],
-                          "additionalProperties": false
+                        "card": {
+                          "type": "string",
+                          "enum": [
+                            "standard",
+                            "portrait",
+                            "quick"
+                          ]
                         },
-                        "grid": {
-                          "type": "object",
-                          "properties": {
-                            "desktop": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    3
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    4
-                                  ]
-                                }
-                              ]
-                            },
-                            "mobile": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    1
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "desktop",
-                            "mobile"
-                          ],
-                          "additionalProperties": false
+                        "density": {
+                          "type": "string",
+                          "enum": [
+                            "compact",
+                            "comfortable"
+                          ]
                         },
                         "productPage": {
-                          "type": "object",
-                          "properties": {
-                            "gallery": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "stacked"
-                              ]
-                            },
-                            "thumbnails": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "below"
-                              ]
-                            }
-                          },
-                          "required": [
+                          "type": "string",
+                          "enum": [
                             "gallery",
-                            "thumbnails"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "homepage": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "enum": [
-                              "hero",
-                              "collections",
-                              "categories",
-                              "delivery"
-                            ]
-                          }
+                            "filmstrip",
+                            "stacked"
+                          ]
                         }
                       },
                       "required": [
                         "header",
                         "footer",
-                        "productCard",
-                        "grid",
-                        "productPage",
-                        "homepage"
+                        "card",
+                        "density",
+                        "productPage"
                       ],
                       "additionalProperties": false
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "hero"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "collections"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "categories"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "rich_text"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {
+                                  "heading": {
+                                    "type": "string",
+                                    "maxLength": 120
+                                  },
+                                  "body": {
+                                    "type": "string",
+                                    "maxLength": 2000
+                                  }
+                                },
+                                "required": [
+                                  "heading",
+                                  "body"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "maxItems": 24
                     }
                   },
                   "required": [
-                    "colors",
-                    "typography",
-                    "cornerStyle",
-                    "density",
-                    "containerWidth",
-                    "components",
-                    "layout"
+                    "version",
+                    "mode",
+                    "tokens",
+                    "layout",
+                    "sections"
                   ],
                   "additionalProperties": false
                 },
@@ -61750,102 +63197,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "theme": {
               "type": "object",
               "properties": {
-                "colors": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
+                "version": {
+                  "type": "number",
+                  "enum": [
+                    2
+                  ]
                 },
-                "typography": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "configured",
+                    "custom"
+                  ]
+                },
+                "tokens": {
                   "type": "object",
                   "properties": {
-                    "heading": {
+                    "colors": {
+                      "type": "object",
+                      "properties": {
+                        "background": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "card": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "card-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "popover": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "popover-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "primary": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "primary-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "secondary": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "secondary-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "muted": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "muted-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "accent": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "accent-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "destructive": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "destructive-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "border": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "input": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "ring": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        }
+                      },
+                      "required": [
+                        "background",
+                        "foreground",
+                        "card",
+                        "card-foreground",
+                        "popover",
+                        "popover-foreground",
+                        "primary",
+                        "primary-foreground",
+                        "secondary",
+                        "secondary-foreground",
+                        "muted",
+                        "muted-foreground",
+                        "accent",
+                        "accent-foreground",
+                        "destructive",
+                        "destructive-foreground",
+                        "border",
+                        "input",
+                        "ring"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "typography": {
+                      "type": "object",
+                      "properties": {
+                        "heading": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "modern",
+                            "editorial"
+                          ]
+                        },
+                        "body": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "modern",
+                            "humanist"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "heading",
+                        "body"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "radius": {
                       "type": "string",
                       "enum": [
-                        "system",
-                        "modern",
-                        "editorial"
+                        "square",
+                        "subtle",
+                        "rounded"
                       ]
                     },
-                    "body": {
+                    "containerWidth": {
                       "type": "string",
                       "enum": [
-                        "system",
-                        "modern",
-                        "humanist"
-                      ]
-                    },
-                    "scale": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
                         "standard",
-                        "generous"
+                        "wide"
                       ]
+                    },
+                    "components": {
+                      "type": "object",
+                      "properties": {
+                        "buttons": {
+                          "type": "string",
+                          "enum": [
+                            "solid",
+                            "outline"
+                          ]
+                        },
+                        "inputs": {
+                          "type": "string",
+                          "enum": [
+                            "outlined",
+                            "filled"
+                          ]
+                        },
+                        "cards": {
+                          "type": "string",
+                          "enum": [
+                            "bordered",
+                            "elevated",
+                            "flat"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "buttons",
+                        "inputs",
+                        "cards"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
-                    "heading",
-                    "body",
-                    "scale"
-                  ],
-                  "additionalProperties": false
-                },
-                "cornerStyle": {
-                  "type": "string",
-                  "enum": [
-                    "square",
-                    "subtle",
-                    "rounded"
-                  ]
-                },
-                "density": {
-                  "type": "string",
-                  "enum": [
-                    "compact",
-                    "comfortable",
-                    "airy"
-                  ]
-                },
-                "containerWidth": {
-                  "type": "string",
-                  "enum": [
-                    "focused",
-                    "standard",
-                    "wide"
-                  ]
-                },
-                "components": {
-                  "type": "object",
-                  "properties": {
-                    "buttons": {
-                      "type": "string",
-                      "enum": [
-                        "solid",
-                        "soft",
-                        "outline"
-                      ]
-                    },
-                    "inputs": {
-                      "type": "string",
-                      "enum": [
-                        "outlined",
-                        "filled"
-                      ]
-                    },
-                    "cards": {
-                      "type": "string",
-                      "enum": [
-                        "bordered",
-                        "elevated",
-                        "flat"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "buttons",
-                    "inputs",
-                    "cards"
+                    "colors",
+                    "typography",
+                    "radius",
+                    "containerWidth",
+                    "components"
                   ],
                   "additionalProperties": false
                 },
@@ -61868,142 +63419,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "contact"
                       ]
                     },
-                    "productCard": {
-                      "type": "object",
-                      "properties": {
-                        "imageRatio": {
-                          "type": "string",
-                          "enum": [
-                            "square",
-                            "portrait"
-                          ]
-                        },
-                        "hoverImage": {
-                          "type": "boolean"
-                        },
-                        "quickBuy": {
-                          "type": "boolean"
-                        },
-                        "badge": {
-                          "type": "string",
-                          "enum": [
-                            "image",
-                            "price"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "imageRatio",
-                        "hoverImage",
-                        "quickBuy",
-                        "badge"
-                      ],
-                      "additionalProperties": false
+                    "card": {
+                      "type": "string",
+                      "enum": [
+                        "standard",
+                        "portrait",
+                        "quick"
+                      ]
                     },
-                    "grid": {
-                      "type": "object",
-                      "properties": {
-                        "desktop": {
-                          "anyOf": [
-                            {
-                              "type": "number",
-                              "enum": [
-                                2
-                              ]
-                            },
-                            {
-                              "type": "number",
-                              "enum": [
-                                3
-                              ]
-                            },
-                            {
-                              "type": "number",
-                              "enum": [
-                                4
-                              ]
-                            }
-                          ]
-                        },
-                        "mobile": {
-                          "anyOf": [
-                            {
-                              "type": "number",
-                              "enum": [
-                                1
-                              ]
-                            },
-                            {
-                              "type": "number",
-                              "enum": [
-                                2
-                              ]
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "desktop",
-                        "mobile"
-                      ],
-                      "additionalProperties": false
+                    "density": {
+                      "type": "string",
+                      "enum": [
+                        "compact",
+                        "comfortable"
+                      ]
                     },
                     "productPage": {
-                      "type": "object",
-                      "properties": {
-                        "gallery": {
-                          "type": "string",
-                          "enum": [
-                            "beside",
-                            "stacked"
-                          ]
-                        },
-                        "thumbnails": {
-                          "type": "string",
-                          "enum": [
-                            "beside",
-                            "below"
-                          ]
-                        }
-                      },
-                      "required": [
+                      "type": "string",
+                      "enum": [
                         "gallery",
-                        "thumbnails"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "homepage": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "enum": [
-                          "hero",
-                          "collections",
-                          "categories",
-                          "delivery"
-                        ]
-                      }
+                        "filmstrip",
+                        "stacked"
+                      ]
                     }
                   },
                   "required": [
                     "header",
                     "footer",
-                    "productCard",
-                    "grid",
-                    "productPage",
-                    "homepage"
+                    "card",
+                    "density",
+                    "productPage"
                   ],
                   "additionalProperties": false
+                },
+                "sections": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "hero"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "collections"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "categories"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "delivery"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "rich_text"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {
+                              "heading": {
+                                "type": "string",
+                                "maxLength": 120
+                              },
+                              "body": {
+                                "type": "string",
+                                "maxLength": 2000
+                              }
+                            },
+                            "required": [
+                              "heading",
+                              "body"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "maxItems": 24
                 }
               },
               "required": [
-                "colors",
-                "typography",
-                "cornerStyle",
-                "density",
-                "containerWidth",
-                "components",
-                "layout"
+                "version",
+                "mode",
+                "tokens",
+                "layout",
+                "sections"
               ],
               "additionalProperties": false
             },
@@ -62070,102 +63711,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "theme": {
                   "type": "object",
                   "properties": {
-                    "colors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                    "version": {
+                      "type": "number",
+                      "enum": [
+                        2
+                      ]
                     },
-                    "typography": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "configured",
+                        "custom"
+                      ]
+                    },
+                    "tokens": {
                       "type": "object",
                       "properties": {
-                        "heading": {
+                        "colors": {
+                          "type": "object",
+                          "properties": {
+                            "background": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "border": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "input": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "ring": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            }
+                          },
+                          "required": [
+                            "background",
+                            "foreground",
+                            "card",
+                            "card-foreground",
+                            "popover",
+                            "popover-foreground",
+                            "primary",
+                            "primary-foreground",
+                            "secondary",
+                            "secondary-foreground",
+                            "muted",
+                            "muted-foreground",
+                            "accent",
+                            "accent-foreground",
+                            "destructive",
+                            "destructive-foreground",
+                            "border",
+                            "input",
+                            "ring"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "typography": {
+                          "type": "object",
+                          "properties": {
+                            "heading": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "editorial"
+                              ]
+                            },
+                            "body": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "humanist"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "heading",
+                            "body"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "radius": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
+                            "square",
+                            "subtle",
+                            "rounded"
                           ]
                         },
-                        "body": {
+                        "containerWidth": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        },
-                        "scale": {
-                          "type": "string",
-                          "enum": [
-                            "compact",
                             "standard",
-                            "generous"
+                            "wide"
                           ]
+                        },
+                        "components": {
+                          "type": "object",
+                          "properties": {
+                            "buttons": {
+                              "type": "string",
+                              "enum": [
+                                "solid",
+                                "outline"
+                              ]
+                            },
+                            "inputs": {
+                              "type": "string",
+                              "enum": [
+                                "outlined",
+                                "filled"
+                              ]
+                            },
+                            "cards": {
+                              "type": "string",
+                              "enum": [
+                                "bordered",
+                                "elevated",
+                                "flat"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "buttons",
+                            "inputs",
+                            "cards"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
-                        "heading",
-                        "body",
-                        "scale"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "cornerStyle": {
-                      "type": "string",
-                      "enum": [
-                        "square",
-                        "subtle",
-                        "rounded"
-                      ]
-                    },
-                    "density": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
-                        "comfortable",
-                        "airy"
-                      ]
-                    },
-                    "containerWidth": {
-                      "type": "string",
-                      "enum": [
-                        "focused",
-                        "standard",
-                        "wide"
-                      ]
-                    },
-                    "components": {
-                      "type": "object",
-                      "properties": {
-                        "buttons": {
-                          "type": "string",
-                          "enum": [
-                            "solid",
-                            "soft",
-                            "outline"
-                          ]
-                        },
-                        "inputs": {
-                          "type": "string",
-                          "enum": [
-                            "outlined",
-                            "filled"
-                          ]
-                        },
-                        "cards": {
-                          "type": "string",
-                          "enum": [
-                            "bordered",
-                            "elevated",
-                            "flat"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "buttons",
-                        "inputs",
-                        "cards"
+                        "colors",
+                        "typography",
+                        "radius",
+                        "containerWidth",
+                        "components"
                       ],
                       "additionalProperties": false
                     },
@@ -62188,142 +63933,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "contact"
                           ]
                         },
-                        "productCard": {
-                          "type": "object",
-                          "properties": {
-                            "imageRatio": {
-                              "type": "string",
-                              "enum": [
-                                "square",
-                                "portrait"
-                              ]
-                            },
-                            "hoverImage": {
-                              "type": "boolean"
-                            },
-                            "quickBuy": {
-                              "type": "boolean"
-                            },
-                            "badge": {
-                              "type": "string",
-                              "enum": [
-                                "image",
-                                "price"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "imageRatio",
-                            "hoverImage",
-                            "quickBuy",
-                            "badge"
-                          ],
-                          "additionalProperties": false
+                        "card": {
+                          "type": "string",
+                          "enum": [
+                            "standard",
+                            "portrait",
+                            "quick"
+                          ]
                         },
-                        "grid": {
-                          "type": "object",
-                          "properties": {
-                            "desktop": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    3
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    4
-                                  ]
-                                }
-                              ]
-                            },
-                            "mobile": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    1
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "desktop",
-                            "mobile"
-                          ],
-                          "additionalProperties": false
+                        "density": {
+                          "type": "string",
+                          "enum": [
+                            "compact",
+                            "comfortable"
+                          ]
                         },
                         "productPage": {
-                          "type": "object",
-                          "properties": {
-                            "gallery": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "stacked"
-                              ]
-                            },
-                            "thumbnails": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "below"
-                              ]
-                            }
-                          },
-                          "required": [
+                          "type": "string",
+                          "enum": [
                             "gallery",
-                            "thumbnails"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "homepage": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "enum": [
-                              "hero",
-                              "collections",
-                              "categories",
-                              "delivery"
-                            ]
-                          }
+                            "filmstrip",
+                            "stacked"
+                          ]
                         }
                       },
                       "required": [
                         "header",
                         "footer",
-                        "productCard",
-                        "grid",
-                        "productPage",
-                        "homepage"
+                        "card",
+                        "density",
+                        "productPage"
                       ],
                       "additionalProperties": false
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "hero"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "collections"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "categories"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "rich_text"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {
+                                  "heading": {
+                                    "type": "string",
+                                    "maxLength": 120
+                                  },
+                                  "body": {
+                                    "type": "string",
+                                    "maxLength": 2000
+                                  }
+                                },
+                                "required": [
+                                  "heading",
+                                  "body"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "maxItems": 24
                     }
                   },
                   "required": [
-                    "colors",
-                    "typography",
-                    "cornerStyle",
-                    "density",
-                    "containerWidth",
-                    "components",
-                    "layout"
+                    "version",
+                    "mode",
+                    "tokens",
+                    "layout",
+                    "sections"
                   ],
                   "additionalProperties": false
                 },
@@ -62362,102 +64197,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "theme": {
               "type": "object",
               "properties": {
-                "colors": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
+                "version": {
+                  "type": "number",
+                  "enum": [
+                    2
+                  ]
                 },
-                "typography": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "configured",
+                    "custom"
+                  ]
+                },
+                "tokens": {
                   "type": "object",
                   "properties": {
-                    "heading": {
+                    "colors": {
+                      "type": "object",
+                      "properties": {
+                        "background": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "card": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "card-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "popover": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "popover-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "primary": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "primary-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "secondary": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "secondary-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "muted": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "muted-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "accent": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "accent-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "destructive": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "destructive-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "border": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "input": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "ring": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        }
+                      },
+                      "required": [
+                        "background",
+                        "foreground",
+                        "card",
+                        "card-foreground",
+                        "popover",
+                        "popover-foreground",
+                        "primary",
+                        "primary-foreground",
+                        "secondary",
+                        "secondary-foreground",
+                        "muted",
+                        "muted-foreground",
+                        "accent",
+                        "accent-foreground",
+                        "destructive",
+                        "destructive-foreground",
+                        "border",
+                        "input",
+                        "ring"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "typography": {
+                      "type": "object",
+                      "properties": {
+                        "heading": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "modern",
+                            "editorial"
+                          ]
+                        },
+                        "body": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "modern",
+                            "humanist"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "heading",
+                        "body"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "radius": {
                       "type": "string",
                       "enum": [
-                        "system",
-                        "modern",
-                        "editorial"
+                        "square",
+                        "subtle",
+                        "rounded"
                       ]
                     },
-                    "body": {
+                    "containerWidth": {
                       "type": "string",
                       "enum": [
-                        "system",
-                        "modern",
-                        "humanist"
-                      ]
-                    },
-                    "scale": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
                         "standard",
-                        "generous"
+                        "wide"
                       ]
+                    },
+                    "components": {
+                      "type": "object",
+                      "properties": {
+                        "buttons": {
+                          "type": "string",
+                          "enum": [
+                            "solid",
+                            "outline"
+                          ]
+                        },
+                        "inputs": {
+                          "type": "string",
+                          "enum": [
+                            "outlined",
+                            "filled"
+                          ]
+                        },
+                        "cards": {
+                          "type": "string",
+                          "enum": [
+                            "bordered",
+                            "elevated",
+                            "flat"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "buttons",
+                        "inputs",
+                        "cards"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
-                    "heading",
-                    "body",
-                    "scale"
-                  ],
-                  "additionalProperties": false
-                },
-                "cornerStyle": {
-                  "type": "string",
-                  "enum": [
-                    "square",
-                    "subtle",
-                    "rounded"
-                  ]
-                },
-                "density": {
-                  "type": "string",
-                  "enum": [
-                    "compact",
-                    "comfortable",
-                    "airy"
-                  ]
-                },
-                "containerWidth": {
-                  "type": "string",
-                  "enum": [
-                    "focused",
-                    "standard",
-                    "wide"
-                  ]
-                },
-                "components": {
-                  "type": "object",
-                  "properties": {
-                    "buttons": {
-                      "type": "string",
-                      "enum": [
-                        "solid",
-                        "soft",
-                        "outline"
-                      ]
-                    },
-                    "inputs": {
-                      "type": "string",
-                      "enum": [
-                        "outlined",
-                        "filled"
-                      ]
-                    },
-                    "cards": {
-                      "type": "string",
-                      "enum": [
-                        "bordered",
-                        "elevated",
-                        "flat"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "buttons",
-                    "inputs",
-                    "cards"
+                    "colors",
+                    "typography",
+                    "radius",
+                    "containerWidth",
+                    "components"
                   ],
                   "additionalProperties": false
                 },
@@ -62480,142 +64419,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "contact"
                       ]
                     },
-                    "productCard": {
-                      "type": "object",
-                      "properties": {
-                        "imageRatio": {
-                          "type": "string",
-                          "enum": [
-                            "square",
-                            "portrait"
-                          ]
-                        },
-                        "hoverImage": {
-                          "type": "boolean"
-                        },
-                        "quickBuy": {
-                          "type": "boolean"
-                        },
-                        "badge": {
-                          "type": "string",
-                          "enum": [
-                            "image",
-                            "price"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "imageRatio",
-                        "hoverImage",
-                        "quickBuy",
-                        "badge"
-                      ],
-                      "additionalProperties": false
+                    "card": {
+                      "type": "string",
+                      "enum": [
+                        "standard",
+                        "portrait",
+                        "quick"
+                      ]
                     },
-                    "grid": {
-                      "type": "object",
-                      "properties": {
-                        "desktop": {
-                          "anyOf": [
-                            {
-                              "type": "number",
-                              "enum": [
-                                2
-                              ]
-                            },
-                            {
-                              "type": "number",
-                              "enum": [
-                                3
-                              ]
-                            },
-                            {
-                              "type": "number",
-                              "enum": [
-                                4
-                              ]
-                            }
-                          ]
-                        },
-                        "mobile": {
-                          "anyOf": [
-                            {
-                              "type": "number",
-                              "enum": [
-                                1
-                              ]
-                            },
-                            {
-                              "type": "number",
-                              "enum": [
-                                2
-                              ]
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "desktop",
-                        "mobile"
-                      ],
-                      "additionalProperties": false
+                    "density": {
+                      "type": "string",
+                      "enum": [
+                        "compact",
+                        "comfortable"
+                      ]
                     },
                     "productPage": {
-                      "type": "object",
-                      "properties": {
-                        "gallery": {
-                          "type": "string",
-                          "enum": [
-                            "beside",
-                            "stacked"
-                          ]
-                        },
-                        "thumbnails": {
-                          "type": "string",
-                          "enum": [
-                            "beside",
-                            "below"
-                          ]
-                        }
-                      },
-                      "required": [
+                      "type": "string",
+                      "enum": [
                         "gallery",
-                        "thumbnails"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "homepage": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "enum": [
-                          "hero",
-                          "collections",
-                          "categories",
-                          "delivery"
-                        ]
-                      }
+                        "filmstrip",
+                        "stacked"
+                      ]
                     }
                   },
                   "required": [
                     "header",
                     "footer",
-                    "productCard",
-                    "grid",
-                    "productPage",
-                    "homepage"
+                    "card",
+                    "density",
+                    "productPage"
                   ],
                   "additionalProperties": false
+                },
+                "sections": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "hero"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "collections"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "categories"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "delivery"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "rich_text"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {
+                              "heading": {
+                                "type": "string",
+                                "maxLength": 120
+                              },
+                              "body": {
+                                "type": "string",
+                                "maxLength": 2000
+                              }
+                            },
+                            "required": [
+                              "heading",
+                              "body"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "maxItems": 24
                 }
               },
               "required": [
-                "colors",
-                "typography",
-                "cornerStyle",
-                "density",
-                "containerWidth",
-                "components",
-                "layout"
+                "version",
+                "mode",
+                "tokens",
+                "layout",
+                "sections"
               ],
               "additionalProperties": false
             },
@@ -62688,102 +64717,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "theme": {
               "type": "object",
               "properties": {
-                "colors": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
+                "version": {
+                  "type": "number",
+                  "enum": [
+                    2
+                  ]
                 },
-                "typography": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "configured",
+                    "custom"
+                  ]
+                },
+                "tokens": {
                   "type": "object",
                   "properties": {
-                    "heading": {
+                    "colors": {
+                      "type": "object",
+                      "properties": {
+                        "background": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "card": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "card-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "popover": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "popover-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "primary": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "primary-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "secondary": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "secondary-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "muted": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "muted-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "accent": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "accent-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "destructive": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "destructive-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "border": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "input": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "ring": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        }
+                      },
+                      "required": [
+                        "background",
+                        "foreground",
+                        "card",
+                        "card-foreground",
+                        "popover",
+                        "popover-foreground",
+                        "primary",
+                        "primary-foreground",
+                        "secondary",
+                        "secondary-foreground",
+                        "muted",
+                        "muted-foreground",
+                        "accent",
+                        "accent-foreground",
+                        "destructive",
+                        "destructive-foreground",
+                        "border",
+                        "input",
+                        "ring"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "typography": {
+                      "type": "object",
+                      "properties": {
+                        "heading": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "modern",
+                            "editorial"
+                          ]
+                        },
+                        "body": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "modern",
+                            "humanist"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "heading",
+                        "body"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "radius": {
                       "type": "string",
                       "enum": [
-                        "system",
-                        "modern",
-                        "editorial"
+                        "square",
+                        "subtle",
+                        "rounded"
                       ]
                     },
-                    "body": {
+                    "containerWidth": {
                       "type": "string",
                       "enum": [
-                        "system",
-                        "modern",
-                        "humanist"
-                      ]
-                    },
-                    "scale": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
                         "standard",
-                        "generous"
+                        "wide"
                       ]
+                    },
+                    "components": {
+                      "type": "object",
+                      "properties": {
+                        "buttons": {
+                          "type": "string",
+                          "enum": [
+                            "solid",
+                            "outline"
+                          ]
+                        },
+                        "inputs": {
+                          "type": "string",
+                          "enum": [
+                            "outlined",
+                            "filled"
+                          ]
+                        },
+                        "cards": {
+                          "type": "string",
+                          "enum": [
+                            "bordered",
+                            "elevated",
+                            "flat"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "buttons",
+                        "inputs",
+                        "cards"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
-                    "heading",
-                    "body",
-                    "scale"
-                  ],
-                  "additionalProperties": false
-                },
-                "cornerStyle": {
-                  "type": "string",
-                  "enum": [
-                    "square",
-                    "subtle",
-                    "rounded"
-                  ]
-                },
-                "density": {
-                  "type": "string",
-                  "enum": [
-                    "compact",
-                    "comfortable",
-                    "airy"
-                  ]
-                },
-                "containerWidth": {
-                  "type": "string",
-                  "enum": [
-                    "focused",
-                    "standard",
-                    "wide"
-                  ]
-                },
-                "components": {
-                  "type": "object",
-                  "properties": {
-                    "buttons": {
-                      "type": "string",
-                      "enum": [
-                        "solid",
-                        "soft",
-                        "outline"
-                      ]
-                    },
-                    "inputs": {
-                      "type": "string",
-                      "enum": [
-                        "outlined",
-                        "filled"
-                      ]
-                    },
-                    "cards": {
-                      "type": "string",
-                      "enum": [
-                        "bordered",
-                        "elevated",
-                        "flat"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "buttons",
-                    "inputs",
-                    "cards"
+                    "colors",
+                    "typography",
+                    "radius",
+                    "containerWidth",
+                    "components"
                   ],
                   "additionalProperties": false
                 },
@@ -62806,142 +64939,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "contact"
                       ]
                     },
-                    "productCard": {
-                      "type": "object",
-                      "properties": {
-                        "imageRatio": {
-                          "type": "string",
-                          "enum": [
-                            "square",
-                            "portrait"
-                          ]
-                        },
-                        "hoverImage": {
-                          "type": "boolean"
-                        },
-                        "quickBuy": {
-                          "type": "boolean"
-                        },
-                        "badge": {
-                          "type": "string",
-                          "enum": [
-                            "image",
-                            "price"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "imageRatio",
-                        "hoverImage",
-                        "quickBuy",
-                        "badge"
-                      ],
-                      "additionalProperties": false
+                    "card": {
+                      "type": "string",
+                      "enum": [
+                        "standard",
+                        "portrait",
+                        "quick"
+                      ]
                     },
-                    "grid": {
-                      "type": "object",
-                      "properties": {
-                        "desktop": {
-                          "anyOf": [
-                            {
-                              "type": "number",
-                              "enum": [
-                                2
-                              ]
-                            },
-                            {
-                              "type": "number",
-                              "enum": [
-                                3
-                              ]
-                            },
-                            {
-                              "type": "number",
-                              "enum": [
-                                4
-                              ]
-                            }
-                          ]
-                        },
-                        "mobile": {
-                          "anyOf": [
-                            {
-                              "type": "number",
-                              "enum": [
-                                1
-                              ]
-                            },
-                            {
-                              "type": "number",
-                              "enum": [
-                                2
-                              ]
-                            }
-                          ]
-                        }
-                      },
-                      "required": [
-                        "desktop",
-                        "mobile"
-                      ],
-                      "additionalProperties": false
+                    "density": {
+                      "type": "string",
+                      "enum": [
+                        "compact",
+                        "comfortable"
+                      ]
                     },
                     "productPage": {
-                      "type": "object",
-                      "properties": {
-                        "gallery": {
-                          "type": "string",
-                          "enum": [
-                            "beside",
-                            "stacked"
-                          ]
-                        },
-                        "thumbnails": {
-                          "type": "string",
-                          "enum": [
-                            "beside",
-                            "below"
-                          ]
-                        }
-                      },
-                      "required": [
+                      "type": "string",
+                      "enum": [
                         "gallery",
-                        "thumbnails"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "homepage": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "enum": [
-                          "hero",
-                          "collections",
-                          "categories",
-                          "delivery"
-                        ]
-                      }
+                        "filmstrip",
+                        "stacked"
+                      ]
                     }
                   },
                   "required": [
                     "header",
                     "footer",
-                    "productCard",
-                    "grid",
-                    "productPage",
-                    "homepage"
+                    "card",
+                    "density",
+                    "productPage"
                   ],
                   "additionalProperties": false
+                },
+                "sections": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "hero"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "collections"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "categories"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "delivery"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "rich_text"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {
+                              "heading": {
+                                "type": "string",
+                                "maxLength": 120
+                              },
+                              "body": {
+                                "type": "string",
+                                "maxLength": 2000
+                              }
+                            },
+                            "required": [
+                              "heading",
+                              "body"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "maxItems": 24
                 }
               },
               "required": [
-                "colors",
-                "typography",
-                "cornerStyle",
-                "density",
-                "containerWidth",
-                "components",
-                "layout"
+                "version",
+                "mode",
+                "tokens",
+                "layout",
+                "sections"
               ],
               "additionalProperties": false
             },
@@ -63197,102 +65420,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "theme": {
                   "type": "object",
                   "properties": {
-                    "colors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                    "version": {
+                      "type": "number",
+                      "enum": [
+                        2
+                      ]
                     },
-                    "typography": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "configured",
+                        "custom"
+                      ]
+                    },
+                    "tokens": {
                       "type": "object",
                       "properties": {
-                        "heading": {
+                        "colors": {
+                          "type": "object",
+                          "properties": {
+                            "background": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "border": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "input": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "ring": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            }
+                          },
+                          "required": [
+                            "background",
+                            "foreground",
+                            "card",
+                            "card-foreground",
+                            "popover",
+                            "popover-foreground",
+                            "primary",
+                            "primary-foreground",
+                            "secondary",
+                            "secondary-foreground",
+                            "muted",
+                            "muted-foreground",
+                            "accent",
+                            "accent-foreground",
+                            "destructive",
+                            "destructive-foreground",
+                            "border",
+                            "input",
+                            "ring"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "typography": {
+                          "type": "object",
+                          "properties": {
+                            "heading": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "editorial"
+                              ]
+                            },
+                            "body": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "humanist"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "heading",
+                            "body"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "radius": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
+                            "square",
+                            "subtle",
+                            "rounded"
                           ]
                         },
-                        "body": {
+                        "containerWidth": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        },
-                        "scale": {
-                          "type": "string",
-                          "enum": [
-                            "compact",
                             "standard",
-                            "generous"
+                            "wide"
                           ]
+                        },
+                        "components": {
+                          "type": "object",
+                          "properties": {
+                            "buttons": {
+                              "type": "string",
+                              "enum": [
+                                "solid",
+                                "outline"
+                              ]
+                            },
+                            "inputs": {
+                              "type": "string",
+                              "enum": [
+                                "outlined",
+                                "filled"
+                              ]
+                            },
+                            "cards": {
+                              "type": "string",
+                              "enum": [
+                                "bordered",
+                                "elevated",
+                                "flat"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "buttons",
+                            "inputs",
+                            "cards"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
-                        "heading",
-                        "body",
-                        "scale"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "cornerStyle": {
-                      "type": "string",
-                      "enum": [
-                        "square",
-                        "subtle",
-                        "rounded"
-                      ]
-                    },
-                    "density": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
-                        "comfortable",
-                        "airy"
-                      ]
-                    },
-                    "containerWidth": {
-                      "type": "string",
-                      "enum": [
-                        "focused",
-                        "standard",
-                        "wide"
-                      ]
-                    },
-                    "components": {
-                      "type": "object",
-                      "properties": {
-                        "buttons": {
-                          "type": "string",
-                          "enum": [
-                            "solid",
-                            "soft",
-                            "outline"
-                          ]
-                        },
-                        "inputs": {
-                          "type": "string",
-                          "enum": [
-                            "outlined",
-                            "filled"
-                          ]
-                        },
-                        "cards": {
-                          "type": "string",
-                          "enum": [
-                            "bordered",
-                            "elevated",
-                            "flat"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "buttons",
-                        "inputs",
-                        "cards"
+                        "colors",
+                        "typography",
+                        "radius",
+                        "containerWidth",
+                        "components"
                       ],
                       "additionalProperties": false
                     },
@@ -63315,142 +65642,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "contact"
                           ]
                         },
-                        "productCard": {
-                          "type": "object",
-                          "properties": {
-                            "imageRatio": {
-                              "type": "string",
-                              "enum": [
-                                "square",
-                                "portrait"
-                              ]
-                            },
-                            "hoverImage": {
-                              "type": "boolean"
-                            },
-                            "quickBuy": {
-                              "type": "boolean"
-                            },
-                            "badge": {
-                              "type": "string",
-                              "enum": [
-                                "image",
-                                "price"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "imageRatio",
-                            "hoverImage",
-                            "quickBuy",
-                            "badge"
-                          ],
-                          "additionalProperties": false
+                        "card": {
+                          "type": "string",
+                          "enum": [
+                            "standard",
+                            "portrait",
+                            "quick"
+                          ]
                         },
-                        "grid": {
-                          "type": "object",
-                          "properties": {
-                            "desktop": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    3
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    4
-                                  ]
-                                }
-                              ]
-                            },
-                            "mobile": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    1
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "desktop",
-                            "mobile"
-                          ],
-                          "additionalProperties": false
+                        "density": {
+                          "type": "string",
+                          "enum": [
+                            "compact",
+                            "comfortable"
+                          ]
                         },
                         "productPage": {
-                          "type": "object",
-                          "properties": {
-                            "gallery": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "stacked"
-                              ]
-                            },
-                            "thumbnails": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "below"
-                              ]
-                            }
-                          },
-                          "required": [
+                          "type": "string",
+                          "enum": [
                             "gallery",
-                            "thumbnails"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "homepage": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "enum": [
-                              "hero",
-                              "collections",
-                              "categories",
-                              "delivery"
-                            ]
-                          }
+                            "filmstrip",
+                            "stacked"
+                          ]
                         }
                       },
                       "required": [
                         "header",
                         "footer",
-                        "productCard",
-                        "grid",
-                        "productPage",
-                        "homepage"
+                        "card",
+                        "density",
+                        "productPage"
                       ],
                       "additionalProperties": false
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "hero"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "collections"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "categories"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "rich_text"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {
+                                  "heading": {
+                                    "type": "string",
+                                    "maxLength": 120
+                                  },
+                                  "body": {
+                                    "type": "string",
+                                    "maxLength": 2000
+                                  }
+                                },
+                                "required": [
+                                  "heading",
+                                  "body"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "maxItems": 24
                     }
                   },
                   "required": [
-                    "colors",
-                    "typography",
-                    "cornerStyle",
-                    "density",
-                    "containerWidth",
-                    "components",
-                    "layout"
+                    "version",
+                    "mode",
+                    "tokens",
+                    "layout",
+                    "sections"
                   ],
                   "additionalProperties": false
                 },
@@ -63470,102 +65887,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "theme": {
                   "type": "object",
                   "properties": {
-                    "colors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                    "version": {
+                      "type": "number",
+                      "enum": [
+                        2
+                      ]
                     },
-                    "typography": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "configured",
+                        "custom"
+                      ]
+                    },
+                    "tokens": {
                       "type": "object",
                       "properties": {
-                        "heading": {
+                        "colors": {
+                          "type": "object",
+                          "properties": {
+                            "background": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "border": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "input": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "ring": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            }
+                          },
+                          "required": [
+                            "background",
+                            "foreground",
+                            "card",
+                            "card-foreground",
+                            "popover",
+                            "popover-foreground",
+                            "primary",
+                            "primary-foreground",
+                            "secondary",
+                            "secondary-foreground",
+                            "muted",
+                            "muted-foreground",
+                            "accent",
+                            "accent-foreground",
+                            "destructive",
+                            "destructive-foreground",
+                            "border",
+                            "input",
+                            "ring"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "typography": {
+                          "type": "object",
+                          "properties": {
+                            "heading": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "editorial"
+                              ]
+                            },
+                            "body": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "humanist"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "heading",
+                            "body"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "radius": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
+                            "square",
+                            "subtle",
+                            "rounded"
                           ]
                         },
-                        "body": {
+                        "containerWidth": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        },
-                        "scale": {
-                          "type": "string",
-                          "enum": [
-                            "compact",
                             "standard",
-                            "generous"
+                            "wide"
                           ]
+                        },
+                        "components": {
+                          "type": "object",
+                          "properties": {
+                            "buttons": {
+                              "type": "string",
+                              "enum": [
+                                "solid",
+                                "outline"
+                              ]
+                            },
+                            "inputs": {
+                              "type": "string",
+                              "enum": [
+                                "outlined",
+                                "filled"
+                              ]
+                            },
+                            "cards": {
+                              "type": "string",
+                              "enum": [
+                                "bordered",
+                                "elevated",
+                                "flat"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "buttons",
+                            "inputs",
+                            "cards"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
-                        "heading",
-                        "body",
-                        "scale"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "cornerStyle": {
-                      "type": "string",
-                      "enum": [
-                        "square",
-                        "subtle",
-                        "rounded"
-                      ]
-                    },
-                    "density": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
-                        "comfortable",
-                        "airy"
-                      ]
-                    },
-                    "containerWidth": {
-                      "type": "string",
-                      "enum": [
-                        "focused",
-                        "standard",
-                        "wide"
-                      ]
-                    },
-                    "components": {
-                      "type": "object",
-                      "properties": {
-                        "buttons": {
-                          "type": "string",
-                          "enum": [
-                            "solid",
-                            "soft",
-                            "outline"
-                          ]
-                        },
-                        "inputs": {
-                          "type": "string",
-                          "enum": [
-                            "outlined",
-                            "filled"
-                          ]
-                        },
-                        "cards": {
-                          "type": "string",
-                          "enum": [
-                            "bordered",
-                            "elevated",
-                            "flat"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "buttons",
-                        "inputs",
-                        "cards"
+                        "colors",
+                        "typography",
+                        "radius",
+                        "containerWidth",
+                        "components"
                       ],
                       "additionalProperties": false
                     },
@@ -63588,142 +66109,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "contact"
                           ]
                         },
-                        "productCard": {
-                          "type": "object",
-                          "properties": {
-                            "imageRatio": {
-                              "type": "string",
-                              "enum": [
-                                "square",
-                                "portrait"
-                              ]
-                            },
-                            "hoverImage": {
-                              "type": "boolean"
-                            },
-                            "quickBuy": {
-                              "type": "boolean"
-                            },
-                            "badge": {
-                              "type": "string",
-                              "enum": [
-                                "image",
-                                "price"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "imageRatio",
-                            "hoverImage",
-                            "quickBuy",
-                            "badge"
-                          ],
-                          "additionalProperties": false
+                        "card": {
+                          "type": "string",
+                          "enum": [
+                            "standard",
+                            "portrait",
+                            "quick"
+                          ]
                         },
-                        "grid": {
-                          "type": "object",
-                          "properties": {
-                            "desktop": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    3
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    4
-                                  ]
-                                }
-                              ]
-                            },
-                            "mobile": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    1
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "desktop",
-                            "mobile"
-                          ],
-                          "additionalProperties": false
+                        "density": {
+                          "type": "string",
+                          "enum": [
+                            "compact",
+                            "comfortable"
+                          ]
                         },
                         "productPage": {
-                          "type": "object",
-                          "properties": {
-                            "gallery": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "stacked"
-                              ]
-                            },
-                            "thumbnails": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "below"
-                              ]
-                            }
-                          },
-                          "required": [
+                          "type": "string",
+                          "enum": [
                             "gallery",
-                            "thumbnails"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "homepage": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "enum": [
-                              "hero",
-                              "collections",
-                              "categories",
-                              "delivery"
-                            ]
-                          }
+                            "filmstrip",
+                            "stacked"
+                          ]
                         }
                       },
                       "required": [
                         "header",
                         "footer",
-                        "productCard",
-                        "grid",
-                        "productPage",
-                        "homepage"
+                        "card",
+                        "density",
+                        "productPage"
                       ],
                       "additionalProperties": false
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "hero"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "collections"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "categories"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "rich_text"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {
+                                  "heading": {
+                                    "type": "string",
+                                    "maxLength": 120
+                                  },
+                                  "body": {
+                                    "type": "string",
+                                    "maxLength": 2000
+                                  }
+                                },
+                                "required": [
+                                  "heading",
+                                  "body"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "maxItems": 24
                     }
                   },
                   "required": [
-                    "colors",
-                    "typography",
-                    "cornerStyle",
-                    "density",
-                    "containerWidth",
-                    "components",
-                    "layout"
+                    "version",
+                    "mode",
+                    "tokens",
+                    "layout",
+                    "sections"
                   ],
                   "additionalProperties": false
                 },
@@ -63837,102 +66448,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "theme": {
                   "type": "object",
                   "properties": {
-                    "colors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                    "version": {
+                      "type": "number",
+                      "enum": [
+                        2
+                      ]
                     },
-                    "typography": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "configured",
+                        "custom"
+                      ]
+                    },
+                    "tokens": {
                       "type": "object",
                       "properties": {
-                        "heading": {
+                        "colors": {
+                          "type": "object",
+                          "properties": {
+                            "background": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "border": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "input": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "ring": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            }
+                          },
+                          "required": [
+                            "background",
+                            "foreground",
+                            "card",
+                            "card-foreground",
+                            "popover",
+                            "popover-foreground",
+                            "primary",
+                            "primary-foreground",
+                            "secondary",
+                            "secondary-foreground",
+                            "muted",
+                            "muted-foreground",
+                            "accent",
+                            "accent-foreground",
+                            "destructive",
+                            "destructive-foreground",
+                            "border",
+                            "input",
+                            "ring"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "typography": {
+                          "type": "object",
+                          "properties": {
+                            "heading": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "editorial"
+                              ]
+                            },
+                            "body": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "humanist"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "heading",
+                            "body"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "radius": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
+                            "square",
+                            "subtle",
+                            "rounded"
                           ]
                         },
-                        "body": {
+                        "containerWidth": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        },
-                        "scale": {
-                          "type": "string",
-                          "enum": [
-                            "compact",
                             "standard",
-                            "generous"
+                            "wide"
                           ]
+                        },
+                        "components": {
+                          "type": "object",
+                          "properties": {
+                            "buttons": {
+                              "type": "string",
+                              "enum": [
+                                "solid",
+                                "outline"
+                              ]
+                            },
+                            "inputs": {
+                              "type": "string",
+                              "enum": [
+                                "outlined",
+                                "filled"
+                              ]
+                            },
+                            "cards": {
+                              "type": "string",
+                              "enum": [
+                                "bordered",
+                                "elevated",
+                                "flat"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "buttons",
+                            "inputs",
+                            "cards"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
-                        "heading",
-                        "body",
-                        "scale"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "cornerStyle": {
-                      "type": "string",
-                      "enum": [
-                        "square",
-                        "subtle",
-                        "rounded"
-                      ]
-                    },
-                    "density": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
-                        "comfortable",
-                        "airy"
-                      ]
-                    },
-                    "containerWidth": {
-                      "type": "string",
-                      "enum": [
-                        "focused",
-                        "standard",
-                        "wide"
-                      ]
-                    },
-                    "components": {
-                      "type": "object",
-                      "properties": {
-                        "buttons": {
-                          "type": "string",
-                          "enum": [
-                            "solid",
-                            "soft",
-                            "outline"
-                          ]
-                        },
-                        "inputs": {
-                          "type": "string",
-                          "enum": [
-                            "outlined",
-                            "filled"
-                          ]
-                        },
-                        "cards": {
-                          "type": "string",
-                          "enum": [
-                            "bordered",
-                            "elevated",
-                            "flat"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "buttons",
-                        "inputs",
-                        "cards"
+                        "colors",
+                        "typography",
+                        "radius",
+                        "containerWidth",
+                        "components"
                       ],
                       "additionalProperties": false
                     },
@@ -63955,142 +66670,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "contact"
                           ]
                         },
-                        "productCard": {
-                          "type": "object",
-                          "properties": {
-                            "imageRatio": {
-                              "type": "string",
-                              "enum": [
-                                "square",
-                                "portrait"
-                              ]
-                            },
-                            "hoverImage": {
-                              "type": "boolean"
-                            },
-                            "quickBuy": {
-                              "type": "boolean"
-                            },
-                            "badge": {
-                              "type": "string",
-                              "enum": [
-                                "image",
-                                "price"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "imageRatio",
-                            "hoverImage",
-                            "quickBuy",
-                            "badge"
-                          ],
-                          "additionalProperties": false
+                        "card": {
+                          "type": "string",
+                          "enum": [
+                            "standard",
+                            "portrait",
+                            "quick"
+                          ]
                         },
-                        "grid": {
-                          "type": "object",
-                          "properties": {
-                            "desktop": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    3
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    4
-                                  ]
-                                }
-                              ]
-                            },
-                            "mobile": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    1
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "desktop",
-                            "mobile"
-                          ],
-                          "additionalProperties": false
+                        "density": {
+                          "type": "string",
+                          "enum": [
+                            "compact",
+                            "comfortable"
+                          ]
                         },
                         "productPage": {
-                          "type": "object",
-                          "properties": {
-                            "gallery": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "stacked"
-                              ]
-                            },
-                            "thumbnails": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "below"
-                              ]
-                            }
-                          },
-                          "required": [
+                          "type": "string",
+                          "enum": [
                             "gallery",
-                            "thumbnails"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "homepage": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "enum": [
-                              "hero",
-                              "collections",
-                              "categories",
-                              "delivery"
-                            ]
-                          }
+                            "filmstrip",
+                            "stacked"
+                          ]
                         }
                       },
                       "required": [
                         "header",
                         "footer",
-                        "productCard",
-                        "grid",
-                        "productPage",
-                        "homepage"
+                        "card",
+                        "density",
+                        "productPage"
                       ],
                       "additionalProperties": false
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "hero"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "collections"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "categories"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "rich_text"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {
+                                  "heading": {
+                                    "type": "string",
+                                    "maxLength": 120
+                                  },
+                                  "body": {
+                                    "type": "string",
+                                    "maxLength": 2000
+                                  }
+                                },
+                                "required": [
+                                  "heading",
+                                  "body"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "maxItems": 24
                     }
                   },
                   "required": [
-                    "colors",
-                    "typography",
-                    "cornerStyle",
-                    "density",
-                    "containerWidth",
-                    "components",
-                    "layout"
+                    "version",
+                    "mode",
+                    "tokens",
+                    "layout",
+                    "sections"
                   ],
                   "additionalProperties": false
                 },
@@ -64110,102 +66915,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "theme": {
                   "type": "object",
                   "properties": {
-                    "colors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                    "version": {
+                      "type": "number",
+                      "enum": [
+                        2
+                      ]
                     },
-                    "typography": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "configured",
+                        "custom"
+                      ]
+                    },
+                    "tokens": {
                       "type": "object",
                       "properties": {
-                        "heading": {
+                        "colors": {
+                          "type": "object",
+                          "properties": {
+                            "background": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "border": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "input": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "ring": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            }
+                          },
+                          "required": [
+                            "background",
+                            "foreground",
+                            "card",
+                            "card-foreground",
+                            "popover",
+                            "popover-foreground",
+                            "primary",
+                            "primary-foreground",
+                            "secondary",
+                            "secondary-foreground",
+                            "muted",
+                            "muted-foreground",
+                            "accent",
+                            "accent-foreground",
+                            "destructive",
+                            "destructive-foreground",
+                            "border",
+                            "input",
+                            "ring"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "typography": {
+                          "type": "object",
+                          "properties": {
+                            "heading": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "editorial"
+                              ]
+                            },
+                            "body": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "humanist"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "heading",
+                            "body"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "radius": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
+                            "square",
+                            "subtle",
+                            "rounded"
                           ]
                         },
-                        "body": {
+                        "containerWidth": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        },
-                        "scale": {
-                          "type": "string",
-                          "enum": [
-                            "compact",
                             "standard",
-                            "generous"
+                            "wide"
                           ]
+                        },
+                        "components": {
+                          "type": "object",
+                          "properties": {
+                            "buttons": {
+                              "type": "string",
+                              "enum": [
+                                "solid",
+                                "outline"
+                              ]
+                            },
+                            "inputs": {
+                              "type": "string",
+                              "enum": [
+                                "outlined",
+                                "filled"
+                              ]
+                            },
+                            "cards": {
+                              "type": "string",
+                              "enum": [
+                                "bordered",
+                                "elevated",
+                                "flat"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "buttons",
+                            "inputs",
+                            "cards"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
-                        "heading",
-                        "body",
-                        "scale"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "cornerStyle": {
-                      "type": "string",
-                      "enum": [
-                        "square",
-                        "subtle",
-                        "rounded"
-                      ]
-                    },
-                    "density": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
-                        "comfortable",
-                        "airy"
-                      ]
-                    },
-                    "containerWidth": {
-                      "type": "string",
-                      "enum": [
-                        "focused",
-                        "standard",
-                        "wide"
-                      ]
-                    },
-                    "components": {
-                      "type": "object",
-                      "properties": {
-                        "buttons": {
-                          "type": "string",
-                          "enum": [
-                            "solid",
-                            "soft",
-                            "outline"
-                          ]
-                        },
-                        "inputs": {
-                          "type": "string",
-                          "enum": [
-                            "outlined",
-                            "filled"
-                          ]
-                        },
-                        "cards": {
-                          "type": "string",
-                          "enum": [
-                            "bordered",
-                            "elevated",
-                            "flat"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "buttons",
-                        "inputs",
-                        "cards"
+                        "colors",
+                        "typography",
+                        "radius",
+                        "containerWidth",
+                        "components"
                       ],
                       "additionalProperties": false
                     },
@@ -64228,142 +67137,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "contact"
                           ]
                         },
-                        "productCard": {
-                          "type": "object",
-                          "properties": {
-                            "imageRatio": {
-                              "type": "string",
-                              "enum": [
-                                "square",
-                                "portrait"
-                              ]
-                            },
-                            "hoverImage": {
-                              "type": "boolean"
-                            },
-                            "quickBuy": {
-                              "type": "boolean"
-                            },
-                            "badge": {
-                              "type": "string",
-                              "enum": [
-                                "image",
-                                "price"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "imageRatio",
-                            "hoverImage",
-                            "quickBuy",
-                            "badge"
-                          ],
-                          "additionalProperties": false
+                        "card": {
+                          "type": "string",
+                          "enum": [
+                            "standard",
+                            "portrait",
+                            "quick"
+                          ]
                         },
-                        "grid": {
-                          "type": "object",
-                          "properties": {
-                            "desktop": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    3
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    4
-                                  ]
-                                }
-                              ]
-                            },
-                            "mobile": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    1
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "desktop",
-                            "mobile"
-                          ],
-                          "additionalProperties": false
+                        "density": {
+                          "type": "string",
+                          "enum": [
+                            "compact",
+                            "comfortable"
+                          ]
                         },
                         "productPage": {
-                          "type": "object",
-                          "properties": {
-                            "gallery": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "stacked"
-                              ]
-                            },
-                            "thumbnails": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "below"
-                              ]
-                            }
-                          },
-                          "required": [
+                          "type": "string",
+                          "enum": [
                             "gallery",
-                            "thumbnails"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "homepage": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "enum": [
-                              "hero",
-                              "collections",
-                              "categories",
-                              "delivery"
-                            ]
-                          }
+                            "filmstrip",
+                            "stacked"
+                          ]
                         }
                       },
                       "required": [
                         "header",
                         "footer",
-                        "productCard",
-                        "grid",
-                        "productPage",
-                        "homepage"
+                        "card",
+                        "density",
+                        "productPage"
                       ],
                       "additionalProperties": false
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "hero"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "collections"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "categories"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "rich_text"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {
+                                  "heading": {
+                                    "type": "string",
+                                    "maxLength": 120
+                                  },
+                                  "body": {
+                                    "type": "string",
+                                    "maxLength": 2000
+                                  }
+                                },
+                                "required": [
+                                  "heading",
+                                  "body"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "maxItems": 24
                     }
                   },
                   "required": [
-                    "colors",
-                    "typography",
-                    "cornerStyle",
-                    "density",
-                    "containerWidth",
-                    "components",
-                    "layout"
+                    "version",
+                    "mode",
+                    "tokens",
+                    "layout",
+                    "sections"
                   ],
                   "additionalProperties": false
                 },
@@ -64498,102 +67497,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "theme": {
                     "type": "object",
                     "properties": {
-                      "colors": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "string"
-                        }
+                      "version": {
+                        "type": "number",
+                        "enum": [
+                          2
+                        ]
                       },
-                      "typography": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "configured",
+                          "custom"
+                        ]
+                      },
+                      "tokens": {
                         "type": "object",
                         "properties": {
-                          "heading": {
+                          "colors": {
+                            "type": "object",
+                            "properties": {
+                              "background": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "foreground": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "card": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "card-foreground": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "popover": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "popover-foreground": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "primary": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "primary-foreground": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "secondary": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "secondary-foreground": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "muted": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "muted-foreground": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "accent": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "accent-foreground": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "destructive": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "destructive-foreground": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "border": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "input": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              },
+                              "ring": {
+                                "type": "string",
+                                "pattern": "^#[0-9a-f]{6}$"
+                              }
+                            },
+                            "required": [
+                              "background",
+                              "foreground",
+                              "card",
+                              "card-foreground",
+                              "popover",
+                              "popover-foreground",
+                              "primary",
+                              "primary-foreground",
+                              "secondary",
+                              "secondary-foreground",
+                              "muted",
+                              "muted-foreground",
+                              "accent",
+                              "accent-foreground",
+                              "destructive",
+                              "destructive-foreground",
+                              "border",
+                              "input",
+                              "ring"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "typography": {
+                            "type": "object",
+                            "properties": {
+                              "heading": {
+                                "type": "string",
+                                "enum": [
+                                  "system",
+                                  "modern",
+                                  "editorial"
+                                ]
+                              },
+                              "body": {
+                                "type": "string",
+                                "enum": [
+                                  "system",
+                                  "modern",
+                                  "humanist"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "heading",
+                              "body"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "radius": {
                             "type": "string",
                             "enum": [
-                              "system",
-                              "modern",
-                              "editorial"
+                              "square",
+                              "subtle",
+                              "rounded"
                             ]
                           },
-                          "body": {
+                          "containerWidth": {
                             "type": "string",
                             "enum": [
-                              "system",
-                              "modern",
-                              "humanist"
-                            ]
-                          },
-                          "scale": {
-                            "type": "string",
-                            "enum": [
-                              "compact",
                               "standard",
-                              "generous"
+                              "wide"
                             ]
+                          },
+                          "components": {
+                            "type": "object",
+                            "properties": {
+                              "buttons": {
+                                "type": "string",
+                                "enum": [
+                                  "solid",
+                                  "outline"
+                                ]
+                              },
+                              "inputs": {
+                                "type": "string",
+                                "enum": [
+                                  "outlined",
+                                  "filled"
+                                ]
+                              },
+                              "cards": {
+                                "type": "string",
+                                "enum": [
+                                  "bordered",
+                                  "elevated",
+                                  "flat"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "buttons",
+                              "inputs",
+                              "cards"
+                            ],
+                            "additionalProperties": false
                           }
                         },
                         "required": [
-                          "heading",
-                          "body",
-                          "scale"
-                        ],
-                        "additionalProperties": false
-                      },
-                      "cornerStyle": {
-                        "type": "string",
-                        "enum": [
-                          "square",
-                          "subtle",
-                          "rounded"
-                        ]
-                      },
-                      "density": {
-                        "type": "string",
-                        "enum": [
-                          "compact",
-                          "comfortable",
-                          "airy"
-                        ]
-                      },
-                      "containerWidth": {
-                        "type": "string",
-                        "enum": [
-                          "focused",
-                          "standard",
-                          "wide"
-                        ]
-                      },
-                      "components": {
-                        "type": "object",
-                        "properties": {
-                          "buttons": {
-                            "type": "string",
-                            "enum": [
-                              "solid",
-                              "soft",
-                              "outline"
-                            ]
-                          },
-                          "inputs": {
-                            "type": "string",
-                            "enum": [
-                              "outlined",
-                              "filled"
-                            ]
-                          },
-                          "cards": {
-                            "type": "string",
-                            "enum": [
-                              "bordered",
-                              "elevated",
-                              "flat"
-                            ]
-                          }
-                        },
-                        "required": [
-                          "buttons",
-                          "inputs",
-                          "cards"
+                          "colors",
+                          "typography",
+                          "radius",
+                          "containerWidth",
+                          "components"
                         ],
                         "additionalProperties": false
                       },
@@ -64616,142 +67719,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                               "contact"
                             ]
                           },
-                          "productCard": {
-                            "type": "object",
-                            "properties": {
-                              "imageRatio": {
-                                "type": "string",
-                                "enum": [
-                                  "square",
-                                  "portrait"
-                                ]
-                              },
-                              "hoverImage": {
-                                "type": "boolean"
-                              },
-                              "quickBuy": {
-                                "type": "boolean"
-                              },
-                              "badge": {
-                                "type": "string",
-                                "enum": [
-                                  "image",
-                                  "price"
-                                ]
-                              }
-                            },
-                            "required": [
-                              "imageRatio",
-                              "hoverImage",
-                              "quickBuy",
-                              "badge"
-                            ],
-                            "additionalProperties": false
+                          "card": {
+                            "type": "string",
+                            "enum": [
+                              "standard",
+                              "portrait",
+                              "quick"
+                            ]
                           },
-                          "grid": {
-                            "type": "object",
-                            "properties": {
-                              "desktop": {
-                                "anyOf": [
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      2
-                                    ]
-                                  },
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      3
-                                    ]
-                                  },
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      4
-                                    ]
-                                  }
-                                ]
-                              },
-                              "mobile": {
-                                "anyOf": [
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      1
-                                    ]
-                                  },
-                                  {
-                                    "type": "number",
-                                    "enum": [
-                                      2
-                                    ]
-                                  }
-                                ]
-                              }
-                            },
-                            "required": [
-                              "desktop",
-                              "mobile"
-                            ],
-                            "additionalProperties": false
+                          "density": {
+                            "type": "string",
+                            "enum": [
+                              "compact",
+                              "comfortable"
+                            ]
                           },
                           "productPage": {
-                            "type": "object",
-                            "properties": {
-                              "gallery": {
-                                "type": "string",
-                                "enum": [
-                                  "beside",
-                                  "stacked"
-                                ]
-                              },
-                              "thumbnails": {
-                                "type": "string",
-                                "enum": [
-                                  "beside",
-                                  "below"
-                                ]
-                              }
-                            },
-                            "required": [
+                            "type": "string",
+                            "enum": [
                               "gallery",
-                              "thumbnails"
-                            ],
-                            "additionalProperties": false
-                          },
-                          "homepage": {
-                            "type": "array",
-                            "items": {
-                              "type": "string",
-                              "enum": [
-                                "hero",
-                                "collections",
-                                "categories",
-                                "delivery"
-                              ]
-                            }
+                              "filmstrip",
+                              "stacked"
+                            ]
                           }
                         },
                         "required": [
                           "header",
                           "footer",
-                          "productCard",
-                          "grid",
-                          "productPage",
-                          "homepage"
+                          "card",
+                          "density",
+                          "productPage"
                         ],
                         "additionalProperties": false
+                      },
+                      "sections": {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "hero"
+                                  ]
+                                },
+                                "version": {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                "settings": {
+                                  "type": "object",
+                                  "properties": {},
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "version",
+                                "settings"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "collections"
+                                  ]
+                                },
+                                "version": {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                "settings": {
+                                  "type": "object",
+                                  "properties": {},
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "version",
+                                "settings"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "categories"
+                                  ]
+                                },
+                                "version": {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                "settings": {
+                                  "type": "object",
+                                  "properties": {},
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "version",
+                                "settings"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "delivery"
+                                  ]
+                                },
+                                "version": {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                "settings": {
+                                  "type": "object",
+                                  "properties": {},
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "version",
+                                "settings"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "rich_text"
+                                  ]
+                                },
+                                "version": {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                "settings": {
+                                  "type": "object",
+                                  "properties": {
+                                    "heading": {
+                                      "type": "string",
+                                      "maxLength": 120
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 2000
+                                    }
+                                  },
+                                  "required": [
+                                    "heading",
+                                    "body"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "version",
+                                "settings"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "maxItems": 24
                       }
                     },
                     "required": [
-                      "colors",
-                      "typography",
-                      "cornerStyle",
-                      "density",
-                      "containerWidth",
-                      "components",
-                      "layout"
+                      "version",
+                      "mode",
+                      "tokens",
+                      "layout",
+                      "sections"
                     ],
                     "additionalProperties": false
                   },
@@ -64851,102 +68044,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "theme": {
                   "type": "object",
                   "properties": {
-                    "colors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                    "version": {
+                      "type": "number",
+                      "enum": [
+                        2
+                      ]
                     },
-                    "typography": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "configured",
+                        "custom"
+                      ]
+                    },
+                    "tokens": {
                       "type": "object",
                       "properties": {
-                        "heading": {
+                        "colors": {
+                          "type": "object",
+                          "properties": {
+                            "background": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "border": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "input": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "ring": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            }
+                          },
+                          "required": [
+                            "background",
+                            "foreground",
+                            "card",
+                            "card-foreground",
+                            "popover",
+                            "popover-foreground",
+                            "primary",
+                            "primary-foreground",
+                            "secondary",
+                            "secondary-foreground",
+                            "muted",
+                            "muted-foreground",
+                            "accent",
+                            "accent-foreground",
+                            "destructive",
+                            "destructive-foreground",
+                            "border",
+                            "input",
+                            "ring"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "typography": {
+                          "type": "object",
+                          "properties": {
+                            "heading": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "editorial"
+                              ]
+                            },
+                            "body": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "humanist"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "heading",
+                            "body"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "radius": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
+                            "square",
+                            "subtle",
+                            "rounded"
                           ]
                         },
-                        "body": {
+                        "containerWidth": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        },
-                        "scale": {
-                          "type": "string",
-                          "enum": [
-                            "compact",
                             "standard",
-                            "generous"
+                            "wide"
                           ]
+                        },
+                        "components": {
+                          "type": "object",
+                          "properties": {
+                            "buttons": {
+                              "type": "string",
+                              "enum": [
+                                "solid",
+                                "outline"
+                              ]
+                            },
+                            "inputs": {
+                              "type": "string",
+                              "enum": [
+                                "outlined",
+                                "filled"
+                              ]
+                            },
+                            "cards": {
+                              "type": "string",
+                              "enum": [
+                                "bordered",
+                                "elevated",
+                                "flat"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "buttons",
+                            "inputs",
+                            "cards"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
-                        "heading",
-                        "body",
-                        "scale"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "cornerStyle": {
-                      "type": "string",
-                      "enum": [
-                        "square",
-                        "subtle",
-                        "rounded"
-                      ]
-                    },
-                    "density": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
-                        "comfortable",
-                        "airy"
-                      ]
-                    },
-                    "containerWidth": {
-                      "type": "string",
-                      "enum": [
-                        "focused",
-                        "standard",
-                        "wide"
-                      ]
-                    },
-                    "components": {
-                      "type": "object",
-                      "properties": {
-                        "buttons": {
-                          "type": "string",
-                          "enum": [
-                            "solid",
-                            "soft",
-                            "outline"
-                          ]
-                        },
-                        "inputs": {
-                          "type": "string",
-                          "enum": [
-                            "outlined",
-                            "filled"
-                          ]
-                        },
-                        "cards": {
-                          "type": "string",
-                          "enum": [
-                            "bordered",
-                            "elevated",
-                            "flat"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "buttons",
-                        "inputs",
-                        "cards"
+                        "colors",
+                        "typography",
+                        "radius",
+                        "containerWidth",
+                        "components"
                       ],
                       "additionalProperties": false
                     },
@@ -64969,142 +68266,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "contact"
                           ]
                         },
-                        "productCard": {
-                          "type": "object",
-                          "properties": {
-                            "imageRatio": {
-                              "type": "string",
-                              "enum": [
-                                "square",
-                                "portrait"
-                              ]
-                            },
-                            "hoverImage": {
-                              "type": "boolean"
-                            },
-                            "quickBuy": {
-                              "type": "boolean"
-                            },
-                            "badge": {
-                              "type": "string",
-                              "enum": [
-                                "image",
-                                "price"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "imageRatio",
-                            "hoverImage",
-                            "quickBuy",
-                            "badge"
-                          ],
-                          "additionalProperties": false
+                        "card": {
+                          "type": "string",
+                          "enum": [
+                            "standard",
+                            "portrait",
+                            "quick"
+                          ]
                         },
-                        "grid": {
-                          "type": "object",
-                          "properties": {
-                            "desktop": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    3
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    4
-                                  ]
-                                }
-                              ]
-                            },
-                            "mobile": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    1
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "desktop",
-                            "mobile"
-                          ],
-                          "additionalProperties": false
+                        "density": {
+                          "type": "string",
+                          "enum": [
+                            "compact",
+                            "comfortable"
+                          ]
                         },
                         "productPage": {
-                          "type": "object",
-                          "properties": {
-                            "gallery": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "stacked"
-                              ]
-                            },
-                            "thumbnails": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "below"
-                              ]
-                            }
-                          },
-                          "required": [
+                          "type": "string",
+                          "enum": [
                             "gallery",
-                            "thumbnails"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "homepage": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "enum": [
-                              "hero",
-                              "collections",
-                              "categories",
-                              "delivery"
-                            ]
-                          }
+                            "filmstrip",
+                            "stacked"
+                          ]
                         }
                       },
                       "required": [
                         "header",
                         "footer",
-                        "productCard",
-                        "grid",
-                        "productPage",
-                        "homepage"
+                        "card",
+                        "density",
+                        "productPage"
                       ],
                       "additionalProperties": false
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "hero"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "collections"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "categories"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "rich_text"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {
+                                  "heading": {
+                                    "type": "string",
+                                    "maxLength": 120
+                                  },
+                                  "body": {
+                                    "type": "string",
+                                    "maxLength": 2000
+                                  }
+                                },
+                                "required": [
+                                  "heading",
+                                  "body"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "maxItems": 24
                     }
                   },
                   "required": [
-                    "colors",
-                    "typography",
-                    "cornerStyle",
-                    "density",
-                    "containerWidth",
-                    "components",
-                    "layout"
+                    "version",
+                    "mode",
+                    "tokens",
+                    "layout",
+                    "sections"
                   ],
                   "additionalProperties": false
                 },
@@ -65124,102 +68511,206 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "theme": {
                   "type": "object",
                   "properties": {
-                    "colors": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "type": "string"
-                      }
+                    "version": {
+                      "type": "number",
+                      "enum": [
+                        2
+                      ]
                     },
-                    "typography": {
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "configured",
+                        "custom"
+                      ]
+                    },
+                    "tokens": {
                       "type": "object",
                       "properties": {
-                        "heading": {
+                        "colors": {
+                          "type": "object",
+                          "properties": {
+                            "background": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "card-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "popover-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "primary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "secondary-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "muted-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "accent-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "destructive-foreground": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "border": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "input": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            },
+                            "ring": {
+                              "type": "string",
+                              "pattern": "^#[0-9a-f]{6}$"
+                            }
+                          },
+                          "required": [
+                            "background",
+                            "foreground",
+                            "card",
+                            "card-foreground",
+                            "popover",
+                            "popover-foreground",
+                            "primary",
+                            "primary-foreground",
+                            "secondary",
+                            "secondary-foreground",
+                            "muted",
+                            "muted-foreground",
+                            "accent",
+                            "accent-foreground",
+                            "destructive",
+                            "destructive-foreground",
+                            "border",
+                            "input",
+                            "ring"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "typography": {
+                          "type": "object",
+                          "properties": {
+                            "heading": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "editorial"
+                              ]
+                            },
+                            "body": {
+                              "type": "string",
+                              "enum": [
+                                "system",
+                                "modern",
+                                "humanist"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "heading",
+                            "body"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "radius": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
+                            "square",
+                            "subtle",
+                            "rounded"
                           ]
                         },
-                        "body": {
+                        "containerWidth": {
                           "type": "string",
                           "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        },
-                        "scale": {
-                          "type": "string",
-                          "enum": [
-                            "compact",
                             "standard",
-                            "generous"
+                            "wide"
                           ]
+                        },
+                        "components": {
+                          "type": "object",
+                          "properties": {
+                            "buttons": {
+                              "type": "string",
+                              "enum": [
+                                "solid",
+                                "outline"
+                              ]
+                            },
+                            "inputs": {
+                              "type": "string",
+                              "enum": [
+                                "outlined",
+                                "filled"
+                              ]
+                            },
+                            "cards": {
+                              "type": "string",
+                              "enum": [
+                                "bordered",
+                                "elevated",
+                                "flat"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "buttons",
+                            "inputs",
+                            "cards"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
-                        "heading",
-                        "body",
-                        "scale"
-                      ],
-                      "additionalProperties": false
-                    },
-                    "cornerStyle": {
-                      "type": "string",
-                      "enum": [
-                        "square",
-                        "subtle",
-                        "rounded"
-                      ]
-                    },
-                    "density": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
-                        "comfortable",
-                        "airy"
-                      ]
-                    },
-                    "containerWidth": {
-                      "type": "string",
-                      "enum": [
-                        "focused",
-                        "standard",
-                        "wide"
-                      ]
-                    },
-                    "components": {
-                      "type": "object",
-                      "properties": {
-                        "buttons": {
-                          "type": "string",
-                          "enum": [
-                            "solid",
-                            "soft",
-                            "outline"
-                          ]
-                        },
-                        "inputs": {
-                          "type": "string",
-                          "enum": [
-                            "outlined",
-                            "filled"
-                          ]
-                        },
-                        "cards": {
-                          "type": "string",
-                          "enum": [
-                            "bordered",
-                            "elevated",
-                            "flat"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "buttons",
-                        "inputs",
-                        "cards"
+                        "colors",
+                        "typography",
+                        "radius",
+                        "containerWidth",
+                        "components"
                       ],
                       "additionalProperties": false
                     },
@@ -65242,142 +68733,232 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "contact"
                           ]
                         },
-                        "productCard": {
-                          "type": "object",
-                          "properties": {
-                            "imageRatio": {
-                              "type": "string",
-                              "enum": [
-                                "square",
-                                "portrait"
-                              ]
-                            },
-                            "hoverImage": {
-                              "type": "boolean"
-                            },
-                            "quickBuy": {
-                              "type": "boolean"
-                            },
-                            "badge": {
-                              "type": "string",
-                              "enum": [
-                                "image",
-                                "price"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "imageRatio",
-                            "hoverImage",
-                            "quickBuy",
-                            "badge"
-                          ],
-                          "additionalProperties": false
+                        "card": {
+                          "type": "string",
+                          "enum": [
+                            "standard",
+                            "portrait",
+                            "quick"
+                          ]
                         },
-                        "grid": {
-                          "type": "object",
-                          "properties": {
-                            "desktop": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    3
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    4
-                                  ]
-                                }
-                              ]
-                            },
-                            "mobile": {
-                              "anyOf": [
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    1
-                                  ]
-                                },
-                                {
-                                  "type": "number",
-                                  "enum": [
-                                    2
-                                  ]
-                                }
-                              ]
-                            }
-                          },
-                          "required": [
-                            "desktop",
-                            "mobile"
-                          ],
-                          "additionalProperties": false
+                        "density": {
+                          "type": "string",
+                          "enum": [
+                            "compact",
+                            "comfortable"
+                          ]
                         },
                         "productPage": {
-                          "type": "object",
-                          "properties": {
-                            "gallery": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "stacked"
-                              ]
-                            },
-                            "thumbnails": {
-                              "type": "string",
-                              "enum": [
-                                "beside",
-                                "below"
-                              ]
-                            }
-                          },
-                          "required": [
+                          "type": "string",
+                          "enum": [
                             "gallery",
-                            "thumbnails"
-                          ],
-                          "additionalProperties": false
-                        },
-                        "homepage": {
-                          "type": "array",
-                          "items": {
-                            "type": "string",
-                            "enum": [
-                              "hero",
-                              "collections",
-                              "categories",
-                              "delivery"
-                            ]
-                          }
+                            "filmstrip",
+                            "stacked"
+                          ]
                         }
                       },
                       "required": [
                         "header",
                         "footer",
-                        "productCard",
-                        "grid",
-                        "productPage",
-                        "homepage"
+                        "card",
+                        "density",
+                        "productPage"
                       ],
                       "additionalProperties": false
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "hero"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "collections"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "categories"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "delivery"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "rich_text"
+                                ]
+                              },
+                              "version": {
+                                "type": "number",
+                                "enum": [
+                                  1
+                                ]
+                              },
+                              "settings": {
+                                "type": "object",
+                                "properties": {
+                                  "heading": {
+                                    "type": "string",
+                                    "maxLength": 120
+                                  },
+                                  "body": {
+                                    "type": "string",
+                                    "maxLength": 2000
+                                  }
+                                },
+                                "required": [
+                                  "heading",
+                                  "body"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "version",
+                              "settings"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "maxItems": 24
                     }
                   },
                   "required": [
-                    "colors",
-                    "typography",
-                    "cornerStyle",
-                    "density",
-                    "containerWidth",
-                    "components",
-                    "layout"
+                    "version",
+                    "mode",
+                    "tokens",
+                    "layout",
+                    "sections"
                   ],
                   "additionalProperties": false
                 },
@@ -65696,7 +69277,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "additionalProperties": {}
                 },
                 "publishedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "sortOrder": {
                   "type": "number"
@@ -65706,13 +69296,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "minimum": 1
                 },
                 "createdAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "updatedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -65962,7 +69579,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "additionalProperties": {}
                   },
                   "publishedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "sortOrder": {
                     "type": "number"
@@ -65972,13 +69598,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minimum": 1
                   },
                   "createdAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "updatedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "deletedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -69272,7 +72925,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -75293,102 +78955,208 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "theme": {
               "type": "object",
               "properties": {
-                "colors": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
+                "version": {
+                  "type": "number",
+                  "enum": [
+                    2
+                  ]
                 },
-                "typography": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "configured",
+                    "custom"
+                  ]
+                },
+                "tokens": {
                   "type": "object",
                   "properties": {
-                    "heading": {
+                    "colors": {
+                      "type": "object",
+                      "properties": {
+                        "background": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "card": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "card-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "popover": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "popover-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "primary": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "primary-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "secondary": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "secondary-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "muted": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "muted-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "accent": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "accent-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "destructive": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "destructive-foreground": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "border": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "input": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        },
+                        "ring": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-f]{6}$"
+                        }
+                      },
+                      "required": [
+                        "background",
+                        "foreground",
+                        "card",
+                        "card-foreground",
+                        "popover",
+                        "popover-foreground",
+                        "primary",
+                        "primary-foreground",
+                        "secondary",
+                        "secondary-foreground",
+                        "muted",
+                        "muted-foreground",
+                        "accent",
+                        "accent-foreground",
+                        "destructive",
+                        "destructive-foreground",
+                        "border",
+                        "input",
+                        "ring"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "typography": {
+                      "type": "object",
+                      "properties": {
+                        "heading": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "modern",
+                            "editorial"
+                          ]
+                        },
+                        "body": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "modern",
+                            "humanist"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "heading",
+                        "body"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "radius": {
                       "type": "string",
                       "enum": [
-                        "system",
-                        "modern",
-                        "editorial"
+                        "square",
+                        "subtle",
+                        "rounded"
                       ]
                     },
-                    "body": {
+                    "containerWidth": {
                       "type": "string",
                       "enum": [
-                        "system",
-                        "modern",
-                        "humanist"
-                      ]
-                    },
-                    "scale": {
-                      "type": "string",
-                      "enum": [
-                        "compact",
                         "standard",
-                        "generous"
+                        "wide"
                       ]
+                    },
+                    "components": {
+                      "type": "object",
+                      "properties": {
+                        "buttons": {
+                          "type": "string",
+                          "enum": [
+                            "solid",
+                            "outline"
+                          ]
+                        },
+                        "inputs": {
+                          "type": "string",
+                          "enum": [
+                            "outlined",
+                            "filled"
+                          ]
+                        },
+                        "cards": {
+                          "type": "string",
+                          "enum": [
+                            "bordered",
+                            "elevated",
+                            "flat"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "buttons",
+                        "inputs",
+                        "cards"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
-                    "heading",
-                    "body",
-                    "scale"
-                  ]
-                },
-                "cornerStyle": {
-                  "type": "string",
-                  "enum": [
-                    "square",
-                    "subtle",
-                    "rounded"
-                  ]
-                },
-                "density": {
-                  "type": "string",
-                  "enum": [
-                    "compact",
-                    "comfortable",
-                    "airy"
-                  ]
-                },
-                "containerWidth": {
-                  "type": "string",
-                  "enum": [
-                    "focused",
-                    "standard",
-                    "wide"
-                  ]
-                },
-                "components": {
-                  "type": "object",
-                  "properties": {
-                    "buttons": {
-                      "type": "string",
-                      "enum": [
-                        "solid",
-                        "soft",
-                        "outline"
-                      ]
-                    },
-                    "inputs": {
-                      "type": "string",
-                      "enum": [
-                        "outlined",
-                        "filled"
-                      ]
-                    },
-                    "cards": {
-                      "type": "string",
-                      "enum": [
-                        "bordered",
-                        "elevated",
-                        "flat"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "buttons",
-                    "inputs",
-                    "cards"
-                  ]
+                    "colors",
+                    "typography",
+                    "radius",
+                    "containerWidth",
+                    "components"
+                  ],
+                  "additionalProperties": false
                 },
                 "layout": {
                   "type": "object",
@@ -75409,107 +79177,234 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "contact"
                       ]
                     },
-                    "productCard": {
-                      "type": "object",
-                      "properties": {
-                        "imageRatio": {
-                          "type": "string",
-                          "enum": [
-                            "square",
-                            "portrait"
-                          ]
-                        },
-                        "hoverImage": {
-                          "type": "boolean"
-                        },
-                        "quickBuy": {
-                          "type": "boolean"
-                        },
-                        "badge": {
-                          "type": "string",
-                          "enum": [
-                            "image",
-                            "price"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "imageRatio",
-                        "hoverImage",
-                        "quickBuy",
-                        "badge"
+                    "card": {
+                      "type": "string",
+                      "enum": [
+                        "standard",
+                        "portrait",
+                        "quick"
                       ]
                     },
-                    "grid": {
-                      "type": "object",
-                      "properties": {
-                        "desktop": {
-                          "type": "integer"
-                        },
-                        "mobile": {
-                          "type": "integer"
-                        }
-                      },
-                      "required": [
-                        "desktop",
-                        "mobile"
+                    "density": {
+                      "type": "string",
+                      "enum": [
+                        "compact",
+                        "comfortable"
                       ]
                     },
                     "productPage": {
-                      "type": "object",
-                      "properties": {
-                        "gallery": {
-                          "type": "string",
-                          "enum": [
-                            "beside",
-                            "stacked"
-                          ]
-                        },
-                        "thumbnails": {
-                          "type": "string",
-                          "enum": [
-                            "beside",
-                            "below"
-                          ]
-                        }
-                      },
-                      "required": [
+                      "type": "string",
+                      "enum": [
                         "gallery",
-                        "thumbnails"
+                        "filmstrip",
+                        "stacked"
                       ]
-                    },
-                    "homepage": {
-                      "type": "array",
-                      "items": {
-                        "type": "string",
-                        "enum": [
-                          "hero",
-                          "collections",
-                          "categories",
-                          "delivery"
-                        ]
-                      }
                     }
                   },
                   "required": [
                     "header",
                     "footer",
-                    "productCard",
-                    "grid",
-                    "productPage",
-                    "homepage"
-                  ]
+                    "card",
+                    "density",
+                    "productPage"
+                  ],
+                  "additionalProperties": false
+                },
+                "sections": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "hero"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "collections"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "categories"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "delivery"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z0-9][a-z0-9_-]{0,39}$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "rich_text"
+                            ]
+                          },
+                          "version": {
+                            "type": "number",
+                            "enum": [
+                              1
+                            ]
+                          },
+                          "settings": {
+                            "type": "object",
+                            "properties": {
+                              "heading": {
+                                "type": "string",
+                                "maxLength": 120
+                              },
+                              "body": {
+                                "type": "string",
+                                "maxLength": 2000
+                              }
+                            },
+                            "required": [
+                              "heading",
+                              "body"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "version",
+                          "settings"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "maxItems": 24
                 }
               },
               "required": [
-                "colors",
-                "typography",
-                "cornerStyle",
-                "density",
-                "containerWidth",
-                "components",
-                "layout"
-              ]
+                "version",
+                "mode",
+                "tokens",
+                "layout",
+                "sections"
+              ],
+              "additionalProperties": false
             },
             "media": {
               "type": "object",
@@ -78138,7 +82033,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "additionalProperties": {}
                 },
                 "publishedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "sortOrder": {
                   "type": "number"
@@ -78148,13 +82052,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "minimum": 1
                 },
                 "createdAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "updatedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -78379,7 +82310,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "additionalProperties": {}
                 },
                 "publishedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "sortOrder": {
                   "type": "number"
@@ -78389,13 +82329,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "minimum": 1
                 },
                 "createdAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "updatedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 },
                 "deletedAt": {
-                  "$ref": "#/components/schemas/NullableTimestamp"
+                  "type": "string",
+                  "nullable": true,
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -78656,7 +82623,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "additionalProperties": {}
                   },
                   "publishedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "sortOrder": {
                     "type": "number"
@@ -78666,13 +82642,40 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minimum": 1
                   },
                   "createdAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "updatedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   },
                   "deletedAt": {
-                    "$ref": "#/components/schemas/NullableTimestamp"
+                    "type": "string",
+                    "nullable": true,
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -90463,6 +94466,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.orders.mark_delivered",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.mark_delivered"
+        ]
+      },
+      {
         "operationId": "dashboard.orders.notification_resend",
         "surface": "dashboard",
         "mode": "operation-fallback",
@@ -90484,6 +94495,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.orders.notifications"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.parcel_returned",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.parcel_returned"
         ]
       },
       {

@@ -57,6 +57,7 @@ describe("category publication on D1", () => {
       .resolves.toEqual({ revision: 2, status: "published" });
     await expect(updateCategory(db, id, {
       ...createCategorySchema.parse(fields),
+      slug: fields.slug,
       canonicalPath: null,
       expectedRevision: 2,
       status: "published",

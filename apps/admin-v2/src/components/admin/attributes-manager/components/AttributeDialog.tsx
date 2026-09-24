@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
+import { autoHandleFor } from "~/components/admin/search-listing/SearchListingCard";
 import { apiData } from "~/lib/api";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { queryKeys } from "~/lib/query-keys";
@@ -17,8 +18,6 @@ import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 
 const HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-/** "Fabric & care" → "fabric-care"; Bangla names have no Latin letters, so the handle stays empty. */
-const handleFromName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 /** While typing a handle: lowercase, spaces become dashes, nothing else outside a-z, 0-9 and "-". */
 const typedHandle = (text: string) => text.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
@@ -38,7 +37,6 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
   const queryClient = useQueryClient();
   const [name, setName] = useState(attribute?.name ?? "");
   const [slug, setSlug] = useState(attribute?.slug ?? "");
-  const [slugEdited, setSlugEdited] = useState(Boolean(attribute));
   const [filterable, setFilterable] = useState(attribute?.filterable ?? true);
   const [options, setOptions] = useState<string[]>(attribute?.options ?? []);
   const [draftValue, setDraftValue] = useState("");
@@ -46,11 +44,14 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
   const [checked, setChecked] = useState({ name: false, slug: false });
   const [serverError, setServerError] = useState<{ field: "slug" | "form"; message: string } | null>(null);
 
+  // A new attribute left without a handle gets one made from its name on the server.
+  const autoHandle = attribute || slug ? undefined : autoHandleFor(name, "attribute");
+  const slugInvalid = autoHandle === undefined && (slug.length < 2 || !HANDLE.test(slug));
   const errors = {
     name: checked.name && name.trim().length < 2 ? t("nameTooShort") : null,
     slug: serverError?.field === "slug"
       ? serverError.message
-      : checked.slug && (slug.length < 2 || !HANDLE.test(slug)) ? t("handleInvalid") : null,
+      : checked.slug && slugInvalid ? t("handleInvalid") : null,
   };
 
   const save = useMutation({
@@ -60,7 +61,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
       const body = { name: name.trim(), slug, filterable, ...(optionsChanged ? { options } : {}) };
       return attribute
         ? apiData(putApiV1AdminAttributesById({ path: { id: attribute.id }, body }))
-        : apiData(postApiV1AdminAttributes({ body }));
+        : apiData(postApiV1AdminAttributes({ body: { ...body, slug: slug || undefined } }));
     },
     onSuccess: () => {
       toast.success(t("saved"));
@@ -104,7 +105,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
             event.preventDefault();
             setChecked({ name: true, slug: true });
             setServerError(null);
-            if (name.trim().length < 2 || slug.length < 2 || !HANDLE.test(slug) || save.isPending) return;
+            if (name.trim().length < 2 || slugInvalid || save.isPending) return;
             save.mutate();
           }}
         >
@@ -123,10 +124,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                 aria-invalid={Boolean(errors.name)}
                 aria-describedby={errors.name ? "attribute-name-error" : undefined}
                 onBlur={() => setChecked((current) => ({ ...current, name: true }))}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  if (!slugEdited) setSlug(handleFromName(event.target.value));
-                }}
+                onChange={(event) => setName(event.target.value)}
               />
               {errors.name ? <p id="attribute-name-error" className="text-body text-destructive">{errors.name}</p> : null}
             </div>
@@ -137,19 +135,18 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
                 maxLength={100}
                 inputMode="url"
                 autoCapitalize="none"
-                placeholder={t("handlePlaceholder")}
+                placeholder={autoHandle || t("handlePlaceholder")}
                 value={slug}
                 aria-invalid={Boolean(errors.slug)}
                 aria-describedby="attribute-handle-help"
                 onBlur={() => setChecked((current) => ({ ...current, slug: true }))}
                 onChange={(event) => {
-                  setSlugEdited(true);
                   setServerError(null);
                   setSlug(typedHandle(event.target.value));
                 }}
               />
               <p id="attribute-handle-help" className={errors.slug ? "text-body text-destructive" : "text-body text-muted-foreground"}>
-                {errors.slug ?? t("handleHelp")}
+                {errors.slug ?? t(autoHandle === undefined ? "handleHelp" : "handleAuto")}
               </p>
             </div>
           </div>

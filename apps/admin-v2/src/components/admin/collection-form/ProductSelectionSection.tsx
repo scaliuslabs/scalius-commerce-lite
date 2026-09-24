@@ -149,8 +149,8 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-body tabular-nums text-muted-foreground">
               {manual
-                ? t("productsOfMax", { count: selectedProductIds.length, max: MAX_MEMBERSHIP_IDS })
-                : t("categoriesOfMax", { count: selectedCategoryIds.length, max: MAX_MEMBERSHIP_IDS })}
+                ? t(selectedProductIds.length === 1 ? "productsOfMaxOne" : "productsOfMax", { count: selectedProductIds.length, max: MAX_MEMBERSHIP_IDS })
+                : t(selectedCategoryIds.length === 1 ? "categoriesOfMaxOne" : "categoriesOfMax", { count: selectedCategoryIds.length, max: MAX_MEMBERSHIP_IDS })}
             </span>
             {manual ? (
               <ProductPickerDialog

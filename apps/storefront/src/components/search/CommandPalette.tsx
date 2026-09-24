@@ -101,9 +101,25 @@ export default function CommandPalette() {
   }, [results]);
 
   useEffect(() => {
+    // Remember the control that opened search before the dialog renders:
+    // the input's autoFocus runs during React's commit, so by the time an
+    // effect runs `document.activeElement` is already the (soon removed)
+    // input, and closing would drop focus to the top of the page.
+    const rememberOpener = () => {
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement &&
+        active !== document.body &&
+        !modalRef.current?.contains(active)
+      ) {
+        previousFocusRef.current = active;
+      }
+    };
+
     const handleKeydown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
+        rememberOpener();
         setIsOpen((prev) => !prev);
       }
       if (e.key === "Escape") {
@@ -113,6 +129,7 @@ export default function CommandPalette() {
 
     const handleCustomEvent = () => {
       delete window.__scaliusSearchPaletteOpenPending;
+      rememberOpener();
       setIsOpen(true);
     };
 
@@ -127,9 +144,6 @@ export default function CommandPalette() {
 
   useEffect(() => {
     if (isOpen) {
-      previousFocusRef.current = document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
       document.body.style.overflow = "hidden";
       setSelectedIndex(-1);
       requestAnimationFrame(() => {
@@ -139,7 +153,9 @@ export default function CommandPalette() {
     }
     searchAbortRef.current?.abort();
     document.body.style.overflow = "";
-    previousFocusRef.current?.focus();
+    const opener = previousFocusRef.current;
+    previousFocusRef.current = null;
+    if (opener?.isConnected) opener.focus();
     // Clear after the close animation; reopening sooner keeps what was typed.
     const reset = setTimeout(() => {
       setQuery("");

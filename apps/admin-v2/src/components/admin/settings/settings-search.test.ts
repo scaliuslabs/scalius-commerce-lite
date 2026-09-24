@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { searchSettings } from "./settings-search";
+import { exactness, searchSettings, words } from "./settings-search";
 
 const firstCard = (query: string) => searchSettings(query).cards[0];
 
@@ -35,6 +35,15 @@ describe("settings search", () => {
 
   it("matches word starts only, so COD doesn't find unrelated words", () => {
     expect(searchSettings("cod").cards.every((entry) => entry.page === "payments")).toBe(true);
+    // "code" is no longer a two-step synonym, so COD doesn't offer two-step verification.
+    expect(searchSettings("cod").shortcuts).toEqual([]);
+  });
+
+  it("finds the store theme by \"style\", and ranks whole-word matches first", () => {
+    expect(searchSettings("style").shortcuts.map((entry) => entry.card)).toEqual(["storeTheme"]);
+    expect(searchSettings("স্টাইল").shortcuts.map((entry) => entry.card)).toEqual(["storeTheme"]);
+    expect(exactness(words("cod"), words("cod cash on delivery"))).toBe(1);
+    expect(exactness(words("cod"), words("code"))).toBe(0);
   });
 
   it("matches page names and summaries", () => {
