@@ -20,6 +20,7 @@ import {
 } from "~/lib/admin-access";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
+import { useWarmEverydayRouteCode } from "~/lib/warm-route-code";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 
@@ -62,6 +63,7 @@ function AdminLayout() {
     [permissions, isSuperAdmin],
   );
   const nav = useMemo(() => visibleNav(canOpen), [canOpen]);
+  useWarmEverydayRouteCode(canOpen);
 
   return (
     <PermissionProvider permissions={permissions} isSuperAdmin={isSuperAdmin}>
