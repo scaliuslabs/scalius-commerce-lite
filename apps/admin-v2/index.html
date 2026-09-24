@@ -21,6 +21,8 @@
       #boot{position:fixed;inset:0;display:grid;place-items:center;animation:boot-in 0s 1s both}
       #boot::after{content:"";width:20px;height:20px;border:2px solid #8a8a8a;border-top-color:transparent;border-radius:50%;animation:boot-spin .8s linear infinite}
       @keyframes boot-in{from{visibility:hidden}}@keyframes boot-spin{to{transform:rotate(360deg)}}
+      #boot p{grid-row:2;margin:12px 0 0;font:14px/20px system-ui,sans-serif;color:#616161}html.dark #boot p{color:#b5b5b5}
+      #boot button{font:inherit;color:inherit;background:none;border:0;padding:0;text-decoration:underline;cursor:pointer}
     </style>
     <script type="module" src="/src/main.tsx"></script>
   </head>
@@ -28,6 +30,8 @@
     <!-- Nothing protected renders until the session is known: only the boot
          spinner shows until the first route (and its guard) has resolved. -->
     <div id="root"><div id="boot" role="status" aria-label="Loading"></div></div>
+    <!-- A load that has not mounted the app after 12 s offers a reload (PERF-02). -->
+    <script>setTimeout(function(){var b=document.getElementById("boot");if(!b)return;var n=document.documentElement.lang==="bn",p=document.createElement("p"),r=document.createElement("button");p.textContent=n?"এখনো লোড হচ্ছে… ":"Still loading… ";r.type="button";r.textContent=n?"আবার লোড করুন":"Reload";r.onclick=function(){location.reload()};p.append(r);b.removeAttribute("aria-label");b.append(p)},12000)</script>
     <noscript>The Scalius dashboard needs JavaScript.</noscript>
   </body>
 </html>
