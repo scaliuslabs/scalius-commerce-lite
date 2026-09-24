@@ -251,9 +251,9 @@ export const getApiV1Articles = <ThrowOnError extends boolean = false>(options?:
 export const getApiV1ArticlesSlugBySlug = <ThrowOnError extends boolean = false>(options: Options<GetApiV1ArticlesSlugBySlugData, ThrowOnError>): RequestResult<GetApiV1ArticlesSlugBySlugResponses, GetApiV1ArticlesSlugBySlugErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1ArticlesSlugBySlugResponses, GetApiV1ArticlesSlugBySlugErrors, ThrowOnError>({ url: '/api/v1/articles/slug/{slug}', ...options });
 
 /**
- * Validate a discount code against the cart
+ * Preview the cart's discounts before delivery is chosen
  *
- * Evaluates the code together with active automatic discounts. `discountAmount` is the cart's total savings when the code applies.
+ * Evaluates the applied codes together with active automatic discounts. Codes that do not apply are listed with the reason and add nothing.
  */
 export const postApiV1DiscountsValidate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1DiscountsValidateData, ThrowOnError>): RequestResult<PostApiV1DiscountsValidateResponses, PostApiV1DiscountsValidateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1DiscountsValidateResponses, PostApiV1DiscountsValidateErrors, ThrowOnError>({
     url: '/api/v1/discounts/validate',

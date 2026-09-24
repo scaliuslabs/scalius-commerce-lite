@@ -12733,7 +12733,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string"
                   },
                   "orderNumber": {
-                    "type": "integer"
+                    "type": "integer",
+                    "nullable": true
                   },
                   "totalAmount": {
                     "type": "number"
@@ -20506,7 +20507,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "maxLength": 128
                   },
                   "orderNumber": {
-                    "type": "integer"
+                    "type": "integer",
+                    "nullable": true
                   },
                   "customerName": {
                     "type": "string",
@@ -20859,7 +20861,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "maxLength": 128
                   },
                   "orderNumber": {
-                    "type": "integer"
+                    "type": "integer",
+                    "nullable": true
                   },
                   "customerName": {
                     "type": "string",
@@ -68621,8 +68624,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "storefront.discounts_validate.validate",
     "method": "POST",
     "pathTemplate": "/api/v1/discounts/validate",
-    "summary": "Validate a discount code against the cart",
-    "description": "Evaluates the code together with active automatic discounts. `discountAmount` is the cart's total savings when the code applies.",
+    "summary": "Preview the cart's discounts before delivery is chosen",
+    "description": "Evaluates the applied codes together with active automatic discounts. Codes that do not apply are listed with the reason and add nothing.",
     "tags": [
       "Discounts"
     ],
@@ -70467,10 +70470,31 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "buyNowText": {
                   "type": "string"
                 },
-                "selectOptionsText": {
+                "unavailableText": {
                   "type": "string"
                 },
-                "unavailableText": {
+                "chooseOptionText": {
+                  "type": "string"
+                },
+                "fromPriceText": {
+                  "type": "string"
+                },
+                "quantityLabelText": {
+                  "type": "string"
+                },
+                "quantityLimitText": {
+                  "type": "string"
+                },
+                "saleOfferText": {
+                  "type": "string"
+                },
+                "saleOfferSpendText": {
+                  "type": "string"
+                },
+                "freeBenefitText": {
+                  "type": "string"
+                },
+                "percentBenefitText": {
                   "type": "string"
                 }
               },
@@ -70478,8 +70502,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "languageCode",
                 "addToCartText",
                 "buyNowText",
-                "selectOptionsText",
-                "unavailableText"
+                "unavailableText",
+                "chooseOptionText",
+                "fromPriceText",
+                "quantityLabelText",
+                "quantityLimitText",
+                "saleOfferText",
+                "saleOfferSpendText",
+                "freeBenefitText",
+                "percentBenefitText"
               ]
             }
           },

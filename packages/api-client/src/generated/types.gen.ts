@@ -2251,9 +2251,9 @@ export type GetApiV1ArticlesSlugBySlugResponse = GetApiV1ArticlesSlugBySlugRespo
 export type PostApiV1DiscountsValidateData = {
     body: {
         /**
-         * Discount code to validate
+         * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
          */
-        code: string;
+        codes?: Array<string>;
         /**
          * Cart items
          */
@@ -2309,24 +2309,71 @@ export type PostApiV1DiscountsValidateError = PostApiV1DiscountsValidateErrors[k
 
 export type PostApiV1DiscountsValidateResponses = {
     /**
-     * Discount validation result
+     * Cart discount preview
      */
     200: {
         success: true;
         data: {
-            valid: boolean;
-            discount?: {
-                id: string;
+            totalDiscount: number;
+            discounts: Array<{
+                promotionId: string;
+                title: string;
+                code: string | null;
+                amount: number;
+            }>;
+            offers: Array<{
+                promotionId: string;
+                title: string;
+                code: string | null;
+                kind: 'get' | 'buy';
+                /**
+                 * 100 means the items are free.
+                 */
+                percentOff: number;
+                quantity: number;
+                shortfallAmount: number | null;
+                products: Array<{
+                    id: string;
+                    slug: string;
+                    name: string;
+                    /**
+                     * Set for simple products, which can be added in one tap.
+                     */
+                    variantId: string | null;
+                    price: number | null;
+                }>;
+            }>;
+            rejectedCodes: Array<{
                 code: string;
-                type: 'code';
-                discountValue: number;
-            };
-            discountAmount?: number;
-            error?: string;
-            /**
-             * The code has a per-customer limit: ask for the phone number.
-             */
-            requiresCustomerPhone?: boolean;
+                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'unavailable';
+                message: string;
+                shortfallAmount?: number;
+                shortfallQuantity?: number;
+                conflictsWith?: string;
+                offer?: {
+                    promotionId: string;
+                    title: string;
+                    code: string | null;
+                    kind: 'get' | 'buy';
+                    /**
+                     * 100 means the items are free.
+                     */
+                    percentOff: number;
+                    quantity: number;
+                    shortfallAmount: number | null;
+                    products: Array<{
+                        id: string;
+                        slug: string;
+                        name: string;
+                        /**
+                         * Set for simple products, which can be added in one tap.
+                         */
+                        variantId: string | null;
+                        price: number | null;
+                    }>;
+                };
+                requiresCustomerPhone?: boolean;
+            }>;
         };
     };
 };
@@ -2901,8 +2948,15 @@ export type GetApiV1StorefrontLayoutResponses = {
                 languageCode: string;
                 addToCartText: string;
                 buyNowText: string;
-                selectOptionsText: string;
                 unavailableText: string;
+                chooseOptionText: string;
+                fromPriceText: string;
+                quantityLabelText: string;
+                quantityLimitText: string;
+                saleOfferText: string;
+                saleOfferSpendText: string;
+                freeBenefitText: string;
+                percentBenefitText: string;
             };
         };
     };
@@ -10464,6 +10518,28 @@ export type GetApiV1ProductsBySlugResponses = {
                     title: string;
                     content: string;
                 }>;
+                /**
+                 * Active automatic Buy X get Y discounts this product counts toward.
+                 */
+                offers: Array<{
+                    promotionId: string;
+                    title: string;
+                    buyQuantity: number | null;
+                    buyAmount: number | null;
+                    getQuantity: number;
+                    /**
+                     * 100 means the items to get are free.
+                     */
+                    percentOff: number;
+                    endsAtEpochSeconds: number | null;
+                    products: Array<{
+                        id: string;
+                        slug: string;
+                        name: string;
+                        variantId: string | null;
+                        price: number | null;
+                    }>;
+                }>;
             };
             category: {
                 id: string;
@@ -12078,7 +12154,10 @@ export type PostApiV1OrdersTaxQuoteData = {
         zone: string;
         area?: string | null;
         shippingMethodId: string;
-        discountCode?: string | null;
+        /**
+         * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
+         */
+        discountCodes?: Array<string>;
         customerPhone?: string | null;
     };
     path?: never;
@@ -12146,9 +12225,73 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 feeWaived: boolean;
             };
             /**
-             * Automatic Buy X get Y discounts the buyer has earned but not claimed: the free item is not in the cart yet.
+             * One line per applied discount (automatic and code), with its own amount.
              */
-            discountOffers: Array<string>;
+            discounts: Array<{
+                promotionId: string;
+                title: string;
+                code: string | null;
+                amount: number;
+            }>;
+            /**
+             * Automatic Buy X get Y discounts the buyer has earned but not claimed: the items to get are not in the cart yet.
+             */
+            offers: Array<{
+                promotionId: string;
+                title: string;
+                code: string | null;
+                kind: 'get' | 'buy';
+                /**
+                 * 100 means the items are free.
+                 */
+                percentOff: number;
+                quantity: number;
+                shortfallAmount: number | null;
+                products: Array<{
+                    id: string;
+                    slug: string;
+                    name: string;
+                    /**
+                     * Set for simple products, which can be added in one tap.
+                     */
+                    variantId: string | null;
+                    price: number | null;
+                }>;
+            }>;
+            /**
+             * Submitted codes that do not apply right now, with the reason. They add nothing to the totals.
+             */
+            rejectedCodes: Array<{
+                code: string;
+                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'unavailable';
+                message: string;
+                shortfallAmount?: number;
+                shortfallQuantity?: number;
+                conflictsWith?: string;
+                offer?: {
+                    promotionId: string;
+                    title: string;
+                    code: string | null;
+                    kind: 'get' | 'buy';
+                    /**
+                     * 100 means the items are free.
+                     */
+                    percentOff: number;
+                    quantity: number;
+                    shortfallAmount: number | null;
+                    products: Array<{
+                        id: string;
+                        slug: string;
+                        name: string;
+                        /**
+                         * Set for simple products, which can be added in one tap.
+                         */
+                        variantId: string | null;
+                        price: number | null;
+                    }>;
+                };
+                requiresCustomerPhone?: boolean;
+            }>;
             items: Array<{
                 cartKey?: string | null;
                 productId: string;
@@ -12191,8 +12334,10 @@ export type PostApiV1OrdersData = {
             productName?: string | null;
             variantLabel?: string | null;
         }>;
-        discountAmount: number | null;
-        discountCode?: string | null;
+        /**
+         * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
+         */
+        discountCodes?: Array<string>;
         shippingCharge: number;
         shippingMethodId?: string | null;
         paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
@@ -16364,7 +16509,7 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
             }>;
             orders: Array<{
                 id: string;
-                orderNumber: number;
+                orderNumber: number | null;
                 totalAmount: number;
                 status: string;
                 createdAt: string | number;
@@ -26053,7 +26198,7 @@ export type GetApiV1AdminDashboardHomeSummaryResponses = {
             };
             recentOrders: Array<{
                 id: string;
-                orderNumber: number;
+                orderNumber: number | null;
                 customerName: string;
                 totalAmount: number;
                 status: string;
@@ -26142,7 +26287,7 @@ export type GetApiV1AdminDashboardSummaryResponses = {
             };
             recentOrders: Array<{
                 id: string;
-                orderNumber: number;
+                orderNumber: number | null;
                 customerName: string;
                 totalAmount: number;
                 status: string;
@@ -26222,7 +26367,7 @@ export type GetApiV1AdminDashboardResponses = {
             };
             recentOrders: Array<{
                 id: string;
-                orderNumber: number;
+                orderNumber: number | null;
                 customerName: string;
                 totalAmount: number;
                 status: string;
