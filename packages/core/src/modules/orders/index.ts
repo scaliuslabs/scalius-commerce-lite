@@ -2,6 +2,7 @@
 // returns, receipts and payment recovery. Checkout commits orders
 // (modules/checkout) and fulfilment hands them over (modules/fulfilment).
 export * from "./browser";
+export * from "./validation";
 export * from "./admin/list";
 export * from "./admin/detail";
 export * from "./admin/quote";
