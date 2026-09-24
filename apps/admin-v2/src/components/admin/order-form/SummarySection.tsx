@@ -17,7 +17,7 @@ import {
   FormLabel,
   FormMessage,
 } from "~/components/ui/form";
-import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import {
   Select,
@@ -136,19 +136,17 @@ export function SummarySection() {
               <FormItem>
                 <FormLabel>{t("deliveryCharge")}</FormLabel>
                 <FormControl>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
+                  <NumberInput
                     placeholder="0"
-                    min={0}
-                    step="0.01"
-                    {...field}
-                    value={field.value === 0 ? "" : field.value ?? ""}
+                    name={field.name}
+                    disabled={field.disabled}
+                    onBlur={field.onBlur}
+                    value={field.value === 0 ? null : field.value}
                     ref={(el) => {
                       field.ref(el);
                       refs.shippingChargeRef.current = el;
                     }}
-                    onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : 0)}
+                    onValueChange={(value) => field.onChange(value ?? 0)}
                     onKeyDown={(e) => handleKeyDown(e, refs.discountAmountRef)}
                   />
                 </FormControl>
@@ -164,25 +162,22 @@ export function SummarySection() {
               <FormItem>
                 <FormLabel>{t("discount")}</FormLabel>
                 <FormControl>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
+                  <NumberInput
                     placeholder="0"
-                    min={0}
-                    step="0.01"
-                    max={discountLimit?.maximumAmount}
                     aria-invalid={discountNeedsCorrection || undefined}
                     aria-describedby={discountNeedsCorrection
                       ? `${discountGuidanceId} ${discountErrorId}`
                       : discountGuidanceId}
                     aria-errormessage={discountNeedsCorrection ? discountErrorId : undefined}
-                    {...field}
-                    value={field.value ?? ""}
+                    name={field.name}
+                    disabled={field.disabled}
+                    onBlur={field.onBlur}
+                    value={field.value}
                     ref={(el) => {
                       field.ref(el);
                       refs.discountAmountRef.current = el;
                     }}
-                    onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+                    onValueChange={field.onChange}
                     onKeyDown={(e) => handleKeyDown(e)}
                   />
                 </FormControl>

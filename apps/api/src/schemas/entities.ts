@@ -7,6 +7,7 @@
 import { z } from "@hono/zod-openapi";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
+import { ORDER_SHIPMENT_RECOVERY_REASONS } from "@scalius/core/modules/orders/orders.types";
 import {
   nullableTimestampSchema,
   optionalNullableTimestampSchema,
@@ -212,6 +213,7 @@ export const orderPaymentRecoverySchema = z.object({
 
 export const orderShipmentRecoverySchema = z.object({
   state: z.enum(["none", "creating", "needs_attention", "failed"]),
+  reason: z.enum(ORDER_SHIPMENT_RECOVERY_REASONS),
   severity: z.enum(["info", "warning", "danger"]),
   activeLock: z.boolean(),
   label: z.string(),

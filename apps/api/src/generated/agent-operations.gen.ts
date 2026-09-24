@@ -35327,6 +35327,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "failed"
                   ]
                 },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "courier_unconfirmed",
+                    "reconcile_required",
+                    "creating",
+                    "claim_expired",
+                    "failed"
+                  ]
+                },
                 "severity": {
                   "type": "string",
                   "enum": [
@@ -35375,6 +35386,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               },
               "required": [
                 "state",
+                "reason",
                 "severity",
                 "activeLock",
                 "label",
@@ -37558,6 +37570,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "failed"
                         ]
                       },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "courier_unconfirmed",
+                          "reconcile_required",
+                          "creating",
+                          "claim_expired",
+                          "failed"
+                        ]
+                      },
                       "severity": {
                         "type": "string",
                         "enum": [
@@ -37606,6 +37629,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     "required": [
                       "state",
+                      "reason",
                       "severity",
                       "activeLock",
                       "label",
@@ -39127,6 +39151,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "failed"
                         ]
                       },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "courier_unconfirmed",
+                          "reconcile_required",
+                          "creating",
+                          "claim_expired",
+                          "failed"
+                        ]
+                      },
                       "severity": {
                         "type": "string",
                         "enum": [
@@ -39175,6 +39210,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     },
                     "required": [
                       "state",
+                      "reason",
                       "severity",
                       "activeLock",
                       "label",
@@ -39894,6 +39930,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "manual_reconciliation"
                     ]
                   },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "manual_reconciliation",
+                      "stale",
+                      "dead_letter",
+                      "failed"
+                    ]
+                  },
                   "message": {
                     "type": "string"
                   },
@@ -39925,6 +39970,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "provider",
                   "eventType",
                   "status",
+                  "reason",
                   "message",
                   "error",
                   "queueType",

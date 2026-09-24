@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { formatNumber, useMessages } from "~/i18n";
@@ -23,7 +23,7 @@ import {
   type OrderReturnLineDto,
 } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
-import { createReturnCommandKey, getOrderItemName, parseReturnQuantity } from "./shared";
+import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
 
 interface ReceiptDraft { received: number; restock: number }
 
@@ -98,8 +98,8 @@ export function ReceiveReturnDialog({
               const current = draft[line.id] ?? { received: 0, restock: 0 };
               const name = getOrderItemName(itemsById.get(line.orderItemId));
               if (outstanding === 0) return null;
-              const setReceived = (value: string) => {
-                const next = parseReturnQuantity(value, outstanding);
+              const setReceived = (value: number | null) => {
+                const next = clampQuantity(value, outstanding);
                 setDraft((existing) => ({
                   ...existing,
                   [line.id]: { received: next, restock: line.inventoryTracked ? Math.min(existing[line.id]?.restock ?? 0, next) : 0 },
@@ -118,29 +118,23 @@ export function ReceiveReturnDialog({
                     <div className="grid grid-cols-3 gap-2">
                       <Label className="grid">
                         <span>{t("returns.received")}</span>
-                        <Input
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          max={outstanding}
+                        <NumberInput
+                          integer
                           aria-label={t("returns.receivedQty", { name })}
                           value={current.received}
-                          onChange={(e) => setReceived(e.target.value)}
+                          onValueChange={setReceived}
                         />
                       </Label>
                       <Label className="grid">
                         <span>{t("returns.restock")}</span>
-                        <Input
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          max={current.received}
+                        <NumberInput
+                          integer
                           aria-label={t("returns.restockQty", { name })}
                           disabled={current.received === 0}
                           value={current.restock}
-                          onChange={(e) => setDraft((existing) => ({
+                          onValueChange={(value) => setDraft((existing) => ({
                             ...existing,
-                            [line.id]: { ...current, restock: parseReturnQuantity(e.target.value, current.received) },
+                            [line.id]: { ...current, restock: clampQuantity(value, current.received) },
                           }))}
                         />
                       </Label>
@@ -154,14 +148,11 @@ export function ReceiveReturnDialog({
                   ) : (
                     <Label className="grid max-w-40">
                       <span>{t("returns.received")}</span>
-                      <Input
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
-                        max={outstanding}
+                      <NumberInput
+                        integer
                         aria-label={t("returns.receivedQty", { name })}
                         value={current.received}
-                        onChange={(e) => setReceived(e.target.value)}
+                        onValueChange={setReceived}
                       />
                     </Label>
                   )}

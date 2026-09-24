@@ -28,15 +28,16 @@ describe("order notification display", () => {
     expect(notificationIssue(null)).toBeNull();
   });
 
-  it("shows each channel with its masked recipient and outcome, leaving staff push out", () => {
+  it("shows each channel with its masked recipient and outcome, leaving staff push and unset channels out", () => {
     const lines = notificationChannelLines([
       receipt({}),
       receipt({ id: "r2", channel: "sms", recipientMasked: "017••••5601", status: "skipped", lastError: "missing_sms_provider" }),
       receipt({ id: "r3", channel: "push", recipientMasked: null }),
+      receipt({ id: "r4", channel: "whatsapp", recipientMasked: "017••••5601", status: "failed", lastError: "invalid token" }),
     ]);
     expect(lines).toEqual([
       expect.objectContaining({ channel: "email", recipient: "b***@mail.test", status: "accepted", issue: null }),
-      expect.objectContaining({ channel: "sms", recipient: "017••••5601", status: "skipped", issue: "smsNotSetUp" }),
+      expect.objectContaining({ channel: "whatsapp", status: "failed", issue: "providerSetup" }),
     ]);
   });
 
@@ -49,11 +50,47 @@ describe("order notification display", () => {
     expect(summarizeNotificationDelivery({ status: "failed", receipts: [] })).toBe("failed");
   });
 
+  it("calls a message sent when every channel it was sent on succeeded", () => {
+    // Email is the only channel set up; SMS and WhatsApp were never tried, and a staff device failing is not the customer.
+    const receipts = [
+      receipt({}),
+      receipt({ id: "r2", channel: "sms", status: "skipped", lastError: "missing_sms_provider" }),
+      receipt({ id: "r3", channel: "whatsapp", status: "skipped", lastError: "missing_whatsapp_credentials" }),
+      receipt({ id: "r4", channel: "push", recipientMasked: null, status: "failed", lastError: "unregistered" }),
+    ];
+    expect(summarizeNotificationDelivery({ status: "sent", receipts })).toBe("accepted");
+    // No email address for this customer, SMS went out.
+    expect(summarizeNotificationDelivery({
+      status: "sent",
+      receipts: [
+        receipt({ status: "skipped", recipientMasked: "missing-email", lastError: "missing_email_recipient" }),
+        receipt({ id: "r2", channel: "sms", status: "delivered" }),
+      ],
+    })).toBe("delivered");
+    // A configured channel that failed still makes it partial.
+    expect(summarizeNotificationDelivery({
+      status: "sent",
+      receipts: [receipt({}), receipt({ id: "r2", channel: "sms", status: "failed", lastError: "socket hang up" })],
+    })).toBe("partial");
+  });
+
+  it("calls a message skipped when no channel could be tried", () => {
+    expect(summarizeNotificationDelivery({
+      status: "sent",
+      receipts: [
+        receipt({ status: "skipped", lastError: "missing_email_recipient" }),
+        receipt({ id: "r2", channel: "sms", status: "skipped", lastError: "missing_sms_provider" }),
+      ],
+    })).toBe("skipped");
+  });
+
   it("offers sending again only when some channel can reach the customer", () => {
     const noEmail = receipt({ status: "skipped", recipientMasked: null, lastError: "missing_email_recipient" });
     expect(canSendNotificationAgain({ lastError: null, receipts: [noEmail] })).toBe(false);
     expect(canSendNotificationAgain({ lastError: null, receipts: [noEmail, receipt({ id: "r2", channel: "sms" })] })).toBe(true);
     expect(canSendNotificationAgain({ lastError: "missing_email_recipient", receipts: [] })).toBe(false);
     expect(canSendNotificationAgain({ lastError: "timeout", receipts: [] })).toBe(true);
+    const smsNotSetUp = receipt({ id: "r3", channel: "sms", status: "skipped", lastError: "missing_sms_provider" });
+    expect(canSendNotificationAgain({ lastError: null, receipts: [noEmail, smsNotSetUp] })).toBe(false);
   });
 });

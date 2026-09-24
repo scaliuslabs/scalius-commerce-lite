@@ -74,7 +74,7 @@ import {
     listPaymentMethodIds,
     summarizeActiveRefundOperation,
 } from "@scalius/core/modules/payments";
-import { listPaymentWebhookIssuesForOrder } from "../../utils/payment-webhook-issues";
+import { listPaymentWebhookIssuesForOrder, PAYMENT_WEBHOOK_ISSUE_REASONS } from "../../utils/payment-webhook-issues";
 import {
     listOrderNotificationOutboxForOrder,
     resendTerminalOrderNotificationOutboxById,
@@ -279,6 +279,7 @@ const paymentWebhookIssueSchema = z.object({
     provider: z.string(),
     eventType: z.string(),
     status: z.enum(["failed", "manual_reconciliation"]),
+    reason: z.enum(PAYMENT_WEBHOOK_ISSUE_REASONS),
     message: z.string(),
     error: z.string().nullable(),
     queueType: z.string().nullable(),

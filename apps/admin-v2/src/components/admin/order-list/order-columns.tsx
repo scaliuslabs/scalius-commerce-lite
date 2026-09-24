@@ -129,7 +129,7 @@ function FulfillmentCell({ order, handlers }: { order: OrderListItem; handlers: 
             && canRefreshShipment(shipment)
             && !locked
           }
-          refreshDisabledReason={locked ? order.shipmentRecovery.message ?? t("block.shipment") : undefined}
+          refreshDisabledReason={locked ? t("block.shipment") : undefined}
           onStatusUpdated={handlers.onShipmentRefreshed}
         />
       ) : null}
@@ -144,7 +144,7 @@ function useStatusLockedReason(order: OrderListItem, handlers: OrderRowHandlers)
   if (handlers.showArchived) return t("restoreToChange");
   if (!handlers.orderActions.canChangeOrderStatus) return tr("readOnly");
   if (order.activeRefundOperation?.active) return t("block.refund");
-  if (order.shipmentRecovery?.activeLock) return order.shipmentRecovery.message ?? t("block.shipment");
+  if (order.shipmentRecovery?.activeLock) return t("block.shipment");
   return undefined;
 }
 
