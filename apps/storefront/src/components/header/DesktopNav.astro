@@ -1,301 +1,309 @@
 ---
+// The desktop header menu for the `menu` and `mega` navigation styles: one
+// row of top-level links. A parent opens a dropdown list (menu) or a
+// full-width panel of columns (mega) through a disclosure button beside its
+// link (WAI-ARIA disclosure navigation, not role=menu). Items that don't fit
+// move into "More". Behaviour lives in ./nav-disclosure.ts.
 import type { NavigationItem } from "@/lib/api";
-import { ChevronDown } from "lucide-react";
-import RecursiveDesktopNav from "./RecursiveDesktopNav.astro";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import RecursiveDesktopNav from "./RecursiveDesktopNav.astro";
+import MegaMenuPanel from "./MegaMenuPanel.astro";
+import {
+  ariaCurrent,
+  navigationChildren,
+  navigationCurrent,
+  navigationLinkAttributes,
+} from "./navigation-state";
 
 interface Props {
   navigation: NavigationItem[];
-  id?: string;
+  /** Unique per rendered instance; prefixes every id inside. */
+  id: string;
+  navStyle: "menu" | "mega";
 }
 
-const { navigation = [], id = "desktop-nav" } = Astro.props;
-const items = Array.isArray(navigation) ? navigation : [];
-
-const navItemClass =
-  "group/nav relative flex shrink-0 items-center justify-center px-4 py-2 rounded-full text-sm font-bold text-foreground bg-muted hover:bg-accent hover:text-foreground transition-all duration-200 ease-out cursor-pointer tracking-wide whitespace-nowrap nav-item hover:scale-[1.02] active:scale-[0.98]";
-const dropdownPanelClass =
-  "absolute top-full left-0 mt-2 pt-2 w-56 opacity-0 invisible group-hover/nav:opacity-100 group-hover/nav:visible transition-all duration-200 transform origin-top-left scale-95 group-hover/nav:scale-100 z-[100]";
+const { navigation = [], id, navStyle } = Astro.props;
+const items = (Array.isArray(navigation) ? navigation : []).filter((item) => item?.title);
+const moreId = `${id}-more`;
 ---
 
-<nav
-  id={id}
-  aria-label="Main navigation"
-  class="hidden lg:block w-full h-full data-nav-container"
->
-  <ul
-    class="flex items-center justify-center gap-0.5 h-full w-full opacity-0 transition-opacity duration-300"
-    data-nav-list
-  >
+<nav id={id} aria-label="Main navigation" class="desktop-nav" data-nav-style={navStyle}>
+  <ul class="desktop-nav-list" data-nav-overflow data-nav-pending>
     {
-      items.map((item, index) => (
-        <li class={navItemClass} data-index={index}>
-          {item.href ? (
-            <a
-              href={item.href}
-              data-astro-prefetch={getStorefrontPrefetchAttribute(
-                item.href,
-                Astro.url,
-              )}
-              target={item.openInNewTab ? "_blank" : undefined}
-              rel={item.openInNewTab ? "noopener noreferrer" : undefined}
-              class="flex items-center gap-1.5 w-full h-full"
-            >
-              <span>{item.title}</span>
-              {item.subMenu && item.subMenu.length > 0 && (
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover/nav:text-foreground transition-transform duration-200 group-hover/nav:-rotate-180" />
-              )}
-            </a>
-          ) : (
-            <span class="flex items-center gap-1.5 w-full h-full">
-              <span>{item.title}</span>
-              {item.subMenu && item.subMenu.length > 0 && (
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover/nav:text-foreground transition-transform duration-200 group-hover/nav:-rotate-180" />
-              )}
-            </span>
-          )}
-
-          {item.subMenu && item.subMenu.length > 0 && (
-            <div class={dropdownPanelClass}>
-              <div class="absolute -top-2 left-0 right-0 h-2 bg-transparent" />
-              <RecursiveDesktopNav items={item.subMenu} />
-            </div>
-          )}
-        </li>
-      ))
+      items.map((item, index) => {
+        const children = navigationChildren(item);
+        const panelId = `${id}-panel-${index}`;
+        const current = ariaCurrent(navigationCurrent(item, Astro.url));
+        return (
+          <li
+            class="desktop-nav-item"
+            data-nav-index={index}
+            data-disclosure-item={children.length > 0 ? "" : undefined}
+          >
+            {item.href ? (
+              <a
+                href={item.href}
+                class="desktop-nav-link"
+                aria-current={current}
+                data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)}
+                {...navigationLinkAttributes(item)}
+              >
+                {item.title}
+              </a>
+            ) : children.length === 0 ? (
+              <span class="desktop-nav-link">{item.title}</span>
+            ) : null}
+            {children.length > 0 && (
+              <button
+                type="button"
+                class:list={["desktop-nav-toggle", !item.href && "desktop-nav-link"]}
+                aria-expanded="false"
+                aria-controls={panelId}
+                data-disclosure="popup"
+              >
+                {item.href ? <span class="sr-only">{item.title} submenu</span> : item.title}
+                <svg class="desktop-nav-chevron" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="m4 6 4 4 4-4" />
+                </svg>
+              </button>
+            )}
+            {children.length > 0 &&
+              (navStyle === "mega" ? (
+                <MegaMenuPanel id={panelId} item={item} />
+              ) : (
+                <div id={panelId} class="desktop-nav-dropdown" hidden>
+                  <RecursiveDesktopNav items={children} />
+                </div>
+              ))}
+          </li>
+        );
+      })
     }
-
-    <li class={`${navItemClass} hidden`} data-more-nav-item>
-      <button class="flex items-center gap-1.5 w-full h-full outline-none">
-        <span>More</span>
-        <ChevronDown
-          className="h-3.5 w-3.5 text-muted-foreground group-hover/nav:text-muted-foreground transition-transform duration-200 group-hover/nav:-rotate-180"
-        />
+    <li class="desktop-nav-item desktop-nav-more" data-nav-more data-disclosure-item hidden>
+      <button
+        type="button"
+        class="desktop-nav-toggle desktop-nav-link"
+        aria-expanded="false"
+        aria-controls={moreId}
+        data-disclosure="popup"
+      >
+        More
+        <svg class="desktop-nav-chevron" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="m4 6 4 4 4-4" />
+        </svg>
       </button>
-
-      <div class={dropdownPanelClass}>
-        <div class="absolute -top-2 left-0 right-0 h-2 bg-transparent"></div>
-        <ul
-          data-more-nav-container
-          class="bg-card rounded-xl shadow-xl border border-border p-2 min-w-[200px]"
-        >
+      <div id={moreId} class="desktop-nav-dropdown" hidden>
+        <ul class="nav-dropdown-list">
+          {
+            items.map((item, index) => (
+              <li data-nav-more-index={index} hidden>
+                <RecursiveDesktopNav
+                  items={[{ ...item, subMenu: navigationChildren(item).map((child) => ({ ...child, subMenu: undefined })) }]}
+                />
+              </li>
+            ))
+          }
         </ul>
       </div>
     </li>
   </ul>
 </nav>
 
-<script>
-  class DynamicNav {
-    container: HTMLElement;
-    navList: HTMLElement;
-    moreItem: HTMLElement;
-    moreContainer: HTMLElement;
-    originalItems: HTMLElement[] = [];
-
-    constructor(container: HTMLElement) {
-      this.container = container;
-      this.navList = container.querySelector("[data-nav-list]") as HTMLElement;
-      this.moreItem = container.querySelector(
-        "[data-more-nav-item]",
-      ) as HTMLElement;
-      this.moreContainer = container.querySelector(
-        "[data-more-nav-container]",
-      ) as HTMLElement;
-
-      if (!this.navList || !this.moreItem || !this.moreContainer) return;
-
-      this.originalItems = Array.from(
-        this.navList.querySelectorAll(".nav-item:not([data-more-nav-item])"),
-      ) as HTMLElement[];
-
-      this.updateNav = this.updateNav.bind(this);
-
-      this.init();
-    }
-
-    init() {
-      // Use ResizeObserver for robust size detection
-      const observer = new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          if (entry.contentRect.width > 0) {
-            requestAnimationFrame(this.updateNav);
-          }
-        }
-      });
-      observer.observe(this.container);
-
-      requestAnimationFrame(this.updateNav);
-
-      // Safety: Ensure nav becomes visible even if logic fails or hangs
-      setTimeout(() => {
-        this.navList.classList.remove("opacity-0");
-      }, 1000);
-    }
-
-    updateNav() {
-      if (!this.navList || !this.moreItem) return;
-
-      // The desktop navigation is CSS-hidden on mobile. Avoid querying layout
-      // for a subtree that PageSpeed cannot display.
-      if (!window.matchMedia("(min-width: 1024px)").matches) return;
-
-      if (this.container.offsetParent === null) {
-        return;
-      }
-
-      this.originalItems.forEach((item) => {
-        this.navList.insertBefore(item, this.moreItem);
-        // Reset styles for top-bar look
-        item.classList.add(
-          "px-4",
-          "lg:px-4",
-          "py-2",
-          "rounded-full",
-          "text-sm",
-          "font-bold",
-          "bg-muted",
-        );
-        item.classList.remove(
-          "w-full",
-          "px-4",
-          "py-2.5",
-          "hover:bg-accent",
-          "text-foreground",
-          "rounded-lg",
-        );
-      });
-
-      this.moreItem.classList.add("hidden");
-
-      const containerWidth = this.navList.offsetWidth;
-
-      // If width is 0, we can't calculate.
-      if (containerWidth === 0) return;
-
-      this.moreItem.classList.remove("hidden");
-      const moreButtonWidth = this.moreItem.offsetWidth || 80;
-      this.moreItem.classList.add("hidden");
-
-      // OPTIMIZATION: Batch ALL DOM reads before any DOM writes to prevent Forced Reflow
-      const itemsWidths = this.originalItems.map((item) => item.offsetWidth);
-
-      let currentWidth = 0;
-      const gap = 4; // gap-1 is 4px
-      let overflowStartIndex = -1;
-
-      for (let i = 0; i < this.originalItems.length; i++) {
-        const itemWidth = itemsWidths[i];
-
-        // Check if adding this item exceeds container
-        const isLast = i === this.originalItems.length - 1;
-        const availableSpace = isLast
-          ? containerWidth
-          : containerWidth - moreButtonWidth - gap;
-
-        if (currentWidth + itemWidth > availableSpace) {
-          overflowStartIndex = i;
-          break;
-        }
-
-        currentWidth += itemWidth + gap;
-      }
-
-      // DOM WRITES (No more offsetWidth layout reads after this point)
-      if (overflowStartIndex !== -1) {
-        this.moreItem.classList.remove("hidden");
-        const itemsToMove = this.originalItems.slice(overflowStartIndex);
-
-        itemsToMove.forEach((item) => {
-          // Adapt styles for vertical list inside dropdown
-          item.classList.remove(
-            "px-4",
-            "lg:px-4",
-            "py-2",
-            "rounded-full",
-            "text-sm",
-            "font-bold",
-            "bg-muted",
-          );
-          item.classList.add(
-            "w-full",
-            "block",
-            "px-4",
-            "py-2.5",
-            "hover:bg-accent",
-            "text-foreground",
-            "rounded-lg",
-            "text-sm",
-          );
-          this.moreContainer.appendChild(item);
-        });
-      }
-
-      this.navList.classList.remove("opacity-0");
-    }
-  }
-
-  const desktopNavMedia = window.matchMedia("(min-width: 1024px)");
-
-  function initDynamicNavs() {
-    // Do not create observers, animation frames, or the one-second safety
-    // timer for a subtree that cannot render on this viewport.
-    if (!desktopNavMedia.matches) return;
-
-    document
-      .querySelectorAll<HTMLElement>(".data-nav-container")
-      .forEach((nav) => {
-        if (nav.dataset.dynamicNavReady === "true") return;
-        nav.dataset.dynamicNavReady = "true";
-        new DynamicNav(nav);
-      });
-  }
-
-  initDynamicNavs();
-  desktopNavMedia.addEventListener("change", (event) => {
-    if (event.matches) initDynamicNavs();
-  });
-  document.addEventListener("astro:page-load", initDynamicNavs);
-</script>
-
 <style>
-  /* Fix for submenus inside the "More" dropdown */
-  /* Target the dropdown panel div inside the list item when it's in the More container */
-  :global([data-more-nav-container]) :global(.nav-item) > :global(.absolute) {
-    top: 0 !important;
-    left: auto !important;
-    right: 100% !important;
-    margin-top: -0.5rem !important;
-    margin-right: 0.5rem !important;
-    transform: none !important;
+  .desktop-nav {
+    display: none;
+    width: 100%;
+    min-width: 0;
+  }
+
+  @media (min-width: 64rem) {
+    .desktop-nav {
+      display: block;
+    }
+  }
+
+  .desktop-nav-list {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    width: 100%;
+    min-width: 0;
+    transition: opacity 150ms ease;
+  }
+
+  /* Until the script has moved what doesn't fit into "More"; revealed anyway
+     after 1.2s so the menu never stays hidden without JavaScript. */
+  .desktop-nav-list[data-nav-pending] {
     opacity: 0;
-    visibility: hidden;
+    animation: desktop-nav-reveal 0s linear 1.2s forwards;
   }
 
-  /* RECURSIVE FIX: Ensure ALL deep submenus inside "More" also open to the LEFT */
-  :global([data-more-nav-container]) :global(.recursive-nav-flyout) {
-    left: auto !important;
-    right: 100% !important;
-    margin-left: 0 !important;
-    margin-right: 0.5rem !important;
-    transform: none !important;
+  @keyframes desktop-nav-reveal {
+    to {
+      opacity: 1;
+    }
   }
 
-  /* Show it on hover */
-  :global([data-more-nav-container])
-    :global(.nav-item:hover)
-    > :global(.absolute) {
-    opacity: 1 !important;
-    visibility: visible !important;
+  .desktop-nav-item {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
   }
 
-  /* Rotate chevron to point LEFT when in "More" menu */
-  :global([data-more-nav-container])
-    :global(.nav-item)
-    :global(svg.lucide-chevron-down),
-  :global([data-more-nav-container])
-    :global(.nav-item:hover)
-    :global(svg.lucide-chevron-down) {
-    transform: rotate(90deg) !important;
+  .desktop-nav-item[hidden] {
+    display: none;
+  }
+
+  /* Dropdowns hang from their item; mega panels span the whole header row. */
+  .desktop-nav[data-nav-style="menu"] .desktop-nav-item,
+  .desktop-nav-more {
+    position: relative;
+  }
+
+  .desktop-nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    height: 2.5rem;
+    padding-inline: 0.75rem;
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    color: var(--foreground);
+    background-image: linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-position: 50% calc(100% - 0.5rem);
+    background-size: 0 1px;
+    transition: background-size 200ms ease;
+  }
+
+  .desktop-nav-link:hover,
+  .desktop-nav-link[aria-current],
+  .desktop-nav-item:has(> [aria-expanded="true"]) > .desktop-nav-link,
+  .desktop-nav-link[aria-expanded="true"] {
+    background-size: calc(100% - 1.5rem) 1px;
+  }
+
+  .desktop-nav-link[aria-current] {
+    font-weight: 600;
+  }
+
+  /* A link with a disclosure button: the chevron sits snug against it. */
+  a.desktop-nav-link:has(+ .desktop-nav-toggle) {
+    padding-right: 0.125rem;
+  }
+
+  a.desktop-nav-link:has(+ .desktop-nav-toggle):hover,
+  a.desktop-nav-link:has(+ .desktop-nav-toggle)[aria-current],
+  .desktop-nav-item:has(> [aria-expanded="true"]) > a.desktop-nav-link {
+    background-size: calc(100% - 0.875rem) 1px;
+  }
+
+  .desktop-nav-toggle:not(.desktop-nav-link) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 2.5rem;
+    margin-right: 0.25rem;
+    border-radius: var(--radius);
+    color: var(--muted-foreground);
+  }
+
+  .desktop-nav-toggle:not(.desktop-nav-link):hover,
+  .desktop-nav-toggle[aria-expanded="true"] {
+    color: var(--foreground);
+  }
+
+  .desktop-nav-chevron {
+    width: 0.875rem;
+    height: 0.875rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 200ms ease;
+  }
+
+  [aria-expanded="true"] > .desktop-nav-chevron {
+    transform: rotate(180deg);
+  }
+
+  .desktop-nav-link:focus-visible,
+  .desktop-nav-toggle:focus-visible {
+    outline: 2px solid var(--foreground);
+    outline-offset: 2px;
+  }
+
+  /* Touch screens at desktop width (tablets) keep 44px targets. */
+  @media (pointer: coarse) {
+    .desktop-nav-link,
+    .desktop-nav-toggle:not(.desktop-nav-link) {
+      height: 2.75rem;
+    }
+
+    .desktop-nav-toggle:not(.desktop-nav-link) {
+      width: 2.75rem;
+      margin-right: 0;
+    }
+  }
+
+  .desktop-nav-dropdown {
+    position: absolute;
+    top: calc(100% + 0.375rem);
+    left: 0;
+    z-index: 60;
+    width: max-content;
+    min-width: 14rem;
+    max-width: 18rem;
+    max-height: calc(100dvh - var(--header-height, 8rem) - 1rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 0.375rem);
+    background: var(--card);
+    color: var(--card-foreground);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.06),
+      0 16px 40px -12px rgb(0 0 0 / 0.22);
+  }
+
+  [data-align-end] > .desktop-nav-dropdown,
+  .desktop-nav-more > .desktop-nav-dropdown {
+    left: auto;
+    right: 0;
+  }
+
+  .desktop-nav-dropdown:not([hidden]) {
+    animation: desktop-nav-enter 160ms ease-out;
+  }
+
+  @keyframes desktop-nav-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-0.25rem);
+    }
+  }
+
+  .desktop-nav-more .nav-dropdown-list > li + li:not([hidden]) {
+    margin-top: 0.25rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .desktop-nav-list,
+    .desktop-nav-link,
+    .desktop-nav-chevron {
+      transition: none;
+    }
+
+    .desktop-nav-dropdown:not([hidden]) {
+      animation: none;
+    }
   }
 </style>

@@ -1,8 +1,10 @@
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
 
 import type { NavigationTargetItem } from "@scalius/shared/navigation-target";
 import {
   chunkNavigationResourceIds,
+  loadNavigationResourceSnapshots,
   resolveNavigationItemsForAdmin,
   resolveNavigationItemsForPublic,
   type NavigationResourceSnapshot,
@@ -97,6 +99,91 @@ describe("navigation resource resolver", () => {
       available: false,
       title: "Removed product",
     });
+  });
+
+  it("carries the photo of a linked category for mega-menu panels", () => {
+    const withPhotos = new Map<string, NavigationResourceSnapshot>([
+      ["category:cat_shoes", {
+        id: "cat_shoes",
+        resourceType: "category",
+        title: "Shoes",
+        route: "/categories/shoes",
+        readiness: "ready",
+        imageUrl: "https://media.example.com/shoes.webp",
+      }],
+      ["category:cat_bags", {
+        id: "cat_bags",
+        resourceType: "category",
+        title: "Bags",
+        route: "/categories/bags",
+        readiness: "ready",
+      }],
+      ...resources,
+    ]);
+    const items: NavigationTargetItem[] = [{
+      id: "shop",
+      target: { type: "label" },
+      labelMode: "custom",
+      customLabel: "Shop",
+      subMenu: [{
+        id: "shoes",
+        target: { type: "resource", resourceType: "category", resourceId: "cat_shoes" },
+        labelMode: "resource",
+      }, {
+        id: "bags",
+        target: { type: "resource", resourceType: "category", resourceId: "cat_bags" },
+        labelMode: "resource",
+      }, {
+        id: "trainer",
+        target: { type: "resource", resourceType: "product", resourceId: "prod_live" },
+        labelMode: "resource",
+      }],
+    }];
+
+    const [shop] = resolveNavigationItemsForPublic(items, withPhotos);
+    expect(shop).not.toHaveProperty("imageUrl");
+    expect(shop?.subMenu).toEqual([
+      {
+        id: "shoes",
+        title: "Shoes",
+        href: "/categories/shoes",
+        imageUrl: "https://media.example.com/shoes.webp",
+      },
+      { id: "bags", title: "Bags", href: "/categories/bags" },
+      { id: "trainer", title: "Renamed trainer", href: "/products/new-canonical" },
+    ]);
+    expect(shop?.subMenu?.[1]).not.toHaveProperty("imageUrl");
+    expect(resolveNavigationItemsForAdmin(items, withPhotos)[0]?.subMenu?.[0])
+      .not.toHaveProperty("imageUrl");
+  });
+
+  it("reads a category's photo only when it has one", async () => {
+    const { db, sqlite } = createSqliteD1Database({ foreignKeys: true });
+    try {
+      const insert = sqlite.prepare(
+        "INSERT INTO categories (id, name, slug, image_url, status) VALUES (?, ?, ?, ?, 'published')",
+      );
+      insert.run("cat_photo", "Shoes", "shoes", " https://media.example.com/shoes.webp ");
+      insert.run("cat_blank", "Bags", "bags", "   ");
+      insert.run("cat_none", "Hats", "hats", null);
+      const item = (id: string): NavigationTargetItem => ({
+        id,
+        target: { type: "resource", resourceType: "category", resourceId: id },
+        labelMode: "resource",
+      });
+
+      const snapshots = await loadNavigationResourceSnapshots(db, {
+        navigation: [item("cat_photo"), item("cat_blank"), item("cat_none")],
+      }, {});
+
+      expect(snapshots.get("category:cat_photo")?.imageUrl)
+        .toBe("https://media.example.com/shoes.webp");
+      expect(snapshots.get("category:cat_blank")).not.toHaveProperty("imageUrl");
+      expect(snapshots.get("category:cat_none")).not.toHaveProperty("imageUrl");
+      expect(snapshots.get("category:cat_none")?.readiness).toBe("ready");
+    } finally {
+      sqlite.close();
+    }
   });
 
   it("chunks unique IDs below D1's 100-parameter ceiling", () => {

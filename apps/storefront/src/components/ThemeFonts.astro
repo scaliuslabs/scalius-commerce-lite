@@ -1,0 +1,16 @@
+---
+// Self-hosted fonts for the theme's type pairing: the heading's Latin face
+// is preloaded, every face swaps in over a metric-matched fallback (no
+// layout shift). The CSS is built from constants only (lib/theme-fonts.ts).
+import type { StorefrontTypePairing } from "@scalius/shared/storefront-theme";
+import { themeFontAssets } from "@/lib/theme-fonts";
+
+interface Props {
+  pairing: StorefrontTypePairing;
+}
+
+const { css, preload } = themeFontAssets(Astro.props.pairing);
+---
+
+{preload.map((href) => <link rel="preload" as="font" type="font/woff2" href={href} crossorigin="anonymous" />)}
+{css && <style is:inline set:html={css} />}

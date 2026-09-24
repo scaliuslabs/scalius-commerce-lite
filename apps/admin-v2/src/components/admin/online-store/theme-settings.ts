@@ -11,7 +11,11 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 
-/** The four colours a merchant picks; each writes every token that shares its role. */
+/**
+ * The four colours a merchant picks; each writes every token that shares its
+ * role. Background also moves the card and popover surfaces, keeping the
+ * Style's own card-to-page relationship (see setThemeColor).
+ */
 export const COLOR_ROLES = {
   background: ["background", "card", "popover"],
   text: ["foreground", "card-foreground", "popover-foreground"],
@@ -21,7 +25,7 @@ export const COLOR_ROLES = {
 
 export type ColorRole = keyof typeof COLOR_ROLES;
 
-/** The token each colour field shows (every token of a role holds the same value). */
+/** The token each colour field shows. */
 export const COLOR_ROLE_TOKEN: Record<ColorRole, StorefrontThemeColorKey> = {
   background: "background",
   text: "foreground",
@@ -37,10 +41,40 @@ export const COLOR_FIELD_IDS: Record<ColorRole, string> = {
   buttonText: "theme-color-button-text",
 };
 
+function hexChannels(hex: string): [number, number, number] {
+  const value = Number.parseInt(hex.slice(1), 16);
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+function channelsHex(channels: readonly number[]): string {
+  return `#${channels.map((channel) => Math.min(255, Math.max(0, Math.round(channel))).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * The card surface for a new page background: the Style the theme started
+ * from keeps its card a set step lighter or darker than its page (retail's
+ * white cards on warm paper, midnight's raised panels), so a new background
+ * moves the card by the same step instead of flattening it.
+ */
+export function cardForBackground(theme: StorefrontThemeDocument, background: string): string {
+  const style = storefrontStylePresetTheme(closestStylePreset(theme)).tokens.colors;
+  if (!isStorefrontThemeHexColor(background)) return background;
+  const [page, card] = [hexChannels(style.background), hexChannels(style.card)];
+  const next = hexChannels(background);
+  return channelsHex(next.map((channel, index) => channel + (card[index]! - page[index]!)));
+}
+
 /** The document with one role's colour set on every token of that role. */
 export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, value: string): StorefrontThemeDocument {
   const colors = { ...theme.tokens.colors };
-  for (const token of COLOR_ROLES[role]) colors[token] = value;
+  if (role === "background") {
+    const card = cardForBackground(theme, value);
+    colors.background = value;
+    colors.card = card;
+    colors.popover = card;
+  } else {
+    for (const token of COLOR_ROLES[role]) colors[token] = value;
+  }
   return { ...theme, tokens: { ...theme.tokens, colors } };
 }
 
@@ -173,8 +207,9 @@ export function selectedStylePreset(theme: StorefrontThemeDocument): StorefrontS
 
 /**
  * The Style a fine-tuned theme started from: the one sharing the most
- * choices (fonts, shape, colours, layout and section order). Ties go to the
- * earlier Style, so the answer is stable.
+ * choices (fonts, corners, button shape, colours, layout including the
+ * menus, and section order). Ties go to the earlier Style, so the answer is
+ * stable.
  */
 export function closestStylePreset(theme: StorefrontThemeDocument): StorefrontStylePresetKey {
   let best = STYLE_PRESET_THEMES[0]!;
@@ -186,6 +221,7 @@ export function closestStylePreset(theme: StorefrontThemeDocument): StorefrontSt
     const score = [
       same(tokens.typography, theme.tokens.typography),
       tokens.radius === theme.tokens.radius,
+      tokens.buttonShape === theme.tokens.buttonShape,
       tokens.containerWidth === theme.tokens.containerWidth,
       same(tokens.components, theme.tokens.components),
       ...(Object.keys(layout) as Array<keyof typeof layout>).map((key) => layout[key] === theme.layout[key]),

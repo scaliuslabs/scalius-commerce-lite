@@ -2,7 +2,10 @@
 import SearchBar from "../search/SearchBar.astro";
 import { Phone, ShoppingCart, Menu, Search } from "lucide-react";
 import type { HeaderData } from "@/lib/api";
-import type { StorefrontHeaderStyle } from "@scalius/shared/storefront-theme";
+import type {
+  StorefrontHeaderStyle,
+  StorefrontNavigationStyle,
+} from "@scalius/shared/storefront-theme";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import {
   getMobileHeaderLogoWidth,
@@ -22,9 +25,18 @@ interface Props {
    * under the header on phones), as Daraz/Chaldal shoppers expect.
    */
   variant: StorefrontHeaderStyle;
+  /**
+   * menu/mega: a menu row under the bar (slot `desktop-nav-full`). pills: a
+   * scrolling pill row on every screen (slot `pill-nav`). sidebar: no header
+   * menu on computers (Layout renders the column).
+   */
+  navigationStyle: StorefrontNavigationStyle;
+  /** On scroll the menu row folds into the bar (slot `desktop-nav-compact`). */
+  condensedMenu: boolean;
 }
 
-const { headerData, hasNavigation, variant } = Astro.props;
+const { headerData, hasNavigation, variant, navigationStyle, condensedMenu } = Astro.props;
+const menuRow = hasNavigation && (navigationStyle === "menu" || navigationStyle === "mega");
 const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 // Logos without renditions get a plain src (no stray `sizes`).
@@ -54,6 +66,8 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
 <div
   id="main-header"
   data-header-style={variant}
+  data-navigation={navigationStyle}
+  data-header-condense={condensedMenu ? "" : undefined}
   class="sticky top-0 z-50 w-full bg-background/95 backdrop-blur-xl border-b border-border transition-[box-shadow,background-color,border-color] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group/header"
 >
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -123,12 +137,14 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
         <div class="header-expanded-center absolute w-full max-w-lg">
           <SearchBar />
         </div>
-        <!-- Compact Nav (Visible on Scroll) -->
-        <div
-          class="header-compact-center absolute inset-x-0 flex w-full justify-center"
-        >
-          <slot name="desktop-nav-compact" />
-        </div>
+        {/* Compact menu (classic header, shown on scroll) */}
+        {
+          condensedMenu && (
+            <div class="header-compact-center absolute inset-x-0 flex w-full justify-center">
+              <slot name="desktop-nav-compact" />
+            </div>
+          )
+        }
       </div>
 
       <div
@@ -237,9 +253,12 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       )
     }
 
+    <slot name="pill-nav" />
+
     {
-      hasNavigation && (
+      menuRow && (
         <div class="header-full-nav-row hidden border-t border-border lg:block">
+          {/* The menu row is the mega panels' anchor (they span it). */}
           <div class="py-2 flex justify-center relative z-50">
             <slot name="desktop-nav-full" />
           </div>
@@ -276,7 +295,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       visibility 0s linear 160ms;
   }
 
-  #main-header[data-header-style="classic"].is-scrolled .header-expanded-center {
+  #main-header[data-header-condense].is-scrolled .header-expanded-center {
     pointer-events: none;
     visibility: hidden;
     opacity: 0;
@@ -287,7 +306,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       visibility 0s linear 160ms;
   }
 
-  #main-header[data-header-style="classic"].is-scrolled .header-compact-center {
+  #main-header[data-header-condense].is-scrolled .header-compact-center {
     pointer-events: auto;
     visibility: visible;
     opacity: 1;
@@ -299,7 +318,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
   }
 
   .header-full-nav-row {
-    max-height: 3.5rem;
+    max-height: 4rem;
     overflow: visible;
     border-top-width: 1px;
     opacity: 1;
@@ -310,7 +329,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       border-color 120ms ease;
   }
 
-  #main-header[data-header-style="classic"].is-scrolled .header-full-nav-row {
+  #main-header[data-header-condense].is-scrolled .header-full-nav-row {
     max-height: 0;
     overflow: hidden;
     border-top-width: 0;
@@ -353,12 +372,12 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       visibility 0s linear 160ms;
   }
 
-  #main-header[data-header-style="classic"].is-scrolled .header-action-morph {
+  #main-header[data-header-condense].is-scrolled .header-action-morph {
     width: 2.5rem;
     margin-right: 0.75rem;
   }
 
-  #main-header[data-header-style="classic"].is-scrolled .header-expanded-actions {
+  #main-header[data-header-condense].is-scrolled .header-expanded-actions {
     pointer-events: none;
     visibility: hidden;
     opacity: 0;
@@ -369,7 +388,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       visibility 0s linear 160ms;
   }
 
-  #main-header[data-header-style="classic"].is-scrolled .header-scroll-search {
+  #main-header[data-header-condense].is-scrolled .header-scroll-search {
     pointer-events: auto;
     visibility: visible;
     opacity: 1;
@@ -402,7 +421,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       margin-right: var(--header-actions-gap-xl);
     }
 
-    #main-header[data-header-style="classic"].is-scrolled .header-action-morph {
+    #main-header[data-header-condense].is-scrolled .header-action-morph {
       width: 2.5rem;
       margin-right: 0.75rem;
     }
@@ -530,12 +549,10 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
     document.dispatchEvent(new CustomEvent("open-search-palette"));
   };
 
+  // The header search icons and the phone tab bar's Search tab.
   document
-    .getElementById("mobile-search-toggle")
-    ?.addEventListener("click", triggerSearch);
-  document
-    .getElementById("scrolled-search-trigger")
-    ?.addEventListener("click", triggerSearch);
+    .querySelectorAll("#mobile-search-toggle, #scrolled-search-trigger, [data-search-open]")
+    .forEach((opener) => opener.addEventListener("click", triggerSearch));
 
   window.addEventListener("scroll", scheduleScrollState, { passive: true });
   applyScrollState();
@@ -552,15 +569,17 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
     const hasCookie = document.cookie
       .split(";")
       .some((c) => c.trim().startsWith("cs_auth=1"));
-    const accountLink = document.getElementById("account-link");
-    if (accountLink) {
-      accountLink.onclick = (e) => {
-        if (!hasCookie) {
-          e.preventDefault();
-          window.dispatchEvent(new CustomEvent("open-auth-modal"));
-        }
-      };
-    }
+    // The header account icon and the phone tab bar's Account tab.
+    document
+      .querySelectorAll<HTMLElement>("#account-link, [data-account-link]")
+      .forEach((accountLink) => {
+        accountLink.onclick = (e) => {
+          if (!hasCookie) {
+            e.preventDefault();
+            window.dispatchEvent(new CustomEvent("open-auth-modal"));
+          }
+        };
+      });
   }
   checkCustomerSession();
   window.addEventListener("customer-login", checkCustomerSession);

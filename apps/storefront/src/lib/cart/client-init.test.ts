@@ -250,6 +250,37 @@ describe("initCartFunctionality", () => {
     delete window.lastShippingEventDetail;
   });
 
+  it("keeps the cart in its loading state until the first availability check settles (no layout shift)", async () => {
+    let answer!: (response: Response) => void;
+    vi.stubGlobal("fetch", vi.fn((url: string) =>
+      String(url).includes("validate-cart")
+        ? new Promise<Response>((resolve) => { answer = resolve; })
+        : Promise.resolve(new Response(JSON.stringify(VALID_CART), { status: 200, headers: { "Content-Type": "application/json" } }))));
+    const root = document.getElementById("cartPageRoot")!;
+    const init = initCartFunctionality();
+    await vi.advanceTimersByTimeAsync(100);
+    // Lines are rendered, but nothing is shown until the check answers.
+    expect(root.dataset.cartState).toBe("loading");
+    expect(document.getElementById("cartSummary")!.classList.contains("hidden")).toBe(true);
+    answer(new Response(JSON.stringify(VALID_CART), { status: 200, headers: { "Content-Type": "application/json" } }));
+    await init;
+    expect(root.dataset.cartState).toBe("items");
+    expect(document.getElementById("cartSummary")!.classList.contains("hidden")).toBe(false);
+  });
+
+  it("shows the cart after at most 1.5s even when the availability check hangs", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) =>
+      String(url).includes("validate-cart")
+        ? new Promise<Response>(() => {})
+        : Promise.resolve(new Response(JSON.stringify(VALID_CART), { status: 200, headers: { "Content-Type": "application/json" } }))));
+    const root = document.getElementById("cartPageRoot")!;
+    void initCartFunctionality();
+    await vi.advanceTimersByTimeAsync(1400);
+    expect(root.dataset.cartState).toBe("loading");
+    await vi.advanceTimersByTimeAsync(200);
+    expect(root.dataset.cartState).toBe("items");
+  });
+
   it("keeps one checkout id and one abandoned-checkout listener across repeated init", async () => {
     await initCartFunctionality();
     const firstCheckoutId = sessionStorage.getItem("checkoutId");
