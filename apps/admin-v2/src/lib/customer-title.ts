@@ -1,4 +1,4 @@
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import type { customersMessages } from "~/i18n/customers";
 
 export type CustomerKind = "account" | "guest" | "merchant";

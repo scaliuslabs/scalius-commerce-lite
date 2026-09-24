@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   deleteApiV1AdminSettingsDeliveryProvidersById,
-  getApiV1AdminSettingsDeliveryLocations,
   postApiV1AdminSettingsDeliveryProvidersById,
   postApiV1AdminSettingsDeliveryProvidersCreateTest,
   putApiV1AdminSettingsDeliveryProviders,
@@ -17,7 +16,8 @@ import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiBody } from "~/lib/api";
-import { deliveryProvidersQueryOptions, type DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
+import type { DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
+import { areaCountsQuery, couriersQuery, platformQuery } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
@@ -27,23 +27,9 @@ import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useSaveBar } from "../shared/SaveBar";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
-import { platformQuery } from "./StoreSettings";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
 const MASKED = "••••••••••••";
-
-export const areaCountsQuery = {
-  queryKey: [...queryKeys.settings.deliveryLocations(), "counts"],
-  queryFn: async () => {
-    const [cities, zones, areas] = await Promise.all(
-      (["city", "zone", "area"] as const).map((type) =>
-        apiData(getApiV1AdminSettingsDeliveryLocations({ query: { type, page: 1, limit: 1 } })),
-      ),
-    );
-    return { cities: cities!.pagination.total, zones: zones!.pagination.total, areas: areas!.pagination.total };
-  },
-};
-export const couriersQuery = deliveryProvidersQueryOptions();
 
 function refreshCheckout(queryClient: ReturnType<typeof useQueryClient>, key: readonly unknown[]) {
   return Promise.all([

@@ -146,6 +146,7 @@ describe("lookup query options", () => {
         available: 12,
       }],
       pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
+      visibleOnline: 9,
     };
     mocks.getCollectionProductOptions.result = payload;
 

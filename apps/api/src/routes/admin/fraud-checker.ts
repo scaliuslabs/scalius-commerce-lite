@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getFraudProviders, getFraudProvider, saveFraudProvider, deleteFraudProvider, testFraudProvider, fraudLookupWithActiveProvider, getFraudProviderUrlIssue } from "@scalius/core/modules/fraud-checker/fraud-checker.service";
-import { FRAUD_CHECK_PROVIDER_TYPES } from "@scalius/core/modules/fraud-checker/provider";
+import { FRAUD_CHECK_PROVIDER_TYPES } from "@scalius/core/modules/fraud-checker/provider-definitions";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../utils/encryption-key";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 

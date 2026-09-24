@@ -4,14 +4,12 @@ import {
   RefreshStoreCard,
   SignInAccessCard,
   TrustedWebsitesCard,
-  mediaQuery,
-  trustedWebsitesQuery,
 } from "~/components/admin/settings/AdvancedSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
-import { platformQuery } from "~/components/admin/settings/StoreSettings";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { mediaQuery, platformQuery, trustedWebsitesQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/advanced")({

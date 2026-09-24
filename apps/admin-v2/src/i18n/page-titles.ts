@@ -1,0 +1,117 @@
+import { defineMessages, translate } from "./index";
+
+/**
+ * Browser tab titles. Route `head` runs in the always-loaded route tree, so
+ * titles live in this one small catalog instead of pulling each screen's full
+ * catalog (and with it the screen) into the first download.
+ */
+export const pageTitleMessages = defineMessages({
+  en: {
+    home: "Home",
+    orders: "Orders",
+    createOrder: "Create order",
+    editOrder: "Edit order {number}",
+    abandonedCheckouts: "Abandoned checkouts",
+    invoice: "Invoice",
+    invoices: "Invoices",
+    products: "Products",
+    product: "Product",
+    addProduct: "Add product",
+    inventory: "Inventory",
+    barcodeLabels: "Barcode labels",
+    collections: "Collections",
+    collection: "Collection",
+    addCollection: "Add collection",
+    categories: "Categories",
+    category: "Category",
+    addCategory: "Add category",
+    attributes: "Attributes",
+    customers: "Customers",
+    customer: "Customer",
+    newCustomer: "New customer",
+    discounts: "Discounts",
+    createDiscount: "Create discount",
+    pages: "Pages",
+    page: "Page",
+    addPage: "Add page",
+    blogPosts: "Blog posts",
+    blogPost: "Blog post",
+    addBlogPost: "Add blog post",
+    files: "Files",
+    theme: "Theme",
+    navigation: "Navigation",
+    homepageBanners: "Homepage banners",
+    preferences: "Preferences",
+    settings: "Settings",
+    roles: "Roles",
+    deliveryAreas: "Delivery areas",
+    account: "My account",
+    accessDenied: "You don't have access to this page",
+    signIn: "Sign in",
+    setup: "Create your admin account",
+    setupTwoFactor: "Turn on two-step verification",
+    twoFactor: "Two-step verification",
+    forgotPassword: "Reset your password",
+    resetPassword: "Choose a new password",
+  },
+  bn: {
+    home: "হোম",
+    orders: "অর্ডার",
+    createOrder: "অর্ডার তৈরি করুন",
+    editOrder: "অর্ডার {number} এডিট করুন",
+    abandonedCheckouts: "অসমাপ্ত চেকআউট",
+    invoice: "ইনভয়েস",
+    invoices: "ইনভয়েস",
+    products: "পণ্য",
+    product: "পণ্য",
+    addProduct: "পণ্য যোগ করুন",
+    inventory: "স্টক",
+    barcodeLabels: "বারকোড লেবেল",
+    collections: "কালেকশন",
+    collection: "কালেকশন",
+    addCollection: "কালেকশন যোগ করুন",
+    categories: "ক্যাটাগরি",
+    category: "ক্যাটাগরি",
+    addCategory: "ক্যাটাগরি যোগ করুন",
+    attributes: "অ্যাট্রিবিউট",
+    customers: "কাস্টমার",
+    customer: "কাস্টমার",
+    newCustomer: "নতুন কাস্টমার",
+    discounts: "ডিসকাউন্ট",
+    createDiscount: "ডিসকাউন্ট তৈরি করুন",
+    pages: "পেজ",
+    page: "পেজ",
+    addPage: "পেজ যোগ করুন",
+    blogPosts: "ব্লগ পোস্ট",
+    blogPost: "ব্লগ পোস্ট",
+    addBlogPost: "ব্লগ পোস্ট যোগ করুন",
+    files: "ফাইল",
+    theme: "থিম",
+    navigation: "নেভিগেশন",
+    homepageBanners: "হোমপেজ ব্যানার",
+    preferences: "পছন্দসমূহ",
+    settings: "সেটিংস",
+    roles: "রোল",
+    deliveryAreas: "ডেলিভারি এলাকা",
+    account: "আমার অ্যাকাউন্ট",
+    accessDenied: "এই পেজ দেখার অনুমতি আপনার নেই",
+    signIn: "সাইন ইন",
+    setup: "অ্যাডমিন অ্যাকাউন্ট তৈরি করুন",
+    setupTwoFactor: "দুই ধাপে যাচাই চালু করুন",
+    twoFactor: "দুই ধাপে যাচাই",
+    forgotPassword: "পাসওয়ার্ড রিসেট করুন",
+    resetPassword: "নতুন পাসওয়ার্ড দিন",
+  },
+});
+
+export type PageTitleKey = keyof (typeof pageTitleMessages)["en"];
+
+/** The tab title for any page: "Orders · Scalius". */
+export function titleHead(title: string) {
+  return { meta: [{ title: title ? `${title} · Scalius` : "Scalius" }] };
+}
+
+/** Route `head` for a page title key, in the dashboard language. */
+export function pageHead(key: PageTitleKey, vars?: Record<string, string | number>) {
+  return titleHead(translate(pageTitleMessages, key, vars));
+}

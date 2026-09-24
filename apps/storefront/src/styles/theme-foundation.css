@@ -123,12 +123,46 @@ body {
   padding-left: var(--safe-area-inset-left);
 }
 
-.site-root {
-  font-family: var(--theme-font-body);
-}
+/* Type pairing (Theme -> Style): families, weight, tracking and leading
+   chosen together. Base-layer defaults, so explicit utilities still win. */
+@layer base {
+  .site-root {
+    font-family: var(--theme-font-body);
+    line-height: var(--theme-body-leading, 1.6);
+  }
 
-.site-root :where(h1, h2, h3, h4, h5, h6) {
-  font-family: var(--theme-font-heading);
+  .site-root :where(h1, h2, h3, h4, h5, h6) {
+    font-family: var(--theme-font-heading);
+    font-weight: var(--theme-heading-weight, 650);
+    letter-spacing: var(--theme-heading-tracking, -0.02em);
+    line-height: var(--theme-heading-leading, 1.15);
+    text-wrap: balance;
+  }
+
+  /* Section headings (homepage blocks, collections, "You might also
+     like"): one size step up from phones, in the pairing's heading weight
+     and tracking. Editorial pairings (Boutique) step up once more on
+     computers, where a light serif needs the extra size to hold the page. */
+  .site-root .section-heading {
+    font-size: var(--text-xl);
+  }
+
+  @media (min-width: 40rem) {
+    .site-root .section-heading {
+      font-size: var(--text-2xl);
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .site-root[data-theme-typography="editorial"] .section-heading {
+      font-size: var(--text-3xl);
+    }
+  }
+
+  /* Uppercase labels (badges, eyebrows) open up a little. */
+  .site-root :where(.uppercase) {
+    letter-spacing: var(--theme-label-tracking, 0.06em);
+  }
 }
 
 .site-root :where(header, footer) .max-w-7xl,
@@ -157,18 +191,6 @@ body {
 .site-root[data-theme-input-style="filled"]
   :where([data-theme-component="input"], [data-theme-component="textarea"]) {
   background: var(--muted) !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-
-.site-root[data-theme-card-style="elevated"]
-  [data-theme-component="product-card"] {
-  border-color: transparent !important;
-  box-shadow: 0 0.75rem 2rem color-mix(in oklch, var(--foreground) 10%, transparent);
-}
-
-.site-root[data-theme-card-style="flat"]
-  [data-theme-component="product-card"] {
   border-color: transparent !important;
   box-shadow: none !important;
 }
@@ -207,9 +229,9 @@ html.dark {
   outline: 2px solid var(--foreground);
 }
 
-/* Dark or primary surfaces (footer, the header account/cart pill) carry
-   light text, so the ring takes the text color and stays visible on them. */
-.site-root :where(footer, .bg-primary, .bg-card-foreground) :focus-visible {
+/* Primary and ink surfaces (the header account/cart pill) carry light text,
+   so the ring takes the text color and stays visible on them. */
+.site-root :where(.bg-primary, .bg-card-foreground) :focus-visible {
   outline-color: currentColor;
 }
 
@@ -250,3 +272,134 @@ html {
     gap: var(--theme-grid-gap-desktop, 1.5rem);
   }
 }
+
+/* ── Craft (Theme -> Style) ─────────────────────────────────────────────
+   One motion language: 150–200ms ease-out, nothing under reduced motion.
+   Buttons take the Style's shape; surfaces use a border OR a shadow, never
+   both on the same element. */
+.site-root {
+  --theme-ease: cubic-bezier(0.2, 0, 0, 1);
+  --theme-duration: 180ms;
+}
+
+.site-root :where(button, a, input[type="submit"]):where(.bg-primary):not(.rounded-full),
+.site-root [data-theme-component="button"]:not([data-theme-size="icon"]) {
+  border-radius: var(--theme-button-radius, var(--radius));
+  transition:
+    background-color var(--theme-duration) var(--theme-ease),
+    color var(--theme-duration) var(--theme-ease),
+    border-color var(--theme-duration) var(--theme-ease),
+    transform var(--theme-duration) var(--theme-ease);
+}
+
+.site-root :where(button, a, input[type="submit"]):where(.bg-primary):active,
+.site-root [data-theme-component="button"]:active {
+  transform: scale(0.98);
+}
+
+/* Product cards: the surface language per Style. */
+.site-root [data-theme-component="product-card"] {
+  border-radius: calc(var(--radius) * 1.5);
+  transition:
+    border-color var(--theme-duration) var(--theme-ease),
+    box-shadow var(--theme-duration) var(--theme-ease);
+}
+
+.site-root[data-theme-card-style="bordered"] [data-theme-component="product-card"] {
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-root[data-theme-card-style="bordered"] [data-theme-component="product-card"]:hover {
+    border-color: color-mix(in oklab, var(--foreground) 28%, var(--border));
+  }
+}
+
+.site-root[data-theme-card-style="elevated"] [data-theme-component="product-card"] {
+  border: 0;
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--foreground) 6%, transparent),
+    0 8px 24px -12px color-mix(in oklab, var(--foreground) 18%, transparent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-root[data-theme-card-style="elevated"] [data-theme-component="product-card"]:hover {
+    box-shadow:
+      0 1px 2px color-mix(in oklab, var(--foreground) 8%, transparent),
+      0 16px 36px -14px color-mix(in oklab, var(--foreground) 26%, transparent);
+  }
+}
+
+/* Flat (editorial) cards: no chrome at all; the photo carries the card and
+   the text sits flush under it. */
+.site-root[data-theme-card-style="flat"] [data-theme-component="product-card"] {
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.site-root[data-theme-card-style="flat"] [data-theme-component="product-card"] .product-card-media {
+  border-radius: var(--radius);
+}
+
+.site-root[data-theme-card-style="flat"] [data-theme-component="product-card"] .product-card-body {
+  padding-inline: 0;
+  padding-bottom: 0;
+}
+
+/* Photos: a restrained 1.03 zoom on hover (portrait cards cross-fade to the
+   second photo instead). */
+.site-root .product-card-media > img {
+  transition:
+    transform 200ms var(--theme-ease),
+    opacity 200ms var(--theme-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .site-root [data-theme-component="product-card"]:hover .product-card-media > img:first-child {
+    transform: scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-root :where(button, a, input[type="submit"]):where(.bg-primary),
+  .site-root [data-theme-component="button"],
+  .site-root [data-theme-component="product-card"],
+  .site-root .product-card-media > img {
+    transition: none;
+  }
+
+  .site-root :where(button, a, input[type="submit"]):where(.bg-primary):active,
+  .site-root [data-theme-component="button"]:active,
+  .site-root [data-theme-component="product-card"]:hover .product-card-media > img:first-child {
+    transform: none;
+  }
+}
+
+/* Skeletons mirror the final layout; a calm shimmer, static under reduced motion. */
+.site-root .theme-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    color-mix(in oklab, var(--muted) 60%, var(--background)) 50%,
+    var(--muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: theme-skeleton 1.4s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+@keyframes theme-skeleton {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-root .theme-skeleton {
+    animation: none;
+  }
+}
+

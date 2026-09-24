@@ -22,7 +22,14 @@
  */
 
 import {
+  MAX_STOREFRONT_BATCH_PARTS,
+  storefrontBatchPart,
+  storefrontBatchPath,
+  type StorefrontBatchResponse,
+} from "@scalius/shared/public-api-cache-routes";
+import {
   getRuntime,
+  requestRuntime,
   getRuntimeApiToken,
   getRuntimeApiUrl,
   getRuntimeBackendApi,
@@ -36,6 +43,7 @@ import type { Client } from "@scalius/api-client/factory";
 import {
   INTERNAL_SERVICE_ORIGIN,
   LOCAL_DEVELOPMENT_PLATFORM_CONFIG,
+  isInternalServiceUrl,
 } from "@scalius/shared/platform-config";
 
 // Resolved per request, never at module init: this module loads once per Worker
@@ -280,6 +288,8 @@ export interface ApiFetchPolicy {
   auth?: boolean;
   /** Log after the final failed attempt. Default true. */
   logTerminalFailure?: boolean;
+  /** Let this read join the render's read batch. Default true. */
+  batch?: boolean;
 }
 
 function isAbsoluteUrl(target: string): boolean {
@@ -306,6 +316,10 @@ export async function apiFetch(
     logTerminalFailure = true,
   } = policy;
   const url = isAbsoluteUrl(target) ? target : createApiUrl(target);
+  if (import.meta.env.SSR && !requiresAuth && policy.batch !== false) {
+    const batched = joinReadBatch(url, options, policy);
+    if (batched) return batched;
+  }
 
   let usedServiceBinding = false;
   try {
@@ -349,7 +363,12 @@ export async function apiFetch(
     let response: Response;
     if (import.meta.env.SSR && backendApi && url.startsWith(getApiBaseUrl())) {
       usedServiceBinding = true;
-      const serviceBindingTimeout = canFallbackToHttp
+      // The short deadline only buys an HTTPS retry. A read addressed to the
+      // internal origin (the platform API URL is not known yet, as for a
+      // render's first batch) has no public URL to retry, so cutting it short
+      // would only turn a slow cold read into an error page.
+      const canRetryOverHttps = canFallbackToHttp && !isInternalServiceUrl(url);
+      const serviceBindingTimeout = canRetryOverHttps
         ? Math.min(timeout, SERVICE_BINDING_READ_TIMEOUT_MS)
         : timeout;
       try {
@@ -366,7 +385,7 @@ export async function apiFetch(
           "Storefront API service binding",
         );
       } catch (error: unknown) {
-        if (!canFallbackToHttp) {
+        if (!canRetryOverHttps) {
           throw error;
         }
         console.warn(
@@ -430,6 +449,119 @@ export async function apiFetch(
       console.error(`Fetch failed for ${url} after multiple retries.`, error);
     }
     throw error;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Render read batch
+// ---------------------------------------------------------------------------
+
+const BATCHABLE_HEADERS = new Set(["accept", "content-type"]);
+const BATCH_TIMEOUT_MS = 8_000;
+
+interface BatchedRead {
+  url: string;
+  options: RequestInit;
+  policy: ApiFetchPolicy;
+  part: string;
+  resolve(response: Response): void;
+  reject(error: unknown): void;
+}
+
+export interface PendingReadBatch {
+  origin: string;
+  reads: BatchedRead[];
+}
+
+/**
+ * Public cached reads a render starts together (layout, page data, shipping,
+ * checkout settings) travel as one `GET /api/v1/storefront/batch` instead of
+ * one service binding call each: one hop, one API invocation, and parts served
+ * from the API's generation-keyed cache. Reads join the batch until the
+ * current task yields (setTimeout 0); a lone read is sent as itself.
+ */
+function joinReadBatch(
+  url: string,
+  options: RequestInit,
+  policy: ApiFetchPolicy,
+): Promise<Response> | null {
+  const runtime = getRuntime();
+  if (!runtime || options.body != null || options.signal) return null;
+  if ((options.method ?? "GET").toUpperCase() !== "GET") return null;
+  for (const name of new Headers(options.headers ?? {}).keys()) {
+    if (!BATCHABLE_HEADERS.has(name)) return null;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!url.startsWith(getApiBaseUrl())) return null;
+  const part = storefrontBatchPart(parsed);
+  if (!part) return null;
+
+  if (runtime.readBatch && runtime.readBatch.origin !== parsed.origin) return null;
+  let batch = runtime.readBatch;
+  if (!batch) {
+    batch = { origin: parsed.origin, reads: [] };
+    runtime.readBatch = batch;
+    const scheduled = batch;
+    setTimeout(() => {
+      requestRuntime.run(runtime, () => void flushReadBatch(runtime, scheduled));
+    }, 0);
+  }
+  if (batch.reads.length >= MAX_STOREFRONT_BATCH_PARTS) return null;
+  const read = batch.reads;
+  return new Promise<Response>((resolve, reject) => {
+    read.push({ url, options, policy, part, resolve, reject });
+  });
+}
+
+function sendAlone(read: BatchedRead): void {
+  apiFetch(read.url, read.options, { ...read.policy, batch: false }).then(read.resolve, read.reject);
+}
+
+async function flushReadBatch(
+  runtime: StorefrontRuntime,
+  batch: PendingReadBatch,
+): Promise<void> {
+  if (runtime.readBatch === batch) runtime.readBatch = null;
+  const { reads } = batch;
+  if (reads.length === 1) {
+    sendAlone(reads[0]!);
+    return;
+  }
+  const parts = [...new Set(reads.map((read) => read.part))];
+  let payload: StorefrontBatchResponse | null = null;
+  try {
+    const response = await apiFetch(
+      `${batch.origin}${storefrontBatchPath(parts)}`,
+      {},
+      { auth: false, batch: false, retries: 1, timeout: BATCH_TIMEOUT_MS },
+    );
+    if (response.ok) {
+      const envelope = (await response.json()) as { data?: StorefrontBatchResponse };
+      if (envelope.data?.parts?.length === parts.length) payload = envelope.data;
+    } else {
+      await response.body?.cancel();
+    }
+  } catch (error: unknown) {
+    for (const read of reads) read.reject(error);
+    return;
+  }
+  if (!payload) {
+    // An API without the batch route (mid-deploy): send each read itself.
+    for (const read of reads) sendAlone(read);
+    return;
+  }
+  const byPart = new Map(parts.map((part, index) => [part, payload!.parts[index]!]));
+  for (const read of reads) {
+    const result = byPart.get(read.part)!;
+    read.resolve(new Response(result.body, {
+      status: result.status,
+      headers: { "Content-Type": result.contentType },
+    }));
   }
 }
 

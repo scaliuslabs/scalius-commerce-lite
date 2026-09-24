@@ -1,14 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DeliveryZonesCard, deliveryZonesQuery } from "~/components/admin/settings/DeliveryZones";
+import { DeliveryZonesCard } from "~/components/admin/settings/DeliveryZones";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
+import { CouriersCard, DeliveryAreasCard } from "~/components/admin/settings/ShippingSettings";
+import { settingsHead } from "~/components/admin/settings/settings-nav";
 import {
-  CouriersCard,
-  DeliveryAreasCard,
   areaCountsQuery,
   couriersQuery,
-} from "~/components/admin/settings/ShippingSettings";
-import { currencyQuery, platformQuery } from "~/components/admin/settings/StoreSettings";
-import { settingsHead } from "~/components/admin/settings/settings-nav";
+  currencyQuery,
+  deliveryZonesQuery,
+  platformQuery,
+} from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/shipping")({

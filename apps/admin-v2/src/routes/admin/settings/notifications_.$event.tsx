@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { isOrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
-import { customerRulesQuery } from "~/components/admin/settings/NotificationSettings";
-import { NotificationTemplateEditor, templatesQuery } from "~/components/admin/settings/NotificationTemplateEditor";
+import { NotificationTemplateEditor } from "~/components/admin/settings/NotificationTemplateEditor";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { customerRulesQuery, templatesQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { translate, useMessages } from "~/i18n";
 import { settingsNavMessages } from "~/i18n/settings";
-import { notificationEventMessages, notificationTemplateMessages } from "~/i18n/settings-notifications";
+import { notificationEventMessages } from "~/i18n/notification-events";
+import { titleHead } from "~/i18n/page-titles";
+import { notificationTemplateMessages } from "~/i18n/settings-notifications";
 
 // One customer message (e.g. "Order shipped"), opened from Settings → Notifications.
 export const Route = createFileRoute("/admin/settings/notifications_/$event")({
@@ -17,11 +19,12 @@ export const Route = createFileRoute("/admin/settings/notifications_/$event")({
       queryClient.ensureQueryData(templatesQuery),
       queryClient.ensureQueryData(customerRulesQuery),
     ]),
-  head: ({ params }) => ({
-    meta: [{
-      title: `${isOrderNotificationType(params.event) ? translate(notificationEventMessages, params.event) : translate(settingsNavMessages, "notifications")} | Scalius Admin`,
-    }],
-  }),
+  head: ({ params }) =>
+    titleHead(
+      isOrderNotificationType(params.event)
+        ? translate(notificationEventMessages, params.event)
+        : translate(settingsNavMessages, "notifications"),
+    ),
   errorComponent: RouteErrorComponent,
   component: NotificationMessagePage,
 });

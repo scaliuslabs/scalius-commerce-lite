@@ -1,387 +1,147 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
-import { tmpdir } from "os";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  formatAdminPerfCheckReport,
-  runAdminPerfCheck,
+  BUNDLE_BUDGETS,
+  componentChunksByRoute,
+  measureRoutes,
+  parseAdminPerfCheckArgs,
+  parseRouteTree,
+  routeAncestry,
+  staticClosure,
+  validateBundleReport,
 } from "./admin-perf-check.mjs";
+import { validateRuntimeReport, waterfallDepth } from "./admin-perf-runtime.mjs";
 
-const tmpRoots = [];
+const ROUTES = "/repo/apps/admin-v2/src/routes";
 
-function createRoot() {
-  const root = mkdtempSync(join(tmpdir(), "scalius-admin-perf-"));
-  tmpRoots.push(root);
-  return root;
-}
+const ROUTE_TREE = `
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AdminOrdersListRouteImport } from './routes/admin/orders/_list'
+import { Route as AdminOrdersListIndexRouteImport } from './routes/admin/orders/_list/index'
+import { Route as ScannerRouteImport } from './routes/scanner'
 
-function write(root, relativePath, content) {
-  const file = join(root, relativePath);
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, content);
-}
-
-function createPassingFixture({ dist = true } = {}) {
-  const root = createRoot();
-
-  const headers = `/assets/immutable/*.js
-  Cache-Control: public, max-age=31536000, immutable
-
-/assets/immutable/*.css
-  Cache-Control: public, max-age=31536000, immutable
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScannerRoute = ScannerRouteImport.update({
+  id: '/scanner',
+  path: '/scanner',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminOrdersListRoute = AdminOrdersListRouteImport.update({
+  id: '/orders/_list',
+  path: '/orders',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOrdersListIndexRoute =
+  AdminOrdersListIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AdminOrdersListRoute,
+  } as any)
 `;
-  write(root, "apps/admin-v2/public/_headers", headers);
-  write(root, "apps/admin-v2/public/flags/flags.css", ".flag { display: block; }\n");
 
-  for (const route of [
-    "apps/admin-v2/src/routes/admin/products/index.tsx",
-    "apps/admin-v2/src/routes/admin/orders/index.tsx",
-    "apps/admin-v2/src/routes/admin/customers/index.tsx",
-    "apps/admin-v2/src/routes/admin/categories/index.tsx",
-    "apps/admin-v2/src/routes/admin/collections/index.tsx",
-    "apps/admin-v2/src/routes/admin/discounts/index.tsx",
-    "apps/admin-v2/src/routes/admin/pages/index.tsx",
-  ]) {
-    write(root, route, `
-      import { warmRouteQuery } from "~/lib/route-query-warming";
-      export async function loader() {
-        await warmRouteQuery(queryClient, listQueryOptions());
-      }
-    `);
-  }
+const chunk = (fileName, { imports = [], moduleIds = [], isEntry = false } = {}) => ({ fileName, imports, moduleIds, isEntry });
 
-  write(root, "apps/admin-v2/src/lib/api-query-options/orders.ts", `
-    export const ordersQueryOptions = () => ({ queryKey: ["orders"] });
-  `);
-
-  write(root, "apps/admin-v2/src/components/admin/data-table/useServerTable.ts", `
-    import { keepPreviousData, useQuery } from "@tanstack/react-query";
-    export const INTENT_PREFETCH_MOUNT_GRACE_MS = 5_000;
-    export function shouldRefetchServerTableOnMount(query) {
-      if (query.state.isInvalidated || query.state.dataUpdatedAt <= 0 || query.isStale()) return "always";
-      return Date.now() - query.state.dataUpdatedAt > INTENT_PREFETCH_MOUNT_GRACE_MS
-        ? "always"
-        : false;
-    }
-    export function useServerTable(qOpts) {
-      return useQuery({
-        ...qOpts,
-        placeholderData: keepPreviousData,
-        refetchOnMount: shouldRefetchServerTableOnMount,
-      });
-    }
-  `);
-
-  write(root, "apps/admin-v2/src/components/admin/data-table/DataTable.tsx", `
-    import { lazy, Suspense } from "react";
-    const SortableDataTableContent = lazy(() => import("./SortableDataTableContent"));
-    export function DataTable({ sortable }) {
-      return sortable ? <Suspense><SortableDataTableContent /></Suspense> : null;
-    }
-  `);
-
-  write(root, "apps/admin-v2/src/components/admin/data-table/SortableDataTableContent.tsx", `
-    import { DndContext } from "@dnd-kit/core";
-    import { SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
-    export function SortableDataTableContent() {
-      useSortable({ id: "row" });
-      return <DndContext><SortableContext items={[]} /></DndContext>;
-    }
-  `);
-
-  write(root, "apps/admin-v2/src/components/admin/ProductForm.tsx", `
-    import { TitleDescriptionSection } from "./product-form/TitleDescriptionSection";
-    export function ProductForm() {
-      return <TitleDescriptionSection />;
-    }
-  `);
-
-  write(root, "apps/admin-v2/src/components/admin/product-form/TitleDescriptionSection.tsx", `
-    import { lazy, Suspense } from "react";
-    import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
-    const AdditionalInfoManager = lazy(() => import("./AdditionalInfoManager"));
-    export function TitleDescriptionSection() {
-      return <><DeferredTiptapEditor /><Suspense><AdditionalInfoManager /></Suspense></>;
-    }
-  `);
-
-  write(root, "apps/admin-v2/src/components/admin/product-form/ProductImagesSection.tsx", `
-    export function ProductImagesSection() {
-      const field = { value: [] };
-      return field.value.slice(0, 12).map((item) => <img loading="lazy" src={item.url} />);
-    }
-  `);
-
-  write(root, "apps/admin-v2/src/routes/admin/products/new.tsx", `
-    import { lazy } from "react";
-    const OptionMatrixEditor = lazy(() => import("~/components/admin/product-form/variants/OptionMatrixEditor"));
-    export default OptionMatrixEditor;
-  `);
-  write(root, "apps/admin-v2/src/routes/admin/products/$productId/edit.tsx", `
-    import { lazy } from "react";
-    import type { OptionMatrixEditorHandle } from "~/components/admin/product-form/variants/option-matrix-editor-model";
-    const OptionMatrixEditor = lazy(() => import("~/components/admin/product-form/variants/OptionMatrixEditor"));
-    export default OptionMatrixEditor;
-  `);
-  write(root, "apps/admin-v2/src/components/admin/product-form/variants/OptionMatrixEditor.tsx", `
-    const pageSize = 30;
-    const filteredVariants = [];
-    const page = 0;
-    export const visibleVariants = filteredVariants.slice(page * pageSize, (page + 1) * pageSize);
-  `);
-
-  write(root, "apps/admin-v2/src/components/admin/settings/GeneralSettingsPage.tsx", `
-    import { lazy, Suspense } from "react";
-    import type { HeaderConfig } from "../header-builder/types";
-    import type { FooterConfig } from "../footer-builder/types";
-    const HeaderBuilder = lazy(() => import("../header-builder"));
-    const FooterBuilder = lazy(() => import("../footer-builder"));
-    export default function GeneralSettingsPage() {
-      return <Suspense><HeaderBuilder /><FooterBuilder /></Suspense>;
-    }
-  `);
-
-  write(root, "apps/admin-v2/src/components/admin/OrderView.tsx", `
-    import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard";
-    import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
-    export function OrderView() {
-      return <><OrderSupportRequestsCard /><OrderNotificationsCard /></>;
-    }
-  `);
-
-  if (dist) {
-    write(root, "apps/admin-v2/dist/_headers", headers);
-    write(root, "apps/admin-v2/dist/flags/flags.css", ".flag { display: block; }\n");
-    write(root, "apps/admin-v2/dist/assets/immutable/global-a1B2c3D4.css", `
-      :root { color-scheme: light; }
-    `);
-    write(root, "apps/admin-v2/dist/assets/immutable/ProductForm-a1B2c3D4e.js", `
-      import { DeferredTiptapEditor } from "./DeferredTiptapEditor-fixture.js";
-      export async function loadAdditionalInfo() {
-        return import("./AdditionalInfoManager-fixture.js");
-      }
-    `);
-  }
-
-  return root;
+function fixtureChunks() {
+  return [
+    chunk("index.js", { isEntry: true, imports: ["runtime.js"], moduleIds: [`${ROUTES}/admin/orders/_list/index.tsx`] }),
+    chunk("runtime.js"),
+    chunk("admin.js", { imports: ["ui.js"], moduleIds: [`${ROUTES}/admin.tsx?tsr-split=component`] }),
+    chunk("ui.js"),
+    chunk("list.js", { imports: ["table.js"], moduleIds: [`${ROUTES}/admin/orders/_list/index.tsx?tsr-split=component`] }),
+    chunk("list-error.js", { moduleIds: [`${ROUTES}/admin/orders/_list/index.tsx?tsr-split=errorComponent`] }),
+    chunk("table.js", { moduleIds: ["/repo/node_modules/@tanstack/table-core/index.js"] }),
+    chunk("scanner.js", { imports: ["qr.js"], moduleIds: [`${ROUTES}/scanner.tsx?tsr-split=component`] }),
+    chunk("qr.js", { moduleIds: ["/repo/node_modules/html5-qrcode/esm/index.js"] }),
+  ];
 }
 
-afterEach(() => {
-  for (const root of tmpRoots.splice(0)) {
-    rmSync(root, { recursive: true, force: true });
-  }
+const sizes = { "index.js": 100, "runtime.js": 1, "admin.js": 10, "ui.js": 5, "list.js": 20, "list-error.js": 1, "table.js": 30, "scanner.js": 4, "qr.js": 80 };
+const brotliBytes = (file) => sizes[file] * 1024;
+
+describe("admin perf check: route bundles", () => {
+  it("reads each route's parent from the generated route tree, multi-line updates included", () => {
+    const parents = parseRouteTree(ROUTE_TREE);
+    expect(parents.get("admin.tsx")).toBeNull();
+    expect(parents.get("admin/orders/_list.tsx")).toBe("admin.tsx");
+    expect(parents.get("admin/orders/_list/index.tsx")).toBe("admin/orders/_list.tsx");
+    expect(routeAncestry("admin/orders/_list/index.tsx", parents)).toEqual([
+      "admin.tsx",
+      "admin/orders/_list.tsx",
+      "admin/orders/_list/index.tsx",
+    ]);
+  });
+
+  it("maps page components, not error components, to their route", () => {
+    const byRoute = componentChunksByRoute(fixtureChunks(), ROUTES);
+    expect(byRoute.get("admin/orders/_list/index.tsx")).toEqual(["list.js"]);
+    expect(byRoute.get("admin.tsx")).toEqual(["admin.js"]);
+  });
+
+  it("follows static imports only", () => {
+    const byName = new Map(fixtureChunks().map((item) => [item.fileName, item]));
+    expect([...staticClosure(["list.js"], byName)].sort()).toEqual(["list.js", "table.js"]);
+  });
+
+  it("counts the entry, the layouts' and the page's own chunks for a route's first render", () => {
+    const report = measureRoutes({ chunks: fixtureChunks(), parentByFile: parseRouteTree(ROUTE_TREE), routesDir: ROUTES, brotliBytes });
+    const list = report.routes.find((route) => route.route === "admin/orders/_list/index.tsx");
+    expect(report.entry.brotliBytes).toBe(101 * 1024);
+    // index + runtime + admin + ui + list + table; the error chunk loads only on error.
+    expect(list.brotliBytes).toBe(166 * 1024);
+    expect(list.files).toBe(6);
+    expect(list.lazyOnly).toEqual([]);
+    expect(report.routes.find((route) => route.route === "scanner.tsx").lazyOnly).toEqual([]);
+  });
+
+  it("fails a route over budget, a lazy-only library on first render, and a stale budget entry", () => {
+    const chunks = fixtureChunks();
+    chunks.find((item) => item.fileName === "list.js").imports.push("qr.js");
+    const report = measureRoutes({ chunks, parentByFile: parseRouteTree(ROUTE_TREE), routesDir: ROUTES, brotliBytes });
+    const failures = validateBundleReport(report, {
+      ...BUNDLE_BUDGETS,
+      entry: 100,
+      routes: { "admin/orders/_list/index.tsx": 200, "admin/gone.tsx": 100 },
+    });
+    expect(failures).toEqual(expect.arrayContaining([
+      expect.stringContaining("entry chunk is 101.0 KiB"),
+      expect.stringContaining("admin/orders/_list/index.tsx needs 246.0 KiB"),
+      expect.stringContaining("admin/orders/_list/index.tsx loads html5-qrcode"),
+      "budgeted route admin/gone.tsx no longer exists",
+    ]));
+  });
 });
 
-describe("admin-perf-check", () => {
-  it("passes a representative source and dist fixture", () => {
-    const root = createPassingFixture();
-
-    const report = runAdminPerfCheck({ rootDir: root });
-
-    expect(report.ok).toBe(true);
-    expect(report.failures).toEqual([]);
-    expect(report.results.map((result) => result.status)).not.toContain("SKIP");
-    expect(formatAdminPerfCheckReport(report)).toContain(
-      "PASS dist: ProductForm client chunk - 1 chunk(s)",
-    );
+describe("admin perf check: runtime", () => {
+  it("measures how many API round trips had to wait for another", () => {
+    expect(waterfallDepth([])).toBe(0);
+    expect(waterfallDepth([{ start: 0, end: 10 }, { start: 1, end: 12 }])).toBe(1);
+    expect(waterfallDepth([{ start: 0, end: 10 }, { start: 11, end: 20 }, { start: 12, end: 30 }, { start: 21, end: 25 }])).toBe(3);
   });
 
-  it("fails with grouped source and dist errors", () => {
-    const root = createPassingFixture();
-    write(root, "apps/admin-v2/src/lib/api.queries.ts", "export {};\n");
-    write(root, "apps/admin-v2/src/components/admin/data-table/DataTable.tsx", `
-      import { DndContext } from "@dnd-kit/core";
-      export function DataTable() {
-        return <DndContext />;
-      }
-    `);
-    write(root, "apps/admin-v2/dist/assets/immutable/ProductForm-a1B2c3D4e.js", `
-      export async function restoreObsoleteGallery() {
-        return import("./DraggableImageGallery-fixture.js");
-      }
-    `);
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const lines = formatAdminPerfCheckReport(report);
-
-    expect(report.ok).toBe(false);
-    expect(report.failures.map((failure) => failure.group)).toEqual(
-      expect.arrayContaining(["source", "dist"]),
-    );
-    expect(lines).toContain("FAIL admin performance confidence gate");
-    expect(lines).toContain("FAIL source");
-    expect(lines).toContain("FAIL dist");
-    expect(lines.join("\n")).toContain("api.queries.ts exists");
-    expect(lines.join("\n")).toContain("DraggableImageGallery-fixture.js");
+  it("holds first load, transitions and typing to their budgets", () => {
+    const failures = validateRuntimeReport({
+      firstLoad: { cold: { ok: true, ready: 1600 } },
+      transitions: [
+        { pass: "cold", name: "Home → Orders", ok: true, ms: 380 },
+        { pass: "warm", name: "Home → Orders", ok: true, ms: 170 },
+        { pass: "cold", name: "Orders → Order", ok: false, error: "link not found: tbody a" },
+      ],
+      typing: { maxMs: 60 },
+    });
+    expect(failures).toEqual([
+      "first load ready 1600ms (budget 1500ms)",
+      "warm Home → Orders: 170ms (budget 150ms)",
+      "cold Orders → Order: link not found: tbody a",
+      "product editor keystroke 60ms (budget 50ms)",
+    ]);
   });
 
-  it("fails when useServerTable omits explicit stale-aware mount refetch", () => {
-    const root = createPassingFixture({ dist: false });
-    write(root, "apps/admin-v2/src/components/admin/data-table/useServerTable.ts", `
-      import { keepPreviousData, useQuery } from "@tanstack/react-query";
-      export function useServerTable(qOpts) {
-        return useQuery({ ...qOpts, placeholderData: keepPreviousData });
-      }
-    `);
-
-    const report = runAdminPerfCheck({ rootDir: root });
-
-    expect(report.ok).toBe(false);
-    expect(formatAdminPerfCheckReport(report).join("\n")).toContain(
-      "expected the bounded intent-prefetch mount policy",
-    );
-  });
-
-  it("fails when useServerTable forces fresh prefetched data to refetch", () => {
-    const root = createPassingFixture({ dist: false });
-    write(root, "apps/admin-v2/src/components/admin/data-table/useServerTable.ts", `
-      import { keepPreviousData, useQuery } from "@tanstack/react-query";
-      export function useServerTable(qOpts) {
-        return useQuery({
-          ...qOpts,
-          placeholderData: keepPreviousData,
-          refetchOnMount: "always",
-        });
-      }
-    `);
-
-    const report = runAdminPerfCheck({ rootDir: root });
-
-    expect(report.ok).toBe(false);
-    expect(formatAdminPerfCheckReport(report).join("\n")).toContain(
-      "expected the bounded intent-prefetch mount policy",
-    );
-  });
-
-  it("fails when product media restores drag tooling or drops the render cap", () => {
-    const root = createPassingFixture({ dist: false });
-    write(root, "apps/admin-v2/src/components/admin/product-form/ProductImagesSection.tsx", `
-      import { DndContext } from "@dnd-kit/core";
-      import { DraggableImageGallery } from "../DraggableImageGallery";
-      export function ProductImagesSection({ field }) {
-        return <DndContext>{field.value.map((item) => <img src={item.url} />)}</DndContext>;
-      }
-    `);
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const output = formatAdminPerfCheckReport(report).join("\n");
-
-    expect(report.ok).toBe(false);
-    expect(output).toContain("product media must keep the direct, accessible reorder controls");
-    expect(output).toContain("cap its initial rendered tiles at 12");
-    expect(output).toContain("native lazy loading");
-  });
-
-  it("fails when OrderView restores lazy panel hydration", () => {
-    const root = createPassingFixture({ dist: false });
-    write(root, "apps/admin-v2/src/components/admin/OrderView.tsx", `
-      import { lazy, Suspense } from "react";
-      const OrderSupportRequestsCard = lazy(() => import("./orderview/OrderSupportRequestsCard"));
-      const OrderNotificationsCard = lazy(() => import("./orderview/OrderNotificationsCard"));
-      export function OrderView() {
-        return <Suspense><OrderSupportRequestsCard /><OrderNotificationsCard /></Suspense>;
-      }
-    `);
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const output = formatAdminPerfCheckReport(report).join("\n");
-
-    expect(report.ok).toBe(false);
-    expect(output).toContain("render deterministically");
-    expect(output).toContain("hydration-unstable lazy panel boundary");
-  });
-
-  it("rejects broad immutable header rules", () => {
-    const root = createPassingFixture();
-    const broadHeaders = `/*
-  Cache-Control: public, max-age=31536000, immutable
-`;
-    write(root, "apps/admin-v2/public/_headers", broadHeaders);
-    write(root, "apps/admin-v2/dist/_headers", broadHeaders);
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const output = formatAdminPerfCheckReport(report).join("\n");
-
-    expect(report.ok).toBe(false);
-    expect(output).toContain("long-lived browser caching is only allowed");
-    expect(output).toContain("found /*");
-    expect(output).toContain("expected exactly one /assets/immutable/*.js rule");
-  });
-
-  it("rejects broad long-lived caching even without the immutable directive", () => {
-    const root = createPassingFixture();
-    const broadHeaders = `/*
-  Cache-Control: public, max-age=31536000
-`;
-    write(root, "apps/admin-v2/public/_headers", broadHeaders);
-    write(root, "apps/admin-v2/dist/_headers", broadHeaders);
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const output = formatAdminPerfCheckReport(report).join("\n");
-
-    expect(report.ok).toBe(false);
-    expect(output).toContain("long-lived browser caching is only allowed");
-    expect(output).toContain("found /*");
-  });
-
-  it("fails closed when an existing client build loses its ProductForm chunk", () => {
-    const root = createPassingFixture();
-    const productFormChunk = join(
-      root,
-      "apps/admin-v2/dist/assets/immutable/ProductForm-a1B2c3D4e.js",
-    );
-    rmSync(productFormChunk);
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const output = formatAdminPerfCheckReport(report).join("\n");
-
-    expect(report.ok).toBe(false);
-    expect(output).toContain("expected a ProductForm-*.js artifact");
-  });
-
-  it("rejects unhashed or misplaced generated scripts and styles", () => {
-    const root = createPassingFixture();
-    write(root, "apps/admin-v2/dist/assets/immutable/unhashed.js", "export {};\n");
-    write(root, "apps/admin-v2/dist/assets/generated-a1B2c3D4.css", ".x {}\n");
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const output = formatAdminPerfCheckReport(report).join("\n");
-
-    expect(report.ok).toBe(false);
-    expect(output).toContain("immutable scripts/styles require a Vite content hash");
-    expect(output).toContain(
-      "generated scripts/styles must be emitted under assets/immutable/",
-    );
-  });
-
-  it("rejects public files, maps, and HTML in the generated immutable namespace", () => {
-    const root = createPassingFixture();
-    write(root, "apps/admin-v2/public/assets/immutable/copied-a1B2c3D4.js", "export {};\n");
-    write(root, "apps/admin-v2/dist/assets/immutable/index.html", "<!doctype html>\n");
-    write(root, "apps/admin-v2/dist/assets/immutable/index-a1B2c3D4.js.map", "{}\n");
-
-    const report = runAdminPerfCheck({ rootDir: root });
-    const output = formatAdminPerfCheckReport(report).join("\n");
-
-    expect(report.ok).toBe(false);
-    expect(output).toContain("reserved for generated client assets");
-    expect(output).toContain("source maps and HTML must stay outside");
-  });
-
-  it("passes and reports dist as skipped when build artifacts are absent", () => {
-    const root = createPassingFixture({ dist: false });
-
-    const report = runAdminPerfCheck({ rootDir: root });
-
-    expect(report.ok).toBe(true);
-    expect(report.failures).toEqual([]);
-    expect(report.results).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          status: "SKIP",
-          label: "dist: ProductForm client chunk",
-        }),
-      ]),
-    );
+  it("refuses to drive anything but a local dashboard", () => {
+    expect(() => parseAdminPerfCheckArgs(["--runtime", "--admin", "https://dashboard.scalius.com"])).toThrow(/local dashboard/);
+    expect(parseAdminPerfCheckArgs(["--runtime", "--admin", "http://localhost:4323", "--cpu", "4"])).toMatchObject({ runtime: true, cpu: 4, check: true });
   });
 });

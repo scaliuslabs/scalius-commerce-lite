@@ -22,9 +22,10 @@ import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink, inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
 import { Badge } from "~/components/ui/badge";
 import { DateText, sortHeader } from "~/components/admin/resource/columns";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
 import { dataTableMessages } from "~/i18n/data-table";
+import { pageHead } from "~/i18n/page-titles";
 
 const validateCollectionSearch = createListSearchValidator(
   ["name", "presentation", "isActive", "sortOrder", "updatedAt"] as const,
@@ -46,7 +47,7 @@ export const Route = createFileRoute("/admin/collections/")({
   validateSearch: validateCollectionSearch,
   loaderDeps: ({ search }) => search,
   loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("collections", deps), deps.q))),
-  head: () => ({ meta: [{ title: translate(catalogMessages, "collections") }] }),
+  head: () => pageHead("collections"),
   component: CollectionsPage,
   errorComponent: RouteErrorComponent,
 });

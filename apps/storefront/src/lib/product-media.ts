@@ -1,4 +1,9 @@
-import { mediaImageSrcSet, mediaImageUrl } from "./media-url";
+import { mediaImageSrcSet, mediaImageUrl, resolveMediaUrl } from "./media-url";
+import {
+  responsiveImageSources,
+  type ImageSlot,
+  type ResponsiveImageSources,
+} from "./responsive-image";
 
 export const PRODUCT_IMAGE_FALLBACK = "/placeholder-product.svg";
 
@@ -26,4 +31,26 @@ export function getProductImageSrcSet(
 ): string | undefined {
   const source = normalizeImageSource(url);
   return source ? mediaImageSrcSet(source) : undefined;
+}
+
+/**
+ * The CDN URL of a product image (its largest rendition when it has any), or
+ * the placeholder. Client scripts derive slot sources from it with
+ * `responsiveImageSources`, the helper `productImageSources` uses on SSR.
+ */
+export function resolveProductImageUrl(
+  url: string | null | undefined,
+  fallback = PRODUCT_IMAGE_FALLBACK,
+): string {
+  const source = normalizeImageSource(url);
+  return (source && resolveMediaUrl(source)) || fallback;
+}
+
+/** `src`/`srcset`/`sizes` of a product image in `slot`, or the placeholder. */
+export function productImageSources(
+  url: string | null | undefined,
+  slot: ImageSlot,
+  fallback = PRODUCT_IMAGE_FALLBACK,
+): ResponsiveImageSources {
+  return responsiveImageSources(resolveProductImageUrl(url, fallback), slot);
 }

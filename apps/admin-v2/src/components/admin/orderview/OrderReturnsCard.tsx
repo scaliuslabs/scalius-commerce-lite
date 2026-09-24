@@ -9,6 +9,7 @@ import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
 import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
+import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
 import {
   getRemainingReturnableQuantities,
@@ -37,7 +38,7 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
   // The return a dialog acts on; kept after closing so the dialog can animate out.
   const [target, setTarget] = useState<OrderReturnDto | null>(null);
   const targetKey = target ? `${target.id}:${target.version}` : "none";
-  const query = useQuery({ ...orderReturnsQueryOptions(order.id), enabled: hydrated, refetchInterval: 30_000 });
+  const query = useQuery({ ...orderReturnsQueryOptions(order.id), enabled: hydrated, staleTime: ORDER_DETAIL_PREFETCH_STALE_MS, refetchInterval: 30_000 });
   const returns = query.data?.returns ?? EMPTY_RETURNS;
   const itemsById = useMemo(() => new Map(order.items.map((item) => [item.id, item])), [order.items]);
   const remaining = useMemo(() => getRemainingReturnableQuantities(order.items, returns), [order.items, returns]);

@@ -368,6 +368,8 @@ export interface NavigationItem {
   title: string;
   href?: string;
   openInNewTab?: boolean;
+  /** The linked category's photo, when the item links a category that has one. */
+  imageUrl?: string;
   subMenu?: NavigationItem[];
 }
 

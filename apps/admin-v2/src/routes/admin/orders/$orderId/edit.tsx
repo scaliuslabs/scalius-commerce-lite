@@ -11,10 +11,11 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { orderFormDataQueryOptions, orderQueryOptions } from "~/lib/api-query-options/orders";
-import { translate, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 import { OrderFormRouteError } from "../-OrderFormRouteError";
 import { orderEditState, savedDeliveryMethod } from "../-order-form-route-state";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/orders/$orderId/edit")({
   loader: async ({ context: { queryClient }, params }) => {
@@ -32,12 +33,8 @@ export const Route = createFileRoute("/admin/orders/$orderId/edit")({
       cashToCollect: order.balanceDue,
     };
   },
-  head: ({ loaderData, params }) => ({
-    meta: [{
-      title: `${translate(orderFormMessages, "editOrder", {
-        number: formatOrderNumber(loaderData?.order.orderNumber, params.orderId),
-      })} | Scalius`,
-    }],
+  head: ({ loaderData, params }) => pageHead("editOrder", {
+    number: formatOrderNumber(loaderData?.order.orderNumber, params.orderId),
   }),
   errorComponent: OrderFormRouteError,
   component: EditOrderPage,

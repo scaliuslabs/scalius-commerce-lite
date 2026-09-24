@@ -34,13 +34,12 @@ import { settingsMessages } from "~/i18n/settings";
 import { aiAccessMessages } from "~/i18n/settings-ai-access";
 import { permissionMessages } from "~/i18n/settings-users";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { aiAccessQuery } from "~/lib/api-query-options/settings-screens";
 
 import { AccessFields, defaultSelection } from "./AccessFields";
 import {
-  countClearableAgentConnections,
   createAgentToken,
   listAgentConnectionEvents,
-  listAgentConnections,
   purgeRevokedAgentConnections,
   revokeAgentGrant,
   revokeAllAgentGrants,
@@ -48,27 +47,8 @@ import {
 } from "./api";
 import type { AgentAuditEvent, AgentConnection, AgentRisk } from "./types";
 
-const LIST_LIMIT = 100;
 const ACTIVITY_LIMIT = 10;
 const RISKS: ReadonlySet<string> = new Set<AgentRisk>(["read", "write", "destructive", "financial", "security"]);
-
-/** Active connections plus how many old ones "Clear old connections" would remove. */
-export const aiAccessQuery = {
-  queryKey: ["agent-access", "card"] as const,
-  queryFn: async () => {
-    const [page, clearable] = await Promise.all([
-      listAgentConnections({ page: 1, limit: LIST_LIMIT, status: "active" }),
-      countClearableAgentConnections(),
-    ]);
-    return {
-      connections: page.connections,
-      total: page.pagination.total,
-      clearable: clearable.total,
-      // The server's verdict on this session (store owner, two-step verified).
-      canManage: page.canManage === true,
-    };
-  },
-};
 
 function useRefresh() {
   const queryClient = useQueryClient();

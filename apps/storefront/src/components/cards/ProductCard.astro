@@ -27,6 +27,11 @@ interface Props {
    * grid beside the filter sidebar, or a horizontal collection rail.
    */
   context?: ProductGridContext;
+  /**
+   * The page container's max width when it is not the theme's (the product
+   * page keeps `max-w-7xl` at 80rem), so `sizes` caps where the grid does.
+   */
+  containerWidth?: string;
   headingLevel?: "h2" | "h3";
 }
 
@@ -37,6 +42,7 @@ const {
   index,
   aboveFold = false,
   context = "grid",
+  containerWidth: containerWidthOverride,
   headingLevel = "h3",
 } = Astro.props;
 const TitleTag = headingLevel;
@@ -48,7 +54,8 @@ const money = (price: number) =>
 // the fluid grid the image `sizes` follow.
 const { theme, layout } = await currentRequestTheme(Astro.locals);
 const card = layout.productCard;
-const containerWidth = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
+const containerWidth =
+  containerWidthOverride ?? buildStorefrontThemeTokens(theme)["theme-container-width"]!;
 const imageLoading = productCardImageLoading(
   productGridFirstRow(layout.grid, containerWidth),
   { index, aboveFold },
@@ -84,7 +91,7 @@ const portrait = card.imageRatio === "portrait";
   data-theme-component="product-card"
   data-card-ratio={card.imageRatio}
   data-card-badge={card.badge}
-  class="group relative flex flex-col h-full bg-card rounded-2xl overflow-hidden transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-border/50 hover:border-transparent"
+  class="group relative flex flex-col h-full bg-card overflow-hidden"
 >
   <div class:list={["product-card-media relative overflow-hidden bg-muted", portrait ? "aspect-[4/5]" : "aspect-square"]}>
     <img
@@ -97,7 +104,7 @@ const portrait = card.imageRatio === "portrait";
       loading={imageLoading.loading}
       fetchpriority={imageLoading.fetchpriority}
       decoding={imageLoading.decoding}
-      class="w-full h-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
+      class="w-full h-full object-cover object-center"
     />
     {
       hoverImage && (
@@ -111,7 +118,7 @@ const portrait = card.imageRatio === "portrait";
           height={portrait ? 500 : 400}
           loading="lazy"
           decoding="async"
-          class="product-card-hover-image absolute inset-0 hidden h-full w-full object-cover object-center opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+          class="product-card-hover-image absolute inset-0 hidden h-full w-full object-cover object-center opacity-0 group-hover:opacity-100"
         />
       )
     }
@@ -134,9 +141,9 @@ const portrait = card.imageRatio === "portrait";
     </div>
   </div>
 
-  <div class="p-3 sm:p-4 flex flex-col flex-1">
+  <div class="product-card-body p-3 sm:p-4 flex flex-col flex-1">
     <TitleTag
-      class="mb-1 text-sm sm:text-[15px] font-semibold text-foreground leading-tight line-clamp-2 min-h-[2.25rem] group-hover:text-primary transition-colors duration-300"
+      class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"
     >
       <a
         href={productHref}

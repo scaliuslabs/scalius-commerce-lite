@@ -4,7 +4,7 @@
 // ./storefront-theme.md; `storefrontThemeDocumentSchema` is the only way in.
 import { z } from "zod";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 2 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 3 as const;
 
 /**
  * `configured`: built from the Theme page's curated choices.
@@ -37,8 +37,22 @@ export const STOREFRONT_THEME_COLOR_KEYS = [
   "ring",
 ] as const;
 
-export const STOREFRONT_THEME_HEADING_FONTS = ["system", "modern", "editorial"] as const;
-export const STOREFRONT_THEME_BODY_FONTS = ["system", "modern", "humanist"] as const;
+/**
+ * Curated type pairings: heading and body families, weights, tracking and
+ * leading chosen together (a free font picker makes weak pairs). Families
+ * are Google Fonts, self-hosted by the storefront; see STOREFRONT_FONTS.
+ */
+export const STOREFRONT_TYPE_PAIRINGS = [
+  "retail",
+  "market",
+  "editorial",
+  "fresh",
+  "beauty",
+  "heritage",
+  "tech",
+] as const;
+/** Button corners follow the theme radius, or are fully rounded (pill). */
+export const STOREFRONT_THEME_BUTTON_SHAPES = ["radius", "pill"] as const;
 export const STOREFRONT_THEME_RADII = ["square", "subtle", "rounded"] as const;
 export const STOREFRONT_THEME_CONTAINER_WIDTHS = ["standard", "wide"] as const;
 export const STOREFRONT_THEME_BUTTON_STYLES = ["solid", "outline"] as const;
@@ -96,12 +110,33 @@ export const STOREFRONT_CARD_STYLES = ["standard", "portrait", "quick"] as const
 export const STOREFRONT_DENSITIES = ["compact", "comfortable"] as const;
 /** Product page: gallery placement and thumbnails chosen together. */
 export const STOREFRONT_PRODUCT_PAGE_LAYOUTS = ["gallery", "filmstrip", "stacked"] as const;
+/**
+ * How buyers browse the store's header menu (Online store -> Navigation)
+ * on computers:
+ * - `menu`: a horizontal menu; items with children open a dropdown list.
+ * - `mega`: a horizontal menu; items with children open a full-width panel
+ *   of columns, with category photos where the menu links a category.
+ * - `pills`: a scrolling row of rounded category links under the header
+ *   (marketplace style); children are reached from the parent's page.
+ * - `sidebar`: a category list in a left column beside the page content
+ *   (grocery / marketplace catalogues), with expandable children.
+ */
+export const STOREFRONT_NAVIGATION_STYLES = ["menu", "mega", "pills", "sidebar"] as const;
+/**
+ * Navigation on phones: `drawer` opens the menu from the header button as a
+ * side sheet with accordion levels; `tabs` adds a bottom tab bar (Home,
+ * Categories, Search, Cart, Account) for marketplace-style stores, with the
+ * menu drawer behind Categories.
+ */
+export const STOREFRONT_MOBILE_NAVIGATION_STYLES = ["drawer", "tabs"] as const;
 
 export type StorefrontHeaderStyle = (typeof STOREFRONT_HEADER_STYLES)[number];
 export type StorefrontFooterStyle = (typeof STOREFRONT_FOOTER_STYLES)[number];
 export type StorefrontCardStyle = (typeof STOREFRONT_CARD_STYLES)[number];
 export type StorefrontDensity = (typeof STOREFRONT_DENSITIES)[number];
 export type StorefrontProductPageLayout = (typeof STOREFRONT_PRODUCT_PAGE_LAYOUTS)[number];
+export type StorefrontNavigationStyle = (typeof STOREFRONT_NAVIGATION_STYLES)[number];
+export type StorefrontMobileNavigationStyle = (typeof STOREFRONT_MOBILE_NAVIGATION_STYLES)[number];
 
 /** What each card style means for the storefront. */
 export const STOREFRONT_CARD_STYLE_SPECS = {
@@ -244,11 +279,9 @@ export const storefrontThemeTokensSchema = z.object({
       typeof hexColorSchema
     >,
   ).strict(),
-  typography: z.object({
-    heading: z.enum(STOREFRONT_THEME_HEADING_FONTS),
-    body: z.enum(STOREFRONT_THEME_BODY_FONTS),
-  }).strict(),
+  typography: z.enum(STOREFRONT_TYPE_PAIRINGS),
   radius: z.enum(STOREFRONT_THEME_RADII),
+  buttonShape: z.enum(STOREFRONT_THEME_BUTTON_SHAPES),
   containerWidth: z.enum(STOREFRONT_THEME_CONTAINER_WIDTHS),
   components: z.object({
     buttons: z.enum(STOREFRONT_THEME_BUTTON_STYLES),
@@ -263,6 +296,8 @@ export const storefrontThemeLayoutSchema = z.object({
   card: z.enum(STOREFRONT_CARD_STYLES),
   density: z.enum(STOREFRONT_DENSITIES),
   productPage: z.enum(STOREFRONT_PRODUCT_PAGE_LAYOUTS),
+  navigation: z.enum(STOREFRONT_NAVIGATION_STYLES),
+  mobileNavigation: z.enum(STOREFRONT_MOBILE_NAVIGATION_STYLES),
 }).strict();
 
 /** The complete, strict theme document schema. Writes and reads both use it. */
@@ -345,6 +380,8 @@ export interface ResolvedStorefrontThemeLayout {
   density: StorefrontDensity;
   grid: (typeof STOREFRONT_DENSITY_SPECS)[StorefrontDensity];
   productPage: (typeof STOREFRONT_PRODUCT_PAGE_SPECS)[StorefrontProductPageLayout];
+  navigation: StorefrontNavigationStyle;
+  mobileNavigation: StorefrontMobileNavigationStyle;
 }
 
 export function resolveStorefrontThemeLayout(layout: StorefrontThemeLayout): ResolvedStorefrontThemeLayout {
@@ -355,6 +392,8 @@ export function resolveStorefrontThemeLayout(layout: StorefrontThemeLayout): Res
     density: layout.density,
     grid: STOREFRONT_DENSITY_SPECS[layout.density],
     productPage: STOREFRONT_PRODUCT_PAGE_SPECS[layout.productPage],
+    navigation: layout.navigation,
+    mobileNavigation: layout.mobileNavigation,
   };
 }
 
@@ -432,18 +471,78 @@ export function isStorefrontThemeHexColor(value: string): boolean {
 
 // ─── CSS tokens ───────────────────────────────────────────────────────────
 
-const FONT_FAMILIES = {
-  heading: {
-    system: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    modern: '"Avenir Next", Avenir, "Segoe UI", ui-sans-serif, sans-serif',
-    editorial: 'Georgia, "Times New Roman", ui-serif, serif',
-  },
-  body: {
-    system: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    modern: 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif',
-    humanist: 'Optima, Candara, "Noto Sans", ui-sans-serif, sans-serif',
-  },
+/**
+ * Self-hosted font families. `fallback` is metric-matched where the family
+ * ships a `* Fallback` face (size-adjust/ascent overrides, so swapping in
+ * the web font never shifts layout) and otherwise a curated system stack.
+ * `bangla` names the Bengali family that follows it in the stack: Latin
+ * faces carry a Latin unicode-range, so Bangla text falls through to it.
+ */
+export const STOREFRONT_FONTS = {
+  inter: { family: "Inter", fallback: '"Inter Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' },
+  "instrument-serif": { family: "Instrument Serif", fallback: '"Instrument Serif Fallback", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif' },
+  "dm-serif-display": { family: "DM Serif Display", fallback: '"DM Serif Display Fallback", Georgia, "Times New Roman", serif' },
+  "dm-sans": { family: "DM Sans", fallback: '"DM Sans Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif' },
+  "nunito-sans": { family: "Nunito Sans", fallback: '"Nunito Sans Fallback", "Avenir Next", Avenir, ui-sans-serif, system-ui, sans-serif' },
+  "cormorant-garamond": { family: "Cormorant Garamond", fallback: '"Cormorant Garamond Fallback", Garamond, "Iowan Old Style", Georgia, serif' },
 } as const;
+export type StorefrontFontKey = keyof typeof STOREFRONT_FONTS;
+
+export const STOREFRONT_BANGLA_FONTS = {
+  sans: { family: "Noto Sans Bengali", fallback: '"Noto Sans Bengali UI", Vrinda, sans-serif' },
+  // Hind Siliguri: compact, sturdy Bangla for dense marketplace/grocery UI.
+  hind: { family: "Hind Siliguri", fallback: '"Noto Sans Bengali", "Noto Sans Bengali UI", Vrinda, sans-serif' },
+  serif: { family: "Noto Serif Bengali", fallback: '"Noto Sans Bengali", Vrinda, serif' },
+} as const;
+
+/**
+ * What each pairing sets. Tracking is in em; leading is unitless; `scale`
+ * multiplies the fluid type scale (with the density's own factor).
+ */
+export const STOREFRONT_TYPE_PAIRING_SPECS = {
+  // Shopify Horizon/Dawn, Allbirds: one confident grotesque, tight headings.
+  retail: { heading: "inter", body: "inter", bangla: "sans", headingWeight: 650, headingTracking: "-0.02em", headingLeading: "1.15", bodyLeading: "1.6", labelTracking: "0.06em", scale: "1" },
+  // Amazon/Daraz/Target: compact, bold, scannable.
+  market: { heading: "inter", body: "inter", bangla: "hind", headingWeight: 700, headingTracking: "-0.01em", headingLeading: "1.2", bodyLeading: "1.5", labelTracking: "0.04em", scale: "0.96" },
+  // COS/Aesop/Ssense: a quiet editorial serif over a neutral grotesque.
+  editorial: { heading: "instrument-serif", body: "inter", bangla: "serif", headingWeight: 400, headingTracking: "-0.01em", headingLeading: "1.08", bodyLeading: "1.65", labelTracking: "0.14em", scale: "1.04" },
+  // Instacart/Ocado/Chaldal: friendly, rounded, very legible at small sizes.
+  fresh: { heading: "nunito-sans", body: "nunito-sans", bangla: "hind", headingWeight: 800, headingTracking: "-0.015em", headingLeading: "1.15", bodyLeading: "1.55", labelTracking: "0.05em", scale: "1" },
+  // Glossier/Sephora: soft display serif with a clean geometric sans.
+  beauty: { heading: "dm-serif-display", body: "dm-sans", bangla: "sans", headingWeight: 400, headingTracking: "-0.005em", headingLeading: "1.1", bodyLeading: "1.6", labelTracking: "0.1em", scale: "1.02" },
+  // Aarong/Fabindia/Anthropologie: crafted Garamond with Bengali serif.
+  heritage: { heading: "cormorant-garamond", body: "inter", bangla: "serif", headingWeight: 600, headingTracking: "0em", headingLeading: "1.1", bodyLeading: "1.7", labelTracking: "0.12em", scale: "1.05" },
+  // Apple/Nothing/Linear: precise grotesque, tight tracking on dark.
+  tech: { heading: "inter", body: "inter", bangla: "sans", headingWeight: 600, headingTracking: "-0.03em", headingLeading: "1.1", bodyLeading: "1.6", labelTracking: "0.08em", scale: "1" },
+} as const satisfies Record<(typeof STOREFRONT_TYPE_PAIRINGS)[number], {
+  heading: StorefrontFontKey;
+  body: StorefrontFontKey;
+  bangla: keyof typeof STOREFRONT_BANGLA_FONTS;
+  headingWeight: number;
+  headingTracking: string;
+  headingLeading: string;
+  bodyLeading: string;
+  labelTracking: string;
+  scale: string;
+}>;
+
+export type StorefrontTypePairing = (typeof STOREFRONT_TYPE_PAIRINGS)[number];
+
+/** The font families a pairing renders (for self-hosted @font-face). */
+export function storefrontPairingFonts(pairing: StorefrontTypePairing): {
+  fonts: StorefrontFontKey[];
+  bangla: keyof typeof STOREFRONT_BANGLA_FONTS;
+  heading: StorefrontFontKey;
+} {
+  const spec = STOREFRONT_TYPE_PAIRING_SPECS[pairing];
+  return { fonts: [...new Set<StorefrontFontKey>([spec.heading, spec.body])], bangla: spec.bangla, heading: spec.heading };
+}
+
+function fontStack(font: StorefrontFontKey, bangla: keyof typeof STOREFRONT_BANGLA_FONTS): string {
+  const latin = STOREFRONT_FONTS[font];
+  const bengali = STOREFRONT_BANGLA_FONTS[bangla];
+  return `"${latin.family}", "${bengali.family}", ${latin.fallback}, ${bengali.fallback}`;
+}
 
 const RADIUS_TOKENS = { square: "0rem", subtle: "0.4rem", rounded: "0.75rem" } as const;
 /** Content is capped so ultra-wide screens keep a readable measure. */
@@ -453,12 +552,19 @@ const CONTAINER_TOKENS = { standard: "76rem", wide: "90rem" } as const;
 export function buildStorefrontThemeTokens(document: StorefrontThemeDocument): Record<string, string> {
   const { tokens } = document;
   const density = STOREFRONT_DENSITY_SPECS[document.layout.density];
+  const type = STOREFRONT_TYPE_PAIRING_SPECS[tokens.typography];
   return {
     ...tokens.colors,
-    "theme-font-heading": FONT_FAMILIES.heading[tokens.typography.heading],
-    "theme-font-body": FONT_FAMILIES.body[tokens.typography.body],
-    "theme-type-scale": density.scale,
+    "theme-font-heading": fontStack(type.heading, type.bangla),
+    "theme-font-body": fontStack(type.body, type.bangla),
+    "theme-heading-weight": String(type.headingWeight),
+    "theme-heading-tracking": type.headingTracking,
+    "theme-heading-leading": type.headingLeading,
+    "theme-body-leading": type.bodyLeading,
+    "theme-label-tracking": type.labelTracking,
+    "theme-type-scale": String(Number(density.scale) * Number(type.scale)),
     radius: RADIUS_TOKENS[tokens.radius],
+    "theme-button-radius": tokens.buttonShape === "pill" ? "9999px" : RADIUS_TOKENS[tokens.radius],
     "theme-density-scale": density.scale,
     "theme-card-min-phone": density.cardMin.phone,
     "theme-card-min-tablet": density.cardMin.tablet,
@@ -483,70 +589,91 @@ function palette(colors: Omit<Palette, "popover" | "popover-foreground" | "ring"
 }
 
 /** Colour palettes behind the Style presets; each passes every AA text pair (tested). */
+/**
+ * Curated palettes, one system per Style: ink, a single restrained brand
+ * colour, neutrals tinted toward the palette's hue (never raw grey on a warm
+ * page), surfaces, and semantic tones. Each passes every AA text pair and
+ * the helper-vs-error rule (tested). Rationale per palette:
+ * storefront-theme.md.
+ */
 export const STOREFRONT_THEME_PALETTES = {
-  everyday: palette({
-    background: "#ffffff", foreground: "#18181b", card: "#ffffff", "card-foreground": "#18181b",
-    primary: "#11813c", "primary-foreground": "#ffffff",
-    secondary: "#f4f4f5", "secondary-foreground": "#27272a",
-    muted: "#f4f4f5", "muted-foreground": "#5f5f69",
-    accent: "#f4f4f5", "accent-foreground": "#18181b",
-    destructive: "#c70009", "destructive-foreground": "#ffffff",
-    border: "#e4e4e7", input: "#d4d4d8",
+  // Horizon/Dawn, Allbirds: warm white paper, charcoal ink, charcoal
+  // buttons; sand neutrals carry the warmth, the brand colour stays quiet.
+  retail: palette({
+    background: "#fbfaf7", foreground: "#1d1c1a", card: "#ffffff", "card-foreground": "#1d1c1a",
+    primary: "#1d1c1a", "primary-foreground": "#fbfaf7",
+    secondary: "#f1eee8", "secondary-foreground": "#1d1c1a",
+    muted: "#f1eee8", "muted-foreground": "#5d5850",
+    accent: "#e9e3d8", "accent-foreground": "#1d1c1a",
+    destructive: "#b42318", "destructive-foreground": "#ffffff",
+    border: "#e5e0d6", input: "#d3ccbf", ring: "#1d1c1a",
   }),
+  // Amazon/Daraz/Target: bright white, near-black ink, cool neutral panels
+  // for density, one saturated orange reserved for buying actions.
   marketplace: palette({
-    background: "#ffffff", foreground: "#1c1917", card: "#ffffff", "card-foreground": "#1c1917",
+    background: "#ffffff", foreground: "#0f1111", card: "#ffffff", "card-foreground": "#0f1111",
     primary: "#c2410c", "primary-foreground": "#ffffff",
-    secondary: "#fff7ed", "secondary-foreground": "#7c2d12",
-    muted: "#f5f5f4", "muted-foreground": "#57534e",
-    accent: "#ffedd5", "accent-foreground": "#7c2d12",
-    destructive: "#b91c1c", "destructive-foreground": "#ffffff",
-    border: "#e7e5e4", input: "#d6d3d1",
+    secondary: "#f2f4f5", "secondary-foreground": "#0f1111",
+    muted: "#f2f4f5", "muted-foreground": "#565959",
+    accent: "#fff1e6", "accent-foreground": "#7a2e0e",
+    destructive: "#b12704", "destructive-foreground": "#ffffff",
+    border: "#e3e6e6", input: "#c7cccc", ring: "#c2410c",
   }),
+  // COS/Aesop/Ssense: linen page, espresso ink, no colour at all; hierarchy
+  // comes from type and space.
   boutique: palette({
-    background: "#ffffff", foreground: "#09090b", card: "#ffffff", "card-foreground": "#09090b",
-    primary: "#18181b", "primary-foreground": "#fafafa",
-    secondary: "#f4f4f5", "secondary-foreground": "#18181b",
-    muted: "#f4f4f5", "muted-foreground": "#52525b",
-    accent: "#f4f4f5", "accent-foreground": "#18181b",
-    destructive: "#b91c1c", "destructive-foreground": "#ffffff",
-    border: "#e4e4e7", input: "#d4d4d8", ring: "#09090b",
+    background: "#f6f4ef", foreground: "#242220", card: "#f6f4ef", "card-foreground": "#242220",
+    primary: "#242220", "primary-foreground": "#f6f4ef",
+    secondary: "#ebe7df", "secondary-foreground": "#242220",
+    muted: "#ebe7df", "muted-foreground": "#5a554d",
+    accent: "#e3ddd2", "accent-foreground": "#242220",
+    destructive: "#9b1c1c", "destructive-foreground": "#ffffff",
+    border: "#d9d3c7", input: "#c9c1b3", ring: "#242220",
   }),
+  // Instacart/Ocado/Chaldal: clean white with a fresh leaf green for buying,
+  // soft green-tinted panels for categories and delivery facts.
   fresh: palette({
-    background: "#ffffff", foreground: "#022c22", card: "#ffffff", "card-foreground": "#022c22",
-    primary: "#047857", "primary-foreground": "#ffffff",
-    secondary: "#d1fae5", "secondary-foreground": "#064e3b",
-    muted: "#ecfdf5", "muted-foreground": "#4a5b53",
-    accent: "#a7f3d0", "accent-foreground": "#064e3b",
-    destructive: "#b91c1c", "destructive-foreground": "#ffffff",
-    border: "#a7f3d0", input: "#6ee7b7",
+    background: "#ffffff", foreground: "#15231b", card: "#ffffff", "card-foreground": "#15231b",
+    primary: "#0b7a3e", "primary-foreground": "#ffffff",
+    secondary: "#f1f6f1", "secondary-foreground": "#15231b",
+    muted: "#f1f6f1", "muted-foreground": "#4b5a51",
+    accent: "#e3f4e6", "accent-foreground": "#0b4f2a",
+    destructive: "#c0262d", "destructive-foreground": "#ffffff",
+    border: "#dde8de", input: "#c6d6c8", ring: "#0b7a3e",
   }),
+  // Glossier/Sephora: black type and black pill buttons on white, a blush
+  // accent used sparingly on surfaces, never on text.
   beauty: palette({
-    background: "#fffafb", foreground: "#3b0a24", card: "#ffffff", "card-foreground": "#3b0a24",
-    primary: "#9d174d", "primary-foreground": "#ffffff",
-    secondary: "#fce7f3", "secondary-foreground": "#831843",
-    muted: "#fdf2f8", "muted-foreground": "#6b5a62",
-    accent: "#fbcfe8", "accent-foreground": "#831843",
-    destructive: "#b91c1c", "destructive-foreground": "#ffffff",
-    border: "#fbcfe8", input: "#f9a8d4",
+    background: "#ffffff", foreground: "#1a1718", card: "#ffffff", "card-foreground": "#1a1718",
+    primary: "#1a1718", "primary-foreground": "#ffffff",
+    secondary: "#fbf1f0", "secondary-foreground": "#1a1718",
+    muted: "#fbf4f3", "muted-foreground": "#625a5b",
+    accent: "#f8e1e1", "accent-foreground": "#5c1f2a",
+    destructive: "#b4232c", "destructive-foreground": "#ffffff",
+    border: "#f0e2e1", input: "#e2cfcd", ring: "#1a1718",
   }),
+  // Aarong/Fabindia/Anthropologie: hand-made paper, umber ink and a madder
+  // terracotta for actions; jute-tinted neutrals.
   heritage: palette({
-    background: "#fbf7f0", foreground: "#2b1d12", card: "#fffdf9", "card-foreground": "#2b1d12",
-    primary: "#9a3412", "primary-foreground": "#ffffff",
-    secondary: "#f3e8d7", "secondary-foreground": "#4a2c14",
-    muted: "#f3ebe0", "muted-foreground": "#6b5646",
-    accent: "#ecdcc4", "accent-foreground": "#4a2c14",
-    destructive: "#b91c1c", "destructive-foreground": "#ffffff",
-    border: "#e5d5bd", input: "#d6c1a1",
+    background: "#faf6ef", foreground: "#2a2018", card: "#fffdf8", "card-foreground": "#2a2018",
+    primary: "#8a3b1e", "primary-foreground": "#fffdf8",
+    secondary: "#f2eadd", "secondary-foreground": "#2a2018",
+    muted: "#f2eadd", "muted-foreground": "#665646",
+    accent: "#ecdfc9", "accent-foreground": "#4a2c14",
+    destructive: "#a3191b", "destructive-foreground": "#ffffff",
+    border: "#e2d5bf", input: "#d2c2a6", ring: "#8a3b1e",
   }),
+  // Apple/Nothing/Linear: layered near-blacks (page, card, panel), white ink
+  // and white buttons; one soft zinc for secondary text.
   midnight: palette({
-    background: "#09090b", foreground: "#fafafa", card: "#18181b", "card-foreground": "#fafafa",
-    primary: "#fafafa", "primary-foreground": "#18181b",
-    secondary: "#27272a", "secondary-foreground": "#fafafa",
-    muted: "#27272a", "muted-foreground": "#d4d4d8",
-    accent: "#3f3f46", "accent-foreground": "#fafafa",
-    // Error text sits on the dark background, so the red must be light.
-    destructive: "#f87171", "destructive-foreground": "#09090b",
-    border: "#3f3f46", input: "#3f3f46", ring: "#d4d4d8",
+    background: "#0a0a0b", foreground: "#f4f4f5", card: "#141416", "card-foreground": "#f4f4f5",
+    primary: "#f4f4f5", "primary-foreground": "#0a0a0b",
+    secondary: "#1c1c1f", "secondary-foreground": "#f4f4f5",
+    muted: "#1c1c1f", "muted-foreground": "#a8a8b0",
+    accent: "#232327", "accent-foreground": "#f4f4f5",
+    // Error text sits on the dark page, so the red must be light.
+    destructive: "#f87171", "destructive-foreground": "#0a0a0b",
+    border: "#27272b", input: "#34343a", ring: "#d4d4d8",
   }),
 } as const satisfies Record<string, Palette>;
 
@@ -564,92 +691,86 @@ function themeSections(order: readonly StorefrontSectionType[]): StorefrontSecti
 }
 
 /**
- * Style presets: complete configured documents tuned for the verticals
- * Bangladeshi stores sell in, with Shopify Dawn/Horizon and leading BD stores
- * (Daraz, Chaldal, Aarong, Shajgoj, Star Tech) as the bar.
+ * Style presets: complete configured documents, each anchored to named
+ * world-class references (storefront-theme.md) and tuned for the verticals
+ * Bangladeshi stores sell in.
  */
 export const STOREFRONT_STYLE_PRESETS = [
   {
+    // Horizon/Dawn, Allbirds. General retail.
     key: "classic",
-    palette: "everyday",
+    palette: "retail",
     tokens: {
-      typography: { heading: "system", body: "system" },
-      radius: "subtle", containerWidth: "wide",
+      typography: "retail", radius: "subtle", buttonShape: "radius", containerWidth: "wide",
       components: { buttons: "solid", inputs: "outlined", cards: "bordered" },
     },
-    layout: { header: "classic", footer: "columns", card: "standard", density: "compact", productPage: "gallery" },
+    layout: { header: "classic", footer: "columns", card: "standard", density: "compact", productPage: "gallery", navigation: "menu", mobileNavigation: "drawer" },
     sections: ["hero", "collections", "categories", "delivery"],
   },
   {
-    // Electronics and marketplaces: search first, compact grid, buy-now cards.
+    // Amazon/Daraz density done cleanly, Target. Electronics and marketplaces.
     key: "marketplace",
     palette: "marketplace",
     tokens: {
-      typography: { heading: "system", body: "system" },
-      radius: "subtle", containerWidth: "wide",
-      components: { buttons: "solid", inputs: "filled", cards: "elevated" },
+      typography: "market", radius: "subtle", buttonShape: "radius", containerWidth: "wide",
+      components: { buttons: "solid", inputs: "filled", cards: "bordered" },
     },
-    layout: { header: "marketplace", footer: "contact", card: "quick", density: "compact", productPage: "filmstrip" },
+    layout: { header: "marketplace", footer: "contact", card: "quick", density: "compact", productPage: "filmstrip", navigation: "pills", mobileNavigation: "tabs" },
     sections: ["hero", "categories", "collections", "delivery"],
   },
   {
-    // Fashion: tall photos, second photo on hover, quiet type.
+    // COS, Aesop, Ssense. Fashion: tall photos, second photo on hover.
     key: "boutique",
     palette: "boutique",
     tokens: {
-      typography: { heading: "editorial", body: "modern" },
-      radius: "square", containerWidth: "wide",
+      typography: "editorial", radius: "square", buttonShape: "radius", containerWidth: "wide",
       components: { buttons: "solid", inputs: "outlined", cards: "flat" },
     },
-    layout: { header: "centered", footer: "columns", card: "portrait", density: "comfortable", productPage: "gallery" },
+    layout: { header: "centered", footer: "columns", card: "portrait", density: "comfortable", productPage: "gallery", navigation: "mega", mobileNavigation: "drawer" },
     sections: ["hero", "collections", "categories", "delivery"],
   },
   {
-    // Grocery and daily needs: categories first, delivery facts, buy-now.
+    // Instacart, Chaldal, Ocado. Grocery and daily needs.
     key: "daily",
     palette: "fresh",
     tokens: {
-      typography: { heading: "modern", body: "system" },
-      radius: "rounded", containerWidth: "wide",
+      typography: "fresh", radius: "rounded", buttonShape: "pill", containerWidth: "wide",
       components: { buttons: "solid", inputs: "filled", cards: "bordered" },
     },
-    layout: { header: "marketplace", footer: "contact", card: "quick", density: "compact", productPage: "filmstrip" },
+    layout: { header: "marketplace", footer: "contact", card: "quick", density: "compact", productPage: "filmstrip", navigation: "sidebar", mobileNavigation: "tabs" },
     sections: ["categories", "hero", "delivery", "collections"],
   },
   {
-    // Cosmetics and beauty: soft palette, portrait cards, comfortable grid.
+    // Glossier, Sephora. Cosmetics and beauty.
     key: "beauty",
     palette: "beauty",
     tokens: {
-      typography: { heading: "editorial", body: "system" },
-      radius: "rounded", containerWidth: "wide",
+      typography: "beauty", radius: "rounded", buttonShape: "pill", containerWidth: "wide",
       components: { buttons: "solid", inputs: "outlined", cards: "flat" },
     },
-    layout: { header: "classic", footer: "contact", card: "portrait", density: "comfortable", productPage: "filmstrip" },
+    layout: { header: "classic", footer: "contact", card: "portrait", density: "comfortable", productPage: "filmstrip", navigation: "mega", mobileNavigation: "drawer" },
     sections: ["hero", "categories", "collections", "delivery"],
   },
   {
-    // Handicrafts and heritage: warm paper tones, large photos, story first.
+    // Aarong, Anthropologie, Fabindia. Handicrafts and heritage.
     key: "heritage",
     palette: "heritage",
     tokens: {
-      typography: { heading: "editorial", body: "humanist" },
-      radius: "square", containerWidth: "standard",
+      typography: "heritage", radius: "square", buttonShape: "radius", containerWidth: "standard",
       components: { buttons: "solid", inputs: "outlined", cards: "flat" },
     },
-    layout: { header: "centered", footer: "columns", card: "portrait", density: "comfortable", productPage: "stacked" },
+    layout: { header: "centered", footer: "columns", card: "portrait", density: "comfortable", productPage: "stacked", navigation: "menu", mobileNavigation: "drawer" },
     sections: ["hero", "collections", "delivery", "categories"],
   },
   {
-    // A dark look for electronics and premium catalogues.
+    // Apple, Nothing, Linear-style dark. Electronics and premium.
     key: "midnight",
     palette: "midnight",
     tokens: {
-      typography: { heading: "modern", body: "modern" },
-      radius: "subtle", containerWidth: "wide",
+      typography: "tech", radius: "rounded", buttonShape: "pill", containerWidth: "wide",
       components: { buttons: "solid", inputs: "filled", cards: "elevated" },
     },
-    layout: { header: "classic", footer: "columns", card: "standard", density: "compact", productPage: "gallery" },
+    layout: { header: "classic", footer: "columns", card: "standard", density: "compact", productPage: "gallery", navigation: "mega", mobileNavigation: "drawer" },
     sections: ["hero", "collections", "categories", "delivery"],
   },
 ] as const satisfies ReadonlyArray<{

@@ -13,6 +13,9 @@ interface Props {
   currencyCode?: string;
 }
 
+// theme-foundation.css keeps the product route's `max-w-7xl` at 80rem.
+const PRODUCT_PAGE_CONTAINER_WIDTH = "80rem";
+
 const {
   recommendations,
   currencySymbol = DEFAULT_CURRENCY.symbol,
@@ -28,7 +31,7 @@ const {
       aria-labelledby="related-products-title"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 id="related-products-title" class="text-lg font-bold text-foreground mb-4">
+        <h2 id="related-products-title" class="section-heading text-foreground mb-4">
           {recommendationTitle(recommendations.reason)}
         </h2>
         <ProductGrid>
@@ -37,6 +40,7 @@ const {
               product={relatedProduct}
               currencySymbol={currencySymbol}
               currencyCode={currencyCode}
+              containerWidth={PRODUCT_PAGE_CONTAINER_WIDTH}
             />
           ))}
         </ProductGrid>

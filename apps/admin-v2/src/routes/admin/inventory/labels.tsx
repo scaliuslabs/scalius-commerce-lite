@@ -6,10 +6,11 @@ import {
   validateBarcodeLabelSearch,
 } from "~/components/admin/barcode-labels/barcode-label-search";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/inventory/labels")({
   validateSearch: validateBarcodeLabelSearch,
-  head: () => ({ meta: [{ title: "Barcode labels | Scalius Admin" }] }),
+  head: () => pageHead("barcodeLabels"),
   errorComponent: RouteErrorComponent,
   component: BarcodeLabelPage,
 });

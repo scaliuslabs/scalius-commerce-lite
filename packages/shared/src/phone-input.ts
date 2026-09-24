@@ -40,6 +40,24 @@ export function isBangladeshNumber(raw: string): boolean {
   return /^(?:\+?880|0)\d/.test(compactPhone(raw));
 }
 
+// Country calling codes are prefix-free: these start with 1 or 7 (one digit)
+// or are two digits long; every other code has three digits.
+const TWO_DIGIT_CALLING_CODE = /^(?:2[07]|3[0-469]|4[013-9]|5[1-8]|6[0-6]|8[1246]|9[0-58])/;
+
+/**
+ * An E.164 number for reading in the dashboard: "+880 1712 345678" for a
+ * Bangladesh mobile, "+44 7700900123" (code set apart) for anything else. No
+ * phone metadata, so lists and cards can show numbers without downloading it.
+ */
+export function formatPhoneForDisplay(e164: string): string {
+  const mobile = normalizeBdMobile(e164);
+  if (mobile) return `+880 ${mobile.slice(4, 8)} ${mobile.slice(8)}`;
+  const digits = /^\+(\d{7,15})$/.exec(e164.trim())?.[1];
+  if (!digits) return e164;
+  const codeLength = /^[17]/.test(digits) ? 1 : TWO_DIGIT_CALLING_CODE.test(digits) ? 2 : 3;
+  return `+${digits.slice(0, codeLength)} ${digits.slice(codeLength)}`;
+}
+
 /** "01712-345678" for a Bangladesh mobile number; any other value unchanged. */
 export function formatBdMobile(phone: string): string {
   const e164 = normalizeBdMobile(phone);

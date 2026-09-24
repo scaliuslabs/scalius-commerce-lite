@@ -7,8 +7,7 @@ import {
   navigationPlacementsQueryOptions,
 } from "~/lib/api-query-options/online-store";
 import { RouteErrorComponent } from "~/lib/route-error";
-import { translate } from "~/i18n";
-import { onlineStoreMessages } from "~/i18n/online-store";
+import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/online-store/navigation/")({
   loader: ({ context: { queryClient } }) => Promise.all([
@@ -17,7 +16,7 @@ export const Route = createFileRoute("/admin/online-store/navigation/")({
     queryClient.ensureQueryData(headerQueryOptions()),
     queryClient.ensureQueryData(footerQueryOptions()),
   ]),
-  head: () => ({ meta: [{ title: `${translate(onlineStoreMessages, "navigationTitle")} | Scalius` }] }),
+  head: () => pageHead("navigation"),
   component: NavigationPage,
   errorComponent: RouteErrorComponent,
 });

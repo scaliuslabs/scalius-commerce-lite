@@ -1,4 +1,4 @@
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
 import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { customersMessages } from "~/i18n/customers";
 import { customerTitle } from "./customer-title";
 

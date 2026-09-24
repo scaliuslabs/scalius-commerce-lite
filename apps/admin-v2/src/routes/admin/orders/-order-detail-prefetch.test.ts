@@ -17,6 +17,18 @@ const queryOptionMocks = vi.hoisted(() => ({
     queryKey: ["orders", "cod", id],
     queryFn: vi.fn(),
   })),
+  orderReturnsQueryOptions: vi.fn((id: string) => ({
+    queryKey: ["orders", "returns", id],
+    queryFn: vi.fn(),
+  })),
+  orderNotificationsQueryOptions: vi.fn((id: string) => ({
+    queryKey: ["orders", "notifications", id],
+    queryFn: vi.fn(),
+  })),
+  orderTimelineQueryOptions: vi.fn((id: string) => ({
+    queryKey: ["orders", "timeline", id],
+    queryFn: vi.fn(),
+  })),
   deliveryProvidersQueryOptions: vi.fn(() => ({
     queryKey: ["settings", "delivery-providers"],
     queryFn: vi.fn(),
@@ -29,6 +41,9 @@ const queryOptionMocks = vi.hoisted(() => ({
 
 vi.mock("../../../lib/api-query-options/orders", () => ({
   orderCodQueryOptions: queryOptionMocks.orderCodQueryOptions,
+  orderNotificationsQueryOptions: queryOptionMocks.orderNotificationsQueryOptions,
+  orderReturnsQueryOptions: queryOptionMocks.orderReturnsQueryOptions,
+  orderTimelineQueryOptions: queryOptionMocks.orderTimelineQueryOptions,
   orderPaymentsQueryOptions: queryOptionMocks.orderPaymentsQueryOptions,
   orderQueryOptions: queryOptionMocks.orderQueryOptions,
   orderShipmentsQueryOptions: queryOptionMocks.orderShipmentsQueryOptions,
@@ -97,7 +112,7 @@ describe("order detail prefetch", () => {
     vi.restoreAllMocks();
   });
 
-  it("requires order detail and warms shipments, providers, payments, and COD tracking for COD orders", async () => {
+  it("requires order detail and warms every card read, plus COD tracking for COD orders", async () => {
     const { queryClient, ensureQueryData, prefetchQuery } = createQueryClient("cod");
 
     await prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: true });
@@ -109,6 +124,9 @@ describe("order detail prefetch", () => {
       expect.arrayContaining([
         ["orders", "shipments", "ord_1"],
         ["orders", "payments", "ord_1"],
+        ["orders", "returns", "ord_1"],
+        ["orders", "notifications", "ord_1"],
+        ["orders", "timeline", "ord_1"],
         ["orders", "cod", "ord_1"],
         ["settings", "currency"],
         ["settings", "delivery-providers"],
@@ -158,7 +176,26 @@ describe("order detail prefetch", () => {
     await expect(prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: true })).rejects.toThrow(
       "order detail temporarily unavailable",
     );
-    expect(prefetchQuery).not.toHaveBeenCalled();
+    expect(prefetchQuery.mock.calls.map(([options]) => options.queryKey)).not.toContainEqual(["orders", "cod", "ord_1"]);
+  });
+
+  it("starts the card reads in the same round trip as the order, not after it", async () => {
+    let resolveOrder: (value: { id: string; paymentMethod: string | null }) => void = () => {};
+    const { queryClient, ensureQueryData, prefetchQuery } = createQueryClient("stripe");
+    ensureQueryData.mockImplementationOnce(() => new Promise<{ id: string; paymentMethod: string | null }>((resolve) => { resolveOrder = resolve; }));
+
+    const pending = prefetchOrderDetailQueries(queryClient, "ord_1", { couriers: false });
+    expect(prefetchQuery.mock.calls.map(([options]) => options.queryKey)).toEqual(
+      expect.arrayContaining([
+        ["orders", "shipments", "ord_1"],
+        ["orders", "payments", "ord_1"],
+        ["orders", "returns", "ord_1"],
+        ["orders", "notifications", "ord_1"],
+        ["orders", "timeline", "ord_1"],
+      ]),
+    );
+    resolveOrder({ id: "ord_1", paymentMethod: "stripe" });
+    await expect(pending).resolves.toMatchObject({ id: "ord_1" });
   });
 
   it("keeps the order page loadable when delivery provider prefetch fails", async () => {

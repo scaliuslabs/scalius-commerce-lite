@@ -3,6 +3,10 @@ import {
   DEFAULT_STOREFRONT_THEME,
   STOREFRONT_CARD_STYLES,
   STOREFRONT_DENSITIES,
+  STOREFRONT_FONTS,
+  STOREFRONT_TYPE_PAIRING_SPECS,
+  storefrontPairingFonts,
+  STOREFRONT_NAVIGATION_STYLES,
   STOREFRONT_PRODUCT_PAGE_LAYOUTS,
   STOREFRONT_STYLE_PRESETS,
   STOREFRONT_THEME_PALETTES,
@@ -26,13 +30,13 @@ const issues = (value: unknown) => {
 
 const clone = (): StorefrontThemeDocument => structuredClone(DEFAULT_STOREFRONT_THEME);
 
-describe("storefront theme document v2", () => {
+describe("storefront theme document v3", () => {
   it("accepts every Style preset as a complete configured document", () => {
     for (const { key } of STOREFRONT_STYLE_PRESETS) {
       const theme = storefrontStylePresetTheme(key);
       expect(issues(theme), key).toEqual([]);
       expect(theme.mode).toBe("configured");
-      expect(theme.version).toBe(2);
+      expect(theme.version).toBe(3);
     }
   });
 
@@ -68,6 +72,10 @@ describe("storefront theme document v2", () => {
 
   it("rejects old versions, unknown keys and values outside the curated set", () => {
     expect(issues({ ...clone(), version: 1 })).not.toEqual([]);
+    expect(issues({ ...clone(), version: 2 })).not.toEqual([]);
+    expect(issues({ ...clone(), layout: { ...clone().layout, navigation: "hamburger" } })).not.toEqual([]);
+    const { mobileNavigation: _mobile, ...withoutMobileNavigation } = clone().layout;
+    expect(issues({ ...clone(), layout: withoutMobileNavigation })).not.toEqual([]);
     expect(issues({ ...clone(), extra: true })).not.toEqual([]);
     expect(issues({ ...clone(), layout: { ...clone().layout, density: "tiny" } })).not.toEqual([]);
     expect(issues({ ...clone(), layout: { ...clone().layout, sidebar: "left" } })).not.toEqual([]);
@@ -141,12 +149,43 @@ describe("storefront theme document v2", () => {
     }
   });
 
+  it("gives every Style a navigation style for computers and phones", () => {
+    const styles = new Set(STOREFRONT_STYLE_PRESETS.map(({ key }) => storefrontStylePresetTheme(key).layout.navigation));
+    // The presets show off every navigation style between them.
+    expect([...styles].sort()).toEqual([...STOREFRONT_NAVIGATION_STYLES].sort());
+    for (const { key } of STOREFRONT_STYLE_PRESETS) {
+      const { layout } = storefrontStylePresetTheme(key);
+      expect(resolveStorefrontThemeLayout(layout)).toMatchObject({
+        navigation: layout.navigation,
+        mobileNavigation: layout.mobileNavigation,
+      });
+      // The bottom tab bar belongs with marketplace-style navigation.
+      if (layout.mobileNavigation === "tabs") expect(["pills", "sidebar"]).toContain(layout.navigation);
+    }
+  });
+
   it("builds CSS tokens from constants and validated colours only", () => {
     const tokens = buildStorefrontThemeTokens(clone());
-    expect(tokens.background).toBe("#ffffff");
+    expect(tokens.background).toBe(STOREFRONT_THEME_PALETTES.retail.background);
     expect(tokens.radius).toBe("0.4rem");
+    expect(tokens["theme-button-radius"]).toBe("0.4rem");
     expect(tokens["theme-card-min-phone"]).toBe("9.25rem");
     for (const value of Object.values(tokens)) expect(value).not.toMatch(/[;{}<>\\]/);
+  });
+
+  it("pairs every Style with web fonts that fall back to Bangla and metric-matched faces", () => {
+    for (const { key } of STOREFRONT_STYLE_PRESETS) {
+      const theme = storefrontStylePresetTheme(key);
+      const tokens = buildStorefrontThemeTokens(theme);
+      const spec = STOREFRONT_TYPE_PAIRING_SPECS[theme.tokens.typography];
+      // Latin family first, then the Bengali family, then fallbacks.
+      expect(tokens["theme-font-heading"]).toMatch(new RegExp(`^"${STOREFRONT_FONTS[spec.heading].family}", "(Noto Sans Bengali|Noto Serif Bengali|Hind Siliguri)"`));
+      expect(tokens["theme-font-heading"]).toContain(`"${STOREFRONT_FONTS[spec.heading].family} Fallback"`);
+      expect(Number(tokens["theme-type-scale"])).toBeGreaterThan(0.85);
+      expect(Number(tokens["theme-heading-weight"])).toBeGreaterThanOrEqual(400);
+      if (theme.tokens.buttonShape === "pill") expect(tokens["theme-button-radius"]).toBe("9999px");
+    }
+    expect(storefrontPairingFonts("editorial")).toEqual({ fonts: ["instrument-serif", "inter"], bangla: "serif", heading: "instrument-serif" });
   });
 
   it("publishes a JSON Schema for the document", () => {

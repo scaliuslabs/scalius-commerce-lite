@@ -1,5 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+/** A read that a link's hover or focus preloaded this recently counts as fresh when the page opens. */
+export const INTENT_PREFETCH_MOUNT_GRACE_MS = 5_000;
+
 type RouteQueryOptions = {
   queryKey: readonly unknown[];
   queryFn?: unknown;

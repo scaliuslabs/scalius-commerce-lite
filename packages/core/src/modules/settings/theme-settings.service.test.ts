@@ -25,7 +25,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 
-/** The version 1 shape stores saved before the strict version 2 document. */
+/** The version 1 shape stores saved before the strict document. */
 const V1_THEME = JSON.stringify({
   colors: { primary: "#18181b" },
   typography: { heading: "system", body: "system", scale: "standard" },
@@ -42,6 +42,22 @@ const V1_THEME = JSON.stringify({
     homepage: ["hero", "collections", "categories", "delivery"],
   },
 });
+
+/**
+ * A version 2 document: separate heading/body fonts, no button shape and no
+ * navigation styles.
+ */
+const V2_THEME = (() => {
+  const { navigation: _navigation, mobileNavigation: _mobileNavigation, ...layout } =
+    DEFAULT_STOREFRONT_THEME.layout;
+  const { buttonShape: _buttonShape, ...tokens } = DEFAULT_STOREFRONT_THEME.tokens;
+  return JSON.stringify({
+    ...DEFAULT_STOREFRONT_THEME,
+    version: 2,
+    tokens: { ...tokens, typography: { heading: "system", body: "system" } },
+    layout,
+  });
+})();
 
 describe("versioned storefront theme settings", () => {
   let sqlite: DatabaseSync;
@@ -98,15 +114,15 @@ describe("versioned storefront theme settings", () => {
     expect(batchCalls).toBe(1);
   });
 
-  it("fails closed on dashboard reads when the published row is not a valid version 2 document", async () => {
+  it("fails closed on dashboard reads when the published row is not a valid version 3 document", async () => {
     const unknownFont = structuredClone(DEFAULT_STOREFRONT_THEME) as unknown as {
-      tokens: { typography: { heading: string } };
+      tokens: { typography: string };
     };
-    unknownFont.tokens.typography.heading = "remote-font";
+    unknownFont.tokens.typography = "remote-font";
     const lowContrast = structuredClone(DEFAULT_STOREFRONT_THEME);
     lowContrast.tokens.colors.foreground = "#f5f5f5";
 
-    for (const stored of [V1_THEME, JSON.stringify(unknownFont), JSON.stringify(lowContrast), "{not json"]) {
+    for (const stored of [V1_THEME, V2_THEME, JSON.stringify(unknownFont), JSON.stringify(lowContrast), "{not json"]) {
       sqlite.exec("DELETE FROM theme_settings");
       sqlite.prepare(`
         INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
@@ -122,9 +138,9 @@ describe("versioned storefront theme settings", () => {
     }
   });
 
-  it("fails closed when a stored draft or history row is not a valid version 2 document", async () => {
+  it("fails closed when a stored draft or history row is not a valid version 3 document", async () => {
     seedPublishedWorkspace();
-    sqlite.prepare("UPDATE theme_settings_drafts SET theme = ?").run(V1_THEME);
+    sqlite.prepare("UPDATE theme_settings_drafts SET theme = ?").run(V2_THEME);
     await expect(getThemeWorkspace(db)).rejects.toMatchObject({ status: 503 });
     await expect(publishThemeDraft(db, 1, 1)).rejects.toMatchObject({ status: 503 });
 
@@ -310,9 +326,9 @@ describe("versioned storefront theme settings", () => {
   });
 });
 
-describe("migration 0077 resets theme documents that are not version 2", () => {
-  function seedBefore0077(published: string, history: string) {
-    const sqlite = createMigratedSqlite({ beforeMigration: "0077_" });
+describe("migration 0081 resets theme documents that are not version 3", () => {
+  function seedBefore0081(published: string, draft: string, history: string) {
+    const sqlite = createMigratedSqlite({ beforeMigration: "0081_" });
     sqlite.prepare(`
       INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
       VALUES ('default', ?, 3, 1, 1)
@@ -321,7 +337,7 @@ describe("migration 0077 resets theme documents that are not version 2", () => {
       INSERT INTO theme_settings_drafts (
         id, theme, revision, base_published_revision, updated_by, created_at, updated_at
       ) VALUES ('default', ?, 4, 3, NULL, 1, 1)
-    `).run(published);
+    `).run(draft);
     sqlite.prepare(`
       INSERT INTO theme_settings_versions (
         id, published_revision, theme, source, source_revision, published_by, created_at
@@ -332,7 +348,7 @@ describe("migration 0077 resets theme documents that are not version 2", () => {
         token_hash, theme, draft_revision, base_published_revision, expires_at, created_by, created_at
       ) VALUES ('hash_old', ?, 4, 3, 4102444800, NULL, 1)
     `).run(history);
-    sqlite.exec(compiledMigrationSql("d1", undefined, "0077_"));
+    sqlite.exec(compiledMigrationSql("d1", undefined, "0081_"));
     return createSqliteD1Database({ sqlite });
   }
 
@@ -340,8 +356,11 @@ describe("migration 0077 resets theme documents that are not version 2", () => {
     return (sqlite.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count;
   }
 
-  it("lets the Theme page read the defaults at revision zero after migrating a version 1 theme", async () => {
-    const { sqlite, db } = seedBefore0077(V1_THEME, V1_THEME);
+  it.each([
+    ["version 1", V1_THEME, V1_THEME],
+    ["version 2", V2_THEME, V1_THEME],
+  ])("lets the Theme page read the defaults at revision zero after migrating a %s theme", async (_label, published, history) => {
+    const { sqlite, db } = seedBefore0081(published, published, history);
     try {
       await expect(getThemeSettings(db)).resolves.toEqual({
         theme: DEFAULT_STOREFRONT_THEME,
@@ -362,9 +381,10 @@ describe("migration 0077 resets theme documents that are not version 2", () => {
     }
   });
 
-  it("keeps a version 2 published theme and drops only its non-version-2 history", async () => {
+  it("keeps a version 3 published theme and drops only its older history", async () => {
     const currentTheme = storefrontStylePresetTheme("boutique");
-    const { sqlite, db } = seedBefore0077(JSON.stringify(currentTheme), V1_THEME);
+    const serialized = JSON.stringify(currentTheme);
+    const { sqlite, db } = seedBefore0081(serialized, serialized, V2_THEME);
     try {
       await expect(getThemeSettings(db)).resolves.toEqual({
         theme: currentTheme,

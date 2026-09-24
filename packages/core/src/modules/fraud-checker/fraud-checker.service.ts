@@ -12,15 +12,13 @@ import {
   ValidationError,
   ServiceUnavailableError,
 } from "@scalius/core/errors";
+import { getFraudCheckProvider } from "./provider";
+import type { FraudCheckResult as ProviderFraudCheckResult } from "./provider";
 import {
-  getFraudCheckProvider,
   getFraudCheckProviderDefinition,
   isFraudCheckProviderType,
-} from "./provider";
-import type {
-  FraudCheckProviderType,
-  FraudCheckResult as ProviderFraudCheckResult,
-} from "./provider";
+  type FraudCheckProviderType,
+} from "./provider-definitions";
 
 export interface FraudCheckerProvider {
   id: string;

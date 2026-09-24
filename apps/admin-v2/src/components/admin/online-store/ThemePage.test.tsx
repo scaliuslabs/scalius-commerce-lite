@@ -103,6 +103,7 @@ describe("theme page", () => {
       "Logo",
       "Colors",
       "Header",
+      "Navigation",
       "Footer",
       "Product cards",
       "Density",
@@ -154,9 +155,9 @@ describe("theme page", () => {
   it("names unreadable text in plain words and will not save it", async () => {
     render(DEFAULT_STOREFRONT_THEME);
     const buttonText = container.querySelector<HTMLInputElement>("#theme-color-button-text")!;
-    type(buttonText, "#7AD08F");
+    type(buttonText, "#5A5A5A");
 
-    expect(buttonText.value).toBe("#7ad08f");
+    expect(buttonText.value).toBe("#5a5a5a");
     expect(buttonText.getAttribute("aria-invalid")).toBe("true");
     const note = container.querySelector(`#${buttonText.getAttribute("aria-describedby")}`);
     expect(note?.textContent).toMatch(/^Button text is hard to read on the button color \(2\.\d:1, needs 4\.5:1\)\.$/);
@@ -171,6 +172,40 @@ describe("theme page", () => {
     expect(buttonText.hasAttribute("aria-invalid")).toBe(false);
     await pressSave();
     expect(api.theme).toHaveBeenCalledTimes(1);
+  });
+
+  it("the Navigation card shows both menu choices with the saved values and saves a new one", async () => {
+    const saved = storefrontStylePresetTheme("marketplace");
+    render(saved);
+    let card = [...container.querySelectorAll("h2")]
+      .find((heading) => heading.textContent === "Navigation")!.parentElement!;
+    while (!card.querySelector("[role=radiogroup]")) card = card.parentElement!;
+    const groups = [...card.querySelectorAll<HTMLElement>("[role=radiogroup]")];
+    const labelOf = (group: HTMLElement) =>
+      container.querySelector(`#${CSS.escape(group.getAttribute("aria-labelledby")!)}`)?.textContent;
+    expect(groups.map(labelOf)).toEqual(["On computers", "On phones"]);
+    const options = (group: HTMLElement) => [...group.querySelectorAll<HTMLButtonElement>("[role=radio]")];
+    const checked = (group: HTMLElement) =>
+      options(group).filter((item) => item.getAttribute("aria-checked") === "true").map((item) => item.value);
+    expect(options(groups[0]!).map((item) => item.value)).toEqual(["menu", "mega", "pills", "sidebar"]);
+    expect(options(groups[1]!).map((item) => item.value)).toEqual(["drawer", "tabs"]);
+    expect(checked(groups[0]!)).toEqual(["pills"]);
+    expect(checked(groups[1]!)).toEqual(["tabs"]);
+    // The help points to where the menu links are edited; sketches are decorative.
+    expect(card.querySelector("a")?.getAttribute("href")).toBe("/admin/online-store/navigation");
+    expect(options(groups[0]!).every((item) => item.querySelector("[aria-hidden=true]"))).toBe(true);
+
+    act(() => options(groups[0]!).find((item) => item.value === "mega")!.click());
+    act(() => options(groups[1]!).find((item) => item.value === "drawer")!.click());
+    expect(checked(groups[0]!)).toEqual(["mega"]);
+    expect(checked(groups[1]!)).toEqual(["drawer"]);
+
+    await pressSave();
+    expect(api.theme).toHaveBeenCalledTimes(1);
+    expect(api.theme.mock.calls[0]![0].body).toEqual({
+      expectedRevision: 1,
+      theme: { ...saved, layout: { ...saved.layout, navigation: "mega", mobileNavigation: "drawer" } },
+    });
   });
 
   it("a custom design shows the notice, hides the options and never offers to save the theme", () => {

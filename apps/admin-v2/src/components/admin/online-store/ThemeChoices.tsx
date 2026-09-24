@@ -8,6 +8,8 @@ import {
   type StorefrontDensity,
   type StorefrontFooterStyle,
   type StorefrontHeaderStyle,
+  type StorefrontMobileNavigationStyle,
+  type StorefrontNavigationStyle,
   type StorefrontProductPageLayout,
   type StorefrontThemeTokens,
 } from "@scalius/shared/storefront-theme";
@@ -23,12 +25,15 @@ import { isThemeSection, moveSection } from "./theme-settings";
  */
 export function VisualChoice<Value extends string>({
   label,
+  showLabel = false,
   value,
   options,
   onChange,
   className = "grid-cols-3",
 }: {
   label: string;
+  /** Show the label above the options (when a card holds more than one choice). */
+  showLabel?: boolean;
   /** Null when no option matches (a fine-tuned Style). */
   value: Value | null;
   options: ReadonlyArray<{ value: Value; label: string; help?: string; sketch: ReactNode }>;
@@ -39,7 +44,7 @@ export function VisualChoice<Value extends string>({
   const labelId = useId();
   return (
     <div className="space-y-1.5">
-      <p id={labelId} className="sr-only">{label}</p>
+      <p id={labelId} className={showLabel ? "text-body font-medium" : "sr-only"}>{label}</p>
       <RadioGroupPrimitive.Root
         aria-labelledby={labelId}
         value={value ?? ""}
@@ -269,6 +274,117 @@ export function HeaderSketch({ kind }: { kind: StorefrontHeaderStyle }) {
     <Sketch>
       <HeaderRows kind={kind} />
       <Filler className="mt-1" />
+    </Sketch>
+  );
+}
+
+/** The page under the header: a menu open over it, a category row, or a side column. */
+export function NavigationSketch({ kind }: { kind: StorefrontNavigationStyle }) {
+  const header = (
+    <span className="flex items-center gap-1">
+      <Logo />
+      <span className="flex gap-1">
+        <Line className="bg-(--sk-accent)" />
+        <Line />
+        <Line />
+      </span>
+      <span className="ml-auto flex gap-1">
+        <Dot />
+        <Dot />
+      </span>
+    </span>
+  );
+  if (kind === "pills") {
+    return (
+      <Sketch>
+        {header}
+        <span className="flex gap-1 overflow-clip">
+          {[0, 1, 2, 3, 4].map((index) => (
+            <span key={index} className="h-2 w-4 shrink-0 rounded-full border border-(--sk-line)" />
+          ))}
+        </span>
+        <Filler />
+      </Sketch>
+    );
+  }
+  if (kind === "sidebar") {
+    return (
+      <Sketch>
+        {header}
+        <span className="flex flex-1 gap-1.5">
+          <span className="flex w-1/4 shrink-0 flex-col gap-1 border-r border-(--sk-edge) pt-0.5 pr-1">
+            <Line className="w-full bg-(--sk-accent)" />
+            <Line className="w-full" />
+            <Line className="w-2/3" />
+            <Line className="w-full" />
+          </span>
+          <Filler />
+        </span>
+      </Sketch>
+    );
+  }
+  return (
+    <Sketch className="relative">
+      {header}
+      <Filler className="mt-1" />
+      {kind === "mega" ? (
+        // A full-width panel of columns, each led by a category photo.
+        <span className="absolute inset-x-1.5 top-4 flex gap-1.5 rounded-xs border border-(--sk-edge) bg-(--sk-paper) p-1">
+          {[0, 1, 2].map((index) => (
+            <span key={index} className="flex flex-1 flex-col gap-1">
+              <Block className="h-3" />
+              <Line className="w-full" />
+              <Line className="w-2/3" />
+            </span>
+          ))}
+        </span>
+      ) : (
+        // A short list under the open item.
+        <span className="absolute top-4 left-7 flex w-8 flex-col gap-1 rounded-xs border border-(--sk-edge) bg-(--sk-paper) p-1">
+          <Line className="w-full" />
+          <Line className="w-2/3" />
+          <Line className="w-full" />
+        </span>
+      )}
+    </Sketch>
+  );
+}
+
+/** A phone: the menu drawer open from the side, or a tab bar along the bottom. */
+export function MobileNavigationSketch({ kind }: { kind: StorefrontMobileNavigationStyle }) {
+  return (
+    <Sketch className="items-center">
+      <span className="relative flex h-full w-12 flex-col gap-1 overflow-clip rounded-sm border border-(--sk-edge) p-1">
+        <span className="flex items-center gap-1">
+          <span className="flex flex-col gap-px">
+            <span className="h-px w-1.5 bg-(--sk-ink)" />
+            <span className="h-px w-1.5 bg-(--sk-ink)" />
+            <span className="h-px w-1.5 bg-(--sk-ink)" />
+          </span>
+          <Logo className="mx-auto w-3" />
+          <Dot />
+        </span>
+        <span className="grid flex-1 grid-cols-2 content-start gap-0.5">
+          <Block className="aspect-square" />
+          <Block className="aspect-square" />
+        </span>
+        {kind === "tabs" ? (
+          <span className="flex justify-between border-t border-(--sk-edge) pt-0.5">
+            <span className="size-1.5 shrink-0 rounded-full bg-(--sk-accent)" />
+            <Dot />
+            <Dot />
+            <Dot />
+            <Dot />
+          </span>
+        ) : (
+          <span className="absolute inset-y-0 left-0 flex w-2/3 flex-col gap-1 border-r border-(--sk-edge) bg-(--sk-paper) p-1">
+            <Line className="w-full bg-(--sk-accent)" />
+            <Line className="w-full" />
+            <Line className="w-2/3" />
+            <Line className="w-full" />
+          </span>
+        )}
+      </span>
     </Sketch>
   );
 }
