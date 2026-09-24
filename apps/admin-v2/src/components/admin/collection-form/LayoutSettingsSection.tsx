@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "~/components/ui/form";
 import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
 import { useMessages } from "~/i18n";
 import { collectionFormMessages } from "~/i18n/collection-form";
@@ -48,17 +48,16 @@ export const LayoutSettingsSection = React.memo(function LayoutSettingsSection({
             rules={{ deps: ["config.productIds", "config.categoryIds"] }}
             render={({ field }) => (
               <FormItem>
-                <Select value={field.value ? "active" : "inactive"} onValueChange={(value) => field.onChange(value === "active")}>
-                  <FormControl>
-                    <SelectTrigger aria-label={t("status")}>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="active">{t("active")}</SelectItem>
-                    <SelectItem value="inactive">{t("draft")}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <NativeSelect
+                    value={field.value ? "active" : "inactive"}
+                    onValueChange={(value) => field.onChange(value === "active")}
+                    aria-label={t("status")}
+                  >
+                    <option value="active">{t("active")}</option>
+                    <option value="inactive">{t("draft")}</option>
+                  </NativeSelect>
+                </FormControl>
                 <FormDescription>{t(field.value ? "activeHelp" : "draftHelp")}</FormDescription>
               </FormItem>
             )}
@@ -97,17 +96,12 @@ export const LayoutSettingsSection = React.memo(function LayoutSettingsSection({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t("layout")}</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="grid">{t("grid")}</SelectItem>
-                        <SelectItem value="carousel">{t("carousel")}</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <NativeSelect value={field.value} onValueChange={field.onChange}>
+                        <option value="grid">{t("grid")}</option>
+                        <option value="carousel">{t("carousel")}</option>
+                      </NativeSelect>
+                    </FormControl>
                   </FormItem>
                 )}
               />

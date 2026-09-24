@@ -63,7 +63,7 @@ describe("manual order variant choice", () => {
     expect(variantChoice()?.disabled).toBe(false);
     expect(addButton().disabled).toBe(true);
 
-    await act(async () => variantChoice()!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+    await act(async () => variantChoice()!.click());
     const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
       .find((candidate) => candidate.textContent?.includes("Color: White"));
     expect(option).toBeDefined();

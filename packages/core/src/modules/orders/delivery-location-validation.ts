@@ -3,6 +3,17 @@ import { deliveryLocations, deliveryZoneLocations } from "@scalius/database/sche
 import { ValidationError } from "@scalius/core/errors";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
+/**
+ * The chosen city, thana or area was removed or turned off since the buyer
+ * picked it. `details.field` names the level so the storefront can clear
+ * that choice and ask again at the field.
+ */
+export const DELIVERY_LOCATION_UNAVAILABLE_REASON = "delivery_location_unavailable";
+
+function locationUnavailable(message: string, field: "city" | "zone" | "area"): ValidationError {
+    return new ValidationError(message, { reason: DELIVERY_LOCATION_UNAVAILABLE_REASON, field });
+}
+
 export interface DeliveryLocationSelectionInput {
     city: string;
     zone: string;
@@ -71,17 +82,17 @@ export function resolveActiveDeliveryLocationNamesFromRows(
     const locationMap = new Map(rows.map((location) => [location.id, location]));
     const city = locationMap.get(data.city);
     if (!city || city.type !== "city" || city.parentId !== null || city.isActive !== true || city.deletedAt != null) {
-        throw new ValidationError("Selected city is no longer available for checkout.");
+        throw locationUnavailable("Selected city is no longer available for checkout.", "city");
     }
 
     const zone = locationMap.get(data.zone);
     if (!zone || zone.type !== "zone" || zone.parentId !== city.id || zone.isActive !== true || zone.deletedAt != null) {
-        throw new ValidationError("Selected zone is no longer available for the chosen city.");
+        throw locationUnavailable("Selected thana is no longer available for the chosen city.", "zone");
     }
 
     const area = data.area ? locationMap.get(data.area) : null;
     if (data.area && (!area || area.type !== "area" || area.parentId !== zone.id || area.isActive !== true || area.deletedAt != null)) {
-        throw new ValidationError("Selected area is no longer available for the chosen zone.");
+        throw locationUnavailable("Selected area is no longer available for the chosen thana.", "area");
     }
 
     return {

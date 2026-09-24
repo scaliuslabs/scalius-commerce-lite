@@ -25,6 +25,11 @@ type NumberInputProps = Omit<React.ComponentProps<"input">, "value" | "onChange"
   onValueChange: (value: number | null) => void;
   /** Whole numbers only (quantities): the phone keyboard shows digits only. */
   integer?: boolean;
+  /**
+   * Money in a currency paid in whole units (taka): the field takes no decimal
+   * point, and trying one shows this message at the field instead.
+   */
+  wholeUnitsMessage?: string;
 };
 
 /**
@@ -34,7 +39,7 @@ type NumberInputProps = Omit<React.ComponentProps<"input">, "value" | "onChange"
  * nothing).
  */
 export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ value, onValueChange, integer = false, onBlur, ...props }, ref) => {
+  ({ value, onValueChange, integer = false, wholeUnitsMessage, onBlur, ...props }, ref) => {
     const shown = value === null || value === undefined || Number.isNaN(value) ? "" : String(value);
     const [text, setText] = React.useState(shown);
     // Follow outside changes (discard, bulk edit) unless the text already means that number.
@@ -43,12 +48,20 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       <Input
         ref={ref}
         type="text"
-        inputMode={integer ? "numeric" : "decimal"}
+        inputMode={integer || wholeUnitsMessage ? "numeric" : "decimal"}
         autoComplete="off"
         {...props}
         value={text}
         onChange={(event) => {
           const next = event.target.value;
+          const input = event.currentTarget;
+          if (wholeUnitsMessage && /[.٫।]/.test(next)) {
+            // Keep what was there and say why at the field.
+            input.setCustomValidity(wholeUnitsMessage);
+            input.reportValidity();
+            return;
+          }
+          input.setCustomValidity("");
           setText(next);
           const number = parseLocaleNumber(next);
           if (!sameNumber(number, value ?? null)) onValueChange(number);
@@ -57,6 +70,7 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           // Show the number as it was understood ("১,২০০" becomes "1200").
           const number = parseLocaleNumber(text);
           if (number !== null && !Number.isNaN(number)) setText(String(number));
+          event.currentTarget.setCustomValidity("");
           onBlur?.(event);
         }}
       />

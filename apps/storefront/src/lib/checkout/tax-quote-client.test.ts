@@ -4,6 +4,7 @@ import {
   buildTaxQuoteRequest,
   fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError,
+  TaxQuoteDeliveryLocationError,
   TaxQuoteDeliveryRateError,
   TaxQuoteUnavailableError,
 } from "./tax-quote-client";
@@ -252,6 +253,18 @@ describe("tax quote client contract", () => {
 
     await expect(fetchAuthoritativeTaxQuote(checkoutData(), fetcher))
       .rejects.toBeInstanceOf(TaxQuoteDeliveryRateError);
+  });
+
+  it("names the removed thana instead of reporting an unavailable total", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      success: false,
+      error: "Current checkout total is unavailable",
+      details: { reason: "delivery_location_unavailable", field: "zone" },
+    }), { status: 400 })) as unknown as typeof fetch;
+
+    const refused = await fetchAuthoritativeTaxQuote(checkoutData(), fetcher).catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(TaxQuoteDeliveryLocationError);
+    expect((refused as TaxQuoteDeliveryLocationError).field).toBe("zone");
   });
 
   it("preserves only bounded cart-repair issues from a failed quote", async () => {

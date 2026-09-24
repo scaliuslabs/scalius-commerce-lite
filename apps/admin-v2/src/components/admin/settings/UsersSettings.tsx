@@ -11,7 +11,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "~/components/ui/collapsible";
 import { Input } from "~/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
@@ -258,18 +258,16 @@ function AddStaffForm() {
           error={errors.roleId}
           help={roles.data && !list.length ? t("noRoles") : limited ? t("onlyYourAccess") : undefined}
         >
-          <Select value={draft.roleId} onValueChange={(roleId) => setDraft({ ...draft, roleId })} disabled={!list.length}>
-            <SelectTrigger id="staff-role" aria-describedby="staff-role-note">
-              <SelectValue placeholder={t("chooseRole")} />
-            </SelectTrigger>
-            <SelectContent>
-              {list.map((role) => (
-                <SelectItem key={role.id} value={role.id} disabled={!canGrantRole(role, viewer)}>
-                  {roleName(role)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            id="staff-role"
+            aria-describedby="staff-role-note"
+            value={draft.roleId}
+            onValueChange={(roleId) => setDraft({ ...draft, roleId })}
+            disabled={!list.length}
+            placeholder={t("chooseRole")}
+            options={list.map((role) => ({ value: role.id, label: roleName(role), disabled: !canGrantRole(role, viewer) }))}
+            triggerClassName="w-full"
+          />
         </SettingsField>
       )}
     </>

@@ -19,7 +19,7 @@ import { clearAdminRouteContextCache } from "@/lib/admin-route-context";
 import { withDashboardBasePath } from "@/lib/dashboard-base-path";
 import { LOCALES, setLocale, useLocale, useMessages, type Locale } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
-import { TOP_BAR_BUTTON } from "@/components/admin/layout/top-bar";
+import { TOP_BAR_BUTTON, useTopBarMenuOffset } from "@/components/admin/layout/top-bar";
 
 export interface UserMenuUser {
   id: string;
@@ -35,6 +35,7 @@ function initials(name: string) {
 /** Avatar menu: My account, dashboard language, sign out. */
 export function UserMenu({ user }: { user: UserMenuUser }) {
   const t = useMessages(shellMessages);
+  const menuOffset = useTopBarMenuOffset();
   const locale = useLocale();
   const { preference, setPreference } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
@@ -65,7 +66,7 @@ export function UserMenu({ user }: { user: UserMenuUser }) {
           <span className="hidden max-w-40 truncate text-body font-medium md:inline">{user.name}</span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" sideOffset={menuOffset} className="w-64">
         <div className="px-2 py-1.5">
           <p className="truncate text-body font-medium">{user.name}</p>
           <p className="truncate text-body text-muted-foreground">{user.email}</p>

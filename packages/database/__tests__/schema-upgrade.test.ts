@@ -263,6 +263,30 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 77,
+        name: "0077_optioned_product_price",
+        sqliteStatements: 2,
+        postgresStatements: 2,
+      },
+      {
+        version: 78,
+        name: "0078_theme_document_v2",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
+      {
+        version: 79,
+        name: "0079_guest_record_origin",
+        sqliteStatements: 10,
+        postgresStatements: 10,
+      },
+      {
+        version: 80,
+        name: "0080_whole_taka_amounts",
+        sqliteStatements: 9,
+        postgresStatements: 9,
+      },
     ]);
   });
 
@@ -388,6 +412,10 @@ describe("provider-neutral schema upgrades", () => {
           { version: 74, name: "0074_verified_customer_identity" },
           { version: 75, name: "0075_theme_layout_reset" },
           { version: 76, name: "0076_guest_record_links" },
+          { version: 77, name: "0077_optioned_product_price" },
+          { version: 78, name: "0078_theme_document_v2" },
+          { version: 79, name: "0079_guest_record_origin" },
+          { version: 80, name: "0080_whole_taka_amounts" },
         ],
       });
     } finally {

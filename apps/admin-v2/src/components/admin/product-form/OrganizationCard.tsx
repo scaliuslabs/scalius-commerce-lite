@@ -84,6 +84,7 @@ function CategoryCombobox({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const name = search.trim();
 
@@ -93,11 +94,12 @@ function CategoryCombobox({
   const handleCreate = async () => {
     if (!name) return;
     setIsCreating(true);
+    setCreateError(null);
     try {
+      // The server makes the web address from the name (Bangla included) and numbers a taken one.
       const data = await apiData(postApiV1AdminCategories({
         body: {
           name,
-          slug: name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
           description: null,
           content: null,
           metaTitle: null,
@@ -119,7 +121,8 @@ function CategoryCombobox({
       setOpen(false);
       setSearch("");
     } catch (error: unknown) {
-      toast.error(getServerFnError(error, r("actionFailed")));
+      // Said next to the Create button, where the merchant can change the name.
+      setCreateError(getServerFnError(error, r("actionFailed")));
     } finally {
       setIsCreating(false);
     }
@@ -141,10 +144,30 @@ function CategoryCombobox({
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start">
         <Command shouldFilter={false}>
-          <CommandInput placeholder={t("searchCategories")} value={search} onValueChange={setSearch} />
+          <CommandInput
+            placeholder={t("searchCategories")}
+            value={search}
+            onValueChange={(value) => {
+              setSearch(value);
+              setCreateError(null);
+            }}
+          />
           <CommandList>
-            {filtered.length > 0 ? (
+            {filtered.length > 0 || selectedId ? (
               <CommandGroup>
+                {/* A category is optional (Shopify): the merchant can take it off again. */}
+                {selectedId && !search ? (
+                  <CommandItem
+                    value="__no_category"
+                    onSelect={() => {
+                      onSelect("");
+                      setOpen(false);
+                    }}
+                  >
+                    <Check className="mr-2 h-4 w-4 opacity-0" />
+                    <span className="flex-1 text-muted-foreground">{t("noCategory")}</span>
+                  </CommandItem>
+                ) : null}
                 {filtered.map((category) => (
                   <CommandItem
                     key={category.id}
@@ -166,10 +189,24 @@ function CategoryCombobox({
             ) : null}
             <CommandEmpty>
               {name ? (
-                <Button type="button" variant="ghost" className="w-full justify-start" onClick={handleCreate} disabled={isCreating}>
-                  {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                  {t("createCategory", { name })}
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onClick={handleCreate}
+                    disabled={isCreating}
+                    aria-describedby={createError ? "create-category-error" : undefined}
+                  >
+                    {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                    {t("createCategory", { name })}
+                  </Button>
+                  {createError ? (
+                    <p id="create-category-error" role="alert" className="px-3 pb-2 text-body text-destructive">
+                      {createError}
+                    </p>
+                  ) : null}
+                </>
               ) : (
                 <p className="py-4 text-center text-body text-muted-foreground">{t("typeToFindCategory")}</p>
               )}

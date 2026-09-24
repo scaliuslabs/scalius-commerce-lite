@@ -685,7 +685,7 @@ describe("resolveAdminOrderItemInventory", () => {
         );
 
         await expect(createOrder(db, createOrderInput(), "admin_test"))
-            .rejects.toThrow("Selected zone is no longer available for the chosen city.");
+            .rejects.toThrow("Selected thana is no longer available for the chosen city.");
 
         expect(inventoryMocks.reserveStockBatch).not.toHaveBeenCalled();
         expect(inventoryMocks.prepareStockReservationBatch).not.toHaveBeenCalled();
@@ -769,7 +769,7 @@ describe("resolveAdminOrderItemInventory", () => {
                 quantity: 2,
             }],
             shippingCharge: 60,
-            discountAmount: 200.01,
+            discountAmount: 201,
         })).rejects.toMatchObject({
             status: 400,
             code: "VALIDATION_ERROR",

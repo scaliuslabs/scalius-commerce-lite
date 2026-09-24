@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -10,11 +10,11 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
 import { RichContent } from "../ui/rich-content";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { NativeSelect } from "../ui/native-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
-import { SearchListingCard } from "@/components/admin/search-listing/SearchListingCard";
+import { SearchListingCard, autoHandleFor } from "@/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminPages, putApiV1AdminPagesById } from "@scalius/api-client/sdk";
 import { apiData, type ApiResult } from "@/lib/api";
@@ -36,10 +36,6 @@ interface PageFormProps {
   /** Where the back arrow goes instead of the list (a page opened from Settings → Policies). */
   backUrl?: string;
   contentType?: "page" | "article";
-}
-
-function toHandle(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 function ArticleTagsInput({ value, onChange }: { value: string[]; onChange: (value: string[]) => void }) {
@@ -80,7 +76,6 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
   const canSave = isEdit ? hasPermission(PERMISSIONS.PAGES_EDIT) : canCreate;
   const isArticle = contentType === "article";
   const pathFor = (slug: string) => (isArticle ? `/blog/${slug}` : `/${slug}`);
-  const handleEdited = useRef(isEdit);
 
   const form = useForm<PageFormInput, unknown, PageFormValues>({
     resolver: zodResolver(pageFormSchema),
@@ -157,16 +152,6 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
     },
   });
 
-  // New pages take their web address from the title until the merchant edits it.
-  useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === "title" && !handleEdited.current) {
-        form.setValue("slug", toHandle(value.title ?? ""));
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
-
   const changePublicationMode = useCallback(
     (mode: PagePublicationMode) => {
       form.setValue("publicationMode", mode, { shouldDirty: true, shouldValidate: true });
@@ -185,6 +170,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
   );
 
   const title = form.watch("title");
+  const slug = form.watch("slug");
   const content = form.watch("content");
   const excerpt = form.watch("excerpt");
   const publicationMode = form.watch("publicationMode");
@@ -196,7 +182,7 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
     <FormContainer
       heading={isEdit ? defaultValues?.title || t(isArticle ? "blogPost" : "page") : t(isArticle ? "addBlogPost" : "addPage")}
       unsavedLabel={isEdit ? undefined : t(isArticle ? "unsavedBlogPost" : "unsavedPage")}
-      savedMessage={isEdit ? undefined : t(isArticle ? "blogPostCreated" : "pageCreated")}
+      savedMessage={t(isEdit ? (isArticle ? "blogPostSaved" : "pageSaved") : isArticle ? "blogPostCreated" : "pageCreated")}
       isSubmitting={isSubmitting}
       backUrl={backUrl ?? (isArticle ? "/admin/articles" : "/admin/pages")}
       canSave={canSave}
@@ -295,9 +281,10 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
             value={{
               title: form.watch("metaTitle") ?? "",
               description: form.watch("metaDescription") ?? "",
-              handle: form.watch("slug") ?? "",
+              handle: slug ?? "",
               hidden: form.watch("noIndex") === true,
             }}
+            autoHandle={!isEdit && !slug ? autoHandleFor(title ?? "", isArticle ? "post" : "page") : undefined}
             onChange={(next) => {
               if (next.title !== undefined) {
                 form.setValue("metaTitle", next.title || null, { shouldDirty: true });
@@ -306,7 +293,6 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 form.setValue("metaDescription", next.description || null, { shouldDirty: true });
               }
               if (next.handle !== undefined) {
-                handleEdited.current = true;
                 // A main address that pointed at this page's old address follows it.
                 if (form.getValues("canonicalPath") === pathFor(form.getValues("slug"))) {
                   form.setValue("canonicalPath", pathFor(next.handle), { shouldDirty: true });
@@ -339,22 +325,18 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
                 name="publicationMode"
                 render={({ field }) => (
                   <FormItem>
-                    <Select
-                      value={field.value}
-                      disabled={!canPublish}
-                      onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
-                    >
-                      <FormControl>
-                        <SelectTrigger aria-label={t("visibility")}>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="draft">{t("draft")}</SelectItem>
-                        <SelectItem value="published">{t("visible")}</SelectItem>
-                        <SelectItem value="scheduled">{t("scheduled")}</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <NativeSelect
+                        value={field.value}
+                        disabled={!canPublish}
+                        onValueChange={(value) => changePublicationMode(value as PagePublicationMode)}
+                        aria-label={t("visibility")}
+                      >
+                        <option value="draft">{t("draft")}</option>
+                        <option value="published">{t("visible")}</option>
+                        <option value="scheduled">{t("scheduled")}</option>
+                      </NativeSelect>
+                    </FormControl>
                     <FormDescription>
                       {!canPublish
                         ? t("publishPermission")

@@ -8,23 +8,27 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
+import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues } from "./types";
+import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
 
-export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }) {
+/**
+ * A product without options has one price. With options each variant has its
+ * own, so the card shows their range instead of a price nobody pays (Shopify
+ * hides it too); a product discount still applies to variants without one.
+ */
+export function PricingCard({ form, variantPrices }: {
+  form: UseFormReturn<ProductFormValues>;
+  variantPrices: VariantPriceRange | null;
+}) {
   const t = useMessages(productMessages);
-  const { symbol, fmt, salePrice } = useCurrency();
+  const { symbol, code, fmt, salePrice } = useCurrency();
   const [discountShown, setDiscountShown] = useState(false);
   const [price, discountType, discountPercentage, discountAmount] = useWatch({
     control: form.control,
@@ -35,6 +39,7 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
   const validPrice = Number.isFinite(price) ? price ?? 0 : 0;
   const sale = salePrice(validPrice, { discountType, discountPercentage, discountAmount });
   const hasDiscount = sale !== null;
+  const discountHint = variantPrices ? <p className="text-body text-muted-foreground sm:col-span-2">{t("variantDiscountHint")}</p> : null;
 
   return (
     <Card>
@@ -42,14 +47,25 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
         <CardTitle>{t("pricing")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <FormField
+        {variantPrices ? (
+          <div className="space-y-1">
+            <p className="text-body font-medium">{t("priceLabel", { symbol })}</p>
+            <p className="text-body tabular-nums">
+              {variantPrices.min === variantPrices.max
+                ? fmt(variantPrices.min)
+                : `${fmt(variantPrices.min)}–${fmt(variantPrices.max)}`}
+            </p>
+            <p className="text-body text-muted-foreground">{t("variantPricesHint")}</p>
+          </div>
+        ) : <FormField
           control={form.control}
           name="price"
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("priceLabel", { symbol })}</FormLabel>
               <FormControl>
-                <NumberInput
+                <MoneyInput
+                  currencyCode={code}
                   ref={field.ref}
                   name={field.name}
                   placeholder="0.00"
@@ -64,7 +80,7 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
               <FormMessage />
             </FormItem>
           )}
-        />
+        />}
 
         {discountOpen ? (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -74,26 +90,21 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("discountType")}</FormLabel>
-                  <Select
-                    value={field.value}
-                    onValueChange={(value) => {
-                      field.onChange(value);
-                      form.setValue(value === "flat" ? "discountPercentage" : "discountAmount", 0, {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      });
-                    }}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="percentage">{t("discountPercentage")}</SelectItem>
-                      <SelectItem value="flat">{t("discountFixed")}</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      value={field.value}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        form.setValue(value === "flat" ? "discountPercentage" : "discountAmount", 0, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                      }}
+                    >
+                      <option value="percentage">{t("discountPercentage")}</option>
+                      <option value="flat">{t("discountFixed")}</option>
+                    </NativeSelect>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -108,19 +119,33 @@ export function PricingCard({ form }: { form: UseFormReturn<ProductFormValues> }
                     {discountType === "flat" ? t("discountAmountLabel", { symbol }) : t("discountPercentLabel")}
                   </FormLabel>
                   <FormControl>
-                    <NumberInput
-                      ref={field.ref}
-                      name={field.name}
-                      placeholder="0"
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      onBlur={field.onBlur}
-                    />
+                    {/* A flat discount is money (whole taka in BDT); a percentage is not. */}
+                    {discountType === "flat" ? (
+                      <MoneyInput
+                        currencyCode={code}
+                        ref={field.ref}
+                        name={field.name}
+                        placeholder="0"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        onBlur={field.onBlur}
+                      />
+                    ) : (
+                      <NumberInput
+                        ref={field.ref}
+                        name={field.name}
+                        placeholder="0"
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        onBlur={field.onBlur}
+                      />
+                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            {discountHint}
           </div>
         ) : (
           <Button type="button" variant="outline" size="sm" onClick={() => setDiscountShown(true)}>

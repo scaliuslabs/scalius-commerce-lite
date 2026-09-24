@@ -17,6 +17,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
+import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import { nanoid } from "nanoid";
 import { buildBatchGuard, safeBatch, type Database } from "@scalius/database/client";
 import {
@@ -415,17 +416,19 @@ export async function createPage(
 ): Promise<{ id: string; revision: number }> {
   assertPageLifecycleAuthority(data.isPublished, false, authority);
   assertPageScheduleAuthority(data.publishedAt, null, authority);
-  assertSlugNotReservedByDashboard(data.contentType, data.slug, authority);
-  const existing = await db
-    .select({ id: pages.id })
-    .from(pages)
-    .where(eq(pages.slug, data.slug))
-    .get();
+  if (data.slug) {
+    assertSlugNotReservedByDashboard(data.contentType, data.slug, authority);
+    const existing = await db
+      .select({ id: pages.id })
+      .from(pages)
+      .where(eq(pages.slug, data.slug))
+      .get();
 
-  if (existing) {
-    throw new ConflictError(
-      "A page with this slug already exists, including in trash.",
-    );
+    if (existing) {
+      throw new ConflictError(
+        "A page with this slug already exists, including in trash.",
+      );
+    }
   }
 
   const publishedAt = data.isPublished
@@ -436,7 +439,7 @@ export async function createPage(
   const serializedContent = sanitizeHtml(data.content);
   const serializedFeaturedImage = data.featuredImage ?? null;
   const mediaGuard = noDeletingMediaReferences(`${serializedContent}\u0000${JSON.stringify(serializedFeaturedImage)}`);
-  try {
+  const insertWithSlug = async (slug: string) => {
     const insert = db.insert(pages).values({
         id: pageId,
         contentType: data.contentType,
@@ -445,7 +448,7 @@ export async function createPage(
         excerpt: data.contentType === "article" ? data.excerpt || null : null,
         author: data.contentType === "article" ? data.author || null : null,
         tags: data.contentType === "article" ? data.tags : [],
-        slug: data.slug,
+        slug,
         metaTitle: data.metaTitle || null,
         metaDescription: data.metaDescription || null,
         canonicalPath: data.canonicalPath ?? null,
@@ -474,6 +477,25 @@ export async function createPage(
       ] as never);
     } else {
       await insert;
+    }
+  };
+  try {
+    if (data.slug) await insertWithSlug(data.slug);
+    else {
+      await insertWithDerivedHandle(
+        {
+          db,
+          table: pages,
+          column: pages.slug,
+          isReserved: (slug) =>
+            !isValidContentEntryPath(data.contentType, contentEntryPath(data.contentType, slug)) ||
+            (data.contentType === "page" && Boolean(authority.reservedSlugs?.has(slug))),
+          isHandleConflict: isPageSlugConstraintError,
+        },
+        data.title,
+        data.contentType === "article" ? "post" : "page",
+        insertWithSlug,
+      );
     }
   } catch (error) {
     if (isMediaReferenceDeletingGuardError(error)) {

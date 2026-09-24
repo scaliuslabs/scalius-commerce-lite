@@ -11,7 +11,7 @@ import {
   normalizeOptionalEnumSearchParam,
   type SearchValidatorInput,
 } from "~/lib/list-helpers";
-import { adoptListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, listSearchKey, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -49,7 +49,7 @@ function listQuery(search: ReturnType<typeof validateCategorySearch>, term: stri
 export const Route = createFileRoute("/admin/categories/")({
   validateSearch: validateCategorySearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("categories", deps.q))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("categories", deps, "status"), deps.q))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "categories") }] }),
   component: CategoriesPage,
   errorComponent: RouteErrorComponent,
@@ -59,7 +59,7 @@ const claims = (rows: CategoryListItem[]) => rows.map((row) => ({ id: row.id, ex
 
 function CategoriesPage() {
   const search = Route.useSearch();
-  const [term] = useListSearch("categories");
+  const [term] = useListSearch(listSearchKey("categories", search, "status"));
   const t = useMessages(catalogMessages);
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: can } = useCatalogActionPermissions();

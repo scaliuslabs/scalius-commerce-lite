@@ -23,7 +23,7 @@ const SUCCESSFUL = new Set(["accepted", "delivered"]);
 export function notificationIssue(value: string | null | undefined): NotificationIssue | null {
   const text = value?.trim().toLowerCase();
   if (!text) return null;
-  // Turned off in Notifications: sendable again once it's back on.
+  // Turned off in Notifications: the fix is turning it on, not sending again.
   if (text.includes("notification_turned_off")) return "turnedOff";
   if (text.includes("missing_email_recipient") || text.includes("missing email")) return "noEmail";
   if (/missing_(sms|whatsapp)_recipient|invalid_whatsapp_recipient|missing sms recipient/.test(text)) return "noPhone";
@@ -130,12 +130,23 @@ export function notificationOutboxIssue(
 }
 
 /**
+ * The message is turned off in Notifications: every customer channel skipped
+ * it for that reason. Sending again would only be skipped again (R3-ORD-09).
+ */
+export function notificationTurnedOff(outbox: Pick<OrderNotificationOutboxDto, "lastError" | "receipts">): boolean {
+  const attempted = attemptedCustomerReceipts(outbox.receipts);
+  if (attempted.length === 0) return notificationIssue(outbox.lastError) === "turnedOff";
+  return attempted.every((receipt) => receiptIssue(receipt) === "turnedOff");
+}
+
+/**
  * Whether sending (again) can reach the customer: not when every channel
- * lacks a recipient or isn't set up.
+ * lacks a recipient or isn't set up, or the message is turned off.
  */
 export function canSendNotificationAgain(outbox: Pick<OrderNotificationOutboxDto, "status" | "lastError" | "receipts">): boolean {
   const issue = notificationOutboxIssue(outbox);
   if (issue && UNSENDABLE_ISSUES.has(issue)) return false;
+  if (notificationTurnedOff(outbox)) return false;
   if (!outbox.receipts.some((receipt) => receipt.channel !== "push")) return true;
   return attemptedCustomerReceipts(outbox.receipts).length > 0;
 }

@@ -1,0 +1,37 @@
+---
+// A builder-owned `rich_text` section: a heading and plain-text paragraphs
+// (blank lines split paragraphs). Plain text only; Astro escapes it.
+import { richTextParagraphs } from "@/lib/homepage-sections";
+
+interface Props {
+  id: string;
+  heading: string;
+  body: string;
+}
+
+const { id, heading, body } = Astro.props;
+const title = heading.trim();
+const paragraphs = richTextParagraphs(body);
+const headingId = `home-section-${id}-title`;
+---
+
+{(title || paragraphs.length > 0) && (
+  <section
+    class="w-full py-4 md:py-8"
+    aria-labelledby={title ? headingId : undefined}
+    aria-label={title ? undefined : "Store information"}
+  >
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class="max-w-3xl [overflow-wrap:anywhere]">
+        {title && (
+          <h2 id={headingId} class="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            {title}
+          </h2>
+        )}
+        {paragraphs.map((paragraph) => (
+          <p class="mt-3 whitespace-pre-line text-base leading-relaxed text-foreground">{paragraph}</p>
+        ))}
+      </div>
+    </div>
+  </section>
+)}

@@ -1,7 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConflictError } from "@scalius/core/errors";
-import { DEFAULT_STOREFRONT_THEME_SETTINGS } from "@scalius/shared/storefront-theme";
+import { DEFAULT_STOREFRONT_THEME, storefrontStylePresetTheme } from "@scalius/shared/storefront-theme";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
@@ -153,25 +153,22 @@ function createTestApp() {
     revision: 2,
   });
   mocks.getThemeSettings.mockResolvedValue({
-    theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+    theme: DEFAULT_STOREFRONT_THEME,
     revision: 1,
   });
   mocks.saveThemeSettings.mockResolvedValue({
-    theme: {
-      ...DEFAULT_STOREFRONT_THEME_SETTINGS,
-      colors: { primary: "#000000" },
-    },
+    theme: storefrontStylePresetTheme("midnight"),
     revision: 2,
   });
   const themeDraft = {
-    theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+    theme: DEFAULT_STOREFRONT_THEME,
     revision: 2,
     basePublishedRevision: 1,
     updatedAt: new Date(1_000),
   };
   const themeWorkspace = {
     published: {
-      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+      theme: DEFAULT_STOREFRONT_THEME,
       revision: 1,
     },
     draft: themeDraft,
@@ -184,7 +181,7 @@ function createTestApp() {
   });
   mocks.publishThemeDraft.mockResolvedValue({
     published: {
-      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+      theme: DEFAULT_STOREFRONT_THEME,
       revision: 2,
     },
     draft: {
@@ -196,7 +193,7 @@ function createTestApp() {
   mocks.listThemeVersions.mockResolvedValue([]);
   mocks.rollbackThemeSettings.mockResolvedValue({
     published: {
-      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+      theme: DEFAULT_STOREFRONT_THEME,
       revision: 2,
     },
     draft: {
@@ -992,10 +989,7 @@ describe("site settings cache invalidation", () => {
       method: "POST" as const,
       body: {
         expectedRevision: 1,
-        theme: {
-          ...DEFAULT_STOREFRONT_THEME_SETTINGS,
-          colors: { primary: "#000000" },
-        },
+        theme: storefrontStylePresetTheme("midnight"),
       },
     },
     {
@@ -1149,42 +1143,46 @@ describe("site settings cache invalidation", () => {
     ).not.toHaveBeenCalled();
   });
 
-  it("rejects unsafe theme colors before saving or invalidating cache", async () => {
+  it("rejects invalid version 2 theme documents before saving or invalidating cache", async () => {
     const { app, env } = createTestApp();
-
-    const response = await requestJson(app, env, "POST", "/theme", {
-      expectedRevision: 1,
-      theme: {
-        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
-        colors: {
-          primary: "#059669",
-          background: "#fff; color: red",
-          unsafe: "#000",
-        },
+    const lowContrast = structuredClone(DEFAULT_STOREFRONT_THEME);
+    lowContrast.tokens.colors.foreground = "#f5f5f5";
+    const unsafeColor = structuredClone(DEFAULT_STOREFRONT_THEME) as unknown as {
+      tokens: { colors: Record<string, string> };
+    };
+    unsafeColor.tokens.colors.background = "#fff; color: red";
+    const invalidThemes: unknown[] = [
+      lowContrast,
+      unsafeColor,
+      { ...DEFAULT_STOREFRONT_THEME, version: 1 },
+      { ...DEFAULT_STOREFRONT_THEME, layout: { ...DEFAULT_STOREFRONT_THEME.layout, header: "floating" } },
+      { ...DEFAULT_STOREFRONT_THEME, layout: { ...DEFAULT_STOREFRONT_THEME.layout, sidebar: "left" } },
+      {
+        ...DEFAULT_STOREFRONT_THEME,
+        sections: [...DEFAULT_STOREFRONT_THEME.sections, { id: "promo", type: "banner", version: 1, settings: {} }],
       },
-    });
+      {
+        ...DEFAULT_STOREFRONT_THEME,
+        sections: DEFAULT_STOREFRONT_THEME.sections.map((section) => ({ ...section, version: 2 })),
+      },
+      { ...DEFAULT_STOREFRONT_THEME, sections: DEFAULT_STOREFRONT_THEME.sections.slice(1) },
+    ];
 
-    expect(response.status).toBe(400);
-    expect(mocks.saveThemeSettings).not.toHaveBeenCalled();
-    expect(
-      mocks.bumpCacheGeneration,
-    ).not.toHaveBeenCalled();
-  });
-
-  it("keeps theme writes strict: unknown layout values and keys are rejected", async () => {
-    const { app, env } = createTestApp();
-
-    for (const layout of [
-      { ...DEFAULT_STOREFRONT_THEME_SETTINGS.layout, header: "floating" },
-      { ...DEFAULT_STOREFRONT_THEME_SETTINGS.layout, sidebar: "left" },
-    ]) {
+    for (const theme of invalidThemes) {
       const response = await requestJson(app, env, "POST", "/theme", {
         expectedRevision: 1,
-        theme: { ...DEFAULT_STOREFRONT_THEME_SETTINGS, layout },
+        theme,
       });
       expect(response.status).toBe(400);
     }
+    const draftResponse = await requestJson(app, env, "POST", "/theme/draft", {
+      theme: lowContrast,
+      expectedDraftRevision: 2,
+      basePublishedRevision: 1,
+    });
+    expect(draftResponse.status).toBe(400);
     expect(mocks.saveThemeSettings).not.toHaveBeenCalled();
+    expect(mocks.saveThemeDraft).not.toHaveBeenCalled();
     expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
   });
 
@@ -1198,19 +1196,13 @@ describe("site settings cache invalidation", () => {
 
     const response = await requestJson(app, env, "POST", "/theme", {
       expectedRevision: 1,
-      theme: {
-        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
-        colors: { primary: "#2563eb" },
-      },
+      theme: storefrontStylePresetTheme("marketplace"),
     });
 
     expect(response.status).toBe(409);
     expect(mocks.saveThemeSettings).toHaveBeenCalledWith(
       { id: "db" },
-      {
-        ...DEFAULT_STOREFRONT_THEME_SETTINGS,
-        colors: { primary: "#2563eb" },
-      },
+      storefrontStylePresetTheme("marketplace"),
       1,
       null,
     );
@@ -1222,7 +1214,7 @@ describe("site settings cache invalidation", () => {
   it("saves and rebases theme drafts without invalidating the published storefront", async () => {
     const { app, env } = createTestApp();
     const payload = {
-      theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+      theme: DEFAULT_STOREFRONT_THEME,
       expectedDraftRevision: 2,
       basePublishedRevision: 1,
     };
@@ -1246,14 +1238,14 @@ describe("site settings cache invalidation", () => {
     expect(rebaseResponse.status).toBe(200);
     expect(mocks.saveThemeDraft).toHaveBeenCalledWith(
       { id: "db" },
-      DEFAULT_STOREFRONT_THEME_SETTINGS,
+      DEFAULT_STOREFRONT_THEME,
       2,
       1,
       null,
     );
     expect(mocks.rebaseThemeDraft).toHaveBeenCalledWith(
       { id: "db" },
-      DEFAULT_STOREFRONT_THEME_SETTINGS,
+      DEFAULT_STOREFRONT_THEME,
       2,
       1,
       null,

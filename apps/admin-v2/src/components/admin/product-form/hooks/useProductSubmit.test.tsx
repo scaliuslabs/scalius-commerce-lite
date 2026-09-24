@@ -116,6 +116,17 @@ describe("useProductSubmit", () => {
     expect(mocks.navigate).toHaveBeenCalledWith({ to: "/admin/products/$productId/edit", params: { productId: "prod_new" } });
   });
 
+  it("sends a new product's web address only when the merchant typed it", async () => {
+    renderHarness();
+    mocks.serverMutation.mockResolvedValue({ id: "prod_new", aggregateRevision: 1 });
+
+    await requireResult(result).submit(productValues());
+    await requireResult(result).submit({ ...productValues(), slug: "tea-green", slugEdited: true });
+
+    expect(mocks.serverMutation.mock.calls[0]?.[0]?.body?.slug).toBeUndefined();
+    expect(mocks.serverMutation.mock.calls[1]?.[0]?.body?.slug).toBe("tea-green");
+  });
+
   it("sends and advances the shared aggregate revision", async () => {
     renderHarness({ isEdit: true, aggregateRevision: 4 });
     mocks.serverMutation.mockResolvedValueOnce({ aggregateRevision: 5 });

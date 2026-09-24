@@ -16,7 +16,7 @@ import {
   type TableRowData,
 } from "./table-config";
 import { ACTIONS_COLUMN, SELECT_COLUMN, isPrimaryColumn, useColumnLayout, useElementWidth } from "./column-layout";
-import { ColumnMenuContext, DataTableColumnMenu } from "./DataTableColumnMenu";
+import { ColumnLayoutContext, ColumnMenuContext, DataTableColumnMenu } from "./DataTableColumnMenu";
 import { AlertTriangle } from "lucide-react";
 import {
   Table as UITable,
@@ -82,7 +82,18 @@ interface DataTableProps<TData extends TableRowData> {
   layoutKey?: string;
   /** False for a list that shows every row at once (no page footer). */
   paginate?: boolean;
+  /** What the list is sorted by when no sort is chosen (the column menu's first choice); false for none. */
+  defaultSortLabel?: string | false;
+  /**
+   * Below this width of the table's own container the rows become phone
+   * cards: a 768px tablet with the sidebar open leaves a table too narrow for
+   * more than two columns.
+   */
+  cardLayoutBelow?: number;
 }
+
+/** The container width under which rows become cards, unless a list says otherwise. */
+export const CARD_LAYOUT_BELOW = 640;
 
 export function DataTable<TData extends TableRowData>({
   table,
@@ -102,6 +113,8 @@ export function DataTable<TData extends TableRowData>({
   getRowHref,
   layoutKey,
   paginate = true,
+  defaultSortLabel,
+  cardLayoutBelow = CARD_LAYOUT_BELOW,
 }: DataTableProps<TData>) {
   const t = useMessages(resourceMessages);
   const navigate = useNavigate();
@@ -122,6 +135,9 @@ export function DataTable<TData extends TableRowData>({
   // Columns in the merchant's order, minus those hidden by choice or to fit this width.
   const resultsRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(resultsRef);
+  // Cards by the space the table really has, not the window; the window only
+  // decides before the container is measured, so phones never flash a table.
+  const cardLayout = width > 0 ? width < cardLayoutBelow : isMobile;
   // When the rendered cells still overflow the minimums' estimate, step aside
   // one more column at a time; sideways scrolling is the last resort.
   const [extraHidden, setExtraHidden] = useState({ width, count: 0 });
@@ -145,7 +161,8 @@ export function DataTable<TData extends TableRowData>({
       return cell ? [cell] : [];
     });
   };
-  const columnMenu = <DataTableColumnMenu table={table} layout={layout} />;
+  const columnMenu = <DataTableColumnMenu table={table} layout={layout} defaultSortLabel={defaultSortLabel} />;
+  const headerLayout = { toggle: layout.toggle, isHiddenByChoice: layout.isHiddenByChoice };
 
   const renderErrorState = () => (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -250,6 +267,7 @@ export function DataTable<TData extends TableRowData>({
   const mobileCard = mobileCardRenderer ?? defaultMobileCard;
 
   return (
+    <ColumnLayoutContext.Provider value={headerLayout}>
     <div className={cn(isCard && "overflow-clip rounded-xl bg-card shadow-card", className)}>
       <ColumnMenuContext.Provider value={columnMenu}>{toolbar}</ColumnMenuContext.Provider>
 
@@ -264,7 +282,7 @@ export function DataTable<TData extends TableRowData>({
         </span>
         <DataTableLoadingOverlay visible={isFetching && !isLoading && !showError} />
 
-        {isMobile ? (
+        {cardLayout ? (
           // Mobile card view
           <div className="divide-y">
             {showError ? (
@@ -312,6 +330,7 @@ export function DataTable<TData extends TableRowData>({
         />
       )}
     </div>
+    </ColumnLayoutContext.Provider>
   );
 }
 

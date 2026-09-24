@@ -64,7 +64,9 @@ export function describeRejectedCode(
         ? text(copy.discountNotCombinableText, { code, other: rejection.conflictsWith })
         : rejection.message;
     case "lower_savings":
-      return copy.discountLowerSavingsText;
+      return rejection.conflictsWith
+        ? text(copy.discountLowerSavingsThanText, { other: rejection.conflictsWith })
+        : copy.discountLowerSavingsText;
     case "needs_delivery":
       return text(copy.discountNeedsDeliveryText, { code });
     case "delivery_discount_applied":
@@ -159,7 +161,13 @@ export function renderDiscountPanel(
   });
   const notes = state.codes.flatMap((code) => {
     const rejection = facts?.rejectedCodes.find((candidate) => candidate.code === code);
-    if (!rejection) return [];
+    if (!rejection) {
+      // An applied code that took the place of an automatic discount says so, once.
+      const replaced = facts?.discounts.find((line) => line.code === code)?.replaces;
+      return replaced
+        ? [element("li", "basis-full text-sm text-muted-foreground", formatCheckoutLanguageText(copy.discountReplacesText, { code, other: replaced }))]
+        : [];
+    }
     const item = element("li", "basis-full text-sm text-muted-foreground");
     item.append(element("p", "", `${code}: ${describeRejectedCode(rejection, copy)}`));
     if (rejection.reason === "needs_phone") {

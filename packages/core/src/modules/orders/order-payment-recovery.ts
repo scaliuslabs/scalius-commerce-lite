@@ -260,7 +260,7 @@ export class NoOrderCodeChannelError extends AppError {
         super(
             409,
             "NO_CODE_CHANNEL",
-            "This order has no email address, and this store can't send text messages. Contact the store to check on your order.",
+            "This order has no email address, and this store can't send text messages, so we can't send you a code.",
         );
     }
 }

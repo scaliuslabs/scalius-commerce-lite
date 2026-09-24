@@ -26,10 +26,9 @@ import {
   getCookieConfig,
   buildSetCookieHeader,
   deleteCustomerAuthOtpChallenge,
-  canSendPhoneProof,
-  listLinkedGuestRecords,
-  sendLinkedGuestOrdersCode,
-  verifyLinkedGuestOrdersCode,
+  getAccountPhoneVerificationPrompt,
+  sendAccountPhoneCode,
+  verifyAccountPhoneCode,
   COOKIE_NAME,
   SESSION_TTL_SECONDS
 } from "@scalius/core/modules/customers/customer-auth.service";
@@ -513,13 +512,10 @@ const getCustomerOrdersRoute = createRoute({
               hasMore: z.boolean(),
               nextCursor: z.string().nullable(),
             }),
-            unclaimedGuestOrders: z.array(z.object({
-              id: z.string().openapi({ description: "Opaque id for the send-code / verify calls" }),
-              destination: z.string().openapi({ description: "Masked phone the orders were placed with" }),
-              orderCount: z.number().int(),
-              canVerify: z.boolean().openapi({ description: "False when the store can't send a text or WhatsApp code" }),
-            })).openapi({
-              description: "Orders on a guest record whose other orders already joined this account, placed with a phone the account hasn't proven.",
+            phoneVerification: z.object({
+              phone: z.string().openapi({ description: "The account's own phone (E.164)" }),
+            }).nullable().openapi({
+              description: "Set when the account's own phone is unverified and a text/WhatsApp code can reach it. Proving it adds orders placed with that phone.",
             }),
             customer: z.object({
               id: z.string().optional(),
@@ -572,7 +568,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
         hasMore: false,
         nextCursor: null,
       },
-      unclaimedGuestOrders: [],
+      phoneVerification: null,
     });
   }
 
@@ -580,12 +576,10 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
   // Orders placed signed out (any device) with a verified email/phone join
   // the history here, not only at sign-in.
   await linkVerifiedContactOrders(db, session.customerId);
-  const [result, linkedGuestRecords] = await Promise.all([
+  const [result, phoneVerification] = await Promise.all([
     getCustomerOrders(db, session.customerId, query),
-    listLinkedGuestRecords(db, session.customerId),
+    getAccountPhoneVerificationPrompt(db, session.customerId, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>)),
   ]);
-  const canVerify = linkedGuestRecords.length > 0
-    && await canSendPhoneProof(db, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>));
 
   // Merge session data into profile (DB profile wins, session fills gaps)
   const customer = result.customerProfile
@@ -602,47 +596,40 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
     customer,
     summary: result.summary,
     pagination: result.pagination,
-    unclaimedGuestOrders: linkedGuestRecords.map(({ id, destination, orderCount }) => ({ id, destination, orderCount, canVerify })),
+    phoneVerification,
   });
 });
 
-// ─── Guest orders waiting for a phone proof ──────────────────────────────────
+// ─── The account's own phone, proven by code ─────────────────────────────────
 
-const guestOrdersParams = z.object({ id: z.string().trim().min(1).max(128) });
-
-const sendGuestOrdersCodeRoute = createRoute({
+const sendAccountPhoneCodeRoute = createRoute({
   method: "post",
-  path: "/guest-orders/{id}/send-code",
+  path: "/phone/send-code",
   tags: ["Customer Auth"],
-  summary: "Send a code to the phone a waiting guest order was placed with",
-  request: { params: guestOrdersParams },
+  summary: "Send a code to the signed-in account's own phone",
   responses: {
     200: {
       description: "Code sent",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({
-            message: z.string(),
-            destination: z.string(),
-            resendAfterSeconds: z.number().int(),
-          })),
+          schema: successEnvelope(z.object({ message: z.string(), resendAfterSeconds: z.number().int() })),
         },
       },
     },
     ...errorResponses,
+    409: conflictResponse,
     503: serviceUnavailableResponse,
   },
 });
 
-app.openapi(sendGuestOrdersCodeRoute, async (c) => {
+app.openapi(sendAccountPhoneCodeRoute, async (c) => {
   setPrivateNoStoreHeaders(c);
   const { session } = await requireCustomerSession(c);
   if (!session.customerId) throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
   const db = c.get("db");
   const env = c.env as unknown as Record<string, unknown>;
-  const result = await sendLinkedGuestOrdersCode(db, {
+  const result = await sendAccountPhoneCode(db, {
     accountId: session.customerId,
-    guestRecordId: c.req.valid("param").id,
     ip: getTrustedClientIp(c),
     emailEnv: env,
     encryptionKey: getCredentialEncryptionKey(env),
@@ -652,19 +639,18 @@ app.openapi(sendGuestOrdersCodeRoute, async (c) => {
     await c.env.JOBS_QUEUE.send(result.queuePayload);
   } catch (error) {
     await deleteCustomerAuthOtpChallenge(db, { otpKey: result.otpStorageKey, deliveryKey: result.deliveryKey }).catch(() => undefined);
-    console.error("[CustomerAuth] Failed to enqueue guest-orders code:", error instanceof Error ? error.name : typeof error);
+    console.error("[CustomerAuth] Failed to enqueue phone code:", error instanceof Error ? error.name : typeof error);
     throw new ServiceUnavailableError("We couldn't send the code. Please try again.");
   }
-  return ok(c, { message: result.message, destination: result.destination, resendAfterSeconds: result.resendAfterSeconds });
+  return ok(c, { message: result.message, resendAfterSeconds: result.resendAfterSeconds });
 });
 
-const verifyGuestOrdersCodeRoute = createRoute({
+const verifyAccountPhoneCodeRoute = createRoute({
   method: "post",
-  path: "/guest-orders/{id}/verify",
+  path: "/phone/verify",
   tags: ["Customer Auth"],
-  summary: "Prove the phone of waiting guest orders and add them to the account",
+  summary: "Prove the signed-in account's own phone and add orders placed with it",
   request: {
-    params: guestOrdersParams,
     body: {
       content: {
         "application/json": {
@@ -675,7 +661,7 @@ const verifyGuestOrdersCodeRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Orders added to the account",
+      description: "Phone verified",
       content: {
         "application/json": {
           schema: successEnvelope(z.object({ movedOrders: z.number().int(), message: z.string() })),
@@ -687,20 +673,19 @@ const verifyGuestOrdersCodeRoute = createRoute({
   },
 });
 
-app.openapi(verifyGuestOrdersCodeRoute, async (c) => {
+app.openapi(verifyAccountPhoneCodeRoute, async (c) => {
   setPrivateNoStoreHeaders(c);
   const { session } = await requireCustomerSession(c);
   if (!session.customerId) throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
-  const { movedOrders } = await verifyLinkedGuestOrdersCode(c.get("db"), {
+  const env = c.env as unknown as Record<string, unknown>;
+  const { movedOrders } = await verifyAccountPhoneCode(c.get("db"), {
     accountId: session.customerId,
-    guestRecordId: c.req.valid("param").id,
     code: c.req.valid("json").code,
-    encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    encryptionKey: getCredentialEncryptionKey(env),
+    credentialEncryptionKey: getCredentialEncryptionKey(env),
   });
-  return ok(c, {
-    movedOrders,
-    message: movedOrders === 1 ? "1 order was added to your account." : `${movedOrders} orders were added to your account.`,
-  });
+  const added = movedOrders === 0 ? "" : movedOrders === 1 ? " 1 order was added to your account." : ` ${movedOrders} orders were added to your account.`;
+  return ok(c, { movedOrders, message: `Your phone number is verified.${added}` });
 });
 
 const customerPaymentRecoverySchema = z.object({

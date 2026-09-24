@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect } from "react";
+import React, { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useWatch } from "react-hook-form";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { FieldErrors, SubmitHandler } from "react-hook-form";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -21,10 +21,6 @@ import { FormActionBar } from "@/components/admin/FormStickyHeader";
 import { PageHeader } from "@/components/admin/resource/PageHeader";
 import { UnsavedChangesGuard } from "./shared/UnsavedChangesGuard";
 import {
-  deliveryLocationsQueryOptions,
-  getDeliveryLocations,
-} from "@/lib/api-query-options/delivery";
-import {
   orderErrorMessage,
   useConfirmManualOrderAmendment,
   useCreateOrder,
@@ -40,11 +36,10 @@ import {
   type OrderFormInput,
   type OrderFormValues,
   type OrderItem,
-  type DeliveryLocation,
   type OrderFormProps,
 } from "./order-form/types";
 import { OrderFormProvider } from "./order-form/OrderFormContext";
-import { CustomerInfoSection } from "./order-form/CustomerInfoSection";
+import { CustomerInfoSection, ORDER_LOCATION_IDS } from "./order-form/CustomerInfoSection";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
 import { PRODUCT_SEARCH_INPUT_ID } from "./order-form/ProductSearch";
@@ -105,8 +100,8 @@ function toOrderBaseContentInput(values: OrderFormValues) {
     city: values.city,
     zone: values.zone,
     area: values.area,
-    cityName: values.cityName,
-    zoneName: values.zoneName,
+    cityName: values.cityName ?? undefined,
+    zoneName: values.zoneName ?? undefined,
     areaName: values.areaName ?? null,
     notes: values.notes,
     discountAmount: values.discountAmount,
@@ -149,12 +144,12 @@ export function OrderForm({
   defaultValues,
   orderLabel,
   cashToCollect = null,
+  savedShippingMethod = null,
 }: OrderFormProps) {
   const isEdit = mode === "amend";
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { code: currencyCode, fmt } = useCurrency();
   const orderActions = useOrderActionPermissions();
   const canSave = isEdit ? orderActions.canEditOrders : orderActions.canCreateOrders;
@@ -319,58 +314,6 @@ export function OrderForm({
 
   const isSubmitting = createMutation.isPending || amendMutation.isPending || completed;
   const isInteractionLocked = isSubmitting || confirmOpen;
-  const [locations, setLocations] = React.useState<{
-    cities: DeliveryLocation[];
-    zones: DeliveryLocation[];
-    areas: DeliveryLocation[];
-  }>({ cities: [], zones: [], areas: [] });
-  const [isLoading, setIsLoading] = React.useState({ zones: false, areas: false });
-
-  // --- DELIVERY AREAS ---
-
-  const loadCities = useCallback(async () => {
-    try {
-      const data = await queryClient.ensureQueryData(
-        deliveryLocationsQueryOptions({ type: "city" }),
-      );
-      setLocations((prev) => ({ ...prev, cities: data.locations as DeliveryLocation[] }));
-    } catch {
-      toast.error(translate(orderFormMessages, "locationsFailed"));
-    }
-  }, [queryClient]);
-
-  // Pickers reset the child selections themselves, so these only load lists
-  // (an edit must keep its saved area while zones and areas load together).
-  const loadZones = useCallback(async (cityId: string) => {
-    setIsLoading((prev) => ({ ...prev, zones: true }));
-    try {
-      const data = await getDeliveryLocations({ type: "zone", parentId: cityId });
-      setLocations((prev) => ({ ...prev, zones: data.locations as DeliveryLocation[] }));
-    } catch {
-      toast.error(translate(orderFormMessages, "locationsFailed"));
-    } finally {
-      setIsLoading((prev) => ({ ...prev, zones: false }));
-    }
-  }, []);
-
-  const loadAreas = useCallback(async (zoneId: string) => {
-    setIsLoading((prev) => ({ ...prev, areas: true }));
-    try {
-      const data = await getDeliveryLocations({ type: "area", parentId: zoneId });
-      setLocations((prev) => ({ ...prev, areas: data.locations as DeliveryLocation[] }));
-    } catch {
-      toast.error(translate(orderFormMessages, "locationsFailed"));
-    } finally {
-      setIsLoading((prev) => ({ ...prev, areas: false }));
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadCities();
-    if (isEdit && defaultValues?.city) void loadZones(defaultValues.city);
-    if (isEdit && defaultValues?.zone) void loadAreas(defaultValues.zone);
-  }, [defaultValues, isEdit, loadAreas, loadCities, loadZones]);
-
   // An abandoned checkout's "Create order" hands its details over once.
   useEffect(() => {
     if (isEdit) return;
@@ -388,9 +331,7 @@ export function OrderForm({
       form.setValue("shippingCharge", prefill.shippingCharge, set);
       form.setValue("shippingMethodId", prefill.shippingMethodId, set);
     }
-    if (prefill.city) void loadZones(prefill.city);
-    if (prefill.zone) void loadAreas(prefill.zone);
-  }, [form, isEdit, loadAreas, loadZones]);
+  }, [form, isEdit]);
 
   // --- SUBMIT ---
 
@@ -408,6 +349,7 @@ export function OrderForm({
     const line = Array.isArray(errors.items) ? errors.items.findIndex((item) => item?.quantity) : -1;
     if (first === "items" && line >= 0) document.getElementById(orderLineQuantityId(line))?.focus();
     else if (first === "items") document.getElementById(PRODUCT_SEARCH_INPUT_ID)?.focus();
+    else if (first === "city" || first === "zone" || first === "area") document.getElementById(ORDER_LOCATION_IDS[first])?.focus();
     else if (first) form.setFocus(first);
   };
 
@@ -418,14 +360,12 @@ export function OrderForm({
     }
     if (submitLock.current) return;
     setPageError(null);
-    const city = locations.cities.find((c) => c.id === values.city);
-    const zone = locations.zones.find((z) => z.id === values.zone);
-    const area = values.area ? locations.areas.find((a) => a.id === values.area) : null;
+    // The server stores the names of the places it validates; these only label the review.
     const enrichedValues: OrderFormValues = {
       ...values,
-      cityName: city?.name,
-      zoneName: zone?.name,
-      areaName: area?.name ?? null,
+      cityName: values.cityName || undefined,
+      zoneName: values.zoneName || undefined,
+      areaName: values.area ? values.areaName ?? null : null,
     };
 
     if (isEdit) {
@@ -562,10 +502,7 @@ export function OrderForm({
             form={form}
             products={products}
             isEdit={isEdit}
-            locations={locations}
-            isLoading={isLoading}
-            loadZones={loadZones}
-            loadAreas={loadAreas}
+            savedShippingMethod={savedShippingMethod}
             localTotals={localTotals}
             manualQuote={manualQuote}
           >

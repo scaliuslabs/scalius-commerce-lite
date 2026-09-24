@@ -8,7 +8,7 @@ import {
   lookupUnknownOrderShipment,
   reconcileOrderShipment,
   resolveUnknownOrderShipment,
-  updateOrderStatus,
+  markOrderDelivered,
 } from "../orders/orders.fulfillment";
 import { checkShipmentStatus, deleteShipmentRecord, getShipments, ORDER_SHIPMENT_LIST_LIMIT } from "./delivery.service";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
@@ -415,12 +415,12 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
     it("advances only provider-less manual shipments from the merchant delivered command", async () => {
       sqlite.exec(`
         UPDATE orders SET status = 'shipped', payment_method = 'stripe', payment_status = 'paid', paid_amount_minor = 16000, balance_due_minor = 0;
-        UPDATE order_items SET fulfillment_status = 'shipped';
+        UPDATE order_items SET fulfillment_status = 'shipped', shipped_quantity = quantity;
         INSERT INTO delivery_shipments (id, order_id, provider_id, provider_type, status) VALUES
           ('courier_ship', 'order_local', 'provider_local', 'pathao', 'in_transit'),
           ('manual_ship', 'order_local', NULL, 'manual', 'in_transit');
       `);
-      await updateOrderStatus(db, "order_local", "delivered");
+      await markOrderDelivered(db, "order_local");
       expect(sqlite.prepare("SELECT id, status FROM delivery_shipments ORDER BY id").all()).toEqual([
         { id: "courier_ship", status: "in_transit" },
         { id: "manual_ship", status: "delivered" },

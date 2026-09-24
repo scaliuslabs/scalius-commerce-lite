@@ -9,7 +9,7 @@ import {
   type CustomerOrder,
 } from "@/lib/api/customer-auth";
 import { getAreas, getCities, getZones } from "@/lib/api/shipping";
-import { renderGuestOrderNotices } from "@/lib/account-guest-orders";
+import { renderPhoneVerification } from "@/lib/account-phone-verification";
 import { getShippingAddressError } from "@/lib/checkout/shipping-address";
 import { getProductImageUrl } from "@/lib/product-media";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -116,10 +116,10 @@ async function loadAccountOrders(runId: number): Promise<void> {
   const showMoreContainer = byId("showMoreContainer");
   const showMoreBtn = byId<HTMLButtonElement>("showMoreBtn");
   const ordersRetryBtn = byId<HTMLButtonElement>("ordersRetryBtn");
-  const guestNotices = document.getElementById("guestOrderNotices");
+  const phoneNotice = document.getElementById("phoneVerification");
   ordersRetryBtn.disabled = true;
   ordersRetryBtn.onclick = () => void loadAccountOrders(runId);
-  if (guestNotices) renderGuestOrderNotices(guestNotices, [], { onClaimed: () => undefined });
+  if (phoneNotice) renderPhoneVerification(phoneNotice, null, { onVerified: () => undefined });
   ordersList.innerHTML = "";
   emptyOrders.classList.add("hidden");
   ordersError.classList.add("hidden");
@@ -139,11 +139,12 @@ async function loadAccountOrders(runId: number): Promise<void> {
     return;
   }
 
-  // Orders placed with a phone this account hasn't verified: offer to verify it.
-  if (guestNotices) {
-    renderGuestOrderNotices(guestNotices, result.unclaimedGuestOrders ?? [], {
-      onClaimed: async (message) => {
-        const status = document.getElementById("guestOrdersStatus");
+  // The account's own phone isn't verified and the store can text it a code.
+  if (phoneNotice) {
+    renderPhoneVerification(phoneNotice, result.phoneVerification, {
+      storeContact: document.getElementById("phoneVerificationContact"),
+      onVerified: async (message) => {
+        const status = document.getElementById("phoneVerificationStatus");
         if (status) status.textContent = message;
         await loadAccountOrders(runId);
         if (accountWindow.__scaliusAccountInitRun === runId) document.getElementById("ordersHeading")?.focus();
@@ -312,8 +313,8 @@ export async function initializeAccountPage(): Promise<void> {
 
   let customer = session.customer;
   renderProfile(customer);
-  const guestOrdersStatus = document.getElementById("guestOrdersStatus");
-  if (guestOrdersStatus) guestOrdersStatus.textContent = "";
+  const phoneVerificationStatus = document.getElementById("phoneVerificationStatus");
+  if (phoneVerificationStatus) phoneVerificationStatus.textContent = "";
   loadingState.classList.add("hidden");
   authState.classList.remove("hidden");
 

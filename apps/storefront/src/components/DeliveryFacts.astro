@@ -1,5 +1,5 @@
 ---
-import { Banknote, RotateCcw, Truck } from "lucide-react";
+import { Banknote, RotateCcw, Store, Truck } from "lucide-react";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 
@@ -10,8 +10,15 @@ interface Props {
 }
 
 const { facts, variant = "strip" } = Astro.props;
-const ICONS = { delivery: Truck, cod: Banknote, returns: RotateCcw } as const;
-const columns = ["", "sm:grid-cols-1", "sm:grid-cols-2", "sm:grid-cols-3"][facts.length] ?? "sm:grid-cols-3";
+const ICONS = { delivery: Truck, pickup: Store, cod: Banknote, returns: RotateCcw } as const;
+// Up to three facts sit side by side from small screens; four (delivery,
+// pickup, cash on delivery, returns) stack until there is room for a row.
+const columns = [
+  "",
+  "sm:grid-cols-1",
+  "sm:grid-cols-2 sm:divide-x sm:divide-y-0",
+  "sm:grid-cols-3 sm:divide-x sm:divide-y-0",
+][facts.length] ?? "lg:grid-cols-4 lg:divide-x lg:divide-y-0";
 ---
 
 {facts.length > 0 && (
@@ -22,7 +29,7 @@ const columns = ["", "sm:grid-cols-1", "sm:grid-cols-2", "sm:grid-cols-3"][facts
     <div class={variant === "strip" ? "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" : ""}>
       <ul
         class={variant === "strip"
-          ? `grid divide-y divide-border rounded-xl border border-border bg-card sm:divide-x sm:divide-y-0 ${columns}`
+          ? `grid divide-y divide-border rounded-xl border border-border bg-card ${columns}`
           : "divide-y divide-border rounded-lg border border-border bg-card"}
       >
         {facts.map((fact) => {

@@ -129,6 +129,7 @@ type OpenApiOperationLike = {
 
 export type AgentOperationOpenApiDocument = {
   paths?: Record<string, Record<string, unknown> | unknown>;
+  components?: object & { schemas?: Record<string, unknown> };
   "x-scalius-workflows"?: AgentWorkflowCatalog;
 };
 
@@ -801,6 +802,42 @@ function inputSchema(operation: OpenApiOperationLike): Record<string, unknown> {
   return input;
 }
 
+const COMPONENT_SCHEMA_REF = "#/components/schemas/";
+
+/**
+ * Replaces `#/components/schemas/*` references with the component itself so
+ * each manifest entry is self-contained: an agent reading one operation sees
+ * the whole shape (for example the storefront theme document). A component
+ * that refers to itself stays a reference at the second visit.
+ */
+export function inlineComponentSchemaRefs(
+  value: unknown,
+  schemas: Record<string, unknown>,
+  visiting: readonly string[] = [],
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => inlineComponentSchemaRefs(item, schemas, visiting));
+  }
+  if (!isRecord(value)) return value;
+  const ref = value.$ref;
+  if (typeof ref === "string" && ref.startsWith(COMPONENT_SCHEMA_REF)) {
+    const name = decodeJsonPointerSegment(ref.slice(COMPONENT_SCHEMA_REF.length));
+    const target = schemas[name];
+    if (target === undefined) throw new Error(`Unknown OpenAPI component schema ${ref}.`);
+    if (visiting.includes(name)) return value;
+    const { $ref: _ref, ...siblings } = value;
+    const inlined = inlineComponentSchemaRefs(target, schemas, [...visiting, name]);
+    return Object.keys(siblings).length > 0 && isRecord(inlined)
+      ? { ...inlined, ...inlineComponentSchemaRefs(siblings, schemas, visiting) as Record<string, unknown> }
+      : inlined;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    out[key] = inlineComponentSchemaRefs(child, schemas, visiting);
+  }
+  return out;
+}
+
 function assertSurfaceMatchesOperationId(
   operationId: string,
   surface: AgentOperationSurface,
@@ -818,6 +855,7 @@ export function buildAgentOperationManifest(
 ): AgentOperationManifestEntry[] {
   const manifest: AgentOperationManifestEntry[] = [];
   const operationIds = new Set<string>();
+  const componentSchemas = document.components?.schemas ?? {};
 
   for (const pathTemplate of Object.keys(document.paths ?? {}).sort()) {
     const pathItem = document.paths?.[pathTemplate];
@@ -846,7 +884,10 @@ export function buildAgentOperationManifest(
         operation.operationId,
       );
       assertSurfaceMatchesOperationId(operation.operationId, metadata.surface);
-      const operationOutputSchema = successOutputSchema(operation.responses);
+      const operationOutputSchema = inlineComponentSchemaRefs(
+        successOutputSchema(operation.responses),
+        componentSchemas,
+      );
       if (metadata.continuationOutput) {
         assertContinuationOutputSchema(
           operationOutputSchema,
@@ -951,7 +992,9 @@ export function buildAgentOperationManifest(
           : {}),
         rbac,
         inputSchema:
-          metadata.exposure === "excluded" ? null : inputSchema(operation),
+          metadata.exposure === "excluded"
+            ? null
+            : inlineComponentSchemaRefs(inputSchema(operation), componentSchemas) as Record<string, unknown>,
         outputSchema:
           metadata.exposure === "excluded"
             ? null

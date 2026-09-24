@@ -116,6 +116,8 @@ export interface AppliedDiscountLine {
     amountMinor: number;
     /** Off delivery. */
     shippingAmountMinor: number;
+    /** A code only: the automatic discount it replaced because it saves more and they can't be combined. */
+    replaces?: string;
 }
 
 export interface StorefrontDiscountQuote {
@@ -520,7 +522,11 @@ export async function quoteStorefrontDiscount(
             && input.shippingKnown === false
             && (reason === "no_savings" || reason === "lower_savings")
         ) {
-            rejected.push({ code, reason: "needs_delivery" });
+            // One delivery discount per order: a second one waiting for the address says so now.
+            const waiting = rejected.find((other) => other.reason === "needs_delivery");
+            rejected.push(waiting
+                ? { code, reason: "delivery_discount_applied", conflictsWith: waiting.code }
+                : { code, reason: "needs_delivery" });
         } else if (reason === "minimum_subtotal_not_met") {
             const shippingMinimum = discountClass === "shipping"
                 || candidate.conditions.some((condition) => condition.kind === "minimum_merchandise_subtotal" && condition.config.shippingOnly);
@@ -553,9 +559,13 @@ export async function quoteStorefrontDiscount(
                         ?? { product: false, order: false, shipping: false },
                 },
             ) && other.discountClass !== discountClass);
+            // The same kind of discount already applies and saves at least as much: name it.
+            const better = conflict ? undefined : applied?.discounts.find((other) => other.discountClass === discountClass);
             rejected.push(conflict
                 ? { code, reason: "not_combinable", conflictsWith: conflict.promotionCode ?? conflict.promotionName }
-                : { code, reason: "lower_savings" });
+                : better
+                    ? { code, reason: "lower_savings", conflictsWith: better.promotionCode ?? better.promotionName }
+                    : { code, reason: "lower_savings" });
         } else {
             rejected.push({ code, reason: "unavailable", message: genericRejectionMessage(reason) });
         }
@@ -591,7 +601,9 @@ export async function quoteStorefrontDiscount(
                 case "get_items":
                 case "buy_items": return finished ? describeOffer(finished) : "Add the qualifying items to your cart to get this discount.";
                 case "not_combinable": return `${rejection.code} can't be combined with ${rejection.conflictsWith}.`;
-                case "lower_savings": return "Your cart already gets an equal or better discount.";
+                case "lower_savings": return rejection.conflictsWith
+                    ? `${rejection.conflictsWith} gives an equal or bigger discount, so ${rejection.conflictsWith} is applied.`
+                    : "Your cart already gets an equal or better discount.";
                 case "needs_delivery": return `Choose your delivery address to use ${rejection.code}.`;
                 case "delivery_discount_applied": return `Only one delivery discount can be used. ${rejection.conflictsWith} already applies to delivery.`;
                 default: return genericRejectionMessage("inactive");
@@ -600,17 +612,45 @@ export async function quoteStorefrontDiscount(
         return { ...rejection, message: text, ...(finished ? { offer: finished } : {}) };
     }).sort((left, right) => codes.indexOf(left.code) - codes.indexOf(right.code));
 
+    const appliedClasses = new Set(applied?.discounts.map(({ discountClass }) => discountClass));
+    /**
+     * The automatic discount a code took the place of: it would have applied,
+     * but it can't be combined with the code and the code saves more. An
+     * automatic discount that lost to another applied discount of its own
+     * kind was not replaced by the code.
+     */
+    const replacedBy = (discount: AppliedPromotion["discounts"][number]): string | undefined => {
+        if (!discount.promotionCode) return undefined;
+        const code = candidates.find(({ id }) => id === discount.promotionId);
+        if (!code) return undefined;
+        const automatic = evaluation.rejected.flatMap(({ promotionId, reason, evaluatedSavingsMinor }) => {
+            if (reason !== "lower_savings" || !evaluatedSavingsMinor) return [];
+            const candidate = candidates.find(({ id }) => id === promotionId);
+            if (!candidate || candidate.method !== "automatic") return [];
+            const automaticClass = discountClassOf(candidate.effects[0]!.target);
+            const tookItsPlace = automaticClass === discount.discountClass
+                || (!appliedClasses.has(automaticClass) && !discountsCombine(
+                    { discountClass: automaticClass, combinesWith: candidate.combinesWith },
+                    { discountClass: discount.discountClass, combinesWith: code.combinesWith },
+                ));
+            return tookItsPlace ? [candidate.name] : [];
+        });
+        return automatic[0];
+    };
+
     const quote = {
         discounts: (applied?.discounts ?? []).map((discount) => {
             const shippingAmountMinor = applied!.allocations
                 .filter(({ promotionId, target }) => promotionId === discount.promotionId && target === "shipping")
                 .reduce((total, { discountAmountMinor }) => total + discountAmountMinor, 0);
+            const replaces = replacedBy(discount);
             return {
                 promotionId: discount.promotionId,
                 title: discount.promotionName,
                 code: discount.promotionCode,
                 amountMinor: discount.totalDiscountMinor - shippingAmountMinor,
                 shippingAmountMinor,
+                ...(replaces ? { replaces } : {}),
             };
         }),
         offers: offerDrafts.map(finishOffer),

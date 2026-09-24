@@ -170,3 +170,14 @@ export function getOrderReceiptSupportStatusMessage(
         : copy.orderReceiptRequestSettledText;
   }
 }
+
+const SUPPORT_STATUSES_WITH_NEXT_STEP = new Set(["submitted", "under_review", "approved", "withdrawn", "completed"]);
+
+/** A declined or settled request leaves the buyer nowhere to go but the store itself. */
+export function orderReceiptSupportRequestNeedsStoreContact(
+  request: Pick<OrderReceiptSupportRequest, "status" | "active">,
+): boolean {
+  const status = normalize(request.status);
+  if (status === "rejected") return true;
+  return !SUPPORT_STATUSES_WITH_NEXT_STEP.has(status) && !request.active;
+}

@@ -13,6 +13,8 @@ import {
 } from "../products/products.public-eligibility";
 import {
     buildBuyerCatalogPricingProjection,
+    buyerPriceRangeColumns,
+    presentBuyerPriceRange,
     type BuyerCatalogPricingProjection,
 } from "../products/products.buyer-projection";
 import {
@@ -390,11 +392,13 @@ export async function listCollectionProductOptions(
         .select({ count: sql<number>`count(*)`, storeCurrencyCode: storeCurrencyCodeSql() })
         .from(products)
         .where(whereClause);
+    const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const optionsQuery = db
         .select({
             id: products.id,
             name: products.name,
             priceMinor: products.priceMinor,
+            ...buyerPriceRangeColumns(buyerPricing),
             categoryId: products.categoryId,
             categoryName: sql<string | null>`${categories.name}`.as(
                 "collection_product_category_name",
@@ -418,6 +422,7 @@ export async function listCollectionProductOptions(
         })
         .from(products)
         .leftJoin(categories, eq(categories.id, products.categoryId))
+        .leftJoin(buyerPricing, eq(buyerPricing.productId, products.id))
         .where(whereClause)
         .orderBy(
             ...(selectedProductIds.length > 0
@@ -441,6 +446,9 @@ export async function listCollectionProductOptions(
             id: string;
             name: string;
             priceMinor: number;
+            buyerFromMinor: number | null;
+            buyerToMinor: number | null;
+            buyerBaseMinor: number | null;
             categoryId: string | null;
             categoryName: string | null;
             isActive: boolean;
@@ -455,11 +463,12 @@ export async function listCollectionProductOptions(
         : new Map();
 
     return {
-        products: productOptions.map(({ priceMinor, variantCount, available, ...product }) => ({
+        products: productOptions.map(({ priceMinor, buyerFromMinor, buyerToMinor, buyerBaseMinor, variantCount, available, ...product }) => ({
             ...product,
             variantCount: Number(variantCount ?? 0),
             available: available == null ? null : Number(available),
             price: fromMinor(priceMinor, decimalPlaces),
+            priceRange: presentBuyerPriceRange({ buyerFromMinor, buyerToMinor, buyerBaseMinor }, decimalPlaces),
             primaryImage:
                 resolveProductImageRepresentation(mediaMap.get(product.id) ?? [])?.url ?? null,
         })),

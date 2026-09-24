@@ -195,7 +195,7 @@ export function SettingsRow({
     <button
       type="button"
       {...props}
-      className="flex min-h-14 w-full items-center gap-3 border-t border-border px-4 py-3 text-left first:border-t-0 hover:bg-muted disabled:cursor-default disabled:hover:bg-transparent"
+      className="flex min-h-14 w-full items-center gap-3 border-t border-border px-4 py-3 text-left outline-none first:border-t-0 hover:bg-muted focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-default disabled:hover:bg-transparent"
     >
       <span className="min-w-0 flex-1">
         <span className="block text-body font-medium">{label}</span>
@@ -263,24 +263,22 @@ export function SettingsDialog({
                 <SaveErrorBanner />
                 <CloseDialogContext.Provider value={() => close(state)}>{children}</CloseDialogContext.Provider>
               </div>
-              {/* Long forms scroll; the actions stay in reach, separated by a border. */}
-              <div className="sticky -bottom-5 -mx-5 -mb-5 border-t border-border bg-card px-5 py-4">
-                <DialogFooter>
-                  <Button type="button" variant="outline" disabled={state.busy} onClick={() => requestClose(state)}>
-                    {t("cancel")}
-                  </Button>
-                  <Button
-                    type="button"
-                    loading={state.busy}
-                    disabled={!state.dirty}
-                    onClick={async () => {
-                      if (await state.saveAll()) setOpen(false);
-                    }}
-                  >
-                    {t("save")}
-                  </Button>
-                </DialogFooter>
-              </div>
+              {/* Long forms scroll; the footer is a pinned, bordered bar (DialogFooter). */}
+              <DialogFooter>
+                <Button type="button" variant="outline" disabled={state.busy} onClick={() => requestClose(state)}>
+                  {t("cancel")}
+                </Button>
+                <Button
+                  type="button"
+                  loading={state.busy}
+                  disabled={!state.dirty}
+                  onClick={async () => {
+                    if (await state.saveAll()) setOpen(false);
+                  }}
+                >
+                  {t("save")}
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
           <ConfirmDialog

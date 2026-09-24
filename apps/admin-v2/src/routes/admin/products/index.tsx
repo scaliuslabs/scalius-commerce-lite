@@ -14,7 +14,7 @@ import {
   normalizeOptionalSearchString,
   type SearchValidatorInput,
 } from "~/lib/list-helpers";
-import { adoptListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, listSearchKey, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -69,7 +69,7 @@ function listQuery(search: ProductSearch, term: string) {
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: validateProductSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("products", deps.q))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("products", deps, "status"), deps.q))),
   head: () => ({ meta: [{ title: `${translate(productMessages, "products")} | Scalius Admin` }] }),
   component: ProductsPage,
   errorComponent: RouteErrorComponent,
@@ -82,8 +82,8 @@ function ProductsPage() {
   const navigate = useNavigate();
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
-  const [term] = useListSearch("products");
-  const { fmt, salePrice } = useCurrency();
+  const [term] = useListSearch(listSearchKey("products", search, "status"));
+  const { fmt } = useCurrency();
   const { getStorefrontPath } = useStorefrontUrl();
   const { products: can } = useCatalogActionPermissions();
   const duplicate = useDuplicateProduct();
@@ -91,8 +91,8 @@ function ProductsPage() {
   const rowTo = (row: ProductListItem) => `/admin/products/${row.id}/edit`;
 
   const columns = useMemo(
-    () => getProductColumns({ trashed: search.trashed, fmt, salePrice, rowTo }),
-    [search.trashed, fmt, salePrice],
+    () => getProductColumns({ trashed: search.trashed, fmt, rowTo }),
+    [search.trashed, fmt],
   );
 
   return (

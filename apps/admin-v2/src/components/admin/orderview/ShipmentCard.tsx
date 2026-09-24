@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -15,13 +25,8 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { ShipmentMetadataDisplay } from "~/components/ui/ShipmentMetadataDisplay";
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
@@ -40,6 +45,8 @@ import {
   orderErrorMessage,
   useCreateOrderShipment,
   useLookupUnknownShipment,
+  useMarkOrderDelivered,
+  useMarkParcelReturned,
   useReconcileShipment,
   useResolveUnknownShipment,
 } from "~/lib/api-mutations/orders";
@@ -56,7 +63,7 @@ import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order, OrderItem, OrderShipment } from "./types";
-import type { OrderActionRequest } from "./primary-action";
+import { canMarkDelivered, isPartSent, type OrderActionRequest } from "./primary-action";
 
 type Outcome = "confirmed_existing" | "confirmed_not_created" | "confirmed_cancelled";
 type EvidenceSource = "courier_portal" | "courier_support";
@@ -187,12 +194,9 @@ function CourierCheckDialog({
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="courier-outcome">{t("courier.outcome")}</Label>
-            <Select value={outcome} onValueChange={(value) => { setOutcome(value as Outcome); edited(); }}>
-              <SelectTrigger id="courier-outcome" disabled={mutation.isPending}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {OUTCOMES.map((value) => <SelectItem key={value} value={value}>{t(`courier.outcome.${value}`)}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <NativeSelect id="courier-outcome" disabled={mutation.isPending} value={outcome} onValueChange={(value) => { setOutcome(value as Outcome); edited(); }}>
+              {OUTCOMES.map((value) => <option key={value} value={value}>{t(`courier.outcome.${value}`)}</option>)}
+            </NativeSelect>
           </div>
           {outcome === "confirmed_existing" ? (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -208,12 +212,9 @@ function CourierCheckDialog({
           ) : null}
           <div className="space-y-2">
             <Label htmlFor="courier-source">{t("courier.source")}</Label>
-            <Select value={evidenceSource} onValueChange={(value) => { setEvidenceSource(value as EvidenceSource); edited(); }}>
-              <SelectTrigger id="courier-source" disabled={mutation.isPending}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {EVIDENCE_SOURCES.map((value) => <SelectItem key={value} value={value}>{t(`courier.source.${value}`)}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <NativeSelect id="courier-source" disabled={mutation.isPending} value={evidenceSource} onValueChange={(value) => { setEvidenceSource(value as EvidenceSource); edited(); }}>
+              {EVIDENCE_SOURCES.map((value) => <option key={value} value={value}>{t(`courier.source.${value}`)}</option>)}
+            </NativeSelect>
           </div>
           <div className="space-y-2">
             <Label htmlFor="courier-evidence">{t("courier.details")}</Label>
@@ -311,17 +312,23 @@ function ShipmentRow({
   canManage,
   refreshBlockedReason,
   statusLabel,
+  failureNote,
   money,
   onUpdated,
+  onCameBack,
 }: {
   shipment: OrderShipment;
   items: readonly OrderItem[];
   canManage: boolean;
   refreshBlockedReason?: string;
-  /** Overrides the courier status, e.g. "Delivery failed". */
+  /** Overrides the courier status, e.g. "Delivery failed · attempt 1 · No cash". */
   statusLabel?: string;
+  /** What the rider wrote about a failed delivery. */
+  failureNote?: string | null;
   money: (amount: number) => string;
   onUpdated: () => void;
+  /** Own-courier parcel of a part-sent order: record that it came back undelivered. */
+  onCameBack?: () => void;
 }) {
   const t = useMessages(orderDetailMessages);
   const [expanded, setExpanded] = useState(false);
@@ -344,6 +351,7 @@ function ShipmentRow({
         />
         <span className="text-muted-foreground">{formatOrderDate(shipment.createdAt)}</span>
       </div>
+      {failureNote ? <p className="whitespace-pre-wrap text-muted-foreground">{failureNote}</p> : null}
       <p>
         {provider}
         {shipment.providerType !== "manual" && shipment.courierName && shipment.courierName !== shipment.providerName ? ` · ${shipment.courierName}` : ""}
@@ -379,6 +387,9 @@ function ShipmentRow({
           </Button>
           {expanded ? <ShipmentMetadataDisplay metadata={shipment.metadata} /> : null}
         </>
+      ) : null}
+      {onCameBack ? (
+        <Button type="button" variant="outline" size="sm" onClick={onCameBack}>{t("shipments.cameBack")}</Button>
       ) : null}
     </li>
   );
@@ -434,25 +445,24 @@ function BookCourier({ order, focusRequest, guard }: {
       {notice}
       <Label htmlFor="book-courier">{t("shipments.courier")}</Label>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Select
+        <SearchableSelect
+          id="book-courier"
+          triggerRef={triggerRef}
           value={providerId}
           onValueChange={(value) => { setProviderId(value); mutation.reset(); }}
           disabled={read.status !== "ready" || mutation.isPending || locked}
-        >
-          <SelectTrigger id="book-courier" ref={triggerRef}>
-            <SelectValue placeholder={t("shipments.chooseCourier")} />
-          </SelectTrigger>
-          <SelectContent>
-            {providers.map((provider) => {
-              const providerReadiness = resolveProviderReadiness(provider);
-              return (
-                <SelectItem key={provider.id} value={provider.id} disabled={!providerReadiness.canCreateShipment}>
-                  {provider.name} · {getProviderReadinessLabel(providerReadiness)}
-                </SelectItem>
-              );
-            })}
-          </SelectContent>
-        </Select>
+          placeholder={t("shipments.chooseCourier")}
+          triggerClassName="w-full"
+          options={providers.map((provider) => {
+            const providerReadiness = resolveProviderReadiness(provider);
+            return {
+              value: provider.id,
+              label: provider.name,
+              description: getProviderReadinessLabel(providerReadiness),
+              disabled: !providerReadiness.canCreateShipment,
+            };
+          })}
+        />
         <Button
           className="shrink-0"
           loading={mutation.isPending}
@@ -475,6 +485,7 @@ const SETTLED_SHIPMENT_STATUSES = new Set(["delivered", "returned", "cancelled",
 export function ShipmentCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
+  const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const hydrated = useHydrated();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -482,7 +493,11 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
   const [sending, setSending] = useState(false);
   const cancelRequest = useCancelRequestGuard(order);
   const guardSend = (run: () => void) => cancelRequest.guard("send", run);
-  const canManage = useOrderActionPermissions().canManageOrderShipments;
+  const permissions = useOrderActionPermissions();
+  const canManage = permissions.canManageOrderShipments;
+  const deliveredMutation = useMarkOrderDelivered();
+  const cameBackMutation = useMarkParcelReturned();
+  const [cameBack, setCameBack] = useState<OrderShipment | null>(null);
   const read = order.operationalReads?.shipments ?? { status: "ready" as const, refreshing: false };
   const shipments = order.shipments ?? [];
   const status = order.status.toLowerCase();
@@ -498,15 +513,28 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
   const refreshBlockedReason = order.activeRefundOperation?.active
     ? t("locked.refund")
     : order.shipmentRecovery?.activeLock ? t("locked.shipment") : undefined;
-  // A recorded failed delivery replaces "In transit" on the shipment still out.
+  const partSent = isPartSent(order);
+  const canDeliver = permissions.canChangeOrderStatus && canMarkDelivered(order);
+  // A recorded failed delivery replaces "In transit" on the shipment still out, once:
+  // "Delivery failed · attempt 1 · No cash" (R3-ORD-05).
+  const outForDelivery = status === "shipped" || partSent;
   const codQuery = useQuery({
     ...orderCodQueryOptions(order.id),
-    enabled: hydrated && order.paymentMethod === "cod" && status === "shipped",
+    enabled: hydrated && order.paymentMethod === "cod" && outForDelivery,
     staleTime: ORDER_DETAIL_PREFETCH_STALE_MS,
   });
-  const cod = hydrated && status === "shipped" ? codQuery.data?.tracking ?? null : null;
+  const cod = hydrated && outForDelivery ? codQuery.data?.tracking ?? null : null;
   const failure = cod?.codStatus === "failed" ? cod : null;
   const openShipmentId = shipments.find((shipment) => !SETTLED_SHIPMENT_STATUSES.has(shipment.status.toLowerCase()))?.id;
+  const openLabel = status === "returned"
+    ? t("cod.status.returned")
+    : failure
+      ? t("shipments.failedAttempt", {
+        count: failure.deliveryAttempts,
+        reason: orderDetailLabel(t, "cod.reason.", failure.failureReason ?? "other"),
+      })
+      : undefined;
+  const cameBackUnits = cameBack ? shipmentLines(cameBack, order.items).reduce((sum, line) => sum + line.quantity, 0) : 0;
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(order.id) });
@@ -535,17 +563,6 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
           label={t("shipments.loadFailed")}
           onRetry={() => void queryClient.refetchQueries({ queryKey: queryKeys.orders.shipments(order.id), type: "active" })}
         />
-        {failure ? (
-          <div role="status" className="space-y-1">
-            <p className="font-medium text-destructive">{t("shipments.failedAttempt", { count: failure.deliveryAttempts })}</p>
-            {failure.failureReason || failure.failureNote ? (
-              <p className="whitespace-pre-wrap text-muted-foreground">
-                {[failure.failureReason ? orderDetailLabel(t, "cod.reason.", failure.failureReason) : null, failure.failureNote]
-                  .filter(Boolean).join(" · ")}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
         {read.status === "ready" || read.status === "stale" ? (
           shipments.length > 0 ? (
             <ul className="divide-y">
@@ -556,17 +573,25 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
                   items={order.items}
                   canManage={canManage}
                   refreshBlockedReason={refreshBlockedReason}
-                  statusLabel={shipment.id !== openShipmentId
-                    ? undefined
-                    : status === "returned" ? t("cod.status.returned") : failure ? t("cod.status.failed") : undefined}
+                  statusLabel={shipment.id === openShipmentId ? openLabel : undefined}
+                  failureNote={shipment.id === openShipmentId ? failure?.failureNote : null}
                   money={money}
                   onUpdated={refresh}
+                  onCameBack={canManage && partSent && shipment.providerType === "manual"
+                    && !SETTLED_SHIPMENT_STATUSES.has(shipment.status.toLowerCase())
+                    ? () => setCameBack(shipment)
+                    : undefined}
                 />
               ))}
             </ul>
           ) : (
             <p className="text-muted-foreground">{t("shipments.empty")}</p>
           )
+        ) : null}
+        {canDeliver ? (
+          <Button type="button" className="w-full" loading={deliveredMutation.isPending} onClick={() => deliveredMutation.mutate({ orderId: order.id })}>
+            {t("primary.markDelivered")}
+          </Button>
         ) : null}
         {canBook || canSend ? (
           <section className="space-y-2 border-t pt-4">
@@ -580,6 +605,29 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
         ) : null}
       </CardContent>
       <ManualFulfillmentDialog order={order} open={sending} onOpenChange={setSending} />
+      <AlertDialog open={cameBack !== null} onOpenChange={(open) => !open && !cameBackMutation.isPending && setCameBack(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("shipments.cameBackTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {cameBackUnits === 1 ? t("shipments.cameBackOne") : t("shipments.cameBackMany", { count: cameBackUnits })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cameBackMutation.isPending}>{r("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cameBackMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!cameBack) return;
+                cameBackMutation.mutate({ orderId: order.id, shipmentId: cameBack.id }, { onSettled: () => setCameBack(null) });
+              }}
+            >
+              {t("shipments.cameBack")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {cancelRequest.dialog}
       <CourierCheckDialog
         order={order}

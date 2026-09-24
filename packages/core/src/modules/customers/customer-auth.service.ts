@@ -36,7 +36,7 @@ import {
     enforceOtpSendRateLimits,
     OtpContactCeilingError,
 } from "./customer-auth-rate-limit";
-import { buildVerifiedContactOrderLink, maskContact } from "./customer-identity";
+import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
     isContactFieldRequiredForAuthChannel,
@@ -102,12 +102,6 @@ export interface SendOtpInput {
     emailEnv?: EmailRuntimeContext["env"];
     encryptionKey?: string;
     credentialEncryptionKey?: string;
-    /**
-     * A signed-in buyer proving a phone for their account, not signing in:
-     * any phone channel the store can send on will do, even when phone
-     * sign-in is off.
-     */
-    contactProof?: boolean;
 }
 
 export interface SendOtpResult {
@@ -402,8 +396,6 @@ async function getActiveCustomerById(db: Database, customerId: string): Promise<
 
 type ProofOwner =
     | { kind: "account"; row: CustomerRow }
-    /** An unclaimed CRM profile keyed by the phone just proven: the buyer owns it. */
-    | { kind: "guest_profile"; row: CustomerRow }
     | { kind: "deleted" }
     | { kind: "none" };
 
@@ -434,16 +426,17 @@ async function resolveProofOwner(
     }
 
     // A phone owns an account only once proven. Accounts that merely typed
-    // this phone are not candidates; the phone's guest record is.
+    // this phone are not candidates, and neither is the phone's guest record:
+    // it can hold several people's orders, so the buyer creates their own
+    // account and the orders placed with the proven phone move into it.
     const rows = await db.select().from(customers).where(and(
         eq(customers.phone, identifier),
-        or(isNotNull(customers.phoneVerifiedAt), isNull(customers.accountClaimedAt)),
+        isNotNull(customers.phoneVerifiedAt),
+        isNotNull(customers.accountClaimedAt),
     ));
-    const verified = rows.find((row) => row.accountClaimedAt && row.phoneVerifiedAt && !row.deletedAt);
+    const verified = rows.find((row) => !row.deletedAt);
     if (verified) return { kind: "account", row: verified };
-    const guest = rows.find((row) => !row.accountClaimedAt && !row.deletedAt);
-    if (guest) return { kind: "guest_profile", row: guest };
-    return rows.some((row) => row.accountClaimedAt && row.phoneVerifiedAt) ? { kind: "deleted" } : { kind: "none" };
+    return rows.length > 0 ? { kind: "deleted" } : { kind: "none" };
 }
 
 async function resolveActiveCustomerLocation(
@@ -492,12 +485,12 @@ async function resolveActiveCustomerLocation(
 
     const zone = locationMap.get(input.zone);
     if (!zone || zone.type !== "zone" || zone.parentId !== city.id || zone.isActive !== true || zone.deletedAt != null) {
-        throw new ValidationError("Selected zone is no longer available for the chosen city.");
+        throw new ValidationError("Selected thana is no longer available for the chosen city.");
     }
 
     const area = input.area ? locationMap.get(input.area) : null;
     if (input.area && (!area || area.type !== "area" || area.parentId !== zone.id || area.isActive !== true || area.deletedAt != null)) {
-        throw new ValidationError("Selected area is no longer available for the chosen zone.");
+        throw new ValidationError("Selected area is no longer available for the chosen thana.");
     }
 
     return {
@@ -530,12 +523,13 @@ export async function sendOtp(
     const { settings, policy, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
     const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
     const channel = resolveCustomerAuthChannelForRequest(policy, input.method, input.channel)
-        ?? (input.contactProof ? contactProofChannel(input.method) : null);
+        ?? (input.method === "phone" && input.channel && PHONE_CODE_CHANNELS.includes(input.channel) ? input.channel : null)
+        ?? (input.method === "phone" ? await readyPhoneCodeChannel(db, policy, input.credentialEncryptionKey) : null);
     if (!channel) {
         throw new ForbiddenError(
             input.method === "email"
                 ? "This store doesn't offer sign-in by email."
-                : "This store doesn't offer sign-in by phone.",
+                : "Phone sign-in isn't available yet. Use your email.",
         );
     }
     requireKey(input.credentialEncryptionKey, "Customer OTP delivery target encryption key is not configured.");
@@ -611,21 +605,21 @@ async function assertOtpChannelReady(
         });
         if (!isReady(readiness)) {
             console.error(`[CustomerAuth] Email transport unavailable: ${readiness.issues[0]?.message ?? "not configured"}`);
-            throw new ServiceUnavailableError("Email codes are unavailable right now. Contact the store.");
+            throw new ServiceUnavailableError("Email codes aren't available right now.");
         }
         return;
     }
     if (channel === "whatsapp") {
         const whatsApp = await getWhatsAppCloudApiSettings(db, input.credentialEncryptionKey);
         if (!whatsApp.accessToken || !whatsApp.phoneNumberId) {
-            throw new ServiceUnavailableError("WhatsApp codes are unavailable right now. Contact the store.");
+            throw new ServiceUnavailableError("WhatsApp codes aren't available right now.");
         }
         return;
     }
     const readiness = await getSmsProviderReadiness(db, input.credentialEncryptionKey);
     if (!isReady(readiness)) {
         console.error(`[CustomerAuth] SMS transport unavailable: ${readiness.issues[0]?.message ?? "not configured"}`);
-        throw new ServiceUnavailableError("SMS codes are unavailable right now. Contact the store.");
+        throw new ServiceUnavailableError("Text message codes aren't available right now.");
     }
 }
 
@@ -650,6 +644,7 @@ export async function verifyOtp(
     const { policy, phoneCountryPolicy } = await getCustomerAuthRuntimePolicy(db);
     const identifier = normalizeIdentifier(input.method, input.identifier, phoneCountryPolicy);
     const channel = resolveCustomerAuthChannelForRequest(policy, input.method, input.channel)
+        ?? (input.method === "phone" && input.channel && PHONE_CODE_CHANNELS.includes(input.channel) ? input.channel : null)
         ?? (input.method === "email" ? "email" : "sms");
     const otpKey = await buildCustomerAuthOtpStorageKey(channel, identifier, input.encryptionKey);
     const challengeInput = {
@@ -682,140 +677,124 @@ export async function verifyOtp(
     if (owner.kind === "account") {
         row = markProven(owner.row, input.method, authenticatedAt);
         statements.push(db.update(customers).set(proofUpdate(input.method)).where(eq(customers.id, row.id)) as SQLiteBatchItem);
-    } else if (owner.kind === "guest_profile") {
-        row = { ...markProven(owner.row, input.method, authenticatedAt), accountClaimedAt: authenticatedAt };
-        isNewUser = true;
-        statements.push(db.update(customers)
-            .set({ ...proofUpdate(input.method), accountClaimedAt: authenticatedAt, linkedAccountId: null })
-            .where(and(eq(customers.id, row.id), isNull(customers.accountClaimedAt))) as SQLiteBatchItem);
     } else {
         row = newAccount!.row;
         isNewUser = true;
-        statements.push(newAccount!.write);
+        statements.push(newAccount!.write, signedUpHistory(db, { accountId: row.id, via: input.method }) as SQLiteBatchItem);
     }
 
     const session = await createSessionForCustomer(db, row, input.sessionHashKey, statements);
     return { status: "signed_in", session, customer: buildCustomerAuthProfile(row), isNewUser };
 }
 
-function contactProofChannel(method: "email" | "phone"): CustomerAuthOtpChannel {
-    return method === "email" ? "email" : "sms";
-}
-
-/** The channel a signed-in buyer's phone proof goes out on. */
-function phoneProofChannel(policy: CustomerAuthPolicyConfig): CustomerAuthOtpChannel {
-    return resolveCustomerAuthChannelForRequest(policy, "phone") ?? contactProofChannel("phone");
-}
-
-export interface LinkedGuestRecord {
-    id: string;
-    phone: string;
-    /** Masked phone the orders were placed with, e.g. "01•••••011". */
-    destination: string;
-    orderCount: number;
-}
+const PHONE_CODE_CHANNELS: readonly CustomerAuthOtpChannel[] = ["sms", "whatsapp"];
 
 /**
- * Guest records that gave this account orders placed with a contact it proved
- * and still hold orders placed with their own phone, which the account has
- * not proven. The buyer may prove that phone to bring them over.
+ * The phone channel a code can actually go out on: the store's chosen phone
+ * channel first, then any text channel that is set up. Phone sign-in is
+ * offered whenever SMS or WhatsApp works, whatever the sign-in settings say.
  */
-export async function listLinkedGuestRecords(db: Database, accountId: string): Promise<LinkedGuestRecord[]> {
-    const rows = await db
-        .select({
-            id: customers.id,
-            phone: customers.phone,
-            orderCount: sql<number>`count(${orders.id})`,
-        })
-        .from(customers)
-        .innerJoin(orders, and(
-            eq(orders.customerId, customers.id),
-            isNull(orders.accountOwnerCustomerId),
-            isNull(orders.deletedAt),
-        ))
-        .where(and(
-            eq(customers.linkedAccountId, accountId),
-            isNull(customers.accountClaimedAt),
-            isNull(customers.deletedAt),
-        ))
-        .groupBy(customers.id)
-        .orderBy(customers.createdAt);
-    return rows.map((row) => ({ ...row, orderCount: Number(row.orderCount), destination: maskContact("phone", row.phone) }));
-}
-
-/** Whether a phone code can reach the buyer at all (the store can text or WhatsApp). */
-export async function canSendPhoneProof(db: Database, credentialEncryptionKey: string | undefined): Promise<boolean> {
-    const { policy } = await getCustomerAuthRuntimePolicy(db);
-    try {
-        await assertOtpChannelReady(db, phoneProofChannel(policy), { credentialEncryptionKey });
-        return true;
-    } catch {
-        return false;
+export async function readyPhoneCodeChannel(
+    db: Database,
+    policy: CustomerAuthPolicyConfig,
+    credentialEncryptionKey: string | undefined,
+): Promise<CustomerAuthOtpChannel | null> {
+    const preferred = resolveCustomerAuthChannelForRequest(policy, "phone");
+    const candidates = [...new Set([...(preferred ? [preferred] : []), ...PHONE_CODE_CHANNELS])];
+    for (const channel of candidates) {
+        try {
+            await assertOtpChannelReady(db, channel, { credentialEncryptionKey });
+            return channel;
+        } catch {
+            // Not set up; try the next channel.
+        }
     }
-}
-
-async function requireLinkedGuestRecord(db: Database, accountId: string, guestRecordId: string) {
-    const record = (await listLinkedGuestRecords(db, accountId)).find((row) => row.id === guestRecordId);
-    if (!record) throw new NotFoundError("These orders are no longer waiting to be added.");
-    return record;
-}
-
-/** Sends a code to the phone a linked guest record's orders were placed with. */
-export async function sendLinkedGuestOrdersCode(
-    db: Database,
-    input: Omit<SendOtpInput, "method" | "identifier" | "channel" | "contactProof"> & { accountId: string; guestRecordId: string },
-): Promise<SendOtpResult & { destination: string }> {
-    const record = await requireLinkedGuestRecord(db, input.accountId, input.guestRecordId);
-    const sent = await sendOtp(db, { ...input, method: "phone", identifier: record.phone, contactProof: true });
-    return { ...sent, message: `We sent a code to ${record.destination}.`, destination: record.destination };
+    return null;
 }
 
 /**
- * Proves a linked guest record's phone for the signed-in account: the phone
- * becomes the account's verified phone (unless it already has another), and
- * every unowned order placed with it joins the account, with both change logs
- * written and the emptied guest record retired.
+ * The account page's only prompt about phones: the buyer's OWN account phone,
+ * unproven, when a code can reach it. It never mentions orders, counts or
+ * anyone else's records; proving the phone is what brings over orders placed
+ * with it.
  */
-export async function verifyLinkedGuestOrdersCode(
+export async function getAccountPhoneVerificationPrompt(
     db: Database,
-    input: { accountId: string; guestRecordId: string; code: string; encryptionKey?: string },
+    accountId: string,
+    credentialEncryptionKey: string | undefined,
+): Promise<{ phone: string } | null> {
+    const account = await getActiveCustomerById(db, accountId);
+    if (!account?.accountClaimedAt || account.phoneVerifiedAt || !account.phone) return null;
+    const { policy } = await getCustomerAuthRuntimePolicy(db);
+    return await readyPhoneCodeChannel(db, policy, credentialEncryptionKey) ? { phone: account.phone } : null;
+}
+
+/** Sends a code to the signed-in account's own (unproven) phone. */
+export async function sendAccountPhoneCode(
+    db: Database,
+    input: Omit<SendOtpInput, "method" | "identifier" | "channel"> & { accountId: string },
+): Promise<SendOtpResult> {
+    const account = await getActiveCustomerById(db, input.accountId);
+    if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
+    if (account.phoneVerifiedAt) throw new ConflictError("Your phone number is already verified.");
+    const { policy } = await getCustomerAuthRuntimePolicy(db);
+    const channel = await readyPhoneCodeChannel(db, policy, input.credentialEncryptionKey);
+    if (!channel) throw new ServiceUnavailableError("Text message codes aren't available right now.");
+    const sent = await sendOtp(db, { ...input, method: "phone", identifier: account.phone, channel });
+    return { ...sent, message: `We sent a code to ${formatAccountPhone(account.phone)}.` };
+}
+
+function formatAccountPhone(phone: string): string {
+    const digits = phone.replace(/\D/g, "");
+    const local = digits.startsWith("880") ? `0${digits.slice(3)}` : phone;
+    return /^01\d{9}$/.test(local) ? `${local.slice(0, 5)}-${local.slice(5)}` : phone;
+}
+
+/**
+ * Proves the signed-in account's own phone: it becomes verified, and every
+ * unowned order placed with it joins the account (both change logs written,
+ * an emptied guest record merged).
+ */
+export async function verifyAccountPhoneCode(
+    db: Database,
+    input: { accountId: string; code: string; encryptionKey?: string; credentialEncryptionKey?: string },
 ): Promise<{ movedOrders: number }> {
     if (!input.code?.trim()) throw new ValidationError("Enter the 6-digit code.");
-    const record = await requireLinkedGuestRecord(db, input.accountId, input.guestRecordId);
+    const account = await getActiveCustomerById(db, input.accountId);
+    if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
     const { policy } = await getCustomerAuthRuntimePolicy(db);
-    const channel = phoneProofChannel(policy);
-    const otpKey = await buildCustomerAuthOtpStorageKey(channel, record.phone, input.encryptionKey);
+    const channel = await readyPhoneCodeChannel(db, policy, input.credentialEncryptionKey ?? input.encryptionKey) ?? "sms";
+    const otpKey = await buildCustomerAuthOtpStorageKey(channel, account.phone, input.encryptionKey);
     await claimCustomerAuthOtpChallenge(db, {
         otpKey,
         method: "phone",
         channel,
-        identifier: record.phone,
+        identifier: account.phone,
         code: input.code,
         encryptionKey: input.encryptionKey,
     });
 
-    const [account, otherOwner] = await Promise.all([
-        getActiveCustomerById(db, input.accountId),
+    const [otherOwner, joining] = await Promise.all([
         db.select({ id: customers.id }).from(customers).where(and(
-            eq(customers.phone, record.phone),
+            eq(customers.phone, account.phone),
             isNotNull(customers.phoneVerifiedAt),
             isNotNull(customers.accountClaimedAt),
             isNull(customers.deletedAt),
         )).get(),
+        db.select({ count: sql<number>`count(*)` }).from(orders).where(and(
+            eq(orders.customerPhone, account.phone),
+            isNull(orders.accountOwnerCustomerId),
+            isNull(orders.deletedAt),
+        )).get(),
     ]);
-    if (!account) throw new UnauthorizedError("Please sign in again.");
     if (otherOwner && otherOwner.id !== account.id) {
         throw new ConflictError("This phone number is verified on another account. Sign in with it instead.");
     }
 
-    const statements: SQLiteBatchItem[] = [];
-    // A proven phone replaces a typed one; an account keeps a phone it already proved.
-    if (!account.phoneVerifiedAt || account.phone === record.phone) {
-        statements.push(db.update(customers)
-            .set({ phone: record.phone, ...proofUpdate("phone") })
-            .where(eq(customers.id, account.id)) as SQLiteBatchItem);
-    }
-    statements.push(...buildVerifiedContactOrderLink(db, { customerId: account.id, phone: record.phone }) as SQLiteBatchItem[]);
+    const statements: SQLiteBatchItem[] = [
+        db.update(customers).set(proofUpdate("phone")).where(eq(customers.id, account.id)) as SQLiteBatchItem,
+        ...buildVerifiedContactOrderLink(db, { customerId: account.id, phone: account.phone }) as SQLiteBatchItem[],
+    ];
     try {
         await safeBatch(db, statements as unknown as Parameters<typeof safeBatch>[1]);
     } catch (error) {
@@ -824,7 +803,7 @@ export async function verifyLinkedGuestOrdersCode(
         }
         throw error;
     }
-    return { movedOrders: record.orderCount };
+    return { movedOrders: Number(joining?.count ?? 0) };
 }
 
 function proofUpdate(method: "email" | "phone") {
@@ -940,6 +919,7 @@ async function prepareNewAccount(
         name,
         email,
         phone,
+        origin: "account",
         // Asked for by the buyer, and read here from the order, never from the request.
         ...(input.account.saveOrderAddress && latestOrder?.shippingAddress?.trim()
             ? {

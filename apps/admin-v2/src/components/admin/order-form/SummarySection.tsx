@@ -17,15 +17,9 @@ import {
   FormLabel,
   FormMessage,
 } from "~/components/ui/form";
-import { NumberInput } from "~/components/ui/number-input";
+import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
 import { Loader2, RotateCcw } from "lucide-react";
 import { useOrderForm } from "./OrderFormContext";
@@ -78,8 +72,8 @@ function useDeliveryZones() {
 
 /** Payment card: delivery charge, discount and the order total from the server quote. */
 export function SummarySection() {
-  const { form, refs, handleKeyDown, isEdit, localTotals, manualQuote } = useOrderForm();
-  const { fmt } = useCurrency();
+  const { form, refs, handleKeyDown, isEdit, savedShippingMethod, localTotals, manualQuote } = useOrderForm();
+  const { fmt, code } = useCurrency();
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
   const [city, zone, area, shippingMethodId] = useWatch({
@@ -89,6 +83,11 @@ export function SummarySection() {
   const zones = useDeliveryZones();
   const rates = deliveryRatesForAddress(zones, { city, zone, area });
   const pickedRate = rates.find((rate) => rate.id === shippingMethodId);
+  // Editing: the method the order was placed with stays named, even when this address no longer offers it.
+  const savedOption = savedShippingMethod && !rates.some((rate) => rate.id === savedShippingMethod.id)
+    ? savedShippingMethod
+    : null;
+  const methodValue = pickedRate?.id ?? (savedOption && shippingMethodId === savedOption.id ? savedOption.id : CUSTOM_CHARGE);
   // Once the merchant sets their own charge, a new address doesn't replace it.
   const customChosen = React.useRef(false);
   const offeredKey = rates.map((rate) => rate.id).join();
@@ -135,30 +134,30 @@ export function SummarySection() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          {rates.length > 0 ? (
+          {rates.length > 0 || savedOption ? (
             <div className="space-y-2">
               <Label htmlFor="order-delivery-method">{t("deliveryMethod")}</Label>
-              <Select
-                value={pickedRate?.id ?? CUSTOM_CHARGE}
+              <SearchableSelect
+                id="order-delivery-method"
+                triggerClassName="w-full"
+                value={methodValue}
                 onValueChange={(value) => {
+                  if (savedOption && value === savedOption.id) {
+                    customChosen.current = false;
+                    form.setValue("shippingMethodId", value, { shouldDirty: true });
+                    return;
+                  }
                   const rate = rates.find((candidate) => candidate.id === value);
                   customChosen.current = !rate;
                   pickRate(rate);
                   if (!rate) refs.shippingChargeRef.current?.focus();
                 }}
-              >
-                <SelectTrigger id="order-delivery-method" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {rates.map((rate) => (
-                    <SelectItem key={rate.id} value={rate.id}>
-                      {rate.name} · {fmt(rate.fee)}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value={CUSTOM_CHARGE}>{t("customCharge")}</SelectItem>
-                </SelectContent>
-              </Select>
+                options={[
+                  ...rates.map((rate) => ({ value: rate.id, label: `${rate.name} · ${fmt(rate.fee)}` })),
+                  ...(savedOption ? [{ value: savedOption.id, label: savedOption.name }] : []),
+                  { value: CUSTOM_CHARGE, label: t("customCharge") },
+                ]}
+              />
             </div>
           ) : null}
 
@@ -169,7 +168,8 @@ export function SummarySection() {
               <FormItem>
                 <FormLabel>{t("deliveryCharge")}</FormLabel>
                 <FormControl>
-                  <NumberInput
+                  <MoneyInput
+                    currencyCode={code}
                     placeholder="0"
                     name={field.name}
                     disabled={field.disabled}
@@ -200,7 +200,8 @@ export function SummarySection() {
               <FormItem>
                 <FormLabel>{t("discount")}</FormLabel>
                 <FormControl>
-                  <NumberInput
+                  <MoneyInput
+                    currencyCode={code}
                     placeholder="0"
                     aria-invalid={discountNeedsCorrection || undefined}
                     aria-describedby={discountNeedsCorrection
@@ -261,7 +262,7 @@ export function SummarySection() {
           {discount > 0 ? (
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">{t("discount")}</dt>
-              <dd>{fmt(-discount)}</dd>
+              <dd>−{fmt(discount)}</dd>
             </div>
           ) : null}
           {quote && (quote.taxEnabled || quote.taxAmount > 0) ? (

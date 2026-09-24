@@ -342,6 +342,58 @@ describe("OrderSuccessButtons customer request policy rendering", () => {
     )).toBe(true);
   });
 
+  it.each([
+    ["rejected", false, true],
+    [null, false, true],
+    ["approved", false, false],
+    ["submitted", true, false],
+  ])("offers the store's contact under a %s request only when it was declined or settled", (status, active, shown) => {
+    const contact = [
+      { kind: "phone" as const, href: "tel:+8801711000000", label: "01711-000000" },
+      { kind: "whatsapp" as const, href: "https://wa.me/8801711000000", label: "WhatsApp" },
+      { kind: "email" as const, href: "mailto:shop@example.com", label: "shop@example.com" },
+    ];
+    const request = {
+      id: "request_1", orderId: "ord_1", customerId: null, type: "cancel_pre_shipment",
+      status, active, severity: "info", label: "Cancellation request", actionLabel: "Request cancellation",
+      reason: null, message: null, submittedAt: null, resolvedAt: null,
+      createdAt: "2026-07-21T00:00:00.000Z", updatedAt: "2026-07-21T00:05:00.000Z",
+    } as never;
+    act(() => {
+      root.render(<OrderSuccessButtons orderId="ord_1" copy={ENGLISH_CHECKOUT_LANGUAGE_DATA} storeContact={contact} supportRequests={[request]} />);
+    });
+
+    const line = host.querySelector("[data-store-contact]");
+    expect(Boolean(line)).toBe(shown);
+    expect(host.textContent).not.toMatch(/contact the store if you still need help/i);
+    if (!shown) return;
+    expect(line?.textContent).toBe("Contact the store: 01711-000000 · WhatsApp · shop@example.com");
+    expect([...line!.querySelectorAll("a")].map((link) => link.getAttribute("href"))).toEqual([
+      "tel:+8801711000000", "https://wa.me/8801711000000", "mailto:shop@example.com",
+    ]);
+  });
+
+  it("says a declined request plainly, with no contact line, when the store has none", () => {
+    act(() => {
+      root.render(
+        <OrderSuccessButtons
+          orderId="ord_1"
+          copy={ENGLISH_CHECKOUT_LANGUAGE_DATA}
+          storeContact={[]}
+          supportRequests={[{
+            id: "request_1", orderId: "ord_1", customerId: null, type: "cancel_pre_shipment",
+            status: "rejected", active: false, severity: "danger", label: "Cancellation request rejected",
+            actionLabel: "Request cancellation", reason: null, message: null, submittedAt: null, resolvedAt: null,
+            createdAt: "2026-07-21T00:00:00.000Z", updatedAt: "2026-07-21T00:05:00.000Z",
+          } as never]}
+        />,
+      );
+    });
+
+    expect(host.textContent).toContain("The store could not accept this request.");
+    expect(host.querySelector("[data-store-contact]")).toBeNull();
+  });
+
   it("maps backend support identifiers to Bangla buyer copy", () => {
     act(() => {
       root.render(

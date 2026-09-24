@@ -150,7 +150,7 @@ describe("PageForm", () => {
     await settle();
   }
 
-  it("creates a draft page with a web address taken from the title", async () => {
+  it("creates a draft page and leaves its web address to the server", async () => {
     await render();
 
     expect(document.querySelector("h1")?.textContent).toBe("Add page");
@@ -162,11 +162,11 @@ describe("PageForm", () => {
 
     await click(button("Save"));
 
+    expect(api.create.mock.calls[0]?.[0]?.body).not.toHaveProperty("slug", expect.anything());
     expect(api.create.mock.calls[0]?.[0]?.body).toEqual(
       expect.objectContaining({
         contentType: "page",
         title: "About us",
-        slug: "about-us",
         isPublished: false,
         publishedAt: null,
         canonicalPath: null,
@@ -204,7 +204,7 @@ describe("PageForm", () => {
         tags: ["Guides"],
       }),
     });
-    expect(toastMock.success).toHaveBeenCalledWith("Changes saved");
+    expect(toastMock.success).toHaveBeenCalledWith("Blog post saved");
   });
 
   it("refuses a web address the store already uses", async () => {
@@ -238,7 +238,7 @@ describe("PageForm", () => {
     await render({ contentType: "article", defaultValues: savedPost, isEdit: true });
 
     expect(document.body.textContent).toContain("Only staff who can publish can change this.");
-    expect(byLabel<HTMLButtonElement>("Visibility").disabled).toBe(true);
+    expect(byLabel<HTMLSelectElement>("Visibility").disabled).toBe(true);
     expect(byLabel<HTMLInputElement>("Publish on").disabled).toBe(true);
     expect(byLabel<HTMLInputElement>("Title").disabled).toBe(false);
   });

@@ -39,8 +39,8 @@ describe("deleting delivery locations", () => {
     it("deletes a city with its thanas and areas and takes them out of delivery zones", async () => {
         const harness = seed();
         const { db } = harness;
-        await createDeliveryZone(db, { name: "Para zone", locationIds: ["para", "hemayetpur"], rates: [rate] }, 2);
-        await createDeliveryZone(db, { name: "Port", locationIds: ["agrabad"], rates: [{ ...rate, name: "Port" }] }, 2);
+        await createDeliveryZone(db, { name: "Para zone", locationIds: ["para", "hemayetpur"], rates: [rate] }, { code: "BDT", decimalPlaces: 2 });
+        await createDeliveryZone(db, { name: "Port", locationIds: ["agrabad"], rates: [{ ...rate, name: "Port" }] }, { code: "BDT", decimalPlaces: 2 });
 
         await deleteLocations(db, ["nagar"]);
 

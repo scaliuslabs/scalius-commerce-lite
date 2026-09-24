@@ -123,10 +123,11 @@ export function useArchiveOrdersWithUndo({ canUndo }: { canUndo: boolean }) {
       return archived;
     },
     onSuccess: (archived, { skipped }) => {
+      const done = archived.length === 1 ? t("archivedOne") : t("archivedOther", { count: archived.length });
+      // "2 orders archived · 1 skipped (still open)"
       toast.success(
-        archived.length === 1 ? t("archivedOne") : t("archivedOther", { count: archived.length }),
+        skipped > 0 ? `${done} · ${t("archiveSkipped", { count: skipped })}` : done,
         {
-          description: skipped > 0 ? t(skipped === 1 ? "archiveSkippedOne" : "archiveSkippedOther", { count: skipped }) : undefined,
           duration: canUndo ? 10_000 : undefined,
           action: canUndo ? { label: t("undo"), onClick: () => void restore(archived) } : undefined,
         },

@@ -9,13 +9,7 @@ import {
 import { Input } from "~/components/ui/input";
 import { PoliciesCard, StorePagePicker, policiesQuery, storePagesQuery } from "~/components/admin/settings/PoliciesCard";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { SettingsLoadFailure } from "~/components/admin/settings/SettingsLoadFailure";
 import { SettingsCard, SettingsField, SettingsPage, SettingsCardLoading } from "~/components/admin/settings/SettingsPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
@@ -131,23 +125,17 @@ function ReturnPolicyCard({ canEdit }: { canEdit: boolean }) {
       {accepts ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <SettingsField id="return-fees" label={t("fees")}>
-            <Select value={values.returnFees} disabled={!canEdit} onValueChange={(fees) => setValue("returnFees", fees as SeoReturnPolicySettings["returnFees"])}>
-              <SelectTrigger id="return-fees"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="free">{t("free")}</SelectItem>
-                <SelectItem value="customer_responsibility">{t("customerPays")}</SelectItem>
-              </SelectContent>
-            </Select>
+            <NativeSelect id="return-fees" value={values.returnFees} disabled={!canEdit} onValueChange={(fees) => setValue("returnFees", fees as SeoReturnPolicySettings["returnFees"])}>
+              <option value="free">{t("free")}</option>
+              <option value="customer_responsibility">{t("customerPays")}</option>
+            </NativeSelect>
           </SettingsField>
           <SettingsField id="return-method" label={t("method")}>
-            <Select value={values.returnMethod} disabled={!canEdit} onValueChange={(method) => setValue("returnMethod", method as SeoReturnPolicySettings["returnMethod"])}>
-              <SelectTrigger id="return-method"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mail">{t("mail")}</SelectItem>
-                <SelectItem value="in_store">{t("inStore")}</SelectItem>
-                <SelectItem value="both">{t("both")}</SelectItem>
-              </SelectContent>
-            </Select>
+            <NativeSelect id="return-method" value={values.returnMethod} disabled={!canEdit} onValueChange={(method) => setValue("returnMethod", method as SeoReturnPolicySettings["returnMethod"])}>
+              <option value="mail">{t("mail")}</option>
+              <option value="in_store">{t("inStore")}</option>
+              <option value="both">{t("both")}</option>
+            </NativeSelect>
           </SettingsField>
         </div>
       ) : null}

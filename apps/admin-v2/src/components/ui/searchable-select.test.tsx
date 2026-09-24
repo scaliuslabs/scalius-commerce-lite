@@ -96,7 +96,7 @@ describe("SearchableSelect", () => {
         new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
       );
     });
-    expect(onValueChange).toHaveBeenCalledWith("cat_drinks");
+    expect(onValueChange).toHaveBeenCalledWith("cat_drinks", expect.objectContaining({ value: "cat_drinks" }));
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
   });
 
@@ -160,7 +160,7 @@ describe("SearchableSelect", () => {
     expect(visibleItems[0]?.textContent).toContain("Zone 1258");
     expect(
       document.body.querySelector('[data-slot="searchable-select-overflow-hint"]')?.textContent,
-    ).toContain("Showing 100 of 1258");
+    ).toContain("Showing 100 of 1,258");
 
     const search = document.body.querySelector<HTMLInputElement>(
       'input[placeholder="Search zones..."]',

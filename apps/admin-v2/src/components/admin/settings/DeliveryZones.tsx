@@ -1,27 +1,31 @@
-import { Fragment, useDeferredValue, useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Plus, Search, X } from "lucide-react";
+import { ChevronRight, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
+import { useWholeCashAmounts } from "~/components/admin/shared/MoneyInput";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { apiClient, apiData } from "~/lib/api";
 import {
   allDeliveryLocationsQueryOptions,
+  deliveryLocationLoader,
   deliveryLocationsQueryOptions,
   type DeliveryLocation,
 } from "~/lib/api-query-options/delivery";
 import { parseAmountInput } from "~/lib/money-input";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
+import { locationMessages } from "~/i18n/location";
 import { settingsMessages } from "~/i18n/settings";
 import { shippingMessages } from "~/i18n/settings-shipping";
 import { cn } from "@scalius/shared/utils";
@@ -138,23 +142,34 @@ function emptyDraft(): RateDraft {
   };
 }
 
-type RateErrorKey = "rateNameRequired" | "feeInvalid" | "feeTooHigh" | "freeOverTooHigh" | "pickupAddressRequired";
+type RateErrorKey = "rateNameRequired" | "feeInvalid" | "feeTooHigh" | "freeOverTooHigh" | "pickupAddressRequired" | "wholeTaka";
 
 /** A charge as typed; an empty pickup charge means free pickup. */
 function feeOf(rate: RateDraft): number | null {
   return rate.kind === "pickup" && !rate.fee.trim() ? 0 : parseAmountInput(rate.fee);
 }
 
-/** What's wrong with each field of a charge, or nothing. */
-export function rateErrors(rate: RateDraft): Partial<Record<"name" | "fee" | "freeOver" | "pickupAddress", RateErrorKey>> {
+/**
+ * What's wrong with each field of a charge, or nothing. `wholeTaka`: the
+ * store currency is paid in whole units, so a charge or threshold has no paisa.
+ */
+export function rateErrors(
+  rate: RateDraft,
+  wholeTaka = false,
+): Partial<Record<"name" | "fee" | "freeOver" | "pickupAddress", RateErrorKey>> {
   const fee = feeOf(rate);
   const freeOver = rate.freeOver.trim() ? parseAmountInput(rate.freeOver) : null;
+  const fractional = (amount: number) => wholeTaka && !Number.isInteger(amount);
   return {
     ...(rate.name.trim() ? {} : { name: "rateNameRequired" as const }),
-    ...(fee === null ? { fee: "feeInvalid" as const } : fee > MAX_AMOUNT ? { fee: "feeTooHigh" as const } : {}),
+    ...(fee === null
+      ? { fee: "feeInvalid" as const }
+      : fee > MAX_AMOUNT ? { fee: "feeTooHigh" as const } : fractional(fee) ? { fee: "wholeTaka" as const } : {}),
     ...(rate.freeOver.trim() && freeOver === null
       ? { freeOver: "feeInvalid" as const }
-      : freeOver !== null && freeOver > MAX_AMOUNT ? { freeOver: "freeOverTooHigh" as const } : {}),
+      : freeOver !== null && freeOver > MAX_AMOUNT
+        ? { freeOver: "freeOverTooHigh" as const }
+        : freeOver !== null && fractional(freeOver) ? { freeOver: "wholeTaka" as const } : {}),
     ...(rate.kind === "pickup" && !rate.pickupAddress.trim() ? { pickupAddress: "pickupAddressRequired" as const } : {}),
   };
 }
@@ -192,13 +207,14 @@ function RatesEditor({
 }) {
   const t = useMessages(shippingMessages);
   const { symbol } = useCurrency();
+  const wholeTaka = useWholeCashAmounts();
   const update = (index: number, patch: Partial<RateDraft>) =>
     onChange(rates.map((rate, i) => (i === index ? { ...rate, ...patch } : rate)));
   return (
     <section className="space-y-4 border-t border-border pt-4">
       <h3 className="text-heading-sm">{t("charges")}</h3>
       {rates.map((rate, index) => {
-        const errors = rateErrors(rate);
+        const errors = rateErrors(rate, wholeTaka);
         const id = (field: string) => `rate-${index}-${field}`;
         return (
           <fieldset key={rate.key} className="space-y-4 border-t border-border pt-4 first-of-type:border-t-0 first-of-type:pt-0">
@@ -234,7 +250,7 @@ function RatesEditor({
               >
                 <Input
                   id={id("fee")}
-                  inputMode="decimal"
+                  inputMode={wholeTaka ? "numeric" : "decimal"}
                   autoComplete="off"
                   value={rate.fee}
                   aria-describedby={rate.kind === "pickup" ? `${id("fee")}-note` : undefined}
@@ -250,7 +266,7 @@ function RatesEditor({
             >
               <Input
                 id={id("freeOver")}
-                inputMode="decimal"
+                inputMode={wholeTaka ? "numeric" : "decimal"}
                 autoComplete="off"
                 className="sm:max-w-48"
                 value={rate.freeOver}
@@ -397,28 +413,24 @@ function PlacePicker({
   error: string | null;
 }) {
   const t = useMessages(shippingMessages);
-  const [search, setSearch] = useState("");
-  const query = useDeferredValue(search.trim().toLowerCase());
+  const place = useMessages(locationMessages);
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const cities = useQuery(allDeliveryLocationsQueryOptions({ type: "city" })).data?.locations ?? [];
   const zones = useQuery(allDeliveryLocationsQueryOptions({ type: "zone" })).data?.locations ?? [];
-  const areaMatches = useQuery({
-    ...deliveryLocationsQueryOptions({ type: "area", search: query, limit: 50 }),
-    enabled: query.length >= 2,
-  }).data?.locations ?? [];
   const cityName = new Map(cities.map((city) => [city.id, city.name]));
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
-  const parentName = (place: DeliveryLocation): string | null => {
-    if (place.type === "zone") return cityName.get(place.parentId ?? "") ?? null;
-    if (place.type !== "area") return null;
-    const zone = zoneById.get(place.parentId ?? "");
+  const parentName = (location: DeliveryLocation): string | null => {
+    if (location.parentPath?.length) return location.parentPath.join(", ");
+    if (location.type === "zone") return cityName.get(location.parentId ?? "") ?? null;
+    if (location.type !== "area") return null;
+    const zone = zoneById.get(location.parentId ?? "");
     return zone ? [zone.name, cityName.get(zone.parentId ?? "")].filter(Boolean).join(", ") : null;
   };
-  const chosen = new Set(selected.map((place) => place.id));
-  const toggle = (place: DeliveryLocation, checked: boolean) =>
-    onChange(checked
-      ? [...selected, { id: place.id, name: place.name, type: place.type, parentName: parentName(place) }]
-      : selected.filter((item) => item.id !== place.id));
+  const chosen = new Set(selected.map((item) => item.id));
+  const add = (location: DeliveryLocation) =>
+    onChange([...selected, { id: location.id, name: location.name, type: location.type, parentName: parentName(location) }]);
+  const toggle = (location: DeliveryLocation, checked: boolean) =>
+    checked ? add(location) : onChange(selected.filter((item) => item.id !== location.id));
   const flip = (id: string) =>
     setOpen((current) => {
       const next = new Set(current);
@@ -431,24 +443,24 @@ function PlacePicker({
     takenBy: (id: string) => taken.get(id),
     toggle,
   };
-  const matches = query
-    ? [...cities, ...zones, ...areaMatches].filter((place) => place.name.toLowerCase().includes(query))
-    : [];
+  const typeName = { city: place("typeCity"), zone: place("typeZone"), area: place("typeArea") } as const;
+  // Found places, remembered so a pick can be added with its parents.
+  const [found] = useState(() => new Map<string, DeliveryLocation>());
 
   return (
     <SettingsField id="zone-places" label={t("zonePlaces")} help={t("zonePlacesHelp")} error={error}>
       <div className="space-y-2">
         {selected.length ? (
           <ul className="flex flex-wrap gap-2" aria-label={t("placeCount", { count: selected.length })}>
-            {selected.map((place) => (
-              <li key={place.id} className="flex items-center gap-1 rounded-lg bg-secondary py-0.5 pl-2 text-body">
-                {place.parentName ? `${place.name}, ${place.parentName}` : place.name}
+            {selected.map((item) => (
+              <li key={item.id} className="flex items-center gap-1 rounded-lg bg-secondary py-0.5 pl-2 text-body">
+                {item.parentName ? `${item.name}, ${item.parentName}` : item.name}
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={t("removePlace", { name: place.name })}
-                  onClick={() => onChange(selected.filter((item) => item.id !== place.id))}
+                  aria-label={t("removePlace", { name: item.name })}
+                  onClick={() => onChange(selected.filter((other) => other.id !== item.id))}
                 >
                   <X aria-hidden="true" />
                 </Button>
@@ -456,54 +468,58 @@ function PlacePicker({
             ))}
           </ul>
         ) : null}
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input
-            id="zone-places"
-            type="search"
-            // eslint-disable-next-line shadcn/no-restyle -- room for the search icon inside the field
-            className="pl-9"
-            value={search}
-            placeholder={t("searchPlaces")}
-            aria-describedby="zone-places-note"
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
+        {/* Any city, thana or area, searched on the server; picking one adds it. */}
+        <SearchableSelect
+          id="zone-places"
+          value=""
+          aria-describedby="zone-places-note"
+          ariaLabel={t("searchPlaces")}
+          placeholder={t("searchPlaces")}
+          searchPlaceholder={t("searchPlaces")}
+          emptyMessage={t("noPlaces")}
+          triggerClassName="w-full"
+          load={deliveryLocationLoader({
+            toOption: (location) => {
+              found.set(location.id, location);
+              const zone = taken.get(location.id);
+              return {
+                value: location.id,
+                label: location.name,
+                description: [typeName[location.type], ...(location.parentPath ?? []), zone ? t("inZone", { zone }) : null]
+                  .filter(Boolean)
+                  .join(" · "),
+                disabled: Boolean(zone),
+              };
+            },
+          })}
+          queryKey={[...queryKeys.settings.deliveryLocations(), "picker", "zone-places", [...taken.keys()].sort().join(",")]}
+          onValueChange={(id) => {
+            const location = found.get(id);
+            if (location && !chosen.has(id) && !taken.has(id)) add(location);
+          }}
+        />
         <ul className="max-h-72 overflow-y-auto rounded-lg border border-border py-1">
-          {query ? (
-            matches.length ? (
-              <PlaceList
-                {...rowProps}
-                places={matches}
-                depth={0}
-                label={(place) => [place.name, parentName(place)].filter(Boolean).join(", ")}
-              />
-            ) : (
-              <li className="px-3 py-2 text-body text-muted-foreground">{t("noPlaces")}</li>
-            )
-          ) : (
-            <PlaceList
-              {...rowProps}
-              places={cities}
-              depth={0}
-              children={(city) => ({
-                expanded: open.has(city.id),
-                onExpand: () => flip(city.id),
-                nested: (
-                  <PlaceList
-                    {...rowProps}
-                    places={zones.filter((zone) => zone.parentId === city.id)}
-                    depth={1}
-                    children={(zone) => ({
-                      expanded: open.has(zone.id),
-                      onExpand: () => flip(zone.id),
-                      nested: <AreasOf {...rowProps} zoneId={zone.id} />,
-                    })}
-                  />
-                ),
-              })}
-            />
-          )}
+          <PlaceList
+            {...rowProps}
+            places={cities}
+            depth={0}
+            children={(city) => ({
+              expanded: open.has(city.id),
+              onExpand: () => flip(city.id),
+              nested: (
+                <PlaceList
+                  {...rowProps}
+                  places={zones.filter((zone) => zone.parentId === city.id)}
+                  depth={1}
+                  children={(zone) => ({
+                    expanded: open.has(zone.id),
+                    onExpand: () => flip(zone.id),
+                    nested: <AreasOf {...rowProps} zoneId={zone.id} />,
+                  })}
+                />
+              ),
+            })}
+          />
         </ul>
       </div>
     </SettingsField>
@@ -517,6 +533,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
   const common = useMessages(settingsMessages);
   const refresh = useRefreshZones();
   const onConflict = useConflictReload();
+  const wholeTaka = useWholeCashAmounts();
   const [saved] = useState(() => ({
     name: zone?.name ?? "",
     places: zone?.locations ?? [],
@@ -552,7 +569,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
     fields: fieldId,
     dirty: JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
-    invalid: !draft.name.trim() || draft.places.length === 0 || draft.rates.some((rate) => Object.keys(rateErrors(rate)).length > 0),
+    invalid: !draft.name.trim() || draft.places.length === 0 || draft.rates.some((rate) => Object.keys(rateErrors(rate, wholeTaka)).length > 0),
     save: () => save.mutateAsync(),
     discard: () => setDraft(saved),
   });
@@ -591,6 +608,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
 
 function EverywhereElseForm({ everywhereElse }: { everywhereElse: DeliveryZones["everywhereElse"] }) {
   const refresh = useRefreshZones();
+  const wholeTaka = useWholeCashAmounts();
   const onConflict = useConflictReload();
   const [saved] = useState(() => everywhereElse.rates.map(toDraft));
   const [rates, setRates] = useState(saved);
@@ -604,7 +622,7 @@ function EverywhereElseForm({ everywhereElse }: { everywhereElse: DeliveryZones[
     fields: fieldId,
     dirty: JSON.stringify(rates) !== JSON.stringify(saved),
     saving: save.isPending,
-    invalid: rates.some((rate) => Object.keys(rateErrors(rate)).length > 0),
+    invalid: rates.some((rate) => Object.keys(rateErrors(rate, wholeTaka)).length > 0),
     save: () => save.mutateAsync(),
     discard: () => setRates(saved),
   });

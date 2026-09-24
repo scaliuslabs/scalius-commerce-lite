@@ -157,6 +157,8 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
         title={t("draftConfirmTitle", { count })}
         description={t("draftConfirmBody", { count: liveCount })}
         confirmLabel={t("setDraft")}
+        // Reversible (Set as active undoes it): a primary button, not a destructive one.
+        variant="default"
         cancelLabel={r("cancel")}
         loadingLabel={r("working")}
         isLoading={setStatus.isPending}

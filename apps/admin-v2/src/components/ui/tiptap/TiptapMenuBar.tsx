@@ -203,11 +203,12 @@ export const TiptapMenuBar = ({
     >
       <div
         className={cn(
-          "min-w-0 overflow-x-auto overscroll-x-contain scrollbar-hide",
+          // Phones scroll the buttons sideways; wider screens wrap them, so none hide past the edge.
+          "min-w-0 overflow-x-auto overscroll-x-contain scrollbar-hide sm:overflow-visible",
           isFullscreen ? "mx-auto w-fit max-w-full" : "flex-1",
         )}
       >
-        <div className="flex min-w-max items-center gap-0.5">
+        <div className="flex min-w-max items-center gap-0.5 sm:min-w-0 sm:flex-wrap">
         {/* Text formatting */}
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}

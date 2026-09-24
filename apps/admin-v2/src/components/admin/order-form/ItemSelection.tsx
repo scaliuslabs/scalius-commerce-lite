@@ -1,11 +1,5 @@
 import * as React from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Button } from "~/components/ui/button";
 import { FormLabel } from "~/components/ui/form";
 import { Plus } from "lucide-react";
@@ -54,50 +48,42 @@ export function ItemSelection({
   const remainingStock = isEdit ? null : remainingStockForNewOrderLine(variant, items);
   const alreadyStaged = variant ? stagedVariantQuantity(items, variant.id) : 0;
   const stockGuidanceId = "new-order-item-stock-guidance";
+  const variantTriggerRef = React.useRef<HTMLButtonElement>(null);
 
   return (
     <div className="grid items-start gap-4 sm:grid-cols-3">
-      <div className="space-y-2">
+      <div
+        className="space-y-2"
+        onKeyDown={(e) => {
+          // Enter on the closed variant field moves on to the quantity.
+          if (e.key === "Enter" && e.target === variantTriggerRef.current) {
+            e.preventDefault();
+            document.getElementById("quantity-input")?.focus();
+          }
+        }}
+      >
         <FormLabel htmlFor="variant-select-trigger">{t("variant")}</FormLabel>
-        <Select
+        <SearchableSelect
+          id="variant-select-trigger"
+          triggerRef={variantTriggerRef}
+          triggerClassName="w-full"
           value={selectedVariant}
           disabled={variants.length === 0}
           onValueChange={(value) => {
             setSelectedVariant(value);
             setTimeout(() => document.getElementById("quantity-input")?.focus(), 0);
           }}
-        >
-          <SelectTrigger
-            id="variant-select-trigger"
-            className="w-full"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                document.getElementById("quantity-input")?.focus();
-              }
-            }}
-          >
-            <SelectValue
-              placeholder={variants.length > 0 ? t("chooseVariant") : t("noVariantForSale")}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {variants.map((option) => (
-              <SelectItem key={option.id} value={option.id}>
-                <div className="flex flex-col">
-                  <span className="font-medium">{orderItemVariantLabel(option)}</span>
-                  <span className="text-body text-muted-foreground">
-                    {option.trackInventory === false
-                      ? t("noStockLimit")
-                      : t("inStock", { count: (option.stock ?? 0) - (option.reservedStock ?? 0) })}
-                    {" · "}
-                    {fmt(discountedUnitPrice(selectedProduct, option))}
-                  </span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          placeholder={variants.length > 0 ? t("chooseVariant") : t("noVariantForSale")}
+          options={variants.map((option) => ({
+            value: option.id,
+            label: orderItemVariantLabel(option),
+            description: `${
+              option.trackInventory === false
+                ? t("noStockLimit")
+                : t("inStock", { count: (option.stock ?? 0) - (option.reservedStock ?? 0) })
+            } · ${fmt(discountedUnitPrice(selectedProduct, option))}`,
+          }))}
+        />
       </div>
 
       <div className="space-y-2">

@@ -41,15 +41,15 @@ describe("StatusCard", () => {
     host.remove();
   });
 
-  const statusTrigger = () =>
-    host.querySelector(`[aria-label="${translate(productMessages, "status")}"]`);
+  const statusSelect = () =>
+    host.querySelector<HTMLSelectElement>(`select[aria-label="${translate(productMessages, "status")}"]`);
 
   it("shows Active or Draft for the saved isActive value", async () => {
     await act(async () => root.render(<Harness isActive={false} />));
-    expect(statusTrigger()?.textContent).toBe(translate(productMessages, "statusDraft"));
+    expect(statusSelect()?.selectedOptions[0]?.textContent).toBe(translate(productMessages, "statusDraft"));
 
     await act(async () => root.render(<Harness key="active" isActive />));
-    expect(statusTrigger()?.textContent).toBe(translate(productMessages, "statusActive"));
+    expect(statusSelect()?.selectedOptions[0]?.textContent).toBe(translate(productMessages, "statusActive"));
   });
 
   it("switches free delivery on", async () => {

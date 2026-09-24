@@ -110,14 +110,13 @@ describe("tax form boundaries", () => {
     expect(taxSettingsIssue({ ...draft, taxShipping: true, shippingTaxClassId: "class_shipping" }, config)).toBeNull();
   });
 
-  it("accepts only saved delivery places", () => {
-    const options = [{ id: "city_1", name: "Dhaka", type: "city" as const, parentId: null }];
-    expect(resolveJurisdictionSelection("city", "city_1", options)).toEqual({
+  it("needs a picked place unless the rate applies everywhere", () => {
+    expect(resolveJurisdictionSelection("city", "city_1", "Dhaka")).toEqual({
       jurisdictionId: "city_1",
       jurisdictionLabel: "Dhaka",
     });
-    expect(resolveJurisdictionSelection("zone", "city_1", options)).toBeNull();
-    expect(resolveJurisdictionSelection("all", "anything", options)).toEqual({
+    expect(resolveJurisdictionSelection("zone", "", "")).toBeNull();
+    expect(resolveJurisdictionSelection("all", "anything", "Dhaka")).toEqual({
       jurisdictionId: null,
       jurisdictionLabel: null,
     });

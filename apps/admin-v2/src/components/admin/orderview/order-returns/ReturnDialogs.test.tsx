@@ -5,13 +5,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { OrderReturnDto } from "~/lib/order-return-workflow";
-import type { OrderItem } from "../types";
+import type { Order, OrderItem } from "../types";
 import { ApproveReturnDialog } from "./ApproveReturnDialog";
+import { CreateReturnDialog } from "./CreateReturnDialog";
 import { ReceiveReturnDialog } from "./ReceiveReturnDialog";
 
-const mocks = vi.hoisted(() => ({ approve: vi.fn(), receive: vi.fn() }));
+const mocks = vi.hoisted(() => ({ approve: vi.fn(), receive: vi.fn(), create: vi.fn() }));
 vi.mock("~/lib/api-mutations/orders", () => ({
   orderErrorMessage: (error: Error) => error.message,
+  useCreateOrderReturn: () => ({ mutate: mocks.create, isPending: false }),
   useApproveOrderReturn: () => ({ mutate: mocks.approve, isPending: false }),
   useReceiveOrderReturn: () => ({ mutate: mocks.receive, isPending: false }),
 }));
@@ -90,7 +92,10 @@ describe("return dialogs", () => {
     expect(received.value).toBe("3");
     expect(received.getAttribute("aria-invalid")).toBe("true");
     expect(document.body.textContent).toContain(en["returns.receiveTooMany"].replace("{count}", "2"));
-    const submit = button(en["returns.receiveCount"].replace("{count}", "3")) as HTMLButtonElement;
+    // Nothing is derived from an invalid quantity: no "Receive 3", no damaged count (R3-ORD-16).
+    expect(document.body.textContent).not.toContain(en["returns.receiveCount"].replace("{count}", "3"));
+    expect(document.querySelector(`[aria-label="${en["returns.damagedQty"].replace("{count}", "1")}"]`)).toBeNull();
+    const submit = button(en["returns.receiveSubmit"]) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
     await act(async () => submit.click());
     expect(mocks.receive).not.toHaveBeenCalled();
@@ -118,6 +123,25 @@ describe("return dialogs", () => {
 
     const [payload] = mocks.receive.mock.calls[0]!;
     expect(payload.lines).toEqual([{ lineId: "line_1", receivedQuantity: 2, restockQuantity: 0, damagedQuantity: 2 }]);
+  });
+
+  it("requests the whole returnable amount of a single line by default (R3-ORD-14)", async () => {
+    const order = { id: "ord_1", version: 7, items: [item] } as unknown as Order;
+    await act(async () => root.render(<CreateReturnDialog order={order} returns={[]} open onOpenChange={() => undefined} />));
+    expect(input(en["returns.returnQty"].replace("{name}", "Shirt · M")).value).toBe("3");
+    await act(async () => setNumber(document.querySelector<HTMLInputElement>("#return-reason")!, "Wrong size"));
+    await act(async () => button(en["returns.request"]).click());
+    const [payload] = mocks.create.mock.calls[0]!;
+    expect(payload.lines).toEqual([{ orderItemId: "item_1", quantity: 3 }]);
+  });
+
+  it("asks to choose at least one item when every quantity is zero", async () => {
+    const order = { id: "ord_1", version: 7, items: [item, { ...item, id: "item_2", variantLabel: "L" }] } as unknown as Order;
+    await act(async () => root.render(<CreateReturnDialog order={order} returns={[]} open onOpenChange={() => undefined} />));
+    await act(async () => setNumber(document.querySelector<HTMLInputElement>("#return-reason")!, "Wrong size"));
+    await act(async () => button(en["returns.request"]).click());
+    expect(document.body.textContent).toContain("Choose at least one item to return.");
+    expect(mocks.create).not.toHaveBeenCalled();
   });
 
   it("approves quantities without sending any stock change", async () => {

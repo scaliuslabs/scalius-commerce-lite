@@ -5,7 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
 import { formatDateTime, useMessages } from "~/i18n";
@@ -70,15 +70,10 @@ function FilterSelect({
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
-      <Select value={value ?? ANY} onValueChange={(next) => onChange(next === ANY ? undefined : next)}>
-        <SelectTrigger aria-label={label}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ANY}>{t("any")}</SelectItem>
-          {children}
-        </SelectContent>
-      </Select>
+      <NativeSelect aria-label={label} value={value ?? ANY} onValueChange={(next) => onChange(next === ANY ? undefined : next)}>
+        <option value={ANY}>{t("any")}</option>
+        {children}
+      </NativeSelect>
     </div>
   );
 }
@@ -161,24 +156,21 @@ export function OrderListToolbar({
               <ListFilter className="h-4 w-4" />
               {filterCount > 0 ? t("filtersCount", { count: filterCount }) : t("filters")}
             </Button>
-            <Select
+            <NativeSelect
+              className="w-auto"
+              aria-label={t("sort")}
               value={`${search.sort}:${search.order}`}
               onValueChange={(value) => {
                 const [sort, order] = value.split(":") as [OrderListSearch["sort"], "asc" | "desc"];
                 onChange({ sort, order, page: 1 });
               }}
             >
-              <SelectTrigger className="w-auto" aria-label={t("sort")}>
-                <SelectValue placeholder={t("sort")} />
-              </SelectTrigger>
-              <SelectContent>
-                {sortOptions.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {t(`sort.${option}`)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              {sortOptions.map((option) => (
+                <option key={option} value={option}>
+                  {t(`sort.${option}`)}
+                </option>
+              ))}
+            </NativeSelect>
             <Button
               variant={autoRefresh.enabled ? "secondary" : "ghost"}
               aria-pressed={autoRefresh.enabled}
@@ -197,9 +189,9 @@ export function OrderListToolbar({
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <FilterSelect label={t("orderStatus")} value={search.status} onChange={(status) => filter({ status })}>
               {ORDER_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
+                <option key={status} value={status}>
                   {orderStatusLabel(to, status)}
-                </SelectItem>
+                </option>
               ))}
             </FilterSelect>
             <FilterSelect
@@ -208,9 +200,9 @@ export function OrderListToolbar({
               onChange={(value) => filter({ paymentStatus: value as OrderListSearch["paymentStatus"] })}
             >
               {PAYMENT_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
+                <option key={status} value={status}>
                   {paymentStatusLabel(to, status)}
-                </SelectItem>
+                </option>
               ))}
             </FilterSelect>
             <FilterSelect
@@ -219,9 +211,9 @@ export function OrderListToolbar({
               onChange={(value) => filter({ paymentMethod: value as OrderListSearch["paymentMethod"] })}
             >
               {PAYMENT_METHODS.map((method) => (
-                <SelectItem key={method} value={method}>
+                <option key={method} value={method}>
                   {paymentMethodLabel(to, method)}
-                </SelectItem>
+                </option>
               ))}
             </FilterSelect>
             <FilterSelect
@@ -231,9 +223,9 @@ export function OrderListToolbar({
                 filter({ fulfillmentStatus: value as OrderListSearch["fulfillmentStatus"] })}
             >
               {FULFILLMENT_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
+                <option key={status} value={status}>
                   {fulfillmentStatusLabel(to, status)}
-                </SelectItem>
+                </option>
               ))}
             </FilterSelect>
             <FilterSelect
@@ -243,9 +235,9 @@ export function OrderListToolbar({
                 filter({ paymentRecovery: value as OrderListSearch["paymentRecovery"] })}
             >
               {PAYMENT_RECOVERY_STATES.map((state) => (
-                <SelectItem key={state} value={state}>
+                <option key={state} value={state}>
                   {t(`recovery.${state}`)}
-                </SelectItem>
+                </option>
               ))}
             </FilterSelect>
             <DateRangeFilter

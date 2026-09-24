@@ -15,7 +15,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { deliveryProvidersQueryOptions, type DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
 import {
   getProviderReadinessMessage,
@@ -55,21 +55,22 @@ function CourierPicker({ value, onChange, disabled }: { value: string; onChange:
   return (
     <div className="space-y-2">
       <Label htmlFor="bulk-ship-courier">{t("courier")}</Label>
-      <Select value={value} onValueChange={onChange} disabled={isLoading || disabled}>
-        <SelectTrigger id="bulk-ship-courier">
-          <SelectValue placeholder={t("chooseCourier")} />
-        </SelectTrigger>
-        <SelectContent>
-          {providers.map((provider) => {
-            const canShip = resolveProviderReadiness(provider).canCreateShipment;
-            return (
-              <SelectItem key={provider.id} value={provider.id} disabled={!canShip}>
-                {canShip ? provider.name : t("courierNotReady", { name: provider.name })}
-              </SelectItem>
-            );
-          })}
-        </SelectContent>
-      </Select>
+      <SearchableSelect
+        id="bulk-ship-courier"
+        value={value}
+        onValueChange={onChange}
+        disabled={isLoading || disabled}
+        placeholder={t("chooseCourier")}
+        triggerClassName="w-full"
+        options={providers.map((provider) => {
+          const canShip = resolveProviderReadiness(provider).canCreateShipment;
+          return {
+            value: provider.id,
+            label: canShip ? provider.name : t("courierNotReady", { name: provider.name }),
+            disabled: !canShip,
+          };
+        })}
+      />
       {!isLoading && ready.length === 0 ? (
         <p className="text-body text-muted-foreground">
           {providers.length === 0 ? t("noCouriers") : t("noReadyCouriers")}{" "}

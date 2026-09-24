@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
-import { Alert } from "~/components/ui/alert";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -100,7 +100,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
         </DialogHeader>
         <Form {...form}>
           <form id="order-details-form" method="post" className="space-y-4" onSubmit={submit} noValidate>
-            {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
+            {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
             <FormField
               control={form.control}
               name="customerName"
@@ -147,7 +147,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
                 </FormItem>
               )}
             />
-            <LocationSelector />
+            <LocationSelector required={{ city: true, zone: true }} />
           </form>
         </Form>
         <DialogFooter>
