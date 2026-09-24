@@ -1,17 +1,20 @@
 ---
-// The `sidebar` navigation style: on computers the header menu is a column
-// beside the page content (grocery / catalogue stores), sticky under the
-// header. Layout.astro renders it inside `.site-shell[data-site-shell="sidebar"]`
+// The departments rail kept open (desktop menu `departments-rail`, open
+// "always"; Chaldal's 240px rail): on computers the menu is a column beside
+// the page content, sticky under the header, the current department
+// expanded. Layout.astro renders it inside `.site-shell[data-site-shell="sidebar"]`
 // next to <main>, so every full-bleed section stays within the content column.
-// Phones use the drawer or the tab bar instead.
+// Phones use the drawer or the tab bar instead. Like every menu rendering it
+// keeps to its share of the link budget (nav-tree.ts).
 import type { NavigationItem } from "@/lib/api";
 import NavTree from "./NavTree.astro";
+import { navigationLinkShare, pruneNavigation } from "./nav-tree";
 
 interface Props {
   navigation: NavigationItem[];
 }
 
-const { navigation } = Astro.props;
+const navigation = pruneNavigation(Astro.props.navigation, navigationLinkShare(2));
 ---
 
 <nav id="sidebar-nav" class="sidebar-nav" aria-label="Main navigation">

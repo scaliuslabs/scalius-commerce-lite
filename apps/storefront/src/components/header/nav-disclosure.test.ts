@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { fitNavOverflow, installNavDisclosure } from "./nav-disclosure";
+import { buildNavMoreEntries, cloneCompactMenus, fitNavOverflow, installNavDisclosure } from "./nav-disclosure";
 import { ariaCurrent, navigationCurrent, navigationPathname } from "./navigation-state";
 
 const button = (id: string) => document.querySelector<HTMLButtonElement>(`[aria-controls="${id}"]`)!;
@@ -124,6 +124,85 @@ describe("menu overflow", () => {
     fitNavOverflow(list);
     expect(shown(":scope > [data-nav-index]")).toEqual([true, true, true, true]);
     expect(list.querySelector<HTMLElement>("[data-nav-more]")!.hidden).toBe(true);
+  });
+});
+
+describe("menu row keys", () => {
+  const key = (name: string) =>
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
+
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <nav id="desktop-nav">
+        <ul data-nav-overflow>
+          <li data-nav-index="0" data-disclosure-item>
+            <a class="desktop-nav-link" href="/women">Women</a>
+            <button type="button" aria-expanded="false" aria-controls="desktop-nav-panel-0" data-disclosure="popup"><span class="sr-only">Women submenu</span></button>
+            <div id="desktop-nav-panel-0" hidden><ul><li><a class="nav-dropdown-link" href="/sarees">Sarees</a></li><li><a class="nav-dropdown-link" href="/kurtis">Kurtis</a></li></ul></div>
+          </li>
+          <li data-nav-index="1" data-disclosure-item>
+            <button type="button" class="desktop-nav-link" aria-expanded="false" aria-controls="desktop-nav-panel-1" data-disclosure="popup">Men</button>
+            <div id="desktop-nav-panel-1" hidden><ul><li><a class="nav-dropdown-link" href="/panjabi">Panjabi</a></li></ul></div>
+          </li>
+          <li data-nav-index="2"><a class="desktop-nav-link" href="/sale">Sale</a></li>
+          <li data-nav-more data-disclosure-item hidden>
+            <button type="button" class="desktop-nav-link" aria-expanded="false" aria-controls="desktop-nav-more" data-disclosure="popup">More</button>
+            <div id="desktop-nav-more" hidden><ul data-nav-more-list></ul></div>
+          </li>
+        </ul>
+        <template data-nav-more-template>
+          <li data-nav-more-index="" hidden><ul class="nav-dropdown-list"><li><a class="nav-dropdown-link nav-dropdown-link--parent" href="#">More</a><ul class="nav-dropdown-list nav-dropdown-sublist"><li><a class="nav-dropdown-link" href="#">More</a></li></ul></li></ul></li>
+        </template>
+      </nav>
+      <div data-nav-compact-from="desktop-nav"></div>`;
+  });
+
+  it("moves along the row and into an open popup", () => {
+    document.querySelector<HTMLElement>('a[href="/women"]')!.focus();
+    key("ArrowRight");
+    expect(document.activeElement!.textContent).toBe("Men");
+    key("ArrowRight");
+    expect(document.activeElement!.getAttribute("href")).toBe("/sale");
+    key("Home");
+    expect(document.activeElement!.getAttribute("href")).toBe("/women");
+    key("ArrowDown");
+    expect(panel("desktop-nav-panel-0").hidden).toBe(false);
+    expect(document.activeElement!.getAttribute("href")).toBe("/sarees");
+    key("ArrowDown");
+    expect(document.activeElement!.getAttribute("href")).toBe("/kurtis");
+    key("ArrowUp");
+    key("ArrowUp");
+    expect(document.activeElement).toBe(button("desktop-nav-panel-0"));
+  });
+
+  it("builds More entries from the row, with the menu's own markup", () => {
+    const list = document.querySelector<HTMLElement>("[data-nav-overflow]")!;
+    buildNavMoreEntries(list);
+    const entries = Array.from(list.querySelectorAll<HTMLElement>("[data-nav-more-index]"));
+    expect(entries.map((entry) => entry.dataset.navMoreIndex)).toEqual(["0", "1", "2"]);
+    expect(entries[0]!.querySelector(".nav-dropdown-link--parent")!.getAttribute("href")).toBe("/women");
+    expect(Array.from(entries[0]!.querySelectorAll(".nav-dropdown-sublist a")).map((link) => link.getAttribute("href"))).toEqual([
+      "/sarees",
+      "/kurtis",
+    ]);
+    // A parent without a link is text; a leaf is a plain row.
+    expect(entries[1]!.querySelector("span.nav-dropdown-link--parent")!.textContent).toBe("Men");
+    expect(entries[2]!.querySelector(".nav-dropdown-sublist")).toBeNull();
+    buildNavMoreEntries(list);
+    expect(list.querySelectorAll("[data-nav-more-index]")).toHaveLength(3);
+  });
+
+  it("copies the row for the condensed header with its own ids", () => {
+    button("desktop-nav-panel-0").click();
+    cloneCompactMenus(document);
+    const copy = document.getElementById("desktop-nav-compact")!;
+    expect(copy.parentElement!.hasAttribute("data-nav-compact-from")).toBe(true);
+    expect(copy.querySelector('[aria-controls="desktop-nav-compact-panel-0"]')!.getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById("desktop-nav-compact-panel-0")!.hidden).toBe(true);
+    const ids = Array.from(document.querySelectorAll("[id]")).map((element) => element.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    cloneCompactMenus(document);
+    expect(document.querySelectorAll("#desktop-nav-compact")).toHaveLength(1);
   });
 });
 

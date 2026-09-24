@@ -1,492 +1,89 @@
 ---
-import SearchBar from "../search/SearchBar.astro";
-import { Phone, ShoppingCart, Menu, Search } from "lucide-react";
-import type { HeaderData } from "@/lib/api";
+// The header block, one component per shape: `mall-departments` is the
+// classic header (variants/ClassicHeader.astro, pixel-identical to version
+// 3, the default template's); every other variant is composed from its spec
+// (header-variants.ts, variants/ComposedHeader.astro). The menu arrives in
+// slot "menu" and lands in the header's menu row or main row; phone extras
+// (a shortcut row) in slot "phone-extras". The behaviour every variant
+// shares lives here: the scroll state, the sticky height the page reads
+// (--header-height), search openers and the account link.
+import type { HeaderData, NavigationItem } from "@/lib/api";
 import type {
   StorefrontHeaderRenderer,
   StorefrontNavigationRenderer,
 } from "@scalius/shared/storefront-theme";
-import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
-import {
-  getMobileHeaderLogoWidth,
-  normalizeHeaderLogoWidth,
-} from "@scalius/shared/brand-presentation";
-import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
-import { telHref } from "@/lib/store-identity";
+import ClassicHeader from "./variants/ClassicHeader.astro";
+import ComposedHeader from "./variants/ComposedHeader.astro";
+import type { HeaderSpec } from "./header-variants";
 
 interface Props {
   headerData: HeaderData;
-  /** Without a header menu there is no second row (and no second rule). */
-  hasNavigation: boolean;
-  /**
-   * classic: logo left, search centre, icons right; collapses into a compact
-   * menu on scroll. centered: logo in the middle, search as an icon, menu row
-   * below. marketplace: a wide search bar that stays put (and a search bar
-   * under the header on phones), as Daraz/Chaldal shoppers expect.
-   */
-  variant: StorefrontHeaderRenderer;
-  /**
-   * menu/mega: a menu row under the bar (slot `desktop-nav-full`). pills: a
-   * scrolling pill row on every screen (slot `pill-nav`). sidebar: no header
-   * menu on computers (Layout renders the column).
-   */
+  variantId: string;
+  /** null: the classic header. */
+  spec: HeaderSpec | null;
+  headerStyle: StorefrontHeaderRenderer;
   navigationStyle: StorefrontNavigationRenderer;
-  /** On scroll the menu row folds into the bar (slot `desktop-nav-compact`). */
+  hasMenu: boolean;
+  menuPlacement: "inline" | "row";
+  stickyMenuRow: boolean;
   condensedMenu: boolean;
+  departments: NavigationItem[];
+  phoneDrop: string;
 }
 
-const { headerData, hasNavigation, variant, navigationStyle, condensedMenu } = Astro.props;
-const menuRow = hasNavigation && (navigationStyle === "menu" || navigationStyle === "mega");
-const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
-const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
-// Logos without renditions get a plain src (no stray `sizes`).
-const logoSrcSet = mediaImageSrcSet(headerData.logo.src);
-// Social links live in the footer and the phone menu, so the desktop header
-// reaches My Account and the cart in a few tab stops (logo, search, call).
-const phoneHref =
-  headerData.contact.isEnabled !== false ? telHref(headerData.contact.phone) : null;
-const expandedActionsLgWidth = 0;
-const expandedActionsXlWidth = phoneHref ? 40 : 0;
+const {
+  headerData,
+  variantId,
+  spec,
+  headerStyle,
+  navigationStyle,
+  hasMenu,
+  menuPlacement,
+  stickyMenuRow,
+  condensedMenu,
+  departments,
+  phoneDrop,
+} = Astro.props;
 ---
 
 {
-  headerData.topBar.isEnabled !== false &&
-    headerData.topBar.text &&
-    headerData.topBar.text.trim().length > 0 && (
-      <div class="relative z-50 bg-primary text-primary-foreground overflow-hidden shrink-0 w-full h-8 sm:h-9 flex items-center justify-center border-b border-white/10">
-        <div class="max-w-7xl mx-auto px-4 w-full">
-          <p class="text-xs sm:text-[0.8125rem] font-medium text-center tracking-[0.08em] uppercase truncate">
-            {headerData.topBar.text}
-          </p>
-        </div>
-      </div>
-    )
+  spec ? (
+    <ComposedHeader
+      headerData={headerData}
+      variantId={variantId}
+      spec={spec}
+      headerStyle={headerStyle}
+      navigationStyle={navigationStyle}
+      hasMenu={hasMenu}
+      menuPlacement={menuPlacement}
+      stickyMenuRow={stickyMenuRow}
+      departments={departments}
+      phoneDrop={phoneDrop}
+    >
+      <slot name="menu" slot="menu" />
+      <slot name="phone-extras" slot="phone-extras" />
+    </ComposedHeader>
+  ) : (
+    <ClassicHeader
+      headerData={headerData}
+      variantId={variantId}
+      menuRow={hasMenu}
+      navigationStyle={navigationStyle}
+      condensedMenu={condensedMenu}
+      phoneDrop={phoneDrop}
+    >
+      <slot name="menu" slot="desktop-nav-full" />
+    </ClassicHeader>
+  )
 }
 
-<div
-  id="main-header"
-  data-header-style={variant}
-  data-navigation={navigationStyle}
-  data-header-condense={condensedMenu ? "" : undefined}
-  class="sticky top-0 z-50 w-full bg-background/95 backdrop-blur-xl border-b border-border transition-[box-shadow,background-color,border-color] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group/header"
->
-  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <!-- ROW 1 -->
-    <div
-      class="header-row flex items-center justify-between h-14 lg:h-18 group-[.is-scrolled]/header:lg:h-16 gap-4 relative z-20 transition-[height] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
-    >
-      <div class="flex items-center shrink-0 lg:hidden z-30 gap-2">
-        <button
-          id="mobile-menu-toggle"
-          type="button"
-          class="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:bg-accent"
-          aria-label="Open menu"
-          aria-haspopup="dialog"
-          aria-controls="mobile-menu-panel"
-          aria-expanded="false"
-        >
-          <Menu className="h-6 w-6 stroke-[1.5]" />
-        </button>
-
-        <button
-          id="mobile-search-toggle"
-          type="button"
-          class:list={[
-            "flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:bg-accent",
-            variant === "marketplace" && "hidden",
-          ]}
-          aria-label="Search"
-          aria-haspopup="dialog"
-        >
-          <Search className="h-5 w-5 stroke-[1.5]" />
-        </button>
-      </div>
-
-      <div
-        class="header-logo absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:translate-x-0 lg:translate-y-0 shrink-0 z-20 flex items-center justify-center lg:justify-start"
-      >
-        {/* The logo's alt text (the store name) is the link's name. */}
-        <a href="/" class="block group">
-          {
-            headerData.logo.src ? (
-              <img
-                src={mediaImageUrl(headerData.logo.src, 320)}
-                srcset={logoSrcSet}
-                sizes={logoSrcSet ? `(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px` : undefined}
-                alt={headerData.logo.alt}
-                class="storefront-header-logo h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-[max-height,transform] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
-                style={`--header-logo-width: ${logoWidth}px; --header-logo-mobile-width: ${mobileLogoWidth}px;`}
-                width={240}
-                height={80}
-                loading="eager"
-                decoding="async"
-              />
-            ) : (
-              <span class="font-bold text-xl tracking-tight transition-transform duration-300 group-hover:scale-[1.02]">
-                {headerData.logo.alt}
-              </span>
-            )
-          }
-        </a>
-      </div>
-
-      <!-- 3. CENTER: Desktop Morphing Zone -->
-      <div
-        class="hidden lg:flex flex-1 items-center justify-center px-8 min-w-0 relative h-full z-10"
-      >
-        <div class="header-expanded-center absolute w-full max-w-lg">
-          <SearchBar />
-        </div>
-        {/* Compact menu (classic header, shown on scroll) */}
-        {
-          condensedMenu && (
-            <div class="header-compact-center absolute inset-x-0 flex w-full justify-center">
-              <slot name="desktop-nav-compact" />
-            </div>
-          )
-        }
-      </div>
-
-      <div
-        class="flex items-center justify-end gap-1 sm:gap-3 lg:gap-0 shrink-0 z-30 ml-auto lg:ml-0"
-      >
-        <div
-          class="header-action-morph relative hidden h-10 shrink-0 overflow-hidden lg:block"
-          style={`--header-actions-expanded-lg: ${expandedActionsLgWidth}px; --header-actions-expanded-xl: ${expandedActionsXlWidth}px; --header-actions-gap-lg: ${expandedActionsLgWidth > 0 ? 12 : 0}px; --header-actions-gap-xl: ${expandedActionsXlWidth > 0 ? 12 : 0}px;`}
-        >
-          <button
-            id="scrolled-search-trigger"
-            type="button"
-            class="header-scroll-search absolute inset-y-0 right-0 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Search"
-            aria-haspopup="dialog"
-          >
-            <Search className="h-5 w-5 stroke-[1.5]" />
-          </button>
-
-          <div
-            class="header-expanded-actions absolute inset-y-0 left-0 flex items-center gap-3"
-          >
-            {
-              phoneHref && (
-                <a
-                  href={phoneHref}
-                  class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-input bg-background text-muted-foreground transition-colors duration-200 hover:border-primary/50 hover:text-foreground xl:flex"
-                  aria-label={`Call ${headerData.contact.phone}`}
-                  title={headerData.contact.phone}
-                >
-                  <Phone className="h-4 w-4 stroke-[1.5]" />
-                </a>
-              )
-            }
-          </div>
-        </div>
-
-        <div
-          class="group relative flex h-11 shrink-0 items-center rounded-full bg-card-foreground py-1 pl-1 pr-1 text-card shadow-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl lg:pr-1.5"
-        >
-          <a
-            id="account-link"
-            href="/account"
-            data-astro-prefetch={getStorefrontPrefetchAttribute(
-              "/account",
-              Astro.url,
-            )}
-            class="flex h-11 w-11 items-center justify-center rounded-full text-card/80 transition-colors duration-200 hover:bg-card/10 hover:text-card lg:mr-1"
-            aria-label="My Account"
-            title="My Account"
-          >
-            <svg
-              class="h-4 w-4 lg:h-[18px] lg:w-[18px]"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              stroke-width="1.8"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
-              ></path>
-            </svg>
-          </a>
-
-          <button
-            type="button"
-            id="cart-button"
-            class="relative flex h-11 min-w-11 cursor-pointer items-center gap-2 rounded-full pl-1.5 active:scale-[0.98] lg:gap-3 lg:pl-2"
-            aria-label="Open shopping cart"
-            aria-haspopup="dialog"
-          >
-            <span
-              id="cart-total-display"
-              aria-hidden="true"
-              class="hidden md:block text-[14px] font-bold tracking-tight whitespace-nowrap tabular-nums text-card"
-            >
-              0
-            </span>
-
-            <span class="hidden md:block h-5 w-px bg-card/20"></span>
-
-            <div
-              class="relative w-7 h-7 lg:w-8 lg:h-8 shrink-0 flex items-center justify-center bg-card/10 rounded-full hover:bg-card/20 transition-colors"
-            >
-              <ShoppingCart className="h-3.5 w-3.5 lg:h-4 lg:w-4 stroke-2" />
-              <span
-                id="cart-count"
-                aria-hidden="true"
-                class="absolute -top-1 -right-1 flex h-3.5 w-3.5 lg:h-4 lg:w-4 min-w-3.5 lg:min-w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground px-0.5 text-[9px] lg:text-[10px] font-bold ring-2 ring-card-foreground transition-all duration-300 scale-0 opacity-0 shadow-sm"
-              >
-                0
-              </span>
-            </div>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    {
-      variant === "marketplace" && (
-        <div class="header-mobile-search pb-2 lg:hidden">
-          <SearchBar mobileView />
-        </div>
-      )
-    }
-
-    <slot name="pill-nav" />
-
-    {
-      menuRow && (
-        <div class="header-full-nav-row hidden border-t border-border lg:block">
-          {/* The menu row is the mega panels' anchor (they span it). */}
-          <div class="py-2 flex justify-center relative z-50">
-            <slot name="desktop-nav-full" />
-          </div>
-        </div>
-      )
-    }
-  </div>
-</div>
-
-<style>
-  .header-expanded-center,
-  .header-compact-center {
-    will-change: opacity, transform;
-  }
-
-  .header-expanded-center {
-    visibility: visible;
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    transition:
-      opacity 160ms linear 40ms,
-      transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1) 40ms,
-      visibility 0s linear 40ms;
-  }
-
-  .header-compact-center {
-    pointer-events: none;
-    visibility: hidden;
-    opacity: 0;
-    transform: translateY(0.5rem) scale(0.98);
-    transition:
-      opacity 160ms linear,
-      transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
-      visibility 0s linear 160ms;
-  }
-
-  #main-header[data-header-condense].is-scrolled .header-expanded-center {
-    pointer-events: none;
-    visibility: hidden;
-    opacity: 0;
-    transform: translateY(-0.5rem) scale(0.96);
-    transition:
-      opacity 160ms linear,
-      transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
-      visibility 0s linear 160ms;
-  }
-
-  #main-header[data-header-condense].is-scrolled .header-compact-center {
-    pointer-events: auto;
-    visibility: visible;
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    transition:
-      opacity 160ms linear 40ms,
-      transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1) 40ms,
-      visibility 0s linear 40ms;
-  }
-
-  .header-full-nav-row {
-    max-height: 4rem;
-    overflow: visible;
-    border-top-width: 1px;
-    opacity: 1;
-    transition:
-      max-height 300ms cubic-bezier(0.25, 0.1, 0.25, 1),
-      opacity 120ms ease,
-      border-top-width 120ms ease,
-      border-color 120ms ease;
-  }
-
-  #main-header[data-header-condense].is-scrolled .header-full-nav-row {
-    max-height: 0;
-    overflow: hidden;
-    border-top-width: 0;
-    border-color: transparent;
-    opacity: 0;
-    transition-delay: 0ms, 0ms, 0ms, 0ms;
-  }
-
-  .header-action-morph {
-    width: var(--header-actions-expanded-lg);
-    margin-right: var(--header-actions-gap-lg);
-    transition:
-      width 240ms cubic-bezier(0.25, 0.1, 0.25, 1),
-      margin-right 240ms cubic-bezier(0.25, 0.1, 0.25, 1);
-  }
-
-  .header-expanded-actions,
-  .header-scroll-search {
-    will-change: opacity, transform;
-  }
-
-  .header-expanded-actions {
-    visibility: visible;
-    opacity: 1;
-    transform: translateX(0);
-    transition:
-      opacity 160ms linear 40ms,
-      transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1) 40ms,
-      visibility 0s linear 40ms;
-  }
-
-  .header-scroll-search {
-    pointer-events: none;
-    visibility: hidden;
-    opacity: 0;
-    transform: translateX(-0.5rem);
-    transition:
-      opacity 160ms linear,
-      transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
-      visibility 0s linear 160ms;
-  }
-
-  #main-header[data-header-condense].is-scrolled .header-action-morph {
-    width: 2.5rem;
-    margin-right: 0.75rem;
-  }
-
-  #main-header[data-header-condense].is-scrolled .header-expanded-actions {
-    pointer-events: none;
-    visibility: hidden;
-    opacity: 0;
-    transform: translateX(0.5rem);
-    transition:
-      opacity 160ms linear,
-      transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
-      visibility 0s linear 160ms;
-  }
-
-  #main-header[data-header-condense].is-scrolled .header-scroll-search {
-    pointer-events: auto;
-    visibility: visible;
-    opacity: 1;
-    transform: translateX(0);
-    transition:
-      opacity 160ms linear 40ms,
-      transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1) 40ms,
-      visibility 0s linear 40ms;
-  }
-
-  .storefront-header-logo {
-    max-width: var(--header-logo-mobile-width);
-  }
-
-  @media (max-width: 21rem) {
-    .storefront-header-logo {
-      max-width: min(var(--header-logo-mobile-width), 5.75rem);
-    }
-  }
-
-  @media (min-width: 64rem) {
-    .storefront-header-logo {
-      max-width: var(--header-logo-width);
-    }
-  }
-
-  @media (min-width: 80rem) {
-    .header-action-morph {
-      width: var(--header-actions-expanded-xl);
-      margin-right: var(--header-actions-gap-xl);
-    }
-
-    #main-header[data-header-condense].is-scrolled .header-action-morph {
-      width: 2.5rem;
-      margin-right: 0.75rem;
-    }
-  }
-
-  /* Centered: logo in the middle, search as an icon, the menu row below. */
-  @media (min-width: 64rem) {
-    #main-header[data-header-style="centered"] .header-logo {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%, -50%);
-    }
-
-    #main-header[data-header-style="centered"] .header-expanded-center,
-    #main-header[data-header-style="centered"] .header-compact-center,
-    #main-header[data-header-style="centered"] .header-expanded-actions {
-      display: none;
-    }
-
-    #main-header[data-header-style="centered"] .header-action-morph {
-      width: 2.5rem;
-      margin-right: 0.75rem;
-    }
-
-    #main-header[data-header-style="centered"] .header-scroll-search {
-      pointer-events: auto;
-      visibility: visible;
-      opacity: 1;
-      transform: none;
-    }
-
-    /* Marketplace: a wide search bar that never collapses. */
-    #main-header[data-header-style="marketplace"] .header-expanded-center {
-      max-width: 44rem;
-    }
-
-    #main-header[data-header-style="marketplace"] .header-compact-center {
-      display: none;
-    }
-  }
-
-  /* Phones and tablets condense on scroll (the same is-scrolled state as the
-     desktop header): a shorter bar, and the marketplace search row folds
-     into the search icon. Tap targets stay 44px. */
+<style is:global>
+  /* Bottom tabs carry cart and account on phones (mix rule 5). */
   @media (max-width: 63.99rem) {
-    #main-header.is-scrolled .header-row {
-      height: 3rem;
-    }
-    #main-header[data-header-style="marketplace"].is-scrolled .header-mobile-search {
+    #main-header[data-phone-drop~="account"] [data-header-account],
+    #main-header[data-phone-drop~="cart"] [data-header-cart],
+    #main-header[data-phone-drop~="account"][data-phone-drop~="cart"] [data-header-action-group] {
       display: none;
-    }
-    #main-header[data-header-style="marketplace"].is-scrolled #mobile-search-toggle {
-      display: flex;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .header-expanded-center,
-    .header-compact-center,
-    .header-full-nav-row,
-    .header-action-morph,
-    .header-expanded-actions,
-    .header-scroll-search {
-      transition: none;
     }
   }
 </style>
@@ -499,16 +96,23 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
   let headerResizeObserver: ResizeObserver | null = null;
 
   function setHeaderHeight(height: number) {
-    document.documentElement.style.setProperty(
-      "--header-height",
-      `${height}px`,
-    );
+    document.documentElement.style.setProperty("--header-height", `${height}px`);
+  }
+
+  /**
+   * The part of the header that sticks: #main-header, or its menu row when
+   * only that row stays (a `display: contents` header on computers).
+   */
+  function stickyPart(): HTMLElement | null {
+    const header = document.getElementById("main-header");
+    if (!header) return null;
+    if (getComputedStyle(header).display !== "contents") return header;
+    return header.querySelector<HTMLElement>(".hdr-menu-row") ?? header;
   }
 
   function updateHeaderHeight() {
-    const header = document.getElementById("main-header");
-    if (!header) return;
-    setHeaderHeight(header.offsetHeight);
+    const part = stickyPart();
+    if (part) setHeaderHeight(part.offsetHeight);
   }
 
   function observeHeaderHeight() {
@@ -518,14 +122,11 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
       updateHeaderHeight();
       return;
     }
-    headerResizeObserver = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      const borderBox = Array.isArray(entry?.borderBoxSize)
-        ? entry.borderBoxSize[0]
-        : entry?.borderBoxSize;
-      if (borderBox?.blockSize) setHeaderHeight(borderBox.blockSize);
-    });
+    headerResizeObserver = new ResizeObserver(() => updateHeaderHeight());
     headerResizeObserver.observe(header);
+    const row = header.querySelector<HTMLElement>(".hdr-menu-row");
+    if (row) headerResizeObserver.observe(row);
+    updateHeaderHeight();
   }
 
   function applyScrollState() {
@@ -536,7 +137,14 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
     if (nextCompact === isCompact) return;
     isCompact = nextCompact;
     header.classList.toggle("is-scrolled", isCompact);
-    header.classList.toggle("shadow-md", isCompact);
+    if (header.dataset.headerStyle === "classic") header.classList.toggle("shadow-md", isCompact);
+    // The departments list open on the home page steps aside once the page
+    // scrolls (it would otherwise ride the sticky header over the content).
+    if (isCompact) {
+      document.querySelectorAll<HTMLDetailsElement>("details[data-menu-home-open][open]").forEach((rail) => {
+        rail.open = false;
+      });
+    }
   }
 
   function scheduleScrollState() {
@@ -544,42 +152,70 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
     scrollFrame = window.requestAnimationFrame(applyScrollState);
   }
 
-  const triggerSearch = (e: Event) => {
-    e.preventDefault();
+  const triggerSearch = (event: Event) => {
+    event.preventDefault();
     document.dispatchEvent(new CustomEvent("open-search-palette"));
   };
 
-  // The header search icons and the phone tab bar's Search tab.
-  document
-    .querySelectorAll("#mobile-search-toggle, #scrolled-search-trigger, [data-search-open]")
-    .forEach((opener) => opener.addEventListener("click", triggerSearch));
+  function bindSearch() {
+    // The header search icons and the phone tab bar's Search tab.
+    document
+      .querySelectorAll<HTMLElement>("#mobile-search-toggle, #scrolled-search-trigger, [data-search-open]")
+      .forEach((opener) => {
+        if (opener.dataset.searchBound) return;
+        opener.dataset.searchBound = "";
+        opener.addEventListener("click", triggerSearch);
+      });
+    // Search fields: a pointer press opens the typeahead palette; keyboard
+    // users type in place and press Enter (a GET form to /search).
+    document.querySelectorAll<HTMLInputElement>("[data-search-inline]").forEach((input) => {
+      if (input.dataset.searchBound) return;
+      input.dataset.searchBound = "";
+      input.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "") return;
+        triggerSearch(event);
+      });
+    });
+    // A department scope searches that category's page instead (?q= there).
+    document.querySelectorAll<HTMLFormElement>("form[data-header-search]").forEach((form) => {
+      if (form.dataset.searchBound) return;
+      form.dataset.searchBound = "";
+      form.addEventListener("submit", (event) => {
+        const scope = form.querySelector<HTMLSelectElement>("[data-search-scope]")?.value ?? "";
+        if (!scope.startsWith("/categories/")) return;
+        event.preventDefault();
+        const query = (form.querySelector<HTMLInputElement>("input[name='q']")?.value ?? "").trim();
+        const target = new URL(scope, window.location.origin);
+        if (query) target.searchParams.set("q", query);
+        window.location.assign(target.pathname + target.search);
+      });
+    });
+  }
 
   window.addEventListener("scroll", scheduleScrollState, { passive: true });
   applyScrollState();
   observeHeaderHeight();
+  bindSearch();
 
   document.addEventListener("astro:page-load", () => {
     isCompact = false;
     applyScrollState();
     observeHeaderHeight();
+    bindSearch();
   });
 
   // Handle account icon click (check for cs_auth cookie)
   function checkCustomerSession() {
-    const hasCookie = document.cookie
-      .split(";")
-      .some((c) => c.trim().startsWith("cs_auth=1"));
-    // The header account icon and the phone tab bar's Account tab.
-    document
-      .querySelectorAll<HTMLElement>("#account-link, [data-account-link]")
-      .forEach((accountLink) => {
-        accountLink.onclick = (e) => {
-          if (!hasCookie) {
-            e.preventDefault();
-            window.dispatchEvent(new CustomEvent("open-auth-modal"));
-          }
-        };
-      });
+    const hasCookie = document.cookie.split(";").some((c) => c.trim().startsWith("cs_auth=1"));
+    // The header account icon, the top bar's and the phone tab bar's Account links.
+    document.querySelectorAll<HTMLElement>("#account-link, [data-account-link]").forEach((accountLink) => {
+      accountLink.onclick = (e) => {
+        if (!hasCookie) {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent("open-auth-modal"));
+        }
+      };
+    });
   }
   checkCustomerSession();
   window.addEventListener("customer-login", checkCustomerSession);
