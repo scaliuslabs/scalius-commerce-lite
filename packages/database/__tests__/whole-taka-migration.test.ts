@@ -1,4 +1,4 @@
-// 0079_whole_taka_amounts on a real pre-0079 schema: in a BDT store every
+// 0080_whole_taka_amounts on a real pre-0080 schema: in a BDT store every
 // merchant-entered amount becomes whole taka (half-up, never zero when it was
 // not), receipts of past orders stay exactly as charged, and a store in
 // another currency keeps its minor units.
@@ -31,12 +31,12 @@ function seed(currencyCode: string | null) {
   `;
 }
 
-describe.each(["d1", "turso"] as const)("0079 whole taka amounts (%s)", (provider) => {
+describe.each(["d1", "turso"] as const)("0080 whole taka amounts (%s)", (provider) => {
   it("rounds merchant-entered taka to whole taka and leaves order receipts as charged", () => {
-    const sqlite = createMigratedSqlite({ provider, beforeMigration: "0079_" });
+    const sqlite = createMigratedSqlite({ provider, beforeMigration: "0080_" });
     sqlite.exec(seed(null));
 
-    sqlite.exec(compiledMigrationSql(provider, undefined, "0079_"));
+    sqlite.exec(compiledMigrationSql(provider, undefined, "0080_"));
 
     const all = (sql: string) => sqlite.prepare(sql).all();
     expect(all("SELECT id, price_minor, discount_amount_minor FROM products ORDER BY id")).toEqual([
@@ -63,10 +63,10 @@ describe.each(["d1", "turso"] as const)("0079 whole taka amounts (%s)", (provide
   });
 
   it("leaves a store in another currency with its minor units", () => {
-    const sqlite = createMigratedSqlite({ provider, beforeMigration: "0079_" });
+    const sqlite = createMigratedSqlite({ provider, beforeMigration: "0080_" });
     sqlite.exec(seed("USD").replaceAll('"currencyCode":"BDT"', '"currencyCode":"USD"').replace("'BDT');", "'USD');"));
 
-    sqlite.exec(compiledMigrationSql(provider, undefined, "0079_"));
+    sqlite.exec(compiledMigrationSql(provider, undefined, "0080_"));
 
     const all = (sql: string) => sqlite.prepare(sql).all();
     expect(all("SELECT price_minor FROM products WHERE id = 'tee'")).toEqual([{ price_minor: 99_949 }]);
