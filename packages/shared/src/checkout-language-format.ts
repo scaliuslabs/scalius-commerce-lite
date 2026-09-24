@@ -15,10 +15,20 @@ export function formatCheckoutLanguageText(
  */
 export function formatDiscountLineLabel(
   discountText: string,
-  line: { title: string; code: string | null },
+  line: { title: string | null; code: string | null },
 ): string {
-  const title = line.title.trim();
-  const code = line.code?.trim() || null;
-  const name = code && code !== title ? `${title} (${code})` : title || code || "";
+  const name = discountDisplayName(line);
   return name ? `${discountText} · ${name}` : discountText;
+}
+
+/**
+ * An applied discount's name everywhere it is listed: "Eid sale (EID10)", just
+ * "EID10" when the title is the code (in any letter case), "Eid sale" for an
+ * automatic discount.
+ */
+export function discountDisplayName(line: { title: string | null; code: string | null }): string {
+  const title = line.title?.trim() ?? "";
+  const code = line.code?.trim() ?? "";
+  if (!code || code.toLocaleLowerCase() === title.toLocaleLowerCase()) return title || code;
+  return title ? `${title} (${code})` : code;
 }

@@ -93,9 +93,9 @@ function adminApi(env: Env) {
   app.use("/admin/*", adminAuthMiddleware);
   app.route("/admin/auth", adminAuthManagementRoutes);
   const ctx = { waitUntil: () => {}, passThroughOnException: () => {} } as unknown as ExecutionContext;
-  return async (cookie: string, path: string, body?: unknown) => {
+  return async (cookie: string, path: string, body?: unknown, method?: "DELETE") => {
     const response = await app.fetch(new Request(`${DASHBOARD}/api/v1/admin/auth${path}`, {
-      method: body === undefined ? "GET" : "POST",
+      method: method ?? (body === undefined ? "GET" : "POST"),
       headers: { "Content-Type": "application/json", Cookie: cookie },
       body: body === undefined ? undefined : JSON.stringify(body),
     }), env, ctx);
@@ -335,9 +335,28 @@ describe("staff sign-in and invites", () => {
     const reopened = await postAuth(env, "/api/auth/reset-session", { token });
     expect(reopened.status).toBe(400);
     expect(await reopened.json()).toMatchObject({ code: "TOKEN_USED" });
-    // A replaced or unknown link still reads as expired.
+    // A replaced or unknown link reads as expired.
     expect(await (await postAuth(env, "/api/auth/reset-session", { token: firstToken })).json()).toMatchObject({ code: "INVALID_TOKEN" });
     expect(await (await postAuth(env, "/api/auth/reset-session", { token: "a".repeat(40) })).json()).toMatchObject({ code: "INVALID_TOKEN" });
+  });
+
+  it("says a cancelled invite was cancelled, not expired", async () => {
+    const env = makeEnv();
+    const { cookie } = await ownerWithEmailCodes(env);
+    const call = adminApi(env);
+    await autoSeedRbacIfNeeded(database.db);
+    const role = database.sqlite.prepare("SELECT id FROM roles WHERE name <> 'super_admin' LIMIT 1").get() as { id: string } | undefined;
+    const invited = await call(cookie, "/users", { name: "Nila", email: "nila@shop.test", roleId: role?.id });
+    const token = linkToken(outbox.at(-1)!.html, "invite");
+    const userId = String((invited.json.data!.user as { id: string }).id);
+
+    expect((await call(cookie, `/users/${userId}`, undefined, "DELETE")).status).toBe(200);
+
+    const reopened = await postAuth(env, "/api/auth/reset-session", { token });
+    expect(reopened.status).toBe(400);
+    expect(await reopened.json()).toMatchObject({ code: "TOKEN_CANCELLED" });
+    // The token itself is not kept: only its hash marks the cancelled link.
+    expect(database.sqlite.prepare("SELECT COUNT(*) AS n FROM verification WHERE identifier LIKE ?").get(`%${token}%`)).toMatchObject({ n: 0 });
   });
 
   it("keeps password-reset links short and sends a 2FA account to its challenge after the reset", async () => {
