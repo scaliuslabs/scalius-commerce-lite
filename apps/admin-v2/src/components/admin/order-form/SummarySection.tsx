@@ -41,20 +41,26 @@ import { resourceMessages } from "~/i18n/resource";
 const discountGuidanceId = "manual-order-discount-guidance";
 const discountErrorId = "manual-order-discount-error";
 const CUSTOM_CHARGE = "custom";
-// Same key and parameters as Settings → Shipping, so both share one cache entry.
-const SHIPPING_RATES_QUERY = { page: 1, limit: 100, sort: "sortOrder", order: "asc" } as const;
-
-/** Store shipping rates to suggest a delivery charge; hidden without access. */
+/**
+ * The store's active delivery charges (every zone, then everywhere else) to
+ * suggest a delivery charge; hidden without access. Same key as Settings →
+ * Shipping, so both share one cache entry.
+ */
 function useShippingRates() {
   const { hasPermission } = usePermissions();
   const query = useQuery({
-    queryKey: queryKeys.settings.shippingMethods(SHIPPING_RATES_QUERY),
-    queryFn: () => apiData(getApiV1AdminSettingsShippingMethods({ query: SHIPPING_RATES_QUERY })),
+    queryKey: queryKeys.settings.shippingMethods(),
+    queryFn: () => apiData(getApiV1AdminSettingsShippingMethods()),
     enabled: hasPermission(ADMIN_PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW),
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
-  return (query.data?.shippingMethods ?? []).filter((method) => method.isActive && !method.deletedAt);
+  const data = query.data;
+  if (!data) return [];
+  return [
+    ...data.zones.flatMap((zone) => zone.rates.map((rate) => ({ ...rate, name: `${zone.name} · ${rate.name}` }))),
+    ...data.everywhereElse.rates,
+  ].filter((rate) => rate.isActive);
 }
 
 /** Payment card: delivery charge, discount and the order total from the server quote. */

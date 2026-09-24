@@ -7,7 +7,9 @@ const transport = vi.hoisted(() => ({ sendEmail: vi.fn(), sendSms: vi.fn(), getA
 vi.mock("@scalius/core/integrations/email", () => ({ sendEmail: transport.sendEmail }));
 vi.mock("@scalius/core/integrations/sms", () => ({ getActiveSmsProvider: transport.getActiveSmsProvider }));
 
-import { DEFAULT_NOTIFICATION_TEMPLATES } from "@scalius/core/modules/notifications/notification-templates";
+import { defaultNotificationTemplates } from "@scalius/core/modules/notifications/notification-templates";
+
+const DEFAULTS = defaultNotificationTemplates("en");
 import { notificationTemplatesRoutes } from "./notification-templates";
 
 function createTestApp(options: { rateLimited?: boolean } = {}) {
@@ -42,7 +44,12 @@ function createTestApp(options: { rateLimited?: boolean } = {}) {
         const row = sqlite.prepare("SELECT value FROM settings WHERE category = 'notification_templates'").get() as { value: string } | undefined;
         return row ? JSON.parse(row.value) : null;
     };
-    return { request, stored, limit };
+    const activateLanguage = (code: string) => {
+        sqlite.exec("UPDATE checkout_languages SET is_active = 0");
+        sqlite.prepare(`INSERT INTO checkout_languages (id, name, code, is_active, is_default, language_data, field_visibility)
+            VALUES (?, ?, ?, 1, 0, '{}', '{}')`).run(`lang_${code}`, code, code);
+    };
+    return { request, stored, limit, activateLanguage };
 }
 
 describe("notification template routes", () => {
@@ -57,11 +64,13 @@ describe("notification template routes", () => {
         const { request, stored } = createTestApp();
         const initial = await request("");
         expect(initial.body.data.revision).toBe(0);
-        expect(initial.body.data.templates.sms.order_shipped).toEqual(DEFAULT_NOTIFICATION_TEMPLATES.sms.order_shipped);
+        expect(initial.body.data.language).toBe("en");
+        expect(initial.body.data.store).toEqual({ name: "Nokshi Kantha", logoUrl: null, storefrontUrl: null });
+        expect(initial.body.data.templates.sms.order_shipped).toEqual(DEFAULTS.sms.order_shipped);
 
         const saved = await request("", "PUT", {
             event: "order_confirmed",
-            email: DEFAULT_NOTIFICATION_TEMPLATES.email.order_confirmed,
+            email: DEFAULTS.email.order_confirmed,
             sms: { body: "{{customer_name}}, অর্ডার {{order_number}} কনফার্ম হয়েছে। মোট {{order_total}}।" },
             expectedRevision: 0,
         });
@@ -75,7 +84,19 @@ describe("notification template routes", () => {
         });
 
         // Resetting to the default removes the stored copy.
-        await request("", "PUT", { event: "order_confirmed", sms: DEFAULT_NOTIFICATION_TEMPLATES.sms.order_confirmed, expectedRevision: 1 });
+        await request("", "PUT", { event: "order_confirmed", sms: DEFAULTS.sms.order_confirmed, expectedRevision: 1 });
+        expect(stored()).toEqual({ email: {}, sms: {} });
+    });
+
+    it("serves the Bangla defaults for a Bangla checkout and doesn't store them when saved unchanged", async () => {
+        const { request, stored, activateLanguage } = createTestApp();
+        activateLanguage("bn-BD");
+        const bn = defaultNotificationTemplates("bn");
+        const initial = await request("");
+        expect(initial.body.data.language).toBe("bn");
+        expect(initial.body.data.templates.email.order_created).toEqual(bn.email.order_created);
+
+        await request("", "PUT", { event: "order_created", email: bn.email.order_created, sms: bn.sms.order_created, expectedRevision: 0 });
         expect(stored()).toEqual({ email: {}, sms: {} });
     });
 

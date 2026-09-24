@@ -4,12 +4,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_NOTIFICATION_TEMPLATES } from "@scalius/core/modules/notifications/notification-templates";
+import { defaultNotificationTemplates } from "@scalius/core/modules/notifications/notification-templates";
+
+const DEFAULTS = defaultNotificationTemplates("en");
 
 const envelope = <T,>(data: T) => Promise.resolve({ data: { success: true, data } });
 
 const sdk = vi.hoisted(() => ({
-  getApiV1AdminSettingsBusiness: vi.fn(),
   getApiV1AdminSettingsNotificationChannels: vi.fn(),
 }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
@@ -40,12 +41,16 @@ describe("notification message editor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     notifyManager.setNotifyFunction((callback) => { act(callback); });
-    sdk.getApiV1AdminSettingsBusiness.mockImplementation(() => envelope({ companyName: "Nokshi Kantha", legalName: "" }));
     sdk.getApiV1AdminSettingsNotificationChannels.mockImplementation(() => envelope({
       channels: { order_confirmed: ["email"] },
       whatsappTemplate: { templateName: "order_update_bn", languageCode: "bn" },
     }));
-    client.get.mockImplementation(() => envelope({ templates: DEFAULT_NOTIFICATION_TEMPLATES, revision: 3 }));
+    client.get.mockImplementation(() => envelope({
+      templates: DEFAULTS,
+      revision: 3,
+      language: "en",
+      store: { name: "Nokshi Kantha", logoUrl: null, storefrontUrl: "https://shop.example.test" },
+    }));
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -106,7 +111,7 @@ describe("notification message editor", () => {
 
     act(() => reset.click());
 
-    expect(sms.value).toBe(DEFAULT_NOTIFICATION_TEMPLATES.sms.order_confirmed.body);
+    expect(sms.value).toBe(DEFAULTS.sms.order_confirmed.body);
     expect(reset.disabled).toBe(true);
   });
 
@@ -121,5 +126,7 @@ describe("notification message editor", () => {
     expect(html).toContain("Hi Rahim Uddin &lt;script&gt;");
     expect(html).not.toContain("<script>");
     expect(html).toContain("Nokshi Kantha");
+    // The real frame: the guest's order link on the store's address.
+    expect(html).toContain('href="https://shop.example.test/track-order?order=1001"');
   });
 });

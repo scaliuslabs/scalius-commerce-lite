@@ -47,6 +47,7 @@ export function useCurrency() {
           discount.discountType ?? "percentage",
           percentToBps(discount.discountPercentage ?? 0),
           toMinor(discount.discountAmount ?? 0, digits),
+          code,
         );
         return sale < priceMinor ? fromMinor(sale, digits) : null;
       } catch {

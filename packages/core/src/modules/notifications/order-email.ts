@@ -1,43 +1,52 @@
 import type { Database } from "@scalius/database/client";
 import { orders, orderItems } from "@scalius/database/schema";
-import { formatPrice, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
+import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatBdMobile } from "@scalius/shared/phone-input";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
-import { asc, eq, sql, type SQL } from "drizzle-orm";
-import { getBusinessSettings } from "../settings/business-settings.service";
+import { asc, eq } from "drizzle-orm";
+import { MESSAGE_COPY, requestCopy, type MessageLanguage } from "./message-copy";
 import type { OrderNotificationType } from "./notification-types";
 import {
-  formatOrderNumber,
   renderOrderEmail,
   renderTemplate,
+  type EmailPayment,
   type EmailTemplate,
   type NotificationVariableValues,
-  type OrderEmailView,
+  type OrderEmailFacts,
 } from "./notification-templates";
+import { readStoreIdentity } from "./store-messages";
 
 export interface OrderMessageInput {
   orderId: string;
-  name: string;
   type: OrderNotificationType;
+  /** The queued name; the saved order's customer name wins when present. */
+  name?: string;
   data?: Record<string, unknown>;
   storefrontUrl?: string;
 }
 
-/** Everything a customer message can say about one order. */
+/** Everything a customer or staff message can say about one order. */
 export interface OrderMessageContext {
+  language: MessageLanguage;
   variables: NotificationVariableValues;
-  email: Omit<OrderEmailView, "subject" | "body">;
+  facts: OrderEmailFacts;
 }
-
-// Orders gain a per-store number in slice F4; until this schema declares the
-// column the number reads as null and messages show the short order id.
-const orderNumberColumn: SQL<number | null> =
-  ((orders as unknown as { orderNumber?: SQL<number | null> }).orderNumber) ?? sql<number | null>`null`;
 
 // Read only persisted purchase facts, never today's catalog or an invoice issuance.
 async function readOrderFacts(db: Database, orderId: string) {
   const rows = await db.select({ order: {
-    orderNumber: orderNumberColumn,
+    customerName: orders.customerName,
+    customerPhone: orders.customerPhone,
+    shippingAddress: orders.shippingAddress,
+    areaName: orders.areaName,
+    zoneName: orders.zoneName,
+    cityName: orders.cityName,
+    shippingMethodName: orders.shippingMethodName,
+    shippingMethodDescription: orders.shippingMethodDescription,
+    accountOwnerCustomerId: orders.accountOwnerCustomerId,
+    orderNumber: orders.orderNumber,
     status: orders.status,
     paymentMethod: orders.paymentMethod,
     paymentStatus: orders.paymentStatus,
@@ -63,80 +72,41 @@ async function readOrderFacts(db: Database, orderId: string) {
     .orderBy(asc(orderItems.createdAt), asc(orderItems.id));
   const order = rows[0]?.order;
   if (!order) throw new Error("Order email details are unavailable");
-  const items = rows.flatMap((row) => row.item ? [row.item] : []);
-  const business = await getBusinessSettings(db);
-  return { order, items, business };
+  return { order, items: rows.flatMap((row) => row.item ? [row.item] : []) };
 }
 
-/** Store name for customer messages and the email sender name. */
-export function storeDisplayName(business: { companyName: string; legalName: string } | null | undefined): string {
-  return business?.companyName.trim() || business?.legalName.trim() || "";
-}
+const CLOSED_STATUSES = new Set(["cancelled", "returned", "refunded", "partially_refunded"]);
 
-/** BDT as buyers read it: ৳ with lakh grouping, whole taka without decimals. */
-function moneyFormatter(currencyCode: string | null | undefined, decimals: number) {
-  const currency = normalizeSupportedCurrencyCode(currencyCode);
-  if (!currency || !Number.isInteger(decimals) || decimals < 0 || decimals > 3) return null;
-  if (currency === "BDT") {
-    return (minor: number) => {
-      const amount = fromMinor(minor, decimals);
-      const whole = Number.isInteger(amount);
-      return `৳${new Intl.NumberFormat("en-IN", {
-        minimumFractionDigits: whole ? 0 : 2,
-        maximumFractionDigits: whole ? 0 : 2,
-      }).format(amount)}`;
-    };
-  }
-  return (minor: number) =>
-    formatPrice(fromMinor(minor, decimals), { symbol: `${currency} `, code: currency, precision: decimals });
-}
+/** The order's facts and variable values in the store's language, for every channel. */
+export async function readOrderMessageContext(input: OrderMessageInput, db: Database): Promise<OrderMessageContext> {
+  const [{ order, items }, store] = await Promise.all([readOrderFacts(db, input.orderId), readStoreIdentity(db)]);
+  const { language } = store;
 
-/**
- * The order facts and variable values for one customer message. Without a
- * database (legacy direct dispatch) only the caller's facts are known.
- */
-export async function readOrderMessageContext(
-  input: OrderMessageInput,
-  db?: Database,
-): Promise<OrderMessageContext> {
-  const facts = db ? await readOrderFacts(db, input.orderId) : null;
-  const order = facts?.order;
-  const storeName = storeDisplayName(facts?.business);
-  const money = order ? moneyFormatter(order.currencyCode, order.currencyDecimalPlaces ?? 0) : null;
+  const currency = normalizeSupportedCurrencyCode(order.currencyCode);
+  const decimals = order.currencyDecimalPlaces;
+  const money = currency && Number.isInteger(decimals) && decimals >= 0 && decimals <= 3
+    ? (minor: number) => formatMoney(fromMinor(minor, decimals), { code: currency })
+    : null;
 
-  const summary: Array<[string, string]> = [];
-  if (order && money) {
-    summary.push(["Subtotal", money(order.subtotalAmountMinor)], ["Shipping", money(order.shippingAmountMinor)]);
-    if (order.discountAmountMinor > 0) summary.push(["Discount", `−${money(order.discountAmountMinor)}`]);
-    if (order.taxAmountMinor > 0) summary.push([`${order.taxLabel || "Tax"}${order.pricesIncludeTax ? " (included)" : ""}`, money(order.taxAmountMinor)]);
-    summary.push(["Total", money(order.totalAmountMinor)]);
-  }
+  let payment: EmailPayment;
+  if (order.paymentStatus === "refunded" || order.status === "refunded") payment = { state: "refunded" };
+  else if (order.paymentStatus === "partially_refunded" || order.status === "partially_refunded") payment = { state: "partially_refunded" };
+  else if (CLOSED_STATUSES.has(order.status)) payment = { state: "nothing_due" };
+  else if (order.paymentStatus === "paid") payment = { state: "paid" };
+  else if (order.paymentMethod === "cod") {
+    payment = { state: "cod", due: money ? money(Math.max(0, order.balanceDueMinor)) : null, partiallyPaid: order.paymentStatus === "partial" };
+  } else payment = { state: order.paymentStatus === "partial" ? "partially_paid" : "not_completed" };
 
-  let payment = "";
-  let codDue: number | null = null;
-  if (order) {
-    const closed = ["cancelled", "returned", "refunded", "partially_refunded"].includes(order.status);
-    if (order.paymentStatus === "refunded" || order.status === "refunded") payment = "Refunded. No payment is due.";
-    else if (order.status === "partially_refunded") payment = "Partially refunded. No payment is due for this closed order.";
-    else if (closed) payment = "No payment is due for this closed order.";
-    else if (order.paymentStatus === "paid") payment = "Paid";
-    else if (order.paymentMethod === "cod") {
-      codDue = Math.max(0, order.balanceDueMinor);
-      const due = money ? `${money(codDue)} due on delivery.` : "Payment is due on delivery.";
-      payment = `${order.paymentStatus === "partial" ? "Partially paid. " : "Cash on delivery. "}${due}`;
-    } else payment = order.paymentStatus === "partial" ? "Partially paid" : "Payment not completed";
-  }
-
-  const items = facts?.items.map((item) => ({
-    name: item.productName?.trim() || "Item name unavailable",
-    variant: item.variantLabel?.trim(),
-    quantity: money ? `${item.quantity} × ${money(item.unitPriceMinor)}` : `Quantity: ${item.quantity}`,
-    subtotal: money ? money(item.lineSubtotalMinor) : "",
-  })) ?? [];
+  // Account orders open in the account; guests verify on the public order page.
+  // Phone and email never go into these URLs.
+  const origin = normalizeStorefrontOrigin(input.storefrontUrl);
+  const orderLink = !origin ? null : order.accountOwnerCustomerId
+    ? { kind: "account" as const, href: `${origin}/account/orders/${encodeURIComponent(input.orderId)}` }
+    : { kind: "track" as const, href: `${origin}/track-order?order=${encodeURIComponent(String(order.orderNumber ?? input.orderId))}` };
 
   const support: Array<{ label: string; href: string }> = [];
-  const email = facts?.business.email.trim();
-  const phone = facts?.business.phone.trim();
+  const email = store.business.email.trim();
+  const phone = store.business.phone.trim();
   if (email && /^[^\s@<>?&#]+@[^\s@<>?&#]+\.[^\s@<>?&#]+$/.test(email)) {
     support.push({ label: email, href: `mailto:${encodeURIComponent(email)}` });
   }
@@ -144,25 +114,49 @@ export async function readOrderMessageContext(
     support.push({ label: phone, href: `tel:${phone.replace(/[ ()-]/g, "")}` });
   }
 
-  const text = (value: unknown) => (value === undefined || value === null ? "" : String(value));
+  const { request, status } = requestCopy(MESSAGE_COPY[language], input.data?.supportRequestType, input.data?.supportRequestStatus);
+  const codDue = payment.state === "cod" ? payment.due : null;
   return {
+    language,
     variables: {
-      customer_name: input.name,
-      order_number: formatOrderNumber(order?.orderNumber, input.orderId),
-      order_total: order && money ? money(order.totalAmountMinor) : "",
-      cod_amount: codDue !== null && money ? money(codDue) : money ? money(0) : "",
-      store_name: storeName,
-      tracking_id: text(input.data?.trackingId),
-      support_request: text(input.data?.supportRequestTypeLabel) || "support request",
-      support_status: text(input.data?.supportRequestStatusLabel) || "updated",
+      customer_name: order.customerName?.trim() || input.name?.trim() || "",
+      order_number: formatOrderNumber(order.orderNumber, input.orderId),
+      order_total: money ? money(order.totalAmountMinor) : "",
+      cod_amount: codDue ?? "",
+      store_name: store.name ?? "",
+      tracking_id: String(input.data?.trackingId ?? "").trim(),
+      support_request: request,
+      support_status: status,
     },
-    email: {
-      storeName,
-      items,
-      summary,
-      amountsUnavailable: Boolean(order && !money),
+    facts: {
+      store: { name: store.name, logoUrl: store.logoUrl },
+      items: items.map((item) => ({
+        name: item.productName?.trim() || null,
+        variant: item.variantLabel?.trim() || null,
+        quantity: item.quantity,
+        unitPrice: money ? money(item.unitPriceMinor) : null,
+        subtotal: money ? money(item.lineSubtotalMinor) : null,
+      })),
+      amounts: money ? {
+        subtotal: money(order.subtotalAmountMinor),
+        shipping: money(order.shippingAmountMinor),
+        discount: order.discountAmountMinor > 0 ? money(order.discountAmountMinor) : null,
+        tax: order.taxAmountMinor > 0
+          ? { label: order.taxLabel, amount: money(order.taxAmountMinor), included: Boolean(order.pricesIncludeTax) }
+          : null,
+        total: money(order.totalAmountMinor),
+      } : null,
       payment,
-      origin: normalizeStorefrontOrigin(input.storefrontUrl),
+      address: [
+        order.customerName,
+        order.customerPhone ? formatBdMobile(order.customerPhone) : null,
+        order.shippingAddress,
+        [order.areaName, order.zoneName, order.cityName].map((part) => part?.trim()).filter(Boolean).join(", "),
+      ].map((line) => line?.trim()).filter((line): line is string => Boolean(line)),
+      method: [order.shippingMethodName, order.shippingMethodDescription]
+        .map((line) => line?.trim()).filter((line): line is string => Boolean(line)),
+      origin,
+      orderLink,
       support,
     },
   };
@@ -170,23 +164,26 @@ export async function readOrderMessageContext(
 
 /** Called only after the email target is eligible (and its receipt is claimed). */
 export function composeOrderEmail(context: OrderMessageContext, template: EmailTemplate) {
-  return renderOrderEmail({
-    ...context.email,
-    subject: renderTemplate(template.subject, context.variables) || `Order ${context.variables.order_number}`,
+  const email = renderOrderEmail({
+    language: context.language,
+    facts: context.facts,
+    subject: renderTemplate(template.subject, context.variables) || context.variables.order_number || "",
     body: renderTemplate(template.body, context.variables),
   });
+  return { ...email, fromName: context.facts.store.name ?? undefined };
 }
 
 /** The staff "new order" email: the same order facts, linked to the dashboard. */
 export function composeStaffOrderEmail(context: OrderMessageContext, dashboardOrderUrl: string | null) {
-  const { customer_name: customer, order_number: number, order_total: total } = context.variables;
-  const store = context.email.storeName;
-  return renderOrderEmail({
-    ...context.email,
-    subject: `${store ? `[${store}] ` : ""}Order ${number} placed by ${customer}`,
-    body: `${customer} placed order ${number}${total ? ` for ${total}` : ""}.`,
-    origin: null,
-    support: [],
-    action: dashboardOrderUrl ? { label: "View order", href: dashboardOrderUrl } : undefined,
+  const copy = MESSAGE_COPY[context.language].staffOrder;
+  const { customer_name: customer = "", order_number: order = "", order_total: total = "" } = context.variables;
+  const email = renderOrderEmail({
+    language: context.language,
+    // Staff never get the buyer's links or the store's own support contacts.
+    facts: { ...context.facts, origin: null, orderLink: null, support: [] },
+    subject: copy.subject(context.facts.store.name, order, customer),
+    body: copy.body(customer, order, total),
+    action: dashboardOrderUrl ? { label: copy.action, href: dashboardOrderUrl } : undefined,
   });
+  return { ...email, fromName: context.facts.store.name ?? undefined };
 }
