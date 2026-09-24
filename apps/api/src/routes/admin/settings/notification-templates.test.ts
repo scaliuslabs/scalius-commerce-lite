@@ -49,7 +49,7 @@ function createTestApp(options: { rateLimited?: boolean } = {}) {
         sqlite.prepare(`INSERT INTO checkout_languages (id, name, code, is_active, is_default, language_data, field_visibility)
             VALUES (?, ?, ?, 1, 0, '{}', '{}')`).run(`lang_${code}`, code, code);
     };
-    return { request, stored, limit, activateLanguage };
+    return { request, stored, limit, activateLanguage, sqlite };
 }
 
 describe("notification template routes", () => {
@@ -65,7 +65,7 @@ describe("notification template routes", () => {
         const initial = await request("");
         expect(initial.body.data.revision).toBe(0);
         expect(initial.body.data.language).toBe("en");
-        expect(initial.body.data.store).toEqual({ name: "Nokshi Kantha", logoUrl: null, storefrontUrl: null });
+        expect(initial.body.data.store).toEqual({ name: "Nokshi Kantha", logoUrl: null, storefrontUrl: null, nameFromAddress: false });
         expect(initial.body.data.templates.sms.order_shipped).toEqual(DEFAULTS.sms.order_shipped);
 
         const saved = await request("", "PUT", {
@@ -153,6 +153,28 @@ describe("notification template routes", () => {
         expect(email.subject).toBe("Nokshi Kantha: order #1001 is out for delivery");
         expect(email.html).toContain("Hi Rahim Uddin &lt;b&gt;");
         expect(email.html).toContain("Tracking: SF12345678");
+    });
+
+    it("names an unnamed store by its Store URL host and keeps the test subject when a variable is empty", async () => {
+        const { request, sqlite } = createTestApp();
+        sqlite.exec("DELETE FROM settings WHERE category = 'business'");
+
+        await request("/test", "POST", {
+            channel: "email", event: "order_created", subject: "R2-SET B {{order_number}} {{store_name}}", body: "Hi",
+        });
+        expect(transport.sendEmail.mock.calls[0]![0].subject).toBe("R2-SET B #1001");
+
+        sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('platform', 'document', ?, 'json', 'platform')")
+            .run(JSON.stringify({ storefrontUrl: "https://storefront.scalius.com" }));
+        const { body } = await request("");
+        expect(body.data.store).toMatchObject({ name: "storefront.scalius.com", nameFromAddress: true });
+        await request("/test", "POST", {
+            channel: "email", event: "order_created", subject: "{{store_name}}: {{order_number}}", body: "Hi",
+        });
+        expect(transport.sendEmail.mock.calls[1]![0]).toMatchObject({
+            subject: "storefront.scalius.com: #1001",
+            fromName: "storefront.scalius.com",
+        });
     });
 
     it("sends a test SMS to a Bangla-digit number normalised to 01XXXXXXXXX", async () => {

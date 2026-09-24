@@ -34,6 +34,7 @@ const refundResultSchema = z.object({
     amount: z.number(),
     isFullRefund: z.boolean(),
     manualSettlementRecorded: z.boolean().optional(),
+    replayed: z.boolean().optional(),
     notificationCount: z.number(),
     sideEffectErrors: z.number(),
     error: z.string().optional(),
@@ -269,6 +270,9 @@ const refundOrderRoute = createRoute({
                         reason: z.string().optional(),
                         gateway: z.enum(listPaymentMethodIds() as [string, ...string[]]).optional(),
                         manualSettlementConfirmed: z.boolean().optional(),
+                        requestKey: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9_-]+$/).optional().openapi({
+                            description: "One key per refund (per dialog opening). Repeating it returns the first refund.",
+                        }),
                     })
                 }
             }
@@ -298,6 +302,7 @@ app.openapi(refundOrderRoute, async (c) => {
                 reason: data.reason ?? "Refund requested",
                 gateway: data.gateway,
                 manualSettlementConfirmed: data.manualSettlementConfirmed,
+                requestKey: data.requestKey,
             },
             encryptionKey,
         );
@@ -314,12 +319,17 @@ app.openapi(refundOrderRoute, async (c) => {
         throw error;
     }
     if (!result.success) throw new ValidationError(result.error || "Refund processing failed");
+    if (result.replayed) {
+        // A repeated click: the first request already logged, notified and refreshed.
+        return ok(c, { ...publicRefundResult(result), notificationCount: 0, sideEffectErrors: 0 });
+    }
     if (result.amount > 0) {
         await recordOrderEvent(db, {
             orderId,
             kind: "refund_recorded",
             actorId: (c.get("user") as { id?: string } | undefined)?.id ?? null,
             body: data.reason?.trim() || null,
+            requestKey: data.requestKey,
             data: { amount: result.amount, full: result.isFullRefund },
         });
     }

@@ -118,7 +118,7 @@ describe("store name and contact", () => {
     // Quiet while typing.
     expect(phone.getAttribute("aria-invalid")).not.toBe("true");
     leave(phone);
-    expect(note("business-phone")).toBe("Enter a mobile number like 01712-345678, or a full number starting with +.");
+    expect(note("business-phone")).toBe("Enter a number like 01712-345678 or 02-9876543, or a full number starting with +.");
     expect(phone.getAttribute("aria-invalid")).toBe("true");
 
     type(email, "abc");
@@ -147,6 +147,55 @@ describe("store name and contact", () => {
     leave(phone);
     expect(phone.value).toBe("+44 20 7946 0958");
     expect(note("business-phone")).toBe("Shown on invoices. Customers and couriers call this number.");
+  });
+
+  it("takes a Bangladesh landline, shows it as 02-9876543 and saves it as +880…", async () => {
+    await openContactDialog(["BD"]);
+    const phone = field("business-phone");
+
+    type(phone, "০২ ৯৮৭ ৬৫৪৩");
+    leave(phone);
+    expect(phone.value).toBe("02-9876543");
+    expect(note("business-phone")).toBe("Shown on invoices. Customers and couriers call this number.");
+
+    const save = [...document.querySelectorAll("button")].find((button) => button.textContent === "Save")!;
+    await act(async () => { save.click(); });
+    await vi.waitFor(() => expect(sdk.postApiV1AdminSettingsBusiness).toHaveBeenCalledOnce());
+    expect(sdk.postApiV1AdminSettingsBusiness.mock.calls[0]![0].body).toMatchObject({ phone: "+88029876543" });
+  });
+
+  it("checks the invoice prefix length when the field is left, before Save", async () => {
+    sdk.getApiV1AdminSettingsBusiness.mockImplementation(() => envelope(business));
+    sdk.getApiV1AdminSettingsAllowedCountries.mockImplementation(() => envelope({ allowedCountries: [], allowedCountriesMode: "include" }));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <PermissionProvider isSuperAdmin>
+            <BusinessCard />
+          </PermissionProvider>
+        </QueryClientProvider>,
+      );
+    });
+    const row = await vi.waitFor(() => {
+      const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes("Invoices"));
+      expect(button).toBeDefined();
+      return button!;
+    });
+    act(() => row.click());
+    const prefix = await vi.waitFor(() => {
+      expect(field("business-invoicePrefix")).not.toBeNull();
+      return field("business-invoicePrefix");
+    });
+
+    type(prefix, "X".repeat(40));
+    expect(note("business-invoicePrefix")).not.toContain("characters");
+    leave(prefix);
+    expect(note("business-invoicePrefix")).toBe("Use 32 characters or fewer.");
+
+    const save = [...document.querySelectorAll("button")].find((button) => button.textContent === "Save")!;
+    await act(async () => { save.click(); });
+    expect(sdk.postApiV1AdminSettingsBusiness).not.toHaveBeenCalled();
   });
 
   it("refuses a number from a country the store doesn't accept", async () => {

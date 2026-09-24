@@ -48,10 +48,14 @@ export function describeTimelineEvent(
         detail: null,
       };
     case "shipment_created": {
-      const courier = text(data.courierName);
+      // No courier typed means the merchant's own rider, named in the merchant's language.
+      const courier = text(data.courierName) ?? t("fulfill.defaultCourier");
+      const quantity = count(data.quantity);
       const tracking = text(data.trackingId);
       return {
-        text: courier ? t("timeline.sentWith", { courier }) : t("timeline.sent"),
+        text: quantity > 0
+          ? t(quantity === 1 ? "timeline.sentItem" : "timeline.sentItems", { count: quantity, courier })
+          : t("timeline.sentWith", { courier }),
         detail: tracking ? t("timeline.tracking", { id: tracking }) : null,
       };
     }
@@ -79,6 +83,15 @@ export function describeTimelineEvent(
         text: t("timeline.returnReceived", { count: count(data.received) }),
         detail: count(data.restocked) > 0 ? t("returns.qtyRestocked", { count: count(data.restocked) }) : null,
       };
+    case "request_submitted": {
+      const type = text(data.type);
+      return {
+        text: type === "cancel_pre_shipment" || type === "return" || type === "refund"
+          ? t(`timeline.requestSubmitted.${type}`)
+          : t("timeline.request"),
+        detail: text(data.reason) ?? body,
+      };
+    }
     case "request_resolved": {
       const type = text(data.type);
       const request = type === "cancel_pre_shipment" || type === "return" || type === "refund"

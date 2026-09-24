@@ -89,7 +89,7 @@ export const pageFeaturedImageSchema = z
   .passthrough();
 
 const pageFieldSchemas = {
-  title: z.string().min(3).max(100),
+  title: z.string().trim().min(3).max(100),
   slug: contentSlugSchema,
   content: z.string(),
   excerpt: z.string().trim().max(500).nullable(),

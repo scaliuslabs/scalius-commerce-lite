@@ -14,7 +14,7 @@ import {
   normalizeOptionalSearchString,
   type SearchValidatorInput,
 } from "~/lib/list-helpers";
-import { readListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -69,7 +69,7 @@ function listQuery(search: ProductSearch, term: string) {
 export const Route = createFileRoute("/admin/products/")({
   validateSearch: validateProductSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, readListSearch("products"))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("products", deps.q))),
   head: () => ({ meta: [{ title: `${translate(productMessages, "products")} | Scalius Admin` }] }),
   component: ProductsPage,
   errorComponent: RouteErrorComponent,
@@ -123,6 +123,7 @@ function ProductsPage() {
         { value: "draft", label: t("statusDraft") },
       ] }}
       searchPlaceholder={t("searchPlaceholder")}
+      countLabel={(count) => t("productsCount", { count })}
       filterParams={["category"]}
       filters={
         <SearchableSelect

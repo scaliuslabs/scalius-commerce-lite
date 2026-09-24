@@ -3,14 +3,6 @@ import {
     mediaFolders,
     mediaUploadParts,
     mediaUploadSessions,
-    productMedia,
-    products,
-    orderItems,
-    settings,
-    heroSliders,
-    pages,
-    categories,
-    user,
 } from "@scalius/database/schema";
 import {
     buildBatchGuard,
@@ -49,40 +41,20 @@ import {
     ServiceUnavailableError,
     ValidationError,
 } from "@scalius/core/errors";
-import { businessDocument, footerDocument, headerDocument } from "../settings/documents";
-import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
 import type { InitiateMediaUploadInput, UpdateMediaInput } from "./media.validation";
 import { presentMediaProjection } from "./media.presentation";
+import { countMediaUsage, loadMediaUsage, noMediaUsage, type MediaUsage } from "./media.usage";
 
 const MAX_COMMAND_IDS = 90;
 const UPLOAD_SESSION_TTL_MS = 24 * 60 * 60 * 1_000;
 
-export type MediaDependencyConflictDetails = {
-    posterReferences: {
-        count: number;
-        samples: Array<{ mediaId: string; filename: string }>;
-    };
-    productReferences: {
-        count: number;
-        samples: Array<{ productId: string; productName: string; productMediaId: string }>;
-    };
-    orderReferences: {
-        count: number;
-        samples: Array<{ orderId: string; orderItemId: string }>;
-    };
-    savedReferences: {
-        count: number;
-        samples: Array<{ surface: string }>;
-    };
-};
-
 export class MediaDependencyConflictError extends AppError {
-    constructor(details: MediaDependencyConflictDetails) {
+    constructor(usage: MediaUsage) {
         super(
             409,
             "MEDIA_DEPENDENCY_CONFLICT",
-            "Remove this media from every saved storefront surface, product, and video poster. Retained order snapshots cannot be deleted.",
-            details,
+            "This file is still used. Remove it from those places before deleting it permanently. Files shown on past orders are kept.",
+            usage,
         );
         this.name = "MediaDependencyConflictError";
     }
@@ -284,8 +256,13 @@ export async function listMediaFiles(db: Database, input: {
     const rawValue = last
         ? sortBy === "size" ? last.size : sortBy === "filename" ? last.filename : last.createdAt.getTime()
         : null;
+    const usage = await countMediaUsage(db, pageRows.map((row) => row.id));
     return {
-        files: pageRows.map(presentMediaProjection),
+        files: pageRows.map((row) => ({
+            ...presentMediaProjection(row),
+            usageCount: usage.get(row.id)?.usageCount ?? 0,
+            keptForOrders: usage.get(row.id)?.keptForOrders ?? false,
+        })),
         pagination: {
             limit: boundedLimit,
             hasMore,
@@ -741,164 +718,8 @@ export async function restoreMediaFile(db: Database, id: string, expectedVersion
     return presented;
 }
 
-async function loadMediaDeleteDependencies(
-    db: Database,
-    id: string,
-): Promise<MediaDependencyConflictDetails> {
-    const posterRows = await db
-        .select({
-            mediaId: media.id,
-            filename: media.filename,
-            total: sql<number>`count(*) OVER ()`,
-        })
-        .from(media)
-        .where(and(eq(media.posterMediaId, id), ne(media.status, "deleted")))
-        .orderBy(asc(media.id))
-        .limit(5);
-    const productRows = await db
-        .select({
-            productId: productMedia.productId,
-            productName: products.name,
-            productMediaId: productMedia.id,
-            total: sql<number>`count(*) OVER ()`,
-        })
-        .from(productMedia)
-        .innerJoin(products, eq(products.id, productMedia.productId))
-        .where(eq(productMedia.mediaId, id))
-        .orderBy(asc(productMedia.productId), asc(productMedia.id))
-        .limit(5);
-    const orderRows = await db
-        .select({
-            orderId: orderItems.orderId,
-            orderItemId: orderItems.id,
-            total: sql<number>`count(*) OVER ()`,
-        })
-        .from(orderItems)
-        .where(eq(orderItems.productImageMediaId, id))
-        .orderBy(asc(orderItems.orderId), asc(orderItems.id))
-        .limit(5);
-    const objectKey = await db
-        .select({ objectKey: media.objectKey })
-        .from(media)
-        .where(eq(media.id, id))
-        .get();
-    const savedReferences: Array<{ surface: string }> = [];
-    let savedReferenceCount = 0;
-    if (objectKey) {
-        const settingCounts = await db.select({
-            category: settings.category,
-            count: sql<number>`sum(case when instr(${settings.value}, ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-        }).from(settings).where(and(
-            eq(settings.key, SETTINGS_DOCUMENT_ROW_KEY),
-            inArray(settings.category, Object.keys(MEDIA_SETTINGS_SURFACES)),
-        )).groupBy(settings.category);
-        for (const [category, surface] of Object.entries(MEDIA_SETTINGS_SURFACES)) {
-            const count = settingCounts.find((row) => row.category === category)?.count;
-            if (count && count > 0) {
-                savedReferences.push({ surface });
-                savedReferenceCount += count;
-            }
-        }
-
-        const heroCount = await db.select({
-            count: sql<number>`sum(case when instr(${heroSliders.images}, ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-        }).from(heroSliders).get();
-        if (heroCount?.count && heroCount.count > 0) {
-            savedReferences.push({ surface: "hero_slider" });
-            savedReferenceCount += heroCount.count;
-        }
-
-        const pageCounts = await db.select({
-            featured: sql<number>`sum(case when instr(coalesce(${pages.featuredImage}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-            content: sql<number>`sum(case when instr(${pages.content}, ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-        }).from(pages).get();
-        const pageSurfaces = [["page_featured_image", pageCounts?.featured], ["page_content", pageCounts?.content]] as const;
-        for (const [surface, count] of pageSurfaces) {
-            if (count && count > 0) {
-                savedReferences.push({ surface });
-                savedReferenceCount += count;
-            }
-        }
-
-        const categoryCounts = await db.select({
-            image: sql<number>`sum(case when instr(coalesce(${categories.imageUrl}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-            content: sql<number>`sum(case when instr(coalesce(${categories.content}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-        }).from(categories).get();
-        const categorySurfaces = [["category_image", categoryCounts?.image], ["category_content", categoryCounts?.content]] as const;
-        for (const [surface, count] of categorySurfaces) {
-            if (count && count > 0) {
-                savedReferences.push({ surface });
-                savedReferenceCount += count;
-            }
-        }
-
-        const profileCount = await db.select({
-            count: sql<number>`sum(case when instr(coalesce(${user.image}, ''), ${objectKey.objectKey}) > 0 then 1 else 0 end)`,
-        }).from(user).get();
-        if (profileCount?.count && profileCount.count > 0) {
-            savedReferences.push({ surface: "admin_profile" });
-            savedReferenceCount += profileCount.count;
-        }
-    }
-    return {
-        posterReferences: {
-            count: posterRows[0]?.total ?? 0,
-            samples: posterRows.map(({ mediaId, filename }) => ({ mediaId, filename })),
-        },
-        productReferences: {
-            count: productRows[0]?.total ?? 0,
-            samples: productRows.map(({ productId, productName, productMediaId }) => ({
-                productId,
-                productName,
-                productMediaId,
-            })),
-        },
-        orderReferences: {
-            count: orderRows[0]?.total ?? 0,
-            samples: orderRows.map(({ orderId, orderItemId }) => ({ orderId, orderItemId })),
-        },
-        savedReferences: {
-            count: savedReferenceCount,
-            samples: savedReferences.slice(0, 5),
-        },
-    };
-}
-
-function hasMediaDeleteDependencies(details: MediaDependencyConflictDetails): boolean {
-    return details.posterReferences.count > 0
-        || details.productReferences.count > 0
-        || details.orderReferences.count > 0
-        || details.savedReferences.count > 0;
-}
-
-/** Settings documents that can hold media URLs, by the surface they report. */
-const MEDIA_SETTINGS_SURFACES: Record<string, string> = {
-    [headerDocument.key]: "site_header",
-    [footerDocument.key]: "site_footer",
-    [businessDocument.key]: "business_invoice",
-};
-
-function noSavedMediaReferences(objectKey: string) {
-    return sql`NOT EXISTS (
-        SELECT 1 FROM ${settings}
-        WHERE ${settings.key} = ${SETTINGS_DOCUMENT_ROW_KEY}
-          AND ${settings.category} IN (${sql.join(Object.keys(MEDIA_SETTINGS_SURFACES).map((category) => sql`${category}`), sql`, `)})
-          AND instr(${settings.value}, ${objectKey}) > 0
-    ) AND NOT EXISTS (
-        SELECT 1 FROM ${heroSliders}
-        WHERE instr(${heroSliders.images}, ${objectKey}) > 0
-    ) AND NOT EXISTS (
-        SELECT 1 FROM ${pages}
-        WHERE instr(coalesce(${pages.featuredImage}, ''), ${objectKey}) > 0
-           OR instr(${pages.content}, ${objectKey}) > 0
-    ) AND NOT EXISTS (
-        SELECT 1 FROM ${categories}
-        WHERE instr(coalesce(${categories.imageUrl}, ''), ${objectKey}) > 0
-           OR instr(coalesce(${categories.content}, ''), ${objectKey}) > 0
-    ) AND NOT EXISTS (
-        SELECT 1 FROM ${user}
-        WHERE instr(coalesce(${user.image}, ''), ${objectKey}) > 0
-    )`;
+function isMediaInUse(usage: MediaUsage): boolean {
+    return usage.count > 0 || usage.orderCount > 0;
 }
 
 export async function permanentlyDeleteMediaFile(
@@ -911,10 +732,8 @@ export async function permanentlyDeleteMediaFile(
     if (!current) throw new NotFoundError("Media file not found");
     if (current.status === "deleted") return;
     if (current.status === "trashed" && current.version === expectedVersion) {
-        const dependencies = await loadMediaDeleteDependencies(db, id);
-        if (hasMediaDeleteDependencies(dependencies)) {
-            throw new MediaDependencyConflictError(dependencies);
-        }
+        const usage = await loadMediaUsage(db, id);
+        if (isMediaInUse(usage)) throw new MediaDependencyConflictError(usage);
         const claimed = await db.update(media).set({
             status: "deleting",
             version: expectedVersion + 1,
@@ -923,27 +742,12 @@ export async function permanentlyDeleteMediaFile(
             eq(media.id, id),
             eq(media.version, expectedVersion),
             eq(media.status, "trashed"),
-            sql`NOT EXISTS (
-                SELECT 1 FROM ${media} AS poster_owner
-                WHERE poster_owner.poster_media_id = ${id}
-                  AND poster_owner.status <> 'deleted'
-            )`,
-            sql`NOT EXISTS (
-                SELECT 1 FROM ${productMedia}
-                WHERE ${productMedia.mediaId} = ${id}
-            )`,
-            sql`NOT EXISTS (
-                SELECT 1 FROM ${orderItems}
-                WHERE ${orderItems.productImageMediaId} = ${id}
-            )`,
-            noSavedMediaReferences(current.objectKey),
+            noMediaUsage(id, current.objectKey),
         ))
             .returning().get();
         if (!claimed) {
-            const latestDependencies = await loadMediaDeleteDependencies(db, id);
-            if (hasMediaDeleteDependencies(latestDependencies)) {
-                throw new MediaDependencyConflictError(latestDependencies);
-            }
+            const latestUsage = await loadMediaUsage(db, id);
+            if (isMediaInUse(latestUsage)) throw new MediaDependencyConflictError(latestUsage);
             throw new ConflictError("Media changed. Reload and try again.");
         }
         current = claimed;

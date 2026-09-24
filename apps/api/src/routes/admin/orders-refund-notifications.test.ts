@@ -114,6 +114,33 @@ describe("admin refund notification routes", () => {
         expect(body.data).toMatchObject({ notificationCount: 1, sideEffectErrors: 0 });
     });
 
+    it("answers a repeated refund request with the first refund and does nothing else (R2-ORD-01)", async () => {
+        mocks.processRefund.mockResolvedValue({
+            success: true,
+            gateway: "cod",
+            amount: 500.5,
+            isFullRefund: false,
+            manualSettlementRecorded: true,
+            availabilityTransitionVariantIds: [],
+            replayed: true,
+        });
+        const { app, env } = createTestApp();
+        const requestKey = "3f0c9a52-6f1e-4b1f-9f59-0c0a3c1d2e11";
+
+        const response = await app.request("/api/v1/admin/orders/order_1/refund", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: 500.5, reason: "requested_by_customer", manualSettlementConfirmed: true, requestKey }),
+        }, env);
+
+        expect(response.status).toBe(200);
+        expect(mocks.processRefund).toHaveBeenCalledWith(db, expect.objectContaining({ requestKey }), "credential-key");
+        expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
+        expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+        const body = await response.json() as { data: Record<string, unknown> };
+        expect(body.data).toMatchObject({ replayed: true, amount: 500.5, notificationCount: 0 });
+    });
+
     it("forwards explicit manual-settlement confirmation to the refund authority", async () => {
         mocks.processRefund.mockResolvedValue({
             success: true,

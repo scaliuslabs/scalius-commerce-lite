@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolveHomepageHero } from "./homepage-hero";
 
-const slide = (url: string) => ({ url, link: "", focalPoint: { x: 50, y: 50 } });
+const slide = (url: string) => ({ id: url, url, title: "Banner", heading: "", buttonLabel: "", link: "", focalPoint: { x: 50, y: 50 } });
 
 describe("resolveHomepageHero", () => {
   it("shows desktop banners on phones when no phone banners exist", () => {

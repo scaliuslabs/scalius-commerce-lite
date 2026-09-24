@@ -127,6 +127,13 @@ type ReturnCommandReplay = {
   actorId: string | null;
 };
 
+/** A receipt returns the whole order only from these; a courier return already did. */
+const WHOLE_RETURN_FROM_STATUSES = [
+  OrderStatus.SHIPPED,
+  OrderStatus.DELIVERED,
+  OrderStatus.COMPLETED,
+] as const;
+
 const RETURNABLE_ORDER_STATUSES = new Set<string>([
   OrderStatus.SHIPPED,
   OrderStatus.DELIVERED,
@@ -860,7 +867,8 @@ export async function receiveOrderReturn(
   const identity = await buildCommandIdentity(orderId, returnId, "receive", input.commandKey, input);
   const existingCommand = await readCommandReplay(db, orderId, input.commandKey);
   if (existingCommand?.status === "committed") {
-    return resultWithOrderStatus(db, resolveReplay(existingCommand, identity.requestHash)!);
+    // The stored result says whether this receipt returned the order.
+    return resolveReplay(existingCommand, identity.requestHash)!;
   }
   if (existingCommand && existingCommand.requestHash !== identity.requestHash) {
     throw new ConflictError("Return command key was already used with a different payload.");
@@ -1005,7 +1013,12 @@ export async function receiveOrderReturn(
     (line) => nextReceivedByLineId.get(line.id) === line.approvedQuantity,
   );
   const nextStatus: OrderReturnStatus = completed ? "completed" : "receiving";
-  const wholeOrderReturned = completed && await shouldMarkWholeOrderReturned(
+  // Only a receipt that closes a still-open order returns it (and tells the
+  // buyer). A courier return already marked the order returned and sent that
+  // message; receiving the parcel is warehouse work (R2-ORD-08).
+  const wholeOrderReturned = completed
+    && WHOLE_RETURN_FROM_STATUSES.includes(context.order.status as never)
+    && await shouldMarkWholeOrderReturned(
     db,
     orderId,
     returnId,
@@ -1089,7 +1102,7 @@ export async function receiveOrderReturn(
       }).where(and(
         eq(orders.id, orderId),
         eq(orders.version, context.order.version),
-        inArray(orders.status, [OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED]),
+        inArray(orders.status, [...WHOLE_RETURN_FROM_STATUSES]),
       )).returning({ id: orders.id })
     : null;
   const finalQueries = [
@@ -1110,7 +1123,7 @@ export async function receiveOrderReturn(
       "Return stock was reconciled but receipt finalization requires retry with the same command key.",
     );
   }
-  return resultWithOrderStatus(db, baseResult);
+  return { ...baseResult, wholeOrderReturned };
 }
 
 /**
@@ -1160,7 +1173,7 @@ export async function reconcileOrderReturnReceipt(
     );
   }
   if (command.status === "committed") {
-    return resultWithOrderStatus(db, parseCommandResult(command.responsePayload));
+    return parseCommandResult(command.responsePayload);
   }
   if (!command.requestPayload) {
     throw new ServiceUnavailableError(

@@ -6,7 +6,12 @@ import { ValidationError } from "@scalius/core/errors";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../products/products.money";
 import { getCurrencyConfig } from "../settings/settings.service";
-import { buildInventoryLowStockCondition } from "./low-stock-policy";
+import {
+    buildInventoryLowStockCondition,
+    buildNeedsRestockCondition,
+    effectiveLowStockThresholdSql,
+    storeDefaultLowStockThresholdSql,
+} from "./low-stock-policy";
 import { operationalSkuRowPredicate } from "../products/products.public-eligibility";
 
 const availableStockSql = sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`;
@@ -451,6 +456,7 @@ export async function getInventoryOverview(db: Database, params: {
                 totalAvailable: sql<number>`COALESCE(SUM(${availableStockSql}), 0)`,
                 outOfStockCount: sql<number>`COALESCE(SUM(CASE WHEN ${availableStockSql} <= 0 THEN 1 ELSE 0 END), 0)`,
                 lowStockCount: sql<number>`COALESCE(SUM(CASE WHEN ${buildInventoryLowStockCondition()} THEN 1 ELSE 0 END), 0)`,
+                defaultLowStockThreshold: storeDefaultLowStockThresholdSql(),
             })
             .from(productVariants)
             .innerJoin(products, eq(products.id, productVariants.productId))
@@ -467,27 +473,29 @@ export async function getInventoryOverview(db: Database, params: {
             statsQuery,
         ]);
         const countResult = countRows[0];
-        const statsResult = statsRows[0];
+        const { defaultLowStockThreshold, ...statsResult } = statsRows[0] ?? {
+            totalVariants: 0,
+            totalOnHand: 0,
+            totalReserved: 0,
+            totalAvailable: 0,
+            outOfStockCount: 0,
+            lowStockCount: 0,
+            defaultLowStockThreshold: null,
+        };
 
         return {
             variants: variantRows.map(({ priceMinor, storeCurrencyCode, ...variant }) => ({
                 ...variant,
                 price: fromMinor(priceMinor, storeDecimalPlacesFromCode(storeCurrencyCode)),
             })),
+            defaultLowStockThreshold: defaultLowStockThreshold ?? null,
             pagination: {
                 page,
                 limit,
                 total: countResult?.count ?? 0,
                 totalPages: Math.ceil((countResult?.count ?? 0) / limit),
             },
-            stats: statsResult ?? {
-                totalVariants: 0,
-                totalOnHand: 0,
-                totalReserved: 0,
-                totalAvailable: 0,
-                outOfStockCount: 0,
-                lowStockCount: 0,
-            },
+            stats: statsResult,
         };
     }
 
@@ -508,13 +516,20 @@ export async function getInventoryOverview(db: Database, params: {
 
     if (section === "alerts") {
         const aStatus = alertStatus ?? "active";
+        const needs = buildNeedsRestockCondition();
+        const acknowledged = sql`${productLowStockAlerts.alertStatus} = 'acknowledged'`;
         const alertConditions: SQL[] = [
             isNull(products.deletedAt),
             isNull(productVariants.deletedAt),
+            eq(productVariants.trackInventory, true),
+            operationalSkuRowPredicate(),
         ];
-        if (aStatus !== "all") {
-            alertConditions.push(eq(productLowStockAlerts.alertStatus, aStatus));
-        }
+        // Live stock decides what needs review; a stored alert row only
+        // remembers that the merchant marked it as seen (or that it was low).
+        if (aStatus === "active") alertConditions.push(sql`(${needs} AND COALESCE(${acknowledged}, 0) = 0)`);
+        else if (aStatus === "acknowledged") alertConditions.push(sql`(${needs} AND ${acknowledged})`);
+        else if (aStatus === "resolved") alertConditions.push(sql`(NOT ${needs} AND ${productLowStockAlerts.id} IS NOT NULL)`);
+        else alertConditions.push(sql`(${needs} OR ${productLowStockAlerts.id} IS NOT NULL)`);
         if (search.trim()) {
             const searchPattern = `%${search.trim()}%`;
             alertConditions.push(or(
@@ -522,45 +537,47 @@ export async function getInventoryOverview(db: Database, params: {
                 like(products.name, searchPattern),
             )!);
         }
-        const alertWhere = alertConditions.length > 0
-            ? and(...alertConditions)
-            : undefined;
+        const alertWhere = and(...alertConditions);
+        const alertJoin = eq(productLowStockAlerts.variantId, productVariants.id);
 
         const countResult = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(productLowStockAlerts)
-            .innerJoin(products, eq(products.id, productLowStockAlerts.productId))
-            .innerJoin(productVariants, eq(productVariants.id, productLowStockAlerts.variantId))
+            .select({ count: sql<number>`count(*)`, defaultLowStockThreshold: storeDefaultLowStockThresholdSql() })
+            .from(productVariants)
+            .innerJoin(products, eq(products.id, productVariants.productId))
+            .leftJoin(productLowStockAlerts, alertJoin)
             .where(alertWhere)
             .get();
         const alerts = await db
             .select({
-                id: productLowStockAlerts.id,
-                variantId: productLowStockAlerts.variantId,
-                productId: productLowStockAlerts.productId,
-                currentQty: productLowStockAlerts.currentQty,
-                threshold: productLowStockAlerts.threshold,
-                alertStatus: productLowStockAlerts.alertStatus,
-                alertSentAt: productLowStockAlerts.alertSentAt,
-                acknowledgedAt: productLowStockAlerts.acknowledgedAt,
-                resolvedAt: productLowStockAlerts.resolvedAt,
-                createdAt: productLowStockAlerts.createdAt,
-                updatedAt: productLowStockAlerts.updatedAt,
+                id: sql<string>`COALESCE(${productLowStockAlerts.id}, ${productVariants.id})`,
+                variantId: productVariants.id,
+                productId: productVariants.productId,
+                currentQty: availableStockSql,
+                threshold: sql<number>`COALESCE(${effectiveLowStockThresholdSql()}, 0)`,
+                alertStatus: sql<string>`CASE WHEN ${needs}
+                    THEN CASE WHEN ${acknowledged} THEN 'acknowledged' ELSE 'active' END
+                    ELSE 'resolved' END`,
+                alertSentAt: sql<number | null>`${productLowStockAlerts.alertSentAt}`,
+                acknowledgedAt: sql<number | null>`${productLowStockAlerts.acknowledgedAt}`,
+                resolvedAt: sql<number | null>`${productLowStockAlerts.resolvedAt}`,
+                createdAt: sql<number>`COALESCE(${productLowStockAlerts.createdAt}, ${productVariants.updatedAt})`,
+                updatedAt: sql<number>`COALESCE(${productLowStockAlerts.updatedAt}, ${productVariants.updatedAt})`,
                 productName: products.name,
                 variantSku: productVariants.sku,
                 variantLabel: variantOptionLabelSql(productVariants.id),
             })
-            .from(productLowStockAlerts)
-            .innerJoin(products, eq(products.id, productLowStockAlerts.productId))
-            .innerJoin(productVariants, eq(productVariants.id, productLowStockAlerts.variantId))
+            .from(productVariants)
+            .innerJoin(products, eq(products.id, productVariants.productId))
+            .leftJoin(productLowStockAlerts, alertJoin)
             .where(alertWhere)
-            .orderBy(desc(productLowStockAlerts.updatedAt), desc(productLowStockAlerts.id))
+            .orderBy(asc(availableStockSql), asc(products.name), asc(productVariants.id))
             .limit(limit)
             .offset(offset)
             .all();
 
         return {
             alerts,
+            defaultLowStockThreshold: countResult?.defaultLowStockThreshold ?? null,
             pagination: {
                 page,
                 limit,
@@ -569,7 +586,6 @@ export async function getInventoryOverview(db: Database, params: {
             },
         };
     }
-
     throw new ValidationError("Invalid section parameter");
 }
 

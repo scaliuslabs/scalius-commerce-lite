@@ -495,7 +495,7 @@ function parseZone(input: DeliveryZoneInput, decimalPlaces: number) {
     if (!name) issues.push({ path: ["name"], message: "Enter a zone name." });
     const locationIds = [...new Set(input.locationIds.map((id) => id.trim()).filter(Boolean))];
     if (locationIds.length === 0) {
-        issues.push({ path: ["locationIds"], message: "Choose at least one city, zone or area." });
+        issues.push({ path: ["locationIds"], message: "Choose at least one city, thana or area." });
     }
     const rates = parseRates(input.rates, decimalPlaces, issues, true);
     throwIssues(issues);

@@ -30,7 +30,8 @@ import {
 } from "~/lib/order-return-workflow";
 import { formatOrderTimestamp } from "./formatters";
 import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./order-returns/shared";
-import { restockedUnits } from "./OrderStatusCard";
+import { restockedUnits, shippedCancelReason } from "./OrderStatusCard";
+import { openCancellationRequest, type OrderActionRequest } from "./primary-action";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order, OrderSupportRequest } from "./types";
 
@@ -70,6 +71,7 @@ function ResolveDialog({
   const mutation = useResolveOrderSupportRequest();
   const options = request ? resolutionsFor(request, canCancelOrders) : [];
   const [selected, setSelected] = useState<Resolution | null>(null);
+  const [choiceMissing, setChoiceMissing] = useState(false);
   const [note, setNote] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));
@@ -93,6 +95,7 @@ function ResolveDialog({
     if (!open || !request) return;
     // Nothing is pre-selected: the merchant picks the answer.
     setSelected(null);
+    setChoiceMissing(false);
     setNote("");
     setQuantities({});
     commandKey.current.clear();
@@ -105,9 +108,15 @@ function ResolveDialog({
     && (!isReturnApproval || (returnsQuery.isSuccess && returnLines.length > 0));
   const isCancelApproval = request.type === "cancel_pre_shipment" && selected === "approved";
   const restock = restockedUnits(order);
+  const shippedReason = isCancelApproval ? shippedCancelReason(order, t) : null;
 
   const submit = () => {
-    if (!selected || !canSubmit) return;
+    if (!selected) {
+      setChoiceMissing(true);
+      document.getElementById(`resolution-${options[0]}`)?.focus();
+      return;
+    }
+    if (!canSubmit || shippedReason) return;
     const returnRequest = isReturnApproval
       ? { expectedOrderVersion: order.version, reason: request.reason, notes: request.message?.trim() || null, lines: returnLines }
       : null;
@@ -136,7 +145,15 @@ function ResolveDialog({
         </DialogHeader>
         <div className="space-y-4">
           {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
-          <RadioGroup value={selected ?? ""} onValueChange={(value) => setSelected(value as Resolution)}>
+          <RadioGroup
+            value={selected ?? ""}
+            aria-invalid={choiceMissing || undefined}
+            aria-describedby={choiceMissing ? "resolution-error" : undefined}
+            onValueChange={(value) => {
+              setSelected(value as Resolution);
+              setChoiceMissing(false);
+            }}
+          >
             {options.map((option) => (
               <div key={option} className="flex items-center gap-3">
                 <RadioGroupItem id={`resolution-${option}`} value={option} />
@@ -144,10 +161,13 @@ function ResolveDialog({
               </div>
             ))}
           </RadioGroup>
+          {choiceMissing ? <p id="resolution-error" className="text-destructive">{t("requests.chooseAction")}</p> : null}
           {request.type === "return" ? (
             <p className="text-body text-muted-foreground">{t("requests.returnHelp")}</p>
           ) : null}
-          {isCancelApproval ? (
+          {shippedReason ? (
+            <p className="text-body text-destructive">{shippedReason}</p>
+          ) : isCancelApproval ? (
             <p className="text-body text-muted-foreground">
               {[t("requests.cancelHelp"), restock > 0 ? t("cancel.restock", { count: restock }) : null].filter(Boolean).join(" ")}
             </p>
@@ -199,7 +219,7 @@ function ResolveDialog({
             type="button"
             variant={isCancelApproval ? "destructive" : "default"}
             onClick={submit}
-            disabled={!canSubmit}
+            disabled={Boolean(selected) && (!canSubmit || shippedReason !== null)}
             loading={mutation.isPending}
           >
             {isCancelApproval ? t("requests.acceptCancel") : r("save")}
@@ -210,19 +230,33 @@ function ResolveDialog({
   );
 }
 
-export function OrderSupportRequestsCard({ order }: { order: Order }) {
+export function OrderSupportRequestsCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
   const actions = useOrderActionPermissions();
   const canResolve = actions.canResolveOrderSupportRequests;
+  const cardRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<OrderSupportRequest | null>(null);
   const [open, setOpen] = useState(false);
   const requests = order.supportRequests ?? [];
+
+  // "Review cancellation request" in the header opens the open request here.
+  useEffect(() => {
+    if (request?.action !== "reviewCancellation") return;
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const pending = openCancellationRequest(order);
+    if (!pending || !canResolve) return;
+    setSelected(pending);
+    setOpen(true);
+    // Only a new request should open the dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request?.id]);
+
   if (requests.length === 0) return null;
   const openCount = requests.filter((request) => request.active).length;
 
   return (
-    <Card>
+    <Card ref={cardRef} id="order-requests" className="scroll-mt-4">
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>{t("requests.title")}</CardTitle>
         {openCount > 0 ? <Badge variant="outline">{t("requests.open", { count: openCount })}</Badge> : null}

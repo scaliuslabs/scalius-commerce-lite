@@ -334,7 +334,7 @@ export function BarcodeLabelWorkspace({
                   return (
                     <li key={variant.id} className="flex flex-wrap items-center gap-3 py-3">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-body font-medium">{name}</p>
+                        <p className="break-words text-body font-medium">{name}</p>
                         <p className="text-body text-muted-foreground">
                           <span className="break-all font-mono">{variant.sku}</span>
                           {" · "}
@@ -525,8 +525,8 @@ export function BarcodeLabelWorkspace({
                           aria-label={t("toggleVariant", { name })}
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-body font-medium">{name}</span>
-                          <span className="block truncate font-mono text-body text-muted-foreground">{variant.sku}</span>
+                          <span className="block break-words text-body font-medium">{name}</span>
+                          <span className="block break-all font-mono text-body text-muted-foreground">{variant.sku}</span>
                         </span>
                       </label>
                     </li>

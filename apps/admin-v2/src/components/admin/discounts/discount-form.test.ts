@@ -152,6 +152,11 @@ describe("discount form model", () => {
     expect(order({ value: "5", minimum: "quantity", minimumValue: "২" })).toEqual({});
     expect(order({ value: "5", minimum: "quantity", minimumValue: "20000" })).toEqual({ minimumValue: "errorQuantityMax" });
     expect(validateDraft(draft("order", { value: "১২.৫" }), "BDT", NOW_SECONDS)).toEqual({});
+    // Thousands as merchants write them, with lakh grouping too.
+    expect(order({ value: "1,000" })).toEqual({});
+    expect(draftToInput(draft("order", { valueKind: "fixed", value: "1,00,000" }), "BDT").effects[0]!.config)
+      .toMatchObject({ amountMinor: 10_000_000 });
+    expect(latinDigits("১,৫০০")).toBe("1500");
   });
 
   it("refuses an end date that has already passed", () => {
@@ -212,6 +217,9 @@ describe("discount form model", () => {
     expect(describeValue(draft("shipping"), "BDT", FORMAT)).toEqual({ key: "type_shipping" });
     expect(describeValue(draft("buy_get", { buyValue: "2", getQuantity: "1" }), "BDT", FORMAT))
       .toEqual({ key: "listValueBuyGet", vars: { buy: "2", get: "1" } });
+    // A 50%-off gift never reads as "Buy 1 get 1" (free).
+    expect(describeValue(draft("buy_get", { buyValue: "1", getQuantity: "1", getValueKind: "percentage", getValue: "50" }), "BDT", FORMAT))
+      .toEqual({ key: "listValueBuyGetPercent", vars: { buy: "1", get: "1", percent: "50%" } });
   });
 
   it("warns when a fixed amount off each item is more than every selected product's price", () => {

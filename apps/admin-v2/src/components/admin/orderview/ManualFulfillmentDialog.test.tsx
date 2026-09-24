@@ -80,6 +80,29 @@ describe("ManualFulfillmentDialog", () => {
     expect(second.requestKey).toBe(first.requestKey);
   });
 
+  it("leaves the courier name to the merchant: blank means your own rider", async () => {
+    await act(async () => root.render(<ManualFulfillmentDialog order={order} open onOpenChange={() => undefined} />));
+    const courier = document.querySelector<HTMLInputElement>("#fulfill-courier")!;
+    expect(courier.value).toBe("");
+    expect(courier.placeholder).toBe(en["fulfill.defaultCourier"]);
+    await act(async () => submit().click());
+    expect(mocks.mutate.mock.calls[0]![0].courierName).toBeUndefined();
+
+    await act(async () => setValue(courier, "Rider Jamal"));
+    await act(async () => submit().click());
+    expect(mocks.mutate.mock.calls[1]![0].courierName).toBe("Rider Jamal");
+  });
+
+  it("clears a field's error as soon as it's corrected", async () => {
+    await act(async () => root.render(<ManualFulfillmentDialog order={order} open onOpenChange={() => undefined} />));
+    await act(async () => setValue(quantity("Kurta")!, "0"));
+    await act(async () => submit().click());
+    expect(document.querySelector("#fulfill-items-error")?.textContent).toBe(en["fulfill.selectItem"]);
+
+    await act(async () => setValue(quantity("Kurta")!, "2"));
+    expect(document.querySelector("#fulfill-items-error")).toBeNull();
+  });
+
   it("flags a tracking link that isn't a full https address next to the field", async () => {
     await act(async () => root.render(<ManualFulfillmentDialog order={order} open onOpenChange={() => undefined} />));
     await act(async () => setValue(document.querySelector<HTMLInputElement>("#fulfill-trackingUrl")!, "not a url"));

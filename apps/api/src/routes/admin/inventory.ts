@@ -3,7 +3,7 @@
 
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import { getInventoryOverview, getInventoryLabelVariants, adjustInventory, adjustInventoryRequestSchema, adjustStock, setStock, lookupByBarcodeOrSku, inventoryOperationKeySchema, INVENTORY_LABEL_VARIANT_LIMIT, INVENTORY_LABEL_ARTIFACT_MAX_COPIES, INVENTORY_LABEL_ARTIFACT_MAX_BYTES, buildInventoryLabelArtifact, buildInventoryMovementCsvArtifact, INVENTORY_MOVEMENT_EXPORT_MAX_BYTES, INVENTORY_MOVEMENT_EXPORT_MAX_ROWS, lowStockThresholdSchema } from "@scalius/core/modules/inventory";
-import { acknowledgeLowStockAlert, setLowStockThreshold } from "@scalius/core/modules/inventory/alerts";
+import { acknowledgeLowStockAlert, setDefaultLowStockThreshold, setLowStockThreshold } from "@scalius/core/modules/inventory/alerts";
 import { getCurrencyConfig } from "@scalius/core/modules/settings/settings.service";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
@@ -151,6 +151,7 @@ const inventoryOverviewSchema = z.object({
     stats: inventoryStatsSchema.optional(),
     ledgerHealth: inventoryLedgerHealthSchema.optional(),
     pageInfo: inventoryMovementPageInfoSchema.optional(),
+    defaultLowStockThreshold: z.number().int().nullable().optional().openapi({ description: "Store-wide alert level for SKUs without their own (variants and alerts sections)" }),
 }).passthrough();
 
 const adjustResultSchema = z.object({
@@ -600,7 +601,7 @@ const alertLevelRoute = createRoute({
     operationId: "dashboard.inventory.set_alert_level",
     tags: ["Admin - Inventory"],
     summary: "Set a SKU's low-stock alert level",
-    description: "Alert when available stock falls to this level or below: a whole number from 0 to 1,000,000, or null to turn the alert off. Stock is not changed.",
+    description: "Alert when available stock falls to this level or below: a whole number from 0 to 1,000,000 (0 turns the alert off for this SKU), or null to use the store default. Stock is not changed.",
     request: {
         params: z.object({ variantId: z.string() }),
         body: {
@@ -635,6 +636,45 @@ app.openapi(alertLevelRoute, async (c) => {
     const { lowStockThreshold } = c.req.valid("json");
     const result = await setLowStockThreshold(c.get("db"), variantId, lowStockThreshold);
     // The alert level shapes the buyer availability band.
+    await bumpCacheGeneration(c);
+    return ok(c, result);
+});
+
+// ── Store default alert level ──
+
+const defaultAlertLevelRoute = createRoute({
+    method: "put",
+    path: "/default-alert-level",
+    operationId: "dashboard.inventory.set_default_alert_level",
+    tags: ["Admin - Inventory"],
+    summary: "Set the store-wide low-stock alert level",
+    description: "SKUs without their own alert level use this one: a whole number from 0 to 1,000,000, or null to turn it off. Stock is not changed.",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({ defaultLowStockThreshold: lowStockThresholdSchema }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: {
+            description: "Store alert level saved",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({ defaultLowStockThreshold: z.number().int().nullable() })),
+                },
+            },
+        },
+        400: errorResponses[400],
+    },
+});
+
+app.openapi(defaultAlertLevelRoute, async (c) => {
+    const { defaultLowStockThreshold } = c.req.valid("json");
+    const result = await setDefaultLowStockThreshold(c.get("db"), defaultLowStockThreshold);
+    // The level shapes buyer availability bands for every SKU that uses it.
     await bumpCacheGeneration(c);
     return ok(c, result);
 });

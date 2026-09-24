@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getFeedProducts: vi.fn(),
   getLayoutData: vi.fn(),
   getSeoSettings: vi.fn(),
+  getShippingMethods: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
   setRuntimeImageCdnPolicy: vi.fn(),
   resolveMediaUrl: vi.fn((url: string) => url),
@@ -18,6 +19,7 @@ vi.mock("@/lib/api/products", () => ({
 vi.mock("@/lib/api", () => ({
   getLayoutData: mocks.getLayoutData,
   getSeoSettings: mocks.getSeoSettings,
+  getShippingMethods: mocks.getShippingMethods,
 }));
 
 vi.mock("@/lib/api/runtime", () => ({
@@ -117,6 +119,8 @@ describe("Facebook product feed route", () => {
     mocks.resolveMediaUrl.mockReset();
     mocks.resolveMediaUrl.mockImplementation((url: string) => url);
     mocks.getSeoSettings.mockResolvedValue({ discovery: undefined });
+    mocks.getShippingMethods.mockReset();
+    mocks.getShippingMethods.mockResolvedValue([]);
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
     mocks.getLayoutData.mockResolvedValue({
       currency: { code: "BDT" },
@@ -1068,6 +1072,32 @@ describe("Facebook product feed route", () => {
     expect(item).toContain("<g:price>0.00 BDT</g:price>");
     expect(item.match(/<g:price>/g)).toHaveLength(2);
     expectFeedPriceInvariant(body);
+  });
+
+  it("gives every other item the store-wide delivery charges, and none when fees vary by zone", async () => {
+    const rate = (name: string, fee: number, extra: Record<string, unknown> = {}) => ({
+      id: name, name, fee, description: null, isActive: true, sortOrder: 0,
+      createdAt: null, updatedAt: null, kind: "delivery", everywhereElse: true, ...extra,
+    });
+    const products = {
+      data: [{
+        id: "prod_paid", slug: "paid", name: "Paid Delivery", description: "x", price: 500,
+        discountedPrice: 500, isActive: true, availableForSale: true, freeDelivery: false,
+        imageUrl: "https://cdn.example.test/p.jpg",
+      }],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    };
+    mocks.getFeedProducts.mockResolvedValue(products);
+    mocks.getShippingMethods.mockResolvedValue([rate("Standard", 110), rate("Pickup", 0, { kind: "pickup" })]);
+
+    let item = feedItemById(await (await GET(context())).text(), "prod_paid");
+    expect(item.match(/<g:shipping>/g)).toHaveLength(1);
+    expect(item).toContain("<g:service>Standard</g:service>");
+    expect(item).toContain("<g:price>110.00 BDT</g:price>");
+
+    mocks.getShippingMethods.mockResolvedValue([rate("Inside Dhaka", 60, { everywhereElse: false }), rate("Outside Dhaka", 120)]);
+    item = feedItemById(await (await GET(context())).text(), "prod_paid");
+    expect(item).not.toContain("<g:shipping>");
   });
 
   it("omits zero-current-price products from both catalog feeds", async () => {

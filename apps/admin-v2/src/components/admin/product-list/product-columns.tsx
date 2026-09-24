@@ -66,7 +66,7 @@ function InventoryText({ product }: { product: ProductListItem }) {
   const text = product.variantCount > 1
     ? t("inStockVariants", { count: product.onHand, variants: product.variantCount })
     : t("inStock", { count: product.onHand });
-  return <span className={cn("tabular-nums", product.onHand === 0 ? "text-destructive" : "text-muted-foreground")}>{text}</span>;
+  return <span className={cn("whitespace-nowrap tabular-nums", product.onHand === 0 ? "text-destructive" : "text-muted-foreground")}>{text}</span>;
 }
 
 /** Price customers pay, with the regular price struck through while a product discount runs. */
@@ -76,8 +76,10 @@ function PriceText({ product, fmt, salePrice }: {
   salePrice: (price: number, discount: ProductListItem) => number | null;
 }) {
   const sale = salePrice(product.price, product);
+  // A draft without a price says so instead of looking free.
+  if (product.price <= 0) return <div className="text-muted-foreground">{t("noPrice")}</div>;
   return (
-    <div className="tabular-nums md:text-right">
+    <div className="tabular-nums">
       {sale === null ? fmt(product.price) : (
         <>
           {fmt(sale)} <s className="text-muted-foreground">{fmt(product.price)}</s>
@@ -98,7 +100,7 @@ export function getProductColumns(opts: {
     {
       accessorKey: "name",
       header: sortHeader(t("columnProduct")),
-      meta: { mobile: "primary" },
+      meta: { mobile: "primary", minWidth: 240 },
       cell: ({ row }) => (
         <div className="flex min-w-0 items-center gap-3">
           <ProductThumb src={row.original.primaryImage} />
@@ -117,14 +119,14 @@ export function getProductColumns(opts: {
     {
       id: "status",
       header: t("columnStatus"),
-      meta: { mobile: "status" },
+      meta: { mobile: "status", priority: 90, minWidth: 90 },
       cell: ({ row }) => <ProductStatusBadge isActive={row.original.isActive} />,
       enableSorting: false,
     },
     {
       id: "inventory",
       header: t("columnInventory"),
-      meta: { mobile: "secondary" },
+      meta: { mobile: "secondary", priority: 70, minWidth: 150 },
       cell: ({ row }) => <InventoryText product={row.original} />,
       enableSorting: false,
     },
@@ -132,16 +134,18 @@ export function getProductColumns(opts: {
       id: "category",
       accessorFn: (row) => row.category.name,
       header: sortHeader(t("columnCategory")),
-      meta: { mobile: "secondary" },
-      // Category names wrap instead of truncating (phones show them in full).
+      meta: { mobile: "secondary", priority: 40, minWidth: 130 },
+      // At most two lines; the whole name on hover.
       cell: ({ row }) => (
-        <span className="break-words text-muted-foreground">{row.original.category.name || t("uncategorized")}</span>
+        <span title={row.original.category.name || undefined} className="line-clamp-2 break-words text-muted-foreground">
+          {row.original.category.name || t("uncategorized")}
+        </span>
       ),
     },
     {
       accessorKey: "price",
       header: sortHeader(t("columnPrice")),
-      meta: { mobile: "secondary" },
+      meta: { mobile: "secondary", numeric: true, priority: 80, minWidth: 110 },
       cell: ({ row }) => <PriceText product={row.original} fmt={opts.fmt} salePrice={opts.salePrice} />,
     },
   ];

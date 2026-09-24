@@ -529,6 +529,8 @@ const listMenuItemsRoute = createRoute({
                 items: z.array(z.object({
                     item: flatMenuItemSchema,
                     childCount: z.number().int().nonnegative(),
+                    /** The linked page, product, category or collection's name; null for other links or a missing one. */
+                    targetTitle: z.string().nullable(),
                 })),
                 nextCursor: z.string().nullable(),
             })) } },

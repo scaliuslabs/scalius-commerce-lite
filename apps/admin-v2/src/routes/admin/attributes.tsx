@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { IdText } from "~/components/admin/data-table/cells";
 import { createFileRoute } from "@tanstack/react-router";
 import { ListTree } from "lucide-react";
 import {
@@ -8,7 +9,7 @@ import {
   postApiV1AdminAttributesBulkRestore,
 } from "@scalius/api-client/sdk";
 import { createListSearchValidator } from "~/lib/list-helpers";
-import { readListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -45,7 +46,7 @@ function listQuery(search: ReturnType<typeof validateAttributeSearch>, term: str
 export const Route = createFileRoute("/admin/attributes")({
   validateSearch: validateAttributeSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, readListSearch("attributes"))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("attributes", deps.q))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "attributes") }] }),
   component: AttributesPage,
   errorComponent: RouteErrorComponent,
@@ -73,25 +74,26 @@ function AttributesPage() {
     {
       accessorKey: "name",
       header: sortHeader(t("attribute")),
-      meta: { mobile: "primary" },
+      meta: { mobile: "primary", minWidth: 200 },
       cell: ({ row }) =>
         can.canEdit && !search.trashed ? (
-          <button type="button" className="truncate text-left font-medium hover:underline" onClick={() => setEditing(row.original)}>
+          <button type="button" className="line-clamp-2 break-words text-left font-medium hover:underline" onClick={() => setEditing(row.original)}>
             {row.original.name}
           </button>
         ) : (
-          <span className="truncate font-medium">{row.original.name}</span>
+          <span className="line-clamp-2 break-words font-medium">{row.original.name}</span>
         ),
     },
     {
       accessorKey: "slug",
       header: sortHeader(t("handle")),
-      meta: { mobile: "secondary" },
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.slug}</span>,
+      meta: { mobile: "secondary", priority: 60, minWidth: 140 },
+      cell: ({ row }) => <IdText value={row.original.slug} className="text-muted-foreground" />,
     },
     {
       id: "values",
       header: t("values"),
+      meta: { numeric: true, priority: 80, minWidth: 80 },
       cell: ({ row }) => (
         <button
           type="button"
@@ -109,7 +111,7 @@ function AttributesPage() {
     {
       accessorKey: "filterable",
       header: sortHeader(t("filterable")),
-      meta: { mobile: "status" },
+      meta: { mobile: "status", priority: 50, minWidth: 110 },
       cell: ({ row }) => (row.original.filterable ? <StatusBadge tone="neutral">{t("filterableYes")}</StatusBadge> : null),
     },
   ], [t, can.canEdit, search.trashed]);
@@ -121,6 +123,7 @@ function AttributesPage() {
         actions={can.canCreate ? <Button onClick={() => setEditing("new")}>{t("addAttribute")}</Button> : null}
         search={search}
         list="attributes"
+        countLabel={(count) => t("attributeCount", { count })}
         query={listQuery(search, term)}
         pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
         dataKey="attributes"

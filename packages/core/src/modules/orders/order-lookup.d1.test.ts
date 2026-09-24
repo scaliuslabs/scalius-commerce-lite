@@ -1,13 +1,14 @@
 // Public "Track your order" on the real schema: the code goes only to the
-// contact saved on the order, lookups never reveal whether an order exists,
-// and a correct code issues a normal private receipt proof.
+// contact saved on the order, the buyer is told where it went (or that none
+// can reach them), and a correct code issues a normal private receipt proof.
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { RateLimitError, ServiceUnavailableError } from "../../errors";
+import { NotFoundError, RateLimitError } from "../../errors";
 import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
-import { ORDER_LOOKUP_SENT_MESSAGE, sendOrderLookupOtp, verifyOrderLookupOtp } from "./order-lookup";
+import { sendOrderLookupOtp, verifyOrderLookupOtp } from "./order-lookup";
+import { NoOrderCodeChannelError } from "./order-payment-recovery";
 import { validateOrderReceiptProof } from "./order-receipts";
 
 const KEY = Buffer.alloc(32, 9).toString("base64");
@@ -35,10 +36,12 @@ const send = (reference: string, phone: string, env: Record<string, unknown> = e
 const challenges = () => Number(sqlite.prepare("SELECT COUNT(*) AS n FROM order_payment_recovery_challenges").get()?.n);
 
 describe("track your order", () => {
-  it("sends a code to the email saved on the order and opens the receipt after the code", async () => {
+  it("sends a code to the email saved on the order, says where, and opens the receipt after the code", async () => {
     const sent = await send("#orderwithemail01", "০১৭১২-০০০০০১");
     expect(sent).toMatchObject({
-      message: ORDER_LOOKUP_SENT_MESSAGE,
+      message: "We sent a code to b•••@example.test.",
+      destination: "b•••@example.test",
+      channel: "email",
       queuePayload: { type: "auth.send_otp", purpose: "order_lookup", method: "email", channel: "email" },
     });
     expect(JSON.stringify(sent.queuePayload)).not.toMatch(/buyer@example|8801712000001/i);
@@ -61,23 +64,25 @@ describe("track your order", () => {
       .rejects.toThrow("That code was already used.");
   });
 
-  it("answers the same way whether or not the details match an order", async () => {
-    const wrongPhone = await send("ORDERWITHEMAIL01", "01712000009");
-    const unknownOrder = await send("NOSUCHORDER00001", "01712000001");
-    const noReachableContact = await send("ORDERNOEMAIL0001", "01712000002");
-    for (const result of [wrongPhone, unknownOrder, noReachableContact]) {
-      expect(result).toEqual({ message: ORDER_LOOKUP_SENT_MESSAGE, resendAfterSeconds: 60, queuePayload: null });
-    }
+  it("never claims a code was sent when none can arrive (R2-BA-03)", async () => {
+    // A phone-only order while the store can't text: say so, send nothing.
+    await expect(send("ORDERNOEMAIL0001", "01712000002")).rejects.toBeInstanceOf(NoOrderCodeChannelError);
+    await expect(send("ORDERNOEMAIL0001", "01712000002")).rejects.toMatchObject({
+      status: 409,
+      message: "This order has no email address, and this store can't send text messages. Contact the store to check on your order.",
+    });
+    // No match: a plain answer, nothing sent.
+    await expect(send("ORDERWITHEMAIL01", "01712000009")).rejects.toBeInstanceOf(NotFoundError);
+    await expect(send("NOSUCHORDER00001", "01712000001")).rejects.toThrow("We couldn't find an order with that number and phone number.");
     expect(challenges()).toBe(0);
   });
 
-  it("limits lookups per order number and per phone, and fails closed with no delivery channel", async () => {
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      await send("NOSUCHORDER00001", `0171200001${attempt}`);
+  it("limits lookups per order number and per phone, and validates input", async () => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await send("NOSUCHORDER00001", `017120000${10 + attempt}`).catch(() => undefined);
     }
-    await expect(send("NOSUCHORDER00001", "01712000019")).rejects.toBeInstanceOf(RateLimitError);
+    await expect(send("NOSUCHORDER00001", "01712000029")).rejects.toBeInstanceOf(RateLimitError);
     await expect(send("#abc", "01712000001")).rejects.toThrow("Enter your order number");
     await expect(send("ORDERWITHEMAIL01", "12345")).rejects.toThrow("Enter the phone number used for the order.");
-    await expect(send("ORDERWITHEMAIL01", "01712000001", {})).rejects.toBeInstanceOf(ServiceUnavailableError);
   });
 });

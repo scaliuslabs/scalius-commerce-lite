@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { ChevronDown } from "lucide-react";
 import {
   postApiV1AdminCollectionsByIdProducts,
@@ -23,9 +25,12 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { MAX_LABEL_SKUS } from "~/components/admin/barcode-labels/barcode-label-model";
 import { apiData } from "~/lib/api";
-import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
+import { productVariantsQueryOptions } from "~/lib/api-query-options/products";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
 import { collectionsQueryOptions } from "~/lib/api-query-options/collections";
 import { useMessages } from "~/i18n";
@@ -55,24 +60,44 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
   const [picker, setPicker] = useState<Picker | null>(null);
   const [choice, setChoice] = useState("");
   const count = rows.length;
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const setStatus = useResourceMutation(async (isActive: boolean) => {
-    try {
-      await inChunks(rows, (chunk) => apiData(postApiV1AdminProductsBulkUpdate({ body: { products: claims(chunk), isActive } })));
-    } catch (error) {
-      // Activating is refused while a product (or one of its variants) has no price.
-      const unpriced = error instanceof AdminApiResponseError
-        ? (error.details as { products?: Array<{ name: string }> } | undefined)?.products
-        : undefined;
-      if (unpriced?.length) {
-        const name = unpriced[0]!.name;
-        throw new Error(unpriced.length > 1
-          ? t("activateNeedsPriceMore", { name, count: unpriced.length - 1 })
-          : t("activateNeedsPrice", { name }));
-      }
-      throw error;
+    let changed = 0;
+    const skipped: string[] = [];
+    await inChunks(rows, async (chunk) => {
+      const result = await apiData(postApiV1AdminProductsBulkUpdate({ body: { products: claims(chunk), isActive } }));
+      changed += result.products.length;
+      skipped.push(...result.skipped.map((row) => row.name));
+    });
+    // Products without a price stay as they were; say which, and whether anything changed.
+    if (skipped.length === 0) {
+      toast.success(t(isActive ? "bulkActivated" : "bulkDrafted", { count: changed }));
+      return;
     }
+    const why = skipped.length > 1
+      ? t("needsPriceMore", { name: skipped[0]!, count: skipped.length - 1 })
+      : t("needsPrice", { name: skipped[0]! });
+    if (changed === 0) toast.error(t("nothingChanged"), { description: why });
+    else toast.warning(t("bulkActivated", { count: changed }), { description: why });
   }, INVALIDATE);
+  // Setting live products as draft hides them from the store: confirm first, naming how many.
+  const liveCount = rows.filter((row) => row.isActive).length;
+  const [confirmDraft, setConfirmDraft] = useState(false);
+  const printLabels = useMutation({
+    mutationFn: async () => {
+      const variantIds: string[] = [];
+      for (const row of rows) {
+        const { variants } = await queryClient.fetchQuery(productVariantsQueryOptions(row.id));
+        variantIds.push(...variants.filter((variant) => !variant.deletedAt).map((variant) => variant.id));
+        if (variantIds.length >= MAX_LABEL_SKUS) break;
+      }
+      return variantIds.slice(0, MAX_LABEL_SKUS);
+    },
+    onSuccess: (variantIds) => void navigate({ to: "/admin/inventory/labels", search: { variants: variantIds.join(",") } }),
+    onError: (error) => toast.error(getServerFnError(error, r("actionFailed"))),
+  });
 
   const { data: categoryData } = useQuery({ ...categoryFormOptionsQueryOptions(), enabled: picker === "category" });
   const { data: collectionData } = useQuery({
@@ -114,7 +139,7 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
         variant="outline"
         size="sm"
         disabled={busy}
-        onClick={() => setStatus.mutate({ variables: true, success: t("bulkActivated", { count }) }, { onSuccess: done })}
+        onClick={() => setStatus.mutate({ variables: true }, { onSuccess: done })}
       >
         {t("setActive")}
       </Button>
@@ -122,10 +147,24 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
         variant="outline"
         size="sm"
         disabled={busy}
-        onClick={() => setStatus.mutate({ variables: false, success: t("bulkDrafted", { count }) }, { onSuccess: done })}
+        onClick={() => (liveCount > 0 ? setConfirmDraft(true) : setStatus.mutate({ variables: false }, { onSuccess: done }))}
       >
         {t("setDraft")}
       </Button>
+      <ConfirmDialog
+        open={confirmDraft}
+        onOpenChange={setConfirmDraft}
+        title={t("draftConfirmTitle", { count })}
+        description={t("draftConfirmBody", { count: liveCount })}
+        confirmLabel={t("setDraft")}
+        cancelLabel={r("cancel")}
+        loadingLabel={r("working")}
+        isLoading={setStatus.isPending}
+        onConfirm={() => setStatus.mutate({ variables: false }, {
+          onSuccess: done,
+          onSettled: () => setConfirmDraft(false),
+        })}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" disabled={busy}>
@@ -137,6 +176,7 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
           <DropdownMenuItem onSelect={() => open("addToCollection")}>{t("addToCollection")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => open("removeFromCollection")}>{t("removeFromCollection")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => open("category")}>{t("changeCategory")}</DropdownMenuItem>
+          <DropdownMenuItem disabled={printLabels.isPending} onSelect={() => printLabels.mutate()}>{t("printLabels")}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

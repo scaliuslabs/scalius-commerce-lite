@@ -7,15 +7,25 @@ function assertMinorAmount(value: number, label: string): number {
     return value;
 }
 
-export function multiplyMinorByRate(amountMinor: number, rateBps: number): number {
+/**
+ * `amountMinor × rateBps`, rounded half-up to `unitMinor` (100 for BDT cash
+ * rounding, so tax is whole taka; 1 keeps full minor-unit precision).
+ */
+export function multiplyMinorByRate(amountMinor: number, rateBps: number, unitMinor = 1): number {
     assertMinorAmount(amountMinor, "Tax base");
     if (!Number.isInteger(rateBps) || rateBps < 0 || rateBps > 10_000) {
         throw new RangeError("Tax rate must be an integer between 0 and 10000 basis points.");
     }
+    const unit = BigInt(unitMinor);
     const numerator = BigInt(amountMinor) * BigInt(rateBps);
-    const rounded = (numerator + 5_000n) / 10_000n;
+    const rounded = ((numerator + 5_000n * unit) / (10_000n * unit)) * unit;
     const result = Number(rounded);
     return assertMinorAmount(result, "Tax amount");
+}
+
+/** Half-up to a multiple of `unitMinor`. */
+export function roundToUnit(amountMinor: number, unitMinor: number): number {
+    return unitMinor <= 1 ? amountMinor : Math.floor((amountMinor + unitMinor / 2) / unitMinor) * unitMinor;
 }
 
 export interface AllocationWeight {
@@ -30,7 +40,16 @@ export interface AllocationWeight {
 export function allocateMinorAmount(
     amountMinor: number,
     weights: AllocationWeight[],
+    unitMinor = 1,
 ): Map<string, number> {
+    // Whole cash units over whole-unit weights stay whole (BDT: no paisa per line).
+    if (unitMinor > 1 && amountMinor % unitMinor === 0 && weights.every(({ weightMinor }) => weightMinor % unitMinor === 0)) {
+        const units = allocateMinorAmount(
+            amountMinor / unitMinor,
+            weights.map(({ key, weightMinor }) => ({ key, weightMinor: weightMinor / unitMinor })),
+        );
+        return new Map([...units].map(([key, part]) => [key, part * unitMinor]));
+    }
     assertMinorAmount(amountMinor, "Allocation amount");
     const normalized = weights.map((entry) => ({
         key: entry.key,

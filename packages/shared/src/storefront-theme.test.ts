@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildStorefrontThemeTokens,
+  DEFAULT_STOREFRONT_THEME_LAYOUT,
   DEFAULT_STOREFRONT_THEME_SETTINGS,
+  STOREFRONT_STYLE_PRESETS,
+  sanitizeStorefrontThemeLayout,
+  storefrontStylePresetTheme,
   isSafeStorefrontThemeColorValue,
   isStorefrontThemeColorKey,
   listInvalidStorefrontThemeColorEntries,
@@ -109,6 +113,7 @@ describe("storefront semantic theme settings", () => {
         inputs: "filled",
         cards: "flat",
       },
+      layout: DEFAULT_STOREFRONT_THEME_LAYOUT,
     });
 
     expect(
@@ -119,6 +124,7 @@ describe("storefront semantic theme settings", () => {
         density: "comfortable",
         containerWidth: "wide",
         components: { buttons: "script", inputs: "outlined", cards: "bordered" },
+        layout: DEFAULT_STOREFRONT_THEME_LAYOUT,
         arbitraryCss: "body{display:none}",
       }),
     ).toEqual([
@@ -128,6 +134,46 @@ describe("storefront semantic theme settings", () => {
       "cornerStyle",
       "components.buttons",
     ]);
+  });
+
+  it("keeps layout choices to the curated variants and a full homepage order", () => {
+    const layout = sanitizeStorefrontThemeLayout({
+      header: "marketplace",
+      footer: "contact",
+      productCard: { imageRatio: "portrait", hoverImage: true, quickBuy: true, badge: "price" },
+      grid: { desktop: 3, mobile: 1 },
+      productPage: { gallery: "stacked", thumbnails: "below" },
+      homepage: ["categories", "hero", "delivery", "collections"],
+    });
+    expect(layout).toEqual({
+      header: "marketplace",
+      footer: "contact",
+      productCard: { imageRatio: "portrait", hoverImage: true, quickBuy: true, badge: "price" },
+      grid: { desktop: 3, mobile: 1 },
+      productPage: { gallery: "stacked", thumbnails: "below" },
+      homepage: ["categories", "hero", "delivery", "collections"],
+    });
+    // Unknown variants, partial or duplicated section orders fall back safely.
+    expect(sanitizeStorefrontThemeLayout({
+      header: "transparent-builder",
+      grid: { desktop: 6, mobile: 3 },
+      homepage: ["hero", "hero", "collections", "delivery"],
+    })).toEqual(DEFAULT_STOREFRONT_THEME_LAYOUT);
+    expect(listInvalidStorefrontThemeSettingsEntries({
+      ...DEFAULT_STOREFRONT_THEME_SETTINGS,
+      layout: { ...DEFAULT_STOREFRONT_THEME_LAYOUT, header: "builder", grid: { desktop: 5, mobile: 2 }, homepage: ["hero"], extra: 1 },
+    })).toEqual(["layout.extra", "layout.header", "layout.grid.desktop", "layout.homepage"]);
+  });
+
+  it("offers Style presets that are complete, valid theme documents", () => {
+    expect(STOREFRONT_STYLE_PRESETS.length).toBeGreaterThanOrEqual(4);
+    expect(STOREFRONT_STYLE_PRESETS.length).toBeLessThanOrEqual(6);
+    for (const preset of STOREFRONT_STYLE_PRESETS) {
+      const theme = storefrontStylePresetTheme(preset.key);
+      expect(listInvalidStorefrontThemeSettingsEntries(theme), preset.key).toEqual([]);
+      expect(theme.layout, preset.key).toEqual(preset.theme.layout);
+    }
+    expect(storefrontStylePresetTheme("classic")).toEqual(DEFAULT_STOREFRONT_THEME_SETTINGS);
   });
 
   it("generates deterministic CSS tokens without accepting merchant CSS", () => {

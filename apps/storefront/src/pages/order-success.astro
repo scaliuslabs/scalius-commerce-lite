@@ -2,7 +2,10 @@
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import { recommendationTitle } from "@/lib/recommendations";
 import {
+  getProductRecommendations,
   getAccountOwnerReceiptProof,
   getActiveCheckoutLanguage,
   getOrderReceipt,
@@ -13,13 +16,14 @@ import {
   type OrderItem,
   type LayoutData,
 } from "@/lib/api";
-import { getCheckoutConfig, type CheckoutConfig } from "@/lib/api/checkout";
+import { getCheckoutConfig, isCodOnly, type CheckoutConfig } from "@/lib/api/checkout";
 import {
   createPurchaseTrackingPayload,
   formatOrderSuccessPaymentMethod,
   getOrderSuccessNextSteps,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
+  isOrderStatusView,
   shouldClearCheckoutCartForOrder,
 } from "@/lib/order-success-state";
 import {
@@ -58,6 +62,14 @@ import {
   checkoutLanguageBaseCode,
   formatCheckoutLanguageText,
 } from "@scalius/shared/checkout-language";
+import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
+import {
+  orderProgressMarkup,
+  orderShipmentMarkup,
+  orderTimelineMarkup,
+  safeTrackingUrl,
+  type OrderTrackingText,
+} from "@/lib/order-tracking-markup";
 
 const legacyProofParams = ["token", "receipt_token", "receiptToken"];
 if (legacyProofParams.some((param) => Astro.url.searchParams.has(param))) {
@@ -281,6 +293,18 @@ const receiptMoney = savedMoneySummary
         total: order.totalAmount,
       }
     : null;
+const receiptDiscounts = receiptMoney
+  ? summarizeOrderDiscounts({
+      discounts: order?.discounts,
+      shipping: receiptMoney.shipping,
+      deliveryFee: savedMoneySummary && order?.shippingMethodBaseAmountMinor != null
+        ? toMajor(order.shippingMethodBaseAmountMinor)
+        : null,
+      discount: receiptMoney.discount,
+      decimalPlaces: savedMoneySummary?.decimalPlaces,
+      discountText: copy.discountText,
+    })
+  : null;
 const receiptDeliveryLabel = order?.shippingMethodName
   ? formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: order.shippingMethodName })
   : copy.orderReceiptDeliveryText;
@@ -305,10 +329,37 @@ const merchantReceiptName = layoutData?.business?.companyName?.trim()
 const orderPlacedAt = formatOrderReceiptDate(order?.createdAt, checkoutLanguage.code);
 const orderNumber = order ? formatOrderNumber(order.orderNumber, order.id) : "";
 const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, orderSuccessView.kind, copy) : [];
+// Opened by tracking or later: a status page ("Order #1057", where it is) instead of the checkout confirmation.
+const statusView = orderSuccessView
+  ? isOrderStatusView(orderSuccessView.kind, {
+      requestedView: Astro.url.searchParams.get("view"),
+      freshCheckout: hasCurrentCheckoutFinalizeMarker || Boolean(paymentResult),
+    })
+  : false;
+const paymentNeedsBuyer = orderSuccessView?.kind === "payment_pending" || orderSuccessView?.kind === "payment_issue";
+const statusTitle = formatCheckoutLanguageText(copy.orderStatusTitleText, { orderNumber });
+const tracking = statusView ? order?.tracking ?? null : null;
+const trackingText: OrderTrackingText = {
+  done: copy.orderTrackingStepDoneText,
+  trackingId: copy.orderTrackingIdText,
+  trackWithCourier: copy.orderTrackWithCourierText,
+  formatDate: (iso) => formatOrderReceiptDate(iso, checkoutLanguage.code) ?? "",
+};
+const trackingShipments = (tracking?.shipments ?? []).map((shipment) => orderShipmentMarkup({
+  statusLabel: shipment.statusLabel,
+  courier: shipment.courierName,
+  trackingId: shipment.trackingId,
+  trackingUrl: safeTrackingUrl(shipment.trackingUrl),
+}, trackingText)).join("");
+// Keep shopping, on the fresh confirmation only (never the status view):
+// products related to what was just ordered, from public catalog data.
+const orderRecommendations = order && showsSuccessHero && !statusView
+  ? await getProductRecommendations(orderItemsFromApi.map((item) => item.productId), 4).catch(() => null)
+  : null;
 ---
 
 <Layout
-  title={orderSuccessView?.title ?? recoveryState?.title ?? copy.orderReceiptPageTitleText}
+  title={statusView ? statusTitle : orderSuccessView?.title ?? recoveryState?.title ?? copy.orderReceiptPageTitleText}
   layoutData={layoutData}
   documentLanguage={checkoutLanguageBaseCode(checkoutLanguage.code)}
 >
@@ -328,13 +379,16 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
   >
     {order && orderSuccessView ? (
     <>
-    <CheckoutProgress
-      current={order.paymentMethod !== "cod" && (orderSuccessView.kind === "payment_pending" || orderSuccessView.kind === "payment_issue") ? "payment" : "confirmation"}
-      copy={copy}
-    />
+    {!statusView && (
+      <CheckoutProgress
+        current={order.paymentMethod !== "cod" && paymentNeedsBuyer ? "payment" : "confirmation"}
+        paymentRequired={!(order.paymentMethod === "cod" && isCodOnly(checkoutConfig))}
+        copy={copy}
+      />
+    )}
     <div class="order-success-print-header text-center mb-8 animate-fade-in">
       {merchantReceiptName && <p class="order-success-print-merchant hidden font-semibold">{merchantReceiptName}</p>}
-      {showsSuccessHero ? (
+      {statusView && !paymentNeedsBuyer ? null : showsSuccessHero ? (
         <div class="success-checkmark" aria-hidden="true">
           <svg class="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="m5 12 4 4L19 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
@@ -347,7 +401,14 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
           </svg>
         </div>
       )}
-      <h1 class="mb-2 text-2xl font-bold">{orderSuccessView.title}</h1>
+      {statusView ? (
+        <>
+          <h1 class="mb-1 text-2xl font-bold">{statusTitle}</h1>
+          <p class="mb-2 text-lg font-semibold text-foreground">{orderSuccessView.title}</p>
+        </>
+      ) : (
+        <h1 class="mb-2 text-2xl font-bold">{orderSuccessView.title}</h1>
+      )}
       <p class="text-muted-foreground">{orderSuccessView.message}</p>
       {nextSteps.length > 0 && (
         <div class="no-print mx-auto mt-5 max-w-xl rounded-xl border border-border p-4 text-left">
@@ -441,6 +502,19 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
       )}
     </div>
 
+    {tracking && (
+      <section class="no-print mb-6 rounded-xl border border-border bg-background p-4 sm:p-6" aria-label={copy.orderReceiptStatusText}>
+        <div set:html={orderProgressMarkup(tracking.progress, trackingText)} />
+        {trackingShipments && <div class="mt-4 space-y-3" set:html={trackingShipments} />}
+        {tracking.timeline.length > 0 && (
+          <>
+            <h2 class="mb-3 mt-6 text-sm font-semibold text-foreground">{copy.orderTrackingUpdatesText}</h2>
+            <ol class="space-y-3 border-l border-border pl-4" set:html={orderTimelineMarkup(tracking.timeline, trackingText)} />
+          </>
+        )}
+      </section>
+    )}
+
     <div class="order-success-print-grid space-y-6 animate-slide-up">
       {/* Order details sections */}
       <div
@@ -489,7 +563,7 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
               >{orderSuccessView.paymentStatusLabel}</span
             >
           </div>
-          {receiptMoney && (
+          {receiptMoney && receiptDiscounts && (
             <div class="space-y-3 border-t border-border pt-4">
               <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{copy.subtotalText}</span>
@@ -497,13 +571,21 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
               </div>
               <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{receiptDeliveryLabel}</span>
-                <span class="font-medium">{receiptMoney.shipping === 0 ? copy.freeText : formatReceiptAmount(receiptMoney.shipping)}</span>
+                <span class="text-right font-medium">
+                  {receiptDiscounts.delivery.charged < receiptDiscounts.delivery.fee && <s class="mr-1.5 font-normal text-muted-foreground">{formatReceiptAmount(receiptDiscounts.delivery.fee)}</s>}
+                  {receiptDiscounts.delivery.charged === 0 ? copy.freeText : formatReceiptAmount(receiptDiscounts.delivery.charged)}
+                  {receiptDiscounts.delivery.codes && (
+                    <span class="ml-1 font-normal text-muted-foreground">({receiptDiscounts.delivery.codes})</span>
+                  )}
+                </span>
               </div>
               {receiptDeliveryDetails && <p class="text-xs leading-relaxed text-muted-foreground">{receiptDeliveryDetails}</p>}
-              {receiptMoney.discount > 0 && <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">{copy.discountText}</span>
-                <span class="font-medium text-foreground">−{formatReceiptAmount(receiptMoney.discount)}</span>
-              </div>}
+              {receiptDiscounts.lines.map((line) => (
+                <div class="flex justify-between gap-4">
+                  <span class="text-muted-foreground">{line.label}</span>
+                  <span class="shrink-0 whitespace-nowrap font-medium text-foreground">−{formatReceiptAmount(line.amount)}</span>
+                </div>
+              ))}
               {savedMoneySummary && receiptMoney.tax > 0 && <div class="flex justify-between gap-4">
                 <span class="text-muted-foreground">{savedMoneySummary.taxLabel}{savedMoneySummary.pricesIncludeTax ? ` (${copy.includedText})` : ""}</span>
                 <span class="font-medium">{formatReceiptAmount(receiptMoney.tax)}</span>
@@ -568,6 +650,12 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
           {order.customerPhone && <p class="text-muted-foreground">{formatBdMobile(order.customerPhone)}</p>}
           {order.customerEmail && <p class="break-all text-muted-foreground">{order.customerEmail}</p>}
         </div>
+        {order.notes && (
+          <div class="mt-3 border-t border-border pt-3 text-sm">
+            <p class="font-medium text-foreground">{copy.orderReceiptNoteText}</p>
+            <p class="whitespace-pre-line break-words text-muted-foreground">{order.notes}</p>
+          </div>
+        )}
       </div>
 
       <div
@@ -667,9 +755,26 @@ const nextSteps = order && orderSuccessView ? getOrderSuccessNextSteps(order, or
       }}
       supportRequests={order.supportRequests}
       supportRequestActions={order.supportRequestActions}
+      statusView={statusView}
       copy={copy}
       client:load
     />
+    {orderRecommendations && orderRecommendations.products.length > 0 && (
+      <section aria-labelledby="order-recommendations" class="mt-10 print:hidden">
+        <h2 id="order-recommendations" class="mb-4 text-lg font-semibold text-foreground">
+          {recommendationTitle(orderRecommendations.reason)}
+        </h2>
+        <div class="product-grid">
+          {orderRecommendations.products.map((product) => (
+            <ProductCard
+              product={product}
+              currencySymbol={layoutData?.currency?.symbol}
+              currencyCode={layoutData?.currency?.code}
+            />
+          ))}
+        </div>
+      </section>
+    )}
     </>
     ) : (
       <div class="mx-auto max-w-lg py-10 text-center">

@@ -3,7 +3,8 @@
 import "../styles/global.css";
 import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
-import { getLayoutData, resolveThemePreview, type LayoutData } from "@/lib/api";
+import { getLayoutData, type LayoutData } from "@/lib/api";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import type { AnalyticsConfig } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
 import {
@@ -22,19 +23,18 @@ import {
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
   buildDocumentTitle,
+  resolveStoreDisplayName,
   resolveStoreName,
   resolveStorePhone,
+  resolveStoreShareImage,
   resolveStoreSocialLinks,
 } from "@/lib/store-identity";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import {
   buildStorefrontThemeTokens,
-  sanitizeStorefrontThemeSettings,
 } from "@scalius/shared/storefront-theme";
-import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import {
   clearThemePreviewCookieHeader,
-  readThemePreviewCookie,
 } from "@/lib/theme-preview-cookie";
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
@@ -89,12 +89,11 @@ const {
 const layoutData = providedLayoutData ?? (await getLayoutData());
 setRuntimeImageCdnPolicy(layoutData?.media);
 
-const themePreviewToken = readThemePreviewCookie(
-  Astro.request.headers.get("cookie"),
-);
-const themePreview = themePreviewToken
-  ? await resolveThemePreview(themePreviewToken)
-  : null;
+const {
+  theme: storefrontTheme,
+  previewToken: themePreviewToken,
+  preview: themePreview,
+} = await resolveRequestTheme(Astro, layoutData?.theme);
 const isThemePreview = themePreview !== null;
 if (themePreviewToken) {
   Astro.response.headers.set(
@@ -148,8 +147,12 @@ const faviconUrl = headerData?.favicon?.src
 
 // --- SEO: store name, Organization JSON-LD, WebSite JSON-LD (per SEO-05, SEO-06) ---
 const businessInfo = layoutData?.business;
+// Schema identity comes only from Business settings; titles, the header,
+// footer and Open Graph fall back to the Store URL host so they are never blank.
 const storeSchemaName = resolveStoreName(businessInfo);
-const documentTitle = buildDocumentTitle(title, storeSchemaName);
+const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
+const storeDisplayName = resolveStoreDisplayName(businessInfo, storefrontUrl);
+const documentTitle = buildDocumentTitle(title, storeDisplayName);
 const storePhone = resolveStorePhone(businessInfo, headerData.contact.phone);
 const storeSocial = resolveStoreSocialLinks(
   [headerData.social, footerData.social],
@@ -159,7 +162,6 @@ const storeSocial = resolveStoreSocialLinks(
 const ogLocale = `${documentLanguage}_${
   /^(bangladesh|bd)$/i.test(businessInfo?.country?.trim() ?? "") ? "BD" : "US"
 }`;
-const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData?.seo?.returnPolicy,
   storefrontUrl,
@@ -204,14 +206,16 @@ const websiteJsonLd =
       })
     : null;
 
-// Pages without their own image share the store-level social image.
+// Every page shares an image: its own, else the store social image from
+// Preferences, else the page's fallback (first banner/content image), else
+// the store logo.
 const socialImage = layoutData?.seo?.socialImage;
 const absoluteOgImageUrl = toAbsoluteStorefrontSeoUrl(
   ogImage ||
-    (socialImage
-      ? mediaImageUrl(socialImage, MEDIA_DISCOVERY_IMAGE_WIDTH)
-      : undefined) ||
-    fallbackOgImage,
+    (socialImage ? resolveStoreShareImage({ socialImage }) : null) ||
+    fallbackOgImage ||
+    resolveStoreShareImage({ logo: headerData.logo.src }) ||
+    undefined,
 );
 
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
@@ -220,9 +224,7 @@ const currencyDecimalPlaces =
   layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
 
 // Build CSS only from shared enum constants and sanitized color overrides.
-const storefrontTheme = sanitizeStorefrontThemeSettings(
-  themePreview?.theme ?? layoutData?.theme,
-);
+const themeLayout = storefrontTheme.layout;
 const themeTokenEntries = Object.entries(
   buildStorefrontThemeTokens(storefrontTheme),
 );
@@ -347,7 +349,7 @@ if (!window.$RefreshReg$) {
     {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
 
     {/* Open Graph tags — per OG-01 through OG-05 */}
-    {storeSchemaName && <meta property="og:site_name" content={storeSchemaName} />}
+    {storeDisplayName && <meta property="og:site_name" content={storeDisplayName} />}
     <meta property="og:locale" content={ogLocale} />
     <meta property="og:type" content={ogType} />
     <meta property="og:title" content={title} />
@@ -394,6 +396,8 @@ if (!window.$RefreshReg$) {
     data-theme-button-style={storefrontTheme.components.buttons}
     data-theme-input-style={storefrontTheme.components.inputs}
     data-theme-card-style={storefrontTheme.components.cards}
+    data-theme-grid-desktop={themeLayout.grid.desktop}
+    data-theme-grid-mobile={themeLayout.grid.mobile}
     data-storefront-route={storefrontRouteKind}
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}
@@ -411,9 +415,10 @@ if (!window.$RefreshReg$) {
           <Header
             headerData={headerData}
             navigation={navigationData}
-            storeName={storeSchemaName}
+            storeName={storeDisplayName}
             storePhone={storePhone}
             social={storeSocial}
+            variant={themeLayout.header}
           />
         )
       }
@@ -427,10 +432,12 @@ if (!window.$RefreshReg$) {
         <div class="storefront-deferred-region">
           <Footer
             footerData={footerData}
-            storeName={storeSchemaName}
+            storeName={storeDisplayName}
             storePhone={storePhone}
             social={storeSocial}
             policies={layoutData?.policies ?? []}
+            variant={themeLayout.footer}
+            business={businessInfo}
           />
         </div>
       )

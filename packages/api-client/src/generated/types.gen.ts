@@ -949,6 +949,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                secondaryImageUrl: string | null;
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
@@ -967,6 +968,7 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                secondaryImageUrl: string | null;
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
@@ -1041,6 +1043,8 @@ export type GetApiV1HeroSlidersResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -1058,6 +1062,8 @@ export type GetApiV1HeroSlidersResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -1075,6 +1081,8 @@ export type GetApiV1HeroSlidersResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -1088,6 +1096,8 @@ export type GetApiV1HeroSlidersResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -1152,6 +1162,8 @@ export type GetApiV1HeroSlidersByIdResponses = {
                     id: string;
                     url: string;
                     title: string;
+                    heading: string;
+                    buttonLabel: string;
                     link: string;
                     focalPoint: {
                         x: number;
@@ -2267,7 +2279,7 @@ export type PostApiV1DiscountsValidateData = {
             variantId?: string;
         }>;
         /**
-         * Delivery charge
+         * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
          */
         shippingCost?: number;
         /**
@@ -2319,7 +2331,14 @@ export type PostApiV1DiscountsValidateResponses = {
                 promotionId: string;
                 title: string;
                 code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
                 amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
             }>;
             offers: Array<{
                 promotionId: string;
@@ -2345,7 +2364,7 @@ export type PostApiV1DiscountsValidateResponses = {
             }>;
             rejectedCodes: Array<{
                 code: string;
-                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'unavailable';
+                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
                 message: string;
                 shortfallAmount?: number;
                 shortfallQuantity?: number;
@@ -2620,6 +2639,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                     imageUrl: string | null;
                     imageMediaId: string | null;
                     imageAlt: string | null;
+                    secondaryImageUrl: string | null;
                 }>;
                 featuredProduct: {
                     id: string;
@@ -2638,6 +2658,7 @@ export type GetApiV1StorefrontHomepageResponses = {
                     imageUrl: string | null;
                     imageMediaId: string | null;
                     imageAlt: string | null;
+                    secondaryImageUrl: string | null;
                 } | null;
             }>;
             presentation: {
@@ -2895,6 +2916,25 @@ export type GetApiV1StorefrontLayoutResponses = {
                     inputs: 'outlined' | 'filled';
                     cards: 'bordered' | 'elevated' | 'flat';
                 };
+                layout: {
+                    header: 'classic' | 'centered' | 'marketplace';
+                    footer: 'columns' | 'compact' | 'contact';
+                    productCard: {
+                        imageRatio: 'square' | 'portrait';
+                        hoverImage: boolean;
+                        quickBuy: boolean;
+                        badge: 'image' | 'price';
+                    };
+                    grid: {
+                        desktop: number;
+                        mobile: number;
+                    };
+                    productPage: {
+                        gallery: 'beside' | 'stacked';
+                        thumbnails: 'beside' | 'below';
+                    };
+                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                };
             };
             media: {
                 canonicalCdnUrl: string;
@@ -2960,6 +3000,8 @@ export type GetApiV1StorefrontLayoutResponses = {
                 quantityLimitText: string;
                 saleOfferText: string;
                 saleOfferSpendText: string;
+                saleOfferGetText: string;
+                saleOfferGetSpendText: string;
                 freeBenefitText: string;
                 percentBenefitText: string;
             };
@@ -7293,7 +7335,7 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtp
 
 export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpData = {
     body: {
-        channel: 'email' | 'sms' | 'whatsapp';
+        channel?: 'email' | 'sms' | 'whatsapp';
         code: string;
     };
     path: {
@@ -7613,6 +7655,10 @@ export type PostApiV1CustomerAuthVerifyOtpData = {
             name: string;
             phone?: string;
             email?: string;
+            /**
+             * Save the delivery address of the latest order placed with the proven contact (from `suggestion.address`).
+             */
+            saveOrderAddress?: boolean;
         };
     };
     path?: never;
@@ -7725,6 +7771,18 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
                 profileComplete: boolean;
             };
             isNewUser?: boolean;
+            /**
+             * With needs_account_details: what the latest order placed with the proven contact says, to pre-fill.
+             */
+            suggestion?: {
+                name: string | null;
+                phone: string | null;
+                email: string | null;
+                address: {
+                    orderNumber: number | null;
+                    text: string;
+                } | null;
+            } | null;
         };
     };
 };
@@ -8610,6 +8668,23 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 label: string;
                 happenedAt: NullableTimestamp;
                 details?: string | null;
+            }>;
+            discounts: Array<{
+                promotionId: string;
+                title: string;
+                code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
+                amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
+                /**
+                 * The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind.
+                 */
+                kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
             }>;
             paymentRecovery: {
                 eligible: boolean;
@@ -9846,6 +9921,10 @@ export type GetApiV1ProductsResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                /**
+                 * The next photo in gallery order, for a card's hover swap. Never a video.
+                 */
+                secondaryImageUrl: string | null;
                 category: {
                     id: string;
                     name: string;
@@ -10214,6 +10293,86 @@ export type GetApiV1ProductsSitemapResponses = {
 
 export type GetApiV1ProductsSitemapResponse = GetApiV1ProductsSitemapResponses[keyof GetApiV1ProductsSitemapResponses];
 
+export type GetApiV1ProductsRecommendationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Comma-separated product IDs, such as the cart's products. At most 20 are used.
+         */
+        productIds?: string;
+        /**
+         * Products to return
+         */
+        limit?: number;
+    };
+    url: '/api/v1/products/recommendations';
+};
+
+export type GetApiV1ProductsRecommendationsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1ProductsRecommendationsError = GetApiV1ProductsRecommendationsErrors[keyof GetApiV1ProductsRecommendationsErrors];
+
+export type GetApiV1ProductsRecommendationsResponses = {
+    /**
+     * Recommended products and what kind of list it is
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * What the list mostly is, for an honest title: `also_bought` only when at least half the products were bought together with the source products by two or more different buyers; `similar` for category, collection, attribute and price matches; `popular` and `new_arrivals` for lists without source products.
+             */
+            reason: 'also_bought' | 'similar' | 'popular' | 'new_arrivals';
+            products: Array<{
+                id: string;
+                name: string;
+                price: number;
+                slug: string;
+                discountType: string | null;
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                discountedPrice: number;
+                hasVariants: boolean;
+                availableForSale: boolean;
+                priceVaries: boolean;
+                freeDelivery: boolean;
+                categoryId: string | null;
+                imageUrl: string | null;
+                imageMediaId: string | null;
+                imageAlt: string | null;
+                secondaryImageUrl: string | null;
+                createdAt: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1ProductsRecommendationsResponse = GetApiV1ProductsRecommendationsResponses[keyof GetApiV1ProductsRecommendationsResponses];
+
 export type GetApiV1ProductsBySlugSectionsBySectionData = {
     body?: never;
     path: {
@@ -10442,9 +10601,12 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                 availableForSale: boolean;
                 priceVaries: boolean;
                 freeDelivery: boolean;
+                categoryId: string | null;
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                secondaryImageUrl: string | null;
+                createdAt: string | null;
             }>;
             total: number;
             offset: number;
@@ -10547,11 +10709,15 @@ export type GetApiV1ProductsBySlugResponses = {
                     content: string;
                 }>;
                 /**
-                 * Active automatic Buy X get Y discounts this product counts toward.
+                 * Active automatic Buy X get Y discounts this product counts toward or is given by.
                  */
                 offers: Array<{
                     promotionId: string;
                     title: string;
+                    /**
+                     * "buy": this product counts toward the offer and `products` are what the buyer gets; "get": this product is what the buyer gets and `products` are what to buy.
+                     */
+                    role: 'buy' | 'get';
                     buyQuantity: number | null;
                     buyAmount: number | null;
                     getQuantity: number;
@@ -10631,23 +10797,32 @@ export type GetApiV1ProductsBySlugResponses = {
                 updatedAt: string | null;
                 deletedAt: string | null;
             }>;
-            relatedProducts: Array<{
-                id: string;
-                name: string;
-                price: number;
-                slug: string;
-                discountType: string | null;
-                discountPercentage: number | null;
-                discountAmount: number | null;
-                discountedPrice: number;
-                hasVariants: boolean;
-                availableForSale: boolean;
-                priceVaries: boolean;
-                freeDelivery: boolean;
-                imageUrl: string | null;
-                imageMediaId: string | null;
-                imageAlt: string | null;
-            }>;
+            recommendations: {
+                /**
+                 * What the list mostly is, for an honest title: `also_bought` only when at least half the products were bought together with the source products by two or more different buyers; `similar` for category, collection, attribute and price matches; `popular` and `new_arrivals` for lists without source products.
+                 */
+                reason: 'also_bought' | 'similar' | 'popular' | 'new_arrivals';
+                products: Array<{
+                    id: string;
+                    name: string;
+                    price: number;
+                    slug: string;
+                    discountType: string | null;
+                    discountPercentage: number | null;
+                    discountAmount: number | null;
+                    discountedPrice: number;
+                    hasVariants: boolean;
+                    availableForSale: boolean;
+                    priceVaries: boolean;
+                    freeDelivery: boolean;
+                    categoryId: string | null;
+                    imageUrl: string | null;
+                    imageMediaId: string | null;
+                    imageAlt: string | null;
+                    secondaryImageUrl: string | null;
+                    createdAt: string | null;
+                }>;
+            };
         };
     };
 };
@@ -11018,6 +11193,7 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                secondaryImageUrl: string | null;
                 category: {
                     id: string;
                     name: string;
@@ -11156,6 +11332,7 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 imageUrl: string | null;
                 imageMediaId: string | null;
                 imageAlt: string | null;
+                secondaryImageUrl: string | null;
                 category: {
                     id: string;
                     name: string;
@@ -11448,6 +11625,9 @@ export type PostApiV1OrdersPaymentRecoverySendOtpResponses = {
         success: true;
         data: {
             message: string;
+            destination?: string;
+            orderNumber?: number | null;
+            resendAfterSeconds?: number;
         };
     };
 };
@@ -11457,7 +11637,6 @@ export type PostApiV1OrdersPaymentRecoverySendOtpResponse = PostApiV1OrdersPayme
 export type PostApiV1OrdersPaymentRecoveryVerifyOtpData = {
     body: {
         orderId: string;
-        channel: 'email' | 'sms' | 'whatsapp';
         code: string;
     };
     path?: never;
@@ -11634,6 +11813,17 @@ export type PostApiV1OrdersLookupSendOtpErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -11672,12 +11862,14 @@ export type PostApiV1OrdersLookupSendOtpError = PostApiV1OrdersLookupSendOtpErro
 
 export type PostApiV1OrdersLookupSendOtpResponses = {
     /**
-     * Request accepted
+     * Code sent; says where
      */
     200: {
         success: true;
         data: {
             message: string;
+            destination: string;
+            channel: 'email' | 'sms' | 'whatsapp';
             resendAfterSeconds: number;
         };
     };
@@ -11845,6 +12037,56 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 shippingMethodBaseAmountMinor: number | null;
                 shippingFeeWaived: boolean | null;
                 discountAmountMinor: number | null;
+                discounts: Array<{
+                    promotionId: string;
+                    title: string;
+                    code: string | null;
+                    /**
+                     * Off the items: shown as a discount line.
+                     */
+                    amount: number;
+                    /**
+                     * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                     */
+                    shippingAmount: number;
+                    /**
+                     * The discount's main effect. Delivery savings are always in `shippingAmount`, whatever the kind.
+                     */
+                    kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
+                }>;
+                notes: string | null;
+                tracking: {
+                    progress: {
+                        steps: Array<{
+                            key: 'placed' | 'confirmed' | 'shipped' | 'delivered';
+                            label: string;
+                            done: boolean;
+                            happenedAt: NullableTimestamp;
+                        }>;
+                        outcome: {
+                            key: string;
+                            label: string;
+                            happenedAt: NullableTimestamp;
+                        } | null;
+                    };
+                    timeline: Array<{
+                        id: string;
+                        type: 'order' | 'payment' | 'refund' | 'request';
+                        status: string;
+                        label: string;
+                        happenedAt: NullableTimestamp;
+                        details?: string | null;
+                    }>;
+                    shipments: Array<{
+                        statusLabel: string;
+                        courierName: string | null;
+                        trackingId: string | null;
+                        /**
+                         * http(s) courier tracking link
+                         */
+                        trackingUrl: string | null;
+                    }>;
+                };
                 taxAmountMinor: number;
                 totalAmountMinor: number | null;
                 taxLabel: string | null;
@@ -12358,7 +12600,14 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 promotionId: string;
                 title: string;
                 code: string | null;
+                /**
+                 * Off the items: shown as a discount line.
+                 */
                 amount: number;
+                /**
+                 * Off delivery: shown on the delivery line ("Free" with the fee struck through), never as a discount line.
+                 */
+                shippingAmount: number;
             }>;
             /**
              * Automatic Buy X get Y discounts the buyer has earned but not claimed: the items to get are not in the cart yet.
@@ -12390,7 +12639,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
              */
             rejectedCodes: Array<{
                 code: string;
-                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'unavailable';
+                reason: 'not_found' | 'needs_phone' | 'minimum_subtotal' | 'minimum_quantity' | 'get_items' | 'buy_items' | 'not_combinable' | 'lower_savings' | 'needs_delivery' | 'delivery_discount_applied' | 'unavailable';
                 message: string;
                 shortfallAmount?: number;
                 shortfallQuantity?: number;
@@ -19197,6 +19446,14 @@ export type GetApiV1AdminMediaResponses = {
                 updatedAt: string | number;
                 trashedAt: NullableTimestamp;
                 deletedAt: NullableTimestamp;
+                /**
+                 * Distinct places that show the file: products, categories, collections, pages, banners, theme, navigation, invoice, social image, video covers and staff photos.
+                 */
+                usageCount: number;
+                /**
+                 * Past orders show this picture, so it can never be deleted permanently.
+                 */
+                keptForOrders: boolean;
             }>;
             pagination: {
                 limit: number;
@@ -20728,6 +20985,118 @@ export type GetApiV1AdminMediaByIdOriginalResponses = {
 
 export type GetApiV1AdminMediaByIdOriginalResponse = GetApiV1AdminMediaByIdOriginalResponses[keyof GetApiV1AdminMediaByIdOriginalResponses];
 
+export type GetApiV1AdminMediaByIdUsageData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/media/{id}/usage';
+};
+
+export type GetApiV1AdminMediaByIdUsageErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaByIdUsageError = GetApiV1AdminMediaByIdUsageErrors[keyof GetApiV1AdminMediaByIdUsageErrors];
+
+export type GetApiV1AdminMediaByIdUsageResponses = {
+    /**
+     * Where the file is used
+     */
+    200: {
+        success: true;
+        data: {
+            count: number;
+            references: Array<{
+                kind: 'product' | 'category' | 'collection' | 'page' | 'article' | 'banner' | 'theme' | 'navigation' | 'invoice' | 'social_image' | 'video_cover' | 'staff_photo';
+                id: string | null;
+                name: string | null;
+                trashed: boolean;
+            }>;
+            orderCount: number;
+        };
+    };
+};
+
+export type GetApiV1AdminMediaByIdUsageResponse = GetApiV1AdminMediaByIdUsageResponses[keyof GetApiV1AdminMediaByIdUsageResponses];
+
 export type DeleteApiV1AdminMediaByIdPermanentData = {
     body?: never;
     path: {
@@ -21557,6 +21926,10 @@ export type GetApiV1AdminInventoryResponses = {
                 hasMore: boolean;
                 nextCursor: string | null;
             };
+            /**
+             * Store-wide alert level for SKUs without their own (variants and alerts sections)
+             */
+            defaultLowStockThreshold?: number | null;
             [key: string]: unknown;
         };
     };
@@ -22019,6 +22392,45 @@ export type PutApiV1AdminInventoryByVariantIdAlertLevelResponses = {
 };
 
 export type PutApiV1AdminInventoryByVariantIdAlertLevelResponse = PutApiV1AdminInventoryByVariantIdAlertLevelResponses[keyof PutApiV1AdminInventoryByVariantIdAlertLevelResponses];
+
+export type PutApiV1AdminInventoryDefaultAlertLevelData = {
+    body: {
+        defaultLowStockThreshold: number | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/inventory/default-alert-level';
+};
+
+export type PutApiV1AdminInventoryDefaultAlertLevelErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryDefaultAlertLevelError = PutApiV1AdminInventoryDefaultAlertLevelErrors[keyof PutApiV1AdminInventoryDefaultAlertLevelErrors];
+
+export type PutApiV1AdminInventoryDefaultAlertLevelResponses = {
+    /**
+     * Store alert level saved
+     */
+    200: {
+        success: true;
+        data: {
+            defaultLowStockThreshold: number | null;
+        };
+    };
+};
+
+export type PutApiV1AdminInventoryDefaultAlertLevelResponse = PutApiV1AdminInventoryDefaultAlertLevelResponses[keyof PutApiV1AdminInventoryDefaultAlertLevelResponses];
 
 export type GetApiV1AdminInventoryScannerLookupData = {
     body?: never;
@@ -23304,6 +23716,7 @@ export type GetApiV1AdminNavigationMenusByMenuIdItemsResponses = {
                     updatedAt: string | null;
                 };
                 childCount: number;
+                targetTitle: string | null;
             }>;
             nextCursor: string | null;
         };
@@ -29076,6 +29489,25 @@ export type GetApiV1AdminSettingsThemeResponses = {
                     inputs: 'outlined' | 'filled';
                     cards: 'bordered' | 'elevated' | 'flat';
                 };
+                layout: {
+                    header: 'classic' | 'centered' | 'marketplace';
+                    footer: 'columns' | 'compact' | 'contact';
+                    productCard: {
+                        imageRatio: 'square' | 'portrait';
+                        hoverImage: boolean;
+                        quickBuy: boolean;
+                        badge: 'image' | 'price';
+                    };
+                    grid: {
+                        desktop: 2 | 3 | 4;
+                        mobile: 1 | 2;
+                    };
+                    productPage: {
+                        gallery: 'beside' | 'stacked';
+                        thumbnails: 'beside' | 'below';
+                    };
+                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                };
             };
             revision: number;
             [key: string]: unknown;
@@ -29104,6 +29536,25 @@ export type PostApiV1AdminSettingsThemeData = {
                 buttons: 'solid' | 'soft' | 'outline';
                 inputs: 'outlined' | 'filled';
                 cards: 'bordered' | 'elevated' | 'flat';
+            };
+            layout: {
+                header: 'classic' | 'centered' | 'marketplace';
+                footer: 'columns' | 'compact' | 'contact';
+                productCard: {
+                    imageRatio: 'square' | 'portrait';
+                    hoverImage: boolean;
+                    quickBuy: boolean;
+                    badge: 'image' | 'price';
+                };
+                grid: {
+                    desktop: 2 | 3 | 4;
+                    mobile: 1 | 2;
+                };
+                productPage: {
+                    gallery: 'beside' | 'stacked';
+                    thumbnails: 'beside' | 'below';
+                };
+                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
             };
         };
     };
@@ -29206,6 +29657,25 @@ export type PostApiV1AdminSettingsThemeResponses = {
                     buttons: 'solid' | 'soft' | 'outline';
                     inputs: 'outlined' | 'filled';
                     cards: 'bordered' | 'elevated' | 'flat';
+                };
+                layout: {
+                    header: 'classic' | 'centered' | 'marketplace';
+                    footer: 'columns' | 'compact' | 'contact';
+                    productCard: {
+                        imageRatio: 'square' | 'portrait';
+                        hoverImage: boolean;
+                        quickBuy: boolean;
+                        badge: 'image' | 'price';
+                    };
+                    grid: {
+                        desktop: 2 | 3 | 4;
+                        mobile: 1 | 2;
+                    };
+                    productPage: {
+                        gallery: 'beside' | 'stacked';
+                        thumbnails: 'beside' | 'below';
+                    };
+                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                 };
             };
             revision: number;
@@ -29319,6 +29789,25 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
                     };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                    };
                 };
                 revision: number;
             };
@@ -29339,6 +29828,25 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
                         buttons: 'solid' | 'soft' | 'outline';
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                     };
                 };
                 revision: number;
@@ -29369,6 +29877,25 @@ export type PostApiV1AdminSettingsThemeDraftData = {
                 buttons: 'solid' | 'soft' | 'outline';
                 inputs: 'outlined' | 'filled';
                 cards: 'bordered' | 'elevated' | 'flat';
+            };
+            layout: {
+                header: 'classic' | 'centered' | 'marketplace';
+                footer: 'columns' | 'compact' | 'contact';
+                productCard: {
+                    imageRatio: 'square' | 'portrait';
+                    hoverImage: boolean;
+                    quickBuy: boolean;
+                    badge: 'image' | 'price';
+                };
+                grid: {
+                    desktop: 2 | 3 | 4;
+                    mobile: 1 | 2;
+                };
+                productPage: {
+                    gallery: 'beside' | 'stacked';
+                    thumbnails: 'beside' | 'below';
+                };
+                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
             };
         };
         expectedDraftRevision: number;
@@ -29474,6 +30001,25 @@ export type PostApiV1AdminSettingsThemeDraftResponses = {
                     inputs: 'outlined' | 'filled';
                     cards: 'bordered' | 'elevated' | 'flat';
                 };
+                layout: {
+                    header: 'classic' | 'centered' | 'marketplace';
+                    footer: 'columns' | 'compact' | 'contact';
+                    productCard: {
+                        imageRatio: 'square' | 'portrait';
+                        hoverImage: boolean;
+                        quickBuy: boolean;
+                        badge: 'image' | 'price';
+                    };
+                    grid: {
+                        desktop: 2 | 3 | 4;
+                        mobile: 1 | 2;
+                    };
+                    productPage: {
+                        gallery: 'beside' | 'stacked';
+                        thumbnails: 'beside' | 'below';
+                    };
+                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                };
             };
             revision: number;
             basePublishedRevision: number;
@@ -29502,6 +30048,25 @@ export type PostApiV1AdminSettingsThemeDraftRebaseData = {
                 buttons: 'solid' | 'soft' | 'outline';
                 inputs: 'outlined' | 'filled';
                 cards: 'bordered' | 'elevated' | 'flat';
+            };
+            layout: {
+                header: 'classic' | 'centered' | 'marketplace';
+                footer: 'columns' | 'compact' | 'contact';
+                productCard: {
+                    imageRatio: 'square' | 'portrait';
+                    hoverImage: boolean;
+                    quickBuy: boolean;
+                    badge: 'image' | 'price';
+                };
+                grid: {
+                    desktop: 2 | 3 | 4;
+                    mobile: 1 | 2;
+                };
+                productPage: {
+                    gallery: 'beside' | 'stacked';
+                    thumbnails: 'beside' | 'below';
+                };
+                homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
             };
         };
         expectedDraftRevision: number;
@@ -29606,6 +30171,25 @@ export type PostApiV1AdminSettingsThemeDraftRebaseResponses = {
                     buttons: 'solid' | 'soft' | 'outline';
                     inputs: 'outlined' | 'filled';
                     cards: 'bordered' | 'elevated' | 'flat';
+                };
+                layout: {
+                    header: 'classic' | 'centered' | 'marketplace';
+                    footer: 'columns' | 'compact' | 'contact';
+                    productCard: {
+                        imageRatio: 'square' | 'portrait';
+                        hoverImage: boolean;
+                        quickBuy: boolean;
+                        badge: 'image' | 'price';
+                    };
+                    grid: {
+                        desktop: 2 | 3 | 4;
+                        mobile: 1 | 2;
+                    };
+                    productPage: {
+                        gallery: 'beside' | 'stacked';
+                        thumbnails: 'beside' | 'below';
+                    };
+                    homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                 };
             };
             revision: number;
@@ -29723,6 +30307,25 @@ export type PostApiV1AdminSettingsThemePublishResponses = {
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
                     };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                    };
                 };
                 revision: number;
             };
@@ -29743,6 +30346,25 @@ export type PostApiV1AdminSettingsThemePublishResponses = {
                         buttons: 'solid' | 'soft' | 'outline';
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                     };
                 };
                 revision: number;
@@ -29860,6 +30482,25 @@ export type GetApiV1AdminSettingsThemeVersionsResponses = {
                         buttons: 'solid' | 'soft' | 'outline';
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                     };
                 };
                 revision: number;
@@ -29981,6 +30622,25 @@ export type PostApiV1AdminSettingsThemeRollbackResponses = {
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
                     };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
+                    };
                 };
                 revision: number;
             };
@@ -30001,6 +30661,25 @@ export type PostApiV1AdminSettingsThemeRollbackResponses = {
                         buttons: 'solid' | 'soft' | 'outline';
                         inputs: 'outlined' | 'filled';
                         cards: 'bordered' | 'elevated' | 'flat';
+                    };
+                    layout: {
+                        header: 'classic' | 'centered' | 'marketplace';
+                        footer: 'columns' | 'compact' | 'contact';
+                        productCard: {
+                            imageRatio: 'square' | 'portrait';
+                            hoverImage: boolean;
+                            quickBuy: boolean;
+                            badge: 'image' | 'price';
+                        };
+                        grid: {
+                            desktop: 2 | 3 | 4;
+                            mobile: 1 | 2;
+                        };
+                        productPage: {
+                            gallery: 'beside' | 'stacked';
+                            thumbnails: 'beside' | 'below';
+                        };
+                        homepage: Array<'hero' | 'collections' | 'categories' | 'delivery'>;
                     };
                 };
                 revision: number;
@@ -32118,6 +32797,112 @@ export type PostApiV1AdminSettingsPaymentMethodsResponses = {
 
 export type PostApiV1AdminSettingsPaymentMethodsResponse = PostApiV1AdminSettingsPaymentMethodsResponses[keyof PostApiV1AdminSettingsPaymentMethodsResponses];
 
+export type DeleteApiV1AdminSettingsStripeData = {
+    body: {
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/stripe';
+};
+
+export type DeleteApiV1AdminSettingsStripeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsStripeError = DeleteApiV1AdminSettingsStripeErrors[keyof DeleteApiV1AdminSettingsStripeErrors];
+
+export type DeleteApiV1AdminSettingsStripeResponses = {
+    /**
+     * Stripe keys removed
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revision: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsStripeResponse = DeleteApiV1AdminSettingsStripeResponses[keyof DeleteApiV1AdminSettingsStripeResponses];
+
 export type GetApiV1AdminSettingsStripeData = {
     body?: never;
     path?: never;
@@ -32334,6 +33119,112 @@ export type PostApiV1AdminSettingsStripeResponses = {
 };
 
 export type PostApiV1AdminSettingsStripeResponse = PostApiV1AdminSettingsStripeResponses[keyof PostApiV1AdminSettingsStripeResponses];
+
+export type DeleteApiV1AdminSettingsSslcommerzData = {
+    body: {
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/sslcommerz';
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzError = DeleteApiV1AdminSettingsSslcommerzErrors[keyof DeleteApiV1AdminSettingsSslcommerzErrors];
+
+export type DeleteApiV1AdminSettingsSslcommerzResponses = {
+    /**
+     * SSLCommerz keys removed
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revision: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzResponse = DeleteApiV1AdminSettingsSslcommerzResponses[keyof DeleteApiV1AdminSettingsSslcommerzResponses];
 
 export type GetApiV1AdminSettingsSslcommerzData = {
     body?: never;
@@ -35943,6 +36834,8 @@ export type GetApiV1AdminSettingsHeroSlidersResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -35968,6 +36861,8 @@ export type PostApiV1AdminSettingsHeroSlidersData = {
             id: string;
             url: string;
             title: string;
+            heading?: string;
+            buttonLabel?: string;
             link: string;
             focalPoint?: {
                 x: number;
@@ -36076,6 +36971,8 @@ export type PostApiV1AdminSettingsHeroSlidersResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -36200,6 +37097,8 @@ export type DeleteApiV1AdminSettingsHeroSlidersByIdResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -36311,6 +37210,8 @@ export type GetApiV1AdminSettingsHeroSlidersByIdResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -36336,6 +37237,8 @@ export type PutApiV1AdminSettingsHeroSlidersByIdData = {
             id: string;
             url: string;
             title: string;
+            heading?: string;
+            buttonLabel?: string;
             link: string;
             focalPoint?: {
                 x: number;
@@ -36446,6 +37349,8 @@ export type PutApiV1AdminSettingsHeroSlidersByIdResponses = {
                 id: string;
                 url: string;
                 title: string;
+                heading: string;
+                buttonLabel: string;
                 link: string;
                 focalPoint: {
                     x: number;
@@ -37219,6 +38124,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                 name: string | null;
                 logoUrl: string | null;
                 storefrontUrl: string | null;
+                nameFromAddress: boolean;
             };
         };
     };
@@ -39946,6 +40852,10 @@ export type PostApiV1AdminOrdersByIdRefundData = {
         reason?: string;
         gateway?: 'stripe' | 'sslcommerz' | 'cod';
         manualSettlementConfirmed?: boolean;
+        /**
+         * One key per refund (per dialog opening). Repeating it returns the first refund.
+         */
+        requestKey?: string;
     };
     path: {
         id: string;
@@ -40038,6 +40948,7 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             amount: number;
             isFullRefund: boolean;
             manualSettlementRecorded?: boolean;
+            replayed?: boolean;
             notificationCount: number;
             sideEffectErrors: number;
             error?: string;
@@ -40270,7 +41181,9 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                 discounts?: Array<{
                     name: string;
                     code: string | null;
+                    kind?: string;
                     amount: number;
+                    shippingAmount?: number;
                 }>;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -40288,6 +41201,7 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                     discountAmountMinor: number | null;
                     taxableAmountMinor: number | null;
                     taxAmountMinor: number | null;
+                    returnedQuantity?: number;
                 }>;
             };
             invoiceNumber: string | null;
@@ -40482,7 +41396,9 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                 discounts?: Array<{
                     name: string;
                     code: string | null;
+                    kind?: string;
                     amount: number;
+                    shippingAmount?: number;
                 }>;
                 createdAt: string | number;
                 updatedAt: string | number;
@@ -40500,6 +41416,7 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                     discountAmountMinor: number | null;
                     taxableAmountMinor: number | null;
                     taxAmountMinor: number | null;
+                    returnedQuantity?: number;
                 }>;
             };
             invoiceNumber: string | null;
@@ -41991,6 +42908,7 @@ export type PostApiV1AdminOrdersData = {
             quantity: number;
         }>;
         requestKey?: string;
+        shippingMethodId?: string | null;
     };
     headers?: {
         /**
@@ -43104,6 +44022,7 @@ export type PostApiV1AdminOrdersBulkShipResponse = PostApiV1AdminOrdersBulkShipR
 export type PostApiV1AdminOrdersBulkConfirmData = {
     body: {
         orderIds: Array<string>;
+        requestKey?: string;
     };
     path?: never;
     query?: never;
@@ -43171,6 +44090,7 @@ export type PostApiV1AdminOrdersBulkFulfillData = {
         orderIds: Array<string>;
         courierName?: string;
         note?: string;
+        requestKey?: string;
     };
     path?: never;
     query?: never;
@@ -43267,12 +44187,16 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
                 } | null;
                 actorName: string | null;
+                /**
+                 * The viewer wrote this comment and may delete it.
+                 */
+                own: boolean;
                 createdAt: string | number;
             }>;
         };
@@ -43284,6 +44208,10 @@ export type GetApiV1AdminOrdersByIdTimelineResponse = GetApiV1AdminOrdersByIdTim
 export type PostApiV1AdminOrdersByIdTimelineData = {
     body: {
         body: string;
+        /**
+         * One key per comment draft. Posting it again returns the first comment.
+         */
+        requestKey?: string;
     };
     path: {
         id: string;
@@ -43360,18 +44288,106 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
             body: string | null;
             data: {
                 [key: string]: unknown;
             } | null;
             actorName: string | null;
+            /**
+             * The viewer wrote this comment and may delete it.
+             */
+            own: boolean;
             createdAt: string | number;
         };
     };
 };
 
 export type PostApiV1AdminOrdersByIdTimelineResponse = PostApiV1AdminOrdersByIdTimelineResponses[keyof PostApiV1AdminOrdersByIdTimelineResponses];
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdData = {
+    body?: never;
+    path: {
+        id: string;
+        eventId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/timeline/{eventId}';
+};
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdError = DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors[keyof DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors];
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses = {
+    /**
+     * Comment deleted (or already gone)
+     */
+    200: {
+        success: true;
+        data: {
+            deleted: true;
+        };
+    };
+};
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdResponse = DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses[keyof DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses];
 
 export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkData = {
     body?: never;
@@ -43545,7 +44561,9 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 name: string;
                 code: string | null;
                 method: 'automatic' | 'code';
+                kind: 'buy_x_get_y' | 'product' | 'order' | 'shipping';
                 amount: number;
+                shippingAmount: number;
             }>;
             status: string;
             paymentStatus: string | null;
@@ -45384,6 +46402,11 @@ export type PostApiV1AdminProductsBulkUpdateResponses = {
                 id: string;
                 aggregateRevision: number;
             }>;
+            skipped: Array<{
+                id: string;
+                name: string;
+                reason: 'needs_price';
+            }>;
         };
     };
 };
@@ -46205,6 +47228,10 @@ export type GetApiV1AdminProductsByIdResponses = {
                 posterUrl: string | null;
                 altText: string;
                 contextualAltText?: string | null;
+                /**
+                 * The file's name in Files.
+                 */
+                filename: string;
                 caption: string | null;
                 width: number | null;
                 height: number | null;
@@ -54457,6 +55484,10 @@ export type GetApiV1AdminSettingsDeliveryLocationsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
+                descendants?: {
+                    zones: number;
+                    areas: number;
+                };
                 [key: string]: unknown;
             }>;
             pagination: {
@@ -54582,6 +55613,10 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
+                descendants?: {
+                    zones: number;
+                    areas: number;
+                };
                 [key: string]: unknown;
             };
         };
@@ -54878,6 +55913,10 @@ export type GetApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
+            descendants?: {
+                zones: number;
+                areas: number;
+            };
             [key: string]: unknown;
         };
     };
@@ -54996,6 +56035,10 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
+            descendants?: {
+                zones: number;
+                areas: number;
+            };
             [key: string]: unknown;
         };
     };

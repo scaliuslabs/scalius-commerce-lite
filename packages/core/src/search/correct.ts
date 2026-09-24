@@ -10,23 +10,64 @@ import { sanitizeSearchTokens } from "./fts5";
 const VOCABULARY_PRODUCT_LIMIT = 1_000;
 const VOCABULARY_CATEGORY_LIMIT = 200;
 
-// Native Bangla shopping words whose English catalog name is not a loanword.
-// Loanwords (ব্যাগ, শার্ট, কেতলি, ক্যামেরা) are handled by transliteration.
-const BANGLA_SHOPPING_WORDS: Record<string, string> = {
-  "জুতা": "shoe",
-  "জুতো": "shoe",
-  "ঘড়ি": "watch",
-  "চশমা": "glasses",
-  "বই": "book",
-  "জামা": "shirt",
-  "শাড়ি": "saree",
-  "থালা": "plate",
-  "ছাতা": "umbrella",
-  "চা": "tea",
-  "মোজা": "socks",
-  "টুপি": "cap",
-  "বালিশ": "pillow",
-};
+// Words buyers use for things a catalog may name differently: native Bangla
+// shopping words (loanwords such as ব্যাগ, শার্ট, কেতলি are handled by
+// transliteration) and a few English synonyms. Each entry lists catalog words
+// to try in order; a candidate is used only when the store's own product or
+// category names contain it, so a correction never suggests a missing word.
+const SHOPPING_SYNONYMS: ReadonlyArray<readonly [terms: readonly string[], candidates: readonly string[]]> = [
+  [["জুতা", "জুতো"], ["shoe", "footwear", "sneaker", "sandal", "slipper", "loafer", "boot"]],
+  [["shoe", "sneaker", "trainer", "sandal", "slipper", "boot", "loafer"], ["footwear", "shoe"]],
+  [["footwear"], ["shoe"]],
+  [["ব্যাগ", "থলে"], ["bag", "backpack", "tote", "handbag"]],
+  [["মানিব্যাগ"], ["wallet", "purse"]],
+  [["ঘড়ি"], ["watch", "clock"]],
+  [["চশমা"], ["glasses", "sunglasses", "eyewear"]],
+  [["glasses", "sunglasses", "spectacles"], ["eyewear"]],
+  [["বই"], ["book"]],
+  [["জামা"], ["shirt", "dress", "top", "kurti"]],
+  [["কাপড়"], ["clothing", "fabric"]],
+  [["শাড়ি"], ["saree", "sari"]],
+  [["saree", "sari"], ["saree", "sari"]],
+  [["থালা"], ["plate"]],
+  [["বাটি"], ["bowl"]],
+  [["চামচ"], ["spoon"]],
+  [["ছুরি"], ["knife"]],
+  [["হাঁড়ি", "পাতিল"], ["pot", "cookware"]],
+  [["কড়াই"], ["wok", "pan"]],
+  [["ছাতা"], ["umbrella"]],
+  [["চা"], ["tea"]],
+  [["মোজা"], ["socks"]],
+  [["টুপি"], ["cap", "hat"]],
+  [["বালিশ"], ["pillow", "cushion"]],
+  [["pillow", "cushion"], ["cushion", "pillow"]],
+  [["চাদর"], ["bedsheet", "sheet", "shawl"]],
+  [["কম্বল"], ["blanket"]],
+  [["তোয়ালে", "গামছা"], ["towel"]],
+  [["পর্দা"], ["curtain"]],
+  [["আয়না"], ["mirror"]],
+  [["বাতি"], ["lamp", "light"]],
+  [["ঝুড়ি"], ["basket"]],
+  [["খেলনা"], ["toy"]],
+  [["সাবান"], ["soap"]],
+  [["আংটি"], ["ring"]],
+  [["চুড়ি"], ["bangle", "bracelet"]],
+  [["গয়না", "গহনা"], ["jewellery", "jewelry"]],
+  [["jewelry", "jewellery"], ["jewellery", "jewelry"]],
+  [["সুগন্ধি", "আতর"], ["perfume", "attar", "fragrance"]],
+  [["sofa", "couch"], ["sofa", "couch"]],
+  [["mug", "cup"], ["mug", "cup"]],
+];
+const SYNONYM_CANDIDATES = new Map<string, readonly string[]>(
+  SHOPPING_SYNONYMS.flatMap(([terms, candidates]) =>
+    terms.map((term) => [term.normalize("NFC"), candidates] as const)),
+);
+
+/** "shoes" → "shoe", "watches" → "watch"; "dress" stays "dress". */
+function singular(word: string): string {
+  if (word.length <= 3 || word.endsWith("ss")) return word;
+  return word.replace(/(?:(?<=s|x|ch|sh)es|s)$/, "");
+}
 
 const BANGLA_VOWELS: Record<string, string> = {
   "অ": "o", "আ": "a", "ই": "i", "ঈ": "i", "উ": "u", "ঊ": "u", "ঋ": "ri",
@@ -162,7 +203,17 @@ export function correctSearchQuery(query: string, catalogNames: readonly string[
       continue;
     }
     changed = true;
-    const key = phoneticSearchKey(BANGLA_SHOPPING_WORDS[token] ?? token);
+    const synonyms = SYNONYM_CANDIDATES.get(token) ?? SYNONYM_CANDIDATES.get(singular(token)) ?? [];
+    const synonym = synonyms
+      .map((candidate) => vocabulary
+        .filter(({ word }) => singular(word) === singular(candidate))
+        .sort((left, right) => right.count - left.count)[0])
+      .find(Boolean);
+    if (synonym) {
+      if (!corrected.includes(synonym.word)) corrected.push(synonym.word);
+      continue;
+    }
+    const key = phoneticSearchKey(synonyms[0] ?? token);
     if (!key) continue;
     const maxEdits = allowedEdits(key);
     let best: { word: string; count: number; distance: number } | null = null;

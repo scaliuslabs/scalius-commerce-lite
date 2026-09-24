@@ -43,6 +43,9 @@ export interface ShippingMethodsCopy {
   failedText: string;
   retryText: string;
   loadingText: string;
+  feeChangedText: string;
+  replacedText: string;
+  goneText: string;
 }
 
 export function toDeliveryRate(method: ShippingMethod): DeliveryRate {
@@ -104,12 +107,20 @@ export function enhanceShippingMethods(
 ): {
   refreshFees(): void;
   setAddress(address: Partial<DeliveryAddress>): Promise<void>;
-  /** The checkout refused the chosen rate: drop it and re-read the address's rates. */
+  /** The checkout refused the chosen rate: drop it, re-read the address's rates and say what changed. */
   rejectSelected(): Promise<void>;
+  /**
+   * Before placing the order: re-reads the address's rates and, when the chosen
+   * rate is gone or its fee changed, shows what changed and returns true so the
+   * buyer reviews the new total before placing the order.
+   */
+  recheck(): Promise<boolean>;
 } | null {
   const container = root.querySelector<HTMLElement>("[data-shipping-methods]");
   const list = container?.querySelector<HTMLElement>("[data-shipping-options]");
   const note = container?.querySelector<HTMLElement>("[data-shipping-note]");
+  const notice = container?.querySelector<HTMLElement>("[data-shipping-notice]");
+  const fieldset = container?.querySelector<HTMLElement>("fieldset");
   if (!container || !list || !note) return null;
 
   const data = container.dataset;
@@ -123,6 +134,9 @@ export function enhanceShippingMethods(
     failedText: data.failedText || "",
     retryText: data.retryText || "",
     loadingText: data.loadingText || "",
+    feeChangedText: data.feeChangedText || "",
+    replacedText: data.replacedText || "",
+    goneText: data.goneText || "",
   };
   let initialRates: DeliveryRate[] = [];
   try {
@@ -252,6 +266,43 @@ export function enhanceShippingMethods(
       : rates.find((rate) => rate.kind === "delivery")?.id ?? null;
   };
 
+  /** Says, next to the options, how the buyer's delivery changed. */
+  const showNotice = (message: string) => {
+    if (!notice) return;
+    notice.textContent = message;
+    notice.classList.toggle("hidden", !message);
+    fieldset?.classList.toggle("ring-2", Boolean(message));
+    fieldset?.classList.toggle("ring-destructive", Boolean(message));
+    if (message) container.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  };
+
+  const selectedRate = () => rates.find((rate) => rate.id === selectedId) ?? null;
+
+  /** What changed between the rate the buyer chose and the rates now offered. */
+  const describeChange = (previous: DeliveryRate): string => {
+    const money = (rate: DeliveryRate) => rate.fee === 0 ? copy.freeText : options.formatMoney(rate.fee);
+    const now = rates.find((rate) => rate.id === previous.id);
+    if (now) {
+      return now.fee === previous.fee
+        ? ""
+        : formatCheckoutLanguageText(copy.feeChangedText, { old: money(previous), new: money(now) });
+    }
+    const replacement = selectedRate();
+    return replacement
+      ? formatCheckoutLanguageText(copy.replacedText, {
+          old: previous.name,
+          new: `${replacement.name} ${money(replacement)}`,
+        })
+      : formatCheckoutLanguageText(copy.goneText, { old: previous.name });
+  };
+
+  const applyLoaded = (loaded: DeliveryRate[]) => {
+    rates = loaded.filter((rate) => !rejected.has(rate.id));
+    choose();
+    render();
+    setNote(rates.some((rate) => rate.kind === "delivery") ? "" : copy.noDeliveryText);
+  };
+
   const load = async (force = false) => {
     const hasAddress = Boolean(address.cityId && address.zoneId);
     const current = ++sequence;
@@ -286,10 +337,7 @@ export function enhanceShippingMethods(
       emit();
       return;
     }
-    rates = loaded.filter((rate) => !rejected.has(rate.id));
-    choose();
-    render();
-    setNote(rates.some((rate) => rate.kind === "delivery") ? "" : copy.noDeliveryText);
+    applyLoaded(loaded);
     emit();
   };
 
@@ -298,6 +346,7 @@ export function enhanceShippingMethods(
     if (input?.name !== "shippingLocation") return;
     selectedId = input.value;
     preferredId = input.value;
+    showNotice("");
     emit();
   }, { signal: options.signal });
 
@@ -313,12 +362,32 @@ export function enhanceShippingMethods(
       };
       if (nextAddress.cityId !== address.cityId || nextAddress.zoneId !== address.zoneId) rejected.clear();
       address = nextAddress;
+      showNotice("");
       return load();
     },
-    rejectSelected() {
+    async rejectSelected() {
+      const previous = selectedRate();
       if (selectedId) rejected.add(selectedId);
       selectedId = null;
-      return load(true);
+      await load(true);
+      if (previous) showNotice(describeChange(previous));
+    },
+    async recheck() {
+      const previous = selectedRate();
+      if (!previous || !address.cityId || !address.zoneId) return false;
+      const current = ++sequence;
+      const loaded = await options.loadRates(address);
+      // Unreadable rates don't block the order: the checkout verifies the rate itself.
+      if (!loaded || current !== sequence) return false;
+      const now = loaded.find((rate) => rate.id === previous.id);
+      if (now && now.fee === previous.fee && now.freeOver === previous.freeOver) return false;
+      applyLoaded(loaded);
+      emit();
+      showNotice(describeChange(previous) || formatCheckoutLanguageText(copy.feeChangedText, {
+        old: options.formatMoney(previous.fee),
+        new: options.formatMoney(previous.fee),
+      }));
+      return true;
     },
   };
 }

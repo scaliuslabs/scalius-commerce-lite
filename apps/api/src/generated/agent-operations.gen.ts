@@ -13288,7 +13288,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.delivery_locations.bulk_delete",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/settings/delivery-locations",
-    "summary": "Bulk soft-delete delivery locations",
+    "summary": "Bulk soft-delete delivery locations with their thanas and areas",
     "tags": [
       "Admin - Delivery Locations"
     ],
@@ -13517,6 +13517,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "descendants": {
+                  "type": "object",
+                  "properties": {
+                    "zones": {
+                      "type": "integer"
+                    },
+                    "areas": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "zones",
+                    "areas"
+                  ]
                 }
               },
               "required": [
@@ -13713,6 +13728,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "displayName": {
               "type": "string"
+            },
+            "descendants": {
+              "type": "object",
+              "properties": {
+                "zones": {
+                  "type": "integer"
+                },
+                "areas": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "zones",
+                "areas"
+              ]
             }
           },
           "required": [
@@ -13884,6 +13914,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "displayName": {
                     "type": "string"
+                  },
+                  "descendants": {
+                    "type": "object",
+                    "properties": {
+                      "zones": {
+                        "type": "integer"
+                      },
+                      "areas": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "zones",
+                      "areas"
+                    ]
                   }
                 },
                 "required": [
@@ -14269,7 +14314,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.delivery_locations.trash",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/settings/delivery-locations/{id}",
-    "summary": "Soft-delete a delivery location",
+    "summary": "Soft-delete a delivery location with its thanas and areas",
     "tags": [
       "Admin - Delivery Locations"
     ],
@@ -14467,6 +14512,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "displayName": {
               "type": "string"
+            },
+            "descendants": {
+              "type": "object",
+              "properties": {
+                "zones": {
+                  "type": "integer"
+                },
+                "areas": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "zones",
+                "areas"
+              ]
             }
           },
           "required": [
@@ -19401,6 +19461,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "minLength": 1,
                         "maxLength": 160
                       },
+                      "heading": {
+                        "type": "string",
+                        "maxLength": 160
+                      },
+                      "buttonLabel": {
+                        "type": "string",
+                        "maxLength": 40
+                      },
                       "link": {
                         "type": "string",
                         "maxLength": 2048
@@ -19490,6 +19558,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -19518,6 +19592,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -19657,6 +19733,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -19685,6 +19767,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -19815,6 +19899,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "minLength": 1,
                       "maxLength": 160
                     },
+                    "heading": {
+                      "type": "string"
+                    },
+                    "buttonLabel": {
+                      "type": "string"
+                    },
                     "link": {
                       "type": "string",
                       "maxLength": 2048
@@ -19843,6 +19933,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "id",
                     "url",
                     "title",
+                    "heading",
+                    "buttonLabel",
                     "link",
                     "focalPoint"
                   ]
@@ -20002,6 +20094,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -20030,6 +20128,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -20156,6 +20256,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "minLength": 1,
                         "maxLength": 160
                       },
+                      "heading": {
+                        "type": "string",
+                        "maxLength": 160
+                      },
+                      "buttonLabel": {
+                        "type": "string",
+                        "maxLength": 40
+                      },
                       "link": {
                         "type": "string",
                         "maxLength": 2048
@@ -20244,6 +20352,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "minLength": 1,
                     "maxLength": 160
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string",
                     "maxLength": 2048
@@ -20272,6 +20386,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -22134,6 +22250,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "hasMore",
                 "nextCursor"
               ]
+            },
+            "defaultLowStockThreshold": {
+              "type": "integer",
+              "nullable": true,
+              "description": "Store-wide alert level for SKUs without their own (variants and alerts sections)"
             }
           },
           "additionalProperties": {}
@@ -22401,7 +22522,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "PUT",
     "pathTemplate": "/api/v1/admin/inventory/{variantId}/alert-level",
     "summary": "Set a SKU's low-stock alert level",
-    "description": "Alert when available stock falls to this level or below: a whole number from 0 to 1,000,000, or null to turn the alert off. Stock is not changed.",
+    "description": "Alert when available stock falls to this level or below: a whole number from 0 to 1,000,000 (0 turns the alert off for this SKU), or null to use the store default. Stock is not changed.",
     "tags": [
       "Admin - Inventory"
     ],
@@ -22483,6 +22604,88 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "required": [
             "variantId",
             "lowStockThreshold"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.inventory.set_default_alert_level",
+    "method": "PUT",
+    "pathTemplate": "/api/v1/admin/inventory/default-alert-level",
+    "summary": "Set the store-wide low-stock alert level",
+    "description": "SKUs without their own alert level use this one: a whole number from 0 to 1,000,000, or null to turn it off. Stock is not changed.",
+    "tags": [
+      "Admin - Inventory"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "products.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "defaultLowStockThreshold": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1000000
+                }
+              },
+              "required": [
+                "defaultLowStockThreshold"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "defaultLowStockThreshold": {
+              "type": "integer",
+              "nullable": true
+            }
+          },
+          "required": [
+            "defaultLowStockThreshold"
           ]
         }
       },
@@ -23553,6 +23756,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "deletedAt": {
                     "$ref": "#/components/schemas/NullableTimestamp"
+                  },
+                  "usageCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Distinct places that show the file: products, categories, collections, pages, banners, theme, navigation, invoice, social image, video covers and staff photos."
+                  },
+                  "keptForOrders": {
+                    "type": "boolean",
+                    "description": "Past orders show this picture, so it can never be deleted permanently."
                   }
                 },
                 "required": [
@@ -23570,7 +23782,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "createdAt",
                   "updatedAt",
                   "trashedAt",
-                  "deletedAt"
+                  "deletedAt",
+                  "usageCount",
+                  "keptForOrders"
                 ]
               }
             },
@@ -23754,6 +23968,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/media/{id}/permanent",
     "summary": "Permanently delete unreferenced trashed media",
+    "description": "Refused with 409 MEDIA_DEPENDENCY_CONFLICT while the file is used anywhere (see dashboard.media.usage) or kept by past orders.",
     "tags": [
       "Admin - Media"
     ],
@@ -25238,6 +25453,127 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "outputSchema": null
   },
   {
+    "operationId": "dashboard.media.usage",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/media/{id}/usage",
+    "summary": "List where a file is used",
+    "description": "Distinct places that show the file (up to 50, products first) and how many past order lines keep it. A file in use can be moved to trash (it keeps showing) but not deleted permanently.",
+    "tags": [
+      "Admin - Media"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "media.view"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 160
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "references": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "product",
+                      "category",
+                      "collection",
+                      "page",
+                      "article",
+                      "banner",
+                      "theme",
+                      "navigation",
+                      "invoice",
+                      "social_image",
+                      "video_cover",
+                      "staff_photo"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "name": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "trashed": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "name",
+                  "trashed"
+                ]
+              }
+            },
+            "orderCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "count",
+            "references",
+            "orderCount"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.media.variants_save",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/media/{id}/variants",
@@ -26546,11 +26882,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "childCount": {
                     "type": "integer",
                     "minimum": 0
+                  },
+                  "targetTitle": {
+                    "type": "string",
+                    "nullable": true
                   }
                 },
                 "required": [
                   "item",
-                  "childCount"
+                  "childCount",
+                  "targetTitle"
                 ]
               }
             },
@@ -31068,12 +31409,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "storefrontUrl": {
                   "type": "string",
                   "nullable": true
+                },
+                "nameFromAddress": {
+                  "type": "boolean"
                 }
               },
               "required": [
                 "name",
                 "logoUrl",
-                "storefrontUrl"
+                "storefrontUrl",
+                "nameFromAddress"
               ]
             }
           },
@@ -32355,6 +32700,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "minItems": 1,
                   "maxItems": 90
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
                 }
               },
               "required": [
@@ -32465,6 +32816,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "note": {
                   "type": "string",
                   "maxLength": 500
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
                 }
               },
               "required": [
@@ -33288,6 +33645,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 2000
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "description": "One key per comment draft. Posting it again returns the first comment."
                 }
               },
               "required": [
@@ -33329,6 +33693,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "refund_recorded",
                 "return_created",
                 "return_received",
+                "request_submitted",
                 "request_resolved",
                 "archived",
                 "unarchived",
@@ -33348,6 +33713,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "string",
               "nullable": true
             },
+            "own": {
+              "type": "boolean",
+              "description": "The viewer wrote this comment and may delete it."
+            },
             "createdAt": {
               "anyOf": [
                 {
@@ -33365,7 +33734,88 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "body",
             "data",
             "actorName",
+            "own",
             "createdAt"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.comment_delete",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/orders/{id}/timeline/{eventId}",
+    "summary": "Delete one of your own comments from the order timeline",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.edit"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "eventId",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "deleted": {
+              "type": "boolean",
+              "enum": [
+                true
+              ]
+            }
+          },
+          "required": [
+            "deleted"
           ]
         }
       },
@@ -33513,6 +33963,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "requestKey": {
                   "type": "string",
                   "format": "uuid"
+                },
+                "shippingMethodId": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 180
                 }
               },
               "required": [
@@ -35063,7 +35519,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "code"
                     ]
                   },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "buy_x_get_y",
+                      "product",
+                      "order",
+                      "shipping"
+                    ]
+                  },
                   "amount": {
+                    "type": "number"
+                  },
+                  "shippingAmount": {
                     "type": "number"
                   }
                 },
@@ -35072,7 +35540,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "name",
                   "code",
                   "method",
-                  "amount"
+                  "kind",
+                  "amount",
+                  "shippingAmount"
                 ]
               }
             },
@@ -36155,7 +36625,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "string",
                         "nullable": true
                       },
+                      "kind": {
+                        "type": "string"
+                      },
                       "amount": {
+                        "type": "number"
+                      },
+                      "shippingAmount": {
                         "type": "number"
                       }
                     },
@@ -36240,6 +36716,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "taxAmountMinor": {
                         "type": "number",
                         "nullable": true
+                      },
+                      "returnedQuantity": {
+                        "type": "integer",
+                        "minimum": 0
                       }
                     },
                     "required": [
@@ -36674,7 +37154,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "string",
                         "nullable": true
                       },
+                      "kind": {
+                        "type": "string"
+                      },
                       "amount": {
+                        "type": "number"
+                      },
+                      "shippingAmount": {
                         "type": "number"
                       }
                     },
@@ -36759,6 +37245,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "taxAmountMinor": {
                         "type": "number",
                         "nullable": true
+                      },
+                      "returnedQuantity": {
+                        "type": "integer",
+                        "minimum": 0
                       }
                     },
                     "required": [
@@ -40365,6 +40855,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "manualSettlementConfirmed": {
                   "type": "boolean"
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "description": "One key per refund (per dialog opening). Repeating it returns the first refund."
                 }
               }
             }
@@ -40401,6 +40898,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "boolean"
             },
             "manualSettlementRecorded": {
+              "type": "boolean"
+            },
+            "replayed": {
               "type": "boolean"
             },
             "notificationCount": {
@@ -43710,6 +44210,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "refund_recorded",
                       "return_created",
                       "return_received",
+                      "request_submitted",
                       "request_resolved",
                       "archived",
                       "unarchived",
@@ -43729,6 +44230,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "own": {
+                    "type": "boolean",
+                    "description": "The viewer wrote this comment and may delete it."
+                  },
                   "createdAt": {
                     "anyOf": [
                       {
@@ -43746,6 +44251,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "body",
                   "data",
                   "actorName",
+                  "own",
                   "createdAt"
                 ]
               }
@@ -44432,6 +44938,89 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.payments.sslcommerz_remove",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/settings/sslcommerz",
+    "summary": "Remove the saved SSLCommerz keys and turn SSLCommerz off",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "expectedRevision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "message",
+            "revision"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.payments.sslcommerz_update",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/settings/sslcommerz",
@@ -44592,6 +45181,89 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "publishableKey",
             "webhookSecret",
             "enabled"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.payments.stripe_remove",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/settings/stripe",
+    "summary": "Remove the saved Stripe keys and turn Stripe off",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "expectedRevision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "message",
+            "revision"
           ]
         }
       },
@@ -46366,7 +47038,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "POST",
     "pathTemplate": "/api/v1/admin/products/bulk-update",
     "summary": "Set status and/or category on several products",
-    "description": "Applies to every listed product or none. Activating fails with 400 when a product or one of its live SKUs has no price above 0.",
+    "description": "Changes every listed product together, except that activating skips (and lists in `skipped`) products where the product or one of its live SKUs has no price above 0.",
     "tags": [
       "Admin - Products"
     ],
@@ -46468,10 +47140,36 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "aggregateRevision"
                 ]
               }
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "needs_price"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "reason"
+                ]
+              }
             }
           },
           "required": [
-            "products"
+            "products",
+            "skipped"
           ]
         }
       },
@@ -50004,7 +50702,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "schema": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 10
+            "maximum": 50
           },
           "required": false,
           "name": "sampleLimit",
@@ -50161,7 +50859,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "reason"
                       ]
                     },
-                    "maxItems": 10
+                    "maxItems": 50
                   }
                 },
                 "required": [
@@ -60685,6 +61383,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "cards"
                       ],
                       "additionalProperties": false
+                    },
+                    "layout": {
+                      "type": "object",
+                      "properties": {
+                        "header": {
+                          "type": "string",
+                          "enum": [
+                            "classic",
+                            "centered",
+                            "marketplace"
+                          ]
+                        },
+                        "footer": {
+                          "type": "string",
+                          "enum": [
+                            "columns",
+                            "compact",
+                            "contact"
+                          ]
+                        },
+                        "productCard": {
+                          "type": "object",
+                          "properties": {
+                            "imageRatio": {
+                              "type": "string",
+                              "enum": [
+                                "square",
+                                "portrait"
+                              ]
+                            },
+                            "hoverImage": {
+                              "type": "boolean"
+                            },
+                            "quickBuy": {
+                              "type": "boolean"
+                            },
+                            "badge": {
+                              "type": "string",
+                              "enum": [
+                                "image",
+                                "price"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "imageRatio",
+                            "hoverImage",
+                            "quickBuy",
+                            "badge"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "grid": {
+                          "type": "object",
+                          "properties": {
+                            "desktop": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    3
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    4
+                                  ]
+                                }
+                              ]
+                            },
+                            "mobile": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "desktop",
+                            "mobile"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "productPage": {
+                          "type": "object",
+                          "properties": {
+                            "gallery": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "stacked"
+                              ]
+                            },
+                            "thumbnails": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "below"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "gallery",
+                            "thumbnails"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "homepage": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "hero",
+                              "collections",
+                              "categories",
+                              "delivery"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "header",
+                        "footer",
+                        "productCard",
+                        "grid",
+                        "productPage",
+                        "homepage"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -60693,7 +61537,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cornerStyle",
                     "density",
                     "containerWidth",
-                    "components"
+                    "components",
+                    "layout"
                   ],
                   "additionalProperties": false
                 },
@@ -60830,6 +61675,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cards"
                   ],
                   "additionalProperties": false
+                },
+                "layout": {
+                  "type": "object",
+                  "properties": {
+                    "header": {
+                      "type": "string",
+                      "enum": [
+                        "classic",
+                        "centered",
+                        "marketplace"
+                      ]
+                    },
+                    "footer": {
+                      "type": "string",
+                      "enum": [
+                        "columns",
+                        "compact",
+                        "contact"
+                      ]
+                    },
+                    "productCard": {
+                      "type": "object",
+                      "properties": {
+                        "imageRatio": {
+                          "type": "string",
+                          "enum": [
+                            "square",
+                            "portrait"
+                          ]
+                        },
+                        "hoverImage": {
+                          "type": "boolean"
+                        },
+                        "quickBuy": {
+                          "type": "boolean"
+                        },
+                        "badge": {
+                          "type": "string",
+                          "enum": [
+                            "image",
+                            "price"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "imageRatio",
+                        "hoverImage",
+                        "quickBuy",
+                        "badge"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "grid": {
+                      "type": "object",
+                      "properties": {
+                        "desktop": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "enum": [
+                                2
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                3
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                4
+                              ]
+                            }
+                          ]
+                        },
+                        "mobile": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                2
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "desktop",
+                        "mobile"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "productPage": {
+                      "type": "object",
+                      "properties": {
+                        "gallery": {
+                          "type": "string",
+                          "enum": [
+                            "beside",
+                            "stacked"
+                          ]
+                        },
+                        "thumbnails": {
+                          "type": "string",
+                          "enum": [
+                            "beside",
+                            "below"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "gallery",
+                        "thumbnails"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "homepage": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "hero",
+                          "collections",
+                          "categories",
+                          "delivery"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "header",
+                    "footer",
+                    "productCard",
+                    "grid",
+                    "productPage",
+                    "homepage"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -60838,7 +61829,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "cornerStyle",
                 "density",
                 "containerWidth",
-                "components"
+                "components",
+                "layout"
               ],
               "additionalProperties": false
             },
@@ -61003,6 +61995,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "cards"
                       ],
                       "additionalProperties": false
+                    },
+                    "layout": {
+                      "type": "object",
+                      "properties": {
+                        "header": {
+                          "type": "string",
+                          "enum": [
+                            "classic",
+                            "centered",
+                            "marketplace"
+                          ]
+                        },
+                        "footer": {
+                          "type": "string",
+                          "enum": [
+                            "columns",
+                            "compact",
+                            "contact"
+                          ]
+                        },
+                        "productCard": {
+                          "type": "object",
+                          "properties": {
+                            "imageRatio": {
+                              "type": "string",
+                              "enum": [
+                                "square",
+                                "portrait"
+                              ]
+                            },
+                            "hoverImage": {
+                              "type": "boolean"
+                            },
+                            "quickBuy": {
+                              "type": "boolean"
+                            },
+                            "badge": {
+                              "type": "string",
+                              "enum": [
+                                "image",
+                                "price"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "imageRatio",
+                            "hoverImage",
+                            "quickBuy",
+                            "badge"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "grid": {
+                          "type": "object",
+                          "properties": {
+                            "desktop": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    3
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    4
+                                  ]
+                                }
+                              ]
+                            },
+                            "mobile": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "desktop",
+                            "mobile"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "productPage": {
+                          "type": "object",
+                          "properties": {
+                            "gallery": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "stacked"
+                              ]
+                            },
+                            "thumbnails": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "below"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "gallery",
+                            "thumbnails"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "homepage": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "hero",
+                              "collections",
+                              "categories",
+                              "delivery"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "header",
+                        "footer",
+                        "productCard",
+                        "grid",
+                        "productPage",
+                        "homepage"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -61011,7 +62149,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cornerStyle",
                     "density",
                     "containerWidth",
-                    "components"
+                    "components",
+                    "layout"
                   ],
                   "additionalProperties": false
                 },
@@ -61148,6 +62287,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cards"
                   ],
                   "additionalProperties": false
+                },
+                "layout": {
+                  "type": "object",
+                  "properties": {
+                    "header": {
+                      "type": "string",
+                      "enum": [
+                        "classic",
+                        "centered",
+                        "marketplace"
+                      ]
+                    },
+                    "footer": {
+                      "type": "string",
+                      "enum": [
+                        "columns",
+                        "compact",
+                        "contact"
+                      ]
+                    },
+                    "productCard": {
+                      "type": "object",
+                      "properties": {
+                        "imageRatio": {
+                          "type": "string",
+                          "enum": [
+                            "square",
+                            "portrait"
+                          ]
+                        },
+                        "hoverImage": {
+                          "type": "boolean"
+                        },
+                        "quickBuy": {
+                          "type": "boolean"
+                        },
+                        "badge": {
+                          "type": "string",
+                          "enum": [
+                            "image",
+                            "price"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "imageRatio",
+                        "hoverImage",
+                        "quickBuy",
+                        "badge"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "grid": {
+                      "type": "object",
+                      "properties": {
+                        "desktop": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "enum": [
+                                2
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                3
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                4
+                              ]
+                            }
+                          ]
+                        },
+                        "mobile": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                2
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "desktop",
+                        "mobile"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "productPage": {
+                      "type": "object",
+                      "properties": {
+                        "gallery": {
+                          "type": "string",
+                          "enum": [
+                            "beside",
+                            "stacked"
+                          ]
+                        },
+                        "thumbnails": {
+                          "type": "string",
+                          "enum": [
+                            "beside",
+                            "below"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "gallery",
+                        "thumbnails"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "homepage": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "hero",
+                          "collections",
+                          "categories",
+                          "delivery"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "header",
+                    "footer",
+                    "productCard",
+                    "grid",
+                    "productPage",
+                    "homepage"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -61156,7 +62441,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "cornerStyle",
                 "density",
                 "containerWidth",
-                "components"
+                "components",
+                "layout"
               ],
               "additionalProperties": false
             },
@@ -61327,6 +62613,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cards"
                   ],
                   "additionalProperties": false
+                },
+                "layout": {
+                  "type": "object",
+                  "properties": {
+                    "header": {
+                      "type": "string",
+                      "enum": [
+                        "classic",
+                        "centered",
+                        "marketplace"
+                      ]
+                    },
+                    "footer": {
+                      "type": "string",
+                      "enum": [
+                        "columns",
+                        "compact",
+                        "contact"
+                      ]
+                    },
+                    "productCard": {
+                      "type": "object",
+                      "properties": {
+                        "imageRatio": {
+                          "type": "string",
+                          "enum": [
+                            "square",
+                            "portrait"
+                          ]
+                        },
+                        "hoverImage": {
+                          "type": "boolean"
+                        },
+                        "quickBuy": {
+                          "type": "boolean"
+                        },
+                        "badge": {
+                          "type": "string",
+                          "enum": [
+                            "image",
+                            "price"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "imageRatio",
+                        "hoverImage",
+                        "quickBuy",
+                        "badge"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "grid": {
+                      "type": "object",
+                      "properties": {
+                        "desktop": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "enum": [
+                                2
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                3
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                4
+                              ]
+                            }
+                          ]
+                        },
+                        "mobile": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "enum": [
+                                1
+                              ]
+                            },
+                            {
+                              "type": "number",
+                              "enum": [
+                                2
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "desktop",
+                        "mobile"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "productPage": {
+                      "type": "object",
+                      "properties": {
+                        "gallery": {
+                          "type": "string",
+                          "enum": [
+                            "beside",
+                            "stacked"
+                          ]
+                        },
+                        "thumbnails": {
+                          "type": "string",
+                          "enum": [
+                            "beside",
+                            "below"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "gallery",
+                        "thumbnails"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "homepage": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "hero",
+                          "collections",
+                          "categories",
+                          "delivery"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "header",
+                    "footer",
+                    "productCard",
+                    "grid",
+                    "productPage",
+                    "homepage"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "required": [
@@ -61335,7 +62767,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "cornerStyle",
                 "density",
                 "containerWidth",
-                "components"
+                "components",
+                "layout"
               ],
               "additionalProperties": false
             },
@@ -61689,6 +63122,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "cards"
                       ],
                       "additionalProperties": false
+                    },
+                    "layout": {
+                      "type": "object",
+                      "properties": {
+                        "header": {
+                          "type": "string",
+                          "enum": [
+                            "classic",
+                            "centered",
+                            "marketplace"
+                          ]
+                        },
+                        "footer": {
+                          "type": "string",
+                          "enum": [
+                            "columns",
+                            "compact",
+                            "contact"
+                          ]
+                        },
+                        "productCard": {
+                          "type": "object",
+                          "properties": {
+                            "imageRatio": {
+                              "type": "string",
+                              "enum": [
+                                "square",
+                                "portrait"
+                              ]
+                            },
+                            "hoverImage": {
+                              "type": "boolean"
+                            },
+                            "quickBuy": {
+                              "type": "boolean"
+                            },
+                            "badge": {
+                              "type": "string",
+                              "enum": [
+                                "image",
+                                "price"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "imageRatio",
+                            "hoverImage",
+                            "quickBuy",
+                            "badge"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "grid": {
+                          "type": "object",
+                          "properties": {
+                            "desktop": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    3
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    4
+                                  ]
+                                }
+                              ]
+                            },
+                            "mobile": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "desktop",
+                            "mobile"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "productPage": {
+                          "type": "object",
+                          "properties": {
+                            "gallery": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "stacked"
+                              ]
+                            },
+                            "thumbnails": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "below"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "gallery",
+                            "thumbnails"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "homepage": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "hero",
+                              "collections",
+                              "categories",
+                              "delivery"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "header",
+                        "footer",
+                        "productCard",
+                        "grid",
+                        "productPage",
+                        "homepage"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -61697,7 +63276,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cornerStyle",
                     "density",
                     "containerWidth",
-                    "components"
+                    "components",
+                    "layout"
                   ],
                   "additionalProperties": false
                 },
@@ -61815,6 +63395,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "cards"
                       ],
                       "additionalProperties": false
+                    },
+                    "layout": {
+                      "type": "object",
+                      "properties": {
+                        "header": {
+                          "type": "string",
+                          "enum": [
+                            "classic",
+                            "centered",
+                            "marketplace"
+                          ]
+                        },
+                        "footer": {
+                          "type": "string",
+                          "enum": [
+                            "columns",
+                            "compact",
+                            "contact"
+                          ]
+                        },
+                        "productCard": {
+                          "type": "object",
+                          "properties": {
+                            "imageRatio": {
+                              "type": "string",
+                              "enum": [
+                                "square",
+                                "portrait"
+                              ]
+                            },
+                            "hoverImage": {
+                              "type": "boolean"
+                            },
+                            "quickBuy": {
+                              "type": "boolean"
+                            },
+                            "badge": {
+                              "type": "string",
+                              "enum": [
+                                "image",
+                                "price"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "imageRatio",
+                            "hoverImage",
+                            "quickBuy",
+                            "badge"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "grid": {
+                          "type": "object",
+                          "properties": {
+                            "desktop": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    3
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    4
+                                  ]
+                                }
+                              ]
+                            },
+                            "mobile": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "desktop",
+                            "mobile"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "productPage": {
+                          "type": "object",
+                          "properties": {
+                            "gallery": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "stacked"
+                              ]
+                            },
+                            "thumbnails": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "below"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "gallery",
+                            "thumbnails"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "homepage": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "hero",
+                              "collections",
+                              "categories",
+                              "delivery"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "header",
+                        "footer",
+                        "productCard",
+                        "grid",
+                        "productPage",
+                        "homepage"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -61823,7 +63549,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cornerStyle",
                     "density",
                     "containerWidth",
-                    "components"
+                    "components",
+                    "layout"
                   ],
                   "additionalProperties": false
                 },
@@ -62035,6 +63762,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "cards"
                       ],
                       "additionalProperties": false
+                    },
+                    "layout": {
+                      "type": "object",
+                      "properties": {
+                        "header": {
+                          "type": "string",
+                          "enum": [
+                            "classic",
+                            "centered",
+                            "marketplace"
+                          ]
+                        },
+                        "footer": {
+                          "type": "string",
+                          "enum": [
+                            "columns",
+                            "compact",
+                            "contact"
+                          ]
+                        },
+                        "productCard": {
+                          "type": "object",
+                          "properties": {
+                            "imageRatio": {
+                              "type": "string",
+                              "enum": [
+                                "square",
+                                "portrait"
+                              ]
+                            },
+                            "hoverImage": {
+                              "type": "boolean"
+                            },
+                            "quickBuy": {
+                              "type": "boolean"
+                            },
+                            "badge": {
+                              "type": "string",
+                              "enum": [
+                                "image",
+                                "price"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "imageRatio",
+                            "hoverImage",
+                            "quickBuy",
+                            "badge"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "grid": {
+                          "type": "object",
+                          "properties": {
+                            "desktop": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    3
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    4
+                                  ]
+                                }
+                              ]
+                            },
+                            "mobile": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "desktop",
+                            "mobile"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "productPage": {
+                          "type": "object",
+                          "properties": {
+                            "gallery": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "stacked"
+                              ]
+                            },
+                            "thumbnails": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "below"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "gallery",
+                            "thumbnails"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "homepage": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "hero",
+                              "collections",
+                              "categories",
+                              "delivery"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "header",
+                        "footer",
+                        "productCard",
+                        "grid",
+                        "productPage",
+                        "homepage"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -62043,7 +63916,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cornerStyle",
                     "density",
                     "containerWidth",
-                    "components"
+                    "components",
+                    "layout"
                   ],
                   "additionalProperties": false
                 },
@@ -62161,6 +64035,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "cards"
                       ],
                       "additionalProperties": false
+                    },
+                    "layout": {
+                      "type": "object",
+                      "properties": {
+                        "header": {
+                          "type": "string",
+                          "enum": [
+                            "classic",
+                            "centered",
+                            "marketplace"
+                          ]
+                        },
+                        "footer": {
+                          "type": "string",
+                          "enum": [
+                            "columns",
+                            "compact",
+                            "contact"
+                          ]
+                        },
+                        "productCard": {
+                          "type": "object",
+                          "properties": {
+                            "imageRatio": {
+                              "type": "string",
+                              "enum": [
+                                "square",
+                                "portrait"
+                              ]
+                            },
+                            "hoverImage": {
+                              "type": "boolean"
+                            },
+                            "quickBuy": {
+                              "type": "boolean"
+                            },
+                            "badge": {
+                              "type": "string",
+                              "enum": [
+                                "image",
+                                "price"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "imageRatio",
+                            "hoverImage",
+                            "quickBuy",
+                            "badge"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "grid": {
+                          "type": "object",
+                          "properties": {
+                            "desktop": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    3
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    4
+                                  ]
+                                }
+                              ]
+                            },
+                            "mobile": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "desktop",
+                            "mobile"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "productPage": {
+                          "type": "object",
+                          "properties": {
+                            "gallery": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "stacked"
+                              ]
+                            },
+                            "thumbnails": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "below"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "gallery",
+                            "thumbnails"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "homepage": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "hero",
+                              "collections",
+                              "categories",
+                              "delivery"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "header",
+                        "footer",
+                        "productCard",
+                        "grid",
+                        "productPage",
+                        "homepage"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -62169,7 +64189,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cornerStyle",
                     "density",
                     "containerWidth",
-                    "components"
+                    "components",
+                    "layout"
                   ],
                   "additionalProperties": false
                 },
@@ -62402,6 +64423,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "cards"
                         ],
                         "additionalProperties": false
+                      },
+                      "layout": {
+                        "type": "object",
+                        "properties": {
+                          "header": {
+                            "type": "string",
+                            "enum": [
+                              "classic",
+                              "centered",
+                              "marketplace"
+                            ]
+                          },
+                          "footer": {
+                            "type": "string",
+                            "enum": [
+                              "columns",
+                              "compact",
+                              "contact"
+                            ]
+                          },
+                          "productCard": {
+                            "type": "object",
+                            "properties": {
+                              "imageRatio": {
+                                "type": "string",
+                                "enum": [
+                                  "square",
+                                  "portrait"
+                                ]
+                              },
+                              "hoverImage": {
+                                "type": "boolean"
+                              },
+                              "quickBuy": {
+                                "type": "boolean"
+                              },
+                              "badge": {
+                                "type": "string",
+                                "enum": [
+                                  "image",
+                                  "price"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "imageRatio",
+                              "hoverImage",
+                              "quickBuy",
+                              "badge"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "grid": {
+                            "type": "object",
+                            "properties": {
+                              "desktop": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      2
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      3
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      4
+                                    ]
+                                  }
+                                ]
+                              },
+                              "mobile": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      1
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      2
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "desktop",
+                              "mobile"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "productPage": {
+                            "type": "object",
+                            "properties": {
+                              "gallery": {
+                                "type": "string",
+                                "enum": [
+                                  "beside",
+                                  "stacked"
+                                ]
+                              },
+                              "thumbnails": {
+                                "type": "string",
+                                "enum": [
+                                  "beside",
+                                  "below"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "gallery",
+                              "thumbnails"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "homepage": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "hero",
+                                "collections",
+                                "categories",
+                                "delivery"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "header",
+                          "footer",
+                          "productCard",
+                          "grid",
+                          "productPage",
+                          "homepage"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -62410,7 +64577,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "cornerStyle",
                       "density",
                       "containerWidth",
-                      "components"
+                      "components",
+                      "layout"
                     ],
                     "additionalProperties": false
                   },
@@ -62608,6 +64776,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "cards"
                       ],
                       "additionalProperties": false
+                    },
+                    "layout": {
+                      "type": "object",
+                      "properties": {
+                        "header": {
+                          "type": "string",
+                          "enum": [
+                            "classic",
+                            "centered",
+                            "marketplace"
+                          ]
+                        },
+                        "footer": {
+                          "type": "string",
+                          "enum": [
+                            "columns",
+                            "compact",
+                            "contact"
+                          ]
+                        },
+                        "productCard": {
+                          "type": "object",
+                          "properties": {
+                            "imageRatio": {
+                              "type": "string",
+                              "enum": [
+                                "square",
+                                "portrait"
+                              ]
+                            },
+                            "hoverImage": {
+                              "type": "boolean"
+                            },
+                            "quickBuy": {
+                              "type": "boolean"
+                            },
+                            "badge": {
+                              "type": "string",
+                              "enum": [
+                                "image",
+                                "price"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "imageRatio",
+                            "hoverImage",
+                            "quickBuy",
+                            "badge"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "grid": {
+                          "type": "object",
+                          "properties": {
+                            "desktop": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    3
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    4
+                                  ]
+                                }
+                              ]
+                            },
+                            "mobile": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "desktop",
+                            "mobile"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "productPage": {
+                          "type": "object",
+                          "properties": {
+                            "gallery": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "stacked"
+                              ]
+                            },
+                            "thumbnails": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "below"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "gallery",
+                            "thumbnails"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "homepage": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "hero",
+                              "collections",
+                              "categories",
+                              "delivery"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "header",
+                        "footer",
+                        "productCard",
+                        "grid",
+                        "productPage",
+                        "homepage"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -62616,7 +64930,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cornerStyle",
                     "density",
                     "containerWidth",
-                    "components"
+                    "components",
+                    "layout"
                   ],
                   "additionalProperties": false
                 },
@@ -62734,6 +65049,152 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "cards"
                       ],
                       "additionalProperties": false
+                    },
+                    "layout": {
+                      "type": "object",
+                      "properties": {
+                        "header": {
+                          "type": "string",
+                          "enum": [
+                            "classic",
+                            "centered",
+                            "marketplace"
+                          ]
+                        },
+                        "footer": {
+                          "type": "string",
+                          "enum": [
+                            "columns",
+                            "compact",
+                            "contact"
+                          ]
+                        },
+                        "productCard": {
+                          "type": "object",
+                          "properties": {
+                            "imageRatio": {
+                              "type": "string",
+                              "enum": [
+                                "square",
+                                "portrait"
+                              ]
+                            },
+                            "hoverImage": {
+                              "type": "boolean"
+                            },
+                            "quickBuy": {
+                              "type": "boolean"
+                            },
+                            "badge": {
+                              "type": "string",
+                              "enum": [
+                                "image",
+                                "price"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "imageRatio",
+                            "hoverImage",
+                            "quickBuy",
+                            "badge"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "grid": {
+                          "type": "object",
+                          "properties": {
+                            "desktop": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    3
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    4
+                                  ]
+                                }
+                              ]
+                            },
+                            "mobile": {
+                              "anyOf": [
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    1
+                                  ]
+                                },
+                                {
+                                  "type": "number",
+                                  "enum": [
+                                    2
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "desktop",
+                            "mobile"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "productPage": {
+                          "type": "object",
+                          "properties": {
+                            "gallery": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "stacked"
+                              ]
+                            },
+                            "thumbnails": {
+                              "type": "string",
+                              "enum": [
+                                "beside",
+                                "below"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "gallery",
+                            "thumbnails"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "homepage": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "hero",
+                              "collections",
+                              "categories",
+                              "delivery"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "header",
+                        "footer",
+                        "productCard",
+                        "grid",
+                        "productPage",
+                        "homepage"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -62742,7 +65203,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "cornerStyle",
                     "density",
                     "containerWidth",
-                    "components"
+                    "components",
+                    "layout"
                   ],
                   "additionalProperties": false
                 },
@@ -66111,6 +68573,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "secondaryImageUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "category": {
                     "type": "object",
                     "nullable": true,
@@ -66157,6 +68623,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "imageUrl",
                   "imageMediaId",
                   "imageAlt",
+                  "secondaryImageUrl",
                   "category",
                   "createdAt",
                   "updatedAt"
@@ -68060,6 +70527,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "secondaryImageUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "discountedPrice": {
                     "type": "number"
                   },
@@ -68091,6 +70562,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "imageUrl",
                   "imageMediaId",
                   "imageAlt",
+                  "secondaryImageUrl",
                   "discountedPrice",
                   "priceVaries",
                   "availableForSale",
@@ -68139,6 +70611,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "nullable": true
                 },
+                "secondaryImageUrl": {
+                  "type": "string",
+                  "nullable": true
+                },
                 "discountedPrice": {
                   "type": "number"
                 },
@@ -68170,6 +70646,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "imageUrl",
                 "imageMediaId",
                 "imageAlt",
+                "secondaryImageUrl",
                 "discountedPrice",
                 "priceVaries",
                 "availableForSale",
@@ -71119,6 +73596,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71146,6 +73629,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71269,6 +73754,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71296,6 +73787,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71347,6 +73840,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71374,6 +73873,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71425,6 +73926,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "title": {
                         "type": "string"
                       },
+                      "heading": {
+                        "type": "string"
+                      },
+                      "buttonLabel": {
+                        "type": "string"
+                      },
                       "link": {
                         "type": "string"
                       },
@@ -71452,6 +73959,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "id",
                       "url",
                       "title",
+                      "heading",
+                      "buttonLabel",
                       "link",
                       "focalPoint"
                     ]
@@ -71484,6 +73993,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "title": {
                     "type": "string"
                   },
+                  "heading": {
+                    "type": "string"
+                  },
+                  "buttonLabel": {
+                    "type": "string"
+                  },
                   "link": {
                     "type": "string"
                   },
@@ -71511,6 +74026,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "id",
                   "url",
                   "title",
+                  "heading",
+                  "buttonLabel",
                   "link",
                   "focalPoint"
                 ]
@@ -71851,6 +74368,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "imageAlt": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "secondaryImageUrl": {
+                          "type": "string",
+                          "nullable": true
                         }
                       },
                       "required": [
@@ -71869,7 +74390,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "hasVariants",
                         "imageUrl",
                         "imageMediaId",
-                        "imageAlt"
+                        "imageAlt",
+                        "secondaryImageUrl"
                       ]
                     },
                     "maxItems": 24
@@ -71932,6 +74454,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "imageAlt": {
                         "type": "string",
                         "nullable": true
+                      },
+                      "secondaryImageUrl": {
+                        "type": "string",
+                        "nullable": true
                       }
                     },
                     "required": [
@@ -71950,7 +74476,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "hasVariants",
                       "imageUrl",
                       "imageMediaId",
-                      "imageAlt"
+                      "imageAlt",
+                      "secondaryImageUrl"
                     ]
                   }
                 },
@@ -72623,6 +75150,116 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "inputs",
                     "cards"
                   ]
+                },
+                "layout": {
+                  "type": "object",
+                  "properties": {
+                    "header": {
+                      "type": "string",
+                      "enum": [
+                        "classic",
+                        "centered",
+                        "marketplace"
+                      ]
+                    },
+                    "footer": {
+                      "type": "string",
+                      "enum": [
+                        "columns",
+                        "compact",
+                        "contact"
+                      ]
+                    },
+                    "productCard": {
+                      "type": "object",
+                      "properties": {
+                        "imageRatio": {
+                          "type": "string",
+                          "enum": [
+                            "square",
+                            "portrait"
+                          ]
+                        },
+                        "hoverImage": {
+                          "type": "boolean"
+                        },
+                        "quickBuy": {
+                          "type": "boolean"
+                        },
+                        "badge": {
+                          "type": "string",
+                          "enum": [
+                            "image",
+                            "price"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "imageRatio",
+                        "hoverImage",
+                        "quickBuy",
+                        "badge"
+                      ]
+                    },
+                    "grid": {
+                      "type": "object",
+                      "properties": {
+                        "desktop": {
+                          "type": "integer"
+                        },
+                        "mobile": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "desktop",
+                        "mobile"
+                      ]
+                    },
+                    "productPage": {
+                      "type": "object",
+                      "properties": {
+                        "gallery": {
+                          "type": "string",
+                          "enum": [
+                            "beside",
+                            "stacked"
+                          ]
+                        },
+                        "thumbnails": {
+                          "type": "string",
+                          "enum": [
+                            "beside",
+                            "below"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "gallery",
+                        "thumbnails"
+                      ]
+                    },
+                    "homepage": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "hero",
+                          "collections",
+                          "categories",
+                          "delivery"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "header",
+                    "footer",
+                    "productCard",
+                    "grid",
+                    "productPage",
+                    "homepage"
+                  ]
                 }
               },
               "required": [
@@ -72631,7 +75268,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "cornerStyle",
                 "density",
                 "containerWidth",
-                "components"
+                "components",
+                "layout"
               ]
             },
             "media": {
@@ -72906,6 +75544,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "saleOfferSpendText": {
                   "type": "string"
                 },
+                "saleOfferGetText": {
+                  "type": "string"
+                },
+                "saleOfferGetSpendText": {
+                  "type": "string"
+                },
                 "freeBenefitText": {
                   "type": "string"
                 },
@@ -72924,6 +75568,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "quantityLimitText",
                 "saleOfferText",
                 "saleOfferSpendText",
+                "saleOfferGetText",
+                "saleOfferGetSpendText",
                 "freeBenefitText",
                 "percentBenefitText"
               ]
@@ -74303,7 +76949,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "storefront.orders_lookup_send_otp.send_otp",
     "method": "POST",
     "pathTemplate": "/api/v1/orders/lookup/send-otp",
-    "summary": "Send a code to the contact saved on an order (never reveals whether it matched)",
+    "summary": "Send a code to the contact saved on an order (order number + its phone)",
     "tags": [
       "Orders"
     ],
@@ -77468,6 +80114,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "freeDelivery": {
                         "type": "boolean"
                       },
+                      "categoryId": {
+                        "type": "string",
+                        "nullable": true
+                      },
                       "imageUrl": {
                         "type": "string",
                         "nullable": true
@@ -77477,6 +80127,14 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "nullable": true
                       },
                       "imageAlt": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "secondaryImageUrl": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "createdAt": {
                         "type": "string",
                         "nullable": true
                       }
@@ -77494,9 +80152,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "availableForSale",
                       "priceVaries",
                       "freeDelivery",
+                      "categoryId",
                       "imageUrl",
                       "imageMediaId",
-                      "imageAlt"
+                      "imageAlt",
+                      "secondaryImageUrl",
+                      "createdAt"
                     ]
                   },
                   "maxItems": 10
@@ -77766,6 +80427,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "secondaryImageUrl": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "The next photo in gallery order, for a card's hover swap. Never a video."
+                  },
                   "category": {
                     "type": "object",
                     "nullable": true,
@@ -77816,6 +80482,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "imageUrl",
                   "imageMediaId",
                   "imageAlt",
+                  "secondaryImageUrl",
                   "category",
                   "createdAt",
                   "updatedAt",
@@ -77920,6 +80587,191 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "priceRange",
             "facets",
             "correctedQuery"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "storefront.products.list_recommendations",
+    "method": "GET",
+    "pathTemplate": "/api/v1/products/recommendations",
+    "summary": "Recommend products for products the buyer is looking at or has in the cart",
+    "description": "Ranked buyable products for the given source products (excluding them): bought together first, then same category, collection, attributes and price band, then popular or newest. Without `productIds` it returns popular products, or the newest when there is not enough order history.",
+    "tags": [
+      "Products"
+    ],
+    "surface": "storefront",
+    "exposure": "execute",
+    "principals": [
+      "customer",
+      "visitor"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 16384,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Comma-separated product IDs, such as the cart's products. At most 20 are used."
+          },
+          "required": false,
+          "description": "Comma-separated product IDs, such as the cart's products. At most 20 are used.",
+          "name": "productIds",
+          "in": "query"
+        },
+        {
+          "schema": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 12,
+            "default": 8,
+            "description": "Products to return"
+          },
+          "required": false,
+          "description": "Products to return",
+          "name": "limit",
+          "in": "query"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "enum": [
+                "also_bought",
+                "similar",
+                "popular",
+                "new_arrivals"
+              ],
+              "description": "What the list mostly is, for an honest title: `also_bought` only when at least half the products were bought together with the source products by two or more different buyers; `similar` for category, collection, attribute and price matches; `popular` and `new_arrivals` for lists without source products."
+            },
+            "products": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "price": {
+                    "type": "number"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "discountType": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "discountPercentage": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "discountAmount": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "discountedPrice": {
+                    "type": "number"
+                  },
+                  "hasVariants": {
+                    "type": "boolean"
+                  },
+                  "availableForSale": {
+                    "type": "boolean"
+                  },
+                  "priceVaries": {
+                    "type": "boolean"
+                  },
+                  "freeDelivery": {
+                    "type": "boolean"
+                  },
+                  "categoryId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "imageUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "imageMediaId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "imageAlt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "secondaryImageUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "createdAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "price",
+                  "slug",
+                  "discountType",
+                  "discountPercentage",
+                  "discountAmount",
+                  "discountedPrice",
+                  "hasVariants",
+                  "availableForSale",
+                  "priceVaries",
+                  "freeDelivery",
+                  "categoryId",
+                  "imageUrl",
+                  "imageMediaId",
+                  "imageAlt",
+                  "secondaryImageUrl",
+                  "createdAt"
+                ]
+              }
+            }
+          },
+          "required": [
+            "reason",
+            "products"
           ]
         }
       },
@@ -86750,6 +89602,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.inventory.set_default_alert_level",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.inventory.set_default_alert_level"
+        ]
+      },
+      {
         "operationId": "dashboard.inventory.set_stock",
         "surface": "dashboard",
         "mode": "curated",
@@ -86885,6 +89745,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "dashboard.media-upload"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.usage",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media.usage"
         ]
       },
       {
@@ -87247,6 +90115,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.orders.comment_add"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.comment_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.comment_delete"
         ]
       },
       {
@@ -87613,6 +90489,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.payments.sslcommerz_remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.sslcommerz_remove"
+        ]
+      },
+      {
         "operationId": "dashboard.payments.sslcommerz_update",
         "surface": "dashboard",
         "mode": "curated",
@@ -87626,6 +90510,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "dashboard.stripe-settings"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.stripe_remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.stripe_remove"
         ]
       },
       {
@@ -88907,6 +91799,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "storefront.product-research"
+        ]
+      },
+      {
+        "operationId": "storefront.products.list_recommendations",
+        "surface": "storefront",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.storefront.products.list_recommendations"
         ]
       },
       {

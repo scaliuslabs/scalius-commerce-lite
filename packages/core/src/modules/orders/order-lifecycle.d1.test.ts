@@ -21,6 +21,8 @@ import { createFulfillmentShipment, processCodAction } from "./orders.fulfillmen
 import { approveOrderReturn, createOrderReturn, getOrderReturn, receiveOrderReturn } from "./order-returns";
 import { addOrderComment, listOrderTimeline, recordOrderEvent } from "./order-timeline";
 import { createOrdersCsvArtifactBuilder, formatCommerceDateTime } from "./order-csv-export";
+import { readInvoiceOrderSource } from "./invoice-order-reader";
+import { createReceiptOrderSupportRequest } from "./order-support-requests";
 
 /**
  * Real-SQLite behaviour of the dashboard order lifecycle: sequential order
@@ -336,6 +338,71 @@ describe("dashboard order lifecycle on D1 storage", () => {
         expect(timeline.map((event) => event.kind)).toEqual(["comment", "archived", "placed"]);
         expect(timeline[0]).toMatchObject({ body: "Customer confirmed by phone at 3pm", actorName: null });
         await expect(addOrderComment(db, id, "   ", null)).rejects.toThrow("Write a comment first.");
+    });
+
+    it("finds Bangla-digit phones and whole emails only, newest first among equals (R2-ORD-14)", async () => {
+        const rahim = await manualOrder({ customerEmail: "r2ord.rahim@example.com" });
+        const rahima = await manualOrder({ customerEmail: "r2ord.rahima@example.com", customerPhone: "+8801712345699" });
+        sqlite.exec(`UPDATE orders SET created_at = 1700000000 WHERE id = '${rahim.id}'`);
+
+        const byBanglaPhone = await listOrders(db, { search: "০১৭১২৩৪৫৬০১" });
+        expect(byBanglaPhone.orders.map((order) => order.id)).toEqual([rahim.id]);
+        const byEmail = await listOrders(db, { search: "r2ord.rahim@example.com" });
+        expect(byEmail.orders.map((order) => order.id)).toEqual([rahim.id]);
+        const byDomain = await listOrders(db, { search: "Rahim Uddin", sort: "relevance" });
+        expect(byDomain.orders.map((order) => order.id)).toEqual([rahima.id, rahim.id]);
+    });
+
+    it("keeps every own-courier parcel in step with a failed delivery and a return (R2-ORD-05)", async () => {
+        const { id } = await manualOrder();
+        const itemId = one<{ id: string }>("SELECT id FROM order_items WHERE order_id = ?", id).id;
+        await createFulfillmentShipment(db, id, { items: [{ itemId, quantity: 1 }], courierName: "Rider Jamal", trackingId: "TRK-1" });
+        await createFulfillmentShipment(db, id, { trackingId: "TRK-2" });
+        await processCodAction(db, id, { action: "failed", reason: "no_cash" });
+        expect(sqlite.prepare("SELECT status FROM delivery_shipments WHERE order_id = ? ORDER BY created_at").all(id))
+            .toEqual([{ status: "delivery_failed" }, { status: "delivery_failed" }]);
+
+        // Both parcels are listed; parcels created in the same second have no defined order.
+        const details = (await loadOrderExportDetails(db, [id])).get(id)!;
+        const parts = (value: string | null | undefined) => (value ?? "").split("; ").sort();
+        expect(parts(details.courierName)).toEqual(["Own courier", "Rider Jamal"]);
+        expect(parts(details.trackingId)).toEqual(["TRK-1", "TRK-2"]);
+
+        const { returnId } = await processCodAction(db, id, { action: "returned" }) as { returnId: string };
+        expect(sqlite.prepare("SELECT status FROM delivery_shipments WHERE order_id = ?").all(id))
+            .toEqual([{ status: "returned" }, { status: "returned" }]);
+
+        // Receiving the courier's return is warehouse work: the buyer was told once already (R2-ORD-08).
+        const returned = await getOrderReturn(db, id, returnId);
+        const receipt = await receiveOrderReturn(db, id, returned.id, {
+            commandKey: crypto.randomUUID(),
+            expectedVersion: returned.version,
+            lines: [{ lineId: returned.lines[0]!.id, receivedQuantity: 3, restockQuantity: 3, damagedQuantity: 0 }],
+        }, { type: "admin", id: null });
+        expect(receipt.wholeOrderReturned).toBe(false);
+
+        const invoice = await readInvoiceOrderSource(db, id);
+        expect(invoice?.items[0]).toMatchObject({ quantity: 3, returnedQuantity: 3 });
+    });
+
+    it("keeps the delivery method's name on a manual order (R2-ORD-10)", async () => {
+        sqlite.exec(`INSERT INTO shipping_methods (id, name, fee_minor, description) VALUES ('method_1', 'OPS006 Standard Delivery', 8000, 'Inside Dhaka')`);
+        const { id } = await manualOrder({ shippingMethodId: "method_1", shippingCharge: 80 });
+        expect(one("SELECT shipping_method_name, shipping_amount_minor FROM orders WHERE id = ?", id))
+            .toEqual({ shipping_method_name: "OPS006 Standard Delivery", shipping_amount_minor: 8000 });
+        await expect(manualOrder({ shippingMethodId: "gone" }))
+            .rejects.toThrow("That delivery method no longer exists. Choose another.");
+    });
+
+    it("logs the buyer's cancellation request on the timeline (R2-ORD-15)", async () => {
+        storefrontOrder();
+        await createReceiptOrderSupportRequest(db, "store_1", { type: "cancel_pre_shipment", reason: "Ordered by mistake" });
+        const [latest] = await listOrderTimeline(db, "store_1");
+        expect(latest).toMatchObject({
+            kind: "request_submitted",
+            body: "Ordered by mistake",
+            data: { type: "cancel_pre_shipment", reason: "Ordered by mistake" },
+        });
     });
 
     it("exports store-time dates, readable statuses, local phones and items", async () => {

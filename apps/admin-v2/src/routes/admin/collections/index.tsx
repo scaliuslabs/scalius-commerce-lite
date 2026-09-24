@@ -10,7 +10,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
 import { createListSearchValidator } from "~/lib/list-helpers";
-import { readListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -44,7 +44,7 @@ function listQuery(search: ReturnType<typeof validateCollectionSearch>, term: st
 export const Route = createFileRoute("/admin/collections/")({
   validateSearch: validateCollectionSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, readListSearch("collections"))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("collections", deps.q))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "collections") }] }),
   component: CollectionsPage,
   errorComponent: RouteErrorComponent,
@@ -75,17 +75,17 @@ function CollectionsPage() {
     {
       accessorKey: "name",
       header: sortHeader(t("collection")),
-      meta: { mobile: "primary" },
+      meta: { mobile: "primary", minWidth: 220 },
       cell: ({ row }) => <ResourceRowLink to={search.trashed ? undefined : editTo(row.original)}>{row.original.name}</ResourceRowLink>,
     },
     {
       id: "products",
       header: t("products"),
-      meta: { mobile: "secondary" },
+      meta: { mobile: "secondary", priority: 70, minWidth: 160 },
       cell: ({ row }) => {
         const config = normalizeCollectionConfig(row.original.config);
         return (
-          <span className="text-muted-foreground">
+          <span className="line-clamp-2 text-muted-foreground">
             {config.source === "dynamic"
               ? config.categoryIds.length === 1 ? t("autoOneCategory") : t("autoFromCategories", { count: config.categoryIds.length })
               : config.productIds.length === 1 ? t("productCountOne") : t("productCount", { count: config.productIds.length })}
@@ -97,12 +97,17 @@ function CollectionsPage() {
     {
       accessorKey: "isActive",
       header: sortHeader(t("status")),
-      meta: { mobile: "status" },
+      meta: { mobile: "status", priority: 90, minWidth: 100 },
       cell: ({ row }) => (
         <Badge variant={row.original.isActive ? "success" : "attention"}>{t(row.original.isActive ? "active" : "draft")}</Badge>
       ),
     },
-    { accessorKey: "updatedAt", header: sortHeader(t("updated")), cell: ({ row }) => <DateText value={row.original.updatedAt} /> },
+    {
+      accessorKey: "updatedAt",
+      header: sortHeader(t("updated")),
+      meta: { priority: 40, minWidth: 120 },
+      cell: ({ row }) => <DateText value={row.original.updatedAt} />,
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, search.trashed, can.canEdit]);
 
@@ -116,6 +121,7 @@ function CollectionsPage() {
       actions={can.canCreate ? <Button asChild><Link to="/admin/collections/new">{t("addCollection")}</Link></Button> : null}
       search={search}
       list="collections"
+      countLabel={(count) => t("collectionCount", { count })}
       query={listQuery(search, term)}
       pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
       dataKey="collections"

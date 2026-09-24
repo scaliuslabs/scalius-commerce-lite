@@ -28,6 +28,8 @@ export interface ListSearchParams<TSort extends string = string> {
   sort: TSort;
   order: "asc" | "desc";
   trashed: boolean;
+  /** One-time `?q=` deep link; the list moves it into its session term (list-search.ts). */
+  q?: string;
 }
 
 export type SearchValidatorInput<T extends object = object> = {
@@ -154,6 +156,7 @@ export function createListSearchValidator<T extends readonly [string, ...string[
     sort: normalizeEnumSearchParam(search.sort, sortOptions, defaultSort),
     order: normalizeEnumSearchParam(search.order, ["asc", "desc"] as const, defaultOrder),
     trashed: normalizeBooleanSearchParam(search.trashed),
+    q: normalizeOptionalSearchString(search.q),
   });
 }
 

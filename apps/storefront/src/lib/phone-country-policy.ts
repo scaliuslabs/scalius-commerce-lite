@@ -3,6 +3,7 @@ import {
   validateAndFormatPhone,
   type PhoneCountryPolicy,
 } from "@scalius/shared/customer-utils";
+import { BD_MOBILE_REQUIRED_MESSAGE } from "@scalius/shared/phone-input";
 
 export interface StorefrontPhoneValidationResult {
   ok: boolean;
@@ -40,7 +41,9 @@ export function validateStorefrontPhone(
       value,
       message: message.includes("not accepted")
         ? "This store does not accept phone numbers from that country."
-        : "Enter a valid phone number.",
+        : message === BD_MOBILE_REQUIRED_MESSAGE
+          ? `${BD_MOBILE_REQUIRED_MESSAGE}.`
+          : "Enter a valid phone number.",
     };
   }
 }

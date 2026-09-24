@@ -8,6 +8,7 @@ import {
   getOrderSuccessStateKind,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
+  isOrderStatusView,
   shouldClearCheckoutCartForOrder,
 } from "./order-success-state";
 import type { OrderReceipt } from "./api/types";
@@ -383,5 +384,17 @@ describe("order success receipt details", () => {
     expect(getOrderSuccessNextSteps(order, "order_placed", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toHaveLength(1);
     expect(getOrderSuccessNextSteps(order, "order_updated", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toEqual([]);
     expect(getOrderSuccessNextSteps(order, "payment_pending", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toEqual([]);
+  });
+
+  it("opens a tracked or moved-on order as a status page, but keeps the fresh confirmation", () => {
+    const tracked = { requestedView: "status", freshCheckout: false };
+    const later = { requestedView: null, freshCheckout: false };
+    const fresh = { requestedView: null, freshCheckout: true };
+    expect(isOrderStatusView("order_placed", tracked)).toBe(true);
+    expect(isOrderStatusView("payment_pending", tracked)).toBe(true);
+    expect(isOrderStatusView("order_updated", later)).toBe(true);
+    expect(isOrderStatusView("order_updated", fresh)).toBe(false);
+    expect(isOrderStatusView("order_placed", later)).toBe(false);
+    expect(isOrderStatusView("payment_issue", { requestedView: "other", freshCheckout: false })).toBe(false);
   });
 });

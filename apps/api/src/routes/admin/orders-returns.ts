@@ -250,6 +250,7 @@ app.openapi(createRouteDefinition, async (c) => {
         orderId,
         kind: "return_created",
         actorId: actor(c).id,
+        requestKey: commandKey,
         body: payload.reason?.trim() || null,
         data: { quantity: payload.lines.reduce((sum, line) => sum + line.quantity, 0) },
     });
@@ -283,6 +284,7 @@ app.openapi(receiveRoute, async (c) => {
         orderId: id,
         kind: "return_received",
         actorId: actor(c).id,
+        requestKey: commandKey,
         data: {
             received: (payload as ReceiveOrderReturnInput).lines.reduce((sum, line) => sum + line.receivedQuantity, 0),
             restocked: result.restockedQuantity,

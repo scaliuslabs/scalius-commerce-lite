@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useMatch, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ExternalLink, ShoppingCart, Trash2 } from "lucide-react";
+import { ExternalLink, ShoppingCart, Trash2, X } from "lucide-react";
 import { deleteApiV1AdminAbandonedCheckouts } from "@scalius/api-client/sdk";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -45,7 +46,7 @@ import {
 import { createDataSelector, getCanonicalPageForPagination } from "@/lib/list-helpers";
 import { useListSearch } from "~/lib/list-search";
 import { queryKeys } from "@/lib/query-keys";
-import { useMessages } from "~/i18n";
+import { translate, useLocale, useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderListMessages, pluralKey } from "~/i18n/order-list";
@@ -91,8 +92,8 @@ function CustomerCell({ checkout }: { checkout: AbandonedCheckout }) {
   const { customerInfo } = displayOf(checkout);
   return (
     <div className="min-w-0">
-      <p className="break-words font-medium">{customerInfo.name || t("noName")}</p>
-      <p className={customerInfo.phone ? "font-mono text-body text-muted-foreground" : "text-body text-muted-foreground"}>
+      <p className="line-clamp-2 break-words font-medium">{customerInfo.name || t("noName")}</p>
+      <p className={customerInfo.phone ? "whitespace-nowrap font-mono text-body text-muted-foreground" : "text-body text-muted-foreground"}>
         {customerInfo.phone ? formatPhoneForDisplay(customerInfo.phone) : t("noPhone")}
       </p>
     </div>
@@ -157,6 +158,7 @@ function CheckoutSheet({
   onClose: () => void;
 }) {
   const t = useMessages(orderListMessages);
+  const tr = useMessages(resourceMessages);
   const td = useMessages(orderDetailMessages);
   const { fmt } = useCurrency();
   const navigate = useNavigate();
@@ -175,16 +177,23 @@ function CheckoutSheet({
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="flex flex-col gap-4 overflow-y-auto p-6">
-        <SheetHeader>
-          <SheetTitle className="break-words">{name}</SheetTitle>
-          <SheetDescription>
-            {checkout ? (
-              <>
-                <Reference checkout={checkout} /> · <ListDate value={checkout.updatedAt} />
-              </>
-            ) : null}
-          </SheetDescription>
-        </SheetHeader>
+        <div className="flex items-start gap-2">
+          <SheetHeader className="min-w-0 flex-1">
+            <SheetTitle className="break-words">{name}</SheetTitle>
+            <SheetDescription>
+              {checkout ? (
+                <>
+                  <Reference checkout={checkout} /> · <ListDate value={checkout.updatedAt} />
+                </>
+              ) : null}
+            </SheetDescription>
+          </SheetHeader>
+          <SheetClose asChild>
+            <Button variant="ghost" size="icon" className="-mr-2 -mt-2 shrink-0" aria-label={tr("close")}>
+              <X className="size-4" />
+            </Button>
+          </SheetClose>
+        </div>
         {checkout && display ? (
           <>
             <div className="flex flex-wrap items-center gap-2">
@@ -289,11 +298,14 @@ export function AbandonedCheckoutList({
   const openId = useMatch({ from: "/admin/orders/_list/abandoned/$checkoutId", shouldThrow: false })?.params.checkoutId ?? null;
   const [deleteIds, setDeleteIds] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const locale = useLocale();
 
   const columns = useMemo<ColumnDef<AbandonedCheckout, unknown>[]>(() => {
+    const label = (key: Parameters<typeof t>[0]) => translate(orderListMessages, key);
     const list: ColumnDef<AbandonedCheckout, unknown>[] = [
       {
         id: "checkout",
+        meta: { label: label("checkout"), primary: true, minWidth: 150 },
         header: () => <Title k="checkout" />,
         cell: ({ row }) => (
           <div className="flex flex-col">
@@ -302,18 +314,29 @@ export function AbandonedCheckoutList({
               params={{ checkoutId: row.original.id }}
               className="rounded-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Reference checkout={row.original} />
+              <span className="whitespace-nowrap"><Reference checkout={row.original} /></span>
             </Link>
-            <ListDate value={row.original.updatedAt} className="text-body text-muted-foreground" />
+            <ListDate value={row.original.updatedAt} className="whitespace-nowrap text-body text-muted-foreground" />
           </div>
         ),
       },
-      { id: "customer", header: () => <Title k="customer" />, cell: ({ row }) => <CustomerCell checkout={row.original} /> },
-      { id: "progress", header: () => <Title k="progress" />, cell: ({ row }) => <StageBadge checkout={row.original} /> },
+      {
+        id: "customer",
+        meta: { label: label("customer"), priority: 90, minWidth: 180 },
+        header: () => <Title k="customer" />,
+        cell: ({ row }) => <CustomerCell checkout={row.original} />,
+      },
+      {
+        id: "progress",
+        meta: { label: label("progress"), priority: 60, minWidth: 140 },
+        header: () => <Title k="progress" />,
+        cell: ({ row }) => <StageBadge checkout={row.original} />,
+      },
       {
         id: "total",
-        header: () => <div className="text-right"><Title k="total" /></div>,
-        cell: ({ row }) => <div className="text-right"><TotalCell checkout={row.original} /></div>,
+        meta: { label: label("total"), priority: 80, minWidth: 110, numeric: true },
+        header: () => <Title k="total" />,
+        cell: ({ row }) => <TotalCell checkout={row.original} />,
       },
       {
         id: "actions",
@@ -333,7 +356,9 @@ export function AbandonedCheckoutList({
       }));
     }
     return list;
-  }, [orderActions.canBulkDeleteOrders, orderActions.canDeleteOrders]);
+    // The locale re-labels the columns for the column menu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderActions.canBulkDeleteOrders, orderActions.canDeleteOrders, locale]);
 
   const {
     table, rawData, error, isError, isFetching, isLoading, refetch, pagination,
@@ -442,6 +467,7 @@ export function AbandonedCheckoutList({
         itemLabel={t("checkoutsLabel")}
         pageSizeOptions={[10, 20, 50, 100]}
         mobileCardRenderer={mobileCardRenderer}
+        layoutKey="abandoned-checkouts"
         toolbar={<div className="px-2 pt-2"><DataTableToolbar
             searchValue={term}
             onSearchChange={(value) => {

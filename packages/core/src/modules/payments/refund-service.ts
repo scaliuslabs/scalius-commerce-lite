@@ -27,6 +27,7 @@ import {
     type OrderCurrencySnapshot,
 } from "./order-currency";
 import {
+    ACTIVE_REFUND_ATTEMPT_STATUSES,
     REFUND_IN_PROGRESS_MESSAGE,
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
@@ -47,6 +48,12 @@ export interface RefundRequest {
     gateway?: string;
     /** Required when any allocation records an already-completed external COD repayment. */
     manualSettlementConfirmed?: boolean;
+    /**
+     * One key per refund the merchant means to make (one per dialog opening).
+     * Sending it again (double click, retry) returns the first refund instead
+     * of refunding twice.
+     */
+    requestKey?: string;
 }
 
 export interface RefundResult {
@@ -57,6 +64,8 @@ export interface RefundResult {
     isFullRefund: boolean;
     /** True when at least one allocation records a confirmed off-platform COD repayment. */
     manualSettlementRecorded?: boolean;
+    /** This request key was already used: nothing new was refunded, notified or logged. */
+    replayed?: boolean;
     error?: string;
     /** Internal cache signal; API responses must not expose this field. */
     availabilityTransitionVariantIds: string[];
@@ -170,6 +179,54 @@ function getRefundAttemptId(allocation: Pick<RefundAllocation, "id">): string {
 
 function getRefundAttemptKey(allocation: Pick<RefundAllocation, "idempotencyKey">): string {
     return `refund_attempt:${allocation.idempotencyKey}`;
+}
+
+/** Attempt keys of a merchant refund request: unique, so the same request can't claim twice. */
+function refundRequestAttemptKeyPrefix(orderId: string, requestKey: string): string {
+    return `refund_request:${orderId}:${requestKey}:`;
+}
+
+/**
+ * The refund an earlier call with this request key made, if any. The same key
+ * for a different amount is refused rather than silently ignored.
+ */
+async function findRefundRequestReplay(
+    db: Database,
+    params: RefundRequest & { requestKey: string },
+    order: { paymentStatus: string },
+    currency: { code: string; decimalPlaces: number },
+): Promise<RefundResult | null> {
+    const prefix = refundRequestAttemptKeyPrefix(params.orderId, params.requestKey);
+    const rows = await db.select({
+        gateway: refundAttempts.gateway,
+        amountMinor: refundAttempts.amountMinor,
+        status: refundAttempts.status,
+        providerRefundId: refundAttempts.providerRefundId,
+        lastError: refundAttempts.lastError,
+    }).from(refundAttempts).where(and(
+        eq(refundAttempts.orderId, params.orderId),
+        sql`substr(${refundAttempts.attemptKey}, 1, ${prefix.length}) = ${prefix}`,
+    )).all();
+    if (rows.length === 0) return null;
+    const amountMinor = rows.reduce((sum, row) => sum + row.amountMinor, 0);
+    if (params.amount !== undefined && toMinor(params.amount, currency.decimalPlaces) !== amountMinor) {
+        throw new ConflictError("This refund request was already used for a different amount. Reload and try again.");
+    }
+    if (rows.some((row) => ACTIVE_REFUND_ATTEMPT_STATUSES.includes(row.status as never))) {
+        throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
+    }
+    const failed = rows.find((row) => row.status === "failed");
+    return {
+        success: !failed,
+        ...(failed ? { error: failed.lastError ?? "Refund processing failed" } : {}),
+        gateway: rows[0]!.gateway,
+        refundId: rows.map((row) => row.providerRefundId).filter(Boolean).join(",") || undefined,
+        amount: fromMinor(amountMinor, currency.decimalPlaces),
+        isFullRefund: order.paymentStatus === PaymentStatus.REFUNDED,
+        manualSettlementRecorded: rows.some((row) => row.gateway === COD_PAYMENT_METHOD),
+        availabilityTransitionVariantIds: [],
+        replayed: true,
+    };
 }
 
 function normalizePaymentGateway(value: string): string {
@@ -726,9 +783,12 @@ function buildRefundAttemptInsert(params: {
     requestHash: string;
     currency: string;
 }) {
+    const requestKey = params.request.requestKey?.trim();
     return {
         id: getRefundAttemptId(params.allocation),
-        attemptKey: getRefundAttemptKey(params.allocation),
+        attemptKey: requestKey
+            ? `${refundRequestAttemptKeyPrefix(params.request.orderId, requestKey)}${params.allocation.index}`
+            : getRefundAttemptKey(params.allocation),
         refundGroupId: params.groupId,
         orderId: params.request.orderId,
         sourcePaymentId: params.allocation.sourcePayment.id,
@@ -1039,6 +1099,11 @@ export async function processRefund(
         throw new NotFoundError(`Order ${params.orderId} not found`);
     }
     const currency = resolveOrderCurrencySnapshot(order);
+    const requestKey = params.requestKey?.trim();
+    if (requestKey) {
+        const replay = await findRefundRequestReplay(db, { ...params, requestKey }, order, currency);
+        if (replay) return replay;
+    }
     if (order.discountAmountMinor > 0) {
         await readPromotionRefundSnapshot(db, {
             orderId: order.id,
@@ -1212,6 +1277,11 @@ export async function processRefund(
         ] as any) as any;
     } catch (error: unknown) {
         if (isConstraintError(error)) {
+            // The same request key raced in from a second click.
+            const replay = requestKey
+                ? await findRefundRequestReplay(db, { ...params, requestKey }, order, currency)
+                : null;
+            if (replay) return replay;
             throw new ConflictError(REFUND_IN_PROGRESS_MESSAGE);
         }
         throw error;
