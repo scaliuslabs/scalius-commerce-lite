@@ -20,7 +20,12 @@ import {
   STOREFRONT_BATCH_PART_PARAM,
 } from "@scalius/shared/public-api-cache-routes";
 import { serveStorefrontBatch } from "../storefront-batch";
-import { getPublicApiCachePolicy, withCacheGeneration } from "../public-cache-policy";
+import {
+  getPublicApiCachePolicy,
+  isCacheLayerServerError,
+  logCacheLayerFallback,
+  withCacheGeneration,
+} from "../public-cache-policy";
 import { readCacheGeneration } from "../utils/cache-generation";
 
 import { ok } from "../utils/api-response";
@@ -383,7 +388,12 @@ app.openapi(batchRoute, async (c) => {
       const cachePolicy = getPublicApiCachePolicy(part);
       const publicApi = ctx?.exports?.PublicApi;
       if (cachePolicy && generation && publicApi) {
-        return publicApi.fetch(new Request(withCacheGeneration(cachePolicy.canonicalUrl, generation), part));
+        const cached = await publicApi.fetch(new Request(withCacheGeneration(cachePolicy.canonicalUrl, generation), part));
+        // The cache is a hint: a server error from the cache layer itself (a
+        // stuck entry answers an empty platform 500) is rendered directly.
+        if (!isCacheLayerServerError(cached)) return cached;
+        await cached.body?.cancel();
+        logCacheLayerFallback(part.url, request, cached.status);
       }
       const { fetchRuntimeApiApp } = await import("../runtime/fetch-runtime-app");
       return fetchRuntimeApiApp(part, c.env, ctx as ExecutionContext);

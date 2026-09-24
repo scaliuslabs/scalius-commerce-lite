@@ -53,6 +53,40 @@ check it. The release-wide evidence lives in
    `served_by_colo` in `wrangler d1 execute <db> --remote --json --command "SELECT 1"`
    and change the region to match.
 
+## Known platform failure: a stuck Workers Cache key
+
+Seen on 2026-09-24. In one colo (SIN), one key of the `PublicApi` Workers
+Cache entrypoint (`/api/v1/storefront/homepage?__cg=<generation>`) answered
+every request with the same broken response, while other colos and every
+other key were fine:
+
+- an empty-body `500` with `cf-cache-status: BYPASS`;
+- none of our headers (no `X-Request-Id`, no security headers);
+- no Worker invocation in `wrangler tail`.
+
+The storefront pins its reads to that generation, so the home page was a 503
+in that colo until the generation changed. The most likely trigger is a cache
+fill that was cancelled mid-way: the storefront aborted a slow cold read
+there. The deadline fix above removes that trigger.
+
+How to recognise it:
+
+```sh
+curl -s -o /dev/null -D - https://api.<store>/api/v1/storefront/homepage
+```
+
+The same path with an extra query parameter (a different key) answers 200.
+
+Handling: the API treats the generation cache as a hint
+(`isCacheLayerServerError` in `apps/api/src/public-cache-policy.ts`). When the
+cache entrypoint returns a 5xx without the baseline security headers that
+every response of ours carries, the read is rendered directly and uncached,
+and one masked `[PublicCache] cache layer answered ...` warning is logged with
+the path and colo and no query values. This happens both for single reads
+(`worker.ts`) and for batch parts (`storefront.batch.get`). Our own 5xx
+passes through untouched, so a real outage does not double the database load.
+Bumping the cache generation (any buyer-visible save) also clears it at once.
+
 ## Budgets and guardrails
 
 | Guardrail | Where | Budget |
