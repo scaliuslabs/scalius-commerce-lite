@@ -206,7 +206,7 @@ describe("listCollectionProductOptions", () => {
                 isActive: true,
             },
         ];
-        const db = createDb([[{ count: 21 }], rows]);
+        const db = createDb([[{ count: 21 }], rows, [{ count: 7 }]]);
 
         const result = await listCollectionProductOptions(db, {
             page: 2,
@@ -226,10 +226,11 @@ describe("listCollectionProductOptions", () => {
                 priceRange: { from: 90, to: 120, compareAt: 100 },
             })),
             pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
+            visibleOnline: 7,
         });
         expect(db.batch).toHaveBeenCalledTimes(1);
         const statements = db.batch.mock.calls[0]?.[0] as QueryChain[];
-        expect(statements).toHaveLength(2);
+        expect(statements).toHaveLength(3);
         expect(statements[1]?.limit).toHaveBeenCalledWith(10);
         expect(statements[1]?.offset).toHaveBeenCalledWith(10);
         expect(statements[1]?.orderBy).toHaveBeenCalled();

@@ -31,6 +31,7 @@ import { ok, created, noContent } from "../../utils/api-response";
 import {
     successEnvelope,
     paginatedEnvelope,
+    paginationSchema,
     errorResponses,
     conflictResponse,
     messageResponse,
@@ -198,7 +199,13 @@ const productOptionsRoute = createRoute({
             description: "Paginated product options",
             content: {
                 "application/json": {
-                    schema: paginatedEnvelope("products", collectionProductOptionSchema),
+                    schema: successEnvelope(z.object({
+                        products: z.array(collectionProductOptionSchema),
+                        pagination: paginationSchema,
+                        visibleOnline: z.number().int().nullable().openapi({
+                            description: "With categoryIds: how many of their products buyers see on the storefront. Null without categories.",
+                        }),
+                    })),
                 },
             },
         },

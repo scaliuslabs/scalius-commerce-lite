@@ -9711,11 +9711,17 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "total",
                 "totalPages"
               ]
+            },
+            "visibleOnline": {
+              "type": "integer",
+              "nullable": true,
+              "description": "With categoryIds: how many of their products buyers see on the storefront. Null without categories."
             }
           },
           "required": [
             "products",
-            "pagination"
+            "pagination",
+            "visibleOnline"
           ]
         }
       },

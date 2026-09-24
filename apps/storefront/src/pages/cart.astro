@@ -284,6 +284,21 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     data-cart-state="loading"
     class="group container mx-auto max-w-6xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7"
   >
+    {/* Before first paint: with nothing saved, the server-rendered empty state
+        shows at once instead of after the page scripts load (PERF-01). */}
+    <script is:inline>
+      (function () {
+        try {
+          var cart = JSON.parse(localStorage.getItem("cart") || "null");
+          var items = cart && cart.items && typeof cart.items === "object" ? Object.keys(cart.items) : [];
+          var recovery = "scalius_hosted_payment_recovery";
+          if (items.length === 0 && !sessionStorage.getItem("quickBuyData")
+            && !localStorage.getItem(recovery) && !sessionStorage.getItem(recovery)) {
+            document.getElementById("cartPageRoot").dataset.cartState = "empty";
+          }
+        } catch (error) {}
+      })();
+    </script>
     <h1 class="sr-only">{copy.pageTitle}</h1>
     <noscript>
       <div
@@ -607,6 +622,26 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             id="cartItems"
             aria-busy="true"
           >
+            {/* The empty state as HTML, for the first paint; the cart script
+                replaces it with the lines (renderEmptyCartState keeps it in step). */}
+            <div class="text-center py-8 px-4" data-cart-empty>
+              <svg class="mx-auto h-12 w-12 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <h3 class="mt-2 text-lg font-medium text-foreground">{copy.emptyCartText}</h3>
+              <p class="mt-1 text-sm text-muted-foreground">{copy.emptyCartDescriptionText}</p>
+              <div class="mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row">
+                <a
+                  href="/"
+                  class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90"
+                >
+                  <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+                  </svg>
+                  {copy.continueShoppingText}
+                </a>
+              </div>
+            </div>
           </div>
           <p id="cartUndo" class="mx-4 mb-3 text-sm text-muted-foreground" role="status" hidden></p>
 

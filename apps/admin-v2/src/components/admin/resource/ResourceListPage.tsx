@@ -364,6 +364,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         // write): renumbering a partial page would duplicate positions.
         sortable={Boolean(props.sortable) && pagination.page === 1 && rowCount > 1 && pagination.total === rowCount && pagination.total <= 90}
         onReorder={props.onReorder ? (from, to) => props.onReorder!(from, to, table.getRowModel().rows.map((row) => row.original)) : undefined}
+        getRowLabel={rowLabel}
         toolbar={
           <>
             {tabBar}
