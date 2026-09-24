@@ -2,34 +2,36 @@
 // The same card as every listing, so prices ("From ৳2,200"), badges and
 // labels read identically everywhere.
 import ProductCard from "@/components/cards/ProductCard.astro";
-import type { Product } from "@/lib/api";
+import type { ProductRecommendations } from "@/lib/api";
+import { recommendationTitle } from "@/lib/recommendations";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 
 interface Props {
-  relatedProducts: Product[];
+  recommendations: ProductRecommendations;
   currencySymbol?: string;
   currencyCode?: string;
 }
 
 const {
-  relatedProducts,
+  recommendations,
   currencySymbol = DEFAULT_CURRENCY.symbol,
   currencyCode = DEFAULT_CURRENCY.code,
 } = Astro.props;
 ---
 
 {
-  relatedProducts.length > 0 && (
+  recommendations.products.length > 0 && (
     <section
       class="storefront-deferred-region bg-muted/50 py-6 mt-4"
       id="related-products"
+      aria-labelledby="related-products-title"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 class="text-lg font-bold text-foreground mb-4">
-          You might also like
+        <h2 id="related-products-title" class="text-lg font-bold text-foreground mb-4">
+          {recommendationTitle(recommendations.reason)}
         </h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-4 gap-y-6">
-          {relatedProducts.map((relatedProduct) => (
+        <div class="product-grid">
+          {recommendations.products.map((relatedProduct) => (
             <ProductCard
               product={relatedProduct}
               currencySymbol={currencySymbol}

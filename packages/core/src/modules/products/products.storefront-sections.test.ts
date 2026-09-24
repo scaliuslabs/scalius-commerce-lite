@@ -199,7 +199,7 @@ function detailFixture(): StorefrontProductDetail {
             imageMediaId: null,
             selectedOptions: [selectedOption(index)],
         })),
-        relatedProducts: [],
+        recommendations: { products: [] },
     };
 }
 

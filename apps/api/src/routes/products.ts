@@ -11,6 +11,13 @@ import {
   searchStorefrontProducts,
 } from "@scalius/core/modules/products/products.storefront";
 import {
+  DEFAULT_RECOMMENDATION_LIMIT,
+  MAX_RECOMMENDATION_LIMIT,
+  MAX_RECOMMENDATION_SOURCE_IDS,
+  getStorefrontProductRecommendations,
+  normalizeRecommendationSourceIds,
+} from "@scalius/core/modules/products/products.recommendations";
+import {
   STOREFRONT_PRODUCT_TEXT_CHUNK_MAX,
   getStorefrontProductSection,
   storefrontProductSectionQuerySchema,
@@ -103,6 +110,9 @@ const storefrontProductSchema = z.object({
   imageUrl: z.string().nullable(),
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
+  secondaryImageUrl: z.string().nullable().openapi({
+    description: "The next photo in gallery order, for a card's hover swap. Never a video.",
+  }),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
@@ -319,7 +329,7 @@ const productDetailVariantSchema = z.object({
   deletedAt: z.string().nullable(),
 });
 
-const relatedProductSchema = z.object({
+const recommendedProductSchema = z.object({
   id: z.string(),
   name: z.string(),
   price: z.number(),
@@ -332,9 +342,20 @@ const relatedProductSchema = z.object({
   availableForSale: z.boolean(),
   priceVaries: z.boolean(),
   freeDelivery: z.boolean(),
+  categoryId: z.string().nullable(),
   imageUrl: z.string().nullable(),
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
+  secondaryImageUrl: z.string().nullable(),
+  createdAt: z.string().nullable(),
+});
+
+const productRecommendationsSchema = z.object({
+  reason: z.enum(["also_bought", "similar", "popular", "new_arrivals"]).openapi({
+    description:
+      "What the list mostly is, for an honest title: `also_bought` only when at least half the products were bought together with the source products by two or more different buyers; `similar` for category, collection, attribute and price matches; `popular` and `new_arrivals` for lists without source products.",
+  }),
+  products: z.array(recommendedProductSchema),
 });
 
 const productDetailDataSchema = z.object({
@@ -387,7 +408,7 @@ const productDetailDataSchema = z.object({
   category: productCategoryDetailSchema.nullable(),
   media: z.array(productMediaSchema),
   variants: z.array(productDetailVariantSchema),
-  relatedProducts: z.array(relatedProductSchema),
+  recommendations: productRecommendationsSchema,
 });
 type ProductDetailData = z.infer<typeof productDetailDataSchema>;
 
@@ -477,7 +498,7 @@ const storefrontProductSectionResponseSchema = z.union([
     ...storefrontProductSectionPageFields(productOptionValueSchema, 50),
   }),
   z.object({ section: z.literal("variants"), ...storefrontProductSectionPageFields(productSectionVariantSchema, 10) }),
-  z.object({ section: z.literal("related_products"), ...storefrontProductSectionPageFields(relatedProductSchema, 10) }),
+  z.object({ section: z.literal("related_products"), ...storefrontProductSectionPageFields(recommendedProductSchema, 10) }),
 ]);
 
 // GET /api/storefront/products
@@ -628,6 +649,44 @@ app.openapi(sitemapProductsRoute, async (c) => {
   const db = c.get("db");
   const params = c.req.valid("query");
   const result = await getStorefrontSitemapProducts(db, params);
+  return ok(c, result);
+});
+
+// GET /api/v1/products/recommendations
+const productRecommendationsRoute = createRoute({
+  method: "get",
+  path: "/recommendations",
+  operationId: "storefront.products.list_recommendations",
+  tags: ["Products"],
+  summary: "Recommend products for products the buyer is looking at or has in the cart",
+  description:
+    "Ranked buyable products for the given source products (excluding them): bought together first, then same category, collection, attributes and price band, then popular or newest. Without `productIds` it returns popular products, or the newest when there is not enough order history.",
+  request: {
+    query: z.object({
+      productIds: z.string().max(4_000).optional().openapi({
+        description: `Comma-separated product IDs, such as the cart's products. At most ${MAX_RECOMMENDATION_SOURCE_IDS} are used.`,
+      }),
+      limit: z.coerce.number().int().min(1).max(MAX_RECOMMENDATION_LIMIT).optional()
+        .default(DEFAULT_RECOMMENDATION_LIMIT)
+        .openapi({ description: "Products to return" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Recommended products and what kind of list it is",
+      content: { "application/json": { schema: successEnvelope(productRecommendationsSchema) } },
+    },
+    400: errorResponses[400],
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(productRecommendationsRoute, async (c) => {
+  const { productIds, limit } = c.req.valid("query");
+  const result = await getStorefrontProductRecommendations(c.get("db"), {
+    productIds: normalizeRecommendationSourceIds(productIds),
+    limit,
+  });
   return ok(c, result);
 });
 

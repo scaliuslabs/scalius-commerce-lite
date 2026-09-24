@@ -36,8 +36,53 @@ import { previewCartDiscounts } from "@/lib/cart/browser-api";
 import type { CheckoutDiscountFacts } from "@/lib/checkout/tax-quote-contract";
 import type { CartValidationIssue } from "@/lib/api/orders";
 import { cartItemVariantLabel } from "@/lib/cart/item-options";
+import type { ProductRecommendations } from "@/lib/api/types";
+import {
+  fetchRecommendationsFromBrowser,
+  recommendationQuery,
+  recommendationTitle,
+} from "@/lib/recommendations";
 
 export const cartOpenState = atom<boolean>(false);
+
+const CART_RECOMMENDATION_LIMIT = 4;
+const cartRecommendationCache = new Map<string, ProductRecommendations | null>();
+
+/**
+ * "You might also like" for the open drawer: fetched lazily once per cart
+ * contents, only while the drawer is open and has items. Products already in
+ * the cart are never suggested.
+ */
+function useCartRecommendations(cart: CartStore, isOpen: boolean) {
+  const productIds = Object.values(cart.items).map((item) => item.id);
+  const key = recommendationQuery(productIds, CART_RECOMMENDATION_LIMIT);
+  const [result, setResult] = useState<ProductRecommendations | null>(null);
+  useEffect(() => {
+    if (!isOpen || productIds.length === 0) return;
+    if (cartRecommendationCache.has(key)) {
+      setResult(cartRecommendationCache.get(key) ?? null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetchRecommendationsFromBrowser(productIds, CART_RECOMMENDATION_LIMIT, controller.signal)
+        .then((recommendations) => {
+          if (controller.signal.aborted) return;
+          cartRecommendationCache.set(key, recommendations);
+          setResult(recommendations);
+        });
+    }, 400);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+    // `key` encodes the product ids.
+  }, [key, isOpen]);
+  if (!result || productIds.length === 0) return null;
+  const inCart = new Set(productIds);
+  const products = result.products.filter((product) => !inCart.has(product.id));
+  return products.length > 0 ? { reason: result.reason, products } : null;
+}
 
 export type AddToCartEventDetail = Parameters<typeof addToCart>[0] & {
   redirectToCart?: boolean;
@@ -108,6 +153,7 @@ export default function CartFlyout({ onReady }: Props) {
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
   const { discounts, issues } = useDrawerCartFacts(cart, isOpen);
+  const recommendations = useCartRecommendations(cart, isOpen);
   // Shopify's drawer: discounts listed above, the total already net of them.
   const discountTotal = discounts?.totalDiscount ?? 0;
   const estimatedTotal = Math.max(0, Math.round((cart.totalAmount - discountTotal) * 100) / 100);
@@ -460,6 +506,40 @@ export default function CartFlyout({ onReady }: Props) {
                     </div>
                   </div>
                 ))}
+                {recommendations && (
+                  <section aria-labelledby="cart-recommendations-title" className="pt-2">
+                    <h3 id="cart-recommendations-title" className="mb-2 text-xs font-bold text-foreground sm:text-sm">
+                      {recommendationTitle(recommendations.reason)}
+                    </h3>
+                    <ul className="flex gap-2 overflow-x-auto pb-1">
+                      {recommendations.products.map((product) => (
+                        <li key={product.id} className="w-28 shrink-0">
+                          <a
+                            href={`/products/${encodeURIComponent(product.slug)}`}
+                            onClick={disableAutoClose}
+                            className="flex h-full flex-col rounded-lg border border-border bg-card p-1.5 transition-colors hover:border-foreground/30"
+                          >
+                            <img
+                              src={getProductImageUrl(product.imageUrl, 160)}
+                              alt={product.imageAlt || product.name}
+                              width={100}
+                              height={100}
+                              loading="lazy"
+                              className="aspect-square w-full rounded-md bg-muted object-cover"
+                            />
+                            <span className="mt-1 line-clamp-2 text-xs font-medium leading-tight text-foreground">
+                              {product.name}
+                            </span>
+                            <span className="mt-auto pt-0.5 text-xs font-semibold tabular-nums text-foreground">
+                              {product.priceVaries ? "From " : ""}
+                              {formatMoney(product.discountedPrice)}
+                            </span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
               </div>
             )}
           </div>

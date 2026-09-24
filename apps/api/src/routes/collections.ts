@@ -68,6 +68,7 @@ const collectionProductSchema = z.object({
   imageUrl: z.string().nullable(),
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
+  secondaryImageUrl: z.string().nullable(),
   discountedPrice: z.number(),
   priceVaries: z.boolean(),
   availableForSale: z.boolean(),

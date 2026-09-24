@@ -3103,6 +3103,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "secondaryImageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "discountedPrice": {
                                 "type": "number"
                               },
@@ -3134,6 +3138,7 @@
                               "imageUrl",
                               "imageMediaId",
                               "imageAlt",
+                              "secondaryImageUrl",
                               "discountedPrice",
                               "priceVaries",
                               "availableForSale",
@@ -3182,6 +3187,10 @@
                               "type": "string",
                               "nullable": true
                             },
+                            "secondaryImageUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
                             "discountedPrice": {
                               "type": "number"
                             },
@@ -3213,6 +3222,7 @@
                             "imageUrl",
                             "imageMediaId",
                             "imageAlt",
+                            "secondaryImageUrl",
                             "discountedPrice",
                             "priceVaries",
                             "availableForSale",
@@ -9121,6 +9131,10 @@
                                     "imageAlt": {
                                       "type": "string",
                                       "nullable": true
+                                    },
+                                    "secondaryImageUrl": {
+                                      "type": "string",
+                                      "nullable": true
                                     }
                                   },
                                   "required": [
@@ -9139,7 +9153,8 @@
                                     "hasVariants",
                                     "imageUrl",
                                     "imageMediaId",
-                                    "imageAlt"
+                                    "imageAlt",
+                                    "secondaryImageUrl"
                                   ]
                                 },
                                 "maxItems": 24
@@ -9202,6 +9217,10 @@
                                   "imageAlt": {
                                     "type": "string",
                                     "nullable": true
+                                  },
+                                  "secondaryImageUrl": {
+                                    "type": "string",
+                                    "nullable": true
                                   }
                                 },
                                 "required": [
@@ -9220,7 +9239,8 @@
                                   "hasVariants",
                                   "imageUrl",
                                   "imageMediaId",
-                                  "imageAlt"
+                                  "imageAlt",
+                                  "secondaryImageUrl"
                                 ]
                               }
                             },
@@ -10230,6 +10250,116 @@
                                 "inputs",
                                 "cards"
                               ]
+                            },
+                            "layout": {
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string",
+                                  "enum": [
+                                    "classic",
+                                    "centered",
+                                    "marketplace"
+                                  ]
+                                },
+                                "footer": {
+                                  "type": "string",
+                                  "enum": [
+                                    "columns",
+                                    "compact",
+                                    "contact"
+                                  ]
+                                },
+                                "productCard": {
+                                  "type": "object",
+                                  "properties": {
+                                    "imageRatio": {
+                                      "type": "string",
+                                      "enum": [
+                                        "square",
+                                        "portrait"
+                                      ]
+                                    },
+                                    "hoverImage": {
+                                      "type": "boolean"
+                                    },
+                                    "quickBuy": {
+                                      "type": "boolean"
+                                    },
+                                    "badge": {
+                                      "type": "string",
+                                      "enum": [
+                                        "image",
+                                        "price"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "imageRatio",
+                                    "hoverImage",
+                                    "quickBuy",
+                                    "badge"
+                                  ]
+                                },
+                                "grid": {
+                                  "type": "object",
+                                  "properties": {
+                                    "desktop": {
+                                      "type": "integer"
+                                    },
+                                    "mobile": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "desktop",
+                                    "mobile"
+                                  ]
+                                },
+                                "productPage": {
+                                  "type": "object",
+                                  "properties": {
+                                    "gallery": {
+                                      "type": "string",
+                                      "enum": [
+                                        "beside",
+                                        "stacked"
+                                      ]
+                                    },
+                                    "thumbnails": {
+                                      "type": "string",
+                                      "enum": [
+                                        "beside",
+                                        "below"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "gallery",
+                                    "thumbnails"
+                                  ]
+                                },
+                                "homepage": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "hero",
+                                      "collections",
+                                      "categories",
+                                      "delivery"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "header",
+                                "footer",
+                                "productCard",
+                                "grid",
+                                "productPage",
+                                "homepage"
+                              ]
                             }
                           },
                           "required": [
@@ -10238,7 +10368,8 @@
                             "cornerStyle",
                             "density",
                             "containerWidth",
-                            "components"
+                            "components",
+                            "layout"
                           ]
                         },
                         "media": {
@@ -35207,6 +35338,11 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "secondaryImageUrl": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "The next photo in gallery order, for a card's hover swap. Never a video."
+                              },
                               "category": {
                                 "type": "object",
                                 "nullable": true,
@@ -35257,6 +35393,7 @@
                               "imageUrl",
                               "imageMediaId",
                               "imageAlt",
+                              "secondaryImageUrl",
                               "category",
                               "createdAt",
                               "updatedAt",
@@ -36675,6 +36812,274 @@
         "security": []
       }
     },
+    "/api/v1/products/recommendations": {
+      "get": {
+        "operationId": "storefront.products.list_recommendations",
+        "tags": [
+          "Products"
+        ],
+        "summary": "Recommend products for products the buyer is looking at or has in the cart",
+        "description": "Ranked buyable products for the given source products (excluding them): bought together first, then same category, collection, attributes and price band, then popular or newest. Without `productIds` it returns popular products, or the newest when there is not enough order history.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 4000,
+              "description": "Comma-separated product IDs, such as the cart's products. At most 20 are used."
+            },
+            "required": false,
+            "description": "Comma-separated product IDs, such as the cart's products. At most 20 are used.",
+            "name": "productIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12,
+              "default": 8,
+              "description": "Products to return"
+            },
+            "required": false,
+            "description": "Products to return",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recommended products and what kind of list it is",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "also_bought",
+                            "similar",
+                            "popular",
+                            "new_arrivals"
+                          ],
+                          "description": "What the list mostly is, for an honest title: `also_bought` only when at least half the products were bought together with the source products by two or more different buyers; `similar` for category, collection, attribute and price matches; `popular` and `new_arrivals` for lists without source products."
+                        },
+                        "products": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "price": {
+                                "type": "number"
+                              },
+                              "slug": {
+                                "type": "string"
+                              },
+                              "discountType": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "discountPercentage": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "discountAmount": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "discountedPrice": {
+                                "type": "number"
+                              },
+                              "hasVariants": {
+                                "type": "boolean"
+                              },
+                              "availableForSale": {
+                                "type": "boolean"
+                              },
+                              "priceVaries": {
+                                "type": "boolean"
+                              },
+                              "freeDelivery": {
+                                "type": "boolean"
+                              },
+                              "categoryId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageMediaId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "imageAlt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "secondaryImageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "price",
+                              "slug",
+                              "discountType",
+                              "discountPercentage",
+                              "discountAmount",
+                              "discountedPrice",
+                              "hasVariants",
+                              "availableForSale",
+                              "priceVaries",
+                              "freeDelivery",
+                              "categoryId",
+                              "imageUrl",
+                              "imageMediaId",
+                              "imageAlt",
+                              "secondaryImageUrl",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "products"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "execute",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/products/{slug}/sections/{section}": {
       "get": {
         "operationId": "storefront.products.get_section",
@@ -37655,6 +38060,10 @@
                                   "freeDelivery": {
                                     "type": "boolean"
                                   },
+                                  "categoryId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
                                   "imageUrl": {
                                     "type": "string",
                                     "nullable": true
@@ -37664,6 +38073,14 @@
                                     "nullable": true
                                   },
                                   "imageAlt": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "secondaryImageUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "createdAt": {
                                     "type": "string",
                                     "nullable": true
                                   }
@@ -37681,9 +38098,12 @@
                                   "availableForSale",
                                   "priceVaries",
                                   "freeDelivery",
+                                  "categoryId",
                                   "imageUrl",
                                   "imageMediaId",
-                                  "imageAlt"
+                                  "imageAlt",
+                                  "secondaryImageUrl",
+                                  "createdAt"
                                 ]
                               },
                               "maxItems": 10
@@ -38517,81 +38937,115 @@
                             ]
                           }
                         },
-                        "relatedProducts": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "string"
-                              },
-                              "name": {
-                                "type": "string"
-                              },
-                              "price": {
-                                "type": "number"
-                              },
-                              "slug": {
-                                "type": "string"
-                              },
-                              "discountType": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "discountPercentage": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "discountAmount": {
-                                "type": "number",
-                                "nullable": true
-                              },
-                              "discountedPrice": {
-                                "type": "number"
-                              },
-                              "hasVariants": {
-                                "type": "boolean"
-                              },
-                              "availableForSale": {
-                                "type": "boolean"
-                              },
-                              "priceVaries": {
-                                "type": "boolean"
-                              },
-                              "freeDelivery": {
-                                "type": "boolean"
-                              },
-                              "imageUrl": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "imageMediaId": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "imageAlt": {
-                                "type": "string",
-                                "nullable": true
-                              }
+                        "recommendations": {
+                          "type": "object",
+                          "properties": {
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "also_bought",
+                                "similar",
+                                "popular",
+                                "new_arrivals"
+                              ],
+                              "description": "What the list mostly is, for an honest title: `also_bought` only when at least half the products were bought together with the source products by two or more different buyers; `similar` for category, collection, attribute and price matches; `popular` and `new_arrivals` for lists without source products."
                             },
-                            "required": [
-                              "id",
-                              "name",
-                              "price",
-                              "slug",
-                              "discountType",
-                              "discountPercentage",
-                              "discountAmount",
-                              "discountedPrice",
-                              "hasVariants",
-                              "availableForSale",
-                              "priceVaries",
-                              "freeDelivery",
-                              "imageUrl",
-                              "imageMediaId",
-                              "imageAlt"
-                            ]
-                          }
+                            "products": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "price": {
+                                    "type": "number"
+                                  },
+                                  "slug": {
+                                    "type": "string"
+                                  },
+                                  "discountType": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "discountPercentage": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "discountAmount": {
+                                    "type": "number",
+                                    "nullable": true
+                                  },
+                                  "discountedPrice": {
+                                    "type": "number"
+                                  },
+                                  "hasVariants": {
+                                    "type": "boolean"
+                                  },
+                                  "availableForSale": {
+                                    "type": "boolean"
+                                  },
+                                  "priceVaries": {
+                                    "type": "boolean"
+                                  },
+                                  "freeDelivery": {
+                                    "type": "boolean"
+                                  },
+                                  "categoryId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "imageUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "imageMediaId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "imageAlt": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "secondaryImageUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "createdAt": {
+                                    "type": "string",
+                                    "nullable": true
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "price",
+                                  "slug",
+                                  "discountType",
+                                  "discountPercentage",
+                                  "discountAmount",
+                                  "discountedPrice",
+                                  "hasVariants",
+                                  "availableForSale",
+                                  "priceVaries",
+                                  "freeDelivery",
+                                  "categoryId",
+                                  "imageUrl",
+                                  "imageMediaId",
+                                  "imageAlt",
+                                  "secondaryImageUrl",
+                                  "createdAt"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "reason",
+                            "products"
+                          ]
                         }
                       },
                       "required": [
@@ -38599,7 +39053,7 @@
                         "category",
                         "media",
                         "variants",
-                        "relatedProducts"
+                        "recommendations"
                       ]
                     }
                   },
@@ -39881,6 +40335,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "secondaryImageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "category": {
                                 "type": "object",
                                 "nullable": true,
@@ -39927,6 +40385,7 @@
                               "imageUrl",
                               "imageMediaId",
                               "imageAlt",
+                              "secondaryImageUrl",
                               "category",
                               "createdAt",
                               "updatedAt"
@@ -40484,6 +40943,10 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "secondaryImageUrl": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "category": {
                                 "type": "object",
                                 "nullable": true,
@@ -40530,6 +40993,7 @@
                               "imageUrl",
                               "imageMediaId",
                               "imageAlt",
+                              "secondaryImageUrl",
                               "category",
                               "createdAt",
                               "updatedAt"
@@ -105216,6 +105680,152 @@
                                 "cards"
                               ],
                               "additionalProperties": false
+                            },
+                            "layout": {
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string",
+                                  "enum": [
+                                    "classic",
+                                    "centered",
+                                    "marketplace"
+                                  ]
+                                },
+                                "footer": {
+                                  "type": "string",
+                                  "enum": [
+                                    "columns",
+                                    "compact",
+                                    "contact"
+                                  ]
+                                },
+                                "productCard": {
+                                  "type": "object",
+                                  "properties": {
+                                    "imageRatio": {
+                                      "type": "string",
+                                      "enum": [
+                                        "square",
+                                        "portrait"
+                                      ]
+                                    },
+                                    "hoverImage": {
+                                      "type": "boolean"
+                                    },
+                                    "quickBuy": {
+                                      "type": "boolean"
+                                    },
+                                    "badge": {
+                                      "type": "string",
+                                      "enum": [
+                                        "image",
+                                        "price"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "imageRatio",
+                                    "hoverImage",
+                                    "quickBuy",
+                                    "badge"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "grid": {
+                                  "type": "object",
+                                  "properties": {
+                                    "desktop": {
+                                      "anyOf": [
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            2
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            3
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            4
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "mobile": {
+                                      "anyOf": [
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            1
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            2
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "desktop",
+                                    "mobile"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "productPage": {
+                                  "type": "object",
+                                  "properties": {
+                                    "gallery": {
+                                      "type": "string",
+                                      "enum": [
+                                        "beside",
+                                        "stacked"
+                                      ]
+                                    },
+                                    "thumbnails": {
+                                      "type": "string",
+                                      "enum": [
+                                        "beside",
+                                        "below"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "gallery",
+                                    "thumbnails"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "homepage": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "hero",
+                                      "collections",
+                                      "categories",
+                                      "delivery"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "header",
+                                "footer",
+                                "productCard",
+                                "grid",
+                                "productPage",
+                                "homepage"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -105224,7 +105834,8 @@
                             "cornerStyle",
                             "density",
                             "containerWidth",
-                            "components"
+                            "components",
+                            "layout"
                           ],
                           "additionalProperties": false
                         },
@@ -105624,6 +106235,152 @@
                           "cards"
                         ],
                         "additionalProperties": false
+                      },
+                      "layout": {
+                        "type": "object",
+                        "properties": {
+                          "header": {
+                            "type": "string",
+                            "enum": [
+                              "classic",
+                              "centered",
+                              "marketplace"
+                            ]
+                          },
+                          "footer": {
+                            "type": "string",
+                            "enum": [
+                              "columns",
+                              "compact",
+                              "contact"
+                            ]
+                          },
+                          "productCard": {
+                            "type": "object",
+                            "properties": {
+                              "imageRatio": {
+                                "type": "string",
+                                "enum": [
+                                  "square",
+                                  "portrait"
+                                ]
+                              },
+                              "hoverImage": {
+                                "type": "boolean"
+                              },
+                              "quickBuy": {
+                                "type": "boolean"
+                              },
+                              "badge": {
+                                "type": "string",
+                                "enum": [
+                                  "image",
+                                  "price"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "imageRatio",
+                              "hoverImage",
+                              "quickBuy",
+                              "badge"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "grid": {
+                            "type": "object",
+                            "properties": {
+                              "desktop": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      2
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      3
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      4
+                                    ]
+                                  }
+                                ]
+                              },
+                              "mobile": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      1
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      2
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "desktop",
+                              "mobile"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "productPage": {
+                            "type": "object",
+                            "properties": {
+                              "gallery": {
+                                "type": "string",
+                                "enum": [
+                                  "beside",
+                                  "stacked"
+                                ]
+                              },
+                              "thumbnails": {
+                                "type": "string",
+                                "enum": [
+                                  "beside",
+                                  "below"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "gallery",
+                              "thumbnails"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "homepage": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "hero",
+                                "collections",
+                                "categories",
+                                "delivery"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "header",
+                          "footer",
+                          "productCard",
+                          "grid",
+                          "productPage",
+                          "homepage"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -105632,7 +106389,8 @@
                       "cornerStyle",
                       "density",
                       "containerWidth",
-                      "components"
+                      "components",
+                      "layout"
                     ],
                     "additionalProperties": false
                   }
@@ -105763,6 +106521,152 @@
                                 "cards"
                               ],
                               "additionalProperties": false
+                            },
+                            "layout": {
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string",
+                                  "enum": [
+                                    "classic",
+                                    "centered",
+                                    "marketplace"
+                                  ]
+                                },
+                                "footer": {
+                                  "type": "string",
+                                  "enum": [
+                                    "columns",
+                                    "compact",
+                                    "contact"
+                                  ]
+                                },
+                                "productCard": {
+                                  "type": "object",
+                                  "properties": {
+                                    "imageRatio": {
+                                      "type": "string",
+                                      "enum": [
+                                        "square",
+                                        "portrait"
+                                      ]
+                                    },
+                                    "hoverImage": {
+                                      "type": "boolean"
+                                    },
+                                    "quickBuy": {
+                                      "type": "boolean"
+                                    },
+                                    "badge": {
+                                      "type": "string",
+                                      "enum": [
+                                        "image",
+                                        "price"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "imageRatio",
+                                    "hoverImage",
+                                    "quickBuy",
+                                    "badge"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "grid": {
+                                  "type": "object",
+                                  "properties": {
+                                    "desktop": {
+                                      "anyOf": [
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            2
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            3
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            4
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "mobile": {
+                                      "anyOf": [
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            1
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            2
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "desktop",
+                                    "mobile"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "productPage": {
+                                  "type": "object",
+                                  "properties": {
+                                    "gallery": {
+                                      "type": "string",
+                                      "enum": [
+                                        "beside",
+                                        "stacked"
+                                      ]
+                                    },
+                                    "thumbnails": {
+                                      "type": "string",
+                                      "enum": [
+                                        "beside",
+                                        "below"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "gallery",
+                                    "thumbnails"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "homepage": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "hero",
+                                      "collections",
+                                      "categories",
+                                      "delivery"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "header",
+                                "footer",
+                                "productCard",
+                                "grid",
+                                "productPage",
+                                "homepage"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -105771,7 +106675,8 @@
                             "cornerStyle",
                             "density",
                             "containerWidth",
-                            "components"
+                            "components",
+                            "layout"
                           ],
                           "additionalProperties": false
                         },
@@ -106185,6 +107090,152 @@
                                     "cards"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "layout": {
+                                  "type": "object",
+                                  "properties": {
+                                    "header": {
+                                      "type": "string",
+                                      "enum": [
+                                        "classic",
+                                        "centered",
+                                        "marketplace"
+                                      ]
+                                    },
+                                    "footer": {
+                                      "type": "string",
+                                      "enum": [
+                                        "columns",
+                                        "compact",
+                                        "contact"
+                                      ]
+                                    },
+                                    "productCard": {
+                                      "type": "object",
+                                      "properties": {
+                                        "imageRatio": {
+                                          "type": "string",
+                                          "enum": [
+                                            "square",
+                                            "portrait"
+                                          ]
+                                        },
+                                        "hoverImage": {
+                                          "type": "boolean"
+                                        },
+                                        "quickBuy": {
+                                          "type": "boolean"
+                                        },
+                                        "badge": {
+                                          "type": "string",
+                                          "enum": [
+                                            "image",
+                                            "price"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "imageRatio",
+                                        "hoverImage",
+                                        "quickBuy",
+                                        "badge"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "grid": {
+                                      "type": "object",
+                                      "properties": {
+                                        "desktop": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                3
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                4
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "mobile": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                1
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "desktop",
+                                        "mobile"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "productPage": {
+                                      "type": "object",
+                                      "properties": {
+                                        "gallery": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "stacked"
+                                          ]
+                                        },
+                                        "thumbnails": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "below"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "gallery",
+                                        "thumbnails"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "homepage": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "hero",
+                                          "collections",
+                                          "categories",
+                                          "delivery"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "header",
+                                    "footer",
+                                    "productCard",
+                                    "grid",
+                                    "productPage",
+                                    "homepage"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               },
                               "required": [
@@ -106193,7 +107244,8 @@
                                 "cornerStyle",
                                 "density",
                                 "containerWidth",
-                                "components"
+                                "components",
+                                "layout"
                               ],
                               "additionalProperties": false
                             },
@@ -106311,6 +107363,152 @@
                                     "cards"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "layout": {
+                                  "type": "object",
+                                  "properties": {
+                                    "header": {
+                                      "type": "string",
+                                      "enum": [
+                                        "classic",
+                                        "centered",
+                                        "marketplace"
+                                      ]
+                                    },
+                                    "footer": {
+                                      "type": "string",
+                                      "enum": [
+                                        "columns",
+                                        "compact",
+                                        "contact"
+                                      ]
+                                    },
+                                    "productCard": {
+                                      "type": "object",
+                                      "properties": {
+                                        "imageRatio": {
+                                          "type": "string",
+                                          "enum": [
+                                            "square",
+                                            "portrait"
+                                          ]
+                                        },
+                                        "hoverImage": {
+                                          "type": "boolean"
+                                        },
+                                        "quickBuy": {
+                                          "type": "boolean"
+                                        },
+                                        "badge": {
+                                          "type": "string",
+                                          "enum": [
+                                            "image",
+                                            "price"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "imageRatio",
+                                        "hoverImage",
+                                        "quickBuy",
+                                        "badge"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "grid": {
+                                      "type": "object",
+                                      "properties": {
+                                        "desktop": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                3
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                4
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "mobile": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                1
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "desktop",
+                                        "mobile"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "productPage": {
+                                      "type": "object",
+                                      "properties": {
+                                        "gallery": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "stacked"
+                                          ]
+                                        },
+                                        "thumbnails": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "below"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "gallery",
+                                        "thumbnails"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "homepage": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "hero",
+                                          "collections",
+                                          "categories",
+                                          "delivery"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "header",
+                                    "footer",
+                                    "productCard",
+                                    "grid",
+                                    "productPage",
+                                    "homepage"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               },
                               "required": [
@@ -106319,7 +107517,8 @@
                                 "cornerStyle",
                                 "density",
                                 "containerWidth",
-                                "components"
+                                "components",
+                                "layout"
                               ],
                               "additionalProperties": false
                             },
@@ -106728,6 +107927,152 @@
                           "cards"
                         ],
                         "additionalProperties": false
+                      },
+                      "layout": {
+                        "type": "object",
+                        "properties": {
+                          "header": {
+                            "type": "string",
+                            "enum": [
+                              "classic",
+                              "centered",
+                              "marketplace"
+                            ]
+                          },
+                          "footer": {
+                            "type": "string",
+                            "enum": [
+                              "columns",
+                              "compact",
+                              "contact"
+                            ]
+                          },
+                          "productCard": {
+                            "type": "object",
+                            "properties": {
+                              "imageRatio": {
+                                "type": "string",
+                                "enum": [
+                                  "square",
+                                  "portrait"
+                                ]
+                              },
+                              "hoverImage": {
+                                "type": "boolean"
+                              },
+                              "quickBuy": {
+                                "type": "boolean"
+                              },
+                              "badge": {
+                                "type": "string",
+                                "enum": [
+                                  "image",
+                                  "price"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "imageRatio",
+                              "hoverImage",
+                              "quickBuy",
+                              "badge"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "grid": {
+                            "type": "object",
+                            "properties": {
+                              "desktop": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      2
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      3
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      4
+                                    ]
+                                  }
+                                ]
+                              },
+                              "mobile": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      1
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      2
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "desktop",
+                              "mobile"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "productPage": {
+                            "type": "object",
+                            "properties": {
+                              "gallery": {
+                                "type": "string",
+                                "enum": [
+                                  "beside",
+                                  "stacked"
+                                ]
+                              },
+                              "thumbnails": {
+                                "type": "string",
+                                "enum": [
+                                  "beside",
+                                  "below"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "gallery",
+                              "thumbnails"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "homepage": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "hero",
+                                "collections",
+                                "categories",
+                                "delivery"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "header",
+                          "footer",
+                          "productCard",
+                          "grid",
+                          "productPage",
+                          "homepage"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -106736,7 +108081,8 @@
                       "cornerStyle",
                       "density",
                       "containerWidth",
-                      "components"
+                      "components",
+                      "layout"
                     ],
                     "additionalProperties": false
                   },
@@ -106877,6 +108223,152 @@
                                 "cards"
                               ],
                               "additionalProperties": false
+                            },
+                            "layout": {
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string",
+                                  "enum": [
+                                    "classic",
+                                    "centered",
+                                    "marketplace"
+                                  ]
+                                },
+                                "footer": {
+                                  "type": "string",
+                                  "enum": [
+                                    "columns",
+                                    "compact",
+                                    "contact"
+                                  ]
+                                },
+                                "productCard": {
+                                  "type": "object",
+                                  "properties": {
+                                    "imageRatio": {
+                                      "type": "string",
+                                      "enum": [
+                                        "square",
+                                        "portrait"
+                                      ]
+                                    },
+                                    "hoverImage": {
+                                      "type": "boolean"
+                                    },
+                                    "quickBuy": {
+                                      "type": "boolean"
+                                    },
+                                    "badge": {
+                                      "type": "string",
+                                      "enum": [
+                                        "image",
+                                        "price"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "imageRatio",
+                                    "hoverImage",
+                                    "quickBuy",
+                                    "badge"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "grid": {
+                                  "type": "object",
+                                  "properties": {
+                                    "desktop": {
+                                      "anyOf": [
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            2
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            3
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            4
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "mobile": {
+                                      "anyOf": [
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            1
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            2
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "desktop",
+                                    "mobile"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "productPage": {
+                                  "type": "object",
+                                  "properties": {
+                                    "gallery": {
+                                      "type": "string",
+                                      "enum": [
+                                        "beside",
+                                        "stacked"
+                                      ]
+                                    },
+                                    "thumbnails": {
+                                      "type": "string",
+                                      "enum": [
+                                        "beside",
+                                        "below"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "gallery",
+                                    "thumbnails"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "homepage": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "hero",
+                                      "collections",
+                                      "categories",
+                                      "delivery"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "header",
+                                "footer",
+                                "productCard",
+                                "grid",
+                                "productPage",
+                                "homepage"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -106885,7 +108377,8 @@
                             "cornerStyle",
                             "density",
                             "containerWidth",
-                            "components"
+                            "components",
+                            "layout"
                           ],
                           "additionalProperties": false
                         },
@@ -107288,6 +108781,152 @@
                           "cards"
                         ],
                         "additionalProperties": false
+                      },
+                      "layout": {
+                        "type": "object",
+                        "properties": {
+                          "header": {
+                            "type": "string",
+                            "enum": [
+                              "classic",
+                              "centered",
+                              "marketplace"
+                            ]
+                          },
+                          "footer": {
+                            "type": "string",
+                            "enum": [
+                              "columns",
+                              "compact",
+                              "contact"
+                            ]
+                          },
+                          "productCard": {
+                            "type": "object",
+                            "properties": {
+                              "imageRatio": {
+                                "type": "string",
+                                "enum": [
+                                  "square",
+                                  "portrait"
+                                ]
+                              },
+                              "hoverImage": {
+                                "type": "boolean"
+                              },
+                              "quickBuy": {
+                                "type": "boolean"
+                              },
+                              "badge": {
+                                "type": "string",
+                                "enum": [
+                                  "image",
+                                  "price"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "imageRatio",
+                              "hoverImage",
+                              "quickBuy",
+                              "badge"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "grid": {
+                            "type": "object",
+                            "properties": {
+                              "desktop": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      2
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      3
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      4
+                                    ]
+                                  }
+                                ]
+                              },
+                              "mobile": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      1
+                                    ]
+                                  },
+                                  {
+                                    "type": "number",
+                                    "enum": [
+                                      2
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "desktop",
+                              "mobile"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "productPage": {
+                            "type": "object",
+                            "properties": {
+                              "gallery": {
+                                "type": "string",
+                                "enum": [
+                                  "beside",
+                                  "stacked"
+                                ]
+                              },
+                              "thumbnails": {
+                                "type": "string",
+                                "enum": [
+                                  "beside",
+                                  "below"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "gallery",
+                              "thumbnails"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "homepage": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "hero",
+                                "collections",
+                                "categories",
+                                "delivery"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "header",
+                          "footer",
+                          "productCard",
+                          "grid",
+                          "productPage",
+                          "homepage"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -107296,7 +108935,8 @@
                       "cornerStyle",
                       "density",
                       "containerWidth",
-                      "components"
+                      "components",
+                      "layout"
                     ],
                     "additionalProperties": false
                   },
@@ -107437,6 +109077,152 @@
                                 "cards"
                               ],
                               "additionalProperties": false
+                            },
+                            "layout": {
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string",
+                                  "enum": [
+                                    "classic",
+                                    "centered",
+                                    "marketplace"
+                                  ]
+                                },
+                                "footer": {
+                                  "type": "string",
+                                  "enum": [
+                                    "columns",
+                                    "compact",
+                                    "contact"
+                                  ]
+                                },
+                                "productCard": {
+                                  "type": "object",
+                                  "properties": {
+                                    "imageRatio": {
+                                      "type": "string",
+                                      "enum": [
+                                        "square",
+                                        "portrait"
+                                      ]
+                                    },
+                                    "hoverImage": {
+                                      "type": "boolean"
+                                    },
+                                    "quickBuy": {
+                                      "type": "boolean"
+                                    },
+                                    "badge": {
+                                      "type": "string",
+                                      "enum": [
+                                        "image",
+                                        "price"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "imageRatio",
+                                    "hoverImage",
+                                    "quickBuy",
+                                    "badge"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "grid": {
+                                  "type": "object",
+                                  "properties": {
+                                    "desktop": {
+                                      "anyOf": [
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            2
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            3
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            4
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "mobile": {
+                                      "anyOf": [
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            1
+                                          ]
+                                        },
+                                        {
+                                          "type": "number",
+                                          "enum": [
+                                            2
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "desktop",
+                                    "mobile"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "productPage": {
+                                  "type": "object",
+                                  "properties": {
+                                    "gallery": {
+                                      "type": "string",
+                                      "enum": [
+                                        "beside",
+                                        "stacked"
+                                      ]
+                                    },
+                                    "thumbnails": {
+                                      "type": "string",
+                                      "enum": [
+                                        "beside",
+                                        "below"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "gallery",
+                                    "thumbnails"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                "homepage": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "hero",
+                                      "collections",
+                                      "categories",
+                                      "delivery"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "header",
+                                "footer",
+                                "productCard",
+                                "grid",
+                                "productPage",
+                                "homepage"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -107445,7 +109231,8 @@
                             "cornerStyle",
                             "density",
                             "containerWidth",
-                            "components"
+                            "components",
+                            "layout"
                           ],
                           "additionalProperties": false
                         },
@@ -107887,6 +109674,152 @@
                                     "cards"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "layout": {
+                                  "type": "object",
+                                  "properties": {
+                                    "header": {
+                                      "type": "string",
+                                      "enum": [
+                                        "classic",
+                                        "centered",
+                                        "marketplace"
+                                      ]
+                                    },
+                                    "footer": {
+                                      "type": "string",
+                                      "enum": [
+                                        "columns",
+                                        "compact",
+                                        "contact"
+                                      ]
+                                    },
+                                    "productCard": {
+                                      "type": "object",
+                                      "properties": {
+                                        "imageRatio": {
+                                          "type": "string",
+                                          "enum": [
+                                            "square",
+                                            "portrait"
+                                          ]
+                                        },
+                                        "hoverImage": {
+                                          "type": "boolean"
+                                        },
+                                        "quickBuy": {
+                                          "type": "boolean"
+                                        },
+                                        "badge": {
+                                          "type": "string",
+                                          "enum": [
+                                            "image",
+                                            "price"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "imageRatio",
+                                        "hoverImage",
+                                        "quickBuy",
+                                        "badge"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "grid": {
+                                      "type": "object",
+                                      "properties": {
+                                        "desktop": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                3
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                4
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "mobile": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                1
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "desktop",
+                                        "mobile"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "productPage": {
+                                      "type": "object",
+                                      "properties": {
+                                        "gallery": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "stacked"
+                                          ]
+                                        },
+                                        "thumbnails": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "below"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "gallery",
+                                        "thumbnails"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "homepage": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "hero",
+                                          "collections",
+                                          "categories",
+                                          "delivery"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "header",
+                                    "footer",
+                                    "productCard",
+                                    "grid",
+                                    "productPage",
+                                    "homepage"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               },
                               "required": [
@@ -107895,7 +109828,8 @@
                                 "cornerStyle",
                                 "density",
                                 "containerWidth",
-                                "components"
+                                "components",
+                                "layout"
                               ],
                               "additionalProperties": false
                             },
@@ -108013,6 +109947,152 @@
                                     "cards"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "layout": {
+                                  "type": "object",
+                                  "properties": {
+                                    "header": {
+                                      "type": "string",
+                                      "enum": [
+                                        "classic",
+                                        "centered",
+                                        "marketplace"
+                                      ]
+                                    },
+                                    "footer": {
+                                      "type": "string",
+                                      "enum": [
+                                        "columns",
+                                        "compact",
+                                        "contact"
+                                      ]
+                                    },
+                                    "productCard": {
+                                      "type": "object",
+                                      "properties": {
+                                        "imageRatio": {
+                                          "type": "string",
+                                          "enum": [
+                                            "square",
+                                            "portrait"
+                                          ]
+                                        },
+                                        "hoverImage": {
+                                          "type": "boolean"
+                                        },
+                                        "quickBuy": {
+                                          "type": "boolean"
+                                        },
+                                        "badge": {
+                                          "type": "string",
+                                          "enum": [
+                                            "image",
+                                            "price"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "imageRatio",
+                                        "hoverImage",
+                                        "quickBuy",
+                                        "badge"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "grid": {
+                                      "type": "object",
+                                      "properties": {
+                                        "desktop": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                3
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                4
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "mobile": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                1
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "desktop",
+                                        "mobile"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "productPage": {
+                                      "type": "object",
+                                      "properties": {
+                                        "gallery": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "stacked"
+                                          ]
+                                        },
+                                        "thumbnails": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "below"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "gallery",
+                                        "thumbnails"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "homepage": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "hero",
+                                          "collections",
+                                          "categories",
+                                          "delivery"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "header",
+                                    "footer",
+                                    "productCard",
+                                    "grid",
+                                    "productPage",
+                                    "homepage"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               },
                               "required": [
@@ -108021,7 +110101,8 @@
                                 "cornerStyle",
                                 "density",
                                 "containerWidth",
-                                "components"
+                                "components",
+                                "layout"
                               ],
                               "additionalProperties": false
                             },
@@ -108462,6 +110543,152 @@
                                       "cards"
                                     ],
                                     "additionalProperties": false
+                                  },
+                                  "layout": {
+                                    "type": "object",
+                                    "properties": {
+                                      "header": {
+                                        "type": "string",
+                                        "enum": [
+                                          "classic",
+                                          "centered",
+                                          "marketplace"
+                                        ]
+                                      },
+                                      "footer": {
+                                        "type": "string",
+                                        "enum": [
+                                          "columns",
+                                          "compact",
+                                          "contact"
+                                        ]
+                                      },
+                                      "productCard": {
+                                        "type": "object",
+                                        "properties": {
+                                          "imageRatio": {
+                                            "type": "string",
+                                            "enum": [
+                                              "square",
+                                              "portrait"
+                                            ]
+                                          },
+                                          "hoverImage": {
+                                            "type": "boolean"
+                                          },
+                                          "quickBuy": {
+                                            "type": "boolean"
+                                          },
+                                          "badge": {
+                                            "type": "string",
+                                            "enum": [
+                                              "image",
+                                              "price"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "imageRatio",
+                                          "hoverImage",
+                                          "quickBuy",
+                                          "badge"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "grid": {
+                                        "type": "object",
+                                        "properties": {
+                                          "desktop": {
+                                            "anyOf": [
+                                              {
+                                                "type": "number",
+                                                "enum": [
+                                                  2
+                                                ]
+                                              },
+                                              {
+                                                "type": "number",
+                                                "enum": [
+                                                  3
+                                                ]
+                                              },
+                                              {
+                                                "type": "number",
+                                                "enum": [
+                                                  4
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "mobile": {
+                                            "anyOf": [
+                                              {
+                                                "type": "number",
+                                                "enum": [
+                                                  1
+                                                ]
+                                              },
+                                              {
+                                                "type": "number",
+                                                "enum": [
+                                                  2
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "desktop",
+                                          "mobile"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "productPage": {
+                                        "type": "object",
+                                        "properties": {
+                                          "gallery": {
+                                            "type": "string",
+                                            "enum": [
+                                              "beside",
+                                              "stacked"
+                                            ]
+                                          },
+                                          "thumbnails": {
+                                            "type": "string",
+                                            "enum": [
+                                              "beside",
+                                              "below"
+                                            ]
+                                          }
+                                        },
+                                        "required": [
+                                          "gallery",
+                                          "thumbnails"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      "homepage": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "enum": [
+                                            "hero",
+                                            "collections",
+                                            "categories",
+                                            "delivery"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "header",
+                                      "footer",
+                                      "productCard",
+                                      "grid",
+                                      "productPage",
+                                      "homepage"
+                                    ],
+                                    "additionalProperties": false
                                   }
                                 },
                                 "required": [
@@ -108470,7 +110697,8 @@
                                   "cornerStyle",
                                   "density",
                                   "containerWidth",
-                                  "components"
+                                  "components",
+                                  "layout"
                                 ],
                                 "additionalProperties": false
                               },
@@ -108942,6 +111170,152 @@
                                     "cards"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "layout": {
+                                  "type": "object",
+                                  "properties": {
+                                    "header": {
+                                      "type": "string",
+                                      "enum": [
+                                        "classic",
+                                        "centered",
+                                        "marketplace"
+                                      ]
+                                    },
+                                    "footer": {
+                                      "type": "string",
+                                      "enum": [
+                                        "columns",
+                                        "compact",
+                                        "contact"
+                                      ]
+                                    },
+                                    "productCard": {
+                                      "type": "object",
+                                      "properties": {
+                                        "imageRatio": {
+                                          "type": "string",
+                                          "enum": [
+                                            "square",
+                                            "portrait"
+                                          ]
+                                        },
+                                        "hoverImage": {
+                                          "type": "boolean"
+                                        },
+                                        "quickBuy": {
+                                          "type": "boolean"
+                                        },
+                                        "badge": {
+                                          "type": "string",
+                                          "enum": [
+                                            "image",
+                                            "price"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "imageRatio",
+                                        "hoverImage",
+                                        "quickBuy",
+                                        "badge"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "grid": {
+                                      "type": "object",
+                                      "properties": {
+                                        "desktop": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                3
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                4
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "mobile": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                1
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "desktop",
+                                        "mobile"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "productPage": {
+                                      "type": "object",
+                                      "properties": {
+                                        "gallery": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "stacked"
+                                          ]
+                                        },
+                                        "thumbnails": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "below"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "gallery",
+                                        "thumbnails"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "homepage": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "hero",
+                                          "collections",
+                                          "categories",
+                                          "delivery"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "header",
+                                    "footer",
+                                    "productCard",
+                                    "grid",
+                                    "productPage",
+                                    "homepage"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               },
                               "required": [
@@ -108950,7 +111324,8 @@
                                 "cornerStyle",
                                 "density",
                                 "containerWidth",
-                                "components"
+                                "components",
+                                "layout"
                               ],
                               "additionalProperties": false
                             },
@@ -109068,6 +111443,152 @@
                                     "cards"
                                   ],
                                   "additionalProperties": false
+                                },
+                                "layout": {
+                                  "type": "object",
+                                  "properties": {
+                                    "header": {
+                                      "type": "string",
+                                      "enum": [
+                                        "classic",
+                                        "centered",
+                                        "marketplace"
+                                      ]
+                                    },
+                                    "footer": {
+                                      "type": "string",
+                                      "enum": [
+                                        "columns",
+                                        "compact",
+                                        "contact"
+                                      ]
+                                    },
+                                    "productCard": {
+                                      "type": "object",
+                                      "properties": {
+                                        "imageRatio": {
+                                          "type": "string",
+                                          "enum": [
+                                            "square",
+                                            "portrait"
+                                          ]
+                                        },
+                                        "hoverImage": {
+                                          "type": "boolean"
+                                        },
+                                        "quickBuy": {
+                                          "type": "boolean"
+                                        },
+                                        "badge": {
+                                          "type": "string",
+                                          "enum": [
+                                            "image",
+                                            "price"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "imageRatio",
+                                        "hoverImage",
+                                        "quickBuy",
+                                        "badge"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "grid": {
+                                      "type": "object",
+                                      "properties": {
+                                        "desktop": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                3
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                4
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        "mobile": {
+                                          "anyOf": [
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                1
+                                              ]
+                                            },
+                                            {
+                                              "type": "number",
+                                              "enum": [
+                                                2
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "desktop",
+                                        "mobile"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "productPage": {
+                                      "type": "object",
+                                      "properties": {
+                                        "gallery": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "stacked"
+                                          ]
+                                        },
+                                        "thumbnails": {
+                                          "type": "string",
+                                          "enum": [
+                                            "beside",
+                                            "below"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "gallery",
+                                        "thumbnails"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "homepage": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string",
+                                        "enum": [
+                                          "hero",
+                                          "collections",
+                                          "categories",
+                                          "delivery"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "header",
+                                    "footer",
+                                    "productCard",
+                                    "grid",
+                                    "productPage",
+                                    "homepage"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               },
                               "required": [
@@ -109076,7 +111597,8 @@
                                 "cornerStyle",
                                 "density",
                                 "containerWidth",
-                                "components"
+                                "components",
+                                "layout"
                               ],
                               "additionalProperties": false
                             },
@@ -217382,6 +219904,14 @@
           "mode": "curated",
           "workflowIds": [
             "storefront.product-research"
+          ]
+        },
+        {
+          "operationId": "storefront.products.list_recommendations",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.products.list_recommendations"
           ]
         },
         {

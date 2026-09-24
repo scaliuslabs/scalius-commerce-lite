@@ -39,6 +39,27 @@ describe("storefront product reads", () => {
         expect(result.products[0]).not.toHaveProperty("attributes");
     });
 
+    it("gives listing cards the next gallery photo for hover, never a video", async () => {
+        const { db, sqlite } = setup();
+        sqlite.exec(`
+            INSERT INTO media (id, filename, kind, object_key, size, mime_type, alt_text, status) VALUES
+                ('media_z_video', 'z.mp4', 'video', 'media/z.mp4', 1, 'video/mp4', 'Clip', 'ready'),
+                ('media_z_back', 'z-back.webp', 'image', 'media/z-back.webp', 1, 'image/webp', 'Back', 'ready');
+            INSERT INTO product_media (id, product_id, media_id, is_primary, sort_order) VALUES
+                ('pmed_z_video', 'p_z', 'media_z_video', 0, 1),
+                ('pmed_z_back', 'p_z', 'media_z_back', 0, 2);
+        `);
+
+        const result = await getStorefrontProducts(db, { sort: "price-asc", limit: 10 });
+
+        expect(result.products[0]).toMatchObject({
+            id: "p_z",
+            imageUrl: expect.stringContaining("media/z.webp"),
+            secondaryImageUrl: expect.stringContaining("media/z-back.webp"),
+        });
+        expect(result.products[1]).toMatchObject({ id: "p_a", imageUrl: null, secondaryImageUrl: null });
+    });
+
     it("keeps exact inventory, admin alt overrides, and unpublished categories out of product detail", async () => {
         const { db } = setup();
 
