@@ -548,6 +548,8 @@ export interface ShippingMethod {
   description: string | null;
   /** Pickup rates name the place the buyer collects from. */
   kind?: "delivery" | "pickup";
+  /** True for a default rate that applies outside every delivery zone. */
+  everywhereElse?: boolean;
   pickupAddress?: string | null;
   pickupHours?: string | null;
   isActive: boolean;

@@ -36,6 +36,9 @@ const listShippingMethodsRoute = createRoute({
           fee: z.number().min(0),
           freeOver: z.number().min(0).nullable(),
           kind: z.enum(["delivery", "pickup"]),
+          everywhereElse: z.boolean().openapi({
+            description: "True for a rate that applies outside every delivery zone (the store's default rates); false for a rate of one delivery zone.",
+          }),
           pickupAddress: z.string().max(500).nullable(),
           pickupHours: z.string().max(120).nullable(),
           description: z.string().max(255).nullable(),
@@ -60,8 +63,9 @@ app.openapi(listShippingMethodsRoute, async (c) => {
   ]);
 
   return ok(c, {
-    shippingMethods: rates.map(({ feeMinor, freeOverMinor, createdAt, updatedAt, ...rate }) => ({
+    shippingMethods: rates.map(({ zoneId, feeMinor, freeOverMinor, createdAt, updatedAt, ...rate }) => ({
       ...rate,
+      everywhereElse: zoneId === null,
       fee: fromMinor(feeMinor, decimalPlaces),
       freeOver: freeOverMinor === null ? null : fromMinor(freeOverMinor, decimalPlaces),
       createdAt: createdAt instanceof Date ? createdAt.toISOString() : null,
