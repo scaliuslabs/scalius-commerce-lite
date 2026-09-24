@@ -47,7 +47,7 @@ export const INVENTORY_SEARCH_DEFAULTS = {
   to: "",
 } as const satisfies Omit<InventorySearch, "q">;
 
-/** What a tab filters by: the URL state plus the search term, which lives in the session (`useListSearch("inventory")`). */
+/** What a tab filters by: the URL state plus the search term, which lives in the session, one per tab (`inventory.<section>`). */
 export type InventoryFilters = Omit<InventorySearch, "q"> & { q: string };
 
 export type InventoryFiltersChange = (patch: Partial<Omit<InventoryFilters, "section">>) => void;

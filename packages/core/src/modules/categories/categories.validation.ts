@@ -58,10 +58,10 @@ const categorySchema = z.object({
 });
 
 function requireCanonicalCategoryHandle(
-    value: { slug: string; canonicalPath?: string | null },
+    value: { slug?: string; canonicalPath?: string | null },
     context: z.RefinementCtx,
 ): void {
-    if (value.canonicalPath !== null && value.canonicalPath !== `/categories/${value.slug}`) {
+    if (value.canonicalPath !== null && (value.slug === undefined || value.canonicalPath !== `/categories/${value.slug}`)) {
         context.addIssue({
             code: "custom",
             path: ["canonicalPath"],
@@ -78,6 +78,8 @@ export const categoryRevisionClaimSchema = z.object({
 });
 
 export const createCategorySchema = categorySchema.extend({
+    slug: categorySchema.shape.slug.optional()
+        .describe("Omit to derive the web address from the name; a taken one gets a -2, -3… suffix."),
     status: categoryStatusSchema.optional().default("draft"),
 }).superRefine(requireCanonicalCategoryHandle);
 export const updateCategorySchema = categorySchema.extend({

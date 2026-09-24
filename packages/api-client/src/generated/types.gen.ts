@@ -13313,7 +13313,10 @@ export type PostApiV1AdminCategoriesData = {
         name: string;
         description: string | null;
         content?: string | null;
-        slug: string;
+        /**
+         * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
+         */
+        slug?: string;
         metaTitle: string | null;
         metaDescription: string | null;
         canonicalPath?: string | null;
@@ -14941,6 +14944,23 @@ export type GetApiV1AdminCollectionsProductOptionsResponses = {
                 id: string;
                 name: string;
                 price: number;
+                /**
+                 * Null when the product has no live SKU. Products with options sell at their variant prices, not the product price.
+                 */
+                priceRange: {
+                    /**
+                     * The storefront's "From" price: the lowest price buyers can pay now.
+                     */
+                    from: number;
+                    /**
+                     * The highest price in the same buyer pool; equal to from for one price.
+                     */
+                    to: number;
+                    /**
+                     * The undiscounted price of the "From" SKU when it is on sale.
+                     */
+                    compareAt: number | null;
+                } | null;
                 categoryId: string | null;
                 categoryName: string | null;
                 isActive: boolean;
@@ -17341,7 +17361,10 @@ export type GetApiV1AdminPagesResponse = GetApiV1AdminPagesResponses[keyof GetAp
 export type PostApiV1AdminPagesData = {
     body: {
         title: string;
-        slug: string;
+        /**
+         * Omit to derive the web address from the title; a taken or reserved one gets a -2, -3… suffix.
+         */
+        slug?: string;
         content: string;
         excerpt?: string | null;
         author?: string | null;
@@ -22115,6 +22138,10 @@ export type GetApiV1AdminInventoryResponses = {
                 id: string;
                 variantId: string;
                 orderId: string | null;
+                /**
+                 * The order's short number (#1073); null for movements without an order.
+                 */
+                orderNumber: number | null;
                 type: string;
                 quantity: number;
                 previousStock: number;
@@ -43088,6 +43115,23 @@ export type GetApiV1AdminOrdersCatalogProductsResponses = {
                 name: string;
                 slug: string;
                 price: number;
+                /**
+                 * Null when the product has no live SKU. Products with options sell at their variant prices, not the product price.
+                 */
+                priceRange: {
+                    /**
+                     * The storefront's "From" price: the lowest price buyers can pay now.
+                     */
+                    from: number;
+                    /**
+                     * The highest price in the same buyer pool; equal to from for one price.
+                     */
+                    to: number;
+                    /**
+                     * The undiscounted price of the "From" SKU when it is on sale.
+                     */
+                    compareAt: number | null;
+                } | null;
                 description: string | null;
                 isActive: boolean;
                 discountPercentage: number;
@@ -46112,6 +46156,23 @@ export type GetApiV1AdminProductsResponses = {
                 name: string;
                 slug: string;
                 price: number;
+                /**
+                 * Null when the product has no live SKU. Products with options sell at their variant prices, not the product price.
+                 */
+                priceRange: {
+                    /**
+                     * The storefront's "From" price: the lowest price buyers can pay now.
+                     */
+                    from: number;
+                    /**
+                     * The highest price in the same buyer pool; equal to from for one price.
+                     */
+                    to: number;
+                    /**
+                     * The undiscounted price of the "From" SKU when it is on sale.
+                     */
+                    compareAt: number | null;
+                } | null;
                 description: string | null;
                 isActive: boolean;
                 discountPercentage: number;
@@ -46158,7 +46219,7 @@ export type PostApiV1AdminProductsData = {
         name: string;
         description: string | null;
         price: number;
-        categoryId: string;
+        categoryId: string | null;
         isActive: boolean;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
@@ -46171,7 +46232,10 @@ export type PostApiV1AdminProductsData = {
         excludeFromSitemap?: boolean;
         excludeFromProductFeed?: boolean;
         productCondition: 'new' | 'refurbished' | 'used';
-        slug: string;
+        /**
+         * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
+         */
+        slug?: string;
         media: Array<{
             id: string;
             mediaId: string;
@@ -46551,6 +46615,23 @@ export type GetApiV1AdminProductsByIdsResponses = {
                 id: string;
                 name: string;
                 price: number;
+                /**
+                 * Null when the product has no live SKU. Products with options sell at their variant prices, not the product price.
+                 */
+                priceRange: {
+                    /**
+                     * The storefront's "From" price: the lowest price buyers can pay now.
+                     */
+                    from: number;
+                    /**
+                     * The highest price in the same buyer pool; equal to from for one price.
+                     */
+                    to: number;
+                    /**
+                     * The undiscounted price of the "From" SKU when it is on sale.
+                     */
+                    compareAt: number | null;
+                } | null;
                 categoryId: string | null;
                 primaryImage: string | null;
                 discountPercentage: number | null;
@@ -50861,7 +50942,10 @@ export type GetApiV1AdminAttributesResponse = GetApiV1AdminAttributesResponses[k
 export type PostApiV1AdminAttributesData = {
     body: {
         name: string;
-        slug: string;
+        /**
+         * Omit to derive the handle from the name; a taken one gets a -2, -3… suffix.
+         */
+        slug?: string;
         filterable?: boolean;
         options?: Array<string>;
     };

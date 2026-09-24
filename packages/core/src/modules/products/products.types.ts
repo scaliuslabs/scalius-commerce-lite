@@ -1,6 +1,7 @@
 // src/modules/products/products.types.ts
 // Zod schemas and TypeScript interfaces shared across product modules.
 import { z } from "zod";
+import type { BuyerPriceRange } from "./products.buyer-projection";
 import type { Product, ProductVariant } from "@scalius/database/schema";
 import type {
     ProductOptionDefinitionRecord,
@@ -114,6 +115,8 @@ export interface ProductListItem {
     name: string;
     slug: string;
     price: number;
+    /** What buyers pay (the storefront's range); null when the product has no live SKU. */
+    priceRange: BuyerPriceRange | null;
     description: string | null;
     isActive: boolean;
     discountPercentage: number;

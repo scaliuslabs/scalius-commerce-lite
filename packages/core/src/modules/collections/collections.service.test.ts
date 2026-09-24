@@ -198,6 +198,9 @@ describe("listCollectionProductOptions", () => {
                 id: "prod_a",
                 name: "Alpha",
                 priceMinor: 10_000,
+                buyerFromMinor: 9_000,
+                buyerToMinor: 12_000,
+                buyerBaseMinor: 10_000,
                 categoryId: "cat_a",
                 categoryName: "Category A",
                 isActive: true,
@@ -217,7 +220,11 @@ describe("listCollectionProductOptions", () => {
         });
 
         expect(result).toEqual({
-            products: rows.map(({ priceMinor, ...row }) => ({ ...row, variantCount: 0, available: null, price: priceMinor / 100, primaryImage: null })),
+            products: rows.map(({ priceMinor, buyerFromMinor: _from, buyerToMinor: _to, buyerBaseMinor: _base, ...row }) => ({
+                ...row, variantCount: 0, available: null, price: priceMinor / 100, primaryImage: null,
+                // What buyers pay, as the storefront shows it: the "From" SKU is on sale.
+                priceRange: { from: 90, to: 120, compareAt: 100 },
+            })),
             pagination: { page: 2, limit: 10, total: 21, totalPages: 3 },
         });
         expect(db.batch).toHaveBeenCalledTimes(1);

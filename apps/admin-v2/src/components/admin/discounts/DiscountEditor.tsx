@@ -216,7 +216,8 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   const { data: allDiscounts = [] } = useQuery(discountsQueryOptions());
   const preview = combinationPreview(draft, allDiscounts, discount?.id);
   const summary = summarizeDraft(draft, currencyCode, format, preview.filter((item) => item.stacks).length);
-  const prices = draft.appliesTo.ids.map((id) => appliesItems.get(id)?.price);
+  // Each product's highest price buyers pay: an amount above all of them makes every item free.
+  const prices = draft.appliesTo.ids.map((id) => appliesItems.get(id)?.priceRange?.to);
   const aboveEveryPrice = exceedsEveryPrice(
     draft,
     prices.every((price) => price !== undefined) ? (prices as number[]) : null,

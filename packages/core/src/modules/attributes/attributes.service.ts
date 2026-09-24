@@ -13,6 +13,7 @@ import {
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import type { BatchItem } from "drizzle-orm/batch";
 
+import { insertWithDerivedHandle } from "../../utils/derived-handle";
 import type { CreateAttributeInput, UpdateAttributeInput } from "./attributes.validation";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -287,12 +288,12 @@ export async function createAttribute(
     }
 
     const newAttributeId = "attr_" + nanoid();
-    const [insertedAttribute] = await db
+    const insertWithSlug = async (handle: string) => db
         .insert(productAttributes)
         .values({
             id: newAttributeId,
             name,
-            slug,
+            slug: handle,
             filterable,
             options: options || null,
             createdAt: sql`(cast(strftime('%s','now') as int))`,
@@ -304,6 +305,21 @@ export async function createAttribute(
             slug: productAttributes.slug,
             filterable: productAttributes.filterable,
         });
+    const [insertedAttribute] = slug
+        ? await insertWithSlug(slug)
+        : await insertWithDerivedHandle(
+            {
+                db,
+                table: productAttributes,
+                column: productAttributes.slug,
+                isHandleConflict: (error) => /product_attributes(?:_slug_unique|\.slug)/i.test(
+                    error instanceof Error ? error.message : String(error),
+                ),
+            },
+            name,
+            "attribute",
+            insertWithSlug,
+        );
     if (!insertedAttribute) throw new Error("Attribute insert did not return a row");
 
     return { attribute: insertedAttribute };

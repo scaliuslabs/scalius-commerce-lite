@@ -154,19 +154,16 @@ export function AttributeManager({
   const handleCreateAttribute = async (rawName: string): Promise<boolean> => {
     const name = rawName.trim();
     if (!name) return false;
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-    if (slug.length < 2) {
+    if (name.length < 2) {
       toast.error(t("attributeNameShort"));
       return false;
     }
 
     setIsCreating(true);
     try {
+      // The server makes the handle from the name (Bangla included) and numbers a taken one.
       const data = await apiData(postApiV1AdminAttributes({
-        body: { name, slug, filterable: true, options: [] },
+        body: { name, filterable: true, options: [] },
       }));
       const created = data.attribute;
       rememberDefinitions([{

@@ -26,7 +26,7 @@ function product(id: number) {
   return {
     id: `prod_${id}`,
     name: `Product ${id}`,
-    price: 100 + id,
+    priceRange: { from: 100 + id, to: 100 + id, compareAt: null },
     categoryId: "cat_test",
     categoryName: "Test category",
     isActive: id % 2 === 1,
