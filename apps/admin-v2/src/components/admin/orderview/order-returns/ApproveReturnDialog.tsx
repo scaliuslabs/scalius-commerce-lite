@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
@@ -18,7 +18,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useApproveOrderReturn } from "~/lib/api-mutations/orders";
 import { StableReturnCommandKey, type OrderReturnDto } from "~/lib/order-return-workflow";
 import type { OrderItem } from "../types";
-import { createReturnCommandKey, getOrderItemName, parseReturnQuantity } from "./shared";
+import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
 
 /** Approve or reject each requested unit. The decision never changes stock. */
 export function ApproveReturnDialog({
@@ -83,17 +83,14 @@ export function ApproveReturnDialog({
                       {t("returns.qtyRequested", { count: line.requestedQuantity })} · {t("returns.qtyRejected", { count: line.requestedQuantity - value })}
                     </p>
                   </div>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={line.requestedQuantity}
+                  <NumberInput
+                    integer
                     className="w-20 shrink-0"
                     aria-label={t("returns.approveQty", { name })}
                     value={value}
-                    onChange={(e) => setApproved((current) => ({
+                    onValueChange={(value) => setApproved((current) => ({
                       ...current,
-                      [line.id]: parseReturnQuantity(e.target.value, line.requestedQuantity),
+                      [line.id]: clampQuantity(value, line.requestedQuantity),
                     }))}
                   />
                 </li>

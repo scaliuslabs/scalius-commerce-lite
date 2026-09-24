@@ -128,6 +128,7 @@ export const orderFormMessages = defineMessages({
     quantityMax: "Quantity can't be more than 99",
     discountNegative: "Discount can't be negative",
     deliveryChargeNegative: "Delivery charge can't be negative",
+    amountNotNumber: "Enter an amount in numbers, like 60",
     itemsRequired: "Add at least one product",
   },
   bn: {
@@ -256,6 +257,7 @@ export const orderFormMessages = defineMessages({
     quantityMax: "পরিমাণ ৯৯-এর বেশি হতে পারবে না",
     discountNegative: "ডিসকাউন্ট শূন্যের কম হতে পারবে না",
     deliveryChargeNegative: "ডেলিভারি চার্জ শূন্যের কম হতে পারবে না",
+    amountNotNumber: "সংখ্যায় পরিমাণ লিখুন, যেমন ৬০",
     itemsRequired: "অন্তত একটি প্রোডাক্ট যোগ করুন",
   },
 });

@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
@@ -22,7 +23,7 @@ import {
   type OrderReturnDto,
 } from "~/lib/order-return-workflow";
 import type { Order } from "../types";
-import { createReturnCommandKey, getOrderItemName, parseReturnQuantity } from "./shared";
+import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./shared";
 
 /** Request a return. This never refunds money or changes stock. */
 export function CreateReturnDialog({
@@ -110,19 +111,16 @@ export function CreateReturnDialog({
                       <p className="font-medium">{name}</p>
                       <p className="text-muted-foreground">{t("returns.available", { count: max })}</p>
                     </div>
-                    <Input
+                    <NumberInput
                       id={`return-qty-${item.id}`}
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={max}
+                      integer
                       className="w-20 shrink-0"
                       aria-label={t("returns.returnQty", { name })}
                       aria-invalid={Boolean(errors.quantity) || undefined}
                       aria-describedby={errors.quantity ? "return-qty-error" : undefined}
                       value={quantities[item.id] ?? 0}
-                      onChange={(e) => {
-                        setQuantities((current) => ({ ...current, [item.id]: parseReturnQuantity(e.target.value, max) }));
+                      onValueChange={(value) => {
+                        setQuantities((current) => ({ ...current, [item.id]: clampQuantity(value, max) }));
                         setErrors((current) => ({ ...current, quantity: undefined }));
                       }}
                     />
