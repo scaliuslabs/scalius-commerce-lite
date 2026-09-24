@@ -27,6 +27,7 @@ import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 import { VariantName } from "./VariantsTab";
+import { IdText } from "~/components/admin/data-table/cells";
 import {
   ALERT_FILTERS,
   alertsQuery,
@@ -185,35 +186,38 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
   const columns: ColumnDef<InventoryAlert, unknown>[] = [
     {
       id: "product",
-      header: () => t("product"),
-      cell: ({ row }) => (
-        <div className="min-w-0">
-          {name(row.original)}
-          <span className="block break-all font-mono text-body text-muted-foreground">{row.original.variantSku}</span>
-        </div>
-      ),
+      header: t("product"),
+      meta: { primary: true, minWidth: 220 },
+      cell: ({ row }) => name(row.original),
+    },
+    {
+      id: "sku",
+      header: t("sku"),
+      meta: { priority: 70, minWidth: 150 },
+      cell: ({ row }) => <IdText value={row.original.variantSku} copy className="text-muted-foreground" />,
     },
     {
       id: "available",
-      header: () => <div className="text-right">{t("available")}</div>,
-      cell: ({ row }) => <div className="text-right tabular-nums">{formatNumber(row.original.currentQty)}</div>,
+      header: t("available"),
+      meta: { numeric: true, priority: 95, minWidth: 90 },
+      cell: ({ row }) => formatNumber(row.original.currentQty),
     },
     {
       id: "threshold",
-      header: () => <div className="text-right">{t("alertAt")}</div>,
+      header: t("alertAt"),
+      meta: { numeric: true, priority: 60, minWidth: 90 },
       // The level that applies (the variant's own, else the store level); sold-out variants without one show 0.
       cell: ({ row }) => (
-        <div className="text-right tabular-nums text-muted-foreground">
-          {row.original.threshold > 0 ? formatNumber(row.original.threshold) : "—"}
-        </div>
+        <span className="text-muted-foreground">{row.original.threshold > 0 ? formatNumber(row.original.threshold) : "—"}</span>
       ),
     },
-    { id: "status", header: () => r("status"), cell: ({ row }) => statusBadge(row.original) },
+    { id: "status", header: r("status"), meta: { priority: 90, minWidth: 110 }, cell: ({ row }) => statusBadge(row.original) },
     {
       id: "updated",
-      header: () => r("updated"),
+      header: r("updated"),
+      meta: { priority: 30, minWidth: 120 },
       cell: ({ row }) => (
-        <span className="text-body text-muted-foreground">
+        <span className="whitespace-nowrap text-body text-muted-foreground">
           {formatDateTime(toDate(row.original.updatedAt), { dateStyle: "medium" })}
         </span>
       ),
@@ -246,7 +250,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
             {name(alert)}
-            <p className="break-all font-mono text-body text-muted-foreground">{alert.variantSku}</p>
+            <IdText value={alert.variantSku} copy className="text-muted-foreground" />
             <p className="text-body text-muted-foreground">{t("availableCount", { count: alert.currentQty })}</p>
           </div>
           {statusBadge(alert)}
@@ -268,6 +272,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
       itemLabel={t("alertsItem")}
       pageSizeOptions={[20, 50, 100]}
       mobileCardRenderer={mobileCard}
+      layoutKey="inventory-alerts"
       toolbar={<div className="px-2 pt-2"><DataTableToolbar
           searchValue={search}
           onSearchChange={(value) => onFiltersChange({ q: value })}

@@ -1,7 +1,9 @@
 import {
   lazy,
   Suspense,
+  useLayoutEffect,
   useRef,
+  useState,
   type MouseEvent,
   type ComponentType,
   type ReactNode,
@@ -120,7 +122,18 @@ export function DataTable<TData extends TableRowData>({
   // Columns in the merchant's order, minus those hidden by choice or to fit this width.
   const resultsRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(resultsRef);
-  const layout = useColumnLayout(table, layoutKey ?? null, width - (sortable ? 40 : 0));
+  // When the rendered cells still overflow the minimums' estimate, step aside
+  // one more column at a time; sideways scrolling is the last resort.
+  const [extraHidden, setExtraHidden] = useState({ width, count: 0 });
+  const extra = extraHidden.width === width ? extraHidden.count : 0;
+  const layout = useColumnLayout(table, layoutKey ?? null, width - (sortable ? 40 : 0), extra);
+  useLayoutEffect(() => {
+    const rendered = resultsRef.current?.querySelector("table");
+    const frame = rendered?.parentElement;
+    if (!rendered || !frame || !layout.canHideMore || width === 0) return;
+    if (rendered.scrollWidth > frame.clientWidth + 1) setExtraHidden({ width, count: extra + 1 });
+    // Re-measure when the width, the columns shown or the rows change.
+  }, [layout.canHideMore, layout.visible.length, width, extra, rows]);
   const columns = layout.visible;
   const visibleColumnCount = columns.length;
   const hasSelect = columns.some((column) => column.id === SELECT_COLUMN);

@@ -26,7 +26,7 @@ export function IdText({
   if (!value) return <span className="text-muted-foreground">—</span>;
   return (
     <span className={cn("group/id inline-flex max-w-full min-w-0 items-center gap-1 align-middle", className)}>
-      <span title={value} className="min-w-0 max-w-60 truncate whitespace-nowrap font-mono">
+      <span title={value} className="min-w-0 max-w-48 truncate whitespace-nowrap font-mono">
         {value}
       </span>
       {copy ? (
