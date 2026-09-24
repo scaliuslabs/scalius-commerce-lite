@@ -264,6 +264,13 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
     color: var(--foreground);
   }
 
+  /* Panels drop below freely but never widen the page (no JavaScript
+     needed; nav-menus.ts also flips them at the viewport's end). */
+  .hdr-main,
+  .hdr-menu-row {
+    overflow-x: clip;
+  }
+
   .hdr-main {
     position: relative;
     z-index: 20;
