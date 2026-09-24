@@ -1,21 +1,25 @@
 ---
 // src/components/cards/ProductCard.astro
-import type { Product } from "@/lib/api";
-import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
-import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
-import { formatMoney } from "@/lib/currency";
+// One card per store (mix rule 2): listings, rails, related products and
+// search render the theme's card variant. `standard` is today's classic card;
+// every other variant renders its registry anatomy (variants/anatomy.astro).
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { buildStorefrontThemeTokens, type StorefrontCardRenderer } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import {
   productCardImageLoading,
   productCardImageSizes,
   productGridFirstRow,
+  productGridSpec,
   type ProductGridContext,
+  type ProductGridPhoneLayout,
 } from "@/lib/product-card-layout";
-import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { buildStorefrontThemeTokens } from "@scalius/shared/storefront-theme";
+import { productCardModel, type ProductCardProduct } from "./card-model";
+import StandardCard from "./variants/standard.astro";
+import AnatomyCard from "./variants/anatomy.astro";
 
 interface Props {
-  product: Product & { secondaryImageUrl?: string | null };
+  product: ProductCardProduct;
   currencySymbol?: string;
   currencyCode?: string;
   /** Position in its list; with `aboveFold`, the first row loads eagerly. */
@@ -27,6 +31,8 @@ interface Props {
    * grid beside the filter sidebar, or a horizontal collection rail.
    */
   context?: ProductGridContext;
+  /** The grid's phone layout (ProductGrid `phoneLayout`): list rows have a small photo. */
+  phoneLayout?: ProductGridPhoneLayout;
   /**
    * The page container's max width when it is not the theme's (the product
    * page keeps `max-w-7xl` at 80rem), so `sizes` caps where the grid does.
@@ -42,175 +48,46 @@ const {
   index,
   aboveFold = false,
   context = "grid",
+  phoneLayout = "grid",
   containerWidth: containerWidthOverride,
   headingLevel = "h3",
 } = Astro.props;
-const TitleTag = headingLevel;
-const money = (price: number) =>
-  formatMoney(price, { symbol: currencySymbol, code: currencyCode });
 
-// The card style (Online store -> Theme -> Layout) sets photo ratio, hover
-// photo, buy-now and badge placement; density and the container width set
-// the fluid grid the image `sizes` follow.
-const { theme, layout } = await currentRequestTheme(Astro.locals);
-const card = layout.productCard;
+// The card variant and its anatomy come from the resolved theme; the photo
+// ratio and fit are tokens; density and the container width set the fluid
+// grid the image `sizes` follow.
+const { theme, resolved, layout } = await currentRequestTheme(Astro.locals);
+const variant = resolved.blocks.card.variant;
+const anatomy: StorefrontCardRenderer = layout.productCard;
+const ratio = theme.tokens.imageRatio;
+const grid = productGridSpec(layout.grid, ratio);
 const containerWidth =
   containerWidthOverride ?? buildStorefrontThemeTokens(theme)["theme-container-width"]!;
-const imageLoading = productCardImageLoading(
-  productGridFirstRow(layout.grid, containerWidth),
+const loading = productCardImageLoading(
+  productGridFirstRow(grid, containerWidth),
   { index, aboveFold },
 );
-
-const hasDiscount = product.discountedPrice < product.price;
-const pricePrefix = product.priceVaries ? "From " : "";
-const discountBadge = formatDiscountBadge(product.price, product.discountedPrice);
-const soldOut = product.availableForSale === false;
-const productHref = `/products/${product.slug}`;
-
-const productImageUrl = getProductImageUrl(product.imageUrl, 480);
-const productImageSrcSet = getProductImageSrcSet(product.imageUrl);
-const imageSizes = productCardImageSizes(layout.grid, containerWidth, context);
-// A second photo on hover: pointer devices only (CSS), loaded lazily.
-const hoverImage = card.hoverImage && product.secondaryImageUrl
-  ? {
-      src: getProductImageUrl(product.secondaryImageUrl, 480),
-      srcset: getProductImageSrcSet(product.secondaryImageUrl),
-    }
-  : null;
-// "Buy now" needs no choice from the buyer: in stock and without options.
-const quickBuyHref = card.quickBuy && !soldOut && !product.hasVariants
-  ? `/buy/${encodeURIComponent(product.slug)}`
-  : null;
-const portrait = card.imageRatio === "portrait";
+const sizes = productCardImageSizes(grid, containerWidth, context, phoneLayout);
+const model = productCardModel(product, {
+  currencySymbol,
+  currencyCode,
+  hoverImage: anatomy.hoverImage,
+  quickBuy: anatomy.quickBuy,
+});
 ---
 
-{/* One link per card: the title link stretches over the whole card, so the
-    card is a single tab stop and screen readers hear the name once. The
-    optional "Buy now" sits above that link as its own control. */}
-<div
-  data-theme-component="product-card"
-  data-card-ratio={card.imageRatio}
-  data-card-badge={card.badge}
-  class="group relative flex flex-col h-full bg-card overflow-hidden"
->
-  <div class:list={["product-card-media relative overflow-hidden bg-muted", portrait ? "aspect-[4/5]" : "aspect-square"]}>
-    <img
-      src={productImageUrl}
-      srcset={productImageSrcSet}
-      sizes={imageSizes}
-      alt={product.imageAlt || product.name}
-      width={400}
-      height={portrait ? 500 : 400}
-      loading={imageLoading.loading}
-      fetchpriority={imageLoading.fetchpriority}
-      decoding={imageLoading.decoding}
-      class="w-full h-full object-cover object-center"
+{
+  variant === "standard" ? (
+    <StandardCard model={model} ratio={ratio} sizes={sizes} loading={loading} headingLevel={headingLevel} />
+  ) : (
+    <AnatomyCard
+      variant={variant}
+      anatomy={anatomy}
+      model={model}
+      ratio={ratio}
+      sizes={sizes}
+      loading={loading}
+      headingLevel={headingLevel}
     />
-    {
-      hoverImage && (
-        <img
-          src={hoverImage.src}
-          srcset={hoverImage.srcset}
-          sizes={imageSizes}
-          alt=""
-          aria-hidden="true"
-          width={400}
-          height={portrait ? 500 : 400}
-          loading="lazy"
-          decoding="async"
-          class="product-card-hover-image absolute inset-0 hidden h-full w-full object-cover object-center opacity-0 group-hover:opacity-100"
-        />
-      )
-    }
-
-    <div class="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none">
-      {
-        discountBadge && card.badge === "image" && (
-          <span class="px-2.5 py-1 text-xs font-bold text-destructive-foreground bg-destructive rounded-full shadow-sm">
-            {discountBadge}
-          </span>
-        )
-      }
-      {
-        soldOut && (
-          <span class="px-2.5 py-1 text-xs font-bold text-foreground bg-background/90 rounded-full shadow-sm border border-border">
-            Sold out
-          </span>
-        )
-      }
-    </div>
-  </div>
-
-  <div class="product-card-body p-3 sm:p-4 flex flex-col flex-1">
-    <TitleTag
-      class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"
-    >
-      <a
-        href={productHref}
-        class="product-card-link after:absolute after:inset-0 after:content-['']"
-      >
-        {product.name}
-      </a>
-    </TitleTag>
-
-    <p class="mt-auto flex flex-col">
-      {
-        hasDiscount && (
-          <span class="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground font-medium leading-none">
-            <span><span class="sr-only">Regular price </span><s>{money(product.price)}</s></span>
-            {discountBadge && card.badge === "price" && (
-              <span class="font-bold text-destructive">{discountBadge}</span>
-            )}
-          </span>
-        )
-      }
-      <span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight">
-        <span class="sr-only">{hasDiscount ? "Sale price " : "Price "}</span>
-        {pricePrefix}{money(product.discountedPrice)}
-      </span>
-    </p>
-
-    {
-      quickBuyHref && (
-        <a
-          href={quickBuyHref}
-          data-astro-prefetch="false"
-          rel="nofollow"
-          class="relative z-10 mt-3 inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          {/* The name starts with the visible words (WCAG 2.5.3). */}
-          Buy now<span class="sr-only">: {product.name}</span>
-        </a>
-      )
-    }
-    {
-      /* Cards that can't be bought in one tap keep the button's space, so
-         prices line up across a row of the quick card style (R3-CAT-11). */
-      card.quickBuy && !quickBuyHref && (
-        <span class="mt-3 block min-h-11" aria-hidden="true" data-quick-buy-spacer></span>
-      )
-    }
-  </div>
-</div>
-
-<style>
-  /*
-   * The title link stretches over the card but sits inside the clamped title
-   * (overflow hidden), so its own outline would be clipped to an underline.
-   * Draw the focus ring on the card instead, inset so no scroller clips it.
-   */
-  .product-card-link:focus-visible {
-    outline: none;
-  }
-  [data-theme-component="product-card"]:has(.product-card-link:focus-visible) {
-    outline: 3px solid var(--ring);
-    outline-offset: -3px;
-  }
-
-  /* The hover photo exists only where hover exists. */
-  @media (hover: hover) and (pointer: fine) {
-    .product-card-hover-image {
-      display: block;
-    }
-  }
-</style>
+  )
+}
