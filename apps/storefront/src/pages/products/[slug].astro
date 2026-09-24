@@ -18,8 +18,8 @@ import ProductSummary from "@/components/product/ProductSummary.astro";
 import RelatedProducts from "@/components/product/RelatedProducts.astro";
 import StickyBuyBar from "@/components/product/StickyBuyBar.astro";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { GALLERY_CONFIG } from "@/components/product/config";
-import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
+import { GALLERY_IMAGE_WIDTHS, productGalleryMainSlot } from "@/components/product/lib/gallery-images";
+import { getProductImageUrl, hasProductImage, productImageSources } from "@/lib/product-media";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
@@ -206,28 +206,24 @@ const featuredGalleryMedia =
   orderedGalleryMedia.find((item) => item.isPrimary) ??
   orderedGalleryMedia[0] ??
   null;
-const requestedVariantImageCandidate =
-  queryVariantSelection?.variant.imageUrl ?? null;
-const requestedVariantImageUrl = hasProductImage(requestedVariantImageCandidate)
-  ? requestedVariantImageCandidate
-  : null;
-const initialGalleryImageSource = requestedVariantImageUrl
-  ?? (featuredGalleryMedia?.kind === "image"
-    ? featuredGalleryMedia.url
-    : featuredGalleryMedia?.posterUrl
-      ?? (!featuredGalleryMedia ? primaryImageUrl : null));
-const initialGalleryMobilePreloadUrl = initialGalleryImageSource
-  ? getProductImageUrl(
-      initialGalleryImageSource,
-      GALLERY_CONFIG.imageWidths.mobileDisplay,
-    )
-  : null;
-const initialGalleryDesktopPreloadUrl = initialGalleryImageSource
-  ? getProductImageUrl(
-      initialGalleryImageSource,
-      GALLERY_CONFIG.imageWidths.display,
-    )
-  : null;
+// ProductGallery renders the exact SKU image of a `?variant=` link first;
+// the LCP preload fetches the same candidate its <img> srcset/sizes pick.
+const initialGalleryProductMediaId = queryVariantSelection?.variant.imageId ?? null;
+const initialGalleryMedia =
+  orderedGalleryMedia.find(
+    (item) => item.id === initialGalleryProductMediaId && item.kind === "image",
+  ) ?? featuredGalleryMedia;
+const initialGalleryPreload =
+  initialGalleryMedia?.kind === "video"
+    ? initialGalleryMedia.posterUrl
+      ? { src: getProductImageUrl(initialGalleryMedia.posterUrl, GALLERY_IMAGE_WIDTHS.main) }
+      : null
+    : initialGalleryMedia || primaryImageUrl
+      ? productImageSources(
+          initialGalleryMedia?.url ?? primaryImageUrl,
+          productGalleryMainSlot(productPageLayout, orderedGalleryMedia.length > 1),
+        )
+      : null;
 const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, 640);
 const schemaImageUrls = storefrontUrl
   ? Array.from(
@@ -566,23 +562,13 @@ const productCategoryAnalytics = productCategory
 >
   <Fragment slot="preload">
     {
-      initialGalleryMobilePreloadUrl && (
+      initialGalleryPreload && (
         <link
           rel="preload"
           as="image"
-          href={initialGalleryMobilePreloadUrl}
-          media="(max-width: 1023px)"
-          fetchpriority="high"
-        />
-      )
-    }
-    {
-      initialGalleryDesktopPreloadUrl && (
-        <link
-          rel="preload"
-          as="image"
-          href={initialGalleryDesktopPreloadUrl}
-          media="(min-width: 1024px)"
+          href={initialGalleryPreload.srcset ? undefined : initialGalleryPreload.src}
+          imagesrcset={initialGalleryPreload.srcset}
+          imagesizes={initialGalleryPreload.sizes}
           fetchpriority="high"
         />
       )
@@ -622,7 +608,12 @@ const productCategoryAnalytics = productCategory
       class="mx-auto max-w-7xl px-3 py-1.5 sm:px-6 sm:py-4 lg:px-8 lg:py-6"
     >
       <ProductPageLayout gallery={productPageLayout.gallery}>
-        <ProductGallery product={product} media={media} thumbnails={productPageLayout.thumbnails} />
+        <ProductGallery
+          product={product}
+          media={media}
+          layout={productPageLayout}
+          initialProductMediaId={initialGalleryProductMediaId}
+        />
         <ProductSummary
           product={product}
           category={productCategory}

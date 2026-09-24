@@ -4,21 +4,61 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bindDesktopZoomWhenEligible,
   initProductMediaGallery,
+  PRELOAD_CONCURRENCY,
+  SWITCH_DECODE_TIMEOUT_MS,
   type ProductMediaChangeDetail,
 } from "./product-media-controller";
 import { bindDesktopZoom } from "./product-desktop-zoom-controller";
+
+const SIZES = "(max-width: 1023px) 384px, 468px";
+const LADDER = [160, 320, 480, 640, 960, 1600];
+
+/** A published media URL (its 1600 master rendition). */
+function media(name: string): string {
+  return `https://cdn.test/media/${name}.jpg/1600.webp`;
+}
+function rendition(name: string, width: number): string {
+  return `https://cdn.test/media/${name}.jpg/${width}.webp`;
+}
+function srcset(name: string): string {
+  return LADDER.map((width) => `${rendition(name, width)} ${width}w`).join(
+    ", ",
+  );
+}
+const LEGACY = "https://cdn.test/media/legacy.jpg";
+
+/**
+ * A detached `new Image()`: records what the controller asked the browser
+ * to fetch; tests settle `decode()` / `onload` by hand.
+ */
+class FakeImage {
+  static created: FakeImage[] = [];
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  decoding = "";
+  fetchPriority = "";
+  sizes = "";
+  srcset = "";
+  src = "";
+  private settle!: () => void;
+  private decoded = new Promise<void>((resolve) => {
+    this.settle = resolve;
+  });
+  decode = vi.fn(() => this.decoded);
+  constructor() {
+    FakeImage.created.push(this);
+  }
+  finishDecode() {
+    this.settle();
+  }
+}
 
 function thumbnail(
   id: string,
   mediaId: string,
   kind: "image" | "video",
   url: string,
-  options: {
-    poster?: string;
-    zoom?: string;
-    preview?: string;
-    mobile?: string;
-  } = {},
+  options: { poster?: string; alt?: string } = {},
 ): string {
   return `<button
     data-gallery-thumbnail
@@ -26,45 +66,54 @@ function thumbnail(
     data-media-id="${mediaId}"
     data-media-kind="${kind}"
     data-media-url="${url}"
-    ${options.mobile ? `data-mobile-media-url="${options.mobile}"` : ""}
-    ${options.preview ? `data-preview-url="${options.preview}"` : ""}
     ${options.poster ? `data-poster-url="${options.poster}"` : ""}
-    ${options.zoom ? `data-zoom-url="${options.zoom}"` : ""}
-    data-alt-text="${kind === "video" ? "Demonstration" : "Front view"}"
+    data-alt-text="${options.alt ?? (kind === "video" ? "Demonstration" : "Front view")}"
   ><span data-thumb-ring></span></button>`;
 }
 
-function renderGallery(initial = "pmed_video") {
+function renderGallery(
+  initial = "pmed_video",
+  options: { variants?: Array<{ imageId: string | null }> } = {},
+) {
   const buttons = [
     thumbnail("pmed_video", "med_video", "video", "/demo.mp4", {
       poster: "/poster.jpg",
     }),
-    thumbnail("pmed_image", "med_image", "image", "/image-main.jpg", {
-      zoom: "/image-zoom.jpg",
-      preview: "/image-preview.jpg",
-      mobile: "/image-mobile.jpg",
+    thumbnail("pmed_front", "med_front", "image", media("front")),
+    thumbnail("pmed_side", "med_side", "image", media("side"), {
+      alt: "Side view",
+    }),
+    thumbnail("pmed_back", "med_back", "image", media("back"), {
+      alt: "Back view",
+    }),
+    thumbnail("pmed_legacy", "med_legacy", "image", LEGACY, {
+      alt: "Legacy photo",
     }),
   ].join("");
   document.body.innerHTML = `
     <header data-page-background></header>
     <main>
+      ${
+        options.variants
+          ? `<script id="product-variants-data" type="application/json">${JSON.stringify(options.variants)}</script>`
+          : ""
+      }
       <div
         data-product-gallery
         data-initial-product-media-id="${initial}"
-        data-fallback-url="/fallback-main.jpg"
-        data-fallback-mobile-url="/fallback-mobile.jpg"
-        data-fallback-zoom-url="/fallback-zoom.jpg"
-        data-fallback-media-id="med_poster"
+        data-main-sizes="${SIZES}"
+        data-fallback-url="${media("primary")}"
+        data-fallback-media-id="med_primary"
         data-fallback-alt="Fallback image"
       >
         <div data-image-stage="desktop" class="hidden lg:block">
           <div data-desktop-image-zoom>
-            <img data-desktop-main-image src="/fallback-main.jpg" />
+            <img data-desktop-main-image src="/placeholder-product.svg" />
             <div data-desktop-zoom-layer></div>
           </div>
         </div>
         <button data-image-stage="mobile" data-mobile-image-trigger>
-          <img data-mobile-main-image src="/fallback-main.jpg" />
+          <img data-mobile-main-image src="/placeholder-product.svg" />
         </button>
         <div data-video-stage class="hidden">
           <div data-video-placeholder></div>
@@ -88,7 +137,47 @@ function renderGallery(initial = "pmed_video") {
   return document.querySelector<HTMLElement>("[data-product-gallery]")!;
 }
 
+/** Render the main images exactly as SSR does for `name`. */
+function renderSsrImage(root: HTMLElement, name: string, alt = "Front view") {
+  for (const image of mainImages(root)) {
+    image.setAttribute("src", rendition(name, 960));
+    image.setAttribute("srcset", srcset(name));
+    image.setAttribute("sizes", SIZES);
+    image.alt = alt;
+  }
+}
+
+function mainImages(root: HTMLElement): HTMLImageElement[] {
+  return [
+    root.querySelector<HTMLImageElement>("[data-mobile-main-image]")!,
+    root.querySelector<HTMLImageElement>("[data-desktop-main-image]")!,
+  ];
+}
+
+function button(root: HTMLElement, id: string, rail = "desktop") {
+  return root.querySelector<HTMLButtonElement>(
+    `[data-thumbnail-rail="${rail}"] [data-product-media-id="${id}"]`,
+  )!;
+}
+
+async function flush() {
+  for (let index = 0; index < 5; index += 1) await Promise.resolve();
+}
+
+let idleTasks: Array<() => void> = [];
+
 beforeEach(() => {
+  FakeImage.created = [];
+  idleTasks = [];
+  vi.stubGlobal("Image", FakeImage);
+  Object.defineProperty(window, "requestIdleCallback", {
+    configurable: true,
+    writable: true,
+    value: (task: () => void) => {
+      idleTasks.push(task);
+      return idleTasks.length;
+    },
+  });
   document.body.innerHTML = "";
   document.body.style.overflow = "";
   Object.defineProperty(window, "matchMedia", {
@@ -104,7 +193,10 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(
     () => undefined,
   );
-  vi.spyOn(RemotePlayback.prototype, "cancelWatchAvailability").mockResolvedValue(undefined);
+  vi.spyOn(
+    RemotePlayback.prototype,
+    "cancelWatchAvailability",
+  ).mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -112,24 +204,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("mixed product media gallery", () => {
-  it("uses the smaller display transform for the initial mobile product image", () => {
-    const root = renderGallery("pmed_image");
-
-    initProductMediaGallery(root);
-
-    expect(
-      root.querySelector<HTMLImageElement>("[data-mobile-main-image]")?.src,
-    ).toContain("/image-mobile.jpg");
-    expect(root.dataset.activeMediaUrl).toBe("/image-main.jpg");
-  });
-
-  it("adopts the SSR image without rewriting it before LCP", () => {
-    const root = renderGallery("pmed_image");
-    const image = root.querySelector<HTMLImageElement>(
-      "[data-mobile-main-image]",
-    )!;
-    image.src = "/image-mobile.jpg";
+describe("product gallery photo switching", () => {
+  it("adopts the SSR photo without rewriting it before LCP", () => {
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
     const changes: ProductMediaChangeDetail[] = [];
     window.addEventListener("product-media-change", (event) =>
       changes.push(event.detail),
@@ -137,258 +215,151 @@ describe("mixed product media gallery", () => {
 
     initProductMediaGallery(root);
 
-    expect(image.src).toContain("/image-mobile.jpg");
-    expect(root.dataset.activeMediaDisplayUrl).toBe("/image-mobile.jpg");
-    expect(root.dataset.activeMediaUrl).toBe("/image-main.jpg");
     expect(changes).toHaveLength(0);
-  });
-
-  it("selects a featured video without autoplay or eager offscreen video sources", () => {
-    const root = renderGallery();
-    const changes: ProductMediaChangeDetail[] = [];
-    window.addEventListener(
-      "product-media-change",
-      (event) => changes.push(event.detail),
-      {
-        once: true,
-      },
-    );
-
-    initProductMediaGallery(root);
-
-    const video = root.querySelector<HTMLVideoElement>("[data-product-video]")!;
-    expect(video.src).toContain("/demo.mp4");
-    expect(video.preload).toBe("metadata");
-    expect(video.autoplay).toBe(false);
-    expect(
-      root
-        .querySelector<HTMLElement>("[data-video-stage]")
-        ?.classList.contains("hidden"),
-    ).toBe(false);
-    expect(changes[0]).toMatchObject({
-      kind: "video",
-      productMediaId: "pmed_video",
-      mediaId: "med_video",
-      posterUrl: "/poster.jpg",
-      zoomUrl: null,
-      source: "initial",
-    });
-  });
-
-  it("switches between video and image while keeping zoom image-only", () => {
-    class DeferredImage {
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      fetchPriority = "auto";
-      decode = vi.fn().mockResolvedValue(undefined);
-      set src(_value: string) {}
+    expect(FakeImage.created).toHaveLength(0);
+    expect(root.dataset.activeMediaKey).toBe("image:pmed_front");
+    expect(root.dataset.activeMediaZoomUrl).toBe(rendition("front", 1600));
+    for (const image of mainImages(root)) {
+      expect(image.getAttribute("srcset")).toBe(srcset("front"));
     }
-    vi.stubGlobal("Image", DeferredImage);
-    const root = renderGallery();
+  });
+
+  it("swaps src, srcset, sizes and alt on both main images once the new photo decodes", async () => {
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
     initProductMediaGallery(root);
     const changes: ProductMediaChangeDetail[] = [];
     window.addEventListener("product-media-change", (event) =>
       changes.push(event.detail),
     );
 
-    root
-      .querySelectorAll<HTMLButtonElement>(
-        "[data-product-media-id='pmed_image']",
-      )[0]!
-      .click();
+    button(root, "pmed_side").click();
 
-    const video = root.querySelector<HTMLVideoElement>("[data-product-video]")!;
-    const mobileImage = root.querySelector<HTMLImageElement>(
-      "[data-mobile-main-image]",
-    )!;
-    const desktopMainImage = root.querySelector<HTMLImageElement>(
-      "[data-desktop-main-image]",
-    )!;
-    expect(video.getAttribute("src")).toBeNull();
-    expect(
-      root
-        .querySelector<HTMLElement>("[data-video-stage]")
-        ?.classList.contains("hidden"),
-    ).toBe(true);
-    expect(mobileImage.src).toContain("/image-preview.jpg");
-    expect(desktopMainImage.src).toContain("/image-preview.jpg");
-    expect(root.dataset.activeMediaUrl).toBe("/image-main.jpg");
+    // The thumbnail and the change event answer the click at once...
+    expect(button(root, "pmed_side").getAttribute("aria-current")).toBe("true");
     expect(changes.at(-1)).toMatchObject({
       kind: "image",
-      productMediaId: "pmed_image",
-      mediaId: "med_image",
-      previewUrl: "/image-preview.jpg",
-      zoomUrl: "/image-zoom.jpg",
+      productMediaId: "pmed_side",
+      url: media("side"),
+      zoomUrl: rendition("side", 1600),
       source: "gallery",
     });
-  });
-
-  it("uses the loaded preview immediately and promotes the decoded display transform", async () => {
-    const requests: Array<{
-      src: string;
-      fetchPriority: string;
-      onload: (() => void) | null;
-    }> = [];
-    class DeferredImage {
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      fetchPriority = "auto";
-      decode = vi.fn().mockResolvedValue(undefined);
-      private value = "";
-      set src(value: string) {
-        this.value = value;
-        requests.push(this);
-      }
-      get src() {
-        return this.value;
-      }
-    }
-    vi.stubGlobal("Image", DeferredImage);
-
-    const root = renderGallery();
-    initProductMediaGallery(root);
-    const imageButton = root.querySelector<HTMLButtonElement>(
-      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_image"]',
-    )!;
-    imageButton.dataset.mediaUrl = "/promotion-full.jpg";
-    imageButton.dataset.mobileMediaUrl = "/promotion-full.jpg";
-    imageButton.dataset.previewUrl = "/promotion-preview.jpg";
-    imageButton.click();
-
-    const main = root.querySelector<HTMLImageElement>(
-      "[data-desktop-main-image]",
-    )!;
-    expect(main.src).toContain("/promotion-preview.jpg");
-    expect(root.dataset.activeMediaDisplayUrl).toBe("/promotion-preview.jpg");
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({
-      src: "/promotion-full.jpg",
+    // ...while the visible photo waits for a decoded candidate, requested
+    // with the slot's own srcset/sizes so the browser picks the same file.
+    const candidate = FakeImage.created.at(-1)!;
+    expect(candidate).toMatchObject({
+      src: rendition("side", 960),
+      srcset: srcset("side"),
+      sizes: SIZES,
       fetchPriority: "high",
     });
+    expect(candidate.decode).toHaveBeenCalledOnce();
+    for (const image of mainImages(root)) {
+      expect(image.getAttribute("src")).toBe(rendition("front", 960));
+    }
 
-    requests[0]!.onload?.();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(main.src).toContain("/promotion-full.jpg");
-    expect(root.dataset.activeMediaDisplayUrl).toBe("/promotion-full.jpg");
+    candidate.finishDecode();
+    await flush();
+
+    for (const image of mainImages(root)) {
+      expect(image.getAttribute("src")).toBe(rendition("side", 960));
+      expect(image.getAttribute("srcset")).toBe(srcset("side"));
+      expect(image.getAttribute("sizes")).toBe(SIZES);
+      expect(image.alt).toBe("Side view");
+    }
   });
 
-  it("keeps the shopper's latest image selection authoritative", async () => {
-    const requests: Array<{
-      src: string;
-      onload: (() => void) | null;
-    }> = [];
-    class DeferredImage {
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      fetchPriority = "auto";
-      decode = vi.fn().mockResolvedValue(undefined);
-      private value = "";
-      set src(value: string) {
-        this.value = value;
-        requests.push(this);
-      }
-      get src() {
-        return this.value;
-      }
-    }
-    vi.stubGlobal("Image", DeferredImage);
-
-    const root = renderGallery();
-    initProductMediaGallery(root);
-    const imageButton = root.querySelector<HTMLButtonElement>(
-      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_image"]',
-    )!;
-    const main = root.querySelector<HTMLImageElement>(
-      "[data-desktop-main-image]",
-    )!;
-
-    imageButton.dataset.productMediaId = "pmed_first";
-    imageButton.dataset.mediaUrl = "/first-full.jpg";
-    imageButton.dataset.mobileMediaUrl = "/first-full.jpg";
-    imageButton.dataset.previewUrl = "/first-preview.jpg";
-    imageButton.click();
-
-    imageButton.dataset.productMediaId = "pmed_latest";
-    imageButton.dataset.mediaUrl = "/latest-full.jpg";
-    imageButton.dataset.mobileMediaUrl = "/latest-full.jpg";
-    imageButton.dataset.previewUrl = "/latest-preview.jpg";
-    imageButton.click();
-    expect(main.src).toContain("/latest-preview.jpg");
-    expect(requests).toHaveLength(2);
-
-    requests[0]!.onload?.();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(main.src).toContain("/latest-preview.jpg");
-
-    requests[1]!.onload?.();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(main.src).toContain("/latest-full.jpg");
-  });
-
-  it("does not fetch full-size variant images speculatively", () => {
-    const requests: Array<{ src: string; fetchPriority: string }> = [];
-    class DeferredImage {
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      fetchPriority = "auto";
-      private value = "";
-      set src(value: string) {
-        this.value = value;
-        requests.push(this);
-      }
-      get src() {
-        return this.value;
-      }
-    }
-    vi.stubGlobal("Image", DeferredImage);
-
-    const root = renderGallery("pmed_image");
-    const variantImage = root.querySelector<HTMLButtonElement>(
-      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_video"]',
-    )!;
-    variantImage.dataset.mediaKind = "image";
-    variantImage.dataset.mediaUrl = "/variant-main.jpg";
+  it("serves photos without renditions as a plain src", async () => {
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
     initProductMediaGallery(root);
 
-    expect(requests).toHaveLength(0);
-    expect(variantImage.dataset.mediaUrl).toBe("/variant-main.jpg");
+    button(root, "pmed_legacy").click();
+    const candidate = FakeImage.created.at(-1)!;
+    expect(candidate.src).toBe(LEGACY);
+    expect(candidate.srcset).toBe("");
+    candidate.finishDecode();
+    await flush();
+
+    for (const image of mainImages(root)) {
+      expect(image.getAttribute("src")).toBe(LEGACY);
+      expect(image.hasAttribute("srcset")).toBe(false);
+      expect(image.hasAttribute("sizes")).toBe(false);
+      expect(image.alt).toBe("Legacy photo");
+    }
+    expect(root.dataset.activeMediaZoomUrl).toBe(LEGACY);
   });
 
-  it("uses exact SKU images and an image representation for unmapped SKUs", () => {
-    const root = renderGallery();
+  it("shows the new photo anyway when decoding outlasts the timeout", async () => {
+    vi.useFakeTimers();
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+
+    button(root, "pmed_back").click();
+    await vi.advanceTimersByTimeAsync(SWITCH_DECODE_TIMEOUT_MS - 1);
+    expect(mainImages(root)[0]!.getAttribute("src")).toBe(
+      rendition("front", 960),
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+    for (const image of mainImages(root)) {
+      expect(image.getAttribute("src")).toBe(rendition("back", 960));
+      expect(image.getAttribute("srcset")).toBe(srcset("back"));
+    }
+  });
+
+  it("keeps the shopper's latest selection authoritative", async () => {
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+
+    button(root, "pmed_side").click();
+    const side = FakeImage.created.at(-1)!;
+    button(root, "pmed_back").click();
+    const back = FakeImage.created.at(-1)!;
+
+    back.finishDecode();
+    await flush();
+    side.finishDecode();
+    await flush();
+
+    for (const image of mainImages(root)) {
+      expect(image.getAttribute("src")).toBe(rendition("back", 960));
+      expect(image.alt).toBe("Back view");
+    }
+  });
+
+  it("uses exact SKU photos and the product photo for SKUs without one", async () => {
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
     initProductMediaGallery(root);
     const changes: ProductMediaChangeDetail[] = [];
     window.addEventListener("product-media-change", (event) =>
       changes.push(event.detail),
     );
-    const desktopImage = root.querySelector<HTMLButtonElement>(
-      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_image"]',
-    )!;
-    const mobileImage = root.querySelector<HTMLButtonElement>(
-      '[data-thumbnail-rail="mobile"] [data-product-media-id="pmed_image"]',
-    )!;
-    desktopImage.scrollIntoView = vi.fn();
-    mobileImage.scrollIntoView = vi.fn();
+    const mobileSide = button(root, "pmed_side", "mobile");
+    const desktopSide = button(root, "pmed_side", "desktop");
+    mobileSide.scrollIntoView = vi.fn();
+    desktopSide.scrollIntoView = vi.fn();
 
     window.dispatchEvent(
       new CustomEvent("product-media-select", {
-        detail: { productMediaId: "pmed_image", source: "variant" },
+        detail: { productMediaId: "pmed_side", source: "variant" },
       }),
     );
     expect(changes.at(-1)).toMatchObject({
-      kind: "image",
-      productMediaId: "pmed_image",
+      productMediaId: "pmed_side",
       source: "variant",
     });
-    expect(mobileImage.scrollIntoView).toHaveBeenCalledOnce();
-    expect(mobileImage.scrollIntoView).toHaveBeenCalledWith({
+    expect(mobileSide.scrollIntoView).toHaveBeenCalledWith({
       behavior: "auto",
       block: "nearest",
     });
-    expect(desktopImage.scrollIntoView).not.toHaveBeenCalled();
+    expect(desktopSide.scrollIntoView).not.toHaveBeenCalled();
+    FakeImage.created.at(-1)!.finishDecode();
+    await flush();
+    expect(mainImages(root)[1]!.getAttribute("srcset")).toBe(srcset("side"));
 
     window.dispatchEvent(
       new CustomEvent("product-media-select", {
@@ -398,13 +369,16 @@ describe("mixed product media gallery", () => {
     expect(changes.at(-1)).toMatchObject({
       kind: "image",
       productMediaId: null,
-      mediaId: "med_poster",
-      url: "/fallback-main.jpg",
+      mediaId: "med_primary",
+      url: media("primary"),
       source: "variant",
     });
-    expect(
-      root.querySelector<HTMLVideoElement>("[data-product-video]")?.autoplay,
-    ).toBe(false);
+    FakeImage.created.at(-1)!.finishDecode();
+    await flush();
+    for (const image of mainImages(root)) {
+      expect(image.getAttribute("srcset")).toBe(srcset("primary"));
+      expect(image.alt).toBe("Fallback image");
+    }
 
     // Even a corrupt legacy video association cannot enter the SKU image path.
     window.dispatchEvent(
@@ -415,36 +389,172 @@ describe("mixed product media gallery", () => {
     expect(changes.at(-1)).toMatchObject({
       kind: "image",
       productMediaId: null,
-      url: "/fallback-main.jpg",
-      source: "variant",
+      url: media("primary"),
     });
   });
 
+  it("selects a featured video without autoplay or eager offscreen video sources", () => {
+    const root = renderGallery();
+    const changes: ProductMediaChangeDetail[] = [];
+    window.addEventListener(
+      "product-media-change",
+      (event) => changes.push(event.detail),
+      { once: true },
+    );
+
+    initProductMediaGallery(root);
+
+    const video = root.querySelector<HTMLVideoElement>("[data-product-video]")!;
+    expect(video.src).toContain("/demo.mp4");
+    expect(video.preload).toBe("metadata");
+    expect(video.autoplay).toBe(false);
+    expect(
+      root.querySelector("[data-video-stage]")!.classList.contains("hidden"),
+    ).toBe(false);
+    expect(changes[0]).toMatchObject({
+      kind: "video",
+      productMediaId: "pmed_video",
+      posterUrl: "/poster.jpg",
+      zoomUrl: null,
+      source: "initial",
+    });
+  });
+
+  it("keeps the video on screen until the chosen photo is decoded", async () => {
+    const root = renderGallery();
+    initProductMediaGallery(root);
+    const video = root.querySelector<HTMLVideoElement>("[data-product-video]")!;
+    const videoStage = root.querySelector<HTMLElement>("[data-video-stage]")!;
+    const mobileStage = root.querySelector<HTMLElement>(
+      "[data-image-stage='mobile']",
+    )!;
+
+    button(root, "pmed_front").click();
+    expect(videoStage.classList.contains("hidden")).toBe(false);
+
+    FakeImage.created.at(-1)!.finishDecode();
+    await flush();
+    expect(videoStage.classList.contains("hidden")).toBe(true);
+    expect(mobileStage.classList.contains("hidden")).toBe(false);
+    expect(video.getAttribute("src")).toBeNull();
+    expect(mainImages(root)[0]!.getAttribute("srcset")).toBe(srcset("front"));
+
+    // Switching to the video is immediate and cancels any pending photo.
+    button(root, "pmed_side").click();
+    button(root, "pmed_video").click();
+    FakeImage.created.at(-1)!.finishDecode();
+    await flush();
+    expect(videoStage.classList.contains("hidden")).toBe(false);
+    expect(mainImages(root)[0]!.getAttribute("srcset")).toBe(srcset("front"));
+  });
+
   it("supports roving keyboard focus and replaces listeners on reinitialization", () => {
-    const root = renderGallery("pmed_image");
+    const root = renderGallery("pmed_front");
     initProductMediaGallery(root);
     initProductMediaGallery(root);
     const changes = vi.fn();
     window.addEventListener("product-media-change", changes);
-    const active = root.querySelector<HTMLButtonElement>(
-      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_image"]',
-    )!;
 
-    active.dispatchEvent(
+    button(root, "pmed_front").dispatchEvent(
       new KeyboardEvent("keydown", { key: "Home", bubbles: true }),
     );
 
-    const video = root.querySelector<HTMLButtonElement>(
-      '[data-thumbnail-rail="desktop"] [data-product-media-id="pmed_video"]',
-    )!;
+    const video = button(root, "pmed_video");
     expect(document.activeElement).toBe(video);
     expect(video.getAttribute("aria-current")).toBe("true");
     expect(changes).toHaveBeenCalledTimes(1);
   });
+});
 
-  it("makes mobile zoom a real modal and restores the page on close", () => {
+describe("product gallery preloading", () => {
+  it("warms SKU photos first after load, in the slot's candidate, two at a time", async () => {
+    const root = renderGallery("pmed_front", {
+      variants: [{ imageId: "pmed_back" }, { imageId: "pmed_back" }],
+    });
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+    expect(FakeImage.created).toHaveLength(0);
+
+    idleTasks.forEach((task) => task());
+    expect(FakeImage.created).toHaveLength(PRELOAD_CONCURRENCY);
+    expect(FakeImage.created.map((image) => image.src)).toEqual([
+      rendition("back", 960),
+      rendition("side", 960),
+    ]);
+    expect(FakeImage.created[0]).toMatchObject({
+      srcset: srcset("back"),
+      sizes: SIZES,
+      fetchPriority: "low",
+    });
+    // Preloads fetch only; decoding waits for an actual switch.
+    expect(FakeImage.created[0]!.decode).not.toHaveBeenCalled();
+
+    FakeImage.created[0]!.onload?.();
+    await flush();
+    expect(FakeImage.created).toHaveLength(3);
+    expect(FakeImage.created[2]!.src).toBe(LEGACY);
+
+    FakeImage.created[1]!.onload?.();
+    FakeImage.created[2]!.onerror?.();
+    await flush();
+    // The active photo and the video are never preloaded.
+    expect(FakeImage.created).toHaveLength(3);
+  });
+
+  it("warms the product photo for SKUs without their own photo", () => {
+    const root = renderGallery("pmed_front", {
+      variants: [{ imageId: null }],
+    });
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+    idleTasks.forEach((task) => task());
+    expect(FakeImage.created[0]!.src).toBe(rendition("primary", 960));
+  });
+
+  it("does not preload on Save-Data and preloads less on 3G", async () => {
+    vi.stubGlobal("navigator", { connection: { saveData: true } });
+    let root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+    idleTasks.forEach((task) => task());
+    expect(FakeImage.created).toHaveLength(0);
+
+    vi.stubGlobal("navigator", { connection: { effectiveType: "3g" } });
+    idleTasks = [];
+    root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+    idleTasks.forEach((task) => task());
+    for (let round = 0; round < 5; round += 1) {
+      FakeImage.created.forEach((image) => image.onload?.());
+      await flush();
+    }
+    expect(FakeImage.created).toHaveLength(3);
+  });
+
+  it("fetches a thumbnail's photo at high priority on focus, once", () => {
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
+    initProductMediaGallery(root);
+
+    const thumb = button(root, "pmed_side", "mobile");
+    thumb.dispatchEvent(new FocusEvent("focus"));
+    thumb.dispatchEvent(new FocusEvent("focus"));
+
+    expect(FakeImage.created).toHaveLength(1);
+    expect(FakeImage.created[0]).toMatchObject({
+      src: rendition("side", 960),
+      srcset: srcset("side"),
+      fetchPriority: "high",
+    });
+  });
+});
+
+describe("product gallery zoom", () => {
+  it("makes mobile zoom a real modal with the 1600 rendition and restores the page on close", () => {
     document.body.style.overflow = "clip";
-    const root = renderGallery("pmed_image");
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
     initProductMediaGallery(root);
 
     const trigger = root.querySelector<HTMLButtonElement>(
@@ -460,6 +570,9 @@ describe("mixed product media gallery", () => {
 
     trigger.click();
 
+    expect(
+      root.querySelector<HTMLImageElement>("[data-fullscreen-image]")!.src,
+    ).toBe(rendition("front", 1600));
     expect(modal.inert).toBe(false);
     expect(modal.getAttribute("aria-hidden")).toBe("false");
     expect(background.every((element) => element.inert)).toBe(true);
@@ -476,78 +589,52 @@ describe("mixed product media gallery", () => {
   });
 
   it("loads desktop zoom detail only after hover and restores the base image", async () => {
-    const requests: Array<{
-      src: string;
-      fetchPriority: string;
-      onload: (() => void) | null;
-    }> = [];
-    class DeferredImage {
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      fetchPriority = "auto";
-      decode = vi.fn().mockResolvedValue(undefined);
-      private value = "";
-      set src(value: string) {
-        this.value = value;
-        requests.push(this);
-      }
-      get src() {
-        return this.value;
-      }
-    }
-    vi.stubGlobal("Image", DeferredImage);
-
-    const root = renderGallery("pmed_image");
-    root.querySelector<HTMLImageElement>("[data-desktop-main-image]")!.src =
-      "/image-main.jpg";
-    root.querySelector<HTMLImageElement>("[data-mobile-main-image]")!.src =
-      "/image-mobile.jpg";
+    const root = renderGallery("pmed_front");
+    renderSsrImage(root, "front");
     initProductMediaGallery(root);
     bindDesktopZoom(root, new AbortController().signal);
+    const before = FakeImage.created.length;
 
-    expect(requests).toHaveLength(0);
     const zoom = root.querySelector<HTMLElement>("[data-desktop-image-zoom]")!;
     const layer = root.querySelector<HTMLElement>("[data-desktop-zoom-layer]")!;
-    const image = root.querySelector<HTMLImageElement>(
-      "[data-desktop-main-image]",
-    )!;
+    const image = mainImages(root)[1]!;
     zoom.dispatchEvent(new MouseEvent("mouseenter"));
 
-    expect(requests).toHaveLength(1);
-    expect(requests[0]).toMatchObject({
-      src: "/image-zoom.jpg",
+    expect(FakeImage.created).toHaveLength(before + 1);
+    expect(FakeImage.created.at(-1)).toMatchObject({
+      src: rendition("front", 1600),
       fetchPriority: "high",
     });
     expect(image.classList.contains("opacity-0")).toBe(true);
     expect(layer.classList.contains("opacity-0")).toBe(false);
 
-    requests[0]!.onload?.();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(layer.style.backgroundImage).toContain("image-zoom.jpg");
+    FakeImage.created.at(-1)!.finishDecode();
+    FakeImage.created.at(-1)!.onload?.();
+    await flush();
+    expect(layer.style.backgroundImage).toContain(rendition("front", 1600));
 
     zoom.dispatchEvent(new MouseEvent("mouseleave"));
     expect(image.classList.contains("opacity-0")).toBe(false);
     expect(layer.classList.contains("opacity-0")).toBe(true);
   });
 
-  it("uses the desktop base image for zoom fallback on Save-Data", () => {
+  it("zooms into the photo on screen on Save-Data", () => {
     vi.stubGlobal("navigator", { connection: { saveData: true } });
-    const root = renderGallery("pmed_image");
-    root.dataset.activeMediaKey = "image:pmed_image";
-    root.dataset.activeMediaUrl = "/slow-main.jpg";
-    root.dataset.activeMediaDisplayUrl = "/slow-preview.jpg";
-    root.dataset.activeMediaZoomUrl = "/slow-zoom.jpg";
+    const root = renderGallery("pmed_back");
+    renderSsrImage(root, "back");
+    root.dataset.activeMediaKey = "image:pmed_back";
+    root.dataset.activeMediaZoomUrl = rendition("back", 1600);
     bindDesktopZoom(root, new AbortController().signal);
 
     root
       .querySelector<HTMLElement>("[data-desktop-image-zoom]")!
       .dispatchEvent(new MouseEvent("mouseenter"));
 
+    expect(FakeImage.created).toHaveLength(0);
     expect(
       root.querySelector<HTMLElement>("[data-desktop-zoom-layer]")!.style
         .backgroundImage,
-    ).toContain("slow-main.jpg");
+    ).toContain(rendition("back", 960));
   });
 
   it("loads desktop zoom once when a resized viewport first crosses 1024px", async () => {
@@ -564,7 +651,7 @@ describe("mixed product media gallery", () => {
     const loadController = vi.fn(async () => ({
       bindDesktopZoom: bindDesktopZoomMock,
     }));
-    const root = renderGallery("pmed_image");
+    const root = renderGallery("pmed_front");
 
     bindDesktopZoomWhenEligible(
       root,
