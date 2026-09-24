@@ -22,6 +22,16 @@ interface RouteChunkLoader {
   loadRouteChunk: (route: never) => Promise<void> | undefined;
 }
 
+interface NetworkInformationLike {
+  saveData?: boolean;
+  effectiveType?: string;
+}
+
+/** Data Saver or a 2G connection: pages fetch their code only when opened. */
+export function shouldSkipRouteCodeWarming(connection: NetworkInformationLike | undefined): boolean {
+  return Boolean(connection?.saveData) || connection?.effectiveType === "2g" || connection?.effectiveType === "slow-2g";
+}
+
 export function warmEverydayRouteCode(router: RouteChunkLoader, canOpen: (path: string) => boolean): void {
   for (const { path, ids } of EVERYDAY_ROUTES) {
     if (!canOpen(path)) continue;
@@ -36,7 +46,18 @@ export function warmEverydayRouteCode(router: RouteChunkLoader, canOpen: (path: 
 export function useWarmEverydayRouteCode(canOpen: (path: string) => boolean): void {
   const router = useRouter();
   useEffect(() => {
-    const timer = window.setTimeout(() => warmEverydayRouteCode(router, canOpen), ROUTE_CODE_WARM_DELAY_MS);
-    return () => window.clearTimeout(timer);
+    const connection = (navigator as Navigator & { connection?: NetworkInformationLike }).connection;
+    if (shouldSkipRouteCodeWarming(connection)) return;
+    let idle: number | undefined;
+    const warm = () => warmEverydayRouteCode(router, canOpen);
+    const timer = window.setTimeout(() => {
+      // Wait for the browser to be idle too, where it can say (Safari cannot).
+      if (typeof window.requestIdleCallback === "function") idle = window.requestIdleCallback(warm, { timeout: 5_000 });
+      else warm();
+    }, ROUTE_CODE_WARM_DELAY_MS);
+    return () => {
+      window.clearTimeout(timer);
+      if (idle !== undefined) window.cancelIdleCallback(idle);
+    };
   }, [router, canOpen]);
 }
