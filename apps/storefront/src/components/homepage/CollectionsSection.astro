@@ -1,0 +1,73 @@
+---
+// The collections the merchant put on the homepage, each in its own
+// presentation (grid or carousel), in their order. A store without any shows
+// its newest products instead, so a store with products never has a blank
+// homepage. Markup for markup the classic store's collections.
+import type { CollectionWithProducts, Product } from "@/lib/api";
+import { collectionShowsProducts } from "@/lib/homepage-sections";
+import ProductGridSection from "./ProductGridSection.astro";
+import ProductRail from "./ProductRail.astro";
+
+interface Props {
+  collections: CollectionWithProducts[];
+  fallbackProducts: Product[];
+  currencySymbol: string;
+  currencyCode: string;
+  /** The section leads the page: the first collection that shows products loads its first row eagerly. */
+  lead: boolean;
+}
+
+const { collections, fallbackProducts, currencySymbol, currencyCode, lead } = Astro.props;
+// Only the first collection that shows products can sit above the fold.
+const firstShownCollectionId = collections.find(collectionShowsProducts)?.id;
+
+function gridProducts(collection: CollectionWithProducts): Product[] {
+  const products = collection.products ?? [];
+  const featured = collection.featuredProduct;
+  return (featured ? [featured, ...products.filter((product) => product.id !== featured.id)] : products)
+    .slice(0, collection.config?.maxProducts || 8);
+}
+
+const collectionHref = (collection: CollectionWithProducts) => `/collections/${encodeURIComponent(collection.id)}`;
+---
+
+{collections.map((collection) => (
+  <Fragment>
+    {collection.presentation === "grid" && (
+      <ProductGridSection
+        title={collection.config?.title || collection.name}
+        products={gridProducts(collection)}
+        href={collectionHref(collection)}
+        collection={{ subtitle: collection.config?.subtitle || "", categories: collection.categories ?? [] }}
+        currencySymbol={currencySymbol}
+        currencyCode={currencyCode}
+        aboveFold={lead && collection.id === firstShownCollectionId}
+      />
+    )}
+    {collection.presentation === "carousel" && (
+      <ProductRail
+        width="collection"
+        title={collection.config?.title || collection.name}
+        products={collection.products ?? []}
+        href={collectionHref(collection)}
+        currencySymbol={currencySymbol}
+        currencyCode={currencyCode}
+        aboveFold={lead && collection.id === firstShownCollectionId}
+      />
+    )}
+  </Fragment>
+))}
+
+{fallbackProducts.length > 0 && (
+  <ProductGridSection
+    title="New arrivals"
+    headingId="home-products-title"
+    products={fallbackProducts}
+    href="/search"
+    hrefLabel="View all products"
+    classicSpacing
+    currencySymbol={currencySymbol}
+    currencyCode={currencyCode}
+    aboveFold={lead && !firstShownCollectionId}
+  />
+)}

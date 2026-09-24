@@ -1,0 +1,106 @@
+---
+// "Just for you" (Daraz): the newest products in the store's grid, then a
+// "Load more" that is a real link to the next page of the full listing
+// (/search?page=n, crawlable and working without script). With script, it
+// fetches that page and appends its cards here instead, skipping cards
+// already shown, until the listing runs out.
+import type { Product } from "@/lib/api";
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
+import SectionHeader from "./SectionHeader.astro";
+
+interface Props {
+  section: StorefrontSectionOf<"endless-grid">;
+  title: string;
+  products: Product[];
+  currencySymbol: string;
+  currencyCode: string;
+  aboveFold: boolean;
+}
+
+const { section, title, products, currencySymbol, currencyCode, aboveFold } = Astro.props;
+const headingId = `home-${section.id}-title`;
+/** The listing's page size (lib/product-list-query.ts). */
+const LISTING_PAGE_SIZE = 20;
+const nextPage = Math.floor(products.length / LISTING_PAGE_SIZE) + 1;
+const nextHref = nextPage > 1 ? `/search?page=${nextPage}` : "/search";
+---
+
+<section class="home-section w-full" aria-labelledby={headingId} data-endless-grid>
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <SectionHeader id={headingId} title={title} />
+    <ProductGrid>
+      {products.map((product, index) => (
+        <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} index={index} aboveFold={aboveFold} />
+      ))}
+    </ProductGrid>
+    <div class="mt-5 flex justify-center">
+      <a
+        href={nextHref}
+        data-endless-more
+        data-next-page={nextPage}
+        class="inline-flex min-h-11 min-w-48 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-semibold text-foreground transition-colors hover:border-primary"
+      >
+        Load more
+      </a>
+    </div>
+  </div>
+</section>
+
+<script>
+  const LISTING_PAGE_SIZE = 20;
+  const cardLink = (card: Element) => card.querySelector<HTMLAnchorElement>('a[href^="/products/"]')?.getAttribute("href");
+
+  function setupEndlessGrids() {
+    document.querySelectorAll<HTMLElement>("[data-endless-grid]").forEach((section) => {
+      const more = section.querySelector<HTMLAnchorElement>("[data-endless-more]");
+      const grid = section.querySelector<HTMLElement>(".product-grid");
+      if (!more || !grid || more.dataset.ready === "true") return;
+      more.dataset.ready = "true";
+      more.addEventListener("click", async (event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+        event.preventDefault();
+        if (more.getAttribute("aria-busy") === "true") return;
+        more.setAttribute("aria-busy", "true");
+        const page = Number(more.dataset.nextPage) || 1;
+        try {
+          const response = await fetch(more.href, { credentials: "same-origin" });
+          if (!response.ok) throw new Error(String(response.status));
+          const listing = new DOMParser().parseFromString(await response.text(), "text/html");
+          const cards = Array.from(listing.querySelectorAll('.product-grid > [data-theme-component="product-card"]'));
+          const shown = new Set(Array.from(grid.children).map(cardLink));
+          // The home grid's image sizes, and lazy loading below the fold.
+          const sizes = grid.querySelector("img[sizes]")?.getAttribute("sizes");
+          for (const card of cards) {
+            if (shown.has(cardLink(card))) continue;
+            card.querySelectorAll("img").forEach((image) => {
+              image.loading = "lazy";
+              image.removeAttribute("fetchpriority");
+              if (sizes && image.hasAttribute("sizes")) image.setAttribute("sizes", sizes);
+            });
+            grid.append(document.importNode(card, true));
+          }
+          if (cards.length < LISTING_PAGE_SIZE) {
+            more.remove();
+            return;
+          }
+          more.dataset.nextPage = String(page + 1);
+          more.href = `/search?page=${page + 1}`;
+        } catch {
+          // The link still works: follow it to the listing.
+          window.location.href = more.href;
+        } finally {
+          more.removeAttribute("aria-busy");
+        }
+      });
+    });
+  }
+
+  document.addEventListener("astro:page-load", setupEndlessGrids);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", setupEndlessGrids, { once: true });
+  } else {
+    setupEndlessGrids();
+  }
+</script>

@@ -1,0 +1,100 @@
+---
+// A deal block (Daraz flash sale: title, countdown, "Shop all", then the
+// cards). The countdown shows only for a real end time still ahead, and a
+// small script shows and ticks it and removes it at the end: the cached
+// page never claims a deal is running once it has ended, and without script
+// there is no countdown at all. Its box is laid out (invisible) from the
+// first paint, so showing it shifts nothing.
+import type { Product } from "@/lib/api";
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import { dealEndsAt } from "@/lib/homepage-sections";
+import ProductRail from "./ProductRail.astro";
+import SectionHeader from "./SectionHeader.astro";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
+
+interface Props {
+  section: StorefrontSectionOf<"deal-block">;
+  title: string;
+  href: string | null;
+  products: Product[];
+  currencySymbol: string;
+  currencyCode: string;
+  aboveFold: boolean;
+}
+
+const { section, title, href, products, currencySymbol, currencyCode, aboveFold } = Astro.props;
+const endsAt = dealEndsAt(section);
+const headingId = `home-${section.id}-title`;
+// The time left when the page was rendered: the box's width from the first
+// paint (the script replaces it before showing it).
+function remainingAt(end: string, now: number): string {
+  const left = Math.max(0, Math.floor((Date.parse(end) - now) / 1000));
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const clock = `${pad(Math.floor((left % 86_400) / 3600))}:${pad(Math.floor((left % 3600) / 60))}:${pad(left % 60)}`;
+  return left >= 86_400 ? `${Math.floor(left / 86_400)}d ${clock}` : clock;
+}
+---
+
+<section class="home-section w-full" aria-labelledby={headingId} data-deal-block>
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="rounded-xl border border-border bg-card p-3 md:p-5">
+      <SectionHeader id={headingId} title={title} href={href} hrefLabel="Shop all">
+        <Fragment slot="aside">{endsAt && (
+          <p class="invisible mr-auto flex shrink-0 items-center gap-2 text-sm text-muted-foreground" data-deal-countdown data-ends-at={endsAt}>
+            <span>Ends in</span>
+            <time datetime={endsAt} class="rounded-md bg-primary px-2 py-0.5 font-semibold tabular-nums text-primary-foreground" data-deal-remaining>{remainingAt(endsAt, Date.now())}</time>
+          </p>
+        )}</Fragment>
+      </SectionHeader>
+      {products.length >= 4 ? (
+        <ProductRail title={title} href={null} products={products} currencySymbol={currencySymbol} currencyCode={currencyCode} aboveFold={aboveFold} bare />
+      ) : (
+        <ProductGrid>
+          {products.map((product, index) => (
+            <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} index={index} aboveFold={aboveFold} />
+          ))}
+        </ProductGrid>
+      )}
+    </div>
+  </div>
+</section>
+
+<script>
+  // One timer for every countdown on the page; paused while the tab is hidden.
+  function tickDealCountdowns() {
+    const countdowns = document.querySelectorAll<HTMLElement>("[data-deal-countdown]");
+    if (countdowns.length === 0) return;
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const update = () => {
+      const now = Date.now();
+      countdowns.forEach((countdown) => {
+        const left = Math.floor((Date.parse(countdown.dataset.endsAt ?? "") - now) / 1000);
+        if (!(left > 0)) {
+          countdown.remove();
+          return;
+        }
+        const days = Math.floor(left / 86_400);
+        const clock = `${pad(Math.floor((left % 86_400) / 3600))}:${pad(Math.floor((left % 3600) / 60))}:${pad(left % 60)}`;
+        const remaining = countdown.querySelector("[data-deal-remaining]");
+        if (remaining) remaining.textContent = days > 0 ? `${days}d ${clock}` : clock;
+        countdown.classList.remove("invisible");
+      });
+    };
+    update();
+    let timer = window.setInterval(update, 1000);
+    document.addEventListener("visibilitychange", () => {
+      window.clearInterval(timer);
+      if (!document.hidden) {
+        update();
+        timer = window.setInterval(update, 1000);
+      }
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", tickDealCountdowns, { once: true });
+  } else {
+    tickDealCountdowns();
+  }
+</script>

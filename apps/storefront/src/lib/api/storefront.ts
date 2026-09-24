@@ -9,6 +9,7 @@ import { unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
 import type {
   CollectionWithProducts,
+  Product,
   HeaderData,
   FooterData,
   NavigationItem,
@@ -17,6 +18,12 @@ import type {
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type { HeroSlide } from "@scalius/shared/hero-slider";
+import {
+  HOME_MEDIA_PARAM,
+  HOME_PRODUCT_LIST_PARAM,
+  homeSectionRequestParams,
+  type HomeSectionRequests,
+} from "@scalius/shared/storefront-theme";
 import type {
   StorefrontBusinessInfo,
   StorefrontReturnPolicySettings,
@@ -65,6 +72,36 @@ export interface HomepageData {
       enabled: boolean;
     };
   };
+  /** What the theme's homepage sections show (lib/homepage-sections.ts reads it by key). */
+  sections: HomepageSectionData;
+}
+
+/** A product list a section reads: one per source key (`storefrontProductSourceKey`). */
+export interface HomepageProductList {
+  key: string;
+  /** Card products (the homepage card projection, not full listing products). */
+  products: Array<Pick<
+    Product,
+    | "id" | "name" | "slug" | "price" | "discountType" | "discountPercentage" | "discountAmount"
+    | "discountedPrice" | "priceVaries" | "availableForSale" | "freeDelivery" | "categoryId"
+    | "hasVariants" | "imageUrl" | "imageAlt"
+  > & { imageMediaId: string | null; secondaryImageUrl: string | null }>;
+  category: { id: string; name: string; slug: string; canonicalPath: string | null } | null;
+  collection: { id: string; title: string } | null;
+}
+
+/** A section image (banner, lookbook or editorial photo, hero side banner). */
+export interface HomepageMediaAsset {
+  id: string;
+  url: string;
+  alt: string;
+  width: number | null;
+  height: number | null;
+}
+
+export interface HomepageSectionData {
+  lists: HomepageProductList[];
+  media: HomepageMediaAsset[];
 }
 
 // =============================================
@@ -171,6 +208,32 @@ export async function getHomepageData(): Promise<HomepageData | null> {
         return unwrapEnvelope<HomepageData>(data);
       } catch (error: unknown) {
         console.error("Error fetching homepage data:", error);
+        return null;
+      }
+    },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
+  );
+}
+
+/**
+ * The section data of a theme preview's draft: the homepage read with the
+ * draft's own product lists and images named in the query (a second read,
+ * made only under a dashboard preview; the published page is one batch).
+ */
+export async function getHomepageSectionData(requests: HomeSectionRequests): Promise<HomepageSectionData | null> {
+  const params = homeSectionRequestParams(requests);
+  const values = (name: string) => params.filter(([key]) => key === name).map(([, value]) => value);
+  return withEdgeCache(
+    `storefront_homepage_sections_${BUILD_ID}_${new URLSearchParams(params).toString()}`,
+    async () => {
+      try {
+        const { data } = await getApiV1StorefrontHomepage({
+          client: getConfiguredSdkClient(),
+          query: { [HOME_PRODUCT_LIST_PARAM]: values(HOME_PRODUCT_LIST_PARAM), [HOME_MEDIA_PARAM]: values(HOME_MEDIA_PARAM) },
+        });
+        return unwrapEnvelope<HomepageData>(data)?.sections ?? null;
+      } catch (error: unknown) {
+        console.error("Error fetching homepage section data:", error);
         return null;
       }
     },
