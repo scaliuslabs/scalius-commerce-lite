@@ -12,6 +12,7 @@ import { getLayoutData, getSeoSettings } from "@/lib/api";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
+import { resolveStoreName } from "@/lib/store-identity";
 import {
   normalizeSeoDiscoverySettings,
   type SeoDiscoverySettings,
@@ -191,8 +192,9 @@ function generateCatalogFeed(
   baseUrl: string,
   feedsPolicy: SeoDiscoverySettings["feeds"],
   format: CatalogFeedFormat,
+  storeName: string | null,
 ): string {
-  const title = feedsPolicy.title || "Product Catalog";
+  const title = feedsPolicy.title || storeName || "Product catalog";
   const description =
     feedsPolicy.description ||
     (format === "meta"
@@ -346,6 +348,7 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         baseUrl,
         feedsPolicy,
         format,
+        resolveStoreName(layoutData.business),
       );
 
       const headers: Record<string, string> = { ...FEED_XML_HEADERS };

@@ -88,6 +88,8 @@ export interface PaginatedResponse<T> {
   };
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];
+  /** Set when the search matched nothing and these results are for this corrected query. */
+  correctedQuery?: string | null;
 }
 
 export interface BuyerPriceRange {
@@ -555,15 +557,6 @@ export interface AnalyticsConfig {
   usePartytown: boolean;
   config: string;
   location: string;
-}
-
-export interface SearchResults {
-  products: Product[];
-  categories: Category[];
-  pages: Page[];
-  success: boolean;
-  query: string;
-  timestamp: string;
 }
 
 // ---------------------------------------------------------------------------

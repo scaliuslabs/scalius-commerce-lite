@@ -1,6 +1,6 @@
 /**
  * Static Pages Sitemap
- * Contains crawlable static URLs like homepage and search.
+ * The homepage. Internal search results are noindexed and never listed.
  */
 
 import {
@@ -21,9 +21,6 @@ export const GET: APIRoute = async (_context: APIContext) => {
     const staticPages: SitemapUrl[] = [
       {
         loc: `${baseUrl}/`,
-      },
-      {
-        loc: `${baseUrl}/search`,
       },
     ];
 

@@ -7,13 +7,12 @@ import {
   Layers,
   Loader2,
   ChevronRight,
-  AlertCircle,
   X,
   ArrowRight,
   FileText,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
-import { getCurrencySymbol } from "@/lib/currency";
+import { formatMoney } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { createApiUrl } from "@/lib/api/transport";
 import { normalizeSearchQuery } from "@/lib/search-query";
@@ -35,6 +34,8 @@ interface SearchResponse {
   products: SearchResultItem[];
   categories: SearchResultItem[];
   pages: SearchResultItem[];
+  /** Set when the typed query matched nothing and these results are for this corrected query. */
+  correctedQuery?: string | null;
 }
 
 interface ApiResponse {
@@ -68,7 +69,9 @@ export default function CommandPalette() {
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<SearchResponse | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  // WAI-ARIA combobox: no option is active until the buyer arrows into the
+  // list, so Enter submits the typed query to the full results page.
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [mounted, setMounted] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -128,22 +131,24 @@ export default function CommandPalette() {
         ? document.activeElement
         : null;
       document.body.style.overflow = "hidden";
-      setSelectedIndex(0);
+      setSelectedIndex(-1);
       requestAnimationFrame(() => {
         setTimeout(() => inputRef.current?.focus(), 50);
       });
-    } else {
-      searchAbortRef.current?.abort();
-      document.body.style.overflow = "";
-      setTimeout(() => {
-        setQuery("");
-        setResults(null);
-        setHasSearched(false);
-        setIsLoading(false);
-        setSearchError(null);
-      }, 200);
-      previousFocusRef.current?.focus();
+      return;
     }
+    searchAbortRef.current?.abort();
+    document.body.style.overflow = "";
+    previousFocusRef.current?.focus();
+    // Clear after the close animation; reopening sooner keeps what was typed.
+    const reset = setTimeout(() => {
+      setQuery("");
+      setResults(null);
+      setHasSearched(false);
+      setIsLoading(false);
+      setSearchError(null);
+    }, 200);
+    return () => clearTimeout(reset);
   }, [isOpen]);
 
   useEffect(() => {
@@ -166,7 +171,7 @@ export default function CommandPalette() {
     if (cachedResults) {
       searchAbortRef.current?.abort();
       setResults(cachedResults);
-      setSelectedIndex(0);
+      setSelectedIndex(-1);
       setHasSearched(true);
       setIsLoading(false);
       setSearchError(null);
@@ -182,7 +187,7 @@ export default function CommandPalette() {
     // request is pending. Cached queries still replace the list immediately.
     setResults(null);
     setHasSearched(false);
-    setSelectedIndex(0);
+    setSelectedIndex(-1);
     setIsLoading(true);
     setSearchError(null);
 
@@ -206,7 +211,7 @@ export default function CommandPalette() {
         if (json.success && json.data) {
           cacheSearchResults(normalizedQuery, json.data);
           setResults(json.data);
-          setSelectedIndex(0);
+          setSelectedIndex(-1);
           setHasSearched(true);
         } else {
           throw new Error("Search response was invalid");
@@ -258,33 +263,22 @@ export default function CommandPalette() {
 
   const handleNavigation = useCallback(
     (e: React.KeyboardEvent) => {
-      if (flatResults.length === 0) {
-        if (e.key === "Enter" && normalizedQuery) {
-          window.location.href = `/search?q=${encodeURIComponent(normalizedQuery)}`;
-        }
-        return;
-      }
-
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        const nextIndex = (selectedIndex + 1) % flatResults.length;
-        setSelectedIndex(nextIndex);
-        document
-          .getElementById(`cmd-item-${nextIndex}`)
-          ?.scrollIntoView({ block: "nearest" });
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        const nextIndex =
-          (selectedIndex - 1 + flatResults.length) % flatResults.length;
-        setSelectedIndex(nextIndex);
-        document
-          .getElementById(`cmd-item-${nextIndex}`)
-          ?.scrollIntoView({ block: "nearest" });
-      } else if (e.key === "Enter") {
+      if (e.key === "Enter") {
         e.preventDefault();
         const selected = flatResults[selectedIndex];
-        navigateToItem(selected);
+        if (selected) navigateToItem(selected);
+        else if (normalizedQuery) window.location.href = searchPageHref(normalizedQuery);
+        return;
       }
+      if (flatResults.length === 0 || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+      e.preventDefault();
+      // Down from the input enters the list at the top, Up at the bottom; moving
+      // past either end returns to the input (no active option).
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      const position = (selectedIndex + 1 + step + flatResults.length + 1) % (flatResults.length + 1);
+      const nextIndex = position - 1;
+      setSelectedIndex(nextIndex);
+      document.getElementById(`cmd-item-${nextIndex}`)?.scrollIntoView({ block: "nearest" });
     },
     [flatResults, selectedIndex, normalizedQuery],
   );
@@ -367,7 +361,7 @@ export default function CommandPalette() {
               aria-expanded={flatResults.length > 0}
               aria-controls="catalog-search-results"
               aria-activedescendant={
-                flatResults.length > 0 ? `cmd-item-${selectedIndex}` : undefined
+                selectedIndex >= 0 ? `cmd-item-${selectedIndex}` : undefined
               }
             />
 
@@ -440,14 +434,12 @@ export default function CommandPalette() {
             </div>
           )}
 
-          {/* State: No Results */}
           {searchError && !isLoading && (
             <div
               className="flex h-full flex-col items-center justify-center py-24 text-muted-foreground sm:py-20"
               role="alert"
             >
-              <AlertCircle className="mb-3 h-8 w-8 text-destructive opacity-40" />
-              <p className="font-medium text-foreground">Search unavailable</p>
+              <p className="font-medium text-foreground">Couldn’t reach the store</p>
               <button
                 type="button"
                 className="mt-4 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted"
@@ -459,16 +451,30 @@ export default function CommandPalette() {
           )}
 
           {hasSearched && !isLoading && !searchError && flatResults.length === 0 && (
-            <div className="flex h-full flex-col items-center justify-center py-24 text-muted-foreground sm:py-20">
-              <AlertCircle className="mb-3 h-8 w-8 text-destructive opacity-20" />
-              <p className="font-medium text-foreground">No results found</p>
-              <p className="text-sm mt-1">Try a different keyword</p>
+            <div className="flex h-full flex-col items-center justify-center px-6 py-20 text-center text-muted-foreground">
+              <div className="mb-4 rounded-full bg-muted/50 p-4">
+                <Search className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <p className="font-medium text-foreground">No results for “{normalizedQuery}”</p>
+              <p className="mt-1 text-sm">Check the spelling or try a more general word.</p>
+              <a
+                href="/search"
+                className="mt-4 inline-flex min-h-11 items-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                Browse all products
+              </a>
             </div>
           )}
 
           {/* State: Results */}
           {results && (
             <div className="space-y-4 pb-4 sm:pt-2">
+              {results.correctedQuery && flatResults.length > 0 && (
+                <p className="px-4 pt-3 text-sm text-muted-foreground sm:px-3">
+                  No results for “{normalizedQuery}”. Showing results for{" "}
+                  <span className="font-semibold text-foreground">“{results.correctedQuery}”</span>.
+                </p>
+              )}
               {/* Products */}
               {results.products.length > 0 && (
                 <div>
@@ -498,18 +504,14 @@ export default function CommandPalette() {
                               {p.discountedPrice !== undefined ? (
                                 <span className="text-primary">
                                   {p.priceVaries ? "From " : ""}
-                                  {getCurrencySymbol()}
-                                  {p.discountedPrice.toLocaleString()}
+                                  {formatMoney(p.discountedPrice)}
                                 </span>
-                              ) : (
-                                <span>
-                                  {getCurrencySymbol()}
-                                  {p.price?.toLocaleString()}
-                                </span>
-                              )}
+                              ) : p.price !== undefined ? (
+                                <span>{formatMoney(p.price)}</span>
+                              ) : null}
                             </div>
                             {p.availableForSale === false ? (
-                              <div className="mt-0.5 text-[11px] font-medium text-muted-foreground">
+                              <div className="mt-0.5 text-xs font-medium text-muted-foreground">
                                 Sold out
                               </div>
                             ) : null}
@@ -607,7 +609,7 @@ export default function CommandPalette() {
 
         {normalizedQuery && (
           <a
-            href={`/search?q=${encodeURIComponent(normalizedQuery)}`}
+            href={searchPageHref(normalizedQuery)}
             className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-4 text-sm font-medium text-foreground sm:hidden"
           >
             <span className="truncate">View all results for “{normalizedQuery}”</span>
@@ -622,7 +624,7 @@ export default function CommandPalette() {
               <kbd className="flex h-5 min-w-5 items-center justify-center rounded border border-border bg-background px-1 font-sans text-[10px] shadow-sm">
                 ↵
               </kbd>
-              <span>to select</span>
+              <span>{selectedIndex >= 0 ? "to open" : "to search"}</span>
             </span>
             <span className="flex items-center gap-1.5">
               <kbd className="flex h-5 min-w-5 items-center justify-center rounded border border-border bg-background px-1 font-sans text-[10px] shadow-sm">
@@ -640,7 +642,7 @@ export default function CommandPalette() {
 
           {normalizedQuery && (
             <a
-              href={`/search?q=${encodeURIComponent(normalizedQuery)}`}
+              href={searchPageHref(normalizedQuery)}
               className="flex items-center hover:text-primary transition-colors ml-auto font-medium"
             >
               View all results <ArrowRight className="w-3 h-3 ml-1" />
@@ -695,6 +697,10 @@ function ProductThumbnail({
       )}
     </div>
   );
+}
+
+function searchPageHref(query: string): string {
+  return `/search?${new URLSearchParams({ q: query })}`;
 }
 
 function isAbortError(error: unknown): boolean {

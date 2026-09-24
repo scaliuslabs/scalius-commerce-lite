@@ -93,12 +93,6 @@ const homepageDataSchema = z.object({
     }),
     trustStrip: z.object({
       enabled: z.boolean(),
-      items: z.array(z.object({
-        kind: z.enum(["delivery", "returns"]),
-        title: z.string(),
-        detail: z.string(),
-        href: z.string().optional(),
-      })).max(2),
     }),
   }),
 });

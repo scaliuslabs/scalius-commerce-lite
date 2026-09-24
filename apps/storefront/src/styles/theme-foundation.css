@@ -19,7 +19,7 @@
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.274 0.006 286.033);
   --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
+  --muted-foreground: oklch(0.52 0.016 285.938);
   --accent: oklch(0.967 0.001 286.375);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
@@ -174,4 +174,44 @@ body {
 
 html.dark {
   color-scheme: dark;
+}
+
+/* One keyboard focus indicator for every control (WCAG 2.4.7). It is
+   unlayered on purpose so it wins over `outline-none` utilities and no
+   control can drop its focus ring by accident. Text fields keep their own
+   border/ring focus styles: :focus-visible also matches them on pointer focus. */
+@layer base {
+  .site-root :focus-visible {
+    outline-offset: 2px;
+  }
+}
+
+.site-root
+  :where(
+    a,
+    button,
+    summary,
+    select,
+    [tabindex]:not([tabindex="-1"]),
+    [role="button"],
+    [role="switch"],
+    [role="checkbox"],
+    [role="radio"],
+    [role="tab"],
+    [role="option"],
+    [role="menuitem"],
+    input[type="checkbox"],
+    input[type="radio"]
+  ):focus-visible {
+  outline: 2px solid var(--foreground);
+}
+
+/* Surfaces painted with the primary color carry primary-foreground text. */
+.site-root :where(footer, .bg-primary) :focus-visible {
+  outline-color: currentColor;
+}
+
+/* Focused targets scroll clear of the sticky header (WCAG 2.4.11). */
+html {
+  scroll-padding-top: calc(var(--header-height, 3.5rem) + 0.5rem);
 }

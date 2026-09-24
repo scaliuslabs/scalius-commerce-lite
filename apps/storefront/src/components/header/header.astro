@@ -1,6 +1,6 @@
 ---
 // Header component - receives data from Layout.astro
-import type { HeaderData, NavigationItem } from "@/lib/api";
+import type { HeaderData, NavigationItem, SocialLink } from "@/lib/api";
 import HeaderLayout from "./HeaderLayout.astro";
 import DesktopNav from "./DesktopNav.astro";
 import MobileMenu from "./MobileMenu.astro";
@@ -9,9 +9,19 @@ import { HEADER_LOGO_WIDTH_DEFAULT } from "@scalius/shared/brand-presentation";
 interface Props {
   headerData: HeaderData;
   navigation: NavigationItem[];
+  /** The store's support phone and single social set (see lib/store-identity). */
+  storeName: string | null;
+  storePhone: string | null;
+  social: SocialLink[];
 }
 
-const { headerData: apiHeaderData, navigation: navigationItems } = Astro.props;
+const {
+  headerData: apiHeaderData,
+  navigation: navigationItems,
+  storeName,
+  storePhone,
+  social,
+} = Astro.props;
 
 const headerData: HeaderData = {
   topBar: {
@@ -19,18 +29,18 @@ const headerData: HeaderData = {
     isEnabled: apiHeaderData?.topBar?.isEnabled ?? true,
   },
   logo: apiHeaderData?.logo?.src
-    ? apiHeaderData.logo
+    ? { ...apiHeaderData.logo, alt: apiHeaderData.logo.alt || storeName || "Store" }
     : {
         src: "",
-        alt: apiHeaderData?.logo?.alt || "Store",
+        alt: apiHeaderData?.logo?.alt || storeName || "Store",
         width: HEADER_LOGO_WIDTH_DEFAULT,
       },
   contact: {
-    phone: apiHeaderData?.contact?.phone || "",
+    phone: storePhone ?? "",
     text: apiHeaderData?.contact?.text || "",
     isEnabled: apiHeaderData?.contact?.isEnabled ?? true,
   },
-  social: apiHeaderData?.social || [],
+  social,
 };
 ---
 
@@ -60,6 +70,7 @@ const headerData: HeaderData = {
   import { cartStore, hydrateCartFromStorage } from "@/store/cart";
   import { debounce } from "@/lib/utils";
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+  import { formatMoney } from "@/lib/currency";
 
   const openCart = debounce(() => {
     document.dispatchEvent(new CustomEvent("open-cart"));
@@ -78,7 +89,10 @@ const headerData: HeaderData = {
     function updateCartDisplay() {
       const { totalItems, totalAmount } = cartStore.get();
       const sym = window.__CURRENCY_SYMBOL__ || DEFAULT_CURRENCY.symbol;
-      const formattedTotal = `${sym}${totalAmount.toLocaleString()}`;
+      const formattedTotal = formatMoney(totalAmount, {
+        symbol: sym,
+        code: window.__CURRENCY_CODE__ || DEFAULT_CURRENCY.code,
+      });
 
       const countElements = document.querySelectorAll(
         "#cart-count, #mobile-cart-count",

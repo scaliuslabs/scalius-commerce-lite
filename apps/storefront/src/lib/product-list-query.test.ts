@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ProductFacet } from "@/lib/api";
 import {
   buildProductListHref,
-  buildProductListPaginationHref,
-  hasDynamicProductListFilterParams,
+  countActiveProductListFilters,
+  isIndexableProductListView,
+  productListCanonicalUrl,
   resolveProductListQueryState,
 } from "./product-list-query";
 
@@ -25,7 +26,6 @@ const facets: ProductFacet[] = [
 describe("product list query canonicalization", () => {
   it("keeps unfiltered default category URLs on the parallel fast path", () => {
     const url = new URL("https://storefront.example.com/categories/shoes?page=1&sortBy=newest&utm_source=ad");
-    expect(hasDynamicProductListFilterParams(url.searchParams)).toBe(false);
     const state = resolveProductListQueryState({ url });
     expect(state.options).toEqual({ page: 1, limit: 20, sort: "newest" });
     expect(state.currentFilters).toEqual({});
@@ -34,7 +34,6 @@ describe("product list query canonicalization", () => {
 
   it("drops unknown render-affecting params before they fragment HTML or L2 keys", () => {
     const url = new URL("https://storefront.example.com/search?q= fish  curry &foo=1&page=2");
-    expect(hasDynamicProductListFilterParams(url.searchParams)).toBe(true);
     const state = resolveProductListQueryState({ url, facets });
     expect(state.options).toMatchObject({ page: 2, limit: 20, sort: "newest", search: "fish curry" });
     expect(state.options).not.toHaveProperty("foo");
@@ -52,7 +51,6 @@ describe("product list query canonicalization", () => {
 
   it("normalizes common filters without requiring attribute metadata", () => {
     const url = new URL("https://storefront.example.com/search?freeDelivery=true&hasDiscount=false&minPrice=1000&maxPrice=50000");
-    expect(hasDynamicProductListFilterParams(url.searchParams)).toBe(false);
     const state = resolveProductListQueryState({ url });
     expect(state.options).toMatchObject({
       page: 1,
@@ -66,18 +64,9 @@ describe("product list query canonicalization", () => {
     expect(state.redirectPath).toBe("/search?freeDelivery=true&maxPrice=50000&minPrice=1000");
   });
 
-  it("does not treat built-in navigation, price, boolean, or tracking params as dynamic attributes", () => {
-    const url = new URL(
-      "https://storefront.example.com/search?q=fish&page=2&sortBy=price-asc&minPrice=1000&maxPrice=50000&freeDelivery=true&hasDiscount=true&utm_source=ad&fbclid=abc",
-    );
-    expect(hasDynamicProductListFilterParams(url.searchParams)).toBe(false);
-  });
-
   it("treats attribute-like and unknown render params as dynamic until metadata proves them", () => {
     const validAttributeUrl = new URL("https://storefront.example.com/search?color=Blue");
     const unknownParamUrl = new URL("https://storefront.example.com/search?campaign=summer");
-    expect(hasDynamicProductListFilterParams(validAttributeUrl.searchParams)).toBe(true);
-    expect(hasDynamicProductListFilterParams(unknownParamUrl.searchParams)).toBe(true);
     const attributeState = resolveProductListQueryState({ url: validAttributeUrl, facets });
     const unknownState = resolveProductListQueryState({ url: unknownParamUrl, facets });
     expect(attributeState.options).toMatchObject({ color: ["Blue"] });
@@ -152,7 +141,7 @@ describe("product list query canonicalization", () => {
       }],
     });
     expect(state.currentFilters).toEqual({ brand: ["Apple"], q: "fish curry" });
-    expect(buildProductListPaginationHref({ pathname: "/search", currentFilters: state.currentFilters, page: 2 }))
+    expect(buildProductListHref({ pathname: "/search", currentFilters: state.currentFilters, overrides: { page: 2 } }))
       .toBe("/search?brand=Apple&page=2&q=fish+curry");
   });
 
@@ -168,7 +157,7 @@ describe("product list query canonicalization", () => {
       size: "M",
       sortBy: "price-asc",
     };
-    expect(buildProductListPaginationHref({ pathname: "/categories/shoes", currentFilters, page: 4 })).toBe(
+    expect(buildProductListHref({ pathname: "/categories/shoes", currentFilters, overrides: { page: 4 } })).toBe(
       "/categories/shoes?color=Red&freeDelivery=true&hasDiscount=true&maxPrice=5000&minPrice=1000&page=4&q=cotton+panjabi&size=M&sortBy=price-asc",
     );
     expect(buildProductListHref({
@@ -204,5 +193,74 @@ describe("product list query canonicalization", () => {
     });
     expect(state.options.maxPrice).toBeUndefined();
     expect(state.redirectPath).toBe("/search");
+  });
+
+  it("ranks search results by relevance by default and keeps an explicit sort in the URL", () => {
+    const searched = resolveProductListQueryState({
+      url: new URL("https://store.test/search?q=bag"),
+      rankByRelevance: true,
+    });
+    expect(searched).toMatchObject({ sortBy: "relevance", defaultSort: "relevance", redirectPath: null });
+    expect(searched.options.sort).toBe("relevance");
+    expect(searched.currentFilters).toEqual({ q: "bag" });
+
+    const newest = resolveProductListQueryState({
+      url: new URL("https://store.test/search?q=bag&sortBy=newest"),
+      rankByRelevance: true,
+    });
+    expect(newest.currentFilters).toEqual({ q: "bag", sortBy: "newest" });
+    expect(buildProductListHref({
+      pathname: "/search",
+      currentFilters: newest.currentFilters,
+      overrides: { sortBy: "relevance" },
+      defaultSort: newest.defaultSort,
+    })).toBe("/search?q=bag");
+
+    // Without a query (or outside /search) there is nothing to rank.
+    const browsing = resolveProductListQueryState({
+      url: new URL("https://store.test/search?sortBy=relevance"),
+      rankByRelevance: true,
+    });
+    expect(browsing).toMatchObject({ sortBy: "newest", redirectPath: "/search" });
+    const category = resolveProductListQueryState({
+      url: new URL("https://store.test/categories/shoes?q=bag"),
+    });
+    expect(category.sortBy).toBe("newest");
+  });
+
+  it("accepts merchant option facets such as option.size", () => {
+    const url = new URL("https://store.test/categories/shoes?option.size=42&option.size=41");
+    const firstPass = resolveProductListQueryState({ url, allowUnknownAttributes: true });
+    expect(firstPass.options["option.size"]).toEqual(["42", "41"]);
+    const authoritative = resolveProductListQueryState({
+      url,
+      facets: [{ id: "option.size", name: "Size", slug: "option.size", values: [
+        { value: "41", count: 2 },
+        { value: "42", count: 1 },
+      ] }],
+    });
+    expect(authoritative.currentFilters).toEqual({ "option.size": ["42", "41"] });
+    expect(authoritative.redirectPath).toBeNull();
+  });
+
+  it("reads Bangla digits in price filters and redirects to Latin digits", () => {
+    const state = resolveProductListQueryState({
+      url: new URL("https://store.test/search?minPrice=%E0%A7%A7%E0%A7%A6%E0%A7%A6"),
+    });
+    expect(state.options.minPrice).toBe(100);
+    expect(state.redirectPath).toBe("/search?minPrice=100");
+  });
+
+  it("indexes only plain listing pages, each self-canonical", () => {
+    expect(isIndexableProductListView({})).toBe(true);
+    expect(isIndexableProductListView({ page: "2" })).toBe(true);
+    expect(isIndexableProductListView({ page: "2", sortBy: "price-asc" })).toBe(false);
+    expect(isIndexableProductListView({ hasDiscount: "true" })).toBe(false);
+    expect(productListCanonicalUrl("https://store.test/categories/shoes", 1))
+      .toBe("https://store.test/categories/shoes");
+    expect(productListCanonicalUrl("https://store.test/categories/shoes", 3))
+      .toBe("https://store.test/categories/shoes?page=3");
+    expect(productListCanonicalUrl(null, 3)).toBeNull();
+    expect(countActiveProductListFilters({ page: "2", sortBy: "discount", q: "bag", color: ["Red", "Blue"] })).toBe(3);
   });
 });
