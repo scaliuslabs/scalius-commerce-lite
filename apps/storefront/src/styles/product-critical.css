@@ -6,6 +6,8 @@
 @source "../pages/products/*.astro";
 @source "../components/header/header.astro";
 @source "../components/header/HeaderLayout.astro";
+@source "../components/header/variants/ClassicHeader.astro";
+@source "../components/header/TopBar.astro";
 /* The closed mobile drawer must remain inert before the complete sheet arrives. */
 @source inline("pointer-events-none invisible fixed inset-0 z-60 bg-black/60 opacity-0 backdrop-blur-sm transition-opacity duration-300 lg:hidden left-0 top-0 z-70 flex h-dvh w-[90vw] max-w-[380px] -translate-x-full transform flex-col border-r border-border bg-card text-foreground shadow-2xl transition-transform ease-[cubic-bezier(0.19,1,0.22,1)]");
 @source "../components/product/ProductBreadcrumbs.astro";
