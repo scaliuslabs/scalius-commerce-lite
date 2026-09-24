@@ -1,0 +1,59 @@
+---
+// The standard card: today's classic card, kept as it renders (the default
+// Department mall store is pixel-identical). Badge on the photo, the title in
+// two lines, the price below.
+import type { StorefrontImageRatio } from "@scalius/shared/storefront-theme";
+import type { ProductCardImageLoading } from "@/lib/product-card-layout";
+import CardMedia from "../parts/CardMedia.astro";
+import type { ProductCardModel } from "../card-model";
+
+interface Props {
+  model: ProductCardModel;
+  ratio: StorefrontImageRatio;
+  sizes: string;
+  loading: ProductCardImageLoading;
+  headingLevel: "h2" | "h3";
+}
+
+const { model, ratio, sizes, loading, headingLevel } = Astro.props;
+const TitleTag = headingLevel;
+---
+
+{/* One link per card: the title link stretches over the whole card, so the
+    card is a single tab stop and screen readers hear the name once. */}
+<div
+  data-theme-component="product-card"
+  data-card-variant="standard"
+  data-card-ratio={ratio}
+  data-card-badge="image"
+  class="group relative flex flex-col h-full bg-card overflow-hidden"
+>
+  <CardMedia model={model} ratio={ratio} sizes={sizes} loading={loading} badge={model.percentOff} />
+
+  <div class="product-card-body p-3 sm:p-4 flex flex-col flex-1">
+    <TitleTag
+      class="mb-1.5 text-sm sm:text-[0.9375rem] font-medium text-foreground leading-snug line-clamp-2 min-h-[2.5em] [font-family:var(--theme-font-body)] [letter-spacing:0]"
+    >
+      <a
+        href={model.href}
+        class="product-card-link after:absolute after:inset-0 after:content-['']"
+      >
+        {model.name}
+      </a>
+    </TitleTag>
+
+    <p class="mt-auto flex flex-col">
+      {
+        model.price.regular && (
+          <span class="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground font-medium leading-none">
+            <span><span class="sr-only">Regular price </span><s>{model.price.regular}</s></span>
+          </span>
+        )
+      }
+      <span class="text-base sm:text-lg font-extrabold text-foreground tracking-tight leading-tight">
+        <span class="sr-only">{model.price.regular ? "Sale price " : "Price "}</span>
+        {model.price.prefix}{model.price.current}
+      </span>
+    </p>
+  </div>
+</div>

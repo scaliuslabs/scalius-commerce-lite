@@ -28,6 +28,7 @@ import {
   STOREFRONT_DENSITY_SPECS,
   type StorefrontDensity,
   type StorefrontDensitySpec,
+  type StorefrontImageRatio,
   type StorefrontThemeTokens,
 } from "./tokens";
 
@@ -62,7 +63,7 @@ export interface ResolvedStorefrontThemeLayout {
   navigation: StorefrontNavigationRenderer;
   mobileNavigation: StorefrontMobileNavigationRenderer;
   footer: StorefrontFooterRenderer;
-  productCard: StorefrontCardRenderer & { imageRatio: "square" | "portrait" };
+  productCard: StorefrontCardRenderer & { imageRatio: StorefrontImageRatio };
   cardSurface: "flat" | "bordered" | "elevated";
   density: StorefrontDensity;
   grid: StorefrontDensitySpec;
@@ -190,8 +191,7 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
       navigation: renders<StorefrontNavigationRenderer>("desktopNav", resolved.desktopNav),
       mobileNavigation: renders<StorefrontMobileNavigationRenderer>("mobileNav", resolved.mobileNav),
       footer: renders<StorefrontFooterRenderer>("footer", resolved.footer),
-      // Landscape crops land with the card renderers (Phase 2); until then they render square.
-      productCard: { ...card, imageRatio: tokens.imageRatio === "portrait" ? "portrait" : "square" },
+      productCard: { ...card, imageRatio: tokens.imageRatio },
       cardSurface: SURFACE_RENDERERS[tokens.surface],
       density: tokens.density,
       grid: STOREFRONT_DENSITY_SPECS[tokens.density],

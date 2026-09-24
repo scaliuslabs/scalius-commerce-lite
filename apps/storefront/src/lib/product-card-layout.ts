@@ -1,4 +1,4 @@
-import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-theme";
+import type { ResolvedStorefrontThemeLayout, StorefrontImageRatio } from "@scalius/shared/storefront-theme";
 
 /**
  * The fluid product grid (theme-foundation.css `.product-grid`), modelled in
@@ -16,6 +16,27 @@ import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-t
  */
 
 type ThemeGrid = ResolvedStorefrontThemeLayout["grid"];
+
+/**
+ * Portrait photos make tall cards: their grid keeps wider minimum cards from
+ * the tablet step, so a dense density never packs six portrait cards across
+ * a laptop (mix rule 7). Phones keep the density's two columns.
+ */
+const PORTRAIT_CARD_MIN = { tablet: "12rem", desktop: "15rem" } as const;
+
+/** The grid a store's cards use: the density's, widened for portrait photos. */
+export function productGridSpec<Grid extends ThemeGrid>(grid: Grid, imageRatio: StorefrontImageRatio): Grid {
+  if (imageRatio !== "portrait") return grid;
+  const wider = (value: string, min: string) => (remToPx(value) >= remToPx(min) ? value : min);
+  return {
+    ...grid,
+    cardMin: {
+      phone: grid.cardMin.phone,
+      tablet: wider(grid.cardMin.tablet, PORTRAIT_CARD_MIN.tablet),
+      desktop: wider(grid.cardMin.desktop, PORTRAIT_CARD_MIN.desktop),
+    },
+  };
+}
 
 const PX_PER_REM = 16;
 /** Container widths (rem) where the grid's minimum card width steps. */
@@ -116,6 +137,14 @@ export function productGridFluidCss(grid: ThemeGrid): { cardMin: string; gap: st
 }
 
 export type ProductGridContext = "grid" | "beside-filters" | "rail";
+/**
+ * How a listing grid lays cards out in a container narrower than the tablet
+ * step: the density's columns, or one card per row with the photo beside
+ * the text (Amazon, Target, Star Tech phone listings).
+ */
+export type ProductGridPhoneLayout = "grid" | "list-row";
+/** The photo column of a list row (theme-foundation.css `--card-row-media`). */
+export const LIST_ROW_MEDIA_PX = 120;
 
 function pageGutter(viewport: number): number {
   return [...PAGE_GUTTER_PX].reverse().find((gutter) => viewport >= gutter.from)!.px;
@@ -143,17 +172,20 @@ const sizesCache = new Map<string, string>();
  * one media condition per viewport range with the same column count and
  * gutter, each `100vw / columns` minus the gutters and gaps (the widest card
  * of the range), then the fixed width once the container cap is reached.
- * `rail` is the horizontal collection rail (collection2.astro).
+ * `rail` is the horizontal collection rail (collection2.astro). With the
+ * `list-row` phone layout, a grid narrower than the tablet step shows one
+ * card per row with a fixed-width photo.
  */
 export function productCardImageSizes(
   grid: ThemeGrid,
   containerWidth: string,
   context: ProductGridContext = "grid",
+  phoneLayout: ProductGridPhoneLayout = "grid",
 ): string {
   if (context === "rail") {
     return "(max-width: 639px) 72vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw";
   }
-  const key = `${JSON.stringify(grid)}|${containerWidth}|${context}`;
+  const key = `${JSON.stringify(grid)}|${containerWidth}|${context}|${phoneLayout}`;
   const cached = sizesCache.get(key);
   if (cached) return cached;
 
@@ -161,10 +193,11 @@ export function productCardImageSizes(
   const ranges: Array<{ signature: string; until: number; size: string }> = [];
   for (let viewport = 320; viewport <= containerMaxPx; viewport += 1) {
     const width = productGridWidth(viewport, containerMaxPx, context);
+    const rows = phoneLayout === "list-row" && width < PRODUCT_GRID_STEPS_REM.tablet * PX_PER_REM;
     const columns = productGridColumnCount(grid, width);
     const fixed = viewport - width;
     const capped = viewport === containerMaxPx;
-    const signature = `${columns}|${fixed}|${capped}`;
+    const signature = rows ? "rows" : `${columns}|${fixed}|${capped}`;
     const last = ranges.at(-1);
     if (last?.signature === signature) {
       last.until = viewport;
@@ -173,9 +206,11 @@ export function productCardImageSizes(
     const gap = productGridGap(grid, width);
     // The first viewport of a range has the smallest gap, so the card width
     // below is the range's widest: an image is never undersized.
-    const size = capped
-      ? `${Math.ceil((width - gap * (columns - 1)) / columns)}px`
-      : `calc(${Number((100 / columns).toFixed(2))}vw - ${Math.floor((fixed + gap * (columns - 1)) / columns)}px)`;
+    const size = rows
+      ? `${LIST_ROW_MEDIA_PX}px`
+      : capped
+        ? `${Math.ceil((width - gap * (columns - 1)) / columns)}px`
+        : `calc(${Number((100 / columns).toFixed(2))}vw - ${Math.floor((fixed + gap * (columns - 1)) / columns)}px)`;
     ranges.push({ signature, until: viewport, size });
   }
   const sizes = ranges
