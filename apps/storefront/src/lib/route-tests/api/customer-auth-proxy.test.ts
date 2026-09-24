@@ -1,0 +1,44 @@
+// @vitest-environment node
+
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
+
+vi.mock("@/lib/api/transport", () => ({
+  resolveBackendTarget: (apiPath: string) => ({
+    url: `https://api.example.test${apiPath}`,
+    fetch: mocks.fetch,
+    viaServiceBinding: true,
+  }),
+}));
+
+import { ALL } from "../../../pages/api/customer-auth/[...path]";
+
+const call = (path: string) => ALL({
+  request: new Request(`https://storefront.example.test/api/customer-auth/${path}`, { method: "POST" }),
+  params: { path },
+} as never) as Promise<Response>;
+
+beforeEach(() => {
+  mocks.fetch.mockReset();
+  mocks.fetch.mockResolvedValue(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }));
+});
+
+describe("customer auth proxy", () => {
+  it("forwards guest-record paths whose ids carry underscores", async () => {
+    const response = await call("guest-orders/cust_V1a-x_9/send-code");
+
+    expect(response.status).toBe(200);
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      "https://api.example.test/api/v1/customer-auth/guest-orders/cust_V1a-x_9/send-code",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it.each(["guest-orders/../admin", "guest-orders/a.b/verify", "guest-orders/a%2F/verify"])("rejects %s", async (path) => {
+    const response = await call(path);
+
+    expect(response.status).toBe(400);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+});

@@ -9,6 +9,8 @@ const api = vi.hoisted(() => ({
   getCustomerOrders: vi.fn(),
   updateCustomerProfile: vi.fn(),
   logoutCustomer: vi.fn(),
+  sendGuestOrdersCode: vi.fn(),
+  verifyGuestOrders: vi.fn(),
   getCities: vi.fn(),
   getZones: vi.fn(),
   getAreas: vi.fn(),
@@ -18,6 +20,8 @@ vi.mock("./api/customer-auth", () => ({
   getCustomerOrders: api.getCustomerOrders,
   updateCustomerProfile: api.updateCustomerProfile,
   logoutCustomer: api.logoutCustomer,
+  sendGuestOrdersCode: api.sendGuestOrdersCode,
+  verifyGuestOrders: api.verifyGuestOrders,
 }));
 vi.mock("./api/shipping", () => ({ getCities: api.getCities, getZones: api.getZones, getAreas: api.getAreas }));
 vi.mock("./product-media", () => ({ getProductImageUrl: () => "/placeholder-product.svg" }));
@@ -101,7 +105,8 @@ beforeEach(() => {
         <button id="profileLocationsRetryBtn" type="button" class="hidden">Retry</button>
         <button id="saveProfileBtn" type="submit" disabled>Save address</button>
       </form>
-      <span id="orderCount"></span>
+      <h2 id="ordersHeading" tabindex="-1">Orders</h2><span id="orderCount"></span>
+      <p id="guestOrdersStatus" role="status"></p><div id="guestOrderNotices" class="hidden"></div>
       <div id="ordersList"></div><div id="emptyOrders" class="hidden"></div>
       <div id="ordersError" class="hidden"><span id="ordersErrorMessage"></span><button id="ordersRetryBtn">Retry</button></div>
       <div id="showMoreContainer" class="hidden"><button id="showMoreBtn">Show more orders</button><p id="showMoreError"></p></div>
@@ -180,6 +185,32 @@ describe("account order history", () => {
     expect(getCities).toHaveBeenCalledTimes(1);
     expect(element("profileForm").classList.contains("hidden")).toBe(false);
     expect(field("fieldName").value).toBe("Unsaved name");
+  });
+
+  it("offers to verify the phone behind guest orders and reloads the orders once they move", async () => {
+    const guest = { id: "cust_guest_1", destination: "01•••••011", orderCount: 1, canVerify: true };
+    getCustomerOrders
+      .mockResolvedValueOnce({ success: true, orders: [], customer, unclaimedGuestOrders: [guest] })
+      .mockResolvedValueOnce({ success: true, orders: [oldOrder], customer, unclaimedGuestOrders: [] });
+    api.sendGuestOrdersCode.mockResolvedValue({ success: true, message: "We sent a code to 01•••••011.", destination: "01•••••011", resendAfterSeconds: 60 });
+    api.verifyGuestOrders.mockResolvedValue({ success: true, movedOrders: 1, message: "1 order was added to your account." });
+    await initializeAccountPage();
+
+    const notices = element("guestOrderNotices");
+    expect(notices.classList.contains("hidden")).toBe(false);
+    expect(notices.textContent).toContain("1 more order was placed with 01•••••011. Verify this phone to add it.");
+    [...notices.querySelectorAll("button")].find((button) => button.textContent === "Verify this phone")!.click();
+    await vi.waitFor(() => expect(notices.querySelector("form")?.classList.contains("hidden")).toBe(false));
+    notices.querySelector<HTMLInputElement>("input[name=code]")!.value = "123456";
+    notices.querySelector("form")!.dispatchEvent(new Event("submit", { cancelable: true }));
+
+    await vi.waitFor(() => expect(element("orderCount").textContent).toBe("1 order"));
+    expect(getCustomerOrders).toHaveBeenCalledTimes(2);
+    expect(notices.classList.contains("hidden")).toBe(true);
+    expect(notices.textContent).toBe("");
+    expect(element("guestOrdersStatus").textContent).toBe("1 order was added to your account.");
+    expect(document.activeElement).toBe(element("ordersHeading"));
+    expect(getCustomerSession).toHaveBeenCalledTimes(1);
   });
 
   it("signs out through the logout route and tells the page to drop the checkout draft", async () => {

@@ -29,6 +29,13 @@ export const customers = sqliteTable("customers", {
     lastAuthenticatedAt: integer("last_authenticated_at", { mode: "timestamp" }),
     totalOrders: integer("total_orders").notNull().default(0),
     lastOrderAt: integer("last_order_at", { mode: "timestamp" }),
+    /**
+     * On a guest record: the account that proved one of its contacts and took
+     * those orders. The rest wait until the account proves their contact too;
+     * a guest record left with no orders is retired (deleted_at) and stays
+     * linked, so lists hide it and its page points at the account.
+     */
+    linkedAccountId: text("linked_account_id"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -38,6 +45,7 @@ export const customers = sqliteTable("customers", {
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
 }, (table) => [
     index("customers_email_idx").on(table.email),
+    index("customers_linked_account_idx").on(table.linkedAccountId),
     index("customers_phone_idx").on(table.phone),
     uniqueIndex("customers_verified_phone_unique")
         .on(table.phone)
@@ -66,7 +74,10 @@ export const customerHistory = sqliteTable("customer_history", {
     cityName: text("city_name"),
     zoneName: text("zone_name"),
     areaName: text("area_name"),
-    changeType: text("change_type", { enum: ["created", "updated", "deleted"] }).notNull(),
+    /** order_moved_in / order_moved_out: `orderId` moved between this record and `relatedCustomerId`. */
+    changeType: text("change_type", { enum: ["created", "updated", "deleted", "order_moved_in", "order_moved_out"] }).notNull(),
+    orderId: text("order_id"),
+    relatedCustomerId: text("related_customer_id"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),

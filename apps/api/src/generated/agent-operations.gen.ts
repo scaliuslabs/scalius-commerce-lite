@@ -12679,6 +12679,44 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "deletedAt": {
                   "$ref": "#/components/schemas/NullableTimestamp"
+                },
+                "linkedAccount": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ]
+                },
+                "guestRecords": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "orderCount": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "orderCount"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -12698,7 +12736,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "totalSpent",
                 "lastOrderAt",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "linkedAccount",
+                "guestRecords"
               ]
             },
             "history": {
@@ -12749,7 +12789,41 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "nullable": true
                   },
                   "changeType": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "created, updated, deleted, or order_moved_in / order_moved_out (see `order` and `relatedCustomer`)"
+                  },
+                  "order": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "orderNumber": {
+                        "type": "integer",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "orderNumber"
+                    ]
+                  },
+                  "relatedCustomer": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ]
                   },
                   "createdAt": {
                     "anyOf": [
@@ -12775,6 +12849,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "zoneName",
                   "areaName",
                   "changeType",
+                  "order",
+                  "relatedCustomer",
                   "createdAt"
                 ]
               }
@@ -13060,6 +13136,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "linkedAccount": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ]
+                  },
                   "totalOrders": {
                     "type": "number"
                   },
@@ -13090,6 +13182,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "zoneName",
                   "areaName",
                   "accountClaimedAt",
+                  "linkedAccount",
                   "totalOrders",
                   "totalSpent",
                   "lastOrderAt",
@@ -71497,6 +71590,72 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
         "data"
       ]
     }
+  },
+  {
+    "operationId": "storefront.customer_auth_guest_orders_send_code.send_code",
+    "method": "POST",
+    "pathTemplate": "/api/v1/customer-auth/guest-orders/{id}/send-code",
+    "summary": "Send a code to the phone a waiting guest order was placed with",
+    "tags": [
+      "Customer Auth"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "customer"
+    ],
+    "risk": "security",
+    "openWorld": true,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Browser-only phone proof for guest orders waiting on the customer-cookie account; it dispatches an SMS code, so identifiers and OTPs stay outside agent I/O.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
+  },
+  {
+    "operationId": "storefront.customer_auth_guest_orders_verify.verify",
+    "method": "POST",
+    "pathTemplate": "/api/v1/customer-auth/guest-orders/{id}/verify",
+    "summary": "Prove the phone of waiting guest orders and add them to the account",
+    "tags": [
+      "Customer Auth"
+    ],
+    "surface": "storefront",
+    "exposure": "excluded",
+    "principals": [
+      "customer"
+    ],
+    "risk": "security",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": true,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "exclusionReason": "Accepts a raw OTP and moves guest orders into the customer-cookie account; proof must be entered by the buyer in the hosted account page.",
+    "rbac": {
+      "type": "public"
+    },
+    "inputSchema": null,
+    "outputSchema": null
   },
   {
     "operationId": "storefront.customer_auth_logout.logout",

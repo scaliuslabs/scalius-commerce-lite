@@ -77,6 +77,8 @@ function CustomersPage() {
         <div className="min-w-0">
           <ResourceRowLink to={search.trashed ? undefined : openTo(row.original)}>{row.original.name || t("unnamed")}</ResourceRowLink>
           <span className="block truncate whitespace-nowrap font-mono text-muted-foreground">{formatPhoneForDisplay(row.original.phone)}</span>
+          {/* A guest record whose contact an account hasn't verified: never mistaken for that account. */}
+          {row.original.linkedAccount ? <span className="block truncate text-muted-foreground">{t("guestOrders")}</span> : null}
         </div>
       ),
     },
