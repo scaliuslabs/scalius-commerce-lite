@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Braces } from "lucide-react";
 import { toast } from "sonner";
 import type { OrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
@@ -8,7 +9,7 @@ import {
   TEMPLATE_LIMITS,
   defaultNotificationTemplates,
   findUnknownVariables,
-  renderTemplate,
+  renderSmsTemplate,
   sampleOrderEmail,
   sampleVariables,
   variablesForEvent,
@@ -17,6 +18,7 @@ import {
   type NotificationTemplates,
 } from "@scalius/core/modules/notifications/notification-templates";
 import { normalizeBdMobile } from "@scalius/shared/phone-input";
+import { isReady } from "@scalius/shared/readiness";
 import { countSmsSegments } from "@scalius/shared/sms-segments";
 import { AdminPhoneInput } from "~/components/admin/shared/AdminPhoneInput";
 import { Button } from "~/components/ui/button";
@@ -59,8 +61,8 @@ interface TemplatesData {
   revision: number;
   /** The checkout language: the defaults' and the email frame's. */
   language: MessageLanguage;
-  /** The store as its emails show it. */
-  store: EmailStore & { storefrontUrl: string | null };
+  /** The store as its emails show it; `nameFromAddress` when no business name is set. */
+  store: EmailStore & { storefrontUrl: string | null; nameFromAddress: boolean };
 }
 
 // Stopgap until `pnpm generate:sdk` adds the notification template operations.
@@ -140,6 +142,30 @@ export function SmsCounter({ text }: { text: string }) {
     </p>
   );
 }
+
+/** Stands in for a test send while its channel isn't set up. */
+function SetUpToTest({ label }: { label: string }) {
+  return (
+    <Button asChild variant="outline" size="sm">
+      <Link to="/admin/settings/notifications" hash="sending">{label}</Link>
+    </Button>
+  );
+}
+
+/** What `{{store_name}}` becomes while the store has no name. */
+function StoreNameNote({ store }: { store: TemplatesData["store"] }) {
+  const t = useMessages(notificationTemplateMessages);
+  if (store.name && !store.nameFromAddress) return null;
+  const variable = "{{store_name}}";
+  return (
+    <p className="text-body text-muted-foreground">
+      {store.name ? t("storeNameIsAddress", { variable, address: store.name }) : t("storeNameBlank", { variable })}{" "}
+      <Link to="/admin/settings/store" hash="business" className="text-link hover:underline">{t("addStoreName")}</Link>
+    </p>
+  );
+}
+
+const usesStoreName = (...texts: string[]) => texts.some((text) => /\{\{\s*store_name\s*\}\}/.test(text));
 
 function TestSmsDialog({
   open,
@@ -228,6 +254,7 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
   const [emailField, setEmailField] = useState<"subject" | "body">("body");
   const [smsTestOpen, setSmsTestOpen] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailTestError, setEmailTestError] = useState<string | null>(null);
   const rules = useQuery(customerRulesQuery);
   const preview = useQuery({ ...templatesQuery, select: ({ language, store }) => ({ language, store }) });
   const { values, setValues, isLoadError, refetch } = useSettingsForm<{ templates: NotificationTemplates }>({
@@ -263,32 +290,34 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
   const sms = values.templates.sms[event];
   // The same frame, language and store identity the real email uses, with a sample order.
   const language = preview.data?.language ?? "en";
-  const store = preview.data?.store ?? { name: null, logoUrl: null, storefrontUrl: null };
+  const store = preview.data?.store ?? { name: null, logoUrl: null, storefrontUrl: null, nameFromAddress: false };
   const defaultTemplates = defaultNotificationTemplates(language);
   const defaults = { email: defaultTemplates.email[event], sms: defaultTemplates.sms[event] };
-  const sample = sampleVariables(store.name ?? "", language);
-  const emailPreview = sampleOrderEmail({
-    language,
-    store,
-    subject: renderTemplate(email.subject, sample),
-    body: renderTemplate(email.body, sample),
-    origin: store.storefrontUrl,
-  });
-  const smsPreview = renderTemplate(sms.body, sample);
+  const emailPreview = sampleOrderEmail({ event, language, store, template: email, origin: store.storefrontUrl });
+  const smsPreview = renderSmsTemplate(event, language, sms.body, sampleVariables(store.name ?? "", language));
   const saved = rules.data?.channels[event];
+  // Unknown until the rules load; a test send then fails inline instead.
+  const channelReady = (channel: "email" | "sms") => !rules.data || isReady(rules.data[channel]);
+  const problems = {
+    subject: templateProblem(email.subject, TEMPLATE_LIMITS.subject, event),
+    emailBody: templateProblem(email.body, TEMPLATE_LIMITS.emailBody, event),
+    smsBody: templateProblem(sms.body, TEMPLATE_LIMITS.smsBody, event),
+  };
   const describe = (problem: Problem | null) =>
     !problem ? null
       : problem.key === "tooLong" ? t("tooLong", { max: problem.max })
       : problem.key === "unknownVariables" ? t("unknownVariables", { names: problem.names })
       : t("required");
 
-  const setEmail = (patch: Partial<EmailTemplate>) =>
+  const setEmail = (patch: Partial<EmailTemplate>) => {
+    setEmailTestError(null);
     setValues((draft) => ({
       templates: {
         ...draft.templates,
         email: { ...draft.templates.email, [event]: { ...draft.templates.email[event], ...patch } },
       },
     }));
+  };
   const setSmsBody = (body: string) =>
     setValues((draft) => ({
       templates: { ...draft.templates, sms: { ...draft.templates.sms, [event]: { body } } },
@@ -296,11 +325,12 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
 
   async function sendTestEmail() {
     setSendingEmail(true);
+    setEmailTestError(null);
     try {
       await sendTest({ channel: "email", event, subject: email.subject, body: email.body });
       toast.success(t("testSent"));
     } catch (cause) {
-      toast.error(getServerFnError(cause));
+      setEmailTestError(getServerFnError(cause));
     } finally {
       setSendingEmail(false);
     }
@@ -310,6 +340,7 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
     <>
       <SettingsCard
         title={channels("email")}
+        description={t("emailHelp")}
         action={
           <Button
             type="button"
@@ -328,12 +359,14 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
         <SettingsField
           id="template-email-subject"
           label={t("subject")}
-          error={describe(templateProblem(email.subject, TEMPLATE_LIMITS.subject, event))}
+          help={t("subjectRule")}
+          error={describe(problems.subject)}
         >
           <Input
             id="template-email-subject"
             value={email.subject}
             disabled={!canEdit}
+            aria-describedby="template-email-subject-note"
             onFocus={() => setEmailField("subject")}
             onChange={(change) => setEmail({ subject: change.target.value })}
           />
@@ -341,8 +374,8 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
         <SettingsField
           id="template-email-body"
           label={t("message")}
-          help={t("emailHelp")}
-          error={describe(templateProblem(email.body, TEMPLATE_LIMITS.emailBody, event))}
+          help={t("lineRule")}
+          error={describe(problems.emailBody)}
         >
           <Textarea
             id="template-email-body"
@@ -361,11 +394,27 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
             onInsert={(token) =>
               insertAtCaret(`template-email-${emailField}`, email[emailField], token, (next) => setEmail({ [emailField]: next }))}
           />
-          <Button type="button" variant="outline" size="sm" loading={sendingEmail} disabled={!canEdit} onClick={() => void sendTestEmail()}>
-            {t("sendTestEmail")}
-          </Button>
+          {channelReady("email") ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              loading={sendingEmail}
+              disabled={!canEdit || Boolean(problems.subject || problems.emailBody)}
+              onClick={() => void sendTestEmail()}
+            >
+              {t("sendTestEmail")}
+            </Button>
+          ) : (
+            <SetUpToTest label={t("setUpEmailToTest")} />
+          )}
         </div>
-        <p className="text-body text-muted-foreground">{t("testEmailTo")}</p>
+        {emailTestError ? (
+          <p role="alert" className="text-body text-destructive">{emailTestError}</p>
+        ) : (
+          <p className="text-body text-muted-foreground">{t("testEmailTo")}</p>
+        )}
+        {usesStoreName(email.subject, email.body) ? <StoreNameNote store={store} /> : null}
         <div className="space-y-1.5">
           <p className="text-body font-medium">{t("preview")}</p>
           <p className="text-body text-muted-foreground">{t("previewNote")}</p>
@@ -400,7 +449,7 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
           id="template-sms-body"
           label={t("message")}
           help={t("lineRule")}
-          error={describe(templateProblem(sms.body, TEMPLATE_LIMITS.smsBody, event))}
+          error={describe(problems.smsBody)}
         >
           <Textarea
             id="template-sms-body"
@@ -417,10 +466,21 @@ export function NotificationTemplateEditor({ event }: { event: OrderNotification
             disabled={!canEdit}
             onInsert={(token) => insertAtCaret("template-sms-body", sms.body, token, setSmsBody)}
           />
-          <Button type="button" variant="outline" size="sm" disabled={!canEdit} onClick={() => setSmsTestOpen(true)}>
-            {t("sendTestSms")}
-          </Button>
+          {channelReady("sms") ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!canEdit || Boolean(problems.smsBody)}
+              onClick={() => setSmsTestOpen(true)}
+            >
+              {t("sendTestSms")}
+            </Button>
+          ) : (
+            <SetUpToTest label={t("setUpSmsToTest")} />
+          )}
         </div>
+        {usesStoreName(sms.body) ? <StoreNameNote store={store} /> : null}
         <div className="space-y-1.5">
           <p className="text-body font-medium">{t("preview")}</p>
           <p data-testid="sms-preview" className="whitespace-pre-wrap rounded-lg bg-muted px-3 py-2 text-body">{smsPreview}</p>

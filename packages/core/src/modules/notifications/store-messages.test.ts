@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { composeAuthOtpMessage } from "./store-messages";
+import { composeAuthOtpMessage, storeDisplayName } from "./store-messages";
+
+describe("the store's display name", () => {
+  it("uses the business name, then the legal name, then the Store URL host, never a blank", () => {
+    expect(storeDisplayName({ companyName: " Nokshi ", legalName: "Nokshi Ltd" }, "https://shop.test")).toBe("Nokshi");
+    expect(storeDisplayName({ companyName: "", legalName: "Nokshi Ltd" }, "https://shop.test")).toBe("Nokshi Ltd");
+    expect(storeDisplayName({ companyName: "", legalName: "" }, "https://www.storefront.scalius.com")).toBe("storefront.scalius.com");
+    expect(storeDisplayName({ companyName: "", legalName: "" }, "http://localhost:4322")).toBe("localhost:4322");
+    expect(storeDisplayName({ companyName: "", legalName: "" }, "")).toBeNull();
+    expect(storeDisplayName({ companyName: "", legalName: "" }, "javascript:alert(1)")).toBeNull();
+  });
+});
 
 describe("one-time code messages", () => {
   const store = { name: "River & Loom", logoUrl: null, language: "en" as const };

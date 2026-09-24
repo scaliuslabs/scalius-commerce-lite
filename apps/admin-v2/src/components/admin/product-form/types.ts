@@ -72,6 +72,8 @@ export const productFormSchema = z.object({
       posterMediaId: z.string().nullable(),
       posterUrl: z.string().nullable(),
       effectiveAltText: z.string(),
+      /** The file's original name, which tells photos apart when they share a description. */
+      filename: z.string(),
       altText: z.string().max(500),
       caption: z.string().nullable(),
       width: z.number().nullable(),
@@ -103,7 +105,8 @@ export const productFormSchema = z.object({
 }).superRefine((data, ctx) => {
   // Customers can't buy a product without a price, and feeds reject it.
   if (data.isActive && (data.price ?? 0) <= 0) {
-    ctx.addIssue({ code: "custom", message: translate(productMessages, "priceRequired"), path: ["price"] });
+    const key = data.price === null ? "priceRequired" : "priceAboveZero";
+    ctx.addIssue({ code: "custom", message: translate(productMessages, key), path: ["price"] });
   }
   if (data.discountType === "flat" && (data.discountAmount ?? 0) > (data.price ?? 0)) {
     ctx.addIssue({ code: "custom", message: translate(productMessages, "issueDiscountOverPrice"), path: ["discountAmount"] });
@@ -142,6 +145,7 @@ export interface ProductMediaItem {
   posterMediaId: string | null;
   posterUrl: string | null;
   effectiveAltText: string;
+  filename: string;
   altText: string;
   caption: string | null;
   width: number | null;

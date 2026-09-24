@@ -1,17 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { postApiV1AdminPages } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useHasPermission } from "~/contexts/PermissionContext";
+import { useCurrency } from "~/hooks/use-currency";
 import { useSettingsForm } from "~/hooks/use-settings-form";
+import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiClient, apiData } from "~/lib/api";
 import { pagesQueryOptions } from "~/lib/api-query-options/pages";
+import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { policiesMessages } from "~/i18n/settings-policies";
+import { deliveryZonesQuery } from "./DeliveryZones";
 import { policyTemplate, type PolicyKind } from "./policy-templates";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, SettingsRow } from "./SettingsPage";
@@ -29,6 +34,23 @@ export const policiesQuery = {
 };
 const savePolicies = (body: Partial<Policies> & { expectedRevision: number }) =>
   apiData(apiClient.put<{ 200: { success: boolean; data: PoliciesPayload } }>({ url: POLICIES_URL, body }));
+
+type NewPage = Parameters<typeof postApiV1AdminPages>[0]["body"];
+
+/**
+ * Creates the policy page. A page (even one in trash) may already use the
+ * template's address, e.g. a policy the merchant deleted earlier: the new
+ * draft then takes the next free one ("shipping-policy-2").
+ */
+async function createPolicyPage(body: NewPage) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await apiData(postApiV1AdminPages({ body: attempt === 1 ? body : { ...body, slug: `${body.slug}-${attempt}` } }));
+    } catch (error) {
+      if (!(error instanceof AdminApiResponseError && error.status === 409) || attempt >= 5) throw error;
+    }
+  }
+}
 
 /** The store's content pages (drafts too), for linking a policy to one. */
 export const storePagesQuery = pagesQueryOptions({ page: 1, limit: 100, contentType: "page", sort: "title", order: "asc" });
@@ -95,9 +117,10 @@ function PolicyFields({ kind, canEdit }: { kind: PolicyKind; canEdit: boolean })
   const t = useMessages(policiesMessages);
   const common = useMessages(settingsMessages);
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
+  const { symbol } = useCurrency();
   const canCreatePage = useHasPermission(ADMIN_PERMISSIONS.PAGES_CREATE);
   const canViewPages = useHasPermission(ADMIN_PERMISSIONS.PAGES_VIEW);
+  const canViewShipping = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW);
   const { values, setValue } = useSettingsForm<Policies, PoliciesPayload, number>({
     label: t(kind),
     queryKey: policiesQuery.queryKey,
@@ -108,25 +131,40 @@ function PolicyFields({ kind, canEdit }: { kind: PolicyKind; canEdit: boolean })
     canEdit,
     fields: { [kind]: `policy-${kind}` },
   });
-  // A draft page from the template, linked at once, then opened to edit.
+  // A draft page from the template, linked at once; the merchant stays in Settings.
   const createFromTemplate = useMutation({
     mutationFn: async () => {
-      // The store's name and contact fill the text; without them it keeps placeholders.
-      const store = await queryClient.ensureQueryData(businessQuery).catch(() => null);
-      const template = policyTemplate(kind, store ?? { companyName: "", email: "", phone: "", addressLine1: "", city: "" });
-      const page = await apiData(postApiV1AdminPages({
-        body: { ...template, metaTitle: null, metaDescription: null, canonicalPath: null, isPublished: false },
-      }));
+      // The store's name and contact, and its shipping zones, fill the text; missing ones keep placeholders.
+      const [store, storefront, zones] = await Promise.all([
+        queryClient.ensureQueryData(businessQuery).catch(() => null),
+        queryClient.ensureQueryData(storefrontUrlQueryOptions()).catch(() => null),
+        kind === "shipping" && canViewShipping
+          ? queryClient.fetchQuery({ ...deliveryZonesQuery, staleTime: 0 }).catch(() => null)
+          : null,
+      ]);
+      const template = policyTemplate(
+        kind,
+        {
+          companyName: store?.companyName ?? "",
+          email: store?.email ?? "",
+          phone: store?.phone ?? "",
+          addressLine1: store?.addressLine1 ?? "",
+          city: store?.city ?? "",
+          storefrontUrl: (storefront as { storefrontUrl?: string } | null)?.storefrontUrl ?? "",
+        },
+        zones ? { zones, currencySymbol: symbol } : null,
+      );
+      const page = await createPolicyPage({ ...template, metaTitle: null, metaDescription: null, canonicalPath: null, isPublished: false });
       const { revision } = await queryClient.fetchQuery({ ...policiesQuery, staleTime: 0 });
       await savePolicies({ [kind]: page.id, expectedRevision: revision });
       return page.id;
     },
-    onSuccess: async (pageId) => {
+    onSuccess: async () => {
+      toast.success(t("templateCreated"));
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: policiesQuery.queryKey }),
         queryClient.invalidateQueries({ queryKey: queryKeys.pages.all }),
       ]);
-      await navigate({ to: "/admin/pages/$pageId/edit", params: { pageId } });
     },
   });
   const linked = values[kind];
@@ -143,9 +181,12 @@ function PolicyFields({ kind, canEdit }: { kind: PolicyKind; canEdit: boolean })
       </SettingsField>
       {linked ? (
         canViewPages ? (
-          <Link to="/admin/pages/$pageId/edit" params={{ pageId: linked }} className="text-body text-link hover:underline">
-            {t("editPage")}
-          </Link>
+          <div className="space-y-1.5">
+            {createFromTemplate.isSuccess ? <p role="status" className="text-body text-muted-foreground">{t("templateCreatedHelp")}</p> : null}
+            <Link to="/admin/pages/$pageId/edit" params={{ pageId: linked }} search={{ from: "policies" }} className="text-body text-link hover:underline">
+              {t("editPage")}
+            </Link>
+          </div>
         ) : null
       ) : canEdit && canCreatePage ? (
         <div className="space-y-1.5">

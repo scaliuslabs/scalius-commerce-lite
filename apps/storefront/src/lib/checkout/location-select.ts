@@ -4,6 +4,7 @@
  * fetches the next level when the buyer picks a parent and keeps the optional
  * `cityName`/`zoneName`/`areaName` hidden inputs in sync.
  */
+import { placeMatches } from "./location-search";
 
 export interface LocationOption {
   id: string;
@@ -218,10 +219,7 @@ export function enhanceLocationSelects(
   // Rebuilds the zone options from the typed text; one match is chosen for the buyer.
   const filterZones = () => {
     if (!zoneFilter) return;
-    const query = normalizeName(zoneFilter.value);
-    const matches = query
-      ? allZones.filter((item) => normalizeName(item.name).includes(query))
-      : allZones;
+    const matches = allZones.filter((item) => placeMatches(item.name, zoneFilter.value));
     const selected = zone.value;
     zone.replaceChildren(
       createOption(zone, placeholders.get(zone) ?? "", ""),

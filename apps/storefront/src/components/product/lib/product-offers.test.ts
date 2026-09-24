@@ -4,12 +4,13 @@ import { formatMoney } from "@scalius/shared/currency";
 import { describeBuyGetOffer } from "./product-offers";
 
 const product = { id: "prod_tee", slug: "tee", name: "Buyer Tee", variantId: null, price: null };
+const role = "buy" as const;
 const format = (amount: number) => formatMoney(amount, { code: "BDT", symbol: "৳" });
 
 describe("describeBuyGetOffer", () => {
   it("names the free item once, split out so the page can link it", () => {
     const text = describeBuyGetOffer(
-      { buyQuantity: 1, buyAmount: null, percentOff: 100, products: [product] },
+      { role, buyQuantity: 1, buyAmount: null, percentOff: 100, products: [product] },
       ENGLISH_CHECKOUT_LANGUAGE_DATA,
       format,
     );
@@ -19,12 +20,22 @@ describe("describeBuyGetOffer", () => {
 
   it("states a spend threshold in the store's money format and a partial benefit", () => {
     const text = describeBuyGetOffer(
-      { buyQuantity: null, buyAmount: 200000, percentOff: 50, products: [product] },
+      { role, buyQuantity: null, buyAmount: 200000, percentOff: 50, products: [product] },
       ENGLISH_CHECKOUT_LANGUAGE_DATA,
       format,
     );
     const sentence = `${text.before}${text.item}${text.after}`;
     expect(sentence).toContain("৳2,00,000");
     expect(sentence).toContain("50%");
+  });
+
+  it("tells the product given away which product to buy", () => {
+    const text = describeBuyGetOffer(
+      { role: "get", buyQuantity: 1, buyAmount: null, percentOff: 50, products: [{ ...product, name: "Tupi" }] },
+      ENGLISH_CHECKOUT_LANGUAGE_DATA,
+      format,
+    );
+    expect(`${text.before}${text.item}${text.after}`).toBe("Buy 1 Tupi, get this 50% off");
+    expect(text.item).toBe("Tupi");
   });
 });

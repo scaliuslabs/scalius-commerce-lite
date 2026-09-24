@@ -56,7 +56,7 @@ export const adjustInventoryRequestSchema = z.object({
 
 export const LOW_STOCK_THRESHOLD_MAX = 1_000_000;
 
-/** A SKU's alert level: alert when available stock falls to this or below. `null` turns it off. */
+/** An alert level: alert when available stock falls to this or below. On a SKU, `null` uses the store default and 0 turns alerts off. */
 export const lowStockThresholdSchema = z
     .number()
     .int("Enter a whole number.")

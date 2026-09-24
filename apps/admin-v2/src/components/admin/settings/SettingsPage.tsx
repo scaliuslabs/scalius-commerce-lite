@@ -144,9 +144,16 @@ export function SettingsField({
   children: ReactNode;
 }) {
   // Inline errors appear once the merchant leaves the field (or presses Save),
-  // never while typing. A rejected save marks the field until it's edited.
+  // never while typing. Passing through an empty field they never typed in
+  // flags nothing (Baymard); Save still reveals it. A rejected save marks the
+  // field until it's edited.
   const [left, setLeft] = useState(false);
+  const [edited, setEdited] = useState(false);
   const server = useServerFieldError(id);
+  const onEdit = () => {
+    setEdited(true);
+    if (server.error) server.clear();
+  };
   const clientShown = error && (left || server.revealed) ? error : null;
   const shown = clientShown ?? server.error;
   const isControl = isValidElement<{ id?: string }>(children) && children.props.id === id;
@@ -160,9 +167,12 @@ export function SettingsField({
   return (
     <div
       className="space-y-1.5"
-      onBlur={() => setLeft(true)}
-      onInput={server.error ? server.clear : undefined}
-      onChange={server.error ? server.clear : undefined}
+      onBlur={(event) => {
+        const target = event.target as { value?: unknown };
+        if (edited || (typeof target.value === "string" && target.value.trim())) setLeft(true);
+      }}
+      onInput={onEdit}
+      onChange={onEdit}
     >
       <Label htmlFor={id}>{label}</Label>
       {control}
@@ -194,6 +204,13 @@ export function SettingsRow({
       <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </button>
   );
+}
+
+const CloseDialogContext = createContext<(() => void) | null>(null);
+
+/** Closes the settings dialog around the caller, for an action that ends the edit (e.g. "Remove keys"). */
+export function useCloseSettingsDialog(): (() => void) | null {
+  return useContext(CloseDialogContext);
 }
 
 /**
@@ -244,7 +261,7 @@ export function SettingsDialog({
               </DialogHeader>
               <div className="space-y-4">
                 <SaveErrorBanner />
-                {children}
+                <CloseDialogContext.Provider value={() => close(state)}>{children}</CloseDialogContext.Provider>
               </div>
               {/* Long forms scroll; the actions stay in reach, separated by a border. */}
               <div className="sticky -bottom-5 -mx-5 -mb-5 border-t border-border bg-card px-5 py-4">

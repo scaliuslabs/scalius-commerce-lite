@@ -311,7 +311,7 @@ export async function validateCartItems(
       return {
         success: false,
         status: response.status,
-        error: getCheckoutErrorMessage(json, "Cart validation failed"),
+        error: getCheckoutErrorMessage(json, "We couldn't check your cart. Try again."),
         details: getApiErrorDetails(json),
       };
     }
@@ -322,7 +322,7 @@ export async function validateCartItems(
     return {
       success: false,
       status: 500,
-      error: "Cart validation failed",
+      error: "We couldn't check your cart. Try again.",
     };
   }
 }

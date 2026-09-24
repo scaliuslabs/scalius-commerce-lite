@@ -10,7 +10,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { normalizeCollectionConfig } from "@scalius/core/modules/collections/collection-config";
 import { createListSearchValidator } from "~/lib/list-helpers";
-import { readListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -44,7 +44,7 @@ function listQuery(search: ReturnType<typeof validateCollectionSearch>, term: st
 export const Route = createFileRoute("/admin/collections/")({
   validateSearch: validateCollectionSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, readListSearch("collections"))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("collections", deps.q))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "collections") }] }),
   component: CollectionsPage,
   errorComponent: RouteErrorComponent,
@@ -116,6 +116,7 @@ function CollectionsPage() {
       actions={can.canCreate ? <Button asChild><Link to="/admin/collections/new">{t("addCollection")}</Link></Button> : null}
       search={search}
       list="collections"
+      countLabel={(count) => t("collectionCount", { count })}
       query={listQuery(search, term)}
       pageQuery={(page, limit) => listQuery({ ...search, page, limit }, term)}
       dataKey="collections"

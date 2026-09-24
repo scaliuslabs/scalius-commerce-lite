@@ -32,6 +32,27 @@ describe("checkout language presets", () => {
     expect(getCheckoutLanguagePreset("fr").paymentStepText).toBe("Payment");
   });
 
+  it("follows the current wording where a saved language still holds an earlier default", () => {
+    const resolved = resolveCheckoutLanguageData("en", {
+      customerPhoneHelp: "Enter your phone number with country code",
+      zoneLabel: "Zone",
+      addToCartText: "Add to Cart",
+      discountAppliedText: "Discount applied successfully!",
+      termsText: "By placing this order, you agree to our Terms of Service and Privacy Policy.",
+      // A merchant's own wording stays.
+      phoneRequiredText: "Your mobile number, please.",
+    });
+    expect(resolved.customerPhoneHelp).toBe(ENGLISH_CHECKOUT_LANGUAGE_DATA.customerPhoneHelp);
+    expect(resolved.zoneLabel).toBe("Thana");
+    expect(resolved.addToCartText).toBe(ENGLISH_CHECKOUT_LANGUAGE_DATA.addToCartText);
+    expect(resolved.discountAppliedText).toBe(ENGLISH_CHECKOUT_LANGUAGE_DATA.discountAppliedText);
+    expect(resolved.termsText).toContain("{terms}");
+    expect(resolved.phoneRequiredText).toBe("Your mobile number, please.");
+    expect(resolveCheckoutLanguageData("bn", { zoneLabel: "এলাকা" }).zoneLabel).toBe("থানা");
+    // Title case saved from an older default follows today's sentence case.
+    expect(resolveCheckoutLanguageData("en", { customerPhoneLabel: "Phone Number" }).customerPhoneLabel).toBe("Phone number");
+  });
+
   it("upgrades untouched English defaults in an older Bangla record", () => {
     const resolved = resolveCheckoutLanguageData("bn", {
       pageTitle: ENGLISH_CHECKOUT_LANGUAGE_DATA.pageTitle,

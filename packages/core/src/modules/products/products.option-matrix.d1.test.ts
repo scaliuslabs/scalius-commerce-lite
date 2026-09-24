@@ -71,6 +71,20 @@ describe("option matrix SKU retirement and restoration", () => {
         expect(variant("draft_m")).toBeUndefined();
     });
 
+    it("revives a removed value typed again, so its retired SKU comes back with its stock", async () => {
+        const { db, variant, sqlite } = setup();
+        // The editor drops the value M entirely, then the merchant types "m" again as a new value.
+        await saveProductOptionMatrix(db, "prod_1", onlySmall);
+        await saveProductOptionMatrix(db, "prod_1", matrix(2, [{ id: "pval_s", value: "S" }, { id: "draft_value_m", value: "m" }], [
+            row("var_s", "pval_s", "TEE-S"),
+            row("draft_m", "draft_value_m", "TEE-M", 0),
+        ]));
+
+        expect(variant("var_m")).toEqual({ stock: 2, retired: 0 });
+        expect(sqlite.prepare("SELECT id, value FROM product_option_values WHERE deleted_at IS NULL ORDER BY position").all())
+            .toEqual([{ id: "pval_s", value: "S" }, { id: "pval_m", value: "m" }]);
+    });
+
     it("fails closed when the retired SKU's stock changes before the restore commits", async () => {
         const { db, variant, raceNextBatch } = setup();
         await saveProductOptionMatrix(db, "prod_1", onlySmall);

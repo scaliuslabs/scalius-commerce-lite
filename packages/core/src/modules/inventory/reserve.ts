@@ -3,6 +3,7 @@
 // Reserves stock by incrementing reservedStock WITHOUT decrementing stock.
 // Stock is permanently deducted only on payment confirmation.
 
+import { effectiveLowStockThresholdSql } from "./low-stock-policy";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
 import {
@@ -1185,7 +1186,7 @@ export function selectReservationVariantStates(
       backorderLimit: productVariants.backorderLimit,
       trackInventory: productVariants.trackInventory,
       stockVersion: productVariants.stockVersion,
-      lowStockThreshold: productVariants.lowStockThreshold,
+      lowStockThreshold: effectiveLowStockThresholdSql(),
     })
     .from(productVariants)
     .innerJoin(products, eq(products.id, productVariants.productId))

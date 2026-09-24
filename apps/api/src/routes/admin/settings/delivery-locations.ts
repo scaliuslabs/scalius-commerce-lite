@@ -1,9 +1,11 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { deliveryLocations } from "@scalius/database/schema";
-import { eq, and, isNull, like, sql, inArray } from "drizzle-orm";
+import { eq, and, isNull, like, sql } from "drizzle-orm";
 import {
+    countLocationDescendants,
     createLocation,
+    deleteLocations,
     getLocationById,
     updateLocation,
 } from "@scalius/core/modules/delivery/locations";
@@ -18,7 +20,7 @@ import { successEnvelope, paginatedEnvelope, messageResponse, errorResponses } f
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const CHECKOUT_BREAKING_LOCATION_MESSAGE =
-    "This change would make checkout unavailable. Keep at least one active city with an active zone.";
+    "This change would make checkout unavailable. Keep at least one active city with an active thana.";
 type AppRouteHandler<R extends RouteConfig> = RouteHandler<R, { Bindings: Env }>;
 
 async function assertDeliveryLocationsCanBeRemovedFromCheckout(
@@ -41,7 +43,7 @@ async function assertAllDeliveryLocationsCanBeRemovedFromCheckout(
     if (isReady(currentReadiness)) {
         throw new ValidationError([
             CHECKOUT_BREAKING_LOCATION_MESSAGE,
-            "Deleting all delivery locations would remove every active city and zone.",
+            "Deleting all delivery locations would remove every active city and thana.",
         ].join(" "));
     }
 }
@@ -58,7 +60,7 @@ async function assertValidLocationParent(
     }
 
     if (!parentId) {
-        throw new ValidationError(type === "zone" ? "Select a parent city." : "Select a parent zone.");
+        throw new ValidationError(type === "zone" ? "Select a parent city." : "Select a parent thana.");
     }
 
     const expectedType = type === "zone" ? "city" : "zone";
@@ -73,7 +75,7 @@ async function assertValidLocationParent(
         .get();
 
     if (!parent) {
-        throw new ValidationError(type === "zone" ? "Select an existing city." : "Select an existing zone.");
+        throw new ValidationError(type === "zone" ? "Select an existing city." : "Select an existing thana.");
     }
     if (isActive && !parent.isActive) {
         throw new ValidationError(`Activate the parent ${expectedType} before activating this ${type}.`);
@@ -165,6 +167,8 @@ const deliveryLocationSchema = z.object({
     isActive: z.boolean(),
     sortOrder: z.number(),
     displayName: z.string().optional(),
+    /** Live places under a city or thana: what deleting it deletes too. */
+    descendants: z.object({ zones: z.number().int(), areas: z.number().int() }).optional(),
 }).passthrough();
 
 const listRoute = createRoute({
@@ -221,6 +225,10 @@ app.openapi(listRoute, async (c) => {
             .where(and(...conditions))
             .get();
         const totalCount = countResult?.count || 0;
+        const descendants = await countLocationDescendants(
+            db,
+            locations.filter((location) => location.type !== "area").map((location) => location.id),
+        );
 
         const formattedLocations = locations.map((location) => {
             const externalIds = parseJsonObject(location.externalIds);
@@ -229,7 +237,10 @@ app.openapi(listRoute, async (c) => {
                 ...location,
                 externalIds,
                 metadata,
-                displayName: `${location.name}`
+                displayName: `${location.name}`,
+                ...(location.type === "area"
+                    ? {}
+                    : { descendants: descendants.get(location.id) ?? { zones: 0, areas: 0 } }),
             };
         });
 
@@ -320,7 +331,7 @@ const bulkDeleteRoute = createRoute({
     path: "/",
     operationId: "dashboard.delivery_locations.bulk_delete",
     tags: ["Admin - Delivery Locations"],
-    summary: "Bulk soft-delete delivery locations",
+    summary: "Bulk soft-delete delivery locations with their thanas and areas",
     request: {
         body: { required: true, content: { "application/json": { schema: z.object({
             ids: z.array(z.string().trim().min(1).max(128)).min(1).max(90),
@@ -337,12 +348,7 @@ app.openapi(bulkDeleteRoute, async (c) => {
         const db = c.get("db");
         const { ids } = c.req.valid("json");
         await assertDeliveryLocationsCanBeRemovedFromCheckout(db, ids);
-
-        await db
-            .update(deliveryLocations)
-            .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
-            .where(and(inArray(deliveryLocations.id, ids), isNull(deliveryLocations.deletedAt)));
-
+        await deleteLocations(db, ids);
         await bumpCacheGeneration(c);
         return ok(c, { message: `${ids.length} locations deleted successfully.` });
     } catch (error: unknown) {
@@ -489,7 +495,7 @@ const deleteLocationRoute = createRoute({
     path: "/{id}",
     operationId: "dashboard.delivery_locations.trash",
     tags: ["Admin - Delivery Locations"],
-    summary: "Soft-delete a delivery location",
+    summary: "Soft-delete a delivery location with its thanas and areas",
     request: {
         params: z.object({ id: z.string() }),
     },
@@ -518,10 +524,7 @@ app.openapi(deleteLocationRoute, async (c) => {
             await assertDeliveryLocationsCanBeRemovedFromCheckout(db, [id]);
         }
 
-        await db
-            .update(deliveryLocations)
-            .set({ deletedAt: sql`(cast(strftime('%s','now') as int))` })
-            .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)));
+        await deleteLocations(db, [id]);
         await bumpCacheGeneration(c);
         return ok(c, {});
     } catch (error: unknown) {

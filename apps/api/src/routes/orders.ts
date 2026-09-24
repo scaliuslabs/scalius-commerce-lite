@@ -9,9 +9,10 @@ import {
   PaymentMethod,
   InventoryPool
 } from "@scalius/database/schema";
-import { quoteStorefrontDiscount, type StorefrontDiscountQuote } from "@scalius/core/modules/promotions";
+import { listOrderDiscountLines, quoteStorefrontDiscount, type StorefrontDiscountQuote } from "@scalius/core/modules/promotions";
 import {
   appliedDiscountLineSchema,
+  orderDiscountLineSchema,
   discountCodesSchema,
   discountOfferSchema,
   presentStorefrontDiscountQuote,
@@ -581,6 +582,10 @@ const orderReceiptSchema = z.object({
   shippingMethodBaseAmountMinor: z.number().int().nullable(),
   shippingFeeWaived: z.boolean().nullable(),
   discountAmountMinor: z.number().int().nullable(),
+  /** Each discount the order used: `amount` off the items, `shippingAmount` off delivery. */
+  discounts: z.array(orderDiscountLineSchema),
+  /** The buyer's order note. */
+  notes: z.string().nullable(),
   taxAmountMinor: z.number().int(),
   totalAmountMinor: z.number().int().nullable(),
   taxLabel: z.string().nullable(),
@@ -929,6 +934,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       shippingMethodDescription: orders.shippingMethodDescription,
       shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
       shippingFeeWaived: orders.shippingFeeWaived,
+      notes: orders.notes,
       taxAmountMinor: orders.taxAmountMinor,
       taxLabel: orders.taxLabel,
       pricesIncludeTax: orders.pricesIncludeTax,
@@ -953,7 +959,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     throw new NotFoundError("Order receipt not found");
   }
 
-  const [items, supportState] = await Promise.all([
+  const [items, supportState, discountLines] = await Promise.all([
     db
       .select({
         id: orderItems.id,
@@ -974,6 +980,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
       .where(eq(orderItems.orderId, id)),
     getReceiptOrderSupportRequestStateForOrder(db, order),
+    listOrderDiscountLines(db, id),
   ]);
 
   const money = orderMoneyAmounts(order);
@@ -999,6 +1006,15 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       shippingMethodBaseAmountMinor: order.shippingMethodBaseAmountMinor,
       shippingFeeWaived: order.shippingFeeWaived,
       discountAmountMinor: order.discountAmountMinor,
+      discounts: discountLines.map((line) => ({
+        promotionId: line.promotionId,
+        title: line.title,
+        code: line.code,
+        kind: line.kind,
+        amount: fromMinor(line.amountMinor, order.currencyDecimalPlaces),
+        shippingAmount: fromMinor(line.shippingAmountMinor, order.currencyDecimalPlaces),
+      })),
+      notes: order.notes?.trim() || null,
       taxAmountMinor: order.taxAmountMinor,
       totalAmountMinor: order.totalAmountMinor,
       taxLabel: order.taxLabel,

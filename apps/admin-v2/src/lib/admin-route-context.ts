@@ -1,3 +1,4 @@
+import { isRedirect } from "@tanstack/react-router";
 import { adminRouteGuard, type AdminRouteContext } from "~/lib/auth-guards";
 
 export const ADMIN_ROUTE_CONTEXT_FRESH_MS = 60_000;
@@ -54,9 +55,12 @@ function refreshAdminRouteContextInBackground() {
       if (refreshEpoch !== adminRouteContextEpoch) return;
       writeAdminRouteContextCache(context);
     })
-    .catch(() => {
-      // Keep the last verified context until the hard TTL; the next blocking guard
-      // will redirect or surface errors if the session is truly no longer usable.
+    .catch((error: unknown) => {
+      // The session is gone (suspended, removed, signed out elsewhere): the next
+      // navigation runs the blocking guard, which leads to sign-in and says why.
+      if (isRedirect(error) && refreshEpoch === adminRouteContextEpoch) cachedAdminRouteContext = null;
+      // Otherwise (offline, a server blip) keep the last verified context until
+      // the hard TTL; the API still enforces every call.
     })
     .finally(() => {
       if (refreshEpoch === adminRouteContextEpoch) {

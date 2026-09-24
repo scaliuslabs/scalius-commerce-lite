@@ -41,7 +41,7 @@ const ratesSchema = z.array(rateInputSchema).max(MAX_ZONE_RATES);
 const zoneInputSchema = z.object({
     name: z.string().trim().min(1, "Enter a zone name.").max(100),
     locationIds: z.array(z.string().trim().min(1).max(128))
-        .min(1, "Choose at least one city, zone or area.")
+        .min(1, "Choose at least one city, thana or area.")
         .max(MAX_ZONE_LOCATIONS),
     rates: ratesSchema,
 });

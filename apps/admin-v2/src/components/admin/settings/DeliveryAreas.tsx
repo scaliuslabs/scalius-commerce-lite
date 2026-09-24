@@ -59,6 +59,21 @@ type Level = "city" | "zone" | "area";
 const PARENT: Record<Exclude<Level, "city">, Level> = { zone: "city", area: "zone" };
 const PAGE_SIZE = 20;
 
+type Descendants = { zones: number; areas: number };
+const descendantsOf = (location: DeliveryLocation): Descendants => location.descendants ?? { zones: 0, areas: 0 };
+
+/** "1 thana and 3 areas", or null when nothing is under the places being deleted. */
+function usePlacesUnder() {
+  const t = useMessages(shippingMessages);
+  return ({ zones, areas }: Descendants): string | null => {
+    const parts = [
+      zones ? (zones === 1 ? t("oneThana") : t("thanaCount", { count: zones })) : null,
+      areas ? (areas === 1 ? t("oneArea") : t("areaCount", { count: areas })) : null,
+    ].filter((part): part is string => part !== null);
+    return parts.length === 2 ? t("both", { first: parts[0]!, second: parts[1]! }) : parts[0] ?? null;
+  };
+}
+
 function useRefreshAreas() {
   const queryClient = useQueryClient();
   return () =>
@@ -78,6 +93,7 @@ function LocationForm({ level, location, parents }: { level: Level; location: De
   const t = useMessages(shippingMessages);
   const common = useMessages(settingsMessages);
   const refresh = useRefreshAreas();
+  const placesUnder = usePlacesUnder();
   const [saved] = useState(() => ({
     name: location?.name ?? "",
     parentId: location?.parentId ?? "",
@@ -85,6 +101,7 @@ function LocationForm({ level, location, parents }: { level: Level; location: De
   }));
   const [draft, setDraft] = useState(saved);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const under = location ? placesUnder(descendantsOf(location)) : null;
   const save = useMutation({
     mutationFn: (): Promise<unknown> => {
       // Courier ids (externalIds) come from the Pathao import, matched by name.
@@ -151,7 +168,7 @@ function LocationForm({ level, location, parents }: { level: Level; location: De
             open={confirmDelete}
             onOpenChange={setConfirmDelete}
             title={common("deleteNamed", { name: location.name })}
-            description={t("deleteLocationConfirm", { name: location.name })}
+            description={under ? t("deleteWithChildren", { name: location.name, places: under }) : t("deleteLocationConfirm")}
             confirmLabel={common("delete")}
             cancelLabel={common("cancel")}
             isLoading={remove.isPending}
@@ -222,6 +239,7 @@ export function DeliveryAreasManager() {
   const common = useMessages(settingsMessages);
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT);
   const refresh = useRefreshAreas();
+  const placesUnder = usePlacesUnder();
   const [level, setLevel] = useState<Level>("city");
   const [search, setSearch] = useState("");
   const [parentFilter, setParentFilter] = useState("");
@@ -231,6 +249,7 @@ export function DeliveryAreasManager() {
   const [confirmAll, setConfirmAll] = useState(false);
   const counts = useQuery(areaCountsQuery).data;
   const placeTotal = counts ? counts.cities + counts.zones + counts.areas : 0;
+  const noPlaces = counts !== undefined && placeTotal === 0;
   const importer = usePathaoImport();
 
   const list = useQuery({
@@ -252,6 +271,12 @@ export function DeliveryAreasManager() {
   const parentList = level === "city" ? [] : (parents.data?.locations ?? []);
   const parentName = new Map(parentList.map((parent) => [parent.id, parent.name]));
   const locations = list.data?.locations ?? [];
+  const selectedUnder = placesUnder(
+    locations
+      .filter((location) => selected.includes(location.id))
+      .map(descendantsOf)
+      .reduce((sum, next) => ({ zones: sum.zones + next.zones, areas: sum.areas + next.areas }), { zones: 0, areas: 0 }),
+  );
   const total = list.data?.pagination.total ?? 0;
   const totalPages = list.data?.pagination.totalPages ?? 1;
 
@@ -281,6 +306,11 @@ export function DeliveryAreasManager() {
     setSearch("");
     setParentFilter("");
     setPage(1);
+    setSelected([]);
+  };
+  // Selection is per page, so the delete confirmation can count what's under it.
+  const changePage = (next: number) => {
+    setPage(next);
     setSelected([]);
   };
   const progress = importer.progress;
@@ -355,7 +385,7 @@ export function DeliveryAreasManager() {
                   aria-label={t("search")}
                   onChange={(event) => {
                     setSearch(event.target.value);
-                    setPage(1);
+                    changePage(1);
                   }}
                 />
               </div>
@@ -372,17 +402,21 @@ export function DeliveryAreasManager() {
                   emptyMessage={t("empty")}
                   onValueChange={(value) => {
                     setParentFilter(value === "_all" ? "" : value);
-                    setPage(1);
+                    changePage(1);
                   }}
                 />
               ) : null}
             </div>
+            {level === "zone" ? (
+              <p className="px-4 pb-3 text-body text-muted-foreground">{t("pathaoThanas")}</p>
+            ) : null}
             {locations.length === 0 ? (
-              <p className="border-t border-border px-4 py-8 text-center text-body text-muted-foreground">
-                {canEdit && !hasPathao && placeTotal === 0 ? (
-                  <Link to="/admin/settings/shipping" hash="couriers" className="text-link hover:underline">{t("importNeedsPathao")}</Link>
-                ) : t("empty")}
-              </p>
+              <div className="space-y-2 border-t border-border px-4 py-8 text-center text-body text-muted-foreground">
+                <p>{noPlaces ? t("noPlacesYet") : t("empty")}</p>
+                {canEdit && !hasPathao && noPlaces ? (
+                  <Link to="/admin/settings/shipping" hash="couriers" className="text-link hover:underline">{t("connectPathao")}</Link>
+                ) : null}
+              </div>
             ) : (
               <ul className="divide-y divide-border border-t border-border">
                 <li className="flex min-h-11 items-center gap-3 px-4 text-body text-muted-foreground">
@@ -440,10 +474,10 @@ export function DeliveryAreasManager() {
                   {t("range", { from: (page - 1) * PAGE_SIZE + 1, to: Math.min(page * PAGE_SIZE, total), total })}
                 </p>
                 <div className="flex gap-1">
-                  <Button type="button" variant="outline" size="icon" aria-label={t("previous")} disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                  <Button type="button" variant="outline" size="icon" aria-label={t("previous")} disabled={page <= 1} onClick={() => changePage(page - 1)}>
                     <ChevronLeft aria-hidden="true" />
                   </Button>
-                  <Button type="button" variant="outline" size="icon" aria-label={t("next")} disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                  <Button type="button" variant="outline" size="icon" aria-label={t("next")} disabled={page >= totalPages} onClick={() => changePage(page + 1)}>
                     <ChevronRight aria-hidden="true" />
                   </Button>
                 </div>
@@ -456,7 +490,13 @@ export function DeliveryAreasManager() {
         open={confirm !== null}
         onOpenChange={(open) => !open && setConfirm(null)}
         title={confirm === "import" ? t("importConfirmTitle") : t("deleteSelected", { count: selected.length })}
-        description={confirm === "import" ? t("importConfirmBody") : t("deleteSelectedConfirm", { count: selected.length })}
+        description={
+          confirm === "import"
+            ? t("importConfirmBody")
+            : selectedUnder
+              ? t("deleteSelectedWithChildren", { count: selected.length, places: selectedUnder })
+              : t("deleteSelectedConfirm", { count: selected.length })
+        }
         confirmLabel={confirm === "import" ? t("import") : common("delete")}
         cancelLabel={common("cancel")}
         variant={confirm === "import" ? "default" : "destructive"}

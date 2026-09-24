@@ -2,8 +2,11 @@
  * Starting text for Settings -> Policies "Create from template": a draft page
  * the merchant reads and edits before publishing. Written for a Bangladeshi
  * online shop (cash on delivery, bKash/Nagad, courier delivery). English only;
- * the merchant rewrites it in their own words and language.
+ * the merchant rewrites it in their own words and language. The store's name
+ * and contact details, and for the shipping policy its saved shipping zones
+ * and charges, fill the text so it matches what checkout does.
  */
+import type { DeliveryZones } from "./DeliveryZones";
 
 export type PolicyKind = "refund" | "privacy" | "terms" | "shipping" | "contact";
 
@@ -13,10 +16,87 @@ export interface PolicyStore {
   phone: string;
   addressLine1: string;
   city: string;
+  /** The Store URL; its host names an unnamed store. */
+  storefrontUrl: string;
 }
+
+export interface PolicyShipping {
+  zones: DeliveryZones;
+  currencySymbol: string;
+}
+
+type Rate = DeliveryZones["everywhereElse"]["rates"][number];
 
 const escape = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** The business name, else the Store URL's host; mid-sentence "our store" when neither is set. */
+function storeName(store: PolicyStore): string {
+  const name = store.companyName.trim();
+  if (name) return name;
+  try {
+    return new URL(store.storefrontUrl).host || "our store";
+  } catch {
+    return "our store";
+  }
+}
+
+/** ৳60, ৳1,500.50: lakh grouping, whole amounts without decimals. */
+function money(amount: number, symbol: string): string {
+  const digits = Number.isInteger(amount) ? 0 : 2;
+  return `${symbol}${new Intl.NumberFormat("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: 2 }).format(amount)}`;
+}
+
+function listPlaces(names: readonly string[]): string {
+  const shown = names.slice(0, 5).map(escape).join(", ");
+  return names.length > 5 ? `${shown} and ${names.length - 5} more` : shown;
+}
+
+/** "Standard ৳60, free on orders of ৳3,000 or more. Delivery in 1–2 days." */
+function describeRate(rate: Rate, symbol: string, withName: boolean): string {
+  const charge = [
+    rate.fee === 0 ? (withName ? "free" : "Free") : money(rate.fee, symbol),
+    rate.freeOver !== null && rate.fee > 0 ? `, free on orders of ${money(rate.freeOver, symbol)} or more` : "",
+  ].join("");
+  const note = rate.description?.trim() ?? "";
+  return `${withName ? `${escape(rate.name)} ` : ""}${charge}.${note ? ` ${escape(/[.!?]$/.test(note) ? note : `${note}.`)}` : ""}`;
+}
+
+/** Where the store delivers, what each place pays and how long it takes, from the saved zones. */
+function deliverySections(shipping: PolicyShipping | null): string {
+  const holidays = "<p>The charge for your address is shown at checkout before you place the order. Delivery can take longer during Eid, public holidays, bad weather or strikes.</p>";
+  const live = (rates: readonly Rate[], kind: Rate["kind"]) => rates.filter((rate) => rate.isActive && rate.kind === kind);
+  const zones = (shipping?.zones.zones ?? [])
+    .map((zone) => ({ zone, rates: live(zone.rates, "delivery") }))
+    .filter(({ zone, rates }) => zone.locations.length > 0 && rates.length > 0);
+  const elsewhere = live(shipping?.zones.everywhereElse.rates ?? [], "delivery");
+  const pickups = live(shipping?.zones.everywhereElse.rates ?? [], "pickup");
+  if (!shipping || (zones.length === 0 && elsewhere.length === 0 && pickups.length === 0)) {
+    return `<h2>Delivery charges and times</h2>\n${holidays}`;
+  }
+  const symbol = shipping.currencySymbol;
+  const rateText = (rates: readonly Rate[], title: string) =>
+    rates.map((rate) => describeRate(rate, symbol, rates.length > 1 || rate.name.trim() !== title)).join(" ");
+  const items = [
+    ...zones.map(({ zone, rates }) =>
+      `<li><strong>${escape(zone.name)}</strong> (${listPlaces(zone.locations.map((place) => place.name))}): ${rateText(rates, zone.name)}</li>`),
+    ...(elsewhere.length > 0
+      ? [`<li><strong>${zones.length > 0 ? "Everywhere else" : "Everywhere we deliver"}</strong>: ${rateText(elsewhere, "")}</li>`]
+      : []),
+  ];
+  const delivery = items.length === 0 ? [] : [
+    `<h2>Delivery charges and times</h2>\n<ul>\n${items.join("\n")}\n</ul>`,
+    ...(zones.length > 0 && elsewhere.length === 0 ? ["<p>We don't deliver outside these areas yet.</p>"] : []),
+    holidays,
+  ];
+  const pickup = pickups.length === 0 ? [] : [
+    "<h2>Pickup</h2>",
+    ...pickups.map((rate) =>
+      `<p>You can collect your order from ${escape(rate.pickupAddress ?? "")}${rate.pickupHours ? ` (${escape(rate.pickupHours)})` : ""}. ${
+        rate.fee === 0 ? "Pickup is free." : `Pickup costs ${money(rate.fee, symbol)}.`}</p>`),
+  ];
+  return [...delivery, ...pickup].join("\n");
+}
 
 function contactLines(store: PolicyStore): string {
   const lines = [
@@ -28,7 +108,11 @@ function contactLines(store: PolicyStore): string {
   return lines.length > 0 ? `<p>${lines.join("<br>")}</p>` : "<p>[Add your phone number and email]</p>";
 }
 
-const TEMPLATES: Record<PolicyKind, { title: string; slug: string; body: (name: string, store: PolicyStore) => string }> = {
+const TEMPLATES: Record<PolicyKind, {
+  title: string;
+  slug: string;
+  body: (name: string, store: PolicyStore, shipping: PolicyShipping | null) => string;
+}> = {
   refund: {
     title: "Return and refund policy",
     slug: "refund-policy",
@@ -85,12 +169,9 @@ ${contactLines(store)}`,
   shipping: {
     title: "Shipping policy",
     slug: "shipping-policy",
-    body: (name, store) => `
-<p>${name} delivers across Bangladesh through trusted courier partners.</p>
-<h2>Delivery time</h2>
-<p>Inside Dhaka: usually 1 to 2 days. Outside Dhaka: usually 2 to 5 days. Delivery can take longer during Eid, public holidays, bad weather or strikes.</p>
-<h2>Delivery charge</h2>
-<p>The delivery charge for your area is shown at checkout before you place the order.</p>
+    body: (name, store, shipping) => `
+<p>Here is where ${name} delivers, what delivery costs and how long it takes.</p>
+${deliverySections(shipping)}
 <h2>Cash on delivery</h2>
 <p>Pay the delivery person when your parcel arrives. Please keep the exact amount ready. You may check the parcel before you pay.</p>
 <h2>Tracking</h2>
@@ -104,15 +185,14 @@ ${contactLines(store)}`,
     title: "Contact information",
     slug: "contact",
     body: (name, store) => `
-<p>Questions about an order, a product or a return? The ${name} team is happy to help.</p>
+<p>Questions about an order, a product or a return? Contact ${name} and we're happy to help.</p>
 ${contactLines(store)}
 <p>We reply to calls and messages from 10 am to 8 pm, Saturday to Thursday. Please have your order number ready.</p>`,
   },
 };
 
 /** A draft page for one policy: title, page address and starting text. */
-export function policyTemplate(kind: PolicyKind, store: PolicyStore) {
+export function policyTemplate(kind: PolicyKind, store: PolicyStore, shipping: PolicyShipping | null = null) {
   const template = TEMPLATES[kind];
-  const name = escape(store.companyName.trim() || "our store");
-  return { title: template.title, slug: template.slug, content: template.body(name, store).trim() };
+  return { title: template.title, slug: template.slug, content: template.body(escape(storeName(store)), store, shipping).trim() };
 }
