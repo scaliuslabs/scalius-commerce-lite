@@ -4,7 +4,7 @@ import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "@scalius/shared/utils";
 import { buttonVariants } from "./button";
-import { modalClassName, overlayClassName } from "./dialog";
+import { dialogFooterClassName, modalClassName, overlayClassName } from "./dialog";
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
@@ -27,7 +27,7 @@ const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDiv
 AlertDialogHeader.displayName = "AlertDialogHeader";
 
 const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)} {...props} />
+  <div data-slot="dialog-footer" className={cn(dialogFooterClassName, className)} {...props} />
 );
 AlertDialogFooter.displayName = "AlertDialogFooter";
 

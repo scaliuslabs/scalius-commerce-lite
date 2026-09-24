@@ -2,6 +2,7 @@ import * as React from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 
 import { cn } from "@scalius/shared/utils";
+import { OVERLAY_COLLISION_PADDING } from "./overlay";
 
 function Popover(props: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />;
@@ -16,7 +17,7 @@ function PopoverContent({
   align = "center",
   side = "bottom",
   sideOffset = 4,
-  collisionPadding = 16,
+  collisionPadding = OVERLAY_COLLISION_PADDING,
   sticky = "partial",
   avoidCollisions = true,
   ...props

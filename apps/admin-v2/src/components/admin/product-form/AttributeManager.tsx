@@ -363,7 +363,7 @@ function AttributeDefinitionCombobox({
           {t("addAttribute")}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={4} collisionPadding={12} className="w-80 p-0">
+      <PopoverContent align="start" sideOffset={4} className="w-80 p-0">
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={t("searchAttributes")}
@@ -559,7 +559,7 @@ function AttributeValueSelector({
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={4} collisionPadding={12} className="w-72 p-0">
+      <PopoverContent align="start" sideOffset={4} className="w-72 p-0">
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={t("searchValues")}
