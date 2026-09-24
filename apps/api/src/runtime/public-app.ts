@@ -12,7 +12,7 @@ export function classifyPublicRuntimePath(pathname: string): PublicRuntimeGroup 
   if (matchesPrefix(pathname, "/api/v1/__ptproxy")) return "proxy";
   if (
     pathname === "/api/v1" || pathname === "/api/v1/" ||
-    ["hero", "header", "navigation", "footer", "storefront", "platform", "checkout-languages", "locations", "shipping-methods", "seo"]
+    ["hero", "header", "navigation", "footer", "storefront", "platform", "checkout", "checkout-languages", "locations", "shipping-methods", "seo"]
       .some((segment) => matchesPrefix(pathname, `/api/v1/${segment}`))
   ) return "config";
   if (
@@ -23,7 +23,7 @@ export function classifyPublicRuntimePath(pathname: string): PublicRuntimeGroup 
     matchesPrefix(pathname, `/api/v1/${segment}`)
   )) return "content";
   if (
-    ["discounts", "analytics", "meta", "checkout", "customer-auth", "abandoned-checkouts", "orders"]
+    ["discounts", "analytics", "meta", "customer-auth", "abandoned-checkouts", "orders"]
       .some((segment) => matchesPrefix(pathname, `/api/v1/${segment}`))
   ) return "buyer";
   return null;
