@@ -194,6 +194,8 @@ export async function listDeliveryRatesForAddress(db: Database, address: Deliver
     return db
         .select({
             id: shippingMethods.id,
+            /** Null for an "Everywhere else" rate (and local pickup). */
+            zoneId: shippingMethods.zoneId,
             name: shippingMethods.name,
             description: shippingMethods.description,
             feeMinor: shippingMethods.feeMinor,

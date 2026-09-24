@@ -149,6 +149,9 @@ describe("local pickup", () => {
         expect(await names({ city: "ctg", zone: "agrabad" })).toEqual(["Outside Dhaka", "Pick up at our shop"]);
         expect((await listDeliveryRatesForAddress(db, { city: "ctg" })).find((row) => row.kind === "pickup"))
             .toMatchObject({ pickupAddress: pickup.pickupAddress, pickupHours: pickup.pickupHours });
+        // Without an address every rate comes back, each saying whether it is zone-scoped.
+        expect((await listDeliveryRatesForAddress(db, null)).map((row) => [row.name, row.zoneId === null]))
+            .toEqual(expect.arrayContaining([["Inside Dhaka", false], ["Outside Dhaka", true], ["Pick up at our shop", true]]));
     });
 
     it("resolves whatever zone the address is in, or none", () => {
