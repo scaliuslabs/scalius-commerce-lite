@@ -82,6 +82,29 @@ describe("storefront API service-binding boundary", () => {
     expect(httpFetch).toHaveBeenCalledTimes(1);
   });
 
+  it("gives a read on the internal origin its full deadline instead of a doomed HTTPS retry", async () => {
+    vi.useFakeTimers();
+    try {
+      const bindingFetch = vi.fn(() =>
+        new Promise<Response>((resolve) => setTimeout(() => resolve(new Response("slow cold read")), 2_500)));
+      const httpFetch = vi.fn();
+      vi.stubGlobal("fetch", httpFetch);
+      // No platform API URL yet: the render's first read goes to the internal origin.
+      const runtime: StorefrontRuntime = { BACKEND_API: fetcher(bindingFetch) };
+
+      const pending = requestRuntime.run(runtime, () =>
+        apiFetch("/storefront/layout", {}, { auth: false, logTerminalFailure: false }));
+      await vi.advanceTimersByTimeAsync(2_600);
+      const response = await pending;
+
+      expect(await response.text()).toBe("slow cold read");
+      expect(new URL((bindingFetch.mock.calls[0] as unknown as [Request])[0].url).origin).toBe("https://api.internal");
+      expect(httpFetch).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each([
     ["a credentialed read", "/seo", { Cookie: "session=placeholder" }],
     ["a private-path read", "/checkout/config", {}],
