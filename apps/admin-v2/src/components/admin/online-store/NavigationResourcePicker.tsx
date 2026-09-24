@@ -113,11 +113,7 @@ export function NavigationResourcePicker({
           </Button>
         )}
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        collisionPadding={16}
-        className="w-80 p-0"
-      >
+      <PopoverContent align="start" className="w-80 p-0">
         {types && types.length > 1 ? (
           <div className="border-b p-1">
             <Tabs value={type} onValueChange={(next) => setType(next as NavigationResourceType)}>
