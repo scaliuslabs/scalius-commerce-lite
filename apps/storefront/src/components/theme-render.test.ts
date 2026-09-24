@@ -30,6 +30,10 @@ import {
   productGridFluidCss,
 } from "@/lib/product-card-layout";
 import { homepageLeadSection } from "@/lib/homepage-sections";
+import {
+  productGalleryMainSlot,
+  productGalleryThumbnailSlot,
+} from "@/components/product/lib/gallery-images";
 
 // ─── Harness ──────────────────────────────────────────────────────────────
 
@@ -283,7 +287,7 @@ const GALLERY_MEDIA = ["front", "back", "detail"].map((name, index) => ({
   id: `pm-${name}`,
   mediaId: `media-${name}`,
   kind: "image",
-  url: image(name),
+  url: `https://cdn.shop.test/media/${name}.jpg/1600.webp`,
   posterMediaId: null,
   posterUrl: null,
   altText: `Kurta ${name}`,
@@ -422,7 +426,7 @@ describe("storefront theme render matrix", () => {
     const gallery = await render("/src/components/product/ProductGallery.astro", theme, {
       product: product("kurta", { imageMediaId: "media-front" }),
       media: GALLERY_MEDIA,
-      thumbnails: layout.productPage.thumbnails,
+      layout: layout.productPage,
     });
     const productPage = parse(
       await render(
@@ -436,9 +440,31 @@ describe("storefront theme render matrix", () => {
     expect(productPage.querySelector("#product-gallery")!.getAttribute("data-thumbnails")).toBe(
       layout.productPage.thumbnails,
     );
-    const mobileStage = productPage.querySelector("[data-mobile-main-image]")!;
-    expect(mobileStage.getAttribute("loading")).toBe("eager");
-    expect(mobileStage.getAttribute("fetchpriority")).toBe("high");
+    // Both main images carry one responsive source set sized to the slot, so
+    // the browser fetches a single candidate for whichever one is visible.
+    const mainSizes = productGalleryMainSlot(layout.productPage, true).sizes;
+    const mainImages = [
+      productPage.querySelector("[data-mobile-main-image]")!,
+      productPage.querySelector("[data-desktop-main-image]")!,
+    ];
+    for (const mainImage of mainImages) {
+      expect(mainImage.getAttribute("src")).toBe("https://cdn.shop.test/media/front.jpg/960.webp");
+      expect(mainImage.getAttribute("srcset")).toContain("https://cdn.shop.test/media/front.jpg/1600.webp 1600w");
+      expect(mainImage.getAttribute("sizes")).toBe(mainSizes);
+      expect(mainImage.getAttribute("loading")).toBe("eager");
+      expect(mainImage.getAttribute("fetchpriority")).toBe("high");
+      expect(mainImage.getAttribute("alt")).toBe("Kurta front");
+    }
+    expect(productPage.querySelector("#product-gallery")!.getAttribute("data-main-sizes")).toBe(mainSizes);
+    for (const rail of ["mobile", "desktop"] as const) {
+      const thumbs = productPage.querySelectorAll(`[data-thumbnail-rail="${rail}"] [data-gallery-thumbnail] img`);
+      expect(thumbs).toHaveLength(GALLERY_MEDIA.length);
+      for (const thumb of thumbs) {
+        expect(thumb.getAttribute("loading")).toBe("lazy");
+        expect(thumb.getAttribute("sizes")).toBe(productGalleryThumbnailSlot(layout.productPage, rail).sizes);
+        expect(thumb.getAttribute("srcset")).toMatch(/\/160\.webp 160w, \S+\/320\.webp 320w$/);
+      }
+    }
     expect(duplicateIds(productPage)).toEqual([]);
   });
 });

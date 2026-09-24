@@ -12,21 +12,38 @@ import {
 import {
   getProductImageUrl,
   hasProductImage,
-  PRODUCT_IMAGE_FALLBACK,
+  productImageSources,
+  resolveProductImageUrl,
 } from "@/lib/product-media";
-import type { ResolvedStorefrontThemeLayout } from "@scalius/shared/storefront-theme";
+import { responsiveImageSources } from "@/lib/responsive-image";
+import {
+  GALLERY_IMAGE_WIDTHS,
+  productGalleryMainSlot,
+  productGalleryThumbnailSlot,
+  type ProductGalleryLayout,
+} from "./lib/gallery-images";
 
 interface Props {
   product: Product;
   media: ProductMedia[];
-  /** Theme -> Layout -> Product page: thumbnails beside or below the main photo. */
-  thumbnails?: ResolvedStorefrontThemeLayout["productPage"]["thumbnails"];
+  /** Theme -> Layout -> Product page: gallery placement and thumbnails. */
+  layout?: ProductGalleryLayout;
+  /**
+   * The exact SKU image of a `?variant=` link (a product media id). It is
+   * rendered first so the LCP photo is the one the buyer asked for.
+   */
+  initialProductMediaId?: string | null;
 }
 
-const { product, media, thumbnails = "beside" } = Astro.props;
+const {
+  product,
+  media,
+  layout = { gallery: "beside", thumbnails: "beside" },
+  initialProductMediaId = null,
+} = Astro.props;
+const thumbnails = layout.thumbnails;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
-const imageWidths = GALLERY_CONFIG.imageWidths;
 
 const galleryMedia = media
   .filter((item) =>
@@ -37,13 +54,23 @@ const galleryMedia = media
       left.sortOrder - right.sortOrder || left.id.localeCompare(right.id),
   );
 const featuredMedia =
-  galleryMedia.find((item) => item.isPrimary) ?? galleryMedia[0] ?? null;
-const productFallbackUrl = hasProductImage(product.imageUrl)
-  ? product.imageUrl!
-  : PRODUCT_IMAGE_FALLBACK;
-const productFallbackMainUrl = getProductImageUrl(productFallbackUrl, imageWidths.display);
-const productFallbackMobileUrl = getProductImageUrl(productFallbackUrl, imageWidths.mobileDisplay);
-const productFallbackZoomUrl = getProductImageUrl(productFallbackUrl, imageWidths.zoom);
+  (initialProductMediaId
+    ? galleryMedia.find(
+        (item) => item.id === initialProductMediaId && item.kind === "image",
+      )
+    : undefined) ??
+  galleryMedia.find((item) => item.isPrimary) ??
+  galleryMedia[0] ??
+  null;
+const hasMultipleMedia = galleryMedia.length > 1;
+const mainSlot = productGalleryMainSlot(layout, hasMultipleMedia);
+const thumbnailSlots = {
+  mobile: productGalleryThumbnailSlot(layout, "mobile"),
+  desktop: productGalleryThumbnailSlot(layout, "desktop"),
+};
+// Client switches rebuild src/srcset/sizes from these URLs with the same
+// helper (responsiveImageSources) and the same slot.
+const productFallbackUrl = resolveProductImageUrl(product.imageUrl);
 
 function formatDuration(durationMs: number | null): string | null {
   if (!durationMs || durationMs <= 0) return null;
@@ -53,60 +80,47 @@ function formatDuration(durationMs: number | null): string | null {
   return `${minutes}:${seconds}`;
 }
 
-const optimizedMedia = galleryMedia.map((item) => {
+const galleryItems = galleryMedia.map((item) => {
   const altText =
     item.altText?.trim() || product.imageAlt?.trim() || product.name;
-  if (item.kind === "video") {
-    return {
-      item,
-      altText,
-      duration: formatDuration(item.durationMs),
-      thumbUrl: item.posterUrl
-        ? getProductImageUrl(item.posterUrl, imageWidths.preview)
-        : null,
-      mainUrl: item.url,
-      mobileUrl: item.url,
-      zoomUrl: null,
-      posterUrl: item.posterUrl
-        ? getProductImageUrl(item.posterUrl, imageWidths.display)
-        : null,
-    };
-  }
-
+  const thumbSource = item.kind === "video" ? item.posterUrl : item.url;
   return {
     item,
     altText,
-    duration: null,
-    thumbUrl: getProductImageUrl(item.url, imageWidths.preview),
-    mainUrl: getProductImageUrl(item.url, imageWidths.display),
-    mobileUrl: getProductImageUrl(item.url, imageWidths.mobileDisplay),
-    zoomUrl: getProductImageUrl(item.url, imageWidths.zoom),
-    posterUrl: null,
+    duration: item.kind === "video" ? formatDuration(item.durationMs) : null,
+    /** Image: the CDN URL the slots derive from. Video: the video file. */
+    url: item.kind === "video" ? item.url : resolveProductImageUrl(item.url),
+    posterUrl:
+      item.kind === "video" && item.posterUrl
+        ? getProductImageUrl(item.posterUrl, GALLERY_IMAGE_WIDTHS.main)
+        : null,
+    thumbs: thumbSource
+      ? {
+          mobile: productImageSources(thumbSource, thumbnailSlots.mobile),
+          desktop: productImageSources(thumbSource, thumbnailSlots.desktop),
+        }
+      : null,
   };
 });
 
 const initialMedia =
-  optimizedMedia.find(({ item }) => item.id === featuredMedia?.id) ?? null;
+  galleryItems.find(({ item }) => item.id === featuredMedia?.id) ?? null;
 const initialImage =
   initialMedia?.item.kind === "image"
     ? initialMedia
-    : (optimizedMedia.find(({ item }) => item.kind === "image") ?? null);
-const initialImageUrl = initialImage?.mainUrl ?? productFallbackMainUrl;
-const initialMobileImageUrl =
-  initialImage?.mobileUrl ?? productFallbackMobileUrl;
-const initialImageZoomUrl = initialImage?.zoomUrl ?? productFallbackZoomUrl;
+    : (galleryItems.find(({ item }) => item.kind === "image") ?? null);
+const initialImageUrl = initialImage?.url ?? productFallbackUrl;
+const initialImageSources = responsiveImageSources(initialImageUrl, mainSlot);
 const initialImageAlt =
   initialImage?.altText ?? product.imageAlt?.trim() ?? product.name;
-const hasMultipleMedia = optimizedMedia.length > 1;
 ---
 
 <div
   id="product-gallery"
   data-product-gallery
   data-initial-product-media-id={featuredMedia?.id ?? undefined}
-  data-fallback-url={productFallbackMainUrl}
-  data-fallback-mobile-url={productFallbackMobileUrl}
-  data-fallback-zoom-url={productFallbackZoomUrl}
+  data-main-sizes={mainSlot.sizes}
+  data-fallback-url={productFallbackUrl}
   data-fallback-media-id={product.imageMediaId ?? undefined}
   data-fallback-alt={product.imageAlt?.trim() || product.name}
   data-thumbnails={thumbnails}
@@ -141,8 +155,9 @@ const hasMultipleMedia = optimizedMedia.length > 1;
           >
             <img
               data-mobile-main-image
-              src={initialMobileImageUrl}
-              data-zoom-url={initialImageZoomUrl}
+              src={initialImageSources.src}
+              srcset={initialImageSources.srcset}
+              sizes={initialImageSources.sizes}
               alt={initialImageAlt}
               width="600"
               height="600"
@@ -171,15 +186,19 @@ const hasMultipleMedia = optimizedMedia.length > 1;
               class="group relative aspect-square w-full cursor-crosshair overflow-hidden rounded-xl border border-border bg-background"
               style="contain: layout style;"
             >
+              {/* Same src/srcset/sizes as the mobile image: the browser picks
+                  one candidate and fetches it once for both. */}
               <img
                 data-desktop-main-image
-                src={initialImageUrl}
+                src={initialImageSources.src}
+                srcset={initialImageSources.srcset}
+                sizes={initialImageSources.sizes}
                 alt={initialImageAlt}
-                width={imageWidths.display}
-                height={imageWidths.display}
+                width={GALLERY_IMAGE_WIDTHS.main}
+                height={GALLERY_IMAGE_WIDTHS.main}
                 class="h-full w-full object-contain object-center transition-opacity duration-150 motion-reduce:transition-none"
-                loading="lazy"
-                fetchpriority="low"
+                loading="eager"
+                fetchpriority="high"
                 decoding="async"
               />
               <div
@@ -232,7 +251,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                   ? "metadata"
                   : "none"}
                 src={initialMedia?.item.kind === "video"
-                  ? initialMedia.mainUrl
+                  ? initialMedia.url
                   : undefined}
                 poster={initialMedia?.item.kind === "video"
                   ? (initialMedia.posterUrl ?? undefined)
@@ -266,7 +285,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                 aria-label="Product media"
               >
                 <div class="flex flex-col gap-2 pt-0.5">
-                  {optimizedMedia.map((itemData, index) => (
+                  {galleryItems.map((itemData, index) => (
                     <button
                       type="button"
                       class="thumbnail-btn snap-start group relative aspect-square w-full min-h-11 shrink-0 overflow-hidden rounded-lg border border-border bg-background transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground active:scale-95 motion-reduce:transition-none"
@@ -274,15 +293,8 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                       data-product-media-id={itemData.item.id}
                       data-media-id={itemData.item.mediaId}
                       data-media-kind={itemData.item.kind}
-                      data-media-url={itemData.mainUrl}
-                      data-mobile-media-url={itemData.mobileUrl}
-                      data-preview-url={
-                        itemData.item.kind === "image"
-                          ? itemData.thumbUrl
-                          : undefined
-                      }
+                      data-media-url={itemData.url}
                       data-poster-url={itemData.posterUrl ?? undefined}
-                      data-zoom-url={itemData.zoomUrl ?? undefined}
                       data-alt-text={itemData.altText}
                       aria-label={
                         itemData.item.kind === "video"
@@ -296,9 +308,11 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                       }
                       tabindex={itemData.item.id === featuredMedia?.id ? 0 : -1}
                     >
-                      {itemData.thumbUrl ? (
+                      {itemData.thumbs ? (
                         <img
-                          src={itemData.thumbUrl}
+                          src={itemData.thumbs.mobile.src}
+                          srcset={itemData.thumbs.mobile.srcset}
+                          sizes={itemData.thumbs.mobile.sizes}
                           alt=""
                           width={mobileThumb.imageSize}
                           height={mobileThumb.imageSize}
@@ -382,7 +396,7 @@ const hasMultipleMedia = optimizedMedia.length > 1;
             class="custom-scrollbar absolute inset-0 flex flex-col gap-3 overflow-y-auto scroll-smooth pr-1 pb-4 snap-y snap-mandatory motion-reduce:scroll-auto"
             aria-label="Product media"
           >
-            {optimizedMedia.map((itemData, index) => (
+            {galleryItems.map((itemData, index) => (
               <button
                 type="button"
                 class="thumbnail-btn snap-start group relative aspect-square w-full min-h-11 shrink-0 overflow-hidden rounded-lg border border-border bg-background transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground active:scale-95 motion-reduce:transition-none"
@@ -390,13 +404,8 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                 data-product-media-id={itemData.item.id}
                 data-media-id={itemData.item.mediaId}
                 data-media-kind={itemData.item.kind}
-                data-media-url={itemData.mainUrl}
-                data-mobile-media-url={itemData.mobileUrl}
-                data-preview-url={
-                  itemData.item.kind === "image" ? itemData.thumbUrl : undefined
-                }
+                data-media-url={itemData.url}
                 data-poster-url={itemData.posterUrl ?? undefined}
-                data-zoom-url={itemData.zoomUrl ?? undefined}
                 data-alt-text={itemData.altText}
                 aria-label={
                   itemData.item.kind === "video"
@@ -408,9 +417,11 @@ const hasMultipleMedia = optimizedMedia.length > 1;
                 }
                 tabindex={itemData.item.id === featuredMedia?.id ? 0 : -1}
               >
-                {itemData.thumbUrl ? (
+                {itemData.thumbs ? (
                   <img
-                    src={itemData.thumbUrl}
+                    src={itemData.thumbs.desktop.src}
+                    srcset={itemData.thumbs.desktop.srcset}
+                    sizes={itemData.thumbs.desktop.sizes}
                     alt=""
                     width={desktopThumb.imageSize}
                     height={desktopThumb.imageSize}
@@ -496,10 +507,9 @@ const hasMultipleMedia = optimizedMedia.length > 1;
     >
       <img
         data-fullscreen-image
-        data-zoom-src={initialImageZoomUrl}
         alt={`${initialImageAlt} — zoomed view`}
-        width={imageWidths.zoom}
-        height={imageWidths.zoom}
+        width={GALLERY_IMAGE_WIDTHS.zoom}
+        height={GALLERY_IMAGE_WIDTHS.zoom}
         loading="lazy"
         decoding="async"
         class="max-h-full max-w-full origin-center object-contain transition-transform duration-100 ease-out will-change-transform motion-reduce:transition-none"

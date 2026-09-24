@@ -13,6 +13,9 @@ interface Props {
   currencyCode?: string;
 }
 
+// theme-foundation.css keeps the product route's `max-w-7xl` at 80rem.
+const PRODUCT_PAGE_CONTAINER_WIDTH = "80rem";
+
 const {
   recommendations,
   currencySymbol = DEFAULT_CURRENCY.symbol,
@@ -37,6 +40,7 @@ const {
               product={relatedProduct}
               currencySymbol={currencySymbol}
               currencyCode={currencyCode}
+              containerWidth={PRODUCT_PAGE_CONTAINER_WIDTH}
             />
           ))}
         </ProductGrid>
