@@ -452,6 +452,13 @@ const CORNERS: Record<StorefrontThemeTokens["radius"], string> = {
 export type CardFacts = ResolvedStorefrontThemeLayout["productCard"];
 
 /** One product card as its variant draws it: photo shape, badge, buy-now button, second photo. */
+/** The photo box per image ratio token, as the storefront card draws it. */
+export const SKETCH_RATIOS = {
+  square: "aspect-square",
+  portrait: "aspect-3/4",
+  landscape: "aspect-4/3",
+} as const satisfies Record<CardFacts["imageRatio"], string>;
+
 export function ProductTile({
   card,
   radius = "subtle",
@@ -471,7 +478,7 @@ export function ProductTile({
       <span
         className={cn(
           "relative flex overflow-clip bg-(--sk-soft)",
-          spec.imageRatio === "portrait" ? "aspect-3/4" : "aspect-square",
+          SKETCH_RATIOS[spec.imageRatio],
           CORNERS[radius],
         )}
       >

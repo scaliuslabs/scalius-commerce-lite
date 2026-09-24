@@ -7,7 +7,7 @@ import SidebarNav from "../components/header/SidebarNav.astro";
 import ThemeFonts from "../components/ThemeFonts.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { productGridFluidCss } from "@/lib/product-card-layout";
+import { productGridFluidCss, productGridSpec } from "@/lib/product-card-layout";
 import type { AnalyticsConfig } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
 import {
@@ -243,10 +243,15 @@ const currencyDecimalPlaces =
   layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
 
 // CSS comes only from shared enum constants and schema-validated hex colours
-// (plus the fluid grid steps derived from the density constants).
-const fluidGrid = productGridFluidCss(themeLayout.grid);
+// (plus the fluid grid steps derived from the density constants, widened for
+// portrait photos). Body data attributes carry the tokens CSS selects on.
+const themeTokens = storefrontTheme.tokens;
+const productGrid = productGridSpec(themeLayout.grid, themeTokens.imageRatio);
+const fluidGrid = productGridFluidCss(productGrid);
 const themeTokenEntries = Object.entries({
   ...buildStorefrontThemeTokens(storefrontTheme),
+  "theme-card-min-tablet": productGrid.cardMin.tablet,
+  "theme-card-min-desktop": productGrid.cardMin.desktop,
   "grid-card-min-fluid": fluidGrid.cardMin,
   "grid-gap-fluid": fluidGrid.gap,
 });
@@ -425,7 +430,11 @@ if (!window.$RefreshReg$) {
     class="flex flex-col min-h-screen site-root"
     data-theme-density={themeLayout.density}
     data-theme-card-style={themeLayout.cardSurface}
-    data-theme-typography={storefrontTheme.tokens.typography}
+    data-theme-typography={themeTokens.typography}
+    data-theme-type-scale={themeTokens.typeScale}
+    data-theme-heading-case={themeTokens.headingCase}
+    data-theme-image-fit={themeTokens.imageFit}
+    data-theme-radius={themeTokens.radius}
     data-storefront-route={storefrontRouteKind}
   >
     {bodyStartScripts.map((script) => <Fragment set:html={script.config} />)}

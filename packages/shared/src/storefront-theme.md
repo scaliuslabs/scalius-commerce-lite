@@ -77,6 +77,14 @@ numbers come from the storefront study
   own. `resolved.layout` carries those facts (header, menus, card, grid,
   gallery, footer, top bar). Sections whose renderer has not landed render
   nothing, and the Theme page says so.
+- **Cards.** A card id's `renders` is its measured anatomy as data: body
+  order (title, price, facts), title emphasis, price colour role, discount
+  wording, and the buy action. Tokens own sizes, radius, surface, photo ratio
+  and fit. Facts (brand, key specs, rating, sold, pack size, delivery, EMI)
+  render only when their data exists, so there are no zero states; sold counts
+  show from 10. `standard` is today's card, unchanged. The storefront renders
+  `standard` from its own file and every other id from
+  `apps/storefront/src/components/cards/variants/anatomy.astro`.
 - **The default renders today's store.** `DEFAULT_STOREFRONT_THEME` is the
   Department mall template. It resolves to the version 3 Classic look
   exactly (tested against values captured from the v3 code), including the
