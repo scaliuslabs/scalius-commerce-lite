@@ -526,6 +526,13 @@
       "when": 1790300005000,
       "tag": "0074_verified_customer_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1790300006000,
+      "tag": "0075_theme_layout_reset",
+      "breakpoints": true
     }
   ]
 }

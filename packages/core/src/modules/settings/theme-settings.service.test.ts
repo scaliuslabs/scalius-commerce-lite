@@ -1,6 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
-import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import {
+  compiledMigrationSql,
+  createMigratedSqlite,
+  createSqliteD1Database,
+} from "@scalius/database/testing/sqlite-d1";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -272,5 +276,73 @@ describe("versioned storefront theme settings", () => {
 
     sqlite.exec("UPDATE theme_preview_sessions SET expires_at = 0");
     await expect(resolveThemePreviewSession(db, exchanged.token)).resolves.toBeNull();
+  });
+});
+
+describe("migration 0075 resets theme documents saved before layouts", () => {
+  // The shape stored by stores whose theme was saved before layout choices.
+  const oldShapeTheme = JSON.stringify({
+    colors: {},
+    typography: { heading: "system", body: "system", scale: "standard" },
+    cornerStyle: "subtle",
+    density: "comfortable",
+    containerWidth: "wide",
+    components: { buttons: "solid", inputs: "outlined", cards: "bordered" },
+  });
+
+  function seedAt0074(published: string, history: string) {
+    const sqlite = createMigratedSqlite({ beforeMigration: "0075_" });
+    sqlite.prepare(`
+      INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
+      VALUES ('default', ?, 3, 1, 1)
+    `).run(published);
+    sqlite.prepare(`
+      INSERT INTO theme_settings_drafts (
+        id, theme, revision, base_published_revision, updated_by, created_at, updated_at
+      ) VALUES ('default', ?, 3, 3, NULL, 1, 1)
+    `).run(published);
+    sqlite.prepare(`
+      INSERT INTO theme_settings_versions (
+        id, published_revision, theme, source, source_revision, published_by, created_at
+      ) VALUES ('themev_old', 2, ?, 'publish', NULL, NULL, 1), ('themev_current', 3, ?, 'publish', NULL, NULL, 1)
+    `).run(history, published);
+    sqlite.exec(compiledMigrationSql("d1", undefined, "0075_"));
+    return createSqliteD1Database({ sqlite });
+  }
+
+  it("lets the Theme page read the defaults after migrating an old-shape theme", async () => {
+    const { sqlite, db } = seedAt0074(oldShapeTheme, oldShapeTheme);
+    try {
+      await expect(getThemeSettings(db)).resolves.toEqual({
+        theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+        revision: 0,
+      });
+      await expect(getThemeWorkspace(db)).resolves.toMatchObject({
+        published: { theme: DEFAULT_STOREFRONT_THEME_SETTINGS, revision: 0 },
+        draft: { revision: 0, basePublishedRevision: 0 },
+      });
+      await expect(listThemeVersions(db)).resolves.toEqual([]);
+      // The first save after the reset claims revision one.
+      await expect(saveThemeSettings(db, DEFAULT_STOREFRONT_THEME_SETTINGS, 0))
+        .resolves.toMatchObject({ revision: 1 });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("keeps a theme already saved with a layout and drops only unreadable history", async () => {
+    const current = JSON.stringify(DEFAULT_STOREFRONT_THEME_SETTINGS);
+    const { sqlite, db } = seedAt0074(current, oldShapeTheme);
+    try {
+      await expect(getThemeSettings(db)).resolves.toEqual({
+        theme: DEFAULT_STOREFRONT_THEME_SETTINGS,
+        revision: 3,
+      });
+      await expect(listThemeVersions(db)).resolves.toEqual([
+        expect.objectContaining({ id: "themev_current", revision: 3 }),
+      ]);
+    } finally {
+      sqlite.close();
+    }
   });
 });
