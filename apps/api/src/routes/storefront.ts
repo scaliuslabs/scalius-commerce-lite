@@ -219,6 +219,16 @@ const layoutDataSchema = z.object({
   }),
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains: z.string(),
+  /**
+   * Store policies linked in Settings -> Policies whose pages are published,
+   * in this order: refund, privacy, terms, shipping, contact. For the footer
+   * and checkout; `path` is a same-store page path such as /refund-policy.
+   */
+  policies: z.array(z.object({
+    kind: z.enum(["refund", "privacy", "terms", "shipping", "contact"]),
+    title: z.string(),
+    path: z.string(),
+  })),
   /** Product call-to-action copy from the active checkout language. */
   storefrontCopy: z.object({
     languageCode: z.string(),

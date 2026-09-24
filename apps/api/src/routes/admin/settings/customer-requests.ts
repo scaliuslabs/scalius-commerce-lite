@@ -2,13 +2,13 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   CUSTOMER_REQUEST_INTRO_MAX_LENGTH,
   getCustomerRequestIntro,
-  getCustomerRequestPolicy,
+  getCustomerRequestPolicyDocument,
   getCustomerRequestPolicyPreview,
   saveCustomerRequestPolicy,
 } from "@scalius/core/modules/settings/customer-request-policy";
 
 import { ok } from "../../../utils/api-response";
-import { errorResponses, successEnvelope } from "../../../schemas/responses";
+import { conflictResponse, errorResponses, successEnvelope } from "../../../schemas/responses";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -31,6 +31,7 @@ const customerRequestActionSchema = z.object({
 
 const customerRequestPolicyPayloadSchema = z.object({
   policy: customerRequestPolicySchema,
+  revision: z.number().int().nonnegative(),
   resolvedIntro: z.string(),
   preview: z.array(z.object({
     id: z.enum(["pre_shipment", "shipped_unpaid", "delivered_paid"]),
@@ -40,9 +41,13 @@ const customerRequestPolicyPayloadSchema = z.object({
   })),
 });
 
-function buildPolicyPayload(policy: z.infer<typeof customerRequestPolicySchema>) {
+function buildPolicyPayload({ policy, revision }: {
+  policy: z.infer<typeof customerRequestPolicySchema>;
+  revision: number;
+}) {
   return {
     policy,
+    revision,
     resolvedIntro: getCustomerRequestIntro(policy),
     preview: getCustomerRequestPolicyPreview(policy),
   };
@@ -68,8 +73,7 @@ const getCustomerRequestPolicyRoute = createRoute({
 });
 
 app.openapi(getCustomerRequestPolicyRoute, async (c) => {
-  const policy = await getCustomerRequestPolicy(c.get("db"));
-  return ok(c, buildPolicyPayload(policy));
+  return ok(c, buildPolicyPayload(await getCustomerRequestPolicyDocument(c.get("db"))));
 });
 
 const saveCustomerRequestPolicyRoute = createRoute({
@@ -82,7 +86,11 @@ const saveCustomerRequestPolicyRoute = createRoute({
     body: {
       required: true,
       content: {
-        "application/json": { schema: customerRequestPolicySchema },
+        "application/json": {
+          schema: customerRequestPolicySchema.extend({
+            expectedRevision: z.number().int().nonnegative(),
+          }).strict(),
+        },
       },
     },
   },
@@ -96,12 +104,15 @@ const saveCustomerRequestPolicyRoute = createRoute({
       },
     },
     ...errorResponses,
+    409: conflictResponse,
   },
 });
 
 app.openapi(saveCustomerRequestPolicyRoute, async (c) => {
-  const policy = await saveCustomerRequestPolicy(c.get("db"), c.req.valid("json"));
-  return ok(c, buildPolicyPayload(policy));
+  const { expectedRevision, ...policy } = c.req.valid("json");
+  return ok(c, buildPolicyPayload(
+    await saveCustomerRequestPolicy(c.get("db"), policy, { expectedRevision }),
+  ));
 });
 
 export { app as customerRequestPolicyRoutes };

@@ -67,6 +67,8 @@ async function click(element: HTMLElement) {
 async function openConnection() {
   await vi.waitFor(() => expect(document.body.textContent).toContain(apps("connection")));
   await click(button(apps("connection")));
+  // The form loads the latest saved connection (and its revision) first.
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"] [role="switch"]')).not.toBeNull());
   await click(document.querySelector<HTMLButtonElement>('[role="dialog"] [role="switch"]')!);
 }
 
@@ -106,6 +108,7 @@ describe("Settings → Apps cards", () => {
     sdk.getApiV1AdminSettingsMetaConversions.mockImplementation(() =>
       ok({
         settings: { pixelId: "123456789012", accessToken: MASK, testEventCode: MASK, isEnabled: false, logRetentionDays: 30 },
+        revision: 4,
       }));
     await render(["analytics.view", "analytics.edit"]);
     await openConnection();
@@ -114,7 +117,7 @@ describe("Settings → Apps cards", () => {
     await click(button(translate(settingsMessages, "save")));
 
     expect(sdk.postApiV1AdminSettingsMetaConversions).toHaveBeenCalledWith({
-      body: { pixelId: "123456789012", isEnabled: true },
+      body: { pixelId: "123456789012", isEnabled: true, expectedRevision: 4 },
     });
   });
 
@@ -128,5 +131,28 @@ describe("Settings → Apps cards", () => {
     await click(button(translate(settingsMessages, "save")));
     expect(sdk.postApiV1AdminSettingsMetaConversions).not.toHaveBeenCalled();
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it("refuses a stale Meta save and offers to reload it, keeping the edit", async () => {
+    sdk.getApiV1AdminSettingsMetaConversions.mockImplementation(() =>
+      ok({ settings: { pixelId: "123456789012", accessToken: MASK, testEventCode: null, isEnabled: false, logRetentionDays: 30 }, revision: 4 }));
+    sdk.postApiV1AdminSettingsMetaConversions.mockImplementationOnce(() => Promise.resolve({
+      error: {
+        error: {
+          code: "SETTINGS_REVISION_CONFLICT",
+          message: "These settings changed in another session.",
+          details: { document: "meta_conversions", expectedRevision: 4, currentRevision: 5 },
+        },
+      },
+      response: { status: 409 },
+    }));
+    await render(["analytics.view", "analytics.edit"]);
+    await openConnection();
+    await click(button(translate(settingsMessages, "save")));
+
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("Someone else changed these settings since you opened them.");
+    expect(button("Reload and keep my edits")).toBeTruthy();
+    expect(dialog.querySelector('[role="switch"]')!.getAttribute("aria-checked")).toBe("true");
   });
 });

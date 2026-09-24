@@ -36,10 +36,9 @@ import {
 } from "./cart-validation";
 import {
     resolveStorefrontDeliveryPreflightFromRows,
-    selectActiveStorefrontShippingMethodRowsByIds,
     type StorefrontDeliveryPreflightResult,
-    type StorefrontShippingMethodRow,
 } from "./orders.storefront";
+import { selectDeliveryRateRowsByIds, type DeliveryRateRow } from "../delivery/zones";
 import {
     selectActiveDeliveryLocationRowsByIds,
     type ActiveDeliveryLocationRow,
@@ -189,7 +188,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         selectStorefrontCartVariantRows(db, productIds, variantIds),
         selectCheckoutProductMediaProjectionRows(db, productIds, variantIds),
         selectActiveDeliveryLocationRowsByIds(db, locationIds),
-        selectActiveStorefrontShippingMethodRowsByIds(db, shippingMethodIds),
+        selectDeliveryRateRowsByIds(db, shippingMethodIds),
         db.select({
             revision: checkoutAuthority.revision,
             hasActiveAdminPushTarget: sql<number>`EXISTS(
@@ -246,7 +245,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 ? results[5] as ActiveDeliveryLocationRow[]
                 : [];
             const shippingRows = Array.isArray(results[6])
-                ? results[6] as StorefrontShippingMethodRow[]
+                ? results[6] as DeliveryRateRow[]
                 : [];
             const sideEffectRows = Array.isArray(results[7])
                 ? results[7] as CheckoutSideEffectSettingsRow[]

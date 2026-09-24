@@ -15,6 +15,7 @@ import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   resolveCheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
+import { SettingsRevisionConflictError } from "@scalius/core/modules/settings/settings-store";
 import { NotFoundError, ConflictError } from "../utils/api-error";
 
 import { ok, created, noContent } from "../utils/api-response";
@@ -22,8 +23,8 @@ import { successEnvelope, noContentResponse, errorResponses, conflictResponse } 
 import { optionalNullableTimestampSchema, optionalTimestampSchema } from "../schemas/timestamps";
 import { bumpCacheGeneration } from "../utils/cache-generation";
 
-const CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING =
-  "CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING";
+/** The batch guard for an update: the language still exists at the revision the editor loaded. */
+const CHECKOUT_LANGUAGE_REVISION_GUARD = "CHECKOUT_LANGUAGE_REVISION_GUARD";
 
 const publicApp = new OpenAPIHono<{ Bindings: Env }>();
 const adminApp = new OpenAPIHono<{ Bindings: Env }>();
@@ -98,6 +99,8 @@ const checkoutLanguageSchema = z.object({
   fieldVisibility: checkoutLanguageFieldVisibilitySchema,
   isActive: z.boolean(),
   isDefault: z.boolean(),
+  /** Optimistic-concurrency revision; an update sends it back as `expectedRevision`. */
+  revision: z.number().int().nonnegative(),
   createdAt: optionalTimestampSchema,
   updatedAt: optionalTimestampSchema,
   deletedAt: optionalNullableTimestampSchema,
@@ -174,6 +177,9 @@ const updateCheckoutLanguageSchema = createCheckoutLanguageSchema
   .extend({
     isActive: z.boolean().optional().openapi({ description: "Whether this language is active" }),
     isDefault: z.boolean().optional().openapi({ description: "Whether this is the default language" }),
+    expectedRevision: z.number().int().nonnegative().openapi({
+      description: "The revision the editor loaded; a stale one is refused with 409 SETTINGS_REVISION_CONFLICT.",
+    }),
   });
 
 function checkoutLanguageConstraintText(error: unknown, depth = 0): string {
@@ -552,13 +558,19 @@ adminApp.openapi(updateRoute, async (c) => {
 
   const existing = await db.select().from(checkoutLanguages).where(eq(checkoutLanguages.id, id)).get();
   if (!existing) throw new NotFoundError("Not found");
+  const conflict = (currentRevision: number) =>
+    new SettingsRevisionConflictError("checkout_language", data.expectedRevision, currentRevision);
+  if (existing.revision !== data.expectedRevision) throw conflict(existing.revision);
 
   if (data.code && data.code !== existing.code) {
     const conflict = await db.select().from(checkoutLanguages).where(and(eq(checkoutLanguages.code, data.code), sql`${checkoutLanguages.id} != ${id}`)).get();
     if (conflict) throw new ConflictError("A checkout language with this code already exists.");
   }
 
-  const updateData: Record<string, unknown> = { updatedAt: sql`(cast(strftime('%s','now') as int))` };
+  const updateData: Record<string, unknown> = {
+    updatedAt: sql`(cast(strftime('%s','now') as int))`,
+    revision: sql`${checkoutLanguages.revision} + 1`,
+  };
   if (data.name !== undefined) updateData.name = data.name;
   if (data.code !== undefined) updateData.code = data.code;
   if (data.languageData !== undefined) {
@@ -571,9 +583,10 @@ adminApp.openapi(updateRoute, async (c) => {
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
+  // Compare-and-swap: a save based on an older revision never overwrites a newer one.
   const updateStatement = db.update(checkoutLanguages)
     .set(updateData)
-    .where(eq(checkoutLanguages.id, id))
+    .where(and(eq(checkoutLanguages.id, id), eq(checkoutLanguages.revision, data.expectedRevision)))
     .returning();
   let updated: typeof checkoutLanguages.$inferSelect | undefined;
   try {
@@ -591,8 +604,8 @@ adminApp.openapi(updateRoute, async (c) => {
       const [, , updatedRows] = await safeBatch(db, [
         buildBatchGuard(
           db,
-          sql`EXISTS (SELECT 1 FROM ${checkoutLanguages} WHERE ${checkoutLanguages.id} = ${id})`,
-          CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING,
+          sql`EXISTS (SELECT 1 FROM ${checkoutLanguages} WHERE ${checkoutLanguages.id} = ${id} AND ${checkoutLanguages.revision} = ${data.expectedRevision})`,
+          CHECKOUT_LANGUAGE_REVISION_GUARD,
         ),
         db.update(checkoutLanguages)
           .set(resetValues)
@@ -607,15 +620,17 @@ adminApp.openapi(updateRoute, async (c) => {
       [updated] = await updateStatement;
     }
   } catch (error) {
-    if (isBatchGuardError(
-      error,
-      CHECKOUT_LANGUAGE_TRANSITION_TARGET_MISSING,
-    )) {
-      throw new NotFoundError("Not found");
-    }
-    rethrowCheckoutLanguageConstraint(error);
+    if (!isBatchGuardError(error, CHECKOUT_LANGUAGE_REVISION_GUARD)) rethrowCheckoutLanguageConstraint(error);
   }
-  if (!updated) throw new NotFoundError("Not found");
+  if (!updated) {
+    // Deleted meanwhile, or saved by someone else since this editor loaded it.
+    const current = await db.select({ revision: checkoutLanguages.revision })
+      .from(checkoutLanguages)
+      .where(eq(checkoutLanguages.id, id))
+      .get();
+    if (!current) throw new NotFoundError("Not found");
+    throw conflict(current.revision);
+  }
   await bumpCacheGeneration(c);
   return ok(c, {
     language: {

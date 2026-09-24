@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "@tanstack/react-router";
-import { AlertCircle, Copy, Mail, Smartphone } from "lucide-react";
+import { AlertCircle, Copy, Download, Mail, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { postApiV1AdminAuth2FaMethod, postApiV1AdminAuth2FaMethodChallenge } from "@scalius/api-client/sdk";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -12,11 +12,14 @@ import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Skeleton } from "~/components/ui/skeleton";
 import { UnsavedChangesGuard } from "~/components/admin/shared/UnsavedChangesGuard";
+import { downloadRecoveryCodes } from "~/components/auth/auth-ui";
+import type { AuthFailure } from "~/components/auth/auth-error";
 import { authClient } from "~/lib/auth-client";
 import { apiData } from "~/lib/api";
 import { refreshAdminRouteContext } from "~/lib/admin-route-context";
 import { useMessages } from "~/i18n";
-import { accountMessages } from "~/i18n/account";
+import { accountMessages, type AccountMessageKey } from "~/i18n/account";
+import { accountFailureKey } from "./account-error";
 import type { User } from "./ProfileHeader";
 
 type Step = "method" | "password" | "qr" | "verify" | "codes";
@@ -24,16 +27,18 @@ type Method = "totp" | "email";
 /** enable: first setup · change: switch method · codes: a new authenticator secret and new recovery codes. */
 type Mode = "enable" | "change" | "codes";
 
-const errorText = (error: unknown, fallback: string) => (error instanceof Error && error.message ? error.message : fallback);
-
-/** The key inside the otpauth:// link, for people who type it instead of scanning. */
+/** The key inside the otpauth:// link in blocks of four, for people who type it instead of scanning. */
 function manualKeyOf(totpUri: string | null): string | null {
   try {
-    return totpUri ? new URL(totpUri).searchParams.get("secret") : null;
+    const key = totpUri ? new URL(totpUri).searchParams.get("secret") : null;
+    return key ? key.match(/.{1,4}/g)!.join(" ") : null;
   } catch {
     return null;
   }
 }
+
+const wrongPassword = ({ code, status }: AuthFailure): AccountMessageKey | null =>
+  code === "PASSWORD_INCORRECT" || code === "INVALID_PASSWORD" || status === 400 || status === 401 ? "wrongPassword" : null;
 
 /**
  * Two-step verification card. Nothing here is put in a URL or a log: the
@@ -55,7 +60,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AccountMessageKey | null>(null);
   const isChange = mode === "change" || mode === "codes";
 
   // The QR code is drawn locally; the key never leaves this page.
@@ -94,13 +99,13 @@ export function TwoFactorSetup({ user }: { user: User }) {
     }
   };
 
-  const run = async (task: () => Promise<void>, fallback: string) => {
+  const run = async (task: () => Promise<void>, pick: (failure: AuthFailure) => AccountMessageKey | null) => {
     setError(null);
     setBusy(true);
     try {
       await task();
     } catch (err) {
-      setError(errorText(err, fallback));
+      setError(accountFailureKey(err, pick));
     } finally {
       setBusy(false);
     }
@@ -108,7 +113,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
 
   const sendEmailCode = async () => {
     const result = await authClient.twoFactor.sendOtp();
-    if (result?.error) throw new Error(result.error.message || t("codeNotSent"));
+    if (result?.error) throw result.error;
   };
 
   // Step 2: the password unlocks setup (first time) or a staged method change.
@@ -116,8 +121,8 @@ export function TwoFactorSetup({ user }: { user: User }) {
     run(async () => {
       if (!isChange) {
         const result = await authClient.twoFactor.enable({ password, method: "totp" });
-        if (result.error) throw new Error(result.error.message || t("setupFailed"));
-        if (!result.data || result.data.method !== "totp") throw new Error(t("setupFailed"));
+        if (result.error) throw result.error;
+        if (!result.data || result.data.method !== "totp") throw new Error("Two-step setup returned no authenticator key");
         setTotpUri(result.data.totpURI);
         setRecoveryCodes(result.data.backupCodes || []);
         if (method === "totp") setStep("qr");
@@ -139,17 +144,17 @@ export function TwoFactorSetup({ user }: { user: User }) {
         setStep("verify");
         toast.success(t("codeSent"));
       }
-    }, t("setupFailed"));
+    }, wrongPassword);
 
   // Step 3: the code proves the method works before anything changes.
   const verify = () =>
     run(async () => {
-      if (isChange && !challengeId) throw new Error(t("setupExpired"));
+      if (isChange && !challengeId) return setError("setupExpired");
       const result = await apiData(postApiV1AdminAuth2FaMethod({
         body: isChange ? { method, challengeId: challengeId!, code } : { method, code },
       }));
       const issued = isChange && method === "totp" ? result.backupCodes ?? [] : recoveryCodes;
-      if (isChange && method === "totp" && !issued.length) throw new Error(t("setupFailed"));
+      if (isChange && method === "totp" && !issued.length) throw new Error("The new authenticator key came without recovery codes");
       setIsEnabled(true);
       setCurrentMethod(method);
       void refreshAdminRouteContext(router);
@@ -160,12 +165,16 @@ export function TwoFactorSetup({ user }: { user: User }) {
         setCode("");
         setStep("codes");
       } else close();
-    }, t("wrongCode"));
+    }, ({ code: errorCode, status }) => {
+      if (errorCode === "TWO_FACTOR_SETUP_EXPIRED") return "setupExpired";
+      if (errorCode === "TWO_FACTOR_CODE_EXPIRED" || errorCode === "OTP_HAS_EXPIRED") return "codeExpired";
+      return status === 400 || status === 401 ? (method === "totp" ? "wrongAppCode" : "wrongEmailCode") : null;
+    });
 
   const resend = () => run(async () => {
     await sendEmailCode();
     toast.success(t("codeSent"));
-  }, t("codeNotSent"));
+  }, () => "codeNotSent");
 
   const copyCodes = async () => {
     try {
@@ -260,7 +269,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
         )}
         {manualKey ? (
           <p className="text-body text-muted-foreground">
-            {t("manualKey")} <code className="break-all text-foreground">{manualKey}</code>
+            {t("manualKey")} <code className="text-foreground">{manualKey}</code>
           </p>
         ) : null}
       </div>
@@ -310,28 +319,30 @@ export function TwoFactorSetup({ user }: { user: User }) {
         <ul className="grid grid-cols-2 gap-2 rounded-lg bg-muted p-3 font-mono text-body" aria-label={t("recoveryCodes")}>
           {recoveryCodes.map((item) => <li key={item} className="break-all text-center">{item}</li>)}
         </ul>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => void copyCodes()}>
+            <Copy aria-hidden="true" />
+            {t("copyCodes")}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => downloadRecoveryCodes(recoveryCodes, t("codesFileIntro", { email: user.email }))}>
+            <Download aria-hidden="true" />
+            {t("downloadCodes")}
+          </Button>
+        </div>
       </div>
     );
-    footer = (
-      <>
-        <Button type="button" variant="outline" onClick={() => void copyCodes()}>
-          <Copy aria-hidden="true" />
-          {t("copyCodes")}
-        </Button>
-        <Button type="button" onClick={close}>{t("done")}</Button>
-      </>
-    );
+    footer = <Button type="button" onClick={close}>{t("done")}</Button>;
   }
 
-  const title = mode === "enable" ? "turnOnTitle" : mode === "change" ? "changeMethod" : mode === "codes" ? "newRecoveryCodes" : "twoStep";
-  const description = step === "codes" ? "recoveryCodesTitle" : mode === "codes" ? "newCodesHelp" : "twoStepHelp";
+  // The title stays put through every step; the line under it says what this step is for.
+  const description = step === "codes" ? "recoveryCodesTitle" : mode === "codes" ? "newCodesHelp" : mode === "change" ? "changeMethodHelp" : "twoStepHelp";
   const submits = step === "password" || step === "verify";
 
   return (
-    <Card>
+    <Card id="two-step" className="scroll-mt-4">
       <UnsavedChangesGuard isDirty={dirty && step !== "codes"} isSubmitting={busy} />
       <CardHeader>
-        <CardTitle>{t(title)}</CardTitle>
+        <CardTitle>{t("twoStep")}</CardTitle>
         <CardDescription>{t(description)}</CardDescription>
       </CardHeader>
       <form
@@ -348,7 +359,7 @@ export function TwoFactorSetup({ user }: { user: User }) {
           {error ? (
             <Alert variant="destructive">
               <AlertCircle aria-hidden="true" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{t(error)}</AlertDescription>
             </Alert>
           ) : null}
           {content}

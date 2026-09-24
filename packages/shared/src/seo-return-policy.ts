@@ -86,24 +86,15 @@ function hasControlCharacter(value: string): boolean {
   return false;
 }
 
+/** Blank or a page on this store (`/returns`); never another site. */
 export function isValidSeoReturnPolicyUrl(value: string): boolean {
   const raw = value.trim();
   if (!raw) return true;
-  if (
-    raw.startsWith("/") &&
+  return raw.startsWith("/") &&
     !raw.startsWith("//") &&
     !raw.includes("\\") &&
-    !hasControlCharacter(raw)
-  ) {
-    return true;
-  }
-
-  try {
-    const parsed = new URL(raw);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
+    !/\s/.test(raw) &&
+    !hasControlCharacter(raw);
 }
 
 function policyUrlOrDefault(value: unknown, fallback: string): string {

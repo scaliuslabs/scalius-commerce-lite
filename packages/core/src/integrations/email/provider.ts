@@ -6,7 +6,7 @@ export interface SendEmailOptions {
   subject: string;
   html: string;
   from?: string;
-  /** Display name shown before the sender address (the store name). */
+  /** Display name for the sender; defaults to the store name. */
   fromName?: string;
   text?: string;
   idempotencyKey?: string;
@@ -32,6 +32,8 @@ export interface CloudflareEmailBinding {
 export interface EmailRuntimeSettings {
   provider: "cloudflare" | "resend";
   sender: string;
+  /** The store name from Business settings: what recipients see as the sender. */
+  senderName?: string;
   senderConfigured: boolean;
   resendApiKey: string | null;
   hasResendApiKey: boolean;
@@ -54,32 +56,23 @@ export interface EmailRuntimeContext {
   settings?: EmailRuntimeSettings;
 }
 
+/** The sender as providers take it: address plus a display name, if any. */
+export function resolveSender(
+  options: Pick<SendEmailOptions, "from" | "fromName">,
+  settings: Pick<EmailRuntimeSettings, "sender" | "senderName">,
+): { email: string; name?: string } {
+  const email = options.from || settings.sender;
+  // Header-safe: no quotes, angle brackets or line breaks in the display name.
+  const name = (options.fromName ?? settings.senderName ?? "").replace(/["<>\r\n\\]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 78);
+  return name ? { email, name } : { email };
+}
+
 /**
  * Contract that every email provider must implement.
  */
 export interface EmailProvider {
   readonly name: string;
   sendEmail(options: SendEmailOptions, context?: EmailRuntimeContext): Promise<SendEmailResult>;
-}
-
-export interface SenderMailbox {
-  email: string;
-  name?: string;
-}
-
-/** The sender address plus a display name safe to place in a From header. */
-export function senderMailbox(
-  { from, fromName }: Pick<SendEmailOptions, "from" | "fromName">,
-  settings: Pick<EmailRuntimeSettings, "sender">,
-): SenderMailbox {
-  const email = from || settings.sender;
-  const name = fromName?.replace(/[\p{Cc}\s]+/gu, " ").trim().slice(0, 78);
-  return name ? { email, name } : { email };
-}
-
-/** RFC 5322 `"Name" <address>`, or the bare address without a name. */
-export function formatSenderMailbox({ email, name }: SenderMailbox): string {
-  return name ? `"${name.replace(/["\\]/g, "\\$&")}" <${email}>` : email;
 }
 
 // ── Provider Registry ───────────────────────────────────────────────

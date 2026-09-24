@@ -1,5 +1,6 @@
 import { ServiceUnavailableError } from "@scalius/core/errors";
-import { senderMailbox, type EmailProvider, type EmailRuntimeContext, type SendEmailOptions, type SendEmailResult } from "./provider";
+import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
+import { resolveSender } from "./provider";
 import { getEmailRuntimeSettings } from "./settings";
 
 export class MailpitEmailProvider implements EmailProvider {
@@ -15,12 +16,12 @@ export class MailpitEmailProvider implements EmailProvider {
       throw new ServiceUnavailableError("Local Mailpit URL is not configured");
     }
 
-    const sender = senderMailbox({ from, fromName }, settings);
+    const sender = resolveSender({ from, fromName }, settings);
     const response = await fetch(`${baseUrl}/api/v1/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        From: { Email: sender.email, ...(sender.name ? { Name: sender.name } : {}) },
+        From: sender.name ? { Email: sender.email, Name: sender.name } : { Email: sender.email },
         To: [{ Email: to }],
         Subject: subject,
         HTML: html,

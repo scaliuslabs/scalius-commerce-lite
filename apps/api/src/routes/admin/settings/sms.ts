@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getSmsSettings, saveSmsSettings, SMS_PROVIDER_IDS } from "@scalius/core/integrations/sms";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { ok } from "../../../utils/api-response";
-import { successEnvelope, messageResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
+import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../../schemas/responses";
 import { clearNotificationProviderBlocks } from "@scalius/core/modules/notifications/notification-provider-health";
 import { bumpCacheGeneration } from "../../../utils/cache-generation";
 
@@ -31,6 +31,7 @@ const smsSettingsSchema = z.object({
     gennetApiToken: z.string().max(MASKED.length),
     gennetBaseUrl: z.string().max(SMS_BASE_URL_MAX_LENGTH),
     gennetSid: z.string().max(SMS_SENDER_MAX_LENGTH),
+    revision: z.number().int().nonnegative(),
 });
 
 function projectSmsSettings(
@@ -55,6 +56,7 @@ function projectSmsSettings(
         gennetApiToken: masked(data.gennetApiToken),
         gennetBaseUrl: data.gennetBaseUrl.slice(0, SMS_BASE_URL_MAX_LENGTH),
         gennetSid: data.gennetSid.slice(0, SMS_SENDER_MAX_LENGTH),
+        revision: data.revision,
     };
 }
 
@@ -91,7 +93,8 @@ const saveSmsSchema = z.object({
     gennetApiToken: z.string().max(SMS_SECRET_MAX_LENGTH).optional(),
     gennetBaseUrl: z.string().max(SMS_BASE_URL_MAX_LENGTH).optional(),
     gennetSid: z.string().max(SMS_SENDER_MAX_LENGTH).optional(),
-});
+    expectedRevision: z.number().int().nonnegative(),
+}).strict();
 
 const SMS_SECRET_FIELDS = [
     "bdbulksmsToken",
@@ -100,7 +103,7 @@ const SMS_SECRET_FIELDS = [
     "gennetApiToken",
 ] as const;
 
-function hasSmsSecretWrite(body: z.infer<typeof saveSmsSchema>): boolean {
+function hasSmsSecretWrite(body: Omit<z.infer<typeof saveSmsSchema>, "expectedRevision">): boolean {
     return SMS_SECRET_FIELDS.some((field) => {
         const value = body[field];
         return typeof value === "string" && value.trim() !== "" && !value.startsWith("••••");
@@ -115,24 +118,25 @@ const saveSmsRoute = createRoute({
     summary: "Save SMS provider settings",
     request: { body: { required: true, content: { "application/json": { schema: saveSmsSchema } } } },
     responses: {
-        200: { description: "SMS settings saved", content: { "application/json": { schema: messageResponse } } },
+        200: { description: "SMS settings saved", content: { "application/json": { schema: successEnvelope(smsSettingsSchema) } } },
         ...errorResponses,
+        409: conflictResponse,
         503: serviceUnavailableResponse,
     },
 });
 
 app.openapi(saveSmsRoute, async (c) => {
     const db = c.get("db");
-    const body = c.req.valid("json");
+    const { expectedRevision, ...body } = c.req.valid("json");
     const encKey = hasSmsSecretWrite(body)
         ? requireEncryptionKey(c.env as Record<string, unknown>)
         : getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    await saveSmsSettings(db, body, encKey);
+    await saveSmsSettings(db, body, encKey, { expectedRevision });
     await clearNotificationProviderBlocks(db, { channel: "sms" });
     // SMS provider readiness participates in public checkout readiness when
     // customer sign-in is required; do not leave the cached projection stale.
     await bumpCacheGeneration(c);
-    return ok(c, { message: "SMS settings saved successfully" });
+    return ok(c, projectSmsSettings(await getSmsSettings(db, getCredentialEncryptionKey(c.env as Record<string, unknown>))));
 });
 
 export { app as smsSettingsRoutes };

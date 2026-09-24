@@ -1,3 +1,4 @@
+import { toLatinDigits } from "@scalius/shared/phone-input";
 import type {
   TaxConfigurationPayload,
   TaxJurisdictionOption,
@@ -12,7 +13,7 @@ export function basisPointsToPercent(rateBps: number): string {
 }
 
 export function percentToBasisPoints(value: string): number | null {
-  const normalized = value.trim();
+  const normalized = toLatinDigits(value).trim();
   if (!/^\d{1,3}(?:\.\d{1,2})?$/.test(normalized)) return null;
   const percent = Number(normalized);
   if (!Number.isFinite(percent) || percent < 0 || percent > 100) return null;

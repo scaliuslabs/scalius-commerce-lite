@@ -21,8 +21,8 @@ vi.mock("@scalius/api-client/sdk", () => ({
 }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-const session = (commandId: string, current: boolean, deviceLabel: string) => ({
-  commandId, current, deviceLabel, deviceType: "desktop", networkHint: null, twoFactorVerified: true,
+const session = (commandId: string, current: boolean, deviceLabel: string, network: { networkHint?: string | null; localNetwork?: boolean } = {}) => ({
+  commandId, current, deviceLabel, deviceType: "desktop", networkHint: null, localNetwork: false, ...network, twoFactorVerified: true,
   impersonated: false, createdAt: "2026-09-20T10:00:00Z", lastActiveAt: "2026-09-24T10:00:00Z", expiresAt: "2026-10-24T10:00:00Z",
 });
 
@@ -44,7 +44,14 @@ describe("AccountSessions", () => {
     document.body.append(host);
     root = createRoot(host);
     Object.values(api).forEach((mock) => mock.mockReset());
-    api.list.mockResolvedValue({ sessions: [session("cmd_this", true, "Chrome on Mac"), session("cmd_phone", false, "Safari on iPhone")], hasMore: false });
+    api.list.mockResolvedValue({
+      sessions: [
+        session("cmd_this", true, "Chrome · macOS", { localNetwork: true }),
+        session("cmd_phone", false, "Safari · iPhone", { networkHint: "203.0.113.x" }),
+        session("cmd_unknown", false, ""),
+      ],
+      hasMore: false,
+    });
     api.signOutOne.mockResolvedValue({});
     api.signOutOthers.mockResolvedValue({ revokedCount: 1 });
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -57,13 +64,23 @@ describe("AccountSessions", () => {
     document.body.innerHTML = "";
   });
 
+  it("names the local network in words and masks a public address", () => {
+    expect(host.textContent).toContain("Local network");
+    expect(host.textContent).toContain("Network 203.0.113.x");
+    expect(host.textContent).not.toContain("0000:");
+  });
+
+  it("names a device the API couldn't recognise in the dashboard's language", () => {
+    expect(host.textContent).toContain("Unknown device");
+  });
+
   it("signs out another device only after confirmation", async () => {
     expect(host.textContent).toContain("This device");
     act(() => buttonIn(host, "Sign out").click());
     expect(api.signOutOne).not.toHaveBeenCalled();
 
     const dialog = document.querySelector('[role="alertdialog"]')!;
-    expect(dialog.textContent).toContain("Sign out Safari on iPhone?");
+    expect(dialog.textContent).toContain("Sign out Safari · iPhone?");
     act(() => buttonIn(dialog, "Sign out").click());
     await flush();
     expect(api.signOutOne).toHaveBeenCalledWith({ path: { commandId: "cmd_phone" } });

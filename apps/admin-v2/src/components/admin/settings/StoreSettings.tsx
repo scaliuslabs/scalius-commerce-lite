@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ImageIcon, Search, X } from "lucide-react";
-import { getCountries, getCountryCallingCode, type Country } from "react-phone-number-input";
+import { z } from "zod";
 import {
   getApiV1AdminSettingsAllowedCountries,
   getApiV1AdminSettingsBusiness,
@@ -12,6 +12,7 @@ import {
   putApiV1AdminSettingsAllowedCountries,
   putApiV1AdminSettingsPlatform,
 } from "@scalius/api-client/sdk";
+import { getCountries, getCountryCallingCode } from "@scalius/shared/customer-utils";
 import {
   SUPPORTED_CURRENCY_CODES,
   normalizeSupportedCurrencyCode,
@@ -40,11 +41,12 @@ import { settingsMessages } from "~/i18n/settings";
 import { storeSettingsMessages } from "~/i18n/settings-store";
 import { MediaManager } from "../media-manager";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
-import { normalizeStorePhone } from "./store-phone";
+import { AdminPhoneInput, adminPhoneProblem, type PhoneCountryPolicy } from "../shared/AdminPhoneInput";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 
-type Business = ApiResult<typeof getApiV1AdminSettingsBusiness>;
-type Platform = ApiResult<typeof getApiV1AdminSettingsPlatform>;
+type Business = Omit<ApiResult<typeof getApiV1AdminSettingsBusiness>, "revision">;
+type Platform = Omit<ApiResult<typeof getApiV1AdminSettingsPlatform>, "revision">;
+type Country = ReturnType<typeof getCountries>[number];
 type CountryMode = "include" | "exclude";
 interface CountryPolicy {
   allowedCountries: Country[];
@@ -65,11 +67,12 @@ export const currencyQuery = {
 };
 export const countriesQuery = {
   queryKey: queryKeys.settings.allowedCountries(),
-  queryFn: async (): Promise<CountryPolicy> => {
+  queryFn: async (): Promise<CountryPolicy & { revision: number }> => {
     const data = await apiData(getApiV1AdminSettingsAllowedCountries());
     return {
       allowedCountries: (Array.isArray(data.allowedCountries) ? data.allowedCountries : []) as Country[],
       allowedCountriesMode: data.allowedCountriesMode === "exclude" ? "exclude" : "include",
+      revision: data.revision,
     };
   },
 };
@@ -105,16 +108,30 @@ function isValidLogo(value: string) {
   return !value.trim() || Boolean(normalizePublicMediaUrl(value));
 }
 
+const EMAIL = z.email();
+
+/** What's wrong with a contact field, as a catalog key. The server checks the same. */
+function contactProblem(key: keyof Business, value: string, policy?: PhoneCountryPolicy) {
+  if (key === "phone") return adminPhoneProblem(value, policy);
+  if (key === "email") return value.trim() && !EMAIL.safeParse(value.trim()).success ? "emailInvalid" : null;
+  return null;
+}
+
 function useBusinessForm() {
   const common = useMessages(settingsMessages);
+  const policy = useQuery(countriesQuery).data;
   return useSettingsForm<Business>({
     queryKey: businessQuery.queryKey,
     fetchFn: businessQuery.queryFn,
-    saveFn: (values) => apiData(postApiV1AdminSettingsBusiness({ body: values })),
+    saveFn: (values, expectedRevision) =>
+      apiData(postApiV1AdminSettingsBusiness({ body: { ...values, expectedRevision } })),
     defaultValues: BUSINESS_DEFAULTS,
     errorMessage: common("saveFailed"),
     canEdit: useCanEditStore(),
-    isValid: (values) => isValidLogo(values.invoiceLogoUrl),
+    isValid: (values) =>
+      isValidLogo(values.invoiceLogoUrl) &&
+      !contactProblem("email", values.email) &&
+      !contactProblem("phone", values.phone, policy),
     fields: (path) => `business-${path}`,
   });
 }
@@ -122,20 +139,29 @@ function useBusinessForm() {
 type BusinessKey = Exclude<keyof Business, "invoiceLogoUrl" | "invoiceFooterText">;
 
 function BusinessFields({ fields }: { fields: Array<{ key: BusinessKey; label: string; help?: string; type?: string }> }) {
+  const t = useMessages(storeSettingsMessages);
   const { values, setValue } = useBusinessForm();
-  return fields.map(({ key, label, help, type }) => (
-    <SettingsField key={key} id={`business-${key}`} label={label} help={help}>
-      <Input
-        id={`business-${key}`}
-        type={type}
-        value={values[key]}
-        inputMode={key === "phone" ? "tel" : undefined}
-        aria-describedby={help ? `business-${key}-note` : undefined}
-        onChange={(event) => setValue(key, event.target.value)}
-        onBlur={key === "phone" ? () => setValue(key, normalizeStorePhone(values[key])) : undefined}
-      />
-    </SettingsField>
-  ));
+  const policy = useQuery(countriesQuery).data;
+  return fields.map(({ key, label, help, type }) => {
+    const id = `business-${key}`;
+    const problem = contactProblem(key, values[key], policy);
+    const describedBy = help ? `${id}-note` : undefined;
+    return (
+      <SettingsField key={key} id={id} label={label} help={help} error={problem ? t(problem) : null}>
+        {key === "phone" ? (
+          <AdminPhoneInput id={id} value={values.phone} aria-describedby={describedBy} onChange={(next) => setValue("phone", next)} />
+        ) : (
+          <Input
+            id={id}
+            type={type}
+            value={values[key]}
+            aria-describedby={describedBy}
+            onChange={(event) => setValue(key, event.target.value)}
+          />
+        )}
+      </SettingsField>
+    );
+  });
 }
 
 function InvoiceFields() {
@@ -305,9 +331,9 @@ function WebAddressFields() {
     queryKey: platformQuery.queryKey,
     fetchFn: platformQuery.queryFn,
     // PUT is a partial update: only the web addresses travel from this form.
-    saveFn: (draft) =>
+    saveFn: (draft, expectedRevision) =>
       apiData(putApiV1AdminSettingsPlatform({
-        body: Object.fromEntries(URL_KEYS.map((key) => [key, draft[key].trim()])),
+        body: { ...Object.fromEntries(URL_KEYS.map((key) => [key, draft[key].trim()])), expectedRevision },
       })),
     resolveSavedValues: (payload) => payload,
     invalidateQueryKeys: [queryKeys.settings.storefrontUrl(), queryKeys.settings.security()],
@@ -411,12 +437,13 @@ function CurrencyFields() {
   const { values, setValues, setValue } = useSettingsForm<CurrencySettingsPayload>({
     queryKey: currencyQuery.queryKey,
     fetchFn: currencyQuery.queryFn,
-    saveFn: (draft) =>
+    saveFn: (draft, expectedRevision) =>
       apiData(postApiV1AdminSettingsCurrency({
         body: normalizeCurrencySettingsInput({
           currencyCode: draft.currencyCode,
           currencySymbol: draft.currencySymbol,
           usdExchangeRate: draft.usdExchangeRate,
+          expectedRevision,
         }),
       })),
     defaultValues: { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "1", currencyCodeLocked: false },
@@ -503,11 +530,10 @@ function CountryFields() {
   const { values, setValue } = useSettingsForm<CountryPolicy>({
     queryKey: countriesQuery.queryKey,
     fetchFn: countriesQuery.queryFn,
-    saveFn: async (draft) => {
-      await apiData(putApiV1AdminSettingsAllowedCountries({
-        body: { allowedCountries: draft.allowedCountries, mode: draft.allowedCountriesMode },
-      }));
-    },
+    saveFn: (draft, expectedRevision) =>
+      apiData(putApiV1AdminSettingsAllowedCountries({
+        body: { allowedCountries: draft.allowedCountries, mode: draft.allowedCountriesMode, expectedRevision },
+      })),
     invalidateQueryKeys: [queryKeys.settings.checkoutReadiness()],
     defaultValues: { allowedCountries: [], allowedCountriesMode: "include" },
     errorMessage: common("saveFailed"),

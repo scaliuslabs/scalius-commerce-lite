@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Loader2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
 
@@ -14,6 +15,7 @@ import {
   SettingsField,
   SettingsRow,
 } from "~/components/admin/settings/SettingsPage";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -58,7 +60,13 @@ export const aiAccessQuery = {
       listAgentConnections({ page: 1, limit: LIST_LIMIT, status: "active" }),
       countClearableAgentConnections(),
     ]);
-    return { connections: page.connections, total: page.pagination.total, clearable: clearable.total };
+    return {
+      connections: page.connections,
+      total: page.pagination.total,
+      clearable: clearable.total,
+      // The server's verdict on this session (store owner, two-step verified).
+      canManage: page.canManage === true,
+    };
   },
 };
 
@@ -301,14 +309,10 @@ function CreateKeyForm({ onCreated }: { onCreated: (key: string) => void }) {
   const [selection, setSelection] = useState(() => defaultSelection("pat"));
   useSaveBar({
     dirty: name.trim().length > 0,
+    // A failure is listed in the dialog's banner; the form keeps its values.
     save: async () => {
-      try {
-        const result = await createAgentToken({ ...selection, label: name.trim() });
-        onCreated(result.token);
-      } catch (error) {
-        toast.error(t("createFailed"));
-        throw error;
-      }
+      const result = await createAgentToken({ ...selection, label: name.trim() });
+      onCreated(result.token);
     },
     discard: () => {
       setName("");
@@ -390,8 +394,9 @@ export function AiAccessCard() {
   const common = useMessages(settingsMessages);
   const { hasPermission, isSuperAdmin, permissions } = usePermissions();
   const canView = hasPermission(ADMIN_PERMISSIONS.AGENT_ACCESS_VIEW);
-  // Creating and removing access is reserved for Super Admins who hold the permission.
-  const canManage = isSuperAdmin && permissions.has(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE);
+  // Creating and removing access is reserved for Super Admins who hold the permission,
+  // in a session that passed two-step verification (the server decides that part).
+  const mayManage = isSuperAdmin && permissions.has(ADMIN_PERMISSIONS.AGENT_ACCESS_MANAGE);
   const refresh = useRefresh();
   const { data, isPending, isError, refetch } = useQuery({ ...aiAccessQuery, enabled: canView });
   const [newKey, setNewKey] = useState<string | null>(null);
@@ -421,6 +426,8 @@ export function AiAccessCard() {
   if (!data) return <SettingsCardLoading />;
 
   const { connections, total, clearable } = data;
+  const canManage = mayManage && data.canManage;
+  const needsTwoStep = mayManage && !data.canManage;
   const quietActions = canManage && (connections.length > 0 || clearable > 0);
   return (
     <>
@@ -472,6 +479,19 @@ export function AiAccessCard() {
           ) : null
         }
       >
+        {needsTwoStep ? (
+          <Alert variant="warning" role="status">
+            <ShieldAlert aria-hidden="true" />
+            <AlertDescription>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p>{t("twoStepNeeded")}</p>
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/admin/account" hash="two-step">{t("twoStepAction")}</Link>
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         {connections.length === 0 || total > connections.length ? (
           <p className="text-body text-muted-foreground">
             {connections.length === 0 ? t("empty") : t("showing", { shown: connections.length, total })}

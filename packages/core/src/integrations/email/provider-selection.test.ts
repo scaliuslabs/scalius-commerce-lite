@@ -77,11 +77,27 @@ describe("email provider selection", () => {
     });
     expect(send).toHaveBeenCalledWith({
       to: "buyer@example.com",
-      from: "orders@example.com",
+      from: { email: "orders@example.com" },
       subject: "Order received",
       html: "<p>Thanks</p>",
       text: undefined,
     });
+  });
+
+  it("signs mail with the store name from Business settings, header-safe", async () => {
+    const { db, sqlite } = createSqliteD1Database();
+    sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('email', 'document', ?, 'json', 'email')")
+      .run(JSON.stringify({ provider: "cloudflare", sender: "orders@example.com" }));
+    sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES ('business', 'document', ?, 'json', 'business')")
+      .run(JSON.stringify({ companyName: 'River "&" <Loom>\r\nBcc: x@evil.test' }));
+    const send = vi.fn().mockResolvedValue({ messageId: "cf_msg_2" });
+
+    await sendEmail({ to: "buyer@example.com", subject: "Order received", html: "<p>Thanks</p>" }, {
+      db,
+      env: { EMAIL: { send } },
+    });
+
+    expect(send.mock.calls[0]![0].from).toEqual({ email: "orders@example.com", name: "River & Loom Bcc: x@evil.test" });
   });
 
   it("captures local email in Mailpit before any production provider", async () => {

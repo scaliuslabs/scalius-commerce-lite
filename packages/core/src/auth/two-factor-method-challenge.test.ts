@@ -42,6 +42,10 @@ describe("staged TOTP method challenge", () => {
       now: NOW,
     });
     expect(pending?.backupCodes).toHaveLength(10);
+    // No look-alike characters (i, l, o, 0, 1) and one case only.
+    for (const code of pending?.backupCodes ?? []) {
+      expect(code).toMatch(/^[a-hj-km-np-z2-9]{5}-[a-hj-km-np-z2-9]{5}$/);
+    }
     expect(pending?.storedBackupCodes).not.toContain(
       pending?.backupCodes[0] ?? "missing",
     );

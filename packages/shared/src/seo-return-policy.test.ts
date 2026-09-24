@@ -25,7 +25,7 @@ describe("SEO return policy settings", () => {
         returnWindowDays: "14",
         returnFees: "free",
         returnMethod: "both",
-        policyUrl: " https://store.example.com/returns ",
+        policyUrl: " /returns ",
       }),
     ).toEqual({
       enabled: true,
@@ -34,14 +34,13 @@ describe("SEO return policy settings", () => {
       returnWindowDays: 14,
       returnFees: "free",
       returnMethod: "both",
-      policyUrl: "https://store.example.com/returns",
+      policyUrl: "/returns",
     });
 
-    expect(
-      normalizeSeoReturnPolicySettings({
-        policyUrl: " /returns ",
-      }).policyUrl,
-    ).toBe("/returns");
+    // Only a page on this store: another site (or a protocol-relative link) is dropped.
+    for (const policyUrl of ["https://evil.example.com/returns", "//evil.example.com/returns", "/re turns"]) {
+      expect(normalizeSeoReturnPolicySettings({ policyUrl }).policyUrl, policyUrl).toBe("");
+    }
   });
 
   it("drops non-finite return windows and rejects unsafe enum/url values", () => {
@@ -92,7 +91,7 @@ describe("SEO return policy settings", () => {
           returnWindowDays: 10,
           returnFees: "customer_responsibility",
           returnMethod: "mail",
-          policyUrl: "https://store.example.com/returns",
+          policyUrl: "/returns",
         },
         {
           returnFees: "free",
@@ -106,7 +105,7 @@ describe("SEO return policy settings", () => {
       returnWindowDays: 10,
       returnFees: "free",
       returnMethod: "both",
-      policyUrl: "https://store.example.com/returns",
+      policyUrl: "/returns",
     });
   });
 });

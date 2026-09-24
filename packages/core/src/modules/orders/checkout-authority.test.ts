@@ -96,11 +96,14 @@ function authorityRows(): Record<string, unknown>[][] {
     ],
     [{
       id: "shipping_1",
+      zoneId: null,
       name: "Standard delivery",
       description: "Delivered within 2–3 business days",
       feeMinor: 6_000,
+      freeOverMinor: null,
       isActive: 1,
       deletedAt: null,
+      kind: "delivery",
     }],
     [{
       revision: 1,

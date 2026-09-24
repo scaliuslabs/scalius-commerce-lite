@@ -83,6 +83,8 @@ export interface StoredFirebaseSettings {
   /** The usable, normalized service account JSON, if there is one. */
   serviceAccountJson: string | undefined;
   publicConfig: Record<string, unknown>;
+  /** The document revision a save must send back as `expectedRevision`. */
+  revision: number;
 }
 
 /** One read for every Firebase caller: delivery, readiness, and the dashboard. */
@@ -111,6 +113,7 @@ export async function readFirebaseSettings(
     serviceAccountStored,
     serviceAccountJson,
     publicConfig: stored.value.publicConfig,
+    revision: stored.revision,
   };
 }
 

@@ -2,8 +2,7 @@
 // Resend email provider.
 
 import {
-  formatSenderMailbox,
-  senderMailbox,
+  resolveSender,
   type EmailProvider,
   type EmailRuntimeContext,
   type SendEmailOptions,
@@ -38,7 +37,8 @@ export class ResendEmailProvider implements EmailProvider {
       throw new ServiceUnavailableError("Resend API key is not configured");
     }
 
-    const fromAddress = formatSenderMailbox(senderMailbox({ from, fromName }, settings));
+    const sender = resolveSender({ from, fromName }, settings);
+    const fromAddress = sender.name ? `"${sender.name}" <${sender.email}>` : sender.email;
 
     try {
       const response = await fetch("https://api.resend.com/emails", {

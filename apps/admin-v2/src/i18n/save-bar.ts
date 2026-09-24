@@ -49,8 +49,11 @@ export const saveBarMessages = defineMessages({
     notSavedBar: "Not saved. Fix the problems listed",
     notSavedOne: "Couldn't save your changes",
     notSavedMany: "To save, fix {count} problems",
+    fixOne: "To save, fix 1 problem",
     serverError: "Something went wrong on our side. Try again in a minute.",
     offline: "Couldn't reach the server. Check your connection and try again.",
+    conflict: "Someone else changed these settings since you opened them.",
+    reloadKeepEdits: "Reload and keep my edits",
   },
   bn: {
     unsavedChanges: "সেভ করা হয়নি",
@@ -70,7 +73,10 @@ export const saveBarMessages = defineMessages({
     notSavedBar: "সেভ হয়নি। তালিকার সমস্যাগুলো ঠিক করুন",
     notSavedOne: "আপনার পরিবর্তন সেভ করা যায়নি",
     notSavedMany: "সেভ করতে {count}টি সমস্যা ঠিক করুন",
+    fixOne: "সেভ করতে ১টি সমস্যা ঠিক করুন",
     serverError: "আমাদের দিকে একটা সমস্যা হয়েছে। এক মিনিট পর আবার চেষ্টা করুন।",
     offline: "সার্ভারে পৌঁছানো যায়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।",
+    conflict: "আপনি খোলার পর অন্য কেউ এই সেটিংস বদলেছেন।",
+    reloadKeepEdits: "নতুনটা লোড করুন, আমার বদল রাখুন",
   },
 });

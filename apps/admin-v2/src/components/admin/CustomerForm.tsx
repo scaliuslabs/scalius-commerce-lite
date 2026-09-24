@@ -116,7 +116,6 @@ export function CustomerForm({ defaultValues, isEdit = false }: CustomerFormProp
                   <AdminPhoneInput
                     value={field.value}
                     onChange={field.onChange}
-                    preserveExistingValue={isEdit ? defaultValues?.phone : undefined}
                     required
                   />
                 </FormControl>

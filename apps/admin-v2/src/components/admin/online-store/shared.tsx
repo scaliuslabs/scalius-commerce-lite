@@ -46,9 +46,30 @@ function sameValue(left: unknown, right: unknown): boolean {
   return left === right || JSON.stringify(left) === JSON.stringify(right);
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A newer saved version (another session's save, a reload after a conflict)
+ * under the merchant's draft: fields they edited keep their edit, the rest
+ * take the newer value, down to nested fields (theme colours, checkout
+ * texts), so saving again never writes back stale fields.
+ */
+export function rebaseDraft<T>(draft: T, previous: T, saved: T): T {
+  if (sameValue(draft, previous)) return saved;
+  if (!isPlainObject(draft) || !isPlainObject(previous) || !isPlainObject(saved)) return draft;
+  const next: Record<string, unknown> = { ...saved };
+  for (const key of Object.keys({ ...previous, ...draft })) {
+    if (!sameValue(draft[key], previous[key])) next[key] = rebaseDraft(draft[key], previous[key], saved[key]);
+  }
+  return next as T;
+}
+
 /**
  * A card's editable copy of one saved document. Registers with the page save
- * bar; a newer saved value replaces the draft only when the card is clean.
+ * bar; a newer saved value is merged under the draft field by field. `saved`
+ * must keep its identity until the document changes (memoize derived values).
  */
 export function useDocumentDraft<T>({
   label,
@@ -56,22 +77,25 @@ export function useDocumentDraft<T>({
   save,
   invalid,
   fields,
+  reload,
 }: {
   /** Card name, shown before this card's error in the save banner. */
-  label: string;
+  label?: string;
   saved: T;
   save: (draft: T) => Promise<unknown>;
   /** True while the draft cannot be saved; the card's fields say why. */
   invalid?: (draft: T) => boolean;
   /** API body path → control id, so a rejected field is marked in place. */
   fields?: (path: string, draft: T) => string | undefined;
+  /** Refetches `saved` after a revision conflict ("Reload and keep my edits"). */
+  reload?: () => Promise<unknown>;
 }) {
   const [state, setState] = useState({ saved, draft: saved });
   let current = state;
   if (state.saved !== saved) {
     current = {
       saved,
-      draft: sameValue(state.draft, state.saved) ? saved : state.draft,
+      draft: rebaseDraft(state.draft, state.saved, saved),
     };
     setState(current);
   }
@@ -92,6 +116,7 @@ export function useDocumentDraft<T>({
       }
     },
     discard: () => setState((value) => ({ ...value, draft: value.saved })),
+    reload,
   };
   if (fields) entry.fields = (path) => fields(path, current.draft);
   useSaveBar(entry);

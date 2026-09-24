@@ -225,7 +225,8 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 | `settings` | Typed settings documents (one row per document: `category` = document key, `key = 'document'`, JSON value, CAS `revision`) plus fraud-checker provider rows and notification provider-health markers. `key` + `category` unique. Shapes live in `@scalius/core/modules/settings/documents` |
 | `analytics` | Analytics script configs. Type, raw script config, location, Partytown flag |
 | `adminFcmTokens` | Firebase Cloud Messaging tokens. User FK, unique token, device metadata |
-| `shippingMethods` | Shipping method options. Name, fee, sort order |
+| `shippingMethods` | Delivery rates (in `delivery.ts`). Zone (null = Everywhere else), kind (delivery/pickup), name, fee, free-over threshold, soft delete |
+| `deliveryZones` / `deliveryZoneLocations` | Delivery zones and their places; a place belongs to at most one zone |
 | `checkoutLanguages` | Checkout i18n. Unique code, language data JSON, field visibility JSON |
 
 ## JSON Column Shapes

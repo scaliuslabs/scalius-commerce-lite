@@ -36,9 +36,11 @@ import {
   homepageDocument,
   mediaDocument,
   metaConversionsDocument,
+  policiesDocument,
   securityDocument,
   seoDocument,
 } from "../settings/documents";
+import { resolvePublicStorePolicies } from "../settings/store-policies.service";
 import {
   selectSettingsDocuments,
   SETTINGS_DOCUMENT_ROW_KEY,
@@ -294,6 +296,7 @@ const LAYOUT_DOCUMENTS = [
   seoDocument,
   businessDocument,
   securityDocument,
+  policiesDocument,
 ];
 
 /**
@@ -350,7 +353,7 @@ export async function getLayoutData(
   ] = batchResults;
   const rows = documentRows as SettingsDocumentRow[];
   const ctx = { encryptionKey: options.credentialEncryptionKey };
-  const [header, footer, currency, media, metaCapiSettings, seo, business, security] = await Promise.all([
+  const [header, footer, currency, media, metaCapiSettings, seo, business, security, policies] = await Promise.all([
     headerDocument.fromRows(rows, ctx),
     footerDocument.fromRows(rows, ctx),
     currencyDocument.fromRows(rows, ctx),
@@ -359,7 +362,10 @@ export async function getLayoutData(
     seoDocument.fromRows(rows, ctx),
     businessDocument.fromRows(rows, ctx),
     securityDocument.fromRows(rows, ctx),
+    policiesDocument.fromRows(rows, ctx),
   ]);
+  // Only linked policies whose pages are published; nothing to read when none are linked.
+  const publicPolicies = await resolvePublicStorePolicies(db, policies.value);
   // Process Analytics
   const processedAnalytics = analyticsResults
     .filter(shouldInjectAnalyticsScript)
@@ -549,6 +555,7 @@ export async function getLayoutData(
     },
     cspAllowedDomains: security.value.cspAllowedDomains,
     storefrontCopy: resolveStorefrontCopy(checkoutLanguageResults),
+    policies: publicPolicies,
   };
 }
 
