@@ -73,8 +73,8 @@ const DAILY_RESPONSES: Record<string, unknown> = {
   },
   "dashboard.shipping_methods.list": {
     data: {
-      shippingMethods: [],
-      pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
+      zones: [],
+      everywhereElse: { rates: [] },
     },
   },
 };
