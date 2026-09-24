@@ -71,7 +71,7 @@ describe("inline validation", () => {
     expect(document.activeElement).toBe(input);
     act(() => root.unmount());
 
-    // Leaving the field also shows it.
+    // Passing through the empty field flags nothing; leaving it after typing does.
     const again = createRoot(container);
     act(() => {
       again.render(
@@ -82,9 +82,64 @@ describe("inline validation", () => {
     });
     const field = container.querySelector<HTMLInputElement>("#rate-fee")!;
     act(() => { field.focus(); field.blur(); });
+    expect(container.querySelector("#rate-fee-note")).toBeNull();
+    act(() => {
+      field.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, "-1");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.blur();
+    });
     expect(container.querySelector("#rate-fee-note")?.textContent).toBe("Enter 0 or more.");
     expect(field.getAttribute("aria-invalid")).toBe("true");
+    // Emptying it again keeps the message: the merchant did type here.
+    act(() => {
+      field.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, "");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.blur();
+    });
+    expect(container.querySelector("#rate-fee-note")?.textContent).toBe("Enter 0 or more.");
     act(() => again.unmount());
+    container.remove();
+  });
+});
+
+describe("inline validation of a picker", () => {
+  it("keeps the hint while the merchant opens the list without choosing (Add staff → Role)", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <SettingsField id="staff-role" label="Role" error="Choose a role." help="You can only give access you have.">
+          <button type="button" id="staff-role">Choose a role</button>
+        </SettingsField>,
+      );
+    });
+    const trigger = container.querySelector<HTMLButtonElement>("#staff-role")!;
+    act(() => { trigger.focus(); trigger.blur(); });
+    expect(container.querySelector("#staff-role-note")?.textContent).toBe("You can only give access you have.");
+    act(() => root.unmount());
+    container.remove();
+  });
+});
+
+describe("inline validation of a saved value", () => {
+  it("flags a filled-in value the merchant only tabbed through", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <SettingsField id="store-phone" label="Phone" error="Enter a phone number like 01712-345678.">
+          <input id="store-phone" defaultValue="12345" />
+        </SettingsField>,
+      );
+    });
+    const input = container.querySelector<HTMLInputElement>("#store-phone")!;
+    act(() => { input.focus(); input.blur(); });
+    expect(container.querySelector("#store-phone-note")?.textContent).toBe("Enter a phone number like 01712-345678.");
+    act(() => root.unmount());
     container.remove();
   });
 });

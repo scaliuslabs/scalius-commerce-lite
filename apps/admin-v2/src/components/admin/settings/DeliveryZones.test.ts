@@ -26,6 +26,12 @@ describe("delivery charge validation", () => {
     expect(rateErrors(rate({ fee: "60.555", freeOver: "abc" }))).toEqual({ fee: "feeInvalid", freeOver: "feeInvalid" });
   });
 
+  it("treats an empty pickup charge as free, but still needs a delivery charge", () => {
+    expect(rateErrors(rate({ kind: "pickup", fee: "", pickupAddress: "House 1, Dhanmondi" }))).toEqual({});
+    expect(rateErrors(rate({ kind: "pickup", fee: "abc", pickupAddress: "House 1, Dhanmondi" }))).toEqual({ fee: "feeInvalid" });
+    expect(rateErrors(rate({ fee: "" }))).toEqual({ fee: "feeInvalid" });
+  });
+
   it("needs a name and, for pickup, the pickup address", () => {
     expect(rateErrors(rate({ name: " ", kind: "pickup", fee: "0" }))).toEqual({
       name: "rateNameRequired",

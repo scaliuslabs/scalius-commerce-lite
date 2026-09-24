@@ -32167,6 +32167,112 @@ export type PostApiV1AdminSettingsPaymentMethodsResponses = {
 
 export type PostApiV1AdminSettingsPaymentMethodsResponse = PostApiV1AdminSettingsPaymentMethodsResponses[keyof PostApiV1AdminSettingsPaymentMethodsResponses];
 
+export type DeleteApiV1AdminSettingsStripeData = {
+    body: {
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/stripe';
+};
+
+export type DeleteApiV1AdminSettingsStripeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsStripeError = DeleteApiV1AdminSettingsStripeErrors[keyof DeleteApiV1AdminSettingsStripeErrors];
+
+export type DeleteApiV1AdminSettingsStripeResponses = {
+    /**
+     * Stripe keys removed
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revision: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsStripeResponse = DeleteApiV1AdminSettingsStripeResponses[keyof DeleteApiV1AdminSettingsStripeResponses];
+
 export type GetApiV1AdminSettingsStripeData = {
     body?: never;
     path?: never;
@@ -32383,6 +32489,112 @@ export type PostApiV1AdminSettingsStripeResponses = {
 };
 
 export type PostApiV1AdminSettingsStripeResponse = PostApiV1AdminSettingsStripeResponses[keyof PostApiV1AdminSettingsStripeResponses];
+
+export type DeleteApiV1AdminSettingsSslcommerzData = {
+    body: {
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/sslcommerz';
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzError = DeleteApiV1AdminSettingsSslcommerzErrors[keyof DeleteApiV1AdminSettingsSslcommerzErrors];
+
+export type DeleteApiV1AdminSettingsSslcommerzResponses = {
+    /**
+     * SSLCommerz keys removed
+     */
+    200: {
+        success: true;
+        data: {
+            message: string;
+            revision: number;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsSslcommerzResponse = DeleteApiV1AdminSettingsSslcommerzResponses[keyof DeleteApiV1AdminSettingsSslcommerzResponses];
 
 export type GetApiV1AdminSettingsSslcommerzData = {
     body?: never;
@@ -37282,6 +37494,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                 name: string | null;
                 logoUrl: string | null;
                 storefrontUrl: string | null;
+                nameFromAddress: boolean;
             };
         };
     };
@@ -54628,6 +54841,10 @@ export type GetApiV1AdminSettingsDeliveryLocationsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
+                descendants?: {
+                    zones: number;
+                    areas: number;
+                };
                 [key: string]: unknown;
             }>;
             pagination: {
@@ -54753,6 +54970,10 @@ export type PostApiV1AdminSettingsDeliveryLocationsResponses = {
                 isActive: boolean;
                 sortOrder: number;
                 displayName?: string;
+                descendants?: {
+                    zones: number;
+                    areas: number;
+                };
                 [key: string]: unknown;
             };
         };
@@ -55049,6 +55270,10 @@ export type GetApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
+            descendants?: {
+                zones: number;
+                areas: number;
+            };
             [key: string]: unknown;
         };
     };
@@ -55167,6 +55392,10 @@ export type PutApiV1AdminSettingsDeliveryLocationsByIdResponses = {
             isActive: boolean;
             sortOrder: number;
             displayName?: string;
+            descendants?: {
+                zones: number;
+                areas: number;
+            };
             [key: string]: unknown;
         };
     };

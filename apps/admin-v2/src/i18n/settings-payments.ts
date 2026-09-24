@@ -55,6 +55,11 @@ export const paymentsMessages = defineMessages({
     secretSaved: "Saved. Type a new value to replace it.",
     credentialsTitle: "{method} keys",
     loadCredentials: "Payment keys",
+    removeKeys: "Remove keys",
+    removeKeysTitle: "Remove {method} keys?",
+    removeKeysBody: "{method} turns off at checkout and its saved keys are deleted. You can add keys again anytime.",
+    removeBlocked: "Checkout needs another payment method before {method} can be removed. Turn one on first.",
+    keysRemoved: "Keys removed",
 
     optionsTitle: "Checkout payment options",
     modeAll: "All methods you turned on",
@@ -131,6 +136,11 @@ export const paymentsMessages = defineMessages({
     secretSaved: "সেভ করা আছে। বদলাতে নতুন মান লিখুন।",
     credentialsTitle: "{method} কী",
     loadCredentials: "পেমেন্ট কী",
+    removeKeys: "কী মুছে ফেলুন",
+    removeKeysTitle: "{method} কী মুছে ফেলবেন?",
+    removeKeysBody: "চেকআউটে {method} বন্ধ হবে এবং সেভ করা কী মুছে যাবে। পরে যেকোনো সময় আবার কী যোগ করতে পারবেন।",
+    removeBlocked: "{method} মুছে ফেলার আগে চেকআউটে আরেকটি পেমেন্ট মেথড চালু করুন।",
+    keysRemoved: "কী মুছে ফেলা হয়েছে",
 
     optionsTitle: "চেকআউটের পেমেন্ট অপশন",
     modeAll: "চালু করা সব পদ্ধতি",

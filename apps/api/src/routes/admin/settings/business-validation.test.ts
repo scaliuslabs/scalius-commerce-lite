@@ -72,12 +72,24 @@ describe("Business email route boundary", () => {
     ["০১৭১২-৩৪৫৬৭৮", "01712345678"],
     ["8801912345678", "01912345678"],
     ["+44 20 7946 0958", "+442079460958"],
+    // Shops publish landlines and hotlines: stored as +880…
+    ["02-9876543", "+88029876543"],
+    ["০২-৫৫০১২৩৪৫", "+880255012345"],
+    ["031-714567", "+88031714567"],
+    ["09612-345678", "+8809612345678"],
     ["  ", ""],
   ])("saves the phone %j as %j", async (phone, stored) => {
     const response = await save(createApp(), { phone });
 
     expect(response.status).toBe(200);
     expect(businessInfo()).toMatchObject({ phone: stored });
+  });
+
+  it.each(["012345678", "02-123", "01212345678"])("still refuses %j, which is neither a mobile nor a landline", async (phone) => {
+    const response = await save(createApp(), { phone });
+
+    expect(response.status).toBe(400);
+    expect(businessInfo()).toBeNull();
   });
 
   it("refuses a number from a country the store doesn't accept", async () => {

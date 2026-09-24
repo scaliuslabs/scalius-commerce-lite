@@ -1,16 +1,18 @@
 import type { Database } from "@scalius/database/client";
-import { orders, orderItems } from "@scalius/database/schema";
+import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from "@scalius/database/schema";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
+import { getTrackingUrl } from "../delivery/tracking-url";
 import { MESSAGE_COPY, requestCopy, type MessageLanguage } from "./message-copy";
 import type { OrderNotificationType } from "./notification-types";
 import {
+  renderEmailTemplate,
   renderOrderEmail,
-  renderTemplate,
+  renderSmsTemplate,
   type EmailPayment,
   type EmailTemplate,
   type NotificationVariableValues,
@@ -29,6 +31,7 @@ export interface OrderMessageInput {
 
 /** Everything a customer or staff message can say about one order. */
 export interface OrderMessageContext {
+  event: OrderNotificationType;
   language: MessageLanguage;
   variables: NotificationVariableValues;
   facts: OrderEmailFacts;
@@ -36,7 +39,7 @@ export interface OrderMessageContext {
 
 // Read only persisted purchase facts, never today's catalog or an invoice issuance.
 async function readOrderFacts(db: Database, orderId: string) {
-  const rows = await db.select({ order: {
+  const rows = db.select({ order: {
     customerName: orders.customerName,
     customerPhone: orders.customerPhone,
     shippingAddress: orders.shippingAddress,
@@ -45,6 +48,8 @@ async function readOrderFacts(db: Database, orderId: string) {
     cityName: orders.cityName,
     shippingMethodName: orders.shippingMethodName,
     shippingMethodDescription: orders.shippingMethodDescription,
+    shippingMethodBaseAmountMinor: orders.shippingMethodBaseAmountMinor,
+    shippingFeeWaived: orders.shippingFeeWaived,
     accountOwnerCustomerId: orders.accountOwnerCustomerId,
     orderNumber: orders.orderNumber,
     status: orders.status,
@@ -70,16 +75,118 @@ async function readOrderFacts(db: Database, orderId: string) {
     .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
     .where(eq(orders.id, orderId))
     .orderBy(asc(orderItems.createdAt), asc(orderItems.id));
-  const order = rows[0]?.order;
+  // The immutable per-promotion allocations the order was placed with.
+  const discounts = db.select({
+    promotionId: orderDiscountAllocations.promotionId,
+    name: orderDiscountAllocations.promotionName,
+    code: orderDiscountAllocations.promotionCode,
+    target: orderDiscountAllocations.target,
+    amountMinor: sql<number>`SUM(${orderDiscountAllocations.discountAmountMinor})`,
+  }).from(orderDiscountAllocations)
+    .where(eq(orderDiscountAllocations.orderId, orderId))
+    .groupBy(
+      orderDiscountAllocations.promotionId,
+      orderDiscountAllocations.promotionName,
+      orderDiscountAllocations.promotionCode,
+      orderDiscountAllocations.target,
+    )
+    .orderBy(asc(orderDiscountAllocations.promotionName));
+  const [orderRows, discountRows] = await Promise.all([rows, discounts]);
+  const order = orderRows[0]?.order;
   if (!order) throw new Error("Order email details are unavailable");
-  return { order, items: rows.flatMap((row) => row.item ? [row.item] : []) };
+  return {
+    order,
+    items: orderRows.flatMap((row) => row.item ? [row.item] : []),
+    discounts: discountRows.map((row) => ({ ...row, amountMinor: Number(row.amountMinor) || 0 })),
+  };
+}
+
+type OrderFacts = Awaited<ReturnType<typeof readOrderFacts>>;
+
+/**
+ * The summary's discount and delivery lines: each promotion by name and code,
+ * and delivery as the buyer pays it with the fee a waiver or a shipping
+ * discount replaced. Allocations that don't add up to the saved discount fall
+ * back to one "Discount" line so the summary always matches the total.
+ */
+function discountAndDelivery({ order, discounts }: OrderFacts, money: (minor: number) => string) {
+  const shippingDiscountMinor = discounts.filter((row) => row.target === "shipping")
+    .reduce((sum, row) => sum + row.amountMinor, 0);
+  const promotions = new Map<string, { name: string; code: string | null; minor: number }>();
+  for (const row of discounts) {
+    if (row.target === "shipping") continue;
+    const promotion = promotions.get(row.promotionId);
+    if (promotion) promotion.minor += row.amountMinor;
+    else promotions.set(row.promotionId, { name: row.name, code: row.code, minor: row.amountMinor });
+  }
+  const allocatedMinor = [...promotions.values()].reduce((sum, row) => sum + row.minor, 0) + shippingDiscountMinor;
+  const fits = allocatedMinor <= order.discountAmountMinor && shippingDiscountMinor <= order.shippingAmountMinor;
+  const lines: Array<{ name: string | null; code: string | null; amount: string }> = fits
+    ? [...promotions.values()].filter((row) => row.minor > 0)
+      .map((row) => ({ name: row.name, code: row.code, amount: money(row.minor) }))
+    : [];
+  const otherMinor = order.discountAmountMinor - (fits ? allocatedMinor : 0);
+  if (otherMinor > 0) lines.push({ name: null, code: null, amount: money(otherMinor) });
+
+  let charged = order.shippingAmountMinor;
+  let original: number | null = null;
+  if (fits && shippingDiscountMinor > 0) {
+    original = charged;
+    charged -= shippingDiscountMinor;
+  } else if (order.shippingFeeWaived && charged === 0 && (order.shippingMethodBaseAmountMinor ?? 0) > 0) {
+    original = order.shippingMethodBaseAmountMinor;
+  }
+  return {
+    discounts: lines,
+    delivery: {
+      amount: charged > 0 ? money(charged) : null,
+      original: original !== null && original > charged ? money(original) : null,
+    },
+  };
+}
+
+/** The refund in this message (major units in the queued facts), in the order's currency. */
+function refundAmount(amount: unknown, currency: string | null): string {
+  const value = typeof amount === "number" ? amount : typeof amount === "string" ? Number(amount) : Number.NaN;
+  return currency && Number.isFinite(value) && value > 0 ? formatMoney(value, { code: currency }) : "";
 }
 
 const CLOSED_STATUSES = new Set(["cancelled", "returned", "refunded", "partially_refunded"]);
 
 /** The order's facts and variable values in the store's language, for every channel. */
+/** The parcel a shipped message is about: the one with the queued tracking ID, else the newest. */
+async function readShipment(db: Database, orderId: string, trackingId: string) {
+  const shipments = await db.select({
+    providerType: deliveryShipments.providerType,
+    trackingId: deliveryShipments.trackingId,
+    trackingUrl: deliveryShipments.trackingUrl,
+    courierName: deliveryShipments.courierName,
+  }).from(deliveryShipments)
+    .where(eq(deliveryShipments.orderId, orderId))
+    .orderBy(desc(deliveryShipments.createdAt), desc(deliveryShipments.id))
+    .limit(10);
+  const shipment = shipments.find((row) => trackingId && row.trackingId === trackingId) ?? shipments[0];
+  if (!shipment) return null;
+  const tracking = trackingId || shipment.trackingId?.trim() || "";
+  const url = shipment.trackingUrl?.trim() || getTrackingUrl(shipment.providerType, tracking || null) || "";
+  return {
+    trackingId: tracking,
+    courierName: shipment.courierName?.trim() || COURIER_NAMES[shipment.providerType] || "",
+    // Only a public http(s) page may become a link in the message.
+    trackingUrl: /^https?:\/\/[^\s]+$/.test(url) ? url : "",
+  };
+}
+
+const COURIER_NAMES: Record<string, string> = { pathao: "Pathao", steadfast: "Steadfast" };
+
 export async function readOrderMessageContext(input: OrderMessageInput, db: Database): Promise<OrderMessageContext> {
-  const [{ order, items }, store] = await Promise.all([readOrderFacts(db, input.orderId), readStoreIdentity(db)]);
+  const queuedTrackingId = String(input.data?.trackingId ?? "").trim();
+  const [facts, store, shipment] = await Promise.all([
+    readOrderFacts(db, input.orderId),
+    readStoreIdentity(db),
+    input.type === "order_shipped" ? readShipment(db, input.orderId, queuedTrackingId) : null,
+  ]);
+  const { order, items } = facts;
   const { language } = store;
 
   const currency = normalizeSupportedCurrencyCode(order.currencyCode);
@@ -117,6 +224,7 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
   const { request, status } = requestCopy(MESSAGE_COPY[language], input.data?.supportRequestType, input.data?.supportRequestStatus);
   const codDue = payment.state === "cod" ? payment.due : null;
   return {
+    event: input.type,
     language,
     variables: {
       customer_name: order.customerName?.trim() || input.name?.trim() || "",
@@ -124,7 +232,10 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
       order_total: money ? money(order.totalAmountMinor) : "",
       cod_amount: codDue ?? "",
       store_name: store.name ?? "",
-      tracking_id: String(input.data?.trackingId ?? "").trim(),
+      tracking_id: shipment?.trackingId ?? queuedTrackingId,
+      courier_name: shipment?.courierName ?? "",
+      tracking_url: shipment?.trackingUrl ?? "",
+      refund_amount: refundAmount(input.data?.amount, currency),
       support_request: request,
       support_status: status,
     },
@@ -139,8 +250,7 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
       })),
       amounts: money ? {
         subtotal: money(order.subtotalAmountMinor),
-        shipping: money(order.shippingAmountMinor),
-        discount: order.discountAmountMinor > 0 ? money(order.discountAmountMinor) : null,
+        ...discountAndDelivery(facts, money),
         tax: order.taxAmountMinor > 0
           ? { label: order.taxLabel, amount: money(order.taxAmountMinor), included: Boolean(order.pricesIncludeTax) }
           : null,
@@ -167,10 +277,14 @@ export function composeOrderEmail(context: OrderMessageContext, template: EmailT
   const email = renderOrderEmail({
     language: context.language,
     facts: context.facts,
-    subject: renderTemplate(template.subject, context.variables) || context.variables.order_number || "",
-    body: renderTemplate(template.body, context.variables),
+    ...renderEmailTemplate(context.event, context.language, template, context.variables),
   });
   return { ...email, fromName: context.facts.store.name ?? undefined };
+}
+
+/** The customer's SMS for this order event, from the merchant's template. */
+export function composeOrderSms(context: OrderMessageContext, body: string): string {
+  return renderSmsTemplate(context.event, context.language, body, context.variables);
 }
 
 /** The staff "new order" email: the same order facts, linked to the dashboard. */

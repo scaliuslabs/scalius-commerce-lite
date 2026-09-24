@@ -140,9 +140,14 @@ function emptyDraft(): RateDraft {
 
 type RateErrorKey = "rateNameRequired" | "feeInvalid" | "feeTooHigh" | "freeOverTooHigh" | "pickupAddressRequired";
 
+/** A charge as typed; an empty pickup charge means free pickup. */
+function feeOf(rate: RateDraft): number | null {
+  return rate.kind === "pickup" && !rate.fee.trim() ? 0 : parseAmountInput(rate.fee);
+}
+
 /** What's wrong with each field of a charge, or nothing. */
 export function rateErrors(rate: RateDraft): Partial<Record<"name" | "fee" | "freeOver" | "pickupAddress", RateErrorKey>> {
-  const fee = parseAmountInput(rate.fee);
+  const fee = feeOf(rate);
   const freeOver = rate.freeOver.trim() ? parseAmountInput(rate.freeOver) : null;
   return {
     ...(rate.name.trim() ? {} : { name: "rateNameRequired" as const }),
@@ -159,7 +164,7 @@ function toRateInput(rate: RateDraft) {
     id: rate.id,
     kind: rate.kind,
     name: rate.name.trim(),
-    fee: parseAmountInput(rate.fee) ?? 0,
+    fee: feeOf(rate) ?? 0,
     freeOver: rate.freeOver.trim() ? parseAmountInput(rate.freeOver) : null,
     description: rate.description.trim() || null,
     pickupAddress: rate.kind === "pickup" ? rate.pickupAddress.trim() : null,
@@ -202,7 +207,9 @@ function RatesEditor({
                 <RadioGroup
                   id={id("kind")}
                   value={rate.kind}
-                  onValueChange={(kind) => update(index, { kind: kind as Kind })}
+                  // Pickup is usually free: a new pickup charge starts at 0.
+                  onValueChange={(kind) =>
+                    update(index, { kind: kind as Kind, ...(kind === "pickup" && !rate.fee.trim() ? { fee: "0" } : {}) })}
                 >
                   {(["delivery", "pickup"] as const).map((kind) => (
                     <label key={kind} className="flex min-h-11 items-center gap-2 text-body">
@@ -219,8 +226,20 @@ function RatesEditor({
                   <Input id={id("name")} value={rate.name} placeholder={t("rateNamePlaceholder")} onChange={(event) => update(index, { name: event.target.value })} />
                 </SettingsField>
               </div>
-              <SettingsField id={id("fee")} label={`${t("fee")} (${symbol})`} error={errors.fee ? t(errors.fee) : null}>
-                <Input id={id("fee")} inputMode="decimal" autoComplete="off" value={rate.fee} onChange={(event) => update(index, { fee: event.target.value })} />
+              <SettingsField
+                id={id("fee")}
+                label={`${t("fee")} (${symbol})`}
+                help={rate.kind === "pickup" ? t("pickupFeeHelp") : undefined}
+                error={errors.fee ? t(errors.fee) : null}
+              >
+                <Input
+                  id={id("fee")}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={rate.fee}
+                  aria-describedby={rate.kind === "pickup" ? `${id("fee")}-note` : undefined}
+                  onChange={(event) => update(index, { fee: event.target.value })}
+                />
               </SettingsField>
             </div>
             <SettingsField
@@ -634,14 +653,16 @@ export function DeliveryZonesCard() {
       ? t("noCharges")
       : rates.map((rate) => [
           rate.kind === "pickup" ? `${t("pickup")}: ${rate.name}` : rate.name,
-          fmt(rate.fee),
+          rate.fee === 0 ? t("free") : fmt(rate.fee),
           rate.freeOver === null ? null : t("freeOverSummary", { amount: fmt(rate.freeOver) }),
           rate.isActive ? null : t("off"),
         ].filter(Boolean).join(" ")).join(" · ");
   const places = (zone: Zone) =>
-    zone.locations.length <= 2
-      ? zone.locations.map((place) => place.name).join(", ")
-      : t("placeCount", { count: zone.locations.length });
+    zone.locations.length === 0
+      ? t("noPlacesInZone")
+      : zone.locations.length <= 2
+        ? zone.locations.map((place) => place.name).join(", ")
+        : t("placeCount", { count: zone.locations.length });
 
   return (
     <SettingsCard
@@ -655,28 +676,6 @@ export function DeliveryZonesCard() {
       }
       rows={
         <>
-          {templateError ? (
-            <p role="alert" className="border-t border-border px-4 py-3 text-body text-destructive first:border-t-0">{templateError}</p>
-          ) : null}
-          {data.zones.length === 0 && canEdit
-            ? TEMPLATES.map((option) => (
-                <SettingsRow
-                  key={option.id}
-                  disabled={!hasPlaces}
-                  label={t(option.title)}
-                  value={t(option.value, { inside: fmt(option.inside), near: fmt(90), outside: fmt(120) })}
-                  onClick={() => {
-                    setTemplateError(null);
-                    setTemplate(option.id);
-                  }}
-                />
-              ))
-            : null}
-          {data.zones.length === 0 && canEdit && !hasPlaces ? (
-            <p className="border-t border-border px-4 py-3 text-body text-muted-foreground">
-              <Link to="/admin/settings/shipping/areas" className="text-link hover:underline">{t("templateNeedsPlaces")}</Link>
-            </p>
-          ) : null}
           {data.zones.map((zone) => (
             <SettingsDialog key={zone.id} title={t("editZone", { name: zone.name })} trigger={
               <SettingsRow disabled={!canEdit} label={zone.name} value={`${places(zone)} · ${summary(zone.rates)}`} />
@@ -693,6 +692,43 @@ export function DeliveryZonesCard() {
           }>
             <EverywhereElseForm everywhereElse={data.everywhereElse} />
           </SettingsDialog>
+          {data.zones.length === 0 && canEdit ? (
+            // Suggestions, not zones: nothing here is live until the merchant uses one.
+            <section aria-labelledby="suggested-setups" className="border-t border-border">
+              <h3 id="suggested-setups" className="px-4 pt-3 text-heading-sm text-muted-foreground">{t("suggestedSetups")}</h3>
+              {templateError ? <p role="alert" className="px-4 pt-2 text-body text-destructive">{templateError}</p> : null}
+              <ul>
+                {TEMPLATES.map((option) => (
+                  <li key={option.id} className="flex min-h-14 items-center gap-3 px-4 py-3">
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-body font-medium">{t(option.title)}</span>
+                      <span className="block text-body text-muted-foreground">
+                        {t(option.value, { inside: fmt(option.inside), near: fmt(90), outside: fmt(120) })}
+                      </span>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!hasPlaces}
+                      aria-label={t("useNamed", { name: t(option.title) })}
+                      onClick={() => {
+                        setTemplateError(null);
+                        setTemplate(option.id);
+                      }}
+                    >
+                      {t("use")}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              {!hasPlaces ? (
+                <p className="px-4 pb-3 text-body text-muted-foreground">
+                  <Link to="/admin/settings/shipping/areas" className="text-link hover:underline">{t("templateNeedsPlaces")}</Link>
+                </p>
+              ) : null}
+            </section>
+          ) : null}
           <ConfirmDialog
             open={template !== null}
             onOpenChange={(open) => !open && setTemplate(null)}
