@@ -22,41 +22,24 @@ const mocks = vi.hoisted(() => ({
   bumpCacheGeneration: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/products/admin/write", () => ({
+vi.mock("@scalius/core/modules/products", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/products")>()),
   createProduct: mocks.createProduct,
   updateProduct: mocks.updateProduct,
-}));
-
-vi.mock("@scalius/core/modules/products/admin/lifecycle", () => ({
   bulkDeleteProducts: mocks.bulkDeleteProducts,
   deleteProduct: mocks.deleteProduct,
   restoreProduct: mocks.restoreProduct,
   permanentlyDeleteProduct: mocks.permanentlyDeleteProduct,
-}));
-
-vi.mock("@scalius/core/modules/products/admin/read", () => ({
   getProductStats: mocks.getProductStats,
   listProducts: mocks.listProducts,
   getProductsByIds: mocks.getProductsByIds,
   getProductDetails: mocks.getProductDetails,
-}));
-
-vi.mock("@scalius/core/modules/products/variants", () => ({
   createVariant: mocks.createVariant,
   updateVariant: mocks.updateVariant,
   deleteVariant: mocks.deleteVariant,
   getProductVariants: mocks.getProductVariants,
+  saveProductOptionMatrix: mocks.saveProductOptionMatrix,
 }));
-
-vi.mock("@scalius/core/modules/products/option-matrix", async () => {
-  const actual = await vi.importActual<
-    typeof import("@scalius/core/modules/products/option-matrix")
-  >("@scalius/core/modules/products/option-matrix");
-  return {
-    ...actual,
-    saveProductOptionMatrix: mocks.saveProductOptionMatrix,
-  };
-});
 
 vi.mock("../../utils/cache-generation", async () => {
   const actual = await vi.importActual<typeof import("../../utils/cache-generation")>(

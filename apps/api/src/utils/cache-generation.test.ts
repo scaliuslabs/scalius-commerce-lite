@@ -3,12 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDb } from "@scalius/database/client";
 import {
-  bumpCacheGeneration,
-  hasBuyerAvailabilityBandTransition,
-  mirrorCacheGeneration,
-  readCacheGeneration,
-  syncCacheGenerationMirror,
+    bumpCacheGeneration,
+    mirrorCacheGeneration,
+    readCacheGeneration,
+    syncCacheGenerationMirror,
 } from "./cache-generation";
+import { hasBuyerAvailabilityBandTransition } from "./availability-transitions";
 
 const KV_KEY = "cache:generation";
 

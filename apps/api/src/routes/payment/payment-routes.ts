@@ -8,13 +8,14 @@ import type { Context } from "hono";
 import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
-import { getPaymentGateway } from "@scalius/core/modules/payments/gateways/registry";
-import { parsePaymentCorrelationId } from "@scalius/core/modules/payments/gateways/correlation";
-import type { GatewayRequest, PaymentType } from "@scalius/core/modules/payments/gateways/port";
 import {
+  getPaymentGateway,
   reconcileHostedPaymentReturn,
   type HostedPaymentReturnResult,
-} from "@scalius/core/modules/payments/hosted-payment-return";
+  parsePaymentCorrelationId,
+  type GatewayRequest,
+  type PaymentType,
+} from "@scalius/core/modules/payments";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { ok } from "../../utils/api-response";

@@ -1,8 +1,10 @@
 // The signed-in customer's order history.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getAccountPhoneVerificationPrompt } from "@scalius/core/modules/customers/customer-auth.service";
-import { getCustomerOrders } from "@scalius/core/modules/customers/customers.service";
-import { linkVerifiedContactOrders } from "@scalius/core/modules/customers/customer-identity";
+import {
+  getAccountPhoneVerificationPrompt,
+  getCustomerOrders,
+  linkVerifiedContactOrders,
+} from "@scalius/core/modules/customers";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { ok } from "../../utils/api-response";

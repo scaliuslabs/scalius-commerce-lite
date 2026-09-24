@@ -5,7 +5,7 @@
  * own validation.
  */
 import { z } from "zod";
-import { getActiveAnalyticsConfigError } from "@scalius/core/modules/analytics/analytics.validation";
+import { getActiveAnalyticsConfigError } from "@scalius/core/modules/analytics/browser";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import { PAGE_PUBLICATION_MODES } from "@/lib/page-publication";
 import {

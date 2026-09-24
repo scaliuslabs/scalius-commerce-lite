@@ -1,15 +1,17 @@
 import { getDb } from "@scalius/database/client";
 import { releaseExpiredReservations } from "@scalius/core/modules/inventory";
-import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout/abandoned/cleanup";
-import { cleanupExpiredOrderPaymentRecoveryChallenges } from "@scalius/core/modules/orders";
-import { archiveStaleIncompleteOrders } from "@scalius/core/modules/orders/stale-incomplete";
+import { cleanupStaleAbandonedCheckouts } from "@scalius/core/modules/checkout";
+import {
+  cleanupExpiredOrderPaymentRecoveryChallenges,
+  archiveStaleIncompleteOrders,
+} from "@scalius/core/modules/orders";
 import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
   cleanupExpiredCustomerAuthOtpRateLimits,
   cleanupExpiredCustomerSessions,
-} from "@scalius/core/modules/customers/customer-auth.service";
+} from "@scalius/core/modules/customers";
 import {
   cleanupExpiredScannerTokenClaims,
   pruneExpiredIdentityHandoffEvents,
@@ -19,10 +21,7 @@ import { backfillMissingMediaVariants } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
-import {
-  bumpCacheGeneration,
-  syncCacheGenerationMirror,
-} from "./utils/cache-generation";
+import { bumpCacheGeneration, syncCacheGenerationMirror } from "./utils/cache-generation";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
 export const STALE_INCOMPLETE_ORDER_SWEEP_LIMIT = 25;

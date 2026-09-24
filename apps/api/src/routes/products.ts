@@ -3,25 +3,23 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { BUYER_AVAILABILITY_BANDS } from "@scalius/shared/buyer-availability";
-import { getStorefrontFeedProducts } from "@scalius/core/modules/catalog/feed";
-import { getStorefrontSitemapProducts } from "@scalius/core/modules/catalog/sitemap";
-import { getStorefrontProducts } from "@scalius/core/modules/catalog/listing";
-import { getStorefrontProductBySlug } from "@scalius/core/modules/catalog/product-page";
-import { searchStorefrontProducts } from "@scalius/core/modules/catalog/search";
 import {
+  getStorefrontFeedProducts,
+  getStorefrontSitemapProducts,
+  getStorefrontProducts,
+  getStorefrontProductBySlug,
+  searchStorefrontProducts,
   DEFAULT_RECOMMENDATION_LIMIT,
   MAX_RECOMMENDATION_LIMIT,
   MAX_RECOMMENDATION_SOURCE_IDS,
   getStorefrontProductRecommendations,
   normalizeRecommendationSourceIds,
-} from "@scalius/core/modules/catalog/recommendations";
-import {
   STOREFRONT_PRODUCT_TEXT_CHUNK_MAX,
   getStorefrontProductSection,
   storefrontProductSectionQuerySchema,
   storefrontProductSectionSchema,
-} from "@scalius/core/modules/catalog/storefront-sections";
-import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
+} from "@scalius/core/modules/catalog";
+import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 

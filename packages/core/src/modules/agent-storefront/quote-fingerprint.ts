@@ -1,5 +1,5 @@
 import { AppError } from "@scalius/core/errors";
-import type { TaxQuote } from "@scalius/core/modules/tax";
+import type { TaxQuote } from "@scalius/core/modules/tax/browser";
 
 export const AGENT_STOREFRONT_CHECKOUT_QUOTE_FINGERPRINT_PATTERN = /^taxq_[A-Za-z0-9_-]{22}$/;
 

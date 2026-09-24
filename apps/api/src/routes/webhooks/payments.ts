@@ -4,7 +4,7 @@
 // hands it to the queue. Configure this URL in the provider dashboard.
 
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { getPaymentGateway } from "@scalius/core/modules/payments/gateways/registry";
+import { getPaymentGateway } from "@scalius/core/modules/payments";
 import { claimAndEnqueuePaymentEvent, loadCallbackSettings, toGatewayRequest } from "../payment/payment-events";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();

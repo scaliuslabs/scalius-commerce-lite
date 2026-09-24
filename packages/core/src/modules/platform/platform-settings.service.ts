@@ -1,4 +1,4 @@
-// src/modules/settings/platform-settings.service.ts
+// src/modules/platform/platform-settings.service.ts
 // Validation and resolution for the deployment's public origins. Storage is
 // the `platform` settings document; Workers read it through its KV mirror.
 
@@ -19,8 +19,9 @@ import {
 } from "@scalius/shared/platform-config";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { ValidationError } from "@scalius/core/errors";
-import type { SettingsDocumentWriteResult, SettingsStoreKv } from "./settings-store";
-import { platformDocument } from "./documents";
+import type { SettingsDocumentWriteResult, SettingsStoreKv } from "../settings/settings-store";
+import type { SettingsSaveOptions } from "../settings/site-settings.service";
+import { platformDocument } from "../settings/documents";
 
 type PlatformKv = SettingsStoreKv;
 
@@ -268,4 +269,21 @@ export async function resolvePlatformConfig(
 /** Storefront URL alone, for callers that only need the store origin. */
 export async function getConfiguredStorefrontUrl(db: Database): Promise<string> {
   return (await getPlatformSettings(db)).storefrontUrl;
+}
+
+// ─────────────────────────────────────────
+// Storefront URL (the platform document's storefront origin)
+// ─────────────────────────────────────────
+
+export async function getStorefrontUrlSetting(db: Database) {
+  return { storefrontUrl: (await getPlatformSettings(db)).storefrontUrl };
+}
+
+export async function saveStorefrontUrl(
+  db: Database,
+  url: string,
+  kv?: Parameters<typeof savePlatformSettings>[2],
+  options: SettingsSaveOptions = {},
+) {
+  return savePlatformSettings(db, { storefrontUrl: url }, kv, options);
 }

@@ -12,11 +12,13 @@ import {
   bulkPublishPages,
   bulkUnpublishPages,
   restorePages,
+} from "@scalius/core/modules/pages";
+import {
   createPageSchema,
   updatePageSchema,
   pageRevisionClaimSchema,
   pageRevisionClaimsSchema,
-} from "@scalius/core/modules/pages";
+} from "@scalius/core/modules/pages/browser";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { dashboardReservedSegment } from "@scalius/shared/platform-config";
 import { NotFoundError } from "../../utils/api-error";

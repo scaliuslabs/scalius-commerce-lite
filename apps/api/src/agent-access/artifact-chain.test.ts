@@ -1,7 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import type { AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
+import {
+    type AgentOperationManifestEntry,
+    buildAgentOperationManifest,
+} from "../openapi/agent-operation-manifest";
 import type { AgentOAuthProps, AgentPrincipal } from "./types";
 
 const chain = vi.hoisted(() => ({
@@ -39,10 +42,10 @@ vi.mock("@scalius/core/modules/inventory", async (importOriginal) => {
   };
 });
 
-vi.mock("@scalius/core/modules/settings/settings.service", async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, getCurrencyConfig: chain.getCurrencyConfig };
-});
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
+  getCurrencyConfig: chain.getCurrencyConfig,
+}));
 
 vi.mock("./principal", () => ({
   resolveAgentPrincipalFromBearer: vi.fn(async () => chain.principal),
@@ -71,7 +74,6 @@ vi.mock("./mcp/operations", () => ({
 
 import app from "../app";
 import { finalizeOpenApiContract, type OpenApiDocument } from "../openapi-contract";
-import { buildAgentOperationManifest } from "../openapi/agent-operation-manifest";
 import { DashboardMcpHandler } from "./mcp/dashboard";
 import { createAgentMcpServer } from "./mcp/server";
 

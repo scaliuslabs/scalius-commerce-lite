@@ -1,4 +1,4 @@
-// src/modules/fraud-checker/index.ts
+export * from "./browser";
 export {
   getFraudProviders,
   getFraudProvider,
@@ -28,3 +28,4 @@ export {
   getFraudCheckProviderDefinition,
   isFraudCheckProviderType,
 } from "./provider-definitions";
+export { getFraudProviderUrlIssue } from "./fraud-checker.service";

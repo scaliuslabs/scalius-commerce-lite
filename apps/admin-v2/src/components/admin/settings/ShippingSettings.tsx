@@ -8,7 +8,7 @@ import {
   postApiV1AdminSettingsDeliveryProvidersCreateTest,
   putApiV1AdminSettingsDeliveryProviders,
 } from "@scalius/api-client/sdk";
-import { getDeliveryProviderActivationBlockers } from "@scalius/core/modules/delivery/provider-readiness";
+import { getDeliveryProviderActivationBlockers } from "@scalius/core/modules/delivery/browser";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";

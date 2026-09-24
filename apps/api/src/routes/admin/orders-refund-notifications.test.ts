@@ -8,21 +8,11 @@ const mocks = vi.hoisted(() => ({
     enqueueOrderRefundNotificationForOrder: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/payments/refund-service", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@scalius/core/modules/payments/refund-service")>();
-    return {
-        ...actual,
-        processRefund: mocks.processRefund,
-    };
-});
-
-vi.mock("@scalius/core/modules/payments/refund-reconciliation", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@scalius/core/modules/payments/refund-reconciliation")>();
-    return {
-        ...actual,
-        reconcileRefundAttemptForOrder: mocks.reconcileRefundAttemptForOrder,
-    };
-});
+vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("@scalius/core/modules/payments")>()),
+    processRefund: mocks.processRefund,
+    reconcileRefundAttemptForOrder: mocks.reconcileRefundAttemptForOrder,
+}));
 
 vi.mock("../../utils/cache-generation", () => ({
     bumpCacheGeneration: mocks.bumpCacheGeneration,
@@ -32,7 +22,7 @@ vi.mock("../../utils/order-notification-queue", () => ({
     enqueueOrderRefundNotificationForOrder: mocks.enqueueOrderRefundNotificationForOrder,
 }));
 
-import { PartialRefundProcessedError } from "@scalius/core/modules/payments/refund-service";
+import { PartialRefundProcessedError } from "@scalius/core/modules/payments";
 import { errorResponseFromError } from "../../utils/api-response";
 import { adminOrdersRefundRoutes } from "./orders-refund";
 

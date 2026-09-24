@@ -4,7 +4,7 @@ import {
   deleteCustomerAuthOtpChallenge,
   sendAccountPhoneCode,
   verifyAccountPhoneCode,
-} from "@scalius/core/modules/customers/customer-auth.service";
+} from "@scalius/core/modules/customers";
 import { UnauthorizedError, ServiceUnavailableError } from "../../utils/api-error";
 import {
   conflictResponse,

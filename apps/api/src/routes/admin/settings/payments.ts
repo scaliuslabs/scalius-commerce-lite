@@ -12,8 +12,6 @@ import {
     getStripeCheckoutReadiness,
     getSSLCommerzCheckoutReadiness,
     getSSLCommerzSettings,
-} from "@scalius/core/modules/payments/gateway-settings";
-import {
     COD_PAYMENT_METHOD,
     filterPaymentMethodsForCurrency,
     getPaymentMethodCurrencyIssue,
@@ -21,8 +19,8 @@ import {
     listPaymentMethodIds,
     paymentMethodLabel,
     requirePaymentGateway,
-} from "@scalius/core/modules/payments/gateways/registry";
-import type { GatewaySettings } from "@scalius/core/modules/payments/gateways/port";
+    type GatewaySettings,
+} from "@scalius/core/modules/payments";
 import {
     checkoutDocument,
     paymentMethodsDocument,
@@ -30,13 +28,11 @@ import {
     stripeDocument,
     type SSLCommerzSettingsDocument,
     type StripeSettingsDocument,
-} from "@scalius/core/modules/settings/documents";
-import {
     getCheckoutFlowValidationIssues,
     isCheckoutGatewayUsableForFlow,
-} from "@scalius/core/modules/settings/checkout-flow";
-import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
-import { writeSettingsDocuments } from "@scalius/core/modules/settings/settings-store";
+    getCurrencySettings,
+    writeSettingsDocuments,
+} from "@scalius/core/modules/settings";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";

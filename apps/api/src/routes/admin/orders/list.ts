@@ -1,7 +1,7 @@
 // Dashboard order list, export, payment-recovery lists, and the order form product picker.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ORDER_LIST_VIEWS, listOrders, loadOrderExportDetails } from "@scalius/core/modules/orders";
-import { listProducts } from "@scalius/core/modules/products/admin/read";
+import { listProducts } from "@scalius/core/modules/products";
 import { fromMinor } from "@scalius/shared/money";
 import { FulfillmentStatus, PaymentStatus, productVariants } from "@scalius/database/schema";
 import { and, inArray, isNull, sql } from "drizzle-orm";
@@ -12,12 +12,12 @@ import { orderSummarySchema, productSummarySchema } from "../../../schemas/entit
 import { parseBangladeshDateOnlyBoundary } from "../order-date-filter";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { listPaymentMethodIds } from "@scalius/core/modules/payments";
-import type { OrderPaymentRecoveryFilter } from "@scalius/core/modules/orders";
 import {
+    type OrderPaymentRecoveryFilter,
     createOrdersCsvArtifactBuilder,
     createPaymentRecoveryCsvArtifactBuilder,
     ORDER_CSV_ARTIFACT_MAX_BYTES,
-} from "@scalius/core/modules/orders/csv-export";
+} from "@scalius/core/modules/orders/browser";
 import { projectOrderListResult } from "../order-list-projection";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();

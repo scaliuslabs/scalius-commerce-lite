@@ -14,9 +14,13 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
     createOrder: mocks.createOrder,
 }));
 
+vi.mock("../../utils/availability-transitions", async (importOriginal) => ({
+    ...await importOriginal<typeof import("../../utils/availability-transitions")>(),
+    findCheckoutReservationAvailabilityTransitions: mocks.findCheckoutReservationAvailabilityTransitions,
+}));
+
 vi.mock("../../utils/cache-generation", async (importOriginal) => ({
     ...await importOriginal<typeof import("../../utils/cache-generation")>(),
-    findCheckoutReservationAvailabilityTransitions: mocks.findCheckoutReservationAvailabilityTransitions,
     bumpCacheGeneration: mocks.bumpCacheGeneration,
 }));
 

@@ -2,12 +2,11 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { collections } from "@scalius/database/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
-import { successEnvelope, errorResponses } from "../schemas/responses";
-import { paginationSchema } from "../schemas/responses";
+import { successEnvelope, errorResponses, paginationSchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
-import { getPublicCollectionCatalog } from "@scalius/core/modules/collections/collections.service";
-import { publicCollectionConfig } from "@scalius/core/modules/collections/collection-config";
-import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
+import { getPublicCollectionCatalog } from "@scalius/core/modules/collections";
+import { publicCollectionConfig } from "@scalius/core/modules/collections/browser";
+import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes";
 import { toIsoTimestamp } from "../utils/timestamps";
 import {
   normalizePublicListingSearchParam,

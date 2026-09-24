@@ -4,8 +4,8 @@ import {
     getCustomerOrderDetailForOrder,
     getCustomerOwnedOrderForDetail,
     getCustomerPaymentSessionOrderForDetail,
-} from "@scalius/core/modules/customers/customers.service";
-import { claimGuestOrderToAccount } from "@scalius/core/modules/customers/order-account-claim";
+    claimGuestOrderToAccount,
+} from "@scalius/core/modules/customers";
 import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
 import { orderDiscountLineSchema, presentOrderDiscountLines } from "../../schemas/storefront-discounts";
 import { buyerOrderProgressSchema, buyerOrderTimelineSchema } from "../../schemas/order-tracking";
@@ -13,7 +13,7 @@ import {
     createCustomerOrderSupportRequest,
     CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES,
     getOrderSupportRequestStatusLabel,
-} from "@scalius/core/modules/orders/order-support-requests";
+} from "@scalius/core/modules/orders";
 import { UnauthorizedError } from "../../utils/api-error";
 import {
     conflictResponse,

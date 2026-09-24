@@ -4,22 +4,23 @@ import { orders, orderItems, media } from "@scalius/database/schema";
 import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
 import { orderDiscountLineSchema, presentOrderDiscountLines } from "../../schemas/storefront-discounts";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { getCustomerBySession } from "@scalius/core/modules/customers/customer-auth.service";
 import {
+  getCustomerBySession,
   getBuyerOrderTracking,
   getCustomerVisibleBalanceDueMinor,
-} from "@scalius/core/modules/customers/customers.service";
+  issueAccountOwnerReceipt,
+} from "@scalius/core/modules/customers";
 import { buyerOrderTrackingSchema } from "../../schemas/order-tracking";
-import { issueAccountOwnerReceipt } from "@scalius/core/modules/customers/order-account-claim";
-import { sendOrderLookupOtp, verifyOrderLookupOtp } from "@scalius/core/modules/orders/lookup";
-import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/money";
-import { fromMinor } from "@scalius/shared/money";
-import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
-import { publishedMediaObjectKey } from "@scalius/core/modules/media/media.presentation";
 import {
+  sendOrderLookupOtp,
+  verifyOrderLookupOtp,
   deleteOrderPaymentRecoveryChallenge,
   getReceiptOrderSupportRequestStateForOrder,
 } from "@scalius/core/modules/orders";
+import { orderMoneyAmounts, orderMoneySelection } from "@scalius/core/modules/orders/browser";
+import { fromMinor } from "@scalius/shared/money";
+import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
+import { publishedMediaObjectKey } from "@scalius/core/modules/media";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import { NotFoundError, UnauthorizedError, ServiceUnavailableError } from "../../utils/api-error";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";

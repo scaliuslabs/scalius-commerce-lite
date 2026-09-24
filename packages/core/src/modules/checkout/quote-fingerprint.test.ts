@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TaxQuote } from "@scalius/core/modules/tax";
+import type { TaxQuote } from "@scalius/core/modules/tax/browser";
 import {
   StorefrontCheckoutQuoteConflictError,
   assertStorefrontCheckoutQuoteFingerprint,

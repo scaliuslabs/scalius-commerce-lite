@@ -47,11 +47,8 @@ import {
     type OrderContact,
 } from "../customers/customer-identity";
 import type { StorefrontCartItemIssue } from "./cart-validation";
-import {
-    getPromotionRedemptionConstraintError,
-    verifyPromotionCheckoutSnapshot,
-    type AppliedPromotion,
-} from "../promotions";
+import { getPromotionRedemptionConstraintError, verifyPromotionCheckoutSnapshot } from "../promotions";
+import { type AppliedPromotion } from "../promotions/browser";
 import {
     prepareAtomicCheckoutAttemptCommit,
     isCheckoutAttemptCommitConflictError,

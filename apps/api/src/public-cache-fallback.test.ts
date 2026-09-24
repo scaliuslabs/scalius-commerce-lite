@@ -18,7 +18,8 @@ vi.mock("cloudflare:workers", () => ({
   },
 }));
 
-vi.mock("@scalius/core/modules/settings/platform-settings.service", () => ({
+vi.mock("@scalius/core/modules/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/platform")>()),
   resolvePlatformConfig: vi.fn(async () => ({
     storefrontUrl: "https://storefront.example.test",
     apiUrl: "https://api.example.test",

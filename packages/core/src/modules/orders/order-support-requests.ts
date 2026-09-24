@@ -26,10 +26,14 @@ import {
   type CustomerRequestPolicy,
   type CustomerRequestType,
 } from "../settings/customer-request-policy";
+import type { OrderSupportRequestView } from "./types";
+
+export type { OrderSupportRequestView };
 
 export const CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES = CUSTOMER_REQUEST_TYPES;
 
 export type CustomerOrderSupportRequestType = CustomerRequestType;
+type SupportRequestSeverity = OrderSupportRequestView["severity"];
 
 export const ORDER_SUPPORT_REQUEST_STATUSES = [
   "submitted",
@@ -52,27 +56,6 @@ export const ADMIN_ORDER_SUPPORT_REQUEST_STATUSES = [
 
 export type AdminOrderSupportRequestStatus =
   typeof ADMIN_ORDER_SUPPORT_REQUEST_STATUSES[number];
-
-type SupportRequestSeverity = "info" | "success" | "warning" | "danger";
-
-export interface OrderSupportRequestView {
-  id: string;
-  orderId: string;
-  customerId: string | null;
-  type: CustomerOrderSupportRequestType;
-  status: string;
-  active: boolean;
-  severity: SupportRequestSeverity;
-  label: string;
-  actionLabel: string;
-  reason: string;
-  message: string | null;
-  returnId: string | null;
-  submittedAt: string | null;
-  resolvedAt: string | null;
-  createdAt: string | null;
-  updatedAt: string | null;
-}
 
 export interface CustomerOrderSupportRequestAction {
   type: CustomerOrderSupportRequestType;

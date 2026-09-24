@@ -2,7 +2,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { archiveOrders, bulkConfirmOrders, recordOrderEvent } from "@scalius/core/modules/orders";
 import { bulkFulfillOrders, bulkShipOrders } from "@scalius/core/modules/fulfilment";
-import { archiveOrdersSchema, bulkShipOrderSchema } from "@scalius/core/modules/orders/validation";
+import { archiveOrdersSchema, bulkShipOrderSchema } from "@scalius/core/modules/orders/browser";
 import { ok, noContent } from "../../../utils/api-response";
 import { successEnvelope, noContentResponse, conflictResponse } from "../../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";

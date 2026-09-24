@@ -12,19 +12,16 @@ import {
 } from "../../schemas/storefront-discounts";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { getCustomerBySession } from "@scalius/core/modules/customers/customer-auth.service";
+import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
-import { getCurrencySettings } from "@scalius/core/modules/settings/site-settings.service";
+import { getCurrencySettings } from "@scalius/core/modules/settings";
+import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
-    buildStorefrontCheckoutQuoteFingerprint,
     validateStorefrontDeliveryPreflight,
     validateStorefrontCartItems,
 } from "@scalius/core/modules/checkout";
-import {
-    buildStorefrontTaxAllocationLineId,
-    calculateStorefrontTaxQuote,
-    type TaxQuote,
-} from "@scalius/core/modules/tax";
+import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote } from "@scalius/core/modules/tax";
+import { type TaxQuote } from "@scalius/core/modules/tax/browser";
 import { ValidationError } from "../../utils/api-error";
 import { getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { ok } from "../../utils/api-response";

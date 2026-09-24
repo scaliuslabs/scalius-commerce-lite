@@ -12,8 +12,8 @@ const mocks = vi.hoisted(() => ({
   fraudLookupWithActiveProvider: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/fraud-checker/fraud-checker.service", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@scalius/core/modules/fraud-checker/fraud-checker.service")>(),
+vi.mock("@scalius/core/modules/fraud-checker", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/fraud-checker")>()),
   getFraudProviders: mocks.getFraudProviders,
   getFraudProvider: mocks.getFraudProvider,
   saveFraudProvider: mocks.saveFraudProvider,

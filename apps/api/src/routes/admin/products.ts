@@ -5,39 +5,32 @@ import {
     deleteProduct,
     permanentlyDeleteProduct,
     restoreProduct,
-} from "@scalius/core/modules/products/admin/lifecycle";
-import { createProduct, duplicateProduct, updateProduct } from "@scalius/core/modules/products/admin/write";
-import {
+    createProduct,
+    duplicateProduct,
+    updateProduct,
     getProductDetails,
     getProductStats,
     getProductsByIds,
     listProductAgentSummaries,
     listProducts,
-} from "@scalius/core/modules/products/admin/read";
-import {
     createVariant,
     deleteVariant,
     getProductVariants,
     lookupByBarcode,
     updateVariant,
-} from "@scalius/core/modules/products/variants";
-import { createProductSchema, updateProductSchema } from "@scalius/core/modules/products/validation";
-import {
+    createProductSchema,
+    updateProductSchema,
     productOptionMatrixSchema,
     saveProductOptionMatrix,
-} from "@scalius/core/modules/products/option-matrix";
-import {
-    createVariantSchema,
-    updateVariantSchema
-} from "@scalius/core/modules/products/types";
-import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
-import {
     getProductSemanticSection,
     productSemanticSectionPatchSchema,
     productSemanticSectionQuerySchema,
     productSemanticSectionSchema,
     updateProductSemanticSection,
-} from "@scalius/core/modules/products/semantic-sections";
+    createVariantSchema,
+    updateVariantSchema,
+} from "@scalius/core/modules/products";
+import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { ConflictError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";
 import {

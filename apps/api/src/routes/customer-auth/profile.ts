@@ -1,6 +1,6 @@
 // Customer profile updates.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { updateCustomerProfile } from "@scalius/core/modules/customers/customer-auth.service";
+import { updateCustomerProfile } from "@scalius/core/modules/customers";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { ok } from "../../utils/api-response";
 import { customerAuthProfileSchema, requireCustomerSession } from "./shared";

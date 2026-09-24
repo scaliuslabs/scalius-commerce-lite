@@ -28,8 +28,8 @@ import {
     prepareReservedStockReleaseBatch,
     isInventoryReservationConflictError,
     isPreparedReservedStockReleaseConflictError,
+    type ReservationEntry,
 } from "../../inventory";
-import type { ReservationEntry } from "../../inventory";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
 import { guestRecordForPhone } from "../../customers/customer-identity";
 import { fromMinor } from "@scalius/shared/money";
@@ -42,7 +42,7 @@ import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError 
 import { recordOrderEvent } from "../timeline";
 import { resolveOrderCurrencySnapshot } from "../../payments/order-currency";
 import { validateCustomerPhoneCountry } from "../../settings/phone-country-policy";
-import type { TaxQuote } from "../../tax";
+import type { TaxQuote } from "../../tax/browser";
 import { sha256Hex, stableStringify } from "./create-attempts";
 import { type ManualOrderQuote, prepareManualOrderQuote } from "./quote";
 import { getOrderEditReadiness, orderEditLockMessage } from "./readiness";

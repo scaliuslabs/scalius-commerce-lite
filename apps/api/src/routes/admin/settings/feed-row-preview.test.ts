@@ -15,17 +15,12 @@ vi.mock("@scalius/core/modules/catalog", async (importOriginal) => ({
   executeProductFeedRowPreview: mocks.execute,
 }));
 
-vi.mock(
-  "@scalius/core/modules/settings/site-settings.service",
-  async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import("@scalius/core/modules/settings/site-settings.service")
-    >()),
-    getSeoSettings: mocks.getSeo,
-    getCurrencySettings: mocks.getCurrency,
-    getMediaOptimizationSettings: mocks.getMedia,
-  }),
-);
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
+  getSeoSettings: mocks.getSeo,
+  getCurrencySettings: mocks.getCurrency,
+  getMediaOptimizationSettings: mocks.getMedia,
+}));
 
 import { feedRowPreviewRoutes } from "./feed-row-preview";
 

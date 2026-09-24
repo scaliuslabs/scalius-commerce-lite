@@ -10,7 +10,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { OrderListItem } from "@scalius/core/modules/orders/types";
+import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { fitColumns } from "~/components/admin/data-table/column-layout";
 import { getOrderColumns } from "./order-columns";

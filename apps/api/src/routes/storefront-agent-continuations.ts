@@ -19,14 +19,14 @@ import {
   sendOtp,
   SESSION_TTL_SECONDS,
   verifyOtp,
-} from "@scalius/core/modules/customers/customer-auth.service";
+} from "@scalius/core/modules/customers";
 import {
   deleteOrderPaymentRecoveryChallenge,
   sendOrderPaymentRecoveryOtp,
   verifyOrderPaymentRecoveryOtp,
 } from "@scalius/core/modules/orders";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
-import { exchangeThemePreviewContinuation } from "@scalius/core/modules/settings/site-settings.service";
+import { exchangeThemePreviewContinuation } from "@scalius/core/modules/settings";
 import { authMiddleware } from "../middleware/auth";
 import {
   ForbiddenError,

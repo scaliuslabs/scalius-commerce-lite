@@ -1,6 +1,6 @@
 // Helpers and schemas shared by the storefront order routes.
 import { z } from "@hono/zod-openapi";
-import { getSessionCookie } from "@scalius/core/modules/customers/customer-auth.service";
+import { getSessionCookie } from "@scalius/core/modules/customers";
 import { CUSTOMER_ORDER_SUPPORT_REQUEST_TYPES } from "@scalius/core/modules/orders";
 import type { WaitUntilExecutionContext } from "../../utils/cache-generation";
 import {

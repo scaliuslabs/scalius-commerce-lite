@@ -51,6 +51,11 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
   };
 });
 
+vi.mock("@scalius/core/modules/checkout/browser", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/checkout/browser")>()),
+  buildStorefrontCheckoutQuoteFingerprint: mocks.buildStorefrontCheckoutQuoteFingerprint,
+}));
+
 vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@scalius/core/modules/checkout")>();
   return {
@@ -59,7 +64,6 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
     resolveExistingCheckoutAttempt: mocks.resolveExistingCheckoutAttempt,
     createAtomicCheckoutAttempt: mocks.createAtomicCheckoutAttempt,
     createStorefrontOrder: mocks.createStorefrontOrder,
-    buildStorefrontCheckoutQuoteFingerprint: mocks.buildStorefrontCheckoutQuoteFingerprint,
     loadStorefrontCheckoutAuthority: mocks.loadStorefrontCheckoutAuthority,
     // The route reads attempt + authority in one batch; the mocks keep their
     // separate seams so each decision is still observable.
@@ -104,7 +108,8 @@ vi.mock("@scalius/shared/rate-limit", () => ({
   getClientIp: mocks.getClientIp,
 }));
 
-vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
+vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/customers")>()),
   getCustomerBySession: mocks.getCustomerBySession,
   getSessionCookie: (cookieHeader: string | null) => {
     const match = cookieHeader?.match(/(?:^|;\s*)cs_tok=([^;]+)/);
@@ -112,18 +117,15 @@ vi.mock("@scalius/core/modules/customers/customer-auth.service", () => ({
   },
 }));
 
-vi.mock("@scalius/core/modules/payments/gateway-settings", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/payments/gateway-settings")>()),
+vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments")>()),
   getActivePaymentMethods: mocks.getActivePaymentMethods,
 }));
 
-vi.mock("@scalius/core/modules/settings/site-settings.service", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@scalius/core/modules/settings/site-settings.service")>();
-  return {
-    ...actual,
-    getCurrencySettings: mocks.getCurrencySettings,
-  };
-});
+vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
+  getCurrencySettings: mocks.getCurrencySettings,
+}));
 
 vi.mock("@scalius/core/modules/tax", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@scalius/core/modules/tax")>();

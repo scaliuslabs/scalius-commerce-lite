@@ -21,7 +21,7 @@ import {
   summarizeNotificationDelivery,
 } from "~/lib/order-notification-display";
 import { Link } from "@tanstack/react-router";
-import { isOrderNotificationType } from "@scalius/core/modules/notifications/notification-types";
+import { isOrderNotificationType } from "@scalius/core/modules/notifications/browser";
 import { formatOrderTimestamp } from "./formatters";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order } from "./types";

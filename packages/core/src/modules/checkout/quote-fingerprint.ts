@@ -1,5 +1,5 @@
 import { AppError } from "@scalius/core/errors";
-import type { TaxQuote } from "@scalius/core/modules/tax";
+import type { TaxQuote } from "@scalius/core/modules/tax/browser";
 import type { StorefrontOrderShippingMethodSnapshot } from "../orders/types";
 
 export const STOREFRONT_CHECKOUT_QUOTE_FINGERPRINT_PATTERN =

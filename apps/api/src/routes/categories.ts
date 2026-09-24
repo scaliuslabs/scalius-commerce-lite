@@ -4,9 +4,9 @@ import {
   getPublicCategorySummaries,
   getPublicCategoryBySlug,
   getPublicCategorySection,
-} from "@scalius/core/modules/categories/categories.storefront";
-import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes/attributes.public";
-import { getStorefrontCategoryProducts } from "@scalius/core/modules/catalog/listing";
+} from "@scalius/core/modules/categories";
+import { resolvePublicAttributeFilters } from "@scalius/core/modules/attributes";
+import { getStorefrontCategoryProducts } from "@scalius/core/modules/catalog";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, paginationSchema, errorResponses } from "../schemas/responses";
 
