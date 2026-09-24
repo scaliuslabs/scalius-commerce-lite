@@ -47,7 +47,7 @@ describe("request theme", () => {
     const first = await resolveRequestTheme({ request: request(), locals }, { theme: published, storeShape: SHAPE });
     expect(first.theme).toEqual(published);
     expect(first.layout.header).toBe("marketplace");
-    expect(first.layout.navigation).toBe("pills");
+    expect(first.layout.navigation).toBe("drawer");
     expect(first.resolved.blocks.card.variant).toBe("marketplace");
     expect(await resolveRequestTheme({ request: request(), locals }, {})).toBe(first);
     expect(await currentRequestTheme(locals)).toBe(first);

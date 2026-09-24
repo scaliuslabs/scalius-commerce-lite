@@ -1,0 +1,84 @@
+---
+// The button that opens the drill-in drawer on computers (desktop menu
+// `drill-in-drawer`): Amazon's "☰ All" in a menu row, Target's "Categories"
+// pill in the main row. Without JavaScript it is a link to the drawer's
+// :target (NavDrawer.astro); with it, drawer.ts opens the dialog.
+interface Props {
+  /** The drawer's id base (its panel is `${drawer}-panel`). */
+  drawer: string;
+  shape: "text" | "pill";
+  label: string;
+}
+
+const { drawer, shape, label } = Astro.props;
+---
+
+<a
+  href={`#${drawer}-panel`}
+  role="button"
+  class:list={["drawer-trigger", `drawer-trigger--${shape}`]}
+  aria-haspopup="dialog"
+  aria-controls={`${drawer}-panel`}
+  aria-expanded="false"
+  data-drawer-open={drawer}
+>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+  <span>{label}</span>
+</a>
+
+<style>
+  .drawer-trigger {
+    display: none;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.5rem;
+    height: 2.5rem;
+    padding-inline: 0.75rem;
+    border-radius: var(--radius);
+    color: var(--nav-ink, var(--foreground));
+    font-size: 0.875rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  @media (min-width: 64rem) {
+    .drawer-trigger {
+      display: inline-flex;
+    }
+  }
+
+  .drawer-trigger--text {
+    padding-left: 0;
+  }
+
+  .drawer-trigger--text:hover span {
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
+  }
+
+  /* Target's 44px pill. */
+  .drawer-trigger--pill {
+    height: 2.75rem;
+    padding-inline: 1rem;
+    border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+    border-radius: 9999px;
+  }
+
+  .drawer-trigger--pill:hover {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+  }
+
+  .drawer-trigger svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+  }
+
+  .drawer-trigger:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+</style>

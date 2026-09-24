@@ -1,0 +1,636 @@
+---
+// Every header variant but the classic one, composed from one spec
+// (header-variants.ts) and shared pieces: logo, search, utilities, cart and
+// the menu (slot "menu", in the main row or its own row). Tokens paint it:
+// the toned rows use the header tone (`--theme-header-*`, an AA pair), the
+// search field is always the card surface.
+//
+// Sticky: the whole header on phones. On computers the whole header, or only
+// the menu row when `stickyMenuRow` (Star Tech: the category bar stays when
+// the header scrolls away); then #main-header is `display: contents` there
+// and the menu row is the sticky part (HeaderLayout measures it).
+import type { HeaderData, NavigationItem } from "@/lib/api";
+import type {
+  StorefrontHeaderRenderer,
+  StorefrontNavigationRenderer,
+} from "@scalius/shared/storefront-theme";
+import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
+import {
+  getMobileHeaderLogoWidth,
+  normalizeHeaderLogoWidth,
+} from "@scalius/shared/brand-presentation";
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import HeaderSearch from "../HeaderSearch.astro";
+import type { HeaderSpec } from "../header-variants";
+
+interface Props {
+  headerData: HeaderData;
+  variantId: string;
+  spec: HeaderSpec;
+  /** The coarse header facts (`resolved.layout.header`). */
+  headerStyle: StorefrontHeaderRenderer;
+  navigationStyle: StorefrontNavigationRenderer;
+  /** Render the menu slot (a menu exists and belongs in the header). */
+  hasMenu: boolean;
+  /** The menu sits in its own row (the spec's, or a category bar that needs one). */
+  menuPlacement: "inline" | "row";
+  stickyMenuRow: boolean;
+  /** Top-level menu items, for the department-scoped search. */
+  departments: NavigationItem[];
+  /** Phone bar icons the bottom tabs already carry ("account cart"). */
+  phoneDrop: string;
+}
+
+const {
+  headerData,
+  variantId,
+  spec,
+  headerStyle,
+  navigationStyle,
+  hasMenu,
+  menuPlacement,
+  stickyMenuRow,
+  departments,
+  phoneDrop,
+} = Astro.props;
+
+const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
+const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
+const logoSrcSet = mediaImageSrcSet(headerData.logo.src);
+const inlineMenu = hasMenu && menuPlacement === "inline";
+const menuRow = hasMenu && menuPlacement === "row";
+const accountPrefetch = getStorefrontPrefetchAttribute("/account", Astro.url);
+const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight || 2.75}rem; --header-logo-width: ${logoWidth}px; --header-logo-mobile-width: ${mobileLogoWidth}px;`;
+---
+
+<div
+  id="main-header"
+  class="hdr group/header"
+  data-header-style={headerStyle}
+  data-header-variant={variantId}
+  data-navigation={navigationStyle}
+  data-hdr-search={spec.search}
+  data-hdr-utilities={spec.utilities}
+  data-hdr-sticky={stickyMenuRow ? "menu-row" : "header"}
+  data-hdr-uppercase={spec.uppercaseMenu ? "" : undefined}
+  data-phone-drop={phoneDrop || undefined}
+  style={style}
+>
+  <div class="hdr-main" data-tone={spec.toneRow ? "tone" : "surface"}>
+    <div class="hdr-inner hdr-bar">
+      <div class="hdr-phone-start">
+        <button
+          id="mobile-menu-toggle"
+          type="button"
+          class="hdr-icon-button"
+          aria-label="Open menu"
+          aria-haspopup="dialog"
+          aria-controls="mobile-menu-panel"
+          aria-expanded="false"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </button>
+        <noscript>
+          <a href="#mobile-menu-panel" class="hdr-icon-button" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+          </a>
+        </noscript>
+        {
+          spec.phoneSearch === "none" && (
+            <button id="mobile-search-toggle" type="button" class="hdr-icon-button" aria-label="Search" aria-haspopup="dialog">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+            </button>
+          )
+        }
+      </div>
+
+      <a href="/" class="hdr-logo">
+        {
+          headerData.logo.src ? (
+            <img
+              src={mediaImageUrl(headerData.logo.src, 320)}
+              srcset={logoSrcSet}
+              sizes={logoSrcSet ? `(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px` : undefined}
+              alt={headerData.logo.alt}
+              class="hdr-logo-image"
+              width={240}
+              height={80}
+              loading="eager"
+              decoding="async"
+            />
+          ) : (
+            <span class="hdr-logo-text">{headerData.logo.alt}</span>
+          )
+        }
+      </a>
+
+      {inlineMenu && (
+        <div class="hdr-inline-menu">
+          <slot name="menu" />
+        </div>
+      )}
+
+      <div class:list={["hdr-search", spec.search === "icon" && "hdr-search--icon"]}>
+        <HeaderSearch shape={spec.search} id="header-search-input" departments={departments} />
+      </div>
+
+      <div class="hdr-actions">
+        <a href="/track-order" data-astro-prefetch="false" class="hdr-util hdr-util--desktop">
+          <span class="hdr-util-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a2 2 0 1 0 0-.1M17.5 19a2 2 0 1 0 0-.1" /></svg>
+          </span>
+          <span class="hdr-util-text"><small>Your orders</small><strong>Track order</strong></span>
+        </a>
+
+        <a
+          id="account-link"
+          href="/account"
+          class="hdr-util"
+          data-header-account
+          data-astro-prefetch={accountPrefetch}
+          aria-label="My Account"
+        >
+          <span class="hdr-util-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M20 21a8 8 0 0 0-16 0" /></svg>
+          </span>
+          <span class="hdr-util-text" aria-hidden="true"><small>Hello, sign in</small><strong>Account</strong></span>
+        </a>
+
+        <button
+          type="button"
+          id="cart-button"
+          class="hdr-util hdr-cart"
+          data-header-cart
+          aria-label="Open shopping cart"
+          aria-haspopup="dialog"
+        >
+          <span class="hdr-util-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="8" cy="21" r="1" />
+              <circle cx="19" cy="21" r="1" />
+              <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+            </svg>
+            <span id="cart-count" class="hdr-cart-count scale-0 opacity-0" aria-hidden="true">0</span>
+          </span>
+          <span class="hdr-util-text" aria-hidden="true">
+            {spec.cartTotal ? (
+              <>
+                <small>Cart</small>
+                <strong id="cart-total-display" class="tabular-nums">0</strong>
+              </>
+            ) : (
+              <strong>Cart</strong>
+            )}
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {
+    spec.phoneSearch === "sticky" && (
+      <div class="hdr-phone-search" data-tone={spec.toneRow ? "tone" : "surface"}>
+        <HeaderSearch shape={spec.search === "icon" ? "field" : spec.search === "scoped" ? "field" : spec.search} id="header-search-input-phone" />
+      </div>
+    )
+  }
+
+  {menuRow && (
+    <div class="hdr-menu-row" data-tone={spec.menuRowTone === "tone" && spec.toneRow ? "tone" : "surface"}>
+      <div class="hdr-inner hdr-menu-inner">
+        <slot name="menu" />
+      </div>
+    </div>
+  )}
+</div>
+
+{
+  spec.phoneSearch === "in-page" && (
+    <div class="hdr-phone-search hdr-phone-search--page">
+      <HeaderSearch shape="field" id="header-search-input-phone" />
+    </div>
+  )
+}
+
+<slot name="phone-extras" />
+
+<style>
+  .hdr {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    width: 100%;
+    background: var(--background);
+    color: var(--foreground);
+    transition: box-shadow 300ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  .hdr.is-scrolled {
+    box-shadow: 0 4px 12px -6px rgb(0 0 0 / 0.18);
+  }
+
+  .hdr-inner {
+    width: 100%;
+    max-width: var(--theme-container-width, 80rem);
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  @media (min-width: 40rem) {
+    .hdr-inner {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .hdr-inner {
+      padding-inline: 2rem;
+    }
+  }
+
+  /* Toned rows: the header tone, and the ink every menu in them reads. */
+  [data-tone="tone"] {
+    --nav-ink: var(--theme-header-foreground);
+    --nav-ink-muted: var(--theme-header-foreground);
+    background: var(--theme-header-background);
+    color: var(--theme-header-foreground);
+  }
+
+  [data-tone="surface"] {
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  .hdr-main {
+    position: relative;
+    z-index: 20;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  }
+
+  /* ── The bar: phones first ─────────────────────────────────────────── */
+
+  .hdr-bar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    height: 3.5rem;
+    transition: height 300ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  .hdr.is-scrolled .hdr-bar {
+    height: 3rem;
+  }
+
+  .hdr-phone-start {
+    display: flex;
+    align-items: center;
+    margin-left: -0.5rem;
+  }
+
+  .hdr-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 9999px;
+    color: inherit;
+  }
+
+  .hdr-icon-button:hover,
+  .hdr-util:hover .hdr-util-icon {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+  }
+
+  .hdr svg {
+    width: 1.375rem;
+    height: 1.375rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .hdr-logo {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    transform: translate(-50%, -50%);
+    color: inherit;
+  }
+
+  .hdr-logo-image {
+    width: auto;
+    height: auto;
+    max-height: 2rem;
+    max-width: var(--header-logo-mobile-width);
+    object-fit: contain;
+  }
+
+  @media (max-width: 21rem) {
+    .hdr-logo-image {
+      max-width: min(var(--header-logo-mobile-width), 5.75rem);
+    }
+  }
+
+  .hdr-logo-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .hdr-inline-menu,
+  .hdr-search,
+  .hdr-util--desktop,
+  .hdr-util-text {
+    display: none;
+  }
+
+  .hdr-actions {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-left: auto;
+    margin-right: -0.5rem;
+  }
+
+  .hdr-util {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    color: inherit;
+    text-align: start;
+  }
+
+  .hdr-util-icon {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 9999px;
+    transition: background-color 150ms ease;
+  }
+
+  .hdr-util:focus-visible,
+  .hdr-icon-button:focus-visible,
+  .hdr-logo:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: var(--radius);
+  }
+
+  .hdr-cart-count {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.125rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.125rem;
+    height: 1.125rem;
+    padding-inline: 0.25rem;
+    border-radius: 9999px;
+    background: var(--destructive);
+    color: var(--destructive-foreground);
+    font-size: 0.625rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    transition:
+      scale 200ms ease,
+      opacity 200ms ease,
+      transform 150ms ease;
+  }
+
+  /* Phones: a search row under the bar that folds away on scroll, so the
+     sticky stack stays under 120px (mix rule 6). */
+  .hdr-phone-search {
+    padding: 0 1rem 0.5rem;
+  }
+
+  .hdr-phone-search--page {
+    padding-top: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hdr.is-scrolled .hdr-phone-search {
+    display: none;
+  }
+
+  @media (min-width: 64rem) {
+    .hdr-phone-search,
+    .hdr-phone-start,
+    .hdr-phone-search--page {
+      display: none;
+    }
+  }
+
+  /* ── Computers ─────────────────────────────────────────────────────── */
+
+  .hdr-menu-row {
+    display: none;
+  }
+
+  @media (min-width: 64rem) {
+    .hdr-bar,
+    .hdr.is-scrolled .hdr-bar {
+      height: var(--hdr-main);
+      gap: 1.5rem;
+    }
+
+    .hdr-logo {
+      position: static;
+      flex-shrink: 0;
+      transform: none;
+    }
+
+    .hdr-logo-image {
+      max-height: 2.75rem;
+      max-width: var(--header-logo-width);
+    }
+
+    .hdr-inline-menu {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+      align-items: center;
+    }
+
+    .hdr-search {
+      display: flex;
+      flex: 1 1 36rem;
+      min-width: 12rem;
+      max-width: 50rem;
+    }
+
+    .hdr-search--icon {
+      flex: 0 0 auto;
+      min-width: 0;
+    }
+
+    /* Beside an inline menu the search is a fixed, modest field (Fabrilife 300px). */
+    .hdr-inline-menu ~ .hdr-search:not(.hdr-search--icon) {
+      flex: 0 1 19rem;
+    }
+
+    .hdr-actions {
+      gap: 0.25rem;
+      margin-right: 0;
+    }
+
+    .hdr-util--desktop {
+      display: inline-flex;
+    }
+
+    .hdr-menu-row {
+      display: block;
+      position: relative;
+      z-index: 10;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hdr-menu-row[data-tone="tone"] {
+      border-bottom-color: color-mix(in srgb, currentColor 14%, transparent);
+    }
+
+    .hdr-menu-inner {
+      display: flex;
+      align-items: center;
+      min-height: var(--hdr-menu);
+    }
+
+    /* Only the menu row stays (Star Tech's category bar). */
+    .hdr[data-hdr-sticky="menu-row"] {
+      display: contents;
+    }
+
+    .hdr[data-hdr-sticky="menu-row"] .hdr-menu-row {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .hdr[data-hdr-sticky="menu-row"].is-scrolled .hdr-menu-row {
+      box-shadow: 0 4px 12px -6px rgb(0 0 0 / 0.18);
+    }
+
+    /* Utilities, as each variant reads them. */
+    .hdr[data-hdr-utilities="icons"] .hdr-util--desktop {
+      display: none;
+    }
+
+    .hdr[data-hdr-utilities="stacked"] .hdr-util {
+      flex-direction: column;
+      gap: 0.125rem;
+      min-width: 3.5rem;
+    }
+
+    .hdr[data-hdr-utilities="stacked"] .hdr-util-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+      background: none;
+    }
+
+    .hdr[data-hdr-utilities="stacked"] .hdr-util-text {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1;
+    }
+
+    .hdr[data-hdr-utilities="stacked"] .hdr-util-text small {
+      display: none;
+    }
+
+    .hdr[data-hdr-utilities="two-line"] .hdr-util {
+      padding-right: 0.5rem;
+      gap: 0.25rem;
+    }
+
+    .hdr[data-hdr-utilities="two-line"] .hdr-util-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+      white-space: nowrap;
+    }
+
+    .hdr[data-hdr-utilities="two-line"] .hdr-util-text small {
+      font-size: 0.75rem;
+    }
+
+    .hdr[data-hdr-utilities="two-line"] .hdr-util-text strong {
+      font-size: 0.875rem;
+      font-weight: 700;
+    }
+
+    .hdr[data-hdr-utilities="round"] .hdr-util-icon {
+      width: 3rem;
+      height: 3rem;
+      border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    }
+
+    .hdr[data-hdr-utilities="round"] .hdr-util--desktop .hdr-util-icon {
+      display: none;
+    }
+
+    .hdr[data-hdr-utilities="round"] .hdr-util--desktop .hdr-util-text {
+      display: block;
+      padding-inline: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+
+    .hdr[data-hdr-utilities="round"] .hdr-util--desktop .hdr-util-text small {
+      display: none;
+    }
+
+    /* A cart with its running total reads it beside the icon, whatever the style. */
+    .hdr-cart:has(#cart-total-display) .hdr-util-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+
+    .hdr-cart:has(#cart-total-display) .hdr-util-text small {
+      font-size: 0.75rem;
+    }
+
+    .hdr-cart:has(#cart-total-display) .hdr-util-text strong {
+      font-size: 0.9375rem;
+      font-weight: 700;
+    }
+
+    /* Fashion departments: the top-level items in capitals (not the panels). */
+    .hdr[data-hdr-uppercase] :global(:is(.desktop-nav-link, [data-menu-top-link])) {
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+    }
+
+    .hdr[data-header-variant="tech-rounded"] .hdr-menu-inner {
+      justify-content: center;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hdr,
+    .hdr-bar,
+    .hdr-cart-count {
+      transition: none;
+    }
+  }
+</style>

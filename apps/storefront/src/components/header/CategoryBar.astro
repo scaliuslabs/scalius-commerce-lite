@@ -1,0 +1,34 @@
+---
+// The sticky category bar (desktop menu `sticky-category-bar`, Star Tech): up
+// to 18 top-level categories spread across one flat 50px row that stays at
+// the top when the rest of the header scrolls away (the header renders it as
+// its own sticky row). Each category opens a dropdown or cascading fly-outs
+// (setting `flyouts`); what does not fit at the viewport's width moves into
+// "More". Phones use the drawer instead.
+import type { NavigationItem } from "@/lib/api";
+import CascadingNav from "./CascadingNav.astro";
+
+interface Props {
+  navigation: NavigationItem[];
+  flyouts: "dropdown" | "cascading";
+}
+
+const { navigation, flyouts } = Astro.props;
+---
+
+<div class="category-bar" data-category-bar>
+  <CascadingNav
+    navigation={navigation}
+    id="category-bar"
+    layout="bar"
+    flyouts={flyouts === "cascading" ? "cascade" : "indent"}
+    label="Categories"
+  />
+</div>
+
+<style>
+  .category-bar {
+    width: 100%;
+    min-width: 0;
+  }
+</style>

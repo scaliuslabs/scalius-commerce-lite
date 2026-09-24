@@ -1,0 +1,201 @@
+---
+// brand-black (Apple Gadgets): the page's ink as the surface (the palette's
+// darkest pair, AA by construction). The logo with phone and email, a
+// "Visit us" column (the store address), the store's menus, a Policies
+// column (payment, delivery, warranty and refund pages are what shoppers
+// look for here), and the store name as an oversized outline watermark.
+import RecursiveFooterLink from "../RecursiveFooterLink.astro";
+import { mediaImageUrl } from "@/lib/media-url";
+import type { FooterModel } from "./footer-model";
+
+interface Props {
+  model: FooterModel;
+}
+
+const { model } = Astro.props;
+const { logo, brandName, tagline, phoneHref, storePhone, storeEmail, storeAddress, menus, policyLinks } = model;
+---
+
+<div class="brand-footer">
+  <div class="brand-identity">
+    {
+      (logo.src || brandName) && (
+        <a href="/" class="brand-logo">
+          {logo.src ? (
+            <img src={mediaImageUrl(logo.src, 480)} alt={brandName || "Home"} width={344} height={256} loading="lazy" decoding="async" />
+          ) : (
+            <span>{brandName}</span>
+          )}
+        </a>
+      )
+    }
+    {tagline && <p>{tagline}</p>}
+    {
+      phoneHref && (
+        <a href={phoneHref} class="brand-contact" data-footer-contact>
+          {storePhone}
+        </a>
+      )
+    }
+    {
+      storeEmail && (
+        <a href={`mailto:${storeEmail}`} class="brand-contact">
+          {storeEmail}
+        </a>
+      )
+    }
+  </div>
+
+  {
+    storeAddress && (
+      <section>
+        <h2 class="footer-heading">Visit us</h2>
+        <address>{storeAddress}</address>
+      </section>
+    )
+  }
+
+  {
+    menus.map((menu) => (
+      <nav aria-label={menu.title}>
+        <h2 class="footer-heading">{menu.title}</h2>
+        <RecursiveFooterLink links={menu.links} />
+      </nav>
+    ))
+  }
+
+  {
+    policyLinks.length > 0 && (
+      <nav aria-label="Store policies">
+        <h2 class="footer-heading">Policies</h2>
+        <ul class="brand-policies">
+          {policyLinks.map((link) => (
+            <li>
+              <a href={link.href}>{link.title}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    )
+  }
+</div>
+
+{brandName && <p class="brand-watermark" aria-hidden="true">{brandName}</p>}
+
+<style>
+  .brand-footer {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 2rem;
+    padding-block: 1.5rem 0.5rem;
+  }
+
+  @media (min-width: 64rem) {
+    .brand-footer {
+      grid-template-columns: minmax(16rem, 1.4fr) repeat(auto-fit, minmax(10rem, 1fr));
+      padding-block: 2.5rem 1rem;
+    }
+  }
+
+  .brand-identity {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    grid-column: 1 / -1;
+  }
+
+  @media (min-width: 64rem) {
+    .brand-identity {
+      grid-column: auto;
+    }
+  }
+
+  .brand-logo img {
+    width: auto;
+    height: 3rem;
+    object-fit: contain;
+  }
+
+  .brand-logo span {
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+
+  .brand-contact {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  @media (min-width: 40rem) {
+    .brand-contact {
+      min-height: 2rem;
+    }
+  }
+
+  .footer-heading {
+    margin-bottom: 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  address {
+    font-style: normal;
+    line-height: 1.6;
+  }
+
+  .brand-policies {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .brand-policies a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    font-weight: 500;
+  }
+
+  @media (min-width: 40rem) {
+    .brand-policies a {
+      min-height: 0;
+    }
+  }
+
+  .brand-policies a:hover,
+  .brand-contact:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .brand-footer a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  /* Apple Gadgets' oversized outline logo: decoration, clipped by the footer. */
+  .brand-watermark {
+    margin: 1rem 0 -1.5rem;
+    overflow: hidden;
+    color: transparent;
+    -webkit-text-stroke: 1px color-mix(in srgb, currentColor 22%, transparent);
+    font-size: clamp(3.5rem, 14vw, 11rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    white-space: nowrap;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  .brand-watermark {
+    -webkit-text-stroke-color: var(--border);
+  }
+</style>

@@ -1,0 +1,85 @@
+---
+// The row under every footer: policies (unless the variant lists them
+// above), copyright, "Track your order" when no menu carries it, and the
+// social links.
+import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { TRACK_ORDER_PATH } from "@/lib/footer-links";
+import type { FooterModel } from "./footer-model";
+
+interface Props {
+  model: FooterModel;
+  showPolicies?: boolean;
+}
+
+const { model, showPolicies = true } = Astro.props;
+const { policyLinks, copyrightName, trackOrderInBottomRow, social } = model;
+---
+
+<div class="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-border">
+  <div class="flex flex-col sm:flex-row items-center justify-between gap-6">
+    <div class="flex flex-col items-center gap-2 text-sm sm:items-start">
+      {
+        showPolicies && policyLinks.length > 0 && (
+          <nav aria-label="Store policies">
+            <ul class="flex flex-wrap justify-center gap-x-4 gap-y-1 sm:justify-start">
+              {policyLinks.map((link) => (
+                <li>
+                  <a href={link.href} class="inline-flex min-h-11 items-center underline-offset-4 hover:underline sm:min-h-0">
+                    {link.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )
+      }
+      <span class="text-center sm:text-left">
+        © {new Date().getFullYear()}{copyrightName && <> <span class="font-semibold">{copyrightName}</span></>}. All rights reserved.
+      </span>
+      {trackOrderInBottomRow && (
+        <a href={TRACK_ORDER_PATH} class="inline-flex min-h-11 items-center underline underline-offset-4 sm:min-h-0">
+          Track your order
+        </a>
+      )}
+    </div>
+
+    {
+      social.length > 0 && (
+        <div class="flex items-center justify-center gap-4 flex-wrap">
+          {social.map((item) => {
+            const displayTitle = item.label || item.platform || "Social";
+            const href = item.url;
+
+            return (
+              <a
+                href={href}
+                data-astro-prefetch={getStorefrontPrefetchAttribute(href, Astro.url)}
+                class="group transition-all duration-300"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={displayTitle}
+                title={displayTitle}
+              >
+                <div class="relative p-3 rounded-full bg-secondary-foreground/10 group-hover:bg-secondary-foreground/15 transition-colors duration-200">
+                  {item.optimizedIconUrl ? (
+                    <img
+                      src={item.optimizedIconUrl}
+                      alt=""
+                      aria-hidden="true"
+                      class="w-5 h-5 object-contain"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span aria-hidden="true" class="w-5 h-5 flex items-center justify-center font-bold text-sm uppercase">
+                      {displayTitle.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      )
+    }
+  </div>
+</div>

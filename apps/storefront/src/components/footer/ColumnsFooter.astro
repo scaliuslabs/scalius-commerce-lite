@@ -1,0 +1,103 @@
+---
+// minimal-columns (Dawn) and product-widgets (Game Ghor; its product lists
+// wait for product data in the layout read, so it renders the columns): the
+// logo, tagline and call line, the description, then one column per footer
+// menu. Kept pixel-identical to the version 3 columns footer, the default
+// template's.
+import RecursiveFooterLink from "../RecursiveFooterLink.astro";
+import { mediaImageUrl } from "@/lib/media-url";
+import type { FooterModel } from "./footer-model";
+
+interface Props {
+  model: FooterModel;
+}
+
+const {
+  logo,
+  brandName,
+  tagline,
+  phoneHref,
+  storePhone,
+  description,
+  descriptionHtml: optimizedDescription,
+  menus,
+} = Astro.props.model;
+
+const menuCount = menus.length;
+let menuGridCols = "grid-cols-2"; // Default to 2 columns on mobile
+if (menuCount >= 3) menuGridCols = "grid-cols-2 lg:grid-cols-3";
+if (menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-cols-4";
+---
+
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-5">
+  <div class="lg:col-span-4">
+    {/* No logo and no store name: no empty link to tab onto. */}
+    {(logo.src || brandName) && (
+      <a
+        href="/"
+        class="group inline-block transform transition-transform hover:scale-105 duration-300"
+      >
+        {
+          logo.src ? (
+            <img
+              src={mediaImageUrl(logo.src, 480)}
+              alt={brandName || "Home"}
+              width={344}
+              height={256}
+              loading="lazy"
+              decoding="async"
+              class="h-12 sm:h-14 w-auto object-contain drop-shadow-lg"
+            />
+          ) : (
+            <span class="text-lg font-bold">{brandName}</span>
+          )
+        }
+      </a>
+    )}
+    {
+      tagline && (
+        <p class="mt-3 text-base font-medium leading-relaxed max-w-md">
+          {tagline}
+        </p>
+      )
+    }
+
+    {
+      phoneHref && (
+        <p class="mt-3 text-base">
+          Call us:{" "}
+          <a href={phoneHref} class="font-semibold underline underline-offset-4">
+            {storePhone}
+          </a>
+        </p>
+      )
+    }
+
+    {/* Rich text description from API */}
+    {
+      description && (
+        <div
+          class="mt-2 text-base text-inherit leading-relaxed max-w-md prose prose-base [&_*]:text-inherit prose-p:my-1 prose-p:leading-relaxed prose-a:underline prose-pre:bg-transparent"
+          set:html={optimizedDescription}
+        />
+      )
+    }
+  </div>
+
+  <div class="lg:col-span-8">
+    <div class={`grid ${menuGridCols} gap-8 sm:gap-10`}>
+      {
+        menus.map((menu) => (
+          <div class="flex flex-col gap-4">
+            <h2 class="text-sm font-bold tracking-widest uppercase">
+              {menu.title}
+            </h2>
+
+            <RecursiveFooterLink links={menu.links} />
+          </div>
+        ))
+      }
+    </div>
+  </div>
+
+</div>

@@ -1,17 +1,36 @@
 ---
-// Header component - receives data from Layout.astro
+// The storefront header: top bar, header, desktop menu and phone navigation,
+// each the variant the resolved theme chose (theme blocks topBar, header,
+// desktopNav, mobileNav; the resolver already applied fit fallbacks). The
+// menu tree comes from nav-tree.ts and each rendering of it gets its share
+// of the header's 150-link budget, so large trees are drilled into rather
+// than dumped into the HTML.
 import type { HeaderData, NavigationItem, SocialLink } from "@/lib/api";
 import HeaderLayout from "./HeaderLayout.astro";
+import TopBar from "./TopBar.astro";
 import DesktopNav from "./DesktopNav.astro";
+import CascadingNav from "./CascadingNav.astro";
+import CategoryBar from "./CategoryBar.astro";
+import DepartmentsRail from "./DepartmentsRail.astro";
+import DrawerTrigger from "./DrawerTrigger.astro";
 import MobileMenu from "./MobileMenu.astro";
 import MobileTabBar from "./MobileTabBar.astro";
 import PillNav from "./PillNav.astro";
 import { HEADER_LOGO_WIDTH_DEFAULT } from "@scalius/shared/brand-presentation";
 import type {
+  STOREFRONT_MOBILE_TABS,
   StorefrontHeaderRenderer,
   StorefrontMobileNavigationRenderer,
   StorefrontNavigationRenderer,
 } from "@scalius/shared/storefront-theme";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { headerSpec } from "./header-variants";
+import {
+  navigationLinkShare,
+  navigationShortcuts,
+  navigationTree,
+  pruneNavigation,
+} from "./nav-tree";
 
 interface Props {
   headerData: HeaderData;
@@ -20,11 +39,12 @@ interface Props {
   storeName: string | null;
   storePhone: string | null;
   social: SocialLink[];
+  /** The coarse renderer facts (`resolved.layout`); the variants come from the resolved theme. */
   variant: StorefrontHeaderRenderer;
-  /** The theme's top bar block shows the announcement bar (its text lives in Header settings). */
+  /** The theme's top bar block can show a bar (its text lives in Header settings). */
   showTopBar: boolean;
-  /** How the menu is browsed on computers (the sidebar itself is Layout's). */
   navigationStyle: StorefrontNavigationRenderer;
+  /** Layout's coarse phone fact; the phone menu follows the resolved `mobileNav` variant. */
   mobileNavigation: StorefrontMobileNavigationRenderer;
 }
 
@@ -34,15 +54,13 @@ const {
   storeName,
   storePhone,
   social,
-  variant,
+  variant: headerStyle,
   showTopBar,
   navigationStyle,
-  mobileNavigation,
 } = Astro.props;
-const hasNavigation = navigationItems.length > 0;
-// Classic headers fold the menu row into the bar on scroll. Only the dropdown
-// menu folds: a mega panel spans the full row it hangs from.
-const condensedMenu = hasNavigation && variant === "classic" && navigationStyle === "menu";
+
+const { resolved } = await currentRequestTheme(Astro.locals);
+const { topBar, header, desktopNav, mobileNav } = resolved.blocks;
 
 const headerData: HeaderData = {
   topBar: {
@@ -63,37 +81,208 @@ const headerData: HeaderData = {
   },
   social,
 };
+
+// ── Which menus render where ───────────────────────────────────────────
+const tree = navigationTree(navigationItems);
+const hasNavigation = tree.length > 0;
+const desktopKind = desktopNav.variant;
+const desktopSettings = desktopNav.settings as Record<string, unknown>;
+const railAlways = desktopKind === "departments-rail" && desktopSettings.open === "always";
+const mobileSettings = mobileNav.settings as Record<string, unknown>;
+const phoneTree: "accordion" | "drill" =
+  mobileNav.variant === "drill-in-drawer" || (mobileNav.variant === "bottom-tabs" && mobileSettings.drawer === "drill-in")
+    ? "drill"
+    : "accordion";
+const tabs =
+  mobileNav.variant === "bottom-tabs" ? (mobileSettings.tabs as ReadonlyArray<(typeof STOREFRONT_MOBILE_TABS)[number]>) : null;
+const desktopDrill = hasNavigation && desktopKind === "drill-in-drawer";
+// One drawer serves both screens when both drill in.
+const sharedDrawer = desktopDrill && phoneTree === "drill";
+const desktopDrawer = sharedDrawer ? "mobile-menu" : "nav-drawer";
+// The departments column (always open) is the Layout's, beside the page.
+const desktopMenu = hasNavigation && !railAlways;
+
+const spec = header.variant === "mall-departments" ? null : headerSpec(header.variant, header.settings as Record<string, unknown>);
+const retailPill = header.variant === "retail-pill";
+const shortcutRow = Boolean(spec?.phoneShortcuts) && hasNavigation;
+const rowLinks = desktopDrill && !retailPill ? 8 : 0;
+
+// Link budget: one share per rendering of the tree in the header HTML
+// (the classic compact copy and "More" entries are built in the browser).
+const renderings = (desktopMenu && !sharedDrawer ? 1 : 0) + 1;
+const share = navigationLinkShare(renderings, (shortcutRow ? 10 : 0) + rowLinks);
+const desktopAllLinks = desktopKind !== "dropdown";
+const desktopTree = desktopMenu ? pruneNavigation(tree, share, { allLinks: desktopAllLinks }) : [];
+const drawerTree = pruneNavigation(tree, share, { allLinks: phoneTree === "drill" });
+
+const flyouts = desktopSettings.flyouts === "cascading" ? "cascading" : "dropdown";
+const departments = tree.filter((item) => item.href);
+const phoneDrop = tabs ? tabs.filter((tab) => tab === "cart" || tab === "account").join(" ") : "";
+
+// The classic header folds the dropdown row into the bar on scroll.
+const condensedMenu = !spec && desktopMenu && desktopKind === "dropdown";
+const menuPlacement: "inline" | "row" =
+  !spec || desktopKind === "sticky-category-bar" ? "row" : spec.menu;
+const stickyMenuRow =
+  Boolean(spec) && desktopMenu && menuPlacement === "row" && (header.variant === "spec-two-row" || desktopKind === "sticky-category-bar");
 ---
 
-<header id="site-header" class="contents">
+<header id="site-header" class="contents" data-header-variant={header.variant} data-desktop-nav={desktopKind} data-mobile-nav-variant={mobileNav.variant}>
+  <TopBar
+    variant={headerData.topBar.isEnabled ? topBar.variant : "none"}
+    text={headerData.topBar.text}
+    storeName={headerData.logo.alt}
+    phone={headerData.contact.isEnabled !== false ? storePhone : null}
+  />
+
   <HeaderLayout
     headerData={headerData}
-    hasNavigation={hasNavigation}
+    variantId={header.variant}
+    spec={spec}
+    headerStyle={headerStyle}
     navigationStyle={navigationStyle}
+    hasMenu={desktopMenu}
+    menuPlacement={menuPlacement}
+    stickyMenuRow={stickyMenuRow}
     condensedMenu={condensedMenu}
-    variant={variant}
+    departments={departments}
+    phoneDrop={phoneDrop}
   >
+    <Fragment slot="menu">
+      {desktopMenu && desktopKind === "dropdown" && (
+        <DesktopNav navigation={desktopTree} id="desktop-nav" navStyle="menu" />
+      )}
+      {desktopMenu && desktopKind === "mega-panel" && (
+        <DesktopNav
+          navigation={desktopTree}
+          id="desktop-nav"
+          navStyle="mega"
+          promoImages={desktopSettings.promoImages === true}
+        />
+      )}
+      {desktopMenu && desktopKind === "cascading" && (
+        <CascadingNav navigation={desktopTree} id="cascading-nav" layout="row" flyouts="cascade" />
+      )}
+      {desktopMenu && desktopKind === "sticky-category-bar" && (
+        <CategoryBar navigation={desktopTree.slice(0, 18)} flyouts={flyouts} />
+      )}
+      {desktopMenu && desktopKind === "departments-rail" && <DepartmentsRail navigation={desktopTree} />}
+      {desktopDrill && (
+        <div class="drill-row-menu">
+          <DrawerTrigger
+            drawer={desktopDrawer}
+            shape={retailPill ? "pill" : "text"}
+            label={retailPill ? "Categories" : "All"}
+          />
+          {rowLinks > 0 && (
+            <ul class="drill-row-links">
+              {navigationShortcuts(tree, rowLinks).map((item) => (
+                <li>
+                  <a href={item.href} {...(item.openInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+                    {item.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </Fragment>
     {
-      hasNavigation && (navigationStyle === "menu" || navigationStyle === "mega") && (
-        <DesktopNav slot="desktop-nav-full" navigation={navigationItems} id="desktop-nav" navStyle={navigationStyle} />
+      shortcutRow && (
+        <div slot="phone-extras" class="header-phone-shortcuts">
+          <PillNav navigation={navigationShortcuts(tree, 10)} />
+        </div>
       )
     }
-    {
-      condensedMenu && (
-        <DesktopNav slot="desktop-nav-compact" navigation={navigationItems} id="desktop-nav-compact" navStyle="menu" />
-      )
-    }
-    {hasNavigation && navigationStyle === "pills" && <PillNav slot="pill-nav" navigation={navigationItems} />}
   </HeaderLayout>
 
   <MobileMenu
-    navigation={navigationItems}
+    navigation={drawerTree}
     contact={headerData.contact}
     social={headerData.social}
+    tree={phoneTree}
+    screens={sharedDrawer ? "all" : "phone"}
+    title={sharedDrawer ? "Shop by department" : "Menu"}
   />
 
-  {mobileNavigation === "tabs" && <MobileTabBar />}
+  {
+    desktopDrill && !sharedDrawer && (
+      <MobileMenu
+        id="nav-drawer"
+        navigation={desktopTree}
+        contact={headerData.contact}
+        tree="drill"
+        screens="all"
+        title="Shop by department"
+      />
+    )
+  }
+
+  {tabs && <MobileTabBar tabs={tabs} />}
 </header>
+
+<style>
+  .drill-row-menu {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .drill-row-links {
+    display: none;
+    min-width: 0;
+    overflow: hidden;
+    gap: 0.25rem;
+  }
+
+  @media (min-width: 64rem) {
+    .drill-row-links {
+      display: flex;
+    }
+  }
+
+  .drill-row-links a {
+    display: inline-flex;
+    align-items: center;
+    height: 2.5rem;
+    padding-inline: 0.625rem;
+    color: var(--nav-ink, var(--foreground));
+    font-size: 0.875rem;
+    white-space: nowrap;
+  }
+
+  .drill-row-links a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
+  }
+
+  .drill-row-links a:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+  }
+
+  /* PillNav bleeds to the screen edges by its gutter; this row supplies it. */
+  .header-phone-shortcuts {
+    padding-inline: 1rem;
+    overflow-x: clip;
+    border-bottom: 1px solid var(--border);
+    background: var(--background);
+  }
+
+  @media (min-width: 40rem) {
+    .header-phone-shortcuts {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .header-phone-shortcuts {
+      display: none;
+    }
+  }
+</style>
 
 <script>
   import { cartStore, hydrateCartFromStorage } from "@/store/cart";
@@ -101,8 +290,11 @@ const headerData: HeaderData = {
   import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
   import { formatMoney } from "@/lib/currency";
   import { installNavDisclosure } from "./nav-disclosure";
+  import { installNavMenus } from "./nav-menus";
+  import { installDrawer } from "./drawer";
 
   installNavDisclosure();
+  installNavMenus();
 
   const openCart = debounce(() => {
     document.dispatchEvent(new CustomEvent("open-cart"));
@@ -160,253 +352,56 @@ const headerData: HeaderData = {
     const unsubscribeCart = cartStore.subscribe(updateCartDisplay);
     document.addEventListener("cart-updated", updateCartDisplay);
 
-    // Event Delegation for clicks
-    const addClick = (id: string, fn: (e: MouseEvent) => void) => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.onclick = (event) => fn(event as MouseEvent);
-      }
-    };
-
-    const handleOpenCart = (e: MouseEvent) => {
-      e.preventDefault();
+    const handleOpenCart = (event: MouseEvent) => {
+      event.preventDefault();
       openCart();
     };
-
-    addClick("cart-button", handleOpenCart);
-    // The phone tab bar's Cart tab opens the same cart drawer.
-    const cartOpeners = document.querySelectorAll<HTMLElement>("[data-cart-open]");
+    // The header cart and the phone tab bar's Cart tab open the same drawer.
+    const cartOpeners = document.querySelectorAll<HTMLElement>("#cart-button, [data-cart-open]");
     cartOpeners.forEach((opener) => (opener.onclick = handleOpenCart));
 
-    const menuPanel = document.getElementById("mobile-menu-panel");
-    const menuOverlay = document.getElementById("mobile-menu-overlay");
-    const menuTrigger = document.getElementById("mobile-menu-toggle");
-    const menuClose = document.getElementById("mobile-menu-close");
-    // The header button and the tab bar's Categories tab both open the menu;
-    // focus returns to whichever opened it.
-    const menuOpeners = [
-      ...new Set(
-        [menuTrigger, ...document.querySelectorAll<HTMLElement>("[data-mobile-menu-open]")].filter(
-          (opener): opener is HTMLElement => opener !== null,
-        ),
-      ),
-    ];
-    let menuOpener: HTMLElement | null = menuTrigger;
-    const menuHistoryKey = "__scaliusMobileMenu";
-    let menuIsOpen = false;
-    let bodyOverflowBeforeMenu = "";
-    let menuVisibilityTimer: number | undefined;
-    const backgroundInertStates = new Map<HTMLElement, boolean>();
-    const desktopBreakpoint = window.matchMedia("(min-width: 1024px)");
-
-    const hydrateDeferredHeaderImages = (selector: string) => {
-      document.querySelectorAll<HTMLImageElement>(selector).forEach((image) => {
+    const hydrateDeferredHeaderImages = () => {
+      document.querySelectorAll<HTMLImageElement>("[data-mobile-header-image]").forEach((image) => {
         if (image.hasAttribute("src")) return;
         const source = image.dataset.deferredSrc;
         if (source) image.src = source;
       });
     };
 
-    const menuBackgroundElements = () => {
-      const siteHeader = document.getElementById("site-header");
-      const siteWrapper = siteHeader?.parentElement;
-      const elements = new Set<HTMLElement>();
-
-      siteHeader
-        ?.querySelectorAll<HTMLElement>(":scope > *")
-        .forEach((element) => {
-          if (element !== menuPanel && element !== menuOverlay)
-            elements.add(element);
-        });
-      siteWrapper
-        ?.querySelectorAll<HTMLElement>(":scope > *")
-        .forEach((element) => {
-          if (element !== siteHeader) elements.add(element);
-        });
-      document.body
-        .querySelectorAll<HTMLElement>(":scope > *")
-        .forEach((element) => {
-          if (
-            element !== siteWrapper &&
-            !["SCRIPT", "STYLE", "NOSCRIPT"].includes(element.tagName)
-          ) {
-            elements.add(element);
-          }
-        });
-
-      return elements;
-    };
-
-    const setMenuBackgroundInert = (inert: boolean) => {
-      if (inert) {
-        menuBackgroundElements().forEach((element) => {
-          backgroundInertStates.set(element, element.inert);
-          element.inert = true;
-        });
-        return;
-      }
-
-      backgroundInertStates.forEach((wasInert, element) => {
-        element.inert = wasInert;
-      });
-      backgroundInertStates.clear();
-    };
-
-    const historyState = (): Record<string, unknown> =>
-      history.state && typeof history.state === "object" ? history.state : {};
-
-    const clearMenuHistoryMarker = () => {
-      const nextState = { ...historyState() };
-      delete nextState[menuHistoryKey];
-      history.replaceState(nextState, "", window.location.href);
-    };
-
-    const focusableElements = () =>
-      menuPanel
-        ? Array.from(
-            menuPanel.querySelectorAll<HTMLElement>(
-              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            ),
-          ).filter((element) => element.offsetParent !== null)
-        : [];
-
-    const toggleMenu = (
-      show: boolean,
-      options: { syncHistory?: boolean; restoreFocus?: boolean } = {},
-    ) => {
-      if (!menuPanel || !menuOverlay) return;
-      const syncHistory = options.syncHistory ?? true;
-      const restoreFocus = options.restoreFocus ?? true;
-      if (show === menuIsOpen) return;
-      menuIsOpen = show;
-      if (menuVisibilityTimer !== undefined) {
-        window.clearTimeout(menuVisibilityTimer);
-        menuVisibilityTimer = undefined;
-      }
-      menuPanel.inert = !show;
-      menuPanel.setAttribute("aria-hidden", String(!show));
-      menuOpeners.forEach((opener) => opener.setAttribute("aria-expanded", String(show)));
-      if (show) {
-        hydrateDeferredHeaderImages("[data-mobile-header-image]");
-        setMenuBackgroundInert(true);
-        bodyOverflowBeforeMenu = document.body.style.overflow;
-        menuPanel.classList.remove("invisible");
-        menuOverlay.classList.remove("invisible");
-        requestAnimationFrame(() => {
-          if (!menuIsOpen) return;
-          menuPanel.classList.remove("-translate-x-full");
-          menuOverlay.classList.remove("opacity-0", "pointer-events-none");
-        });
-        document.body.style.overflow = "hidden";
-        if (syncHistory && historyState()[menuHistoryKey] !== true) {
-          history.pushState(
-            { ...historyState(), [menuHistoryKey]: true },
-            "",
-            window.location.href,
-          );
-        }
-        requestAnimationFrame(() => menuClose?.focus());
-      } else {
-        setMenuBackgroundInert(false);
-        menuPanel.classList.add("-translate-x-full");
-        menuOverlay.classList.add("opacity-0", "pointer-events-none");
-        menuVisibilityTimer = window.setTimeout(() => {
-          if (menuIsOpen) return;
-          menuPanel.classList.add("invisible");
-          menuOverlay.classList.add("invisible");
-          menuVisibilityTimer = undefined;
-        }, 300);
-        document.body.style.overflow = bodyOverflowBeforeMenu;
-        if (restoreFocus) menuOpener?.focus();
-        if (syncHistory && historyState()[menuHistoryKey] === true) {
-          history.back();
-        }
-      }
-    };
-
-    const handlePopState = () => {
-      if (menuIsOpen) {
-        toggleMenu(false, { syncHistory: false });
-      }
-    };
-    window.addEventListener("popstate", handlePopState);
-
-    menuOpeners.forEach((opener) => {
-      opener.onclick = () => {
-        menuOpener = opener;
-        toggleMenu(true);
-      };
+    // Each drawer: the phone menu (header button, the tab bar's Categories
+    // tab, and the "All" button when it serves computers too) and the
+    // computer's separate drill-in drawer.
+    const cleanups: Array<() => void> = [];
+    document.querySelectorAll<HTMLElement>("[data-drawer]").forEach((panel) => {
+      const id = panel.dataset.drawer!;
+      const overlay = document.getElementById(`${id}-overlay`);
+      if (!overlay) return;
+      const openers = [
+        ...(id === "mobile-menu"
+          ? [
+              document.getElementById("mobile-menu-toggle"),
+              ...document.querySelectorAll<HTMLElement>("[data-mobile-menu-open]"),
+            ]
+          : []),
+        ...document.querySelectorAll<HTMLElement>(`[data-drawer-open="${id}"]`),
+      ].filter((opener): opener is HTMLElement => opener !== null);
+      cleanups.push(
+        installDrawer({
+          panel,
+          overlay,
+          closeButton: document.getElementById(`${id}-close`),
+          openers: [...new Set(openers)],
+          historyKey: id === "mobile-menu" ? "__scaliusMobileMenu" : `__scalius_${id}`,
+          phoneOnly: panel.dataset.drawerScreens !== "all",
+          onOpen: hydrateDeferredHeaderImages,
+        }),
+      );
     });
-    addClick("mobile-menu-close", () => toggleMenu(false));
-    if (menuOverlay) {
-      menuOverlay.onclick = () => toggleMenu(false);
-    }
-
-    if (menuPanel) {
-      menuPanel.onkeydown = (event) => {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          toggleMenu(false);
-          return;
-        }
-
-        if (event.key !== "Tab") return;
-        const elements = focusableElements();
-        const first = elements.at(0);
-        const last = elements.at(-1);
-        if (!first || !last) {
-          event.preventDefault();
-          return;
-        }
-
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first.focus();
-        }
-      };
-
-      // Menu levels are disclosures (nav-disclosure.ts); a link closes the menu.
-      menuPanel.onclick = (e) => {
-        const target = e.target as HTMLElement;
-        if (target.closest("a[href]")) {
-          toggleMenu(false, { syncHistory: false, restoreFocus: false });
-          if (historyState()[menuHistoryKey] === true) {
-            clearMenuHistoryMarker();
-          }
-        }
-      };
-    }
-
-    desktopBreakpoint.onchange = (event) => {
-      if (event.matches) {
-        if (menuTrigger?.getAttribute("aria-expanded") === "true") {
-          toggleMenu(false);
-        }
-      }
-    };
 
     runtimeWindow.__scaliusHeaderCleanup = () => {
       unsubscribeCart();
       document.removeEventListener("cart-updated", updateCartDisplay);
-      window.removeEventListener("popstate", handlePopState);
-      desktopBreakpoint.onchange = null;
-      if (menuPanel) {
-        menuPanel.onkeydown = null;
-        menuPanel.onclick = null;
-      }
-      if (menuOverlay) menuOverlay.onclick = null;
-      if (menuIsOpen) {
-        toggleMenu(false, { syncHistory: false, restoreFocus: false });
-      }
-      if (menuVisibilityTimer !== undefined) {
-        window.clearTimeout(menuVisibilityTimer);
-        menuVisibilityTimer = undefined;
-      }
-      menuPanel?.classList.add("invisible");
-      menuOverlay?.classList.add("invisible");
+      cleanups.forEach((cleanup) => cleanup());
     };
   }
 

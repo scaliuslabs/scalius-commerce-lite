@@ -55,7 +55,14 @@ const SMALL_CATALOGUE = [atMost("skuCount", 500), atMost("menuTopItems", 8), atM
 
 // Existing renderers (the v3 components) the variants map to for now.
 export const STOREFRONT_HEADER_RENDERERS = ["classic", "centered", "marketplace"] as const;
-export const STOREFRONT_NAVIGATION_RENDERERS = ["menu", "mega", "pills", "sidebar"] as const;
+/**
+ * Where the desktop menu lives: a row of dropdowns or fly-outs (menu), full
+ * panels (mega), a flat bar of top links (pills), a column beside the page
+ * (sidebar) or a drawer opened from one button (drawer). The storefront
+ * renders each variant with its own component; Layout reads this for the
+ * sidebar column.
+ */
+export const STOREFRONT_NAVIGATION_RENDERERS = ["menu", "mega", "pills", "sidebar", "drawer"] as const;
 export const STOREFRONT_MOBILE_NAVIGATION_RENDERERS = ["drawer", "tabs"] as const;
 export const STOREFRONT_FOOTER_RENDERERS = ["columns", "compact", "contact"] as const;
 export type StorefrontHeaderRenderer = (typeof STOREFRONT_HEADER_RENDERERS)[number];
@@ -74,32 +81,42 @@ export interface StorefrontGalleryRenderer {
 
 // ─── Registries ───────────────────────────────────────────────────────────
 
-/** Above the header (36-50px); announcement text lives in Header settings. */
+/**
+ * Above the header (36-50px); its text is the announcement in Header
+ * settings. `renders` says whether a bar can show at all.
+ */
 export const STOREFRONT_TOP_BAR_VARIANTS = {
   none: variant({ renders: false }),
+  // Dawn, Fabrilife: one centred line.
   announcement: variant({ renders: true }),
-  utility: variant({ renders: true }),
-  // Phone-only "open app" banner: no renderer yet, so nothing shows.
-  "app-banner": variant({ renders: false }),
+  // Game Ghor, Target: the announcement at the start; call, track order and
+  // account at the end. Computers only (phones reach them in the menu).
+  utility: variant({ contrastPairs: [["foreground", "muted"]], renders: true }),
+  // Apple Gadgets, Amazon: a dismissible phone-only banner (60px) carrying
+  // the announcement until the store has an app to link.
+  "app-banner": variant({ renders: true }),
 };
 
 export const STOREFRONT_HEADER_VARIANTS = {
   // Dawn: 84px, logo, 3-6 inline items, icon search.
   "boutique-inline": variant({ requires: SMALL_CATALOGUE, fallback: "fashion-department", renders: "centered" }),
   // Fabrilife/Aarong: uppercase departments, filled search, icon-over-label utilities.
+  // The filled search fields paint ink on the muted surface.
   "fashion-department": variant({
     settings: { subBrandRow: z.boolean() },
     defaults: { subBrandRow: false },
+    contrastPairs: [["foreground", "muted"]],
     renders: "classic",
   }),
   // Star Tech: dark row with a 580px search, light category row that stays.
-  "spec-two-row": variant({ renders: "marketplace" }),
+  "spec-two-row": variant({ contrastPairs: [["foreground", "muted"]], renders: "marketplace" }),
   // Apple Gadgets: dark row, pill search, round icons, category row.
   "tech-rounded": variant({ renders: "marketplace" }),
   // Amazon/Daraz: department-scoped search, trending queries.
   "marketplace-search": variant({
     settings: { trendingQueries: z.boolean() },
     defaults: { trendingQueries: true },
+    contrastPairs: [["foreground", "muted"]],
     renders: "marketplace",
   }),
   // Game Ghor: big logo, search with a category select, cart with its total.
@@ -107,7 +124,7 @@ export const STOREFRONT_HEADER_VARIANTS = {
   // Target/Walmart: Categories and Deals pills, pill search.
   "retail-pill": variant({ settings: cartTotal, defaults: { cartTotal: false }, renders: "marketplace" }),
   // Chaldal: fixed header, delivery-city selector, wide search.
-  "grocery-shell": variant({ renders: "marketplace" }),
+  "grocery-shell": variant({ contrastPairs: [["foreground", "muted"]], renders: "marketplace" }),
 };
 
 /** How the header menu is browsed on computers (mix rule 4: the pattern must fit the tree). */
@@ -121,8 +138,12 @@ export const STOREFRONT_DESKTOP_NAV_VARIANTS = {
     fallback: "dropdown",
     renders: "mega",
   }),
-  // Scales to any depth: always valid.
-  "drill-in-drawer": variant({ renders: "pills" }),
+  // Amazon, Target: one button opens a drawer that drills in a level at a
+  // time. Scales to any depth: always valid.
+  "drill-in-drawer": variant({ renders: "drawer" }),
+  // Game Ghor (home): an "All departments" tab whose list is open over the
+  // hero on the home page and opens on demand elsewhere. Chaldal (always): a
+  // column beside every page.
   "departments-rail": variant({
     settings: { open: z.enum(["home", "always"]) },
     defaults: { open: "home" },
@@ -130,6 +151,8 @@ export const STOREFRONT_DESKTOP_NAV_VARIANTS = {
     fallback: "dropdown",
     renders: (settings) => (settings.open === "always" ? "sidebar" : "menu"),
   }),
+  // Star Tech: a flat bar of top categories that stays when the header
+  // scrolls away; each opens a dropdown or cascading fly-outs.
   "sticky-category-bar": variant({
     settings: { flyouts: z.enum(["dropdown", "cascading"]) },
     defaults: { flyouts: "dropdown" },
