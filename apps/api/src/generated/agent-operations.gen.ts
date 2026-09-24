@@ -13288,7 +13288,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.delivery_locations.bulk_delete",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/settings/delivery-locations",
-    "summary": "Bulk soft-delete delivery locations",
+    "summary": "Bulk soft-delete delivery locations with their thanas and areas",
     "tags": [
       "Admin - Delivery Locations"
     ],
@@ -13517,6 +13517,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "displayName": {
                   "type": "string"
+                },
+                "descendants": {
+                  "type": "object",
+                  "properties": {
+                    "zones": {
+                      "type": "integer"
+                    },
+                    "areas": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "zones",
+                    "areas"
+                  ]
                 }
               },
               "required": [
@@ -13713,6 +13728,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "displayName": {
               "type": "string"
+            },
+            "descendants": {
+              "type": "object",
+              "properties": {
+                "zones": {
+                  "type": "integer"
+                },
+                "areas": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "zones",
+                "areas"
+              ]
             }
           },
           "required": [
@@ -13884,6 +13914,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "displayName": {
                     "type": "string"
+                  },
+                  "descendants": {
+                    "type": "object",
+                    "properties": {
+                      "zones": {
+                        "type": "integer"
+                      },
+                      "areas": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "zones",
+                      "areas"
+                    ]
                   }
                 },
                 "required": [
@@ -14269,7 +14314,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "operationId": "dashboard.delivery_locations.trash",
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/settings/delivery-locations/{id}",
-    "summary": "Soft-delete a delivery location",
+    "summary": "Soft-delete a delivery location with its thanas and areas",
     "tags": [
       "Admin - Delivery Locations"
     ],
@@ -14467,6 +14512,21 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             },
             "displayName": {
               "type": "string"
+            },
+            "descendants": {
+              "type": "object",
+              "properties": {
+                "zones": {
+                  "type": "integer"
+                },
+                "areas": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "zones",
+                "areas"
+              ]
             }
           },
           "required": [
@@ -22190,6 +22250,11 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "hasMore",
                 "nextCursor"
               ]
+            },
+            "defaultLowStockThreshold": {
+              "type": "integer",
+              "nullable": true,
+              "description": "Store-wide alert level for SKUs without their own (variants and alerts sections)"
             }
           },
           "additionalProperties": {}
@@ -22457,7 +22522,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "PUT",
     "pathTemplate": "/api/v1/admin/inventory/{variantId}/alert-level",
     "summary": "Set a SKU's low-stock alert level",
-    "description": "Alert when available stock falls to this level or below: a whole number from 0 to 1,000,000, or null to turn the alert off. Stock is not changed.",
+    "description": "Alert when available stock falls to this level or below: a whole number from 0 to 1,000,000 (0 turns the alert off for this SKU), or null to use the store default. Stock is not changed.",
     "tags": [
       "Admin - Inventory"
     ],
@@ -22539,6 +22604,88 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
           "required": [
             "variantId",
             "lowStockThreshold"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.inventory.set_default_alert_level",
+    "method": "PUT",
+    "pathTemplate": "/api/v1/admin/inventory/default-alert-level",
+    "summary": "Set the store-wide low-stock alert level",
+    "description": "SKUs without their own alert level use this one: a whole number from 0 to 1,000,000, or null to turn it off. Stock is not changed.",
+    "tags": [
+      "Admin - Inventory"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "write",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "products.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "defaultLowStockThreshold": {
+                  "type": "integer",
+                  "nullable": true,
+                  "minimum": 0,
+                  "maximum": 1000000
+                }
+              },
+              "required": [
+                "defaultLowStockThreshold"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "defaultLowStockThreshold": {
+              "type": "integer",
+              "nullable": true
+            }
+          },
+          "required": [
+            "defaultLowStockThreshold"
           ]
         }
       },
@@ -23609,6 +23756,15 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "deletedAt": {
                     "$ref": "#/components/schemas/NullableTimestamp"
+                  },
+                  "usageCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Distinct places that show the file: products, categories, collections, pages, banners, theme, navigation, invoice, social image, video covers and staff photos."
+                  },
+                  "keptForOrders": {
+                    "type": "boolean",
+                    "description": "Past orders show this picture, so it can never be deleted permanently."
                   }
                 },
                 "required": [
@@ -23626,7 +23782,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "createdAt",
                   "updatedAt",
                   "trashedAt",
-                  "deletedAt"
+                  "deletedAt",
+                  "usageCount",
+                  "keptForOrders"
                 ]
               }
             },
@@ -23810,6 +23968,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "DELETE",
     "pathTemplate": "/api/v1/admin/media/{id}/permanent",
     "summary": "Permanently delete unreferenced trashed media",
+    "description": "Refused with 409 MEDIA_DEPENDENCY_CONFLICT while the file is used anywhere (see dashboard.media.usage) or kept by past orders.",
     "tags": [
       "Admin - Media"
     ],
@@ -25292,6 +25451,127 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     },
     "inputSchema": null,
     "outputSchema": null
+  },
+  {
+    "operationId": "dashboard.media.usage",
+    "method": "GET",
+    "pathTemplate": "/api/v1/admin/media/{id}/usage",
+    "summary": "List where a file is used",
+    "description": "Distinct places that show the file (up to 50, products first) and how many past order lines keep it. A file in use can be moved to trash (it keeps showing) but not deleted permanently.",
+    "tags": [
+      "Admin - Media"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "read",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "parallel",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "media.view"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 160
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "references": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "product",
+                      "category",
+                      "collection",
+                      "page",
+                      "article",
+                      "banner",
+                      "theme",
+                      "navigation",
+                      "invoice",
+                      "social_image",
+                      "video_cover",
+                      "staff_photo"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "name": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "trashed": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "name",
+                  "trashed"
+                ]
+              }
+            },
+            "orderCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "count",
+            "references",
+            "orderCount"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
   },
   {
     "operationId": "dashboard.media.variants_save",
@@ -31129,12 +31409,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "storefrontUrl": {
                   "type": "string",
                   "nullable": true
+                },
+                "nameFromAddress": {
+                  "type": "boolean"
                 }
               },
               "required": [
                 "name",
                 "logoUrl",
-                "storefrontUrl"
+                "storefrontUrl",
+                "nameFromAddress"
               ]
             }
           },
@@ -35235,7 +35519,19 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "code"
                     ]
                   },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "buy_x_get_y",
+                      "product",
+                      "order",
+                      "shipping"
+                    ]
+                  },
                   "amount": {
+                    "type": "number"
+                  },
+                  "shippingAmount": {
                     "type": "number"
                   }
                 },
@@ -35244,7 +35540,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "name",
                   "code",
                   "method",
-                  "amount"
+                  "kind",
+                  "amount",
+                  "shippingAmount"
                 ]
               }
             },
@@ -36327,7 +36625,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "string",
                         "nullable": true
                       },
+                      "kind": {
+                        "type": "string"
+                      },
                       "amount": {
+                        "type": "number"
+                      },
+                      "shippingAmount": {
                         "type": "number"
                       }
                     },
@@ -36850,7 +37154,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "type": "string",
                         "nullable": true
                       },
+                      "kind": {
+                        "type": "string"
+                      },
                       "amount": {
+                        "type": "number"
+                      },
+                      "shippingAmount": {
                         "type": "number"
                       }
                     },
@@ -44628,6 +44938,89 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     }
   },
   {
+    "operationId": "dashboard.payments.sslcommerz_remove",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/settings/sslcommerz",
+    "summary": "Remove the saved SSLCommerz keys and turn SSLCommerz off",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "expectedRevision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "message",
+            "revision"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
     "operationId": "dashboard.payments.sslcommerz_update",
     "method": "POST",
     "pathTemplate": "/api/v1/admin/settings/sslcommerz",
@@ -44788,6 +45181,89 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "publishableKey",
             "webhookSecret",
             "enabled"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.payments.stripe_remove",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/settings/stripe",
+    "summary": "Remove the saved Stripe keys and turn Stripe off",
+    "tags": [
+      "Admin - Settings"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "required",
+    "batch": "forbidden",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "settings.general.edit"
+    },
+    "inputSchema": {
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "expectedRevision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "expectedRevision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "message",
+            "revision"
           ]
         }
       },
@@ -46562,7 +47038,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
     "method": "POST",
     "pathTemplate": "/api/v1/admin/products/bulk-update",
     "summary": "Set status and/or category on several products",
-    "description": "Applies to every listed product or none. Activating fails with 400 when a product or one of its live SKUs has no price above 0.",
+    "description": "Changes every listed product together, except that activating skips (and lists in `skipped`) products where the product or one of its live SKUs has no price above 0.",
     "tags": [
       "Admin - Products"
     ],
@@ -46664,10 +47140,36 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "aggregateRevision"
                 ]
               }
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "needs_price"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "reason"
+                ]
+              }
             }
           },
           "required": [
-            "products"
+            "products",
+            "skipped"
           ]
         }
       },
@@ -73142,6 +73644,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "saleOfferSpendText": {
                   "type": "string"
                 },
+                "saleOfferGetText": {
+                  "type": "string"
+                },
+                "saleOfferGetSpendText": {
+                  "type": "string"
+                },
                 "freeBenefitText": {
                   "type": "string"
                 },
@@ -73160,6 +73668,8 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "quantityLimitText",
                 "saleOfferText",
                 "saleOfferSpendText",
+                "saleOfferGetText",
+                "saleOfferGetSpendText",
                 "freeBenefitText",
                 "percentBenefitText"
               ]
@@ -86986,6 +87496,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.inventory.set_default_alert_level",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.inventory.set_default_alert_level"
+        ]
+      },
+      {
         "operationId": "dashboard.inventory.set_stock",
         "surface": "dashboard",
         "mode": "curated",
@@ -87121,6 +87639,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "dashboard.media-upload"
+        ]
+      },
+      {
+        "operationId": "dashboard.media.usage",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.media.usage"
         ]
       },
       {
@@ -87857,6 +88383,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         ]
       },
       {
+        "operationId": "dashboard.payments.sslcommerz_remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.sslcommerz_remove"
+        ]
+      },
+      {
         "operationId": "dashboard.payments.sslcommerz_update",
         "surface": "dashboard",
         "mode": "curated",
@@ -87870,6 +88404,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "curated",
         "workflowIds": [
           "dashboard.stripe-settings"
+        ]
+      },
+      {
+        "operationId": "dashboard.payments.stripe_remove",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.payments.stripe_remove"
         ]
       },
       {

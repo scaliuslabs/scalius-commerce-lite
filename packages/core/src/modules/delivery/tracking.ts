@@ -291,26 +291,3 @@ export async function updateOrderStatusFromShipment(
     throw error;
   }
 }
-
-/**
- * Get the public tracking URL for a shipment.
- *
- * @param providerType - The courier provider type (pathao, steadfast)
- * @param trackingId - The tracking ID from the courier
- * @returns The tracking URL, or null if not available
- */
-export function getTrackingUrl(
-  providerType: string,
-  trackingId: string | null
-): string | null {
-  if (!trackingId) return null;
-
-  switch (providerType) {
-    case "pathao":
-      return `https://merchant.pathao.com/tracking?consignment_id=${encodeURIComponent(trackingId)}`;
-    case "steadfast":
-      return `https://steadfast.com.bd/t/${encodeURIComponent(trackingId)}`;
-    default:
-      return null;
-  }
-}

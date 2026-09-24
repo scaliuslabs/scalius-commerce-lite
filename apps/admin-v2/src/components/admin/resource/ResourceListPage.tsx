@@ -75,6 +75,8 @@ export interface ResourceListPageProps<T extends { id: string }> {
   views?: { param: string; tabs: ReadonlyArray<IndexTab<string>> };
   /** Says what the search matches, e.g. "Search by title, SKU or barcode". */
   searchPlaceholder?: string;
+  /** Names a number of rows ("2 products") in confirmations; a bare number otherwise. */
+  countLabel?: (count: number) => string;
   /** URL params set by `filters`; they mark the list filtered and "Clear filters" resets them. */
   filterParams?: readonly string[];
   filters?: ReactNode;
@@ -112,6 +114,15 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
       void navigate({ search: ((prev: Record<string, unknown>) => ({ ...prev, ...updates })) as never }),
     [navigate],
   );
+
+  // A `?q=` link was adopted as the session term by the loader; the address drops it
+  // so search terms never stay in URLs.
+  const urlTerm = search.q;
+  useEffect(() => {
+    if (typeof urlTerm !== "string") return;
+    setTerm(urlTerm);
+    void navigate({ search: ((prev: Record<string, unknown>) => ({ ...prev, q: undefined })) as never, replace: true });
+  }, [navigate, setTerm, urlTerm]);
 
   const canBulk = trashed
     ? Boolean(lifecycle?.canRestore || lifecycle?.canDelete)
@@ -363,7 +374,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         title={
           count === 1 && rowLabel
             ? t(confirm?.action === "delete" ? "deleteOneTitle" : "trashOneTitle", { name: rowLabel(confirm!.rows[0]!) })
-            : t(confirm?.action === "delete" ? "deleteTitle" : "trashTitle", { count })
+            : t(confirm?.action === "delete" ? "deleteTitle" : "trashTitle", { count: props.countLabel ? props.countLabel(count) : count })
         }
         description={[
           t(confirm?.action === "delete" ? "deleteBody" : count === 1 ? "trashBodyOne" : "trashBody"),

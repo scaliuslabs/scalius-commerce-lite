@@ -294,7 +294,7 @@ describe("getCheckoutConfig", () => {
             hasActiveDeliveryHierarchy: false,
         });
         expect(config.checkoutReadiness.issues).toContainEqual(
-            expect.objectContaining({ message:            "Add at least one active city with an active zone before checkout can accept orders.", }),
+            expect.objectContaining({ message:            "Add at least one active city with an active thana before checkout can accept orders.", }),
         );
         expect(mocks.getPaymentGatewaySettingsSnapshot).not.toHaveBeenCalled();
     });

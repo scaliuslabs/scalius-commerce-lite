@@ -144,7 +144,8 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 | `release.ts`               | `releaseReservation()` -- single variant (no CAS, safe to apply unconditionally with MAX(0,...)); `releaseMultiple()` -- best-effort, continues on individual failures, checks low stock alerts after release |
 | `expiry.ts`                | `releaseExpiredReservations()` -- bounded cron sweep; `ExpiryResult` interface                     |
 | `movements.ts`             | `recordMovement()` -- best-effort audit log insert (errors logged, not thrown)                      |
-| `alerts.ts`                | `checkAndAlertLowStock()` -- creates/reactivates/resolves `productLowStockAlerts`; `acknowledgeLowStockAlert()` -- marks alert as acknowledged |
+| `alerts.ts`                | `checkAndAlertLowStock()` -- creates/reactivates/resolves `productLowStockAlerts`; `acknowledgeLowStockAlert()` -- marks a SKU that needs review as seen; `setDefaultLowStockThreshold()` -- the store alert level |
+| `low-stock-policy.ts`      | Store alert level (settings document `inventory`) and `effectiveLowStockThresholdSql()` = COALESCE(SKU level, store level), used by the Low stock list, alerts and the buyer availability band |
 | `stock-adjustment.ts`      | `adjustStock()` -- relative delta adjustment with `stockVersion` CAS; `setStock()` -- absolute stocktake; `lookupByBarcodeOrSku()` -- barcode/SKU lookup with product image |
 | `inventory-operations.ts`  | Shared idempotent manual/scanner/stocktake command engine; canonical request hashing, exact replay, atomic operation + movement + counter batch |
 | `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated current-product variants/alerts plus audit-preserving movement history; `InventoryService.adjustInventory()` -- admin adjustment with `stockVersion` CAS + retry (3 attempts, exponential backoff) |
@@ -165,7 +166,7 @@ Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) 
 | `preorder_stock`   | integer   | 0       | Pre-order allocation pool                          |
 | `stock_version`    | integer   | 1       | CAS counter for stock operations only              |
 | `version`          | integer   | 1       | General optimistic locking (non-stock changes)     |
-| `low_stock_threshold` | integer | null   | Alert level, set by `setLowStockThreshold()` (null = off; sold out still alerts) |
+| `low_stock_threshold` | integer | null   | Alert level, set by `setLowStockThreshold()` (null = the store level, 0 = off; sold out still alerts) |
 | `allow_preorder`   | boolean   | false   | Whether pre-order pool is enabled                  |
 | `preorder_date`    | text      | null    | Expected availability date                         |
 | `allow_backorder`  | boolean   | false   | Whether backorder pool is enabled                  |
@@ -238,9 +239,16 @@ Indexes: `product_id`, `alert_status`
 [admin sets the alert level: setLowStockThreshold(), no stock movement]
      └── Re-check at once; the API bumps the public cache generation
 
+[admin sets the store alert level: setDefaultLowStockThreshold(), no SKU rewritten]
+     └── The API bumps the public cache generation (buyer bands can change)
+
 [admin acknowledges]
-     └── Active alert ──> status: acknowledged
+     └── Refresh the alert from live stock, then active ──> status: acknowledged
 ```
+
+The Low stock list reads live stock, not stored alerts: every tracked SKU at or
+under the level that applies (sold out included) needs review unless its alert
+row says it was seen; a stored alert that no longer applies lists as restocked.
 
 Alerts are checked after: manual adjustments (negative delta), stock deductions on shipment, scanner adjustments, reservation releases, and stock restorations.
 

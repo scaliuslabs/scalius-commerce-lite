@@ -92,9 +92,9 @@ describe("saved media reference deletion guards", () => {
       .catch((error: unknown) => error);
     expect(result).toBeInstanceOf(MediaDependencyConflictError);
     expect((result as MediaDependencyConflictError).details).toMatchObject({
-      savedReferences: {
-        samples: [{ surface: "site_header" }],
-      },
+      count: 1,
+      references: [{ kind: "theme", id: null }],
+      orderCount: 0,
     });
 
     expect(storage.deleteCalls).toEqual([]);

@@ -127,6 +127,8 @@ export interface LayoutData {
     quantityLimitText: string;
     saleOfferText: string;
     saleOfferSpendText: string;
+    saleOfferGetText: string;
+    saleOfferGetSpendText: string;
     freeBenefitText: string;
     percentBenefitText: string;
   };

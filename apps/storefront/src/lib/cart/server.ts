@@ -229,7 +229,7 @@ export async function processOrder(
 
     if (!cartValidation.success) {
       return failedOrder(
-        cartValidation.error || "Cart validation failed. Please refresh your cart and try again.",
+        cartValidation.error || "We couldn't check your cart. Try again.",
         itemIssuesFromDetails(cartValidation.details),
       );
     }

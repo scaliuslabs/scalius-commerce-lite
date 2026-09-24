@@ -1,7 +1,10 @@
 import { useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Banknote } from "lucide-react";
+import { toast } from "sonner";
 import {
+  deleteApiV1AdminSettingsSslcommerz,
+  deleteApiV1AdminSettingsStripe,
   getApiV1AdminSettingsCheckoutFlow,
   getApiV1AdminSettingsPaymentMethods,
   getApiV1AdminSettingsSslcommerz,
@@ -25,12 +28,15 @@ import {
 import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
+import { AdminApiResponseError, readSettingsRevisionConflict } from "~/lib/admin-api-error";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
+import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { formatNumber, getLocale, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { paymentsMessages } from "~/i18n/settings-payments";
+import { saveBarMessages } from "~/i18n/save-bar";
 import {
   CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS,
   getCheckoutFlowPreviewIssues,
@@ -45,7 +51,8 @@ import {
 } from "./payment-method-outcome";
 import { OfficialProviderMark } from "./provider-marks";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
-import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading } from "./SettingsPage";
+import { ConfirmDialog } from "../shared/ConfirmDialog";
+import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading, useCloseSettingsDialog } from "./SettingsPage";
 import { currencyQuery, platformQuery } from "./StoreSettings";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
@@ -146,30 +153,38 @@ function MethodMark({ method }: { method: MethodKey }) {
   return <OfficialProviderMark provider={method} />;
 }
 
+/**
+ * A write-only key. A saved one never comes back: the field shows the mask as
+ * its placeholder and says it's saved; typing replaces it, and clearing the
+ * field keeps the saved key.
+ */
 function PasswordField({
   id,
   label,
   value,
+  saved,
   error,
   onChange,
 }: {
   id: string;
   label: string;
   value: string;
+  saved: boolean;
   error?: string | null;
   onChange: (value: string) => void;
 }) {
   const t = useMessages(paymentsMessages);
+  const keepsSaved = saved && value === MASKED;
   return (
-    <SettingsField id={id} label={label} help={value === MASKED ? t("secretSaved") : undefined} error={error}>
+    <SettingsField id={id} label={label} help={keepsSaved ? t("secretSaved") : undefined} error={error}>
       <Input
         id={id}
         type="password"
         autoComplete="off"
-        value={value}
+        value={keepsSaved ? "" : value}
+        placeholder={keepsSaved ? MASKED : undefined}
         aria-describedby={`${id}-note`}
-        onFocus={() => value === MASKED && onChange("")}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(event.target.value || (saved ? MASKED : ""))}
       />
     </SettingsField>
   );
@@ -218,10 +233,22 @@ function GatewayFields({
     fields: GATEWAY_KEYS[gateway],
   });
   const text = (key: string) => String(values[key] ?? "");
-  if (values.enabled === undefined) return null;
+  if (values.enabled === undefined || !saved) return null;
   const missing = turnOn ? missingKeys(values) : [];
   const turnOnError = (key: GatewayKey) =>
     missing.includes(key) ? t("turnOnNeeds", { fields: keyList(missing), method: t(gateway) }) : null;
+  const secret = (id: string, key: GatewayKey, label: string) => (
+    <PasswordField
+      id={id}
+      label={label}
+      value={text(key)}
+      saved={saved[key] === MASKED}
+      error={turnOnError(key)}
+      onChange={(value) => setValue(key, value)}
+    />
+  );
+  const removable = Object.keys(GATEWAY_KEYS[gateway]).some((key) => String(saved[key] ?? "").trim());
+  const remove = removable ? <RemoveKeys gateway={gateway} revision={Number(saved.revision)} /> : null;
 
   if (gateway === "sslcommerz") {
     return (
@@ -236,7 +263,8 @@ function GatewayFields({
         <SettingsField id="ssl-store-id" label={t("storeId")} error={turnOnError("storeId")}>
           <Input id="ssl-store-id" autoComplete="off" value={text("storeId")} onChange={(event) => setValue("storeId", event.target.value)} />
         </SettingsField>
-        <PasswordField id="ssl-password" label={t("storePassword")} value={text("storePassword")} error={turnOnError("storePassword")} onChange={(value) => setValue("storePassword", value)} />
+        {secret("ssl-password", "storePassword", t("storePassword"))}
+        {remove}
       </>
     );
   }
@@ -247,7 +275,7 @@ function GatewayFields({
   });
   return (
     <>
-      <PasswordField id="stripe-secret" label={t("secretKey")} value={text("secretKey")} error={turnOnError("secretKey")} onChange={(value) => setValue("secretKey", value)} />
+      {secret("stripe-secret", "secretKey", t("secretKey"))}
       <SettingsField
         id="stripe-publishable"
         label={t("publishableKey")}
@@ -263,11 +291,68 @@ function GatewayFields({
           onChange={(event) => setValue("publishableKey", event.target.value)}
         />
       </SettingsField>
-      <PasswordField id="stripe-webhook" label={t("webhookSecret")} value={text("webhookSecret")} error={turnOnError("webhookSecret")} onChange={(value) => setValue("webhookSecret", value)} />
+      {secret("stripe-webhook", "webhookSecret", t("webhookSecret"))}
       {platform.data?.apiUrl ? (
         <p className="text-body text-muted-foreground">{t("webhookHelp", { url: `${platform.data.apiUrl}/api/v1/webhooks/stripe` })}</p>
       ) : null}
+      {remove}
     </>
+  );
+}
+
+/**
+ * Shopify's Disconnect: deletes every saved key of the gateway and turns it
+ * off at checkout. The server refuses it when checkout would be left without
+ * a way to pay, as it refuses turning the gateway off.
+ */
+function RemoveKeys({ gateway, revision }: { gateway: "stripe" | "sslcommerz"; revision: number }) {
+  const t = useMessages(paymentsMessages);
+  const common = useMessages(settingsMessages);
+  const bar = useMessages(saveBarMessages);
+  const queryClient = useQueryClient();
+  const closeDialog = useCloseSettingsDialog();
+  const [confirming, setConfirming] = useState(false);
+  const method = t(gateway);
+  const refresh = () => Promise.all(
+    [gatewayQuery(gateway).queryKey, paymentMethodsQuery.queryKey, checkoutFlowQuery.queryKey, queryKeys.settings.checkoutReadiness()]
+      .map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+  );
+  const remove = useMutation({
+    mutationFn: () => apiData(gateway === "stripe"
+      ? deleteApiV1AdminSettingsStripe({ body: { expectedRevision: revision } })
+      : deleteApiV1AdminSettingsSslcommerz({ body: { expectedRevision: revision } })),
+    onSuccess: async () => {
+      toast.success(t("keysRemoved"));
+      closeDialog?.();
+      await refresh();
+    },
+    // A refusal or a newer save: show why, with the latest keys loaded.
+    onError: () => void refresh(),
+  });
+  const failure = !remove.error
+    ? null
+    : readSettingsRevisionConflict(remove.error)
+      ? bar("conflict")
+      : remove.error instanceof AdminApiResponseError && remove.error.status === 400
+        ? t("removeBlocked", { method })
+        : getServerFnError(remove.error);
+  return (
+    <div className="space-y-2 border-t border-border pt-4">
+      <Button type="button" variant="ghost" className="-ml-3" onClick={() => setConfirming(true)}>
+        {t("removeKeys")}
+      </Button>
+      {failure ? <p role="alert" className="text-body text-destructive">{failure}</p> : null}
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={t("removeKeysTitle", { method })}
+        description={t("removeKeysBody", { method })}
+        confirmLabel={t("removeKeys")}
+        cancelLabel={common("cancel")}
+        isLoading={remove.isPending}
+        onConfirm={() => remove.mutate()}
+      />
+    </div>
   );
 }
 

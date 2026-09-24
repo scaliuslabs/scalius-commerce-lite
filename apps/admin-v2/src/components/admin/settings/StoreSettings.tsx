@@ -12,7 +12,7 @@ import {
   putApiV1AdminSettingsAllowedCountries,
   putApiV1AdminSettingsPlatform,
 } from "@scalius/api-client/sdk";
-import { getCountries, getCountryCallingCode } from "@scalius/shared/customer-utils";
+import { formatBdLandline, getCountries, getCountryCallingCode, normalizeBdLandline } from "@scalius/shared/customer-utils";
 import {
   SUPPORTED_CURRENCY_CODES,
   normalizeSupportedCurrencyCode,
@@ -39,6 +39,7 @@ import { queryKeys } from "~/lib/query-keys";
 import { getLocale, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { storeSettingsMessages } from "~/i18n/settings-store";
+import { fieldErrorMessages } from "~/i18n/save-bar";
 import { MediaManager } from "../media-manager";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { AdminPhoneInput, adminPhoneProblem, type PhoneCountryPolicy } from "../shared/AdminPhoneInput";
@@ -108,11 +109,18 @@ function isValidLogo(value: string) {
   return !value.trim() || Boolean(normalizePublicMediaUrl(value));
 }
 
+/** The server's limit (BUSINESS_FIELD_LIMITS.invoicePrefix), checked before Save. */
+const INVOICE_PREFIX_MAX = 32;
+const isValidInvoicePrefix = (value: string) => value.trim().length <= INVOICE_PREFIX_MAX;
+
 const EMAIL = z.email();
 
-/** What's wrong with a contact field, as a catalog key. The server checks the same. */
+/**
+ * What's wrong with a contact field, as a catalog key. The server checks the
+ * same. The store's own phone may also be a landline (02-9876543).
+ */
 function contactProblem(key: keyof Business, value: string, policy?: PhoneCountryPolicy) {
-  if (key === "phone") return adminPhoneProblem(value, policy);
+  if (key === "phone") return adminPhoneProblem(normalizeBdLandline(value) ?? value, policy);
   if (key === "email") return value.trim() && !EMAIL.safeParse(value.trim()).success ? "emailInvalid" : null;
   return null;
 }
@@ -130,6 +138,7 @@ function useBusinessForm() {
     canEdit: useCanEditStore(),
     isValid: (values) =>
       isValidLogo(values.invoiceLogoUrl) &&
+      isValidInvoicePrefix(values.invoicePrefix) &&
       !contactProblem("email", values.email) &&
       !contactProblem("phone", values.phone, policy),
     fields: (path) => `business-${path}`,
@@ -149,7 +158,17 @@ function BusinessFields({ fields }: { fields: Array<{ key: BusinessKey; label: s
     return (
       <SettingsField key={key} id={id} label={label} help={help} error={problem ? t(problem) : null}>
         {key === "phone" ? (
-          <AdminPhoneInput id={id} value={values.phone} aria-describedby={describedBy} onChange={(next) => setValue("phone", next)} />
+          <AdminPhoneInput
+            id={id}
+            value={formatBdLandline(values.phone)}
+            aria-describedby={describedBy}
+            onChange={(next) => setValue("phone", next)}
+            // Like a mobile, a landline settles into one shape on leaving: +880…, shown as 02-9876543.
+            onBlur={(event) => {
+              const landline = normalizeBdLandline(event.target.value);
+              if (landline) setValue("phone", landline);
+            }}
+          />
         ) : (
           <Input
             id={id}
@@ -167,6 +186,7 @@ function BusinessFields({ fields }: { fields: Array<{ key: BusinessKey; label: s
 function InvoiceFields() {
   const t = useMessages(storeSettingsMessages);
   const common = useMessages(settingsMessages);
+  const fieldErrors = useMessages(fieldErrorMessages);
   const { values, setValue } = useBusinessForm();
   const logoUrl = values.invoiceLogoUrl.trim() ? normalizePublicMediaUrl(values.invoiceLogoUrl) : null;
   const prefix = values.invoicePrefix.trim() || "INV";
@@ -176,6 +196,7 @@ function InvoiceFields() {
         id="business-invoicePrefix"
         label={t("invoicePrefix")}
         help={t("invoicePreview", { example: `${prefix}-00001` })}
+        error={isValidInvoicePrefix(values.invoicePrefix) ? null : fieldErrors("maxLength", { count: INVOICE_PREFIX_MAX })}
       >
         <Input
           id="business-invoicePrefix"
@@ -249,7 +270,7 @@ export function BusinessCard() {
                 value={[
                   data.companyName || t("noName"),
                   data.email || t("noEmail"),
-                  data.phone || t("noPhone"),
+                  formatBdLandline(data.phone) || t("noPhone"),
                 ].join(" · ")}
               />
             }

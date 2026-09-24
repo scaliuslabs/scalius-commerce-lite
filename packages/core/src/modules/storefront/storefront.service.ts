@@ -580,6 +580,8 @@ function resolveStorefrontCopy(
     quantityLimitText: copy.quantityLimitText,
     saleOfferText: copy.saleOfferText,
     saleOfferSpendText: copy.saleOfferSpendText,
+    saleOfferGetText: copy.saleOfferGetText,
+    saleOfferGetSpendText: copy.saleOfferGetSpendText,
     freeBenefitText: copy.freeBenefitText,
     percentBenefitText: copy.percentBenefitText,
   };

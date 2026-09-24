@@ -520,7 +520,14 @@ export async function saveProductOptionMatrix(
             if (existing && existing.optionDefinitionId !== option.id) {
                 throw new ValidationError("An option value belongs to a different option.");
             }
-            valueIdMap.set(value.id, existing ? value.id : `pval_${nanoid()}`);
+            // A value removed earlier and typed again revives its old identity, so the
+            // variants retired with it (and their stock) come back instead of colliding.
+            const revived = existing ? null : existingValues.find((candidate) =>
+                candidate.deletedAt !== null
+                && candidate.optionDefinitionId === option.id
+                && normalizeOptionIdentity(candidate.value) === normalizeOptionIdentity(value.value)
+                && ![...valueIdMap.values()].includes(candidate.id));
+            valueIdMap.set(value.id, existing ? value.id : revived?.id ?? `pval_${nanoid()}`);
         }
     }
 

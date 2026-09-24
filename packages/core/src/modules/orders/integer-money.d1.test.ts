@@ -87,13 +87,13 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     seedCatalog(false);
 
     // 999 × 0.875 = 874.125 paisa rounds half-up to whole taka (900); 3 × 900 = 2700;
-    // taxable 2700 − 100 = 2600; VAT 260. Shipping keeps its exact paisa.
+    // taxable 2700 − 100 = 2600; VAT 260 rounds to whole taka (300). Shipping keeps its exact paisa.
     await expect(quoteManualOrder(db, manualOrder())).resolves.toMatchObject({
       subtotalAmount: 27,
       shippingAmount: 60.1,
       discountAmount: 1,
-      taxAmount: 2.6,
-      totalAmount: 88.7,
+      taxAmount: 3,
+      totalAmount: 89.1,
     });
     const created = await createOrder(db, manualOrder(), "admin_1");
 
@@ -105,10 +105,10 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
       subtotal_amount_minor: 2700,
       shipping_amount_minor: 6010,
       discount_amount_minor: 100,
-      tax_amount_minor: 260,
-      total_amount_minor: 8870,
+      tax_amount_minor: 300,
+      total_amount_minor: 8910,
       paid_amount_minor: 0,
-      balance_due_minor: 8870,
+      balance_due_minor: 8910,
     });
     expect(Number(order.subtotal_amount_minor) + Number(order.shipping_amount_minor)
       - Number(order.discount_amount_minor) + Number(order.tax_amount_minor)).toBe(order.total_amount_minor);
@@ -120,7 +120,7 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
       line_subtotal_minor: 2700,
       discount_amount_minor: 100,
       taxable_amount_minor: 2600,
-      tax_amount_minor: 260,
+      tax_amount_minor: 300,
     }]);
   });
 
@@ -128,9 +128,9 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     const db = open(provider);
     seedCatalog(true);
 
-    // Gross 2600 already contains VAT: 2600 × 1000 / 11000 = 236.36 → 236.
+    // Gross 2600 already contains VAT: 2600 × 1000 / 11000 = 236.36 paisa, shown as whole taka (200).
     const quote = await quoteManualOrder(db, manualOrder());
-    expect(quote).toMatchObject({ subtotalAmount: 27, taxAmount: 2.36, totalAmount: 86.1 });
+    expect(quote).toMatchObject({ subtotalAmount: 27, taxAmount: 2, totalAmount: 86.1 });
   });
 
   it("settles a deposit then the balance to exactly the order total", async () => {

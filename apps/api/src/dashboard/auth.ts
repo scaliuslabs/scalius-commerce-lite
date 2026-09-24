@@ -13,7 +13,7 @@ import { getUserPermissions } from "@scalius/core/auth/rbac/helpers";
 import { isTransientD1Error, retryTransientD1, wait } from "@scalius/core/utils/transient-d1";
 import { getDb } from "@scalius/database/client";
 import { adminInvitations, session as sessionTable, user as userTable, verification } from "@scalius/database/schema";
-import { getAdminSessionFromCookieHeader } from "../middleware/admin-auth";
+import { getAdminSessionFromCookieHeader, getAdminSessionTokenFromCookieHeader } from "../middleware/admin-auth";
 import { isForeignDashboardRequest } from "../middleware/cookie-origin-guard";
 
 const AUTH_RETRY_DELAYS_MS = [200, 500, 1000] as const;
@@ -97,6 +97,32 @@ export interface DashboardSessionState {
     /** Present only once every sign-in gate has passed. */
     permissions: string[] | null;
   };
+  /**
+   * No session, but this browser still holds a signed one that someone else
+   * ended (suspended, removed, or signed out from another device): the
+   * sign-in page says so. Never set by the person's own sign-out, which
+   * clears the cookie, nor by a session that simply expired.
+   */
+  signedOut?: "access_changed";
+}
+
+/**
+ * Whether the browser's signed session cookie names a session that was
+ * deleted, or whose person was suspended, rather than one that ran out.
+ * The cookie's signature proves this browser was signed in; nothing about
+ * any other account is revealed.
+ */
+async function sessionEndedByAccessChange(db: ReturnType<typeof getDb>, request: Request, env: Env): Promise<boolean> {
+  const token = await getAdminSessionTokenFromCookieHeader(request.headers.get("cookie") ?? undefined, env.BETTER_AUTH_SECRET);
+  if (!token) return false;
+  const row = await retryTransientD1(() =>
+    db
+      .select({ expiresAt: sessionTable.expiresAt })
+      .from(sessionTable)
+      .where(eq(sessionTable.token, token))
+      .get(),
+  );
+  return !row || row.expiresAt.getTime() > Date.now();
 }
 
 /** Everything the dashboard route guards decide from, in one read. */
@@ -116,9 +142,12 @@ export async function readDashboardSessionState(
     env.BETTER_AUTH_SECRET,
   );
   if (!found) {
-    // A failed read keeps the sign-in form: never offer setup on a guess.
-    const adminExists = await retryTransientD1(() => adminPrincipalExists(db)).catch(() => true);
-    return { adminExists, signIn, session: null };
+    const [adminExists, accessChanged] = await Promise.all([
+      // A failed read keeps the sign-in form: never offer setup on a guess.
+      retryTransientD1(() => adminPrincipalExists(db)).catch(() => true),
+      sessionEndedByAccessChange(db, request, env).catch(() => false),
+    ]);
+    return { adminExists, signIn, session: null, ...(accessChanged ? { signedOut: "access_changed" as const } : {}) };
   }
 
   const { user, session } = found;
@@ -158,12 +187,56 @@ export async function readDashboardSessionState(
 
 const RESET_TOKEN_SHAPE = /^[A-Za-z0-9_-]{16,256}$/;
 
+const USED_RESET_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Better Auth deletes a reset or invite token when it is used. A hash of it is
+ * kept (under the person's `reset-password:` rows, so a newer link or removing
+ * the person clears it) to tell "already used" from "expired": the token is
+ * the proof, so saying so reveals nothing about any email address.
+ */
+async function usedResetTokenIdentifier(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `reset-password:used:${hex}`;
+}
+
+async function isUsedResetToken(env: Env, token: string): Promise<boolean> {
+  const identifier = await usedResetTokenIdentifier(token);
+  const row = await retryTransientD1(() =>
+    getDb(env)
+      .select({ id: verification.id })
+      .from(verification)
+      .where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, new Date())))
+      .get(),
+  );
+  return Boolean(row);
+}
+
+async function rememberUsedResetToken(env: Env, token: string, userId: string): Promise<void> {
+  const now = new Date();
+  try {
+    await retryTransientD1(async () => getDb(env).insert(verification).values({
+      id: crypto.randomUUID(),
+      identifier: await usedResetTokenIdentifier(token),
+      value: userId,
+      expiresAt: new Date(now.getTime() + USED_RESET_TOKEN_TTL_MS),
+      createdAt: now,
+      updatedAt: now,
+    }));
+  } catch {
+    // Only the wording of a reopened link depends on it; the password is set.
+    console.warn("Could not record a used reset link");
+  }
+}
+
 /** The person behind a live reset or invite token, or null when it is used, replaced or expired. */
 async function readResetToken(env: Env, token: string) {
   const db = getDb(env);
   return retryTransientD1(() =>
     db
       .select({
+        userId: userTable.id,
         email: userTable.email,
         invite: sql<number>`${userTable.mustChangePassword} = 1 AND ${adminInvitations.status} = 'pending'`,
       })
@@ -184,9 +257,12 @@ async function readResetToken(env: Env, token: string) {
  */
 async function createResetSession(request: Request, env: Env): Promise<Response> {
   const token = (await readJson(request)).token;
-  const live = typeof token === "string" && RESET_TOKEN_SHAPE.test(token) ? await readResetToken(env, token) : null;
+  const wellFormed = typeof token === "string" && RESET_TOKEN_SHAPE.test(token);
+  const live = wellFormed ? await readResetToken(env, token) : null;
   if (!live) {
-    return json({ code: "INVALID_TOKEN", message: "This link has expired or was already used." }, 400);
+    return wellFormed && await isUsedResetToken(env, token)
+      ? json({ code: "TOKEN_USED", message: "This link was already used. Sign in instead." }, 400)
+      : json({ code: "INVALID_TOKEN", message: "This link has expired or was already used." }, 400);
   }
   return json({ status: true, purpose: live.invite ? "invite" : "reset" }, 200, {
     "Set-Cookie": resetSessionCookie(token as string, RESET_SESSION_MAX_AGE_SECONDS),
@@ -233,6 +309,7 @@ async function resetPasswordFromSession(
     headers.append("Set-Cookie", clearCookie);
     return new Response(reset.body, { status: reset.status, headers });
   }
+  await rememberUsedResetToken(env, token, account.userId);
 
   const signInRequest = authRequest("sign-in/email", { email: account.email, password: newPassword, rememberMe: true });
   const signIn = await preferConfiguredTwoFactorMethod(env, signInRequest, await auth.handler(signInRequest.clone() as Request));
@@ -244,12 +321,49 @@ async function resetPasswordFromSession(
   }
   for (const cookie of signIn.headers.getSetCookie()) headers.append("Set-Cookie", cookie);
   const result = await signIn.json() as { twoFactorRedirect?: boolean; twoFactorMethods?: unknown[] };
+  if (result.twoFactorRedirect === true) {
+    return Response.json(
+      { status: true, signedIn: false, twoFactorRedirect: true, twoFactorMethods: result.twoFactorMethods ?? [] },
+      { headers },
+    );
+  }
+  const backupCodes = await startRequiredTwoFactorSetup(auth, env, account.userId, newPassword, signIn);
   return Response.json(
-    result.twoFactorRedirect === true
-      ? { status: true, signedIn: false, twoFactorRedirect: true, twoFactorMethods: result.twoFactorMethods ?? [] }
-      : { status: true, signedIn: true },
+    { status: true, signedIn: true, ...(backupCodes ? { twoFactorSetup: { backupCodes } } : {}) },
     { headers },
   );
+}
+
+/**
+ * First-time two-step setup, when the store requires it. The password was
+ * proven a moment ago in this same request (fresher than Better Auth's
+ * fresh-session rule for sensitive actions), so the authenticator enrolment
+ * that asks for it starts here rather than asking again on the next page.
+ * Returns the backup codes the setup page shows once the email code is
+ * confirmed, or null to fall back to that page's password step.
+ */
+async function startRequiredTwoFactorSetup(
+  auth: ReturnType<typeof createAuth>,
+  env: Env,
+  userId: string,
+  password: string,
+  signIn: Response,
+): Promise<string[] | null> {
+  try {
+    const person = await retryTransientD1(() =>
+      getDb(env)
+        .select({ mustEnroll: userTable.mustEnrollTwoFactor, enabled: userTable.twoFactorEnabled })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .get(),
+    );
+    if (person?.mustEnroll !== true || person.enabled === true) return null;
+    const cookie = signIn.headers.getSetCookie().map((header) => header.split(";")[0]).join("; ");
+    const enabled = await auth.api.enableTwoFactor({ headers: new Headers({ cookie }), body: { password, method: "totp" } });
+    return "backupCodes" in enabled ? enabled.backupCodes : null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Better Auth with D1 retries and dashboard 2FA bookkeeping ────────────────

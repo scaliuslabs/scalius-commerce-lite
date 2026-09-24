@@ -105,6 +105,8 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
   const hasUnpublished = selectedCategories.some((category) => category.status !== "published");
   const published = categories.filter((category) => category.status === "published");
   const addable = published.filter((category) => !selectedCategoryIds.includes(category.id));
+  const unlistedCount = categories.filter((category) =>
+    category.status !== "published" && !selectedCategoryIds.includes(category.id)).length;
   const previewCategoryIds = selectedCategories.filter((category) => category.status === "published").map((category) => category.id);
   const sources = [
     { value: "manual", label: t("pickProducts"), help: t("pickProductsHelp") },
@@ -173,6 +175,14 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
           {!manual && published.length === 0 ? (
             <p className="text-muted-foreground">
               {t("publishedOnly")}{" "}
+              <Link to="/admin/categories" className="text-link hover:underline">
+                {t("goToCategories")}
+              </Link>
+            </p>
+          ) : !manual && unlistedCount > 0 ? (
+            // Draft and hidden categories never feed a collection, so say why they're missing.
+            <p className="text-muted-foreground">
+              {t("unlistedCategories", { count: unlistedCount })}{" "}
               <Link to="/admin/categories" className="text-link hover:underline">
                 {t("goToCategories")}
               </Link>

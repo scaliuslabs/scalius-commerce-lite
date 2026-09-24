@@ -35,6 +35,17 @@ export function writeListSearch(list: string, term: string): void {
   for (const listener of listeners) listener();
 }
 
+/**
+ * A `?q=` deep link wins once: it becomes the list's session term (the page
+ * then drops `q` from the address). Without one, the session term stays.
+ * Call it from the route loader with the validated `q`.
+ */
+export function adoptListSearch(list: string, q: unknown): string {
+  if (typeof q !== "string") return readListSearch(list);
+  writeListSearch(list, q);
+  return readListSearch(list);
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);

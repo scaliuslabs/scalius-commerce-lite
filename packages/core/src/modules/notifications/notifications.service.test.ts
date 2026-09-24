@@ -90,6 +90,10 @@ function createDb(input: string | {
                 where: vi.fn(() => ({
                     get: vi.fn(async () => ({ customerPhone })),
                     all: vi.fn(async () => []),
+                    // No discount allocations.
+                    groupBy: vi.fn(() => ({ orderBy: vi.fn(async () => []) })),
+                    // No parcel on file for shipped messages.
+                    orderBy: vi.fn(() => ({ limit: vi.fn(async () => []) })),
                 })),
                 leftJoin: vi.fn(() => ({
                     where: vi.fn(() => ({

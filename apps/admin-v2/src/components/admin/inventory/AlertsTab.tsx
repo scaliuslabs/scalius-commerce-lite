@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { patchApiV1AdminInventoryAlerts } from "@scalius/api-client/sdk";
+import { patchApiV1AdminInventoryAlerts, putApiV1AdminInventoryDefaultAlertLevel } from "@scalius/api-client/sdk";
 import type { ColumnDef, Row } from "~/components/admin/data-table/table-config";
 import { DataTable } from "~/components/admin/data-table/DataTable";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Label } from "~/components/ui/label";
+import { NumberInput } from "~/components/ui/number-input";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -17,7 +20,7 @@ import {
 } from "~/components/ui/select";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { apiData } from "~/lib/api";
-import { inventoryQueryOptions, type InventoryAlert } from "~/lib/api-query-options/inventory";
+import { inventoryQueryOptions, type InventoryAlert, type InventoryOverview } from "~/lib/api-query-options/inventory";
 import { createDataSelector } from "~/lib/list-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
@@ -46,14 +49,92 @@ export function toDate(value: string | number): Date {
   return new Date(typeof value === "number" && value < 10_000_000_000 ? value * 1000 : value);
 }
 
+const ALERT_LEVEL_MAX = 1_000_000;
+
+/** Shopify's store-wide low-stock level: one small popover, used by variants without their own level. */
+function StoreAlertLevel({ level, canEdit, open, onOpenChange }: {
+  level: number | null;
+  canEdit: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const t = useMessages(inventoryMessages);
+  const r = useMessages(resourceMessages);
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState<number | null>(level);
+  const valid = draft === null || (Number.isSafeInteger(draft) && draft >= 0 && draft <= ALERT_LEVEL_MAX);
+  const save = useMutation({
+    mutationFn: (defaultLowStockThreshold: number | null) =>
+      apiData(putApiV1AdminInventoryDefaultAlertLevel({ body: { defaultLowStockThreshold } })),
+    onSuccess: async () => {
+      toast.success(t("storeAlertLevelSaved"));
+      onOpenChange(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all });
+      await queryClient.invalidateQueries({ queryKey: ["home", "low-stock"] });
+    },
+    onError: () => toast.error(t("storeAlertLevelFailed")),
+  });
+  const label = t("storeAlertLevelValue", { level: level === null ? t("alertOff") : level });
+  if (!canEdit) return <span className="text-body text-muted-foreground">{label}</span>;
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setDraft(level);
+        onOpenChange(next);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline">{label}</Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto max-w-sm">
+        <form
+          method="post"
+          noValidate
+          className="space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (valid && !save.isPending) save.mutate(draft);
+          }}
+        >
+          <Label htmlFor="inventory-store-alert-level">{t("storeAlertLevel")}</Label>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-body">{t("alertWhen")}</span>
+            <NumberInput
+              id="inventory-store-alert-level"
+              integer
+              className="w-24"
+              value={draft}
+              aria-invalid={valid ? undefined : true}
+              aria-describedby="inventory-store-alert-level-help"
+              onValueChange={setDraft}
+            />
+            <span className="text-body">{t("alertOrFewer")}</span>
+          </div>
+          <p
+            id="inventory-store-alert-level-help"
+            className={valid ? "text-body text-muted-foreground" : "text-body text-destructive"}
+          >
+            {valid ? t("storeAlertLevelHelp") : t("alertLevelInvalid")}
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{r("cancel")}</Button>
+            <Button type="submit" disabled={!valid || draft === level} loading={save.isPending}>{r("save")}</Button>
+          </div>
+        </form>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 interface AlertsTabProps {
   filters: Pick<InventoryFilters, "q" | "alert">;
   onFiltersChange: InventoryFiltersChange;
   onReview: (sku: string) => void;
-  onSetAlertLevels: () => void;
 }
 
-export function AlertsTab({ filters, onFiltersChange, onReview, onSetAlertLevels }: AlertsTabProps) {
+export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps) {
   const t = useMessages(inventoryMessages);
   const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
@@ -61,6 +142,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview, onSetAlertLevels
   const { q: search, alert: status } = filters;
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
+  const [storeLevelOpen, setStoreLevelOpen] = useState(false);
   useEffect(() => setPage(1), [search, status]);
 
   const acknowledge = useMutation({
@@ -119,7 +201,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview, onSetAlertLevels
     {
       id: "threshold",
       header: () => <div className="text-right">{t("alertAt")}</div>,
-      // Sold-out variants without an alert level are flagged with level 0.
+      // The level that applies (the variant's own, else the store level); sold-out variants without one show 0.
       cell: ({ row }) => (
         <div className="text-right tabular-nums text-muted-foreground">
           {row.original.threshold > 0 ? formatNumber(row.original.threshold) : "—"}
@@ -139,7 +221,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview, onSetAlertLevels
     { id: "actions", cell: ({ row }) => actions(row.original) },
   ];
 
-  const { table, isFetching, isLoading, error, refetch } = useServerTable<InventoryAlert>({
+  const { table, rawData, isFetching, isLoading, error, refetch } = useServerTable<InventoryAlert>({
     columns,
     queryOptions: inventoryQueryOptions(alertsQuery(filters, page, limit)),
     dataSelector: selectAlerts,
@@ -154,6 +236,8 @@ export function AlertsTab({ filters, onFiltersChange, onReview, onSetAlertLevels
     enableSorting: false,
     defaultPageSize: 50,
   });
+
+  const overview = rawData as InventoryOverview | undefined;
 
   const mobileCard = (row: Row<InventoryAlert>) => {
     const alert = row.original;
@@ -203,6 +287,14 @@ export function AlertsTab({ filters, onFiltersChange, onReview, onSetAlertLevels
               </SelectContent>
             </Select>
           )}
+          actions={overview ? (
+            <StoreAlertLevel
+              level={overview.defaultLowStockThreshold ?? null}
+              canEdit={permissions.canAdjustStock}
+              open={storeLevelOpen}
+              onOpenChange={setStoreLevelOpen}
+            />
+          ) : null}
         /></div>}
       emptyState={search || status !== "active"
         ? {
@@ -221,7 +313,9 @@ export function AlertsTab({ filters, onFiltersChange, onReview, onSetAlertLevels
         : {
             title: t("noAlerts"),
             description: t("noAlertsHint"),
-            action: <Button type="button" variant="outline" onClick={onSetAlertLevels}>{t("setAlertLevels")}</Button>,
+            action: permissions.canAdjustStock
+              ? <Button type="button" variant="outline" onClick={() => setStoreLevelOpen(true)}>{t("setAlertLevels")}</Button>
+              : undefined,
           }}
     />
   );

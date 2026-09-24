@@ -241,6 +241,8 @@ const layoutDataSchema = z.object({
     quantityLimitText: z.string(),
     saleOfferText: z.string(),
     saleOfferSpendText: z.string(),
+    saleOfferGetText: z.string(),
+    saleOfferGetSpendText: z.string(),
     freeBenefitText: z.string(),
     percentBenefitText: z.string(),
   }),

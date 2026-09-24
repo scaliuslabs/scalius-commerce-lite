@@ -384,7 +384,7 @@ describe("system settings cache invalidation", () => {
       hasUsableCustomerSignIn: true,
       issues: [{
         code: "missing_active_delivery_location",
-        message: "Add at least one active city with an active zone before checkout can accept orders.",
+        message: "Add at least one active city with an active thana before checkout can accept orders.",
       }],
     });
     const { app, env, executionCtx } = await createTestApp();
@@ -413,7 +413,7 @@ describe("system settings cache invalidation", () => {
     });
     expect(body.data.issues).toEqual([{
       code: "missing_active_delivery_location",
-      message: "Add at least one active city with an active zone before checkout can accept orders.",
+      message: "Add at least one active city with an active thana before checkout can accept orders.",
     }]);
   });
 
