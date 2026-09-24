@@ -10,7 +10,7 @@ import {
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import {
   DEFAULT_RESEND_AFTER_SECONDS,
-  NO_CODE_CHANNEL,
+  failureNeedsStoreContact,
   formatCountdown,
   getOrderCodeFailureText,
   positiveSeconds,
@@ -204,7 +204,7 @@ export function enhanceOrderCodeForm(
       retryAfterSeconds: positiveSeconds(data.retryAfterSeconds),
       attemptsLeft: typeof data.attemptsLeft === "number" ? data.attemptsLeft : undefined,
     };
-    if (storeContact && data.errorCode === NO_CODE_CHANNEL) storeContact.hidden = false;
+    if (storeContact && failureNeedsStoreContact({ status: failure.status, errorCode: typeof data.errorCode === "string" ? data.errorCode : undefined })) storeContact.hidden = false;
     const operation = intent === "verify" ? "verify" : "send";
     if (failure.status === 429 && failure.retryAfterSeconds && button) {
       countdown(

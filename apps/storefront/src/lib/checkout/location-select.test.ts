@@ -54,6 +54,41 @@ afterEach(() => {
 });
 
 describe("enhanceLocationSelects", () => {
+  it("lists thanas by name for people: case and creation order don't matter", async () => {
+    const root = renderFields();
+    const load = vi.fn(async () => [
+      { id: "z_banani", name: "R3 Banani" },
+      { id: "z_shampur", name: "shampur" },
+      { id: "z_azampur", name: "azampur (Uttara)" },
+      { id: "z_mirpur", name: "Mirpur" },
+    ]);
+    enhanceLocationSelects(root, { load });
+    choose("city", "city_dhaka");
+    await vi.waitFor(() => expect(select("zone").disabled).toBe(false));
+    expect(Array.from(select("zone").options).slice(1).map((option) => option.text))
+      .toEqual(["azampur (Uttara)", "Mirpur", "R3 Banani", "shampur"]);
+  });
+
+  it("forgets a thana the merchant removed: clears it, lists the rest, and reports the cleared address", async () => {
+    const root = renderFields();
+    let zones = ZONES;
+    const load = vi.fn(async (level: string) => (level === "zones" ? zones : AREAS));
+    const changes: LocationSelection[] = [];
+    const controller = enhanceLocationSelects(root, { load, onChange: (s) => changes.push(s) })!;
+    choose("city", "city_dhaka");
+    await vi.waitFor(() => expect(select("zone").disabled).toBe(false));
+    choose("zone", "zone_banani");
+    await vi.waitFor(() => expect(select("area").disabled).toBe(false));
+
+    zones = [{ id: "zone_mirpur", name: "Mirpur" }];
+    await controller.forget("zone");
+
+    expect(select("zone").value).toBe("");
+    expect(optionValues("zone")).toEqual(["", "zone_mirpur"]);
+    expect(select("area").disabled).toBe(true);
+    expect(changes.at(-1)).toMatchObject({ cityId: "city_dhaka", zoneId: "", areaId: "" });
+  });
+
   it("loads zones for the chosen city, then areas for the chosen zone", async () => {
     const root = renderFields();
     const load = vi.fn(async (level: string) => (level === "zones" ? ZONES : AREAS));

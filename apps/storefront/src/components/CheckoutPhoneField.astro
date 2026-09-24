@@ -51,7 +51,9 @@ const defaultCountry = phoneCountryAllowed("BD", policy)
   : ((policy.mode === "include" ? policy.countries : getCountries()).find(
       (country) => knownCountries.has(country) && phoneCountryAllowed(country, policy),
     ) ?? "BD");
-const callingCode = `+${getCountryCallingCode(defaultCountry as CountryCode)}`;
+// Bangladesh numbers are typed the local way (01712-345678), so the prefix
+// names the country instead of "+880", which would read as +88001….
+const callingCode = defaultCountry === "BD" ? "BD" : `+${getCountryCallingCode(defaultCountry as CountryCode)}`;
 const singleCountry = policy.mode === "include" && policy.countries.length === 1;
 ---
 

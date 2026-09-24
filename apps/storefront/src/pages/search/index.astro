@@ -2,6 +2,7 @@
 // src/pages/search/index.astro
 import Layout from "@/layouts/Layout.astro";
 import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
 import CatalogListing from "@/components/catalog/CatalogListing.astro";
 import {
   getAllCategories,
@@ -198,7 +199,7 @@ const analyticsProductData = products.map((p) => ({
                 <h2 id="search-suggestions" class="text-lg font-semibold text-foreground">{recommendationTitle(suggestions.reason)}</h2>
                 <a href="/search" class="text-sm font-medium text-primary hover:underline">Browse all products</a>
               </div>
-              <div class="product-grid">
+              <ProductGrid>
                 {suggestions.products.map((product) => (
                   <ProductCard
                     product={product}
@@ -207,7 +208,7 @@ const analyticsProductData = products.map((p) => ({
                     headingLevel="h3"
                   />
                 ))}
-              </div>
+              </ProductGrid>
             </section>
           )}
         </div>

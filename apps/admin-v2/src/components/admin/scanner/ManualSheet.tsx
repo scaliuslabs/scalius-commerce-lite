@@ -7,10 +7,10 @@ import {
   Package,
   Hash,
   ArrowRightLeft,
-  ChevronDown,
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
+import { NativeSelect } from "~/components/ui/native-select";
 import { formatNumber, useMessages } from "~/i18n";
 import { scannerMessages } from "~/i18n/scanner";
 import type { ScannedProduct } from "./ScannerApp";
@@ -248,19 +248,11 @@ export function ManualSheet({
             </div>
           )}
 
-          <div className="relative">
-            <select
-              value={reason}
-              onChange={(e) => setReason(e.target.value as AdjustmentReason)}
-              aria-label={t("reason")}
-              className="h-12 w-full appearance-none rounded-lg border bg-muted px-4 pr-10 text-body focus:border-ring focus:outline-none"
-            >
-              {REASONS.map((value) => (
-                <option key={value} value={value}>{t(`reason_${value}`)}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          </div>
+          <NativeSelect value={reason} onValueChange={(value) => setReason(value as AdjustmentReason)} aria-label={t("reason")}>
+            {REASONS.map((value) => (
+              <option key={value} value={value}>{t(`reason_${value}`)}</option>
+            ))}
+          </NativeSelect>
 
           {isLargeAdjustment ? (
             <div className="flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-body text-destructive">

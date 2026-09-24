@@ -1,4 +1,4 @@
-import { products } from "@scalius/database/schema";
+import { products, productVariants } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import {
     buildBatchGuard,
@@ -6,7 +6,7 @@ import {
     safeBatch,
 } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import { AppError, ConflictError } from "@scalius/core/errors";
 
 export const PRODUCT_AGGREGATE_REVISION_CONFLICT =
@@ -65,7 +65,27 @@ export function buildProductAggregateRevisionGuard(
         )`, PRODUCT_AGGREGATE_REVISION_CONFLICT);
 }
 
-/** Must be included exactly once in the guarded aggregate mutation batch. */
+/**
+ * A product with options sells only its option SKUs, so its product-level
+ * price is not the merchant's to edit: the server keeps it equal to the lowest
+ * active option SKU price. A product without options keeps `fallback` (the
+ * merchant's price, mirrored onto its hidden default SKU).
+ */
+export function productPriceMinorSql(productId: string, fallback: SQL | number): SQL<number> {
+    return sql<number>`COALESCE((
+        SELECT MIN(${productVariants.priceMinor}) FROM ${productVariants}
+        WHERE ${productVariants.productId} = ${productId}
+          AND ${productVariants.deletedAt} IS NULL
+          AND ${productVariants.isDefault} = 0
+          AND trim(coalesce(${productVariants.optionCombinationKey}, '')) <> ''
+    ), ${fallback})`;
+}
+
+/**
+ * Must be included exactly once in the guarded aggregate mutation batch. It
+ * runs after the batch's SKU writes, so it also re-derives an optioned
+ * product's price from the SKUs those writes left.
+ */
 export function buildProductAggregateRevisionBump(
     db: Database,
     productId: string,
@@ -74,6 +94,7 @@ export function buildProductAggregateRevisionBump(
         .update(products)
         .set({
             aggregateRevision: sql`${products.aggregateRevision} + 1`,
+            priceMinor: productPriceMinorSql(productId, sql`${products.priceMinor}`),
             updatedAt: sql`unixepoch()`,
         })
         .where(sql`${products.id} = ${productId}`)

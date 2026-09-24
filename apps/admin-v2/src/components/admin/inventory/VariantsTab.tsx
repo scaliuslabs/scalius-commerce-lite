@@ -14,13 +14,7 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { useIsMobile } from "~/hooks/use-mobile";
 import { cn } from "@scalius/shared/utils";
@@ -237,7 +231,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       setLimit(nextLimit);
     },
     onSortingChange: (field, order) => {
-      setSort({ field: field as VariantSort["field"], order });
+      setSort(field ? { field: field as VariantSort["field"], order: order ?? "asc" } : { field: "available", order: "asc" });
       setPage(1);
     },
     defaultPageSize: 50,
@@ -291,24 +285,22 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
         pageSizeOptions={[20, 50, 100]}
         mobileCardRenderer={mobileCard}
         layoutKey="inventory-variants"
+        defaultSortLabel={false}
         toolbar={<div className="px-2 pt-2"><DataTableToolbar
             searchValue={search}
             onSearchChange={(value) => onFiltersChange({ q: value })}
             searchPlaceholder={t("searchVariants")}
             filters={(
-              <Select
+              <NativeSelect
+                className="w-auto min-w-40"
+                aria-label={t("stockFilter")}
                 value={status}
                 onValueChange={(value) => onFiltersChange({ stock: value as StockFilter })}
               >
-                <SelectTrigger className="w-auto min-w-40" aria-label={t("stockFilter")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STOCK_FILTERS.map((value) => (
-                    <SelectItem key={value} value={value}>{t(FILTER_LABEL[value])}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {STOCK_FILTERS.map((value) => (
+                  <option key={value} value={value}>{t(FILTER_LABEL[value])}</option>
+                ))}
+              </NativeSelect>
             )}
           /></div>}
         emptyState={filtered

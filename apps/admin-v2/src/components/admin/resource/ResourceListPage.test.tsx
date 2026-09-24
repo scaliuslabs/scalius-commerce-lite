@@ -117,6 +117,35 @@ describe("ResourceListPage", () => {
     expect(run).toHaveBeenCalledWith("trash", [rows[0]]);
   });
 
+  it("offers Undo on the trash toast only when the list opts in, and Undo restores the same rows", async () => {
+    const { toast } = await import("sonner");
+    const trashFirst = async (lifecycle: ResourceLifecycle<Row>) => {
+      vi.mocked(toast.success).mockClear();
+      await render(lifecycle);
+      const [, first] = [...checkboxes()] as HTMLElement[];
+      await act(async () => first!.click());
+      await act(async () => button("Move to trash")!.click());
+      const confirm = [...document.querySelectorAll('[role="alertdialog"] button')].find(
+        (element) => element.textContent?.trim() === "Move to trash",
+      ) as HTMLButtonElement;
+      await act(async () => confirm.click());
+      return vi.mocked(toast.success).mock.calls.at(-1);
+    };
+
+    const plain = await trashFirst({ canTrash: true, canRestore: true, canDelete: true, run: vi.fn(async () => undefined) });
+    expect(plain).toEqual(["Moved to trash"]);
+    act(() => root.unmount());
+    root = createRoot(host);
+
+    const run = vi.fn(async () => undefined);
+    const call = await trashFirst({ canTrash: true, canRestore: true, canDelete: true, undoTrash: true, run });
+    const options = call?.[1] as { action: { label: string; onClick: () => void } };
+    expect(call?.[0]).toBe("Moved to trash");
+    expect(options.action.label).toBe("Undo");
+    await act(async () => options.action.onClick());
+    expect(run).toHaveBeenLastCalledWith("restore", [rows[0]]);
+  });
+
   it("restores from Trash without a confirmation but never offers trash there", async () => {
     const run = vi.fn(async () => undefined);
     await render({ canTrash: true, canRestore: true, canDelete: false, run }, true);

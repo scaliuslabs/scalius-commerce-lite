@@ -21,6 +21,7 @@ function CustomerPage() {
     <CustomerForm
       key={customerId}
       isEdit
+      record={data}
       defaultValues={{
         id: data.id,
         name: data.name,

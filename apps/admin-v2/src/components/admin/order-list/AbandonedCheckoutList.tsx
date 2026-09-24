@@ -17,7 +17,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NativeSelect } from "@/components/ui/native-select";
 import { DataTable } from "@/components/admin/data-table/DataTable";
 import { DataTableToolbar } from "@/components/admin/data-table/DataTableToolbar";
 import { DataTableRowActions } from "@/components/admin/data-table/DataTableRowActions";
@@ -51,6 +51,7 @@ import { resourceMessages } from "~/i18n/resource";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderListMessages, pluralKey } from "~/i18n/order-list";
 import { buildOrderPrefill, checkoutReference, writeOrderPrefill } from "./abandoned-checkout-prefill";
+import { abandonedStage } from "./abandoned-stage";
 import { ListDate } from "./ListDate";
 
 const selectCheckouts = createDataSelector<AbandonedCheckout>("checkouts");
@@ -76,13 +77,13 @@ function Reference({ checkout }: { checkout: AbandonedCheckout }) {
 
 function StageBadge({ checkout }: { checkout: AbandonedCheckout }) {
   const t = useMessages(orderListMessages);
-  const display = displayOf(checkout);
+  const stage = abandonedStage(displayOf(checkout));
   return (
     <Badge
-      variant={display.variant}
-      title={display.stage === "paymentNotFinished" ? t("paymentNotFinishedHelp") : undefined}
+      variant={stage.variant}
+      title={stage.label === "paymentNotFinished" ? t("paymentNotFinishedHelp") : undefined}
     >
-      {t(`stage.${display.stage}`)}
+      {t(`stage.${stage.label}`)}
     </Badge>
   );
 }
@@ -485,24 +486,21 @@ export function AbandonedCheckoutList({
             selectedCount={selectedIds.length}
             bulkActions={<div className="hidden md:flex">{bulkDelete}</div>}
             filters={
-              <Select
+              <NativeSelect
+                className="w-auto"
+                aria-label={t("sort")}
                 value={`${routeState.sort}:${routeState.order}`}
                 onValueChange={(value) => {
                   const [sort, order] = value.split(":") as [AbandonedCheckoutListState["sort"], "asc" | "desc"];
                   onRouteStateChange({ sort, order, page: 1 });
                 }}
               >
-                <SelectTrigger className="w-auto" aria-label={t("sort")}>
-                  <SelectValue placeholder={t("sort")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORTS.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {t(`checkoutSort.${option}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {SORTS.map((option) => (
+                  <option key={option} value={option}>
+                    {t(`checkoutSort.${option}`)}
+                  </option>
+                ))}
+              </NativeSelect>
             }
           /></div>}
         emptyState={{

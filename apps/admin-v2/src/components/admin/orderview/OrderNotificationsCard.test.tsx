@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +12,11 @@ vi.mock("~/lib/order-detail-prefetch", () => ({ ORDER_DETAIL_PREFETCH_STALE_MS: 
 vi.mock("~/hooks/use-order-action-permissions", () => ({ useOrderActionPermissions: () => ({ canRetryOrderNotifications: true }) }));
 vi.mock("~/lib/api-query-options/orders", () => ({
   orderNotificationsQueryOptions: (id: string) => ({ queryKey: ["notifications", id], queryFn: () => new Promise(() => undefined) }),
+}));
+vi.mock("@tanstack/react-router", () => ({
+  Link: ({ to, params, children }: { to: string; params?: { event?: string }; children: ReactNode }) => (
+    <a href={params?.event ? to.replace("$event", params.event) : to}>{children}</a>
+  ),
 }));
 vi.mock("~/lib/api-mutations/orders", () => ({
   useRetryOrderNotification: () => ({ mutate: vi.fn(), isPending: false }),
@@ -65,14 +70,17 @@ describe("OrderNotificationsCard", () => {
     expect(host.textContent).not.toContain(en["messages.sendAgain"]);
   });
 
-  it("says a message turned off in Notifications wasn't sent, and why, keeping Send again", async () => {
+  it("says a message turned off in Notifications wasn't sent, and links to turning it on instead of Send again (R3-ORD-09)", async () => {
     await render([outbox({
       receipts: [{ ...emailSent, status: "skipped", lastError: "notification_turned_off" }],
     })]);
     const row = host.querySelector("li")!;
     expect(row.textContent).toContain(`Email · r***@example.com · ${en["messages.status.skipped"]} · ${en["messages.issue.turnedOff"]}`);
     expect(row.textContent).not.toContain(en["messages.status.partial"]);
-    expect(row.textContent).toContain(en["messages.sendAgain"]);
+    expect(row.textContent).not.toContain(en["messages.sendAgain"]);
+    const link = row.querySelector("a");
+    expect(link?.textContent).toBe(en["messages.turnOn"]);
+    expect(link?.getAttribute("href")).toBe("/admin/settings/notifications/order_confirmed");
   });
 
   it("says Sent once when one channel carried the message", async () => {

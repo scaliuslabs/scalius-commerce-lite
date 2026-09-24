@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useRef } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import type {
-  DeliveryLocation,
   OrderFormInput,
   OrderFormValues,
   Product,
@@ -14,14 +13,8 @@ interface OrderFormState {
   products: Product[];
   /** Changing a saved order (amendment) rather than creating one. */
   isEdit: boolean;
-  locations: {
-    cities: DeliveryLocation[];
-    zones: DeliveryLocation[];
-    areas: DeliveryLocation[];
-  };
-  isLoading: { zones: boolean; areas: boolean };
-  loadZones: (cityId: string) => Promise<void>;
-  loadAreas: (zoneId: string) => Promise<void>;
+  /** Edit only: the delivery method the order was placed with, shown even when the address no longer offers it. */
+  savedShippingMethod?: { id: string; name: string } | null;
   /** Totals from the form values, shown until a current server quote exists. */
   localTotals: {
     subtotal: number;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveHomepageHero } from "./homepage-hero";
+import { heroImageCandidate, resolveHomepageHero } from "./homepage-hero";
 
 const slide = (url: string) => ({ id: url, url, title: "Banner", heading: "", buttonLabel: "", link: "", focalPoint: { x: 50, y: 50 } });
 
@@ -21,5 +21,24 @@ describe("resolveHomepageHero", () => {
 
   it("is empty without banners", () => {
     expect(resolveHomepageHero(null)).toEqual({ desktop: [], mobile: [] });
+  });
+});
+
+describe("heroImageCandidate", () => {
+  it("offers every rendition to the banner so phones fetch a phone-sized file (R3-MOB-01)", () => {
+    const candidate = heroImageCandidate("https://cdn.example/media/hero.webp/1080.webp", "mobile");
+    expect(candidate.srcset).toBe([160, 320, 480, 640, 960, 1080]
+      .map((width) => `https://cdn.example/media/hero.webp/${width}.webp ${width}w`)
+      .join(", "));
+    expect(candidate.sizes).toBe("calc(100vw - 2rem)");
+    expect(candidate.media).toBe("(max-width: 767px)");
+    expect(candidate.src).toBe("https://cdn.example/media/hero.webp/640.webp");
+  });
+
+  it("falls back to the single original when an image has no renditions", () => {
+    const candidate = heroImageCandidate("https://cdn.example/a.jpg", "desktop");
+    expect(candidate.srcset).toBeUndefined();
+    expect(candidate.src).toBe("https://cdn.example/a.jpg");
+    expect(candidate.media).toBe("(min-width: 768px)");
   });
 });

@@ -27,6 +27,7 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { discountsMessages, type DiscountMessageKey } from "~/i18n/discounts";
+import { dataTableMessages } from "~/i18n/data-table";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { useListSearch } from "~/lib/list-search";
 import { discountFailureText, useDeleteDiscount, useSetDiscountActive } from "~/lib/api-mutations/discounts";
@@ -98,6 +99,7 @@ export function DiscountList({
   onSortChange: (sort: DiscountSort) => void;
 }) {
   const t = useMessages(discountsMessages);
+  const tableCopy = useMessages(dataTableMessages);
   const { hasPermission } = usePermissions();
   const { code: currencyCode, fmt } = useCurrency();
   const scopeLabel = useScopeLabel();
@@ -291,6 +293,7 @@ export function DiscountList({
           isLoading={false}
           paginate={false}
           layoutKey="discounts"
+          defaultSortLabel={tableCopy("recentlyUpdated")}
           getRowHref={(discount) => `/admin/discounts/${discount.id}`}
           emptyState={{
             icon: TicketPercent,

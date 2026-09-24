@@ -454,7 +454,7 @@ function updatePrice() {
     element.classList.toggle("hidden", !pricing.hasDiscount);
   });
   const badge = pricing.hasDiscount
-    ? formatDiscountBadge(pricing.discountType, pricing.discountPercentage, pricing.discountAmount)
+    ? formatDiscountBadge(pricing.originalPrice, pricing.finalPrice)
     : null;
   if (cache.discountBadge) {
     cache.discountBadge.textContent = badge ?? "";

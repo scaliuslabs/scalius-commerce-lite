@@ -17,7 +17,7 @@ import {
   isDiscountValidationPending,
   resumeCartPageFromHistory,
 } from "./client";
-import { TaxQuoteDeliveryRateError } from "../checkout/tax-quote-client";
+import { TaxQuoteDeliveryLocationError, TaxQuoteDeliveryRateError } from "../checkout/tax-quote-client";
 
 const apiMocks = vi.hoisted(() => ({
   saveAbandonedCheckout: vi.fn(),
@@ -47,6 +47,9 @@ vi.mock("../checkout/tax-quote-client", () => ({
   fetchAuthoritativeTaxQuote: taxQuoteMocks.fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError: class TaxQuoteCartChangedError extends Error {},
   TaxQuoteDeliveryRateError: class TaxQuoteDeliveryRateError extends Error {},
+  TaxQuoteDeliveryLocationError: class TaxQuoteDeliveryLocationError extends Error {
+    constructor(public readonly field: string) { super("gone"); }
+  },
 }));
 
 const NO_DISCOUNTS = { ok: true, totalDiscount: 0, discounts: [], offers: [], rejectedCodes: [] };
@@ -940,6 +943,31 @@ describe("initCartFunctionality", () => {
     expect(document.getElementById("taxStatus")?.classList).toContain("hidden");
     expect(document.getElementById("taxStatus")?.textContent).not.toContain("couldn't update");
     window.removeEventListener("delivery-rate-rejected", rejected);
+  });
+
+  it("asks for the thana again, never the connection, when the merchant removed it (R3-SB-04)", async () => {
+    withAddress();
+    const gone = vi.fn();
+    window.addEventListener("delivery-location-unavailable", gone);
+    taxQuoteMocks.fetchAuthoritativeTaxQuote.mockRejectedValue(new TaxQuoteDeliveryLocationError("zone"));
+
+    await initCartFunctionality();
+    await vi.waitFor(() => expect(gone).toHaveBeenCalled());
+    expect((gone.mock.calls[0]![0] as CustomEvent).detail).toEqual({ field: "zone" });
+    expect(document.getElementById("taxStatus")?.textContent).not.toContain("connection");
+
+    // The cart check that follows says nothing of its own: the thana field says it once.
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({
+      success: false,
+      error: "Selected thana is no longer available for the chosen city.",
+      details: { reason: "delivery_location_unavailable", field: "zone" },
+    }, 400));
+    gone.mockClear();
+    await window.validateCartSnapshot?.();
+    expect(gone).toHaveBeenCalledWith(expect.objectContaining({ detail: { field: "zone" } }));
+    expect(document.getElementById("cartValidationMessage")?.classList).toContain("hidden");
+    expect(document.getElementById("cartValidationMessage")?.textContent).toBe("");
+    window.removeEventListener("delivery-location-unavailable", gone);
   });
 
   it("clears a delivery refusal once the buyer picks an option that applies", async () => {

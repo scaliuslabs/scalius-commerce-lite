@@ -17,8 +17,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
+import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
@@ -35,6 +36,7 @@ import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib
 import { queryKeys } from "@/lib/query-keys";
 import { useCurrency } from "@/hooks/use-currency";
 import { SaveNotCompleted } from "../../shared/SaveBar";
+import { IdText } from "~/components/admin/data-table/cells";
 import { ConfirmDialog } from "../../shared/ConfirmDialog";
 import { readSkuTaken } from "../hooks/useProductSubmit";
 import { formatNumber, useMessages } from "~/i18n";
@@ -70,6 +72,7 @@ import {
   type OptionMatrixEditorHandle,
   type ProductCreateComposition,
   type SimpleSkuDraft,
+  type VariantPriceRange,
 } from "./option-matrix-editor-model";
 
 const MAX_AXES = MAX_PRODUCT_OPTION_AXES;
@@ -109,6 +112,8 @@ type OptionMatrixEditorProps = {
   /** The draft's problem as one banner line ("M / White: …"), or null. */
   onDraftIssueChange?: (issue: string | null) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  /** The variants' price range while the product has options (they carry the prices), else null. */
+  onPricesChange?: (range: VariantPriceRange | null) => void;
   onSavingChange?: (saving: boolean) => void;
   onRevisionConflict?: (conflict: ProductRevisionConflict) => void;
 };
@@ -127,6 +132,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   onDraftChange,
   onDraftIssueChange,
   onDirtyChange,
+  onPricesChange,
   onSavingChange,
   onRevisionConflict,
 }, ref) {
@@ -225,6 +231,13 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
 
   React.useEffect(() => onDraftIssueChange?.(draftLine), [draftLine, onDraftIssueChange]);
   React.useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
+  const prices = options.length > 0 ? variants.map((variant) => variant.price).filter(Number.isFinite) : [];
+  const minPrice = prices.length > 0 ? Math.min(...prices) : null;
+  const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
+  React.useEffect(
+    () => onPricesChange?.(minPrice === null || maxPrice === null ? null : { min: minPrice, max: maxPrice }),
+    [minPrice, maxPrice, onPricesChange],
+  );
 
   const reveal = React.useCallback(() => {
     setRevealed(true);
@@ -698,21 +711,17 @@ function OptionRow({ option, index, canMoveUp, canMoveDown, onMove, onChange, on
         </label>
         <label className="flex w-full flex-col gap-1 text-body text-muted-foreground sm:w-40">
           {t("optionFilterAs")}
-          <Select
+          <NativeSelect
             value={option.standardMapping}
             onValueChange={(value) => onChange({ ...option, standardMapping: value as ProductOptionStandardMapping })}
+            aria-label={t("optionType", { name: optionLabel })}
           >
-            <SelectTrigger aria-label={t("optionType", { name: optionLabel })}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">{t("optionTypeOther")}</SelectItem>
-              <SelectItem value="size">{t("optionTypeSize")}</SelectItem>
-              <SelectItem value="color">{t("optionTypeColor")}</SelectItem>
-              <SelectItem value="material">{t("optionTypeMaterial")}</SelectItem>
-              <SelectItem value="pattern">{t("optionTypePattern")}</SelectItem>
-            </SelectContent>
-          </Select>
+            <option value="none">{t("optionTypeOther")}</option>
+            <option value="size">{t("optionTypeSize")}</option>
+            <option value="color">{t("optionTypeColor")}</option>
+            <option value="material">{t("optionTypeMaterial")}</option>
+            <option value="pattern">{t("optionTypePattern")}</option>
+          </NativeSelect>
         </label>
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <Button type="button" variant="ghost" size="icon" disabled={!canMoveUp} onClick={() => onMove(-1)}>
@@ -792,7 +801,7 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
 }) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
-  const { fmt, salePrice } = useCurrency();
+  const { code: currencyCode, fmt, salePrice } = useCurrency();
   const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
   const [query, setQuery] = React.useState("");
   const [page, setPage] = React.useState(0);
@@ -851,7 +860,8 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
     const sale = saleOf(variant);
     return (
       <div className="space-y-1">
-        <NumberInput
+        <MoneyInput
+          currencyCode={currencyCode}
           value={variant.price}
           aria-invalid={Boolean(error)}
           aria-label={t("priceFor", { name: nameOf(variant) })}
@@ -937,7 +947,7 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
             <strong className="font-medium">{r("selected", { count: selected.size })}</strong>
             <Button type="button" variant="link" size="sm" onClick={() => setSelected(new Set())}>{t("clearSelection")}</Button>
           </span>
-          <NumberInput value={bulkPrice} onValueChange={setBulkPrice} placeholder={t("price")} aria-label={t("price")} aria-invalid={bulkPrice !== null && !Number.isFinite(bulkPrice)} className="w-24" />
+          <MoneyInput currencyCode={currencyCode} value={bulkPrice} onValueChange={setBulkPrice} placeholder={t("price")} aria-label={t("price")} aria-invalid={bulkPrice !== null && !Number.isFinite(bulkPrice)} className="w-24" />
           <NumberInput value={bulkStock} integer onValueChange={setBulkStock} placeholder={t("quantity")} aria-label={t("quantity")} aria-invalid={bulkStock !== null && !Number.isInteger(bulkStock)} className="w-24" />
           <VariantImagePicker
             value={bulkImageId}
@@ -959,7 +969,7 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
             variant="outline"
             size="sm"
             disabled={selected.size >= variants.length}
-            title={selected.size >= variants.length ? t("keepOneVariant") : undefined}
+            aria-describedby={selected.size >= variants.length ? "variant-bulk-keep-one" : undefined}
             onClick={() => {
               onRemove(selected);
               setSelected(new Set());
@@ -980,6 +990,10 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
               </Button>
             )
           ) : null}
+          {/* Visible on touch and to keyboard users, not only as a hover title. */}
+          {selected.size >= variants.length ? (
+            <p id="variant-bulk-keep-one" className="w-full text-body text-muted-foreground">{t("keepOneVariant")}</p>
+          ) : null}
         </div>
       ) : null}
       <div className="hidden md:block">
@@ -997,9 +1011,10 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
               </th>
               <th className="w-14 p-2"><span className="sr-only">{t("photo")}</span></th>
               <th className="p-2 font-medium">{t("variant")}</th>
-              <th className="w-32 p-2 text-right font-medium">{t("price")}</th>
-              <th className="w-28 p-2 text-right font-medium">{t("quantity")}</th>
-              <th className="w-24 p-2"><span className="sr-only">{r("actions")}</span></th>
+              <th className="w-28 p-2 text-right font-medium">{t("price")}</th>
+              <th className="w-24 p-2 text-right font-medium">{t("quantity")}</th>
+              {/* Two icon buttons (print, stop selling) and nothing more, so the variant column keeps the room. */}
+              <th className="w-22 p-2"><span className="sr-only">{r("actions")}</span></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -1015,11 +1030,10 @@ function VariantMatrix({ options, variants, images, nameOf, issueFor, reveal, ex
                     <td className="p-2">
                       <button type="button" onClick={() => onExpandedChange(expanded ? null : variant.id)} className="flex min-h-10 w-full items-center gap-1.5 rounded-sm text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-expanded={expanded}>
                         {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                        <span className="min-w-0">
-                          <span className="block break-words">{nameOf(variant)}</span>
-                          <span className="block break-all font-mono font-normal text-muted-foreground">{variant.sku}</span>
-                        </span>
+                        <span className="min-w-0 break-words">{nameOf(variant)}</span>
                       </button>
+                      {/* Identifiers never split mid-word: one line, full value on hover and in the copy button. */}
+                      <IdText value={variant.sku} copy className="text-muted-foreground" />
                       {issueFor(variant.id, "photo") ? <p className="text-body text-destructive">{issueFor(variant.id, "photo")}</p> : null}
                     </td>
                     <td className="p-2">{priceCell(variant)}</td>
@@ -1265,13 +1279,14 @@ function DiscountInput({ variant, name, invalid, onChange }: {
   onChange: (patch: Partial<DraftVariant>) => void;
 }) {
   const t = useMessages(productMessages);
+  const { code: currencyCode } = useCurrency();
   const amount = variant.discountType === "flat" ? variant.discountAmount ?? 0 : variant.discountPercentage ?? 0;
   const [mode, setMode] = React.useState<"none" | "percentage" | "flat">(
     amount > 0 ? variant.discountType : "none",
   );
   return (
     <div className="flex min-w-0 gap-1">
-      <Select
+      <NativeSelect
         value={mode}
         onValueChange={(next) => {
           setMode(next as "none" | "percentage" | "flat");
@@ -1283,24 +1298,28 @@ function DiscountInput({ variant, name, invalid, onChange }: {
             onChange({ discountType: "flat", discountAmount: 0, discountPercentage: null });
           }
         }}
+        aria-label={t("discountTypeFor", { name })}
+        className="min-w-24 flex-1"
       >
-        <SelectTrigger aria-label={t("discountTypeFor", { name })} className="min-w-24 flex-1">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">{t("noDiscount")}</SelectItem>
-          <SelectItem value="percentage">{t("discountPercentage")}</SelectItem>
-          <SelectItem value="flat">{t("discountFixed")}</SelectItem>
-        </SelectContent>
-      </Select>
-      {mode !== "none" ? (
+        <option value="none">{t("noDiscount")}</option>
+        <option value="percentage">{t("discountPercentage")}</option>
+        <option value="flat">{t("discountFixed")}</option>
+      </NativeSelect>
+      {mode === "flat" ? (
+        <MoneyInput
+          currencyCode={currencyCode}
+          value={amount}
+          aria-invalid={invalid}
+          aria-label={t("discountValueFor", { name })}
+          onValueChange={(next) => onChange({ discountAmount: next ?? 0 })}
+          className="w-20"
+        />
+      ) : mode === "percentage" ? (
         <NumberInput
           value={amount}
           aria-invalid={invalid}
           aria-label={t("discountValueFor", { name })}
-          onValueChange={(next) => onChange(mode === "flat"
-            ? { discountAmount: next ?? 0 }
-            : { discountPercentage: next ?? 0 })}
+          onValueChange={(next) => onChange({ discountPercentage: next ?? 0 })}
           className="w-20"
         />
       ) : null}
@@ -1341,23 +1360,20 @@ function AdvancedSkuFields({ variant, name, issueFor, onChange }: {
       </Field>
       <Field label={t("barcodeType")}>
         {() => (
-          <Select
+          <NativeSelect
             value={variant.barcodeType ?? "none"}
             onValueChange={(value) => onChange(value === "none"
               ? { barcodeType: null, barcode: null }
               : { barcodeType: value as DraftVariant["barcodeType"] })}
           >
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">{t(isUnsavedSku ? "barcodeAuto" : "noBarcode")}</SelectItem>
-              <SelectItem value="ean13">EAN-13</SelectItem>
-              <SelectItem value="upc">UPC</SelectItem>
-              <SelectItem value="isbn">ISBN</SelectItem>
-              <SelectItem value="gtin">GTIN</SelectItem>
-              <SelectItem value="code128">Code 128</SelectItem>
-              <SelectItem value="custom">{t("barcodeCustom")}</SelectItem>
-            </SelectContent>
-          </Select>
+            <option value="none">{t(isUnsavedSku ? "barcodeAuto" : "noBarcode")}</option>
+            <option value="ean13">EAN-13</option>
+            <option value="upc">UPC</option>
+            <option value="isbn">ISBN</option>
+            <option value="gtin">GTIN</option>
+            <option value="code128">Code 128</option>
+            <option value="custom">{t("barcodeCustom")}</option>
+          </NativeSelect>
         )}
       </Field>
       <Field label={t("weightGrams")} error={errorOf("weight")}>

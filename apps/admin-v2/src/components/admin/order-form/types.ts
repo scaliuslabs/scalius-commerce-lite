@@ -2,6 +2,7 @@ import { z } from "zod";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { translate } from "~/i18n";
 import { orderFormMessages, type OrderFormMessageKey } from "~/i18n/order-form";
+import type { BuyerPriceRange } from "~/lib/format-utils";
 
 export interface Product {
   id: string;
@@ -11,8 +12,9 @@ export interface Product {
   discountType?: string | null;
   discountAmount?: number | null;
   variantCount?: number | null;
-  /** Catalog search rows only: thumbnail and stock before a variant is chosen. */
+  /** Catalog search rows only: thumbnail, what buyers pay and stock before a variant is chosen. */
   primaryImage?: string | null;
+  priceRange?: BuyerPriceRange | null;
   availableStock?: number | null;
   variants: {
     id: string;
@@ -29,17 +31,6 @@ export interface Product {
     discountPercentage?: number | null;
     discountAmount?: number | null;
   }[];
-}
-
-export interface DeliveryLocation {
-  id: string;
-  name: string;
-  type: "city" | "zone" | "area";
-  parentId: string | null;
-  externalIds: Record<string, unknown>;
-  metadata: Record<string, unknown>;
-  isActive: boolean;
-  sortOrder: number;
 }
 
 export interface OrderItem {
@@ -68,6 +59,8 @@ export interface OrderFormProps {
   /** Amend only: "#1001" and the cash still to collect before the change. */
   orderLabel?: string;
   cashToCollect?: number | null;
+  /** Amend only: the order's saved delivery method. */
+  savedShippingMethod?: { id: string; name: string } | null;
 }
 
 /** Validation messages are read when validation runs, so they follow the dashboard language. */
@@ -110,8 +103,9 @@ export const orderFormSchema = z.object({
   city: z.string().min(1, msg("cityRequired")),
   zone: z.string().min(1, msg("zoneRequired")),
   area: z.string().nullable(),
-  cityName: z.string().optional(),
-  zoneName: z.string().optional(),
+  /** Labels of the chosen places (the server stores the names it validates). */
+  cityName: z.string().nullable().optional(),
+  zoneName: z.string().nullable().optional(),
   areaName: z.string().nullable().optional(),
   notes: z.string().max(500, msg("notesTooLong")).nullable(),
   items: z

@@ -15,7 +15,17 @@ interface DataTableBodyRowProps<TData extends TableRowData> {
 }
 
 // Clicks on these keep their own meaning instead of opening the row.
-const INTERACTIVE = "a,button,input,select,textarea,label,[role=checkbox],[role=menuitem],[role=dialog],[data-row-click-ignore]";
+/**
+ * Clicks that belong to a control, not the row. Menus, selects and dialogs
+ * opened from a row are portaled, but React still bubbles their clicks to the
+ * row, so anything inside an overlay counts too.
+ */
+const INTERACTIVE = [
+  "a", "button", "input", "select", "textarea", "label",
+  "[role=checkbox]", "[role=menu]", "[role=menuitem]", "[role=menuitemradio]", "[role=menuitemcheckbox]",
+  "[role=listbox]", "[role=option]", "[role=dialog]", "[role=alertdialog]",
+  "[data-radix-popper-content-wrapper]", "[data-row-click-ignore]",
+].join(",");
 
 /** Opens a row from a click anywhere on it, except on its own controls (Polaris IndexTable). */
 export function rowClickHandler(open: ((event: MouseEvent) => void) | undefined) {

@@ -14,7 +14,6 @@ import {
 import { DataTable } from "~/components/admin/data-table/DataTable";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import type { Row } from "~/components/admin/data-table/table-config";
-import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { apiData } from "~/lib/api";
@@ -27,8 +26,9 @@ import { translate, useLocale, useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages } from "~/i18n/order-list";
 import { BulkOrdersDialog } from "./BulkOrdersDialog";
+import { OrderRowCancelDialog } from "./CancelOrderDialog";
 import { ExportOrdersDialog } from "./ExportOrdersDialog";
-import { getOrderColumns, orderName } from "./order-columns";
+import { getOrderColumns } from "./order-columns";
 import { getOrderRefreshPause, planOrderBulkAction, type OrderBulkAction } from "./order-bulk-actions";
 import { useOrderExportDialog } from "./order-export";
 import {
@@ -186,11 +186,19 @@ export function OrderList({
     && (allSelected || planOrderBulkAction(selectedRows, "archive").eligible.length > 0);
   const moreActions = [
     !allSelected && orderActions.canPrintInvoices
-      ? { key: "print", icon: Printer, label: t("printInvoices"), disabled: selectedIds.length > PRINT_LIMIT, onSelect: printInvoices }
+      ? { key: "print", icon: Printer, label: t("printInvoices"), disabled: selectedIds.length > PRINT_LIMIT, hint: undefined, onSelect: printInvoices }
       : null,
-    { key: "export", icon: Download, label: t("export"), disabled: false, onSelect: () => exportDialog.setOpen(true) },
+    { key: "export", icon: Download, label: t("export"), disabled: false, hint: undefined, onSelect: () => exportDialog.setOpen(true) },
     !showArchived && orderActions.canBulkDeleteOrders
-      ? { key: "archive", icon: Archive, label: t("archive"), disabled: !canArchiveSelection || actions.busy, onSelect: archiveSelection }
+      ? {
+          key: "archive",
+          icon: Archive,
+          label: t("archive"),
+          disabled: !canArchiveSelection || actions.busy,
+          // A greyed-out Archive says why, as Shopify does.
+          hint: canArchiveSelection ? undefined : t("archiveOnlyFinished"),
+          onSelect: archiveSelection,
+        }
       : null,
   ].filter((action) => action !== null);
 
@@ -228,8 +236,13 @@ export function OrderList({
         <DropdownMenuContent align="end">
           {moreActions.map((action) => (
             <DropdownMenuItem key={action.key} disabled={action.disabled} onSelect={action.onSelect}>
-              <action.icon className="h-4 w-4" />
-              {action.label}
+              <span className="flex h-lh items-center"><action.icon className="h-4 w-4" /></span>
+              {action.hint ? (
+                <span className="flex max-w-64 flex-col">
+                  <span>{action.label}</span>
+                  <span className="text-muted-foreground">{action.hint}</span>
+                </span>
+              ) : action.label}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -302,18 +315,13 @@ export function OrderList({
         {bulkButtons}
       </SelectionSheet>
 
-      <ConfirmDialog
-        open={cancelOrder !== null}
+      <OrderRowCancelDialog
+        order={cancelOrder}
+        pending={cancelOrder !== null && actions.updatingStatusIds.has(cancelOrder.id)}
         onOpenChange={(open) => {
           if (!open) actions.setCancelOrder(null);
         }}
-        title={t("cancelTitle", { number: cancelOrder ? orderName(cancelOrder) : "" })}
-        description={t("cancelBody")}
-        confirmLabel={t("cancelOrder")}
-        cancelLabel={t("keepOrder")}
-        onConfirm={() => {
-          if (cancelOrder) actions.changeStatus(cancelOrder, "cancelled", true);
-        }}
+        onConfirm={(order, reason) => actions.changeStatus(order, "cancelled", { confirmed: true, reason })}
       />
 
       <BulkOrdersDialog

@@ -30,7 +30,7 @@ export function getRouter() {
     basepath: getDashboardBasePath() || "/",
     // Positions are kept per history entry: Back restores, a new visit starts at the top.
     scrollRestoration: true,
-    scrollToTopSelectors: ["#admin-main-scroll"],
+    scrollToTopSelectors: ["#admin-main-scroll", "[data-settings-scroll]"],
     scrollRestorationBehavior: "instant",
     defaultPreload: false,
     // Never replace useful admin content with a route-level loading screen.

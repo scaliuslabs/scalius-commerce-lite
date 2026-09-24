@@ -260,7 +260,7 @@ function PreferencesCards() {
 export function PreferencesPage() {
   const t = useMessages(onlineStoreMessages);
   return (
-    <SaveBarProvider>
+    <SaveBarProvider savedMessage={t("preferencesSaved")}>
       <OnlineStorePage title={t("preferencesTitle")}>
         <PreferencesCards />
       </OnlineStorePage>

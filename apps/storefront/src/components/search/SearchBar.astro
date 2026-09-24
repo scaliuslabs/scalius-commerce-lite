@@ -26,6 +26,7 @@ const finalButtonClass = `${baseButtonClass} ${mobileView ? mobileClasses : desk
     id={mobileView ? "mobile-search-trigger" : "desktop-search-trigger"}
     class={finalButtonClass}
     aria-label={mobileView ? "Search for products" : "Search store"}
+    aria-haspopup="dialog"
   >
     <!-- Icon -->
     <Search

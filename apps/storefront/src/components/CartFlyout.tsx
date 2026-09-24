@@ -573,17 +573,14 @@ export default function CartFlyout({ onReady }: Props) {
             )}
           </div>
 
-          {/* More Below Indicator */}
+          {/* More below: a soft fade only, so nothing covers a price or a button. */}
           <div
+            aria-hidden="true"
             className={cn(
-              "absolute bottom-0 left-0 right-0 h-10 bg-linear-to-t from-muted/80 to-transparent pointer-events-none transition-opacity duration-300 flex items-end justify-center pb-1",
+              "absolute bottom-0 left-0 right-0 h-6 bg-linear-to-t from-card to-transparent pointer-events-none transition-opacity duration-300",
               canScrollMore ? "opacity-100" : "opacity-0",
             )}
-          >
-            <div className="bg-card/90 backdrop-blur text-muted-foreground text-[9px] border border-border font-bold px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 animate-bounce">
-              More <ChevronDown className="h-2.5 w-2.5" />
-            </div>
-          </div>
+          />
         </div>
 
         {undo && (

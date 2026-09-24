@@ -4,13 +4,7 @@ import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Button } from "@/components/ui/button";
 import { PRODUCT_CONDITION_VALUES, type ProductCondition } from "@scalius/shared/product-condition";
 import { useMessages } from "~/i18n";
@@ -43,17 +37,16 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
           name="isActive"
           render={({ field }) => (
             <FormItem>
-              <Select value={field.value ? "active" : "draft"} onValueChange={(value) => field.onChange(value === "active")}>
-                <FormControl>
-                  <SelectTrigger aria-label={t("status")}>
-                    <SelectValue>{t(field.value ? "statusActive" : "statusDraft")}</SelectValue>
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="active">{t("statusActive")}</SelectItem>
-                  <SelectItem value="draft">{t("statusDraft")}</SelectItem>
-                </SelectContent>
-              </Select>
+              <FormControl>
+                <NativeSelect
+                  value={field.value ? "active" : "draft"}
+                  onValueChange={(value) => field.onChange(value === "active")}
+                  aria-label={t("status")}
+                >
+                  <option value="active">{t("statusActive")}</option>
+                  <option value="draft">{t("statusDraft")}</option>
+                </NativeSelect>
+              </FormControl>
               <FormDescription>{t(field.value ? "statusActiveHelp" : "statusDraftHelp")}</FormDescription>
             </FormItem>
           )}
@@ -78,20 +71,15 @@ export const StatusCard = memo(function StatusCard({ form, storefrontUrl }: Stat
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("condition")}</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue>{t(CONDITION_LABELS[field.value])}</SelectValue>
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
+              <FormControl>
+                <NativeSelect value={field.value} onValueChange={field.onChange}>
                   {PRODUCT_CONDITION_VALUES.map((condition) => (
-                    <SelectItem key={condition} value={condition}>
+                    <option key={condition} value={condition}>
                       {t(CONDITION_LABELS[condition])}
-                    </SelectItem>
+                    </option>
                   ))}
-                </SelectContent>
-              </Select>
+                </NativeSelect>
+              </FormControl>
             </FormItem>
           )}
         />

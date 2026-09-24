@@ -93,12 +93,8 @@ vi.mock("react-hook-form", () => ({ useWatch: () => ["", "", null, null] }));
 vi.mock("~/contexts/PermissionContext", () => ({
   usePermissions: () => ({ hasPermission: () => false }),
 }));
-vi.mock("~/components/ui/select", () => ({
-  Select: () => null,
-  SelectContent: () => null,
-  SelectItem: () => null,
-  SelectTrigger: () => null,
-  SelectValue: () => null,
+vi.mock("~/components/ui/searchable-select", () => ({
+  SearchableSelect: () => null,
 }));
 
 vi.mock("./OrderFormContext", () => ({
@@ -118,6 +114,7 @@ vi.mock("./OrderFormContext", () => ({
 
 vi.mock("~/hooks/use-currency", () => ({
   useCurrency: () => ({
+    code: "BDT",
     fmt: (n: number) => `${n < 0 ? "-" : ""}৳${Math.abs(n).toFixed(2)}`,
   }),
 }));
@@ -201,6 +198,9 @@ describe("manual-order summary discount recovery", () => {
     await act(async () => root.render(<SummarySection />));
     expect(host.textContent).not.toContain(en.fixDiscount);
     expect(host.textContent).toContain("৳10.00");
+    // The same true minus sign as the saved order, never a hyphen.
+    expect(host.textContent).toContain("−৳100.00");
+    expect(host.textContent).not.toContain("-৳100.00");
   });
 
   it("keeps Retry only for a failure that may succeed unchanged", async () => {

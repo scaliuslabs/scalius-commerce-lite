@@ -23,14 +23,15 @@ export function ImageField({
   const labelId = useId();
   return (
     <div role="group" aria-labelledby={labelId} className="flex items-center gap-3">
-      <div
-        className={cn(
-          "grid shrink-0 place-items-center overflow-clip rounded-lg border bg-muted",
-          wide ? "h-16 w-28" : "size-16",
-        )}
-      >
+      {/* One preview frame for every row, so labels and buttons line up; a
+          square image (favicon) sits centred at icon size inside it. */}
+      <div className="grid h-16 w-28 shrink-0 place-items-center overflow-clip rounded-lg border bg-muted">
         {src ? (
-          <img src={mediaImageUrl(src, 320)} alt="" className="max-h-full max-w-full object-contain" />
+          <img
+            src={mediaImageUrl(src, 320)}
+            alt=""
+            className={cn("object-contain", wide ? "max-h-full max-w-full" : "size-10")}
+          />
         ) : (
           <ImageIcon className="size-5 text-muted-foreground" aria-hidden />
         )}

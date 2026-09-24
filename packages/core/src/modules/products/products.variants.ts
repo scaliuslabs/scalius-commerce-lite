@@ -19,6 +19,7 @@ import { AppError, NotFoundError, ConflictError, ValidationError } from "@scaliu
 import { checkAndAlertLowStock } from "../inventory/alerts";
 import { fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
 import { presentCatalogPrice, readStoreDecimalPlaces } from "./products.money";
+import { readStoreCurrency, toStoreMinor } from "../settings/store-money";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import {
     STOCK_CHANGED_MESSAGE,
@@ -500,7 +501,8 @@ export async function createVariant(
     data: z.infer<typeof createVariantSchema>,
 ): Promise<VariantView & ProductAggregateRevisionResult> {
     assertNormalVariantHasCustomerOption(data);
-    const decimalPlaces = await readStoreDecimalPlaces(db);
+    const currency = await readStoreCurrency(db);
+    const decimalPlaces = currency.decimalPlaces;
     const selection = await resolveSelectedOptionValueIds(
         db,
         productId,
@@ -539,7 +541,7 @@ export async function createVariant(
         imageId: data.imageId,
         weight: data.weight,
         sku,
-        priceMinor: toMinor(data.price, decimalPlaces),
+        priceMinor: toStoreMinor(data.price, currency),
         stock: data.stock > 0 ? 0 : data.stock,
         reservedStock: 0,
         preorderStock: 0,
@@ -551,7 +553,7 @@ export async function createVariant(
         discountType: data.discountType || "percentage",
         discountBps: (data.discountType || "percentage") === "percentage" ? percentToBps(data.discountPercentage) : 0,
         discountAmountMinor: (data.discountType || "percentage") === "flat"
-            ? toMinor(data.discountAmount ?? 0, decimalPlaces)
+            ? toStoreMinor(data.discountAmount ?? 0, currency)
             : 0,
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
@@ -629,7 +631,8 @@ export async function updateVariant(
     data: z.infer<typeof updateVariantSchema>,
     adminUserId?: string,
 ): Promise<VariantView & ProductAggregateRevisionResult> {
-    const decimalPlaces = await readStoreDecimalPlaces(db);
+    const currency = await readStoreCurrency(db);
+    const decimalPlaces = currency.decimalPlaces;
     const existingVariant = await db
         .select({
             id: productVariants.id,
@@ -709,7 +712,7 @@ export async function updateVariant(
         imageId: data.imageId,
         weight: data.weight,
         sku,
-        priceMinor: simpleProductPricing?.priceMinor ?? toMinor(data.price, decimalPlaces),
+        priceMinor: simpleProductPricing?.priceMinor ?? toStoreMinor(data.price, currency),
         trackInventory: data.trackInventory ?? existingVariant.trackInventory,
         barcode: barcodeIdentity.barcode,
         barcodeType: barcodeIdentity.barcodeType,
@@ -719,7 +722,7 @@ export async function updateVariant(
             : (data.discountType || "percentage") === "percentage" ? percentToBps(data.discountPercentage) : 0,
         discountAmountMinor: existingIsSimpleSku
             ? 0
-            : (data.discountType || "percentage") === "flat" ? toMinor(data.discountAmount ?? 0, decimalPlaces) : 0,
+            : (data.discountType || "percentage") === "flat" ? toStoreMinor(data.discountAmount ?? 0, currency) : 0,
         updatedAt: sql`unixepoch()`,
     };
     const assignmentStatements = existingIsSimpleSku

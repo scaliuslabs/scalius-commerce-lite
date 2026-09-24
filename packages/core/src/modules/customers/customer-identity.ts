@@ -13,6 +13,18 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { customerHistory, customers, orders } from "@scalius/database/schema";
 
+export type CustomerKind = "account" | "guest" | "merchant";
+
+/**
+ * How the dashboard titles a customer: an account or a merchant-made customer
+ * by its name; a checkout-made guest record by its phone, because different
+ * people can order with one phone and none of them owns the record.
+ */
+export function customerKind(row: { accountClaimedAt: unknown; origin: string | null | undefined }): CustomerKind {
+    if (row.accountClaimedAt) return "account";
+    return row.origin === "merchant" ? "merchant" : "guest";
+}
+
 export interface OrderContact {
     phone: string;
     email?: string | null;
@@ -32,7 +44,11 @@ export interface OrderCustomerChoice {
     customerId: string;
     /** Set when a verified contact on the order belongs to an account. */
     accountOwnerCustomerId: string | null;
+    /** Which verified contact filed the order under that account. */
+    linkedBy: VerifiedContact | null;
 }
+
+export type VerifiedContact = "email" | "phone";
 
 /** How a contact is shown before it is proven: "r•••@example.com", "01•••••678". */
 export function maskContact(method: "email" | "phone", target: string): string {
@@ -96,23 +112,24 @@ export function chooseOrderCustomer(
     contact: OrderContact,
 ): OrderCustomerChoice | null {
     const email = normalizeContactEmail(contact.email);
-    const account = candidates.find((row) => row.accountClaimedAt && row.phoneVerifiedAt && row.phone === contact.phone)
-        ?? (email
-            ? candidates.find((row) => row.accountClaimedAt && row.emailVerifiedAt && normalizeContactEmail(row.email) === email)
-            : undefined);
-    if (account) return { customerId: account.id, accountOwnerCustomerId: account.id };
+    const byPhone = candidates.find((row) => row.accountClaimedAt && row.phoneVerifiedAt && row.phone === contact.phone);
+    if (byPhone) return { customerId: byPhone.id, accountOwnerCustomerId: byPhone.id, linkedBy: "phone" };
+    const byEmail = email
+        ? candidates.find((row) => row.accountClaimedAt && row.emailVerifiedAt && normalizeContactEmail(row.email) === email)
+        : undefined;
+    if (byEmail) return { customerId: byEmail.id, accountOwnerCustomerId: byEmail.id, linkedBy: "email" };
     const guest = candidates.find((row) => !row.accountClaimedAt && row.phone === contact.phone);
-    return guest ? { customerId: guest.id, accountOwnerCustomerId: null } : null;
+    return guest ? { customerId: guest.id, accountOwnerCustomerId: null, linkedBy: null } : null;
 }
 
 /**
  * After an account proves an email/phone: unowned orders placed with that
- * verified contact join the account on both sides (merchant and buyer).
- * Every order that leaves another record is written to both change logs, the
- * guest record it left is linked to the account (its other orders wait until
- * the account proves their contact too), and a guest record left with no
- * orders is retired. Returns the ordered statements for the caller's batch;
- * empty when the account has nothing verified.
+ * verified contact join the account on both sides (merchant and buyer). Every
+ * order that leaves another record is written to both change logs with the
+ * contact that proved it. A guest record's other orders stay where they are
+ * (a phone can be shared, so nothing about them is shown to the account); a
+ * guest record left with no orders is retired and marked merged. Returns the
+ * ordered statements for the caller's batch; empty when nothing is verified.
  */
 export function buildVerifiedContactOrderLink(
     db: Database,
@@ -120,12 +137,13 @@ export function buildVerifiedContactOrderLink(
 ) {
     const phone = input.phone?.trim() || null;
     const email = normalizeContactEmail(input.email);
-    const contactMatch: SQL[] = [];
-    if (phone) contactMatch.push(sql`${orders.customerPhone} = ${phone}`);
-    if (email) contactMatch.push(sql`lower(trim(${orders.customerEmail})) = ${email}`);
+    const phoneMatch = phone ? sql`${orders.customerPhone} = ${phone}` : null;
+    const emailMatch = email ? sql`lower(trim(${orders.customerEmail})) = ${email}` : null;
+    const contactMatch = [phoneMatch, emailMatch].filter((match): match is SQL => match !== null);
     if (contactMatch.length === 0) return [];
     const joins = sql`${orders.accountOwnerCustomerId} IS NULL AND ${orders.deletedAt} IS NULL AND (${sql.join(contactMatch, sql` OR `)})`;
     const leaves = and(joins, isNotNull(orders.customerId), ne(orders.customerId, input.customerId))!;
+    const via = phoneMatch ? sql`CASE WHEN ${phoneMatch} THEN 'phone' ELSE 'email' END` : sql`'email'`;
 
     // All of these read the orders before the last statement moves them.
     return [
@@ -136,6 +154,7 @@ export function buildVerifiedContactOrderLink(
             relatedId: sql`${input.customerId}`,
             join: eq(customers.id, orders.customerId),
             where: leaves,
+            via,
         }),
         movedOrderHistory(db, {
             changeType: "order_moved_in",
@@ -144,18 +163,11 @@ export function buildVerifiedContactOrderLink(
             relatedId: sql`${orders.customerId}`,
             join: eq(account.id, input.customerId),
             where: leaves,
+            via,
         }),
-        db.update(customers)
-            .set({ linkedAccountId: input.customerId, updatedAt: sql`unixepoch()` })
-            .where(and(
-                isNull(customers.accountClaimedAt),
-                isNull(customers.deletedAt),
-                isNull(customers.linkedAccountId),
-                sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = ${customers.id} AND ${joins})`,
-            )),
         // Guest records whose every order is about to join the account.
         db.update(customers)
-            .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
+            .set({ deletedAt: sql`unixepoch()`, mergedIntoCustomerId: input.customerId, updatedAt: sql`unixepoch()` })
             .where(and(
                 isNull(customers.accountClaimedAt),
                 isNull(customers.deletedAt),
@@ -170,22 +182,9 @@ export function buildVerifiedContactOrderLink(
 
 const account = alias(customers, "account");
 
-/** One change-log row per moving order on one side, with that record's current details. */
-function movedOrderHistory(
-    db: Database,
-    input: {
-        changeType: "order_moved_in" | "order_moved_out";
-        owner: typeof customers | typeof account;
-        ownerId: SQL;
-        relatedId: SQL;
-        join: SQL;
-        where: SQL;
-    },
-) {
-    const { owner } = input;
-    return db.insert(customerHistory).select(db.select({
-        id: sql<string>`'chist_' || lower(hex(randomblob(12)))`.as("id"),
-        customerId: sql<string>`${input.ownerId}`.as("customer_id"),
+/** A snapshot of the customer's current details, for one change-log row. */
+function customerSnapshot(owner: typeof customers | typeof account) {
+    return {
         name: owner.name,
         email: owner.email,
         phone: owner.phone,
@@ -196,11 +195,72 @@ function movedOrderHistory(
         cityName: owner.cityName,
         zoneName: owner.zoneName,
         areaName: owner.areaName,
+    };
+}
+
+const historyId = () => sql<string>`'chist_' || lower(hex(randomblob(12)))`.as("id");
+
+/** One change-log row per moving order on one side, with that record's current details. */
+function movedOrderHistory(
+    db: Database,
+    input: {
+        changeType: "order_moved_in" | "order_moved_out";
+        owner: typeof customers | typeof account;
+        ownerId: SQL;
+        relatedId: SQL;
+        join: SQL;
+        where: SQL;
+        via: SQL;
+    },
+) {
+    return db.insert(customerHistory).select(db.select({
+        id: historyId(),
+        customerId: sql<string>`${input.ownerId}`.as("customer_id"),
+        ...customerSnapshot(input.owner),
         changeType: sql<string>`${input.changeType}`.as("change_type"),
         orderId: orders.id,
         relatedCustomerId: sql<string>`${input.relatedId}`.as("related_customer_id"),
+        verifiedContact: sql<string>`${input.via}`.as("verified_contact"),
+        actor: sql<string>`'buyer'`.as("actor"),
+        actorId: sql<string | null>`NULL`.as("actor_id"),
         createdAt: sql<number>`unixepoch()`.as("created_at"),
-    }).from(orders).innerJoin(owner, input.join).where(input.where));
+    }).from(orders).innerJoin(input.owner, input.join).where(input.where));
+}
+
+/**
+ * The account's change-log row for a signed-out order filed straight to it at
+ * checkout because its email/phone was verified ("Order #1091 linked by
+ * verified email").
+ */
+export function linkedOrderHistory(db: Database, input: { accountId: string; orderId: string; via: VerifiedContact }) {
+    return db.insert(customerHistory).select(db.select({
+        id: historyId(),
+        customerId: customers.id,
+        ...customerSnapshot(customers),
+        changeType: sql<string>`'order_linked'`.as("change_type"),
+        orderId: sql<string>`${input.orderId}`.as("order_id"),
+        relatedCustomerId: sql<string | null>`NULL`.as("related_customer_id"),
+        verifiedContact: sql<string>`${input.via}`.as("verified_contact"),
+        actor: sql<string>`'buyer'`.as("actor"),
+        actorId: sql<string | null>`NULL`.as("actor_id"),
+        createdAt: sql<number>`unixepoch()`.as("created_at"),
+    }).from(customers).where(eq(customers.id, input.accountId)));
+}
+
+/** The account's "signed up with a verified email/phone" row, from its details as saved in the same batch. */
+export function signedUpHistory(db: Database, input: { accountId: string; via: VerifiedContact }) {
+    return db.insert(customerHistory).select(db.select({
+        id: historyId(),
+        customerId: customers.id,
+        ...customerSnapshot(customers),
+        changeType: sql<string>`'signed_up'`.as("change_type"),
+        orderId: sql<string | null>`NULL`.as("order_id"),
+        relatedCustomerId: sql<string | null>`NULL`.as("related_customer_id"),
+        verifiedContact: sql<string>`${input.via}`.as("verified_contact"),
+        actor: sql<string>`'buyer'`.as("actor"),
+        actorId: sql<string | null>`NULL`.as("actor_id"),
+        createdAt: sql<number>`unixepoch()`.as("created_at"),
+    }).from(customers).where(eq(customers.id, input.accountId)));
 }
 
 /** Links verified-contact guest orders for a signed-in account (any device). */

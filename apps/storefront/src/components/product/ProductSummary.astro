@@ -94,7 +94,7 @@ const showsStartingPrice =
   shouldShowStartingVariantPrice(options.length > 0, stockVariant) && pricePresentation.isStartingAt;
 const pricing = pricePresentation.pricing;
 const discountBadge = pricing.hasDiscount
-  ? formatDiscountBadge(pricing.discountType, pricing.discountPercentage, pricing.discountAmount, currencySymbol)
+  ? formatDiscountBadge(pricing.originalPrice, pricing.finalPrice)
   : null;
 
 const variantsJson = serializeJsonForInlineScript(variants.map((variant) => {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { translate } from "~/i18n";
 import { collectionFormMessages } from "~/i18n/collection-form";
+import type { BuyerPriceRange } from "~/lib/format-utils";
 
 /** Messages resolve when validation runs, so they follow the current language. */
 const message = (key: keyof typeof collectionFormMessages.en) => ({
@@ -20,7 +21,8 @@ export interface Product {
   id: string;
   name: string;
   categoryId?: string | null;
-  price?: number;
+  /** What buyers pay; null when nothing is priced yet. */
+  priceRange?: BuyerPriceRange | null;
   categoryName?: string | null;
   isActive?: boolean;
   primaryImage?: string | null;

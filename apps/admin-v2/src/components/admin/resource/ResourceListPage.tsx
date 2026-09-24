@@ -11,10 +11,11 @@ import { createActionsColumn, createSelectColumn } from "~/components/admin/data
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { createDataSelector, type ListSearchParams } from "~/lib/list-helpers";
-import { useListSearch } from "~/lib/list-search";
+import { listSearchKey, useListSearch } from "~/lib/list-search";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
+import { dataTableMessages } from "~/i18n/data-table";
 import { IndexTabs, type IndexTab } from "./IndexTabs";
 import { PageHeader } from "./PageHeader";
 import { EmptyState } from "./EmptyState";
@@ -43,6 +44,11 @@ export interface ResourceLifecycle<T> {
   deleteBlockedNote?: (count: number) => string;
   /** Runs one action for one or more rows; send revision claims from the rows. */
   run: (action: ResourceAction, rows: T[]) => Promise<unknown>;
+  /**
+   * The "Moved to trash" toast offers Undo (a restore of the same rows). Only
+   * for resources whose restore needs nothing from the trashed rows (no revision claim).
+   */
+  undoTrash?: boolean;
 }
 
 export interface ResourceListPageProps<T extends { id: string }> {
@@ -52,8 +58,9 @@ export interface ResourceListPageProps<T extends { id: string }> {
   /** The route's validated search (page, limit, sort, order, trashed…). */
   search: ListSearchParams & Record<string, unknown>;
   /**
-   * The list's name for its search term, which is kept in the session and
-   * never in the URL (`useListSearch`); build `query` with the same term.
+   * The list's name for its search terms, which are kept in the session per
+   * tab and never in the URL (`useListSearch(listSearchKey(list, search, views?.param))`);
+   * build `query` with the same term.
    */
   list: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,6 +98,8 @@ export interface ResourceListPageProps<T extends { id: string }> {
   canSelectRow?: (row: T) => boolean;
   sortable?: boolean;
   onReorder?: (oldIndex: number, newIndex: number, rows: T[]) => void;
+  /** The list's order when no sort is chosen (the API's default); "Recently updated" unless given. */
+  defaultSortLabel?: string;
 }
 
 /**
@@ -102,10 +111,11 @@ export interface ResourceListPageProps<T extends { id: string }> {
 export function ResourceListPage<T extends { id: string }>(props: ResourceListPageProps<T>) {
   const { search, lifecycle } = props;
   const t = useMessages(resourceMessages);
+  const tableCopy = useMessages(dataTableMessages);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const trashed = search.trashed;
-  const [term, setTerm] = useListSearch(props.list);
+  const [term, setTerm] = useListSearch(listSearchKey(props.list, search, props.views?.param));
   // `kept`: selected rows a permanent delete leaves in Trash (canDeleteRow is false).
   const [confirm, setConfirm] = useState<{ action: "trash" | "delete"; rows: T[]; kept: number } | null>(null);
 
@@ -131,8 +141,15 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   const mutation = useMutation({
     mutationFn: ({ action, rows }: { action: ResourceAction; rows: T[] }) =>
       inChunks(rows, (chunk) => lifecycle!.run(action, chunk)),
-    onSuccess: (_data, { action }) => {
-      toast.success(t(action === "trash" ? "movedToTrash" : action === "restore" ? "restored" : "deleted"));
+    onSuccess: (_data, { action, rows }) => {
+      if (action === "trash" && lifecycle?.undoTrash && lifecycle.canRestore) {
+        toast.success(t("movedToTrash"), {
+          duration: 10_000,
+          action: { label: t("undo"), onClick: () => { mutation.mutate({ action: "restore", rows }); } },
+        });
+      } else {
+        toast.success(t(action === "trash" ? "movedToTrash" : action === "restore" ? "restored" : "deleted"));
+      }
       clearAll();
     },
     onError: (error) => toast.error(getServerFnError(error, t("actionFailed"))),
@@ -340,6 +357,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         error={error}
         onRetry={() => void refetch()}
         layoutKey={props.list}
+        defaultSortLabel={props.defaultSortLabel ?? tableCopy("recentlyUpdated")}
         getRowHref={trashed ? undefined : rowTo}
         emptyState={emptyState}
         // Reorder only when the whole list is on screen (at most 90 rows per

@@ -1,4 +1,5 @@
 import type { BatchItem } from "drizzle-orm/batch";
+import { readStoreCurrency } from "../settings/store-money";
 import { nanoid } from "nanoid";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
@@ -551,7 +552,7 @@ async function updateBaseSection(
     expectedAggregateRevision: number,
     patch: ProductBasePatch,
 ) {
-    const [current, decimalPlaces] = await Promise.all([db.select({
+    const [current, currency] = await Promise.all([db.select({
         name: products.name,
         priceMinor: products.priceMinor,
         categoryId: products.categoryId,
@@ -566,14 +567,14 @@ async function updateBaseSection(
         excludeFromProductFeed: products.excludeFromProductFeed,
         productCondition: products.productCondition,
         slug: products.slug,
-    }).from(products).where(eq(products.id, productId)).get(), readStoreDecimalPlaces(db)]);
+    }).from(products).where(eq(products.id, productId)).get(), readStoreCurrency(db)]);
     if (!current) return null;
     const { price, discountPercentage, discountAmount, ...otherPatch } = patch;
     const definedPatch = Object.fromEntries(Object.entries(otherPatch).filter(([, value]) => value !== undefined));
     const next = {
         ...current,
         ...definedPatch,
-        ...catalogPriceColumns({ price, discountPercentage, discountAmount }, decimalPlaces),
+        ...catalogPriceColumns({ price, discountPercentage, discountAmount }, currency),
     } as typeof current;
     if (next.canonicalPath !== null && next.canonicalPath !== `/products/${next.slug}`) {
         throw new ValidationError("Canonical path must use this product's current slug until URL aliases are supported.");

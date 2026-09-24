@@ -4,6 +4,7 @@
  * the discounts catalog) and the live summary. Pure, so it is unit tested.
  */
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { requiresWholeCashAmounts } from "@scalius/shared/money";
 
 import type { DiscountMessageKey } from "~/i18n/discounts";
 import type { DiscountInput, DiscountRecord } from "~/lib/api-query-options/discounts";
@@ -124,6 +125,7 @@ export function amountError(value: string, currencyCode: string): DiscountMessag
   const match = /^(\d+)(?:\.(\d+))?$/u.exec(latinDigits(value).trim());
   if (!match) return "errorAmount";
   if ((match[2]?.length ?? 0) > precision) return precision === 0 ? "errorWholeAmount" : "errorDecimals";
+  if (requiresWholeCashAmounts(currencyCode) && /[1-9]/u.test(match[2] ?? "")) return "errorWholeTaka";
   const major = Number(`${match[1]}.${match[2] ?? "0"}`);
   if (major <= 0) return "errorAmount";
   return major > MAX_AMOUNT_MAJOR ? "errorAmountMax" : null;
@@ -512,7 +514,18 @@ export function describeValue(draft: DiscountDraft, currencyCode: string, format
 }
 
 /** The Summary card: one line per fact, only once that fact is complete and valid. */
-export function summarizeDraft(draft: DiscountDraft, currencyCode: string, format: SummaryFormat): SummaryLine[] {
+/**
+ * The Summary card's lines. `stacksWithOthers` is how many other active or
+ * scheduled discounts combine with this one (from `combinationPreview`, the
+ * same rule checkout applies: a tick on either discount is enough), so the
+ * combination line never contradicts the list under it.
+ */
+export function summarizeDraft(
+  draft: DiscountDraft,
+  currencyCode: string,
+  format: SummaryFormat,
+  stacksWithOthers = 0,
+): SummaryLine[] {
   const lines: SummaryLine[] = [];
   const clean = (value: string) => latinDigits(value).trim();
   const amount = (value: string) => (amountError(value, currencyCode) ? null : format.money(clean(value)));
@@ -573,9 +586,9 @@ export function summarizeDraft(draft: DiscountDraft, currencyCode: string, forma
     if (!draft.limitTotal && !draft.oncePerCustomer) lines.push({ key: "summaryNoLimits" });
   }
   const others = combinableClasses(draft).filter((item) => draft.combines[item]);
-  lines.push(others.length === 0
-    ? { key: "summaryNoCombine" }
-    : { key: others.length === 2 ? "summaryCombinesBoth" : `summaryCombines_${others[0]!}` });
+  lines.push(others.length > 0
+    ? { key: others.length === 2 ? "summaryCombinesBoth" : `summaryCombines_${others[0]!}` }
+    : { key: stacksWithOthers > 0 ? "summaryCombinesWhereAllowed" : "summaryNoCombine" });
   const start = storeTimeToEpoch(draft.startDate, draft.startTime);
   const end = draft.hasEnd ? storeTimeToEpoch(draft.endDate, draft.endTime) : null;
   if (start !== null) {

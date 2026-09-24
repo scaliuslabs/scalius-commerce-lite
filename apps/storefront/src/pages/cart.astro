@@ -504,6 +504,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 loadingText={copy.loadingText}
                 feeChangedText={copy.deliveryFeeChangedText}
                 replacedText={copy.deliveryOptionReplacedText}
+                replacedSameFeeText={copy.deliveryOptionReplacedSameFeeText}
                 goneText={copy.deliveryOptionGoneText}
               />
 
@@ -716,6 +717,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   import {
     checkoutInformationFields,
     enhanceCheckoutFields,
+    setFieldError,
   } from "@/lib/checkout/field-validation";
   import {
     hideCheckoutLoadingOverlay,
@@ -828,6 +830,25 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       void locationSelects?.prefill(
         (event as CustomEvent<LocationPrefillDetail>).detail ?? {},
       ),
+    { signal: cartPageSignal },
+  );
+  // The merchant removed the city, thana or area the buyer chose: clear it,
+  // list the level again without it, and say so once, at that field. The
+  // totals follow the cleared address like any other change.
+  window.addEventListener(
+    "delivery-location-unavailable",
+    (event) => {
+      const field = (event as CustomEvent<{ field?: string }>).detail?.field;
+      if (field !== "city" && field !== "zone" && field !== "area") return;
+      const control = document.getElementById(`checkout-${field}`);
+      const error = document.getElementById("shippingLocationError");
+      if (control && error) {
+        setFieldError({ control, error }, field === "city"
+          ? checkoutCopy.cityUnavailableText
+          : field === "zone" ? checkoutCopy.thanaUnavailableText : checkoutCopy.areaUnavailableText);
+      }
+      void locationSelects?.forget(field);
+    },
     { signal: cartPageSignal },
   );
 
@@ -1424,6 +1445,15 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           }
           if (!cartIsValid || window.hasCartValidationIssues?.() === true) {
             restoreSubmitButton();
+            // A removed thana is asked for again at its own field.
+            const locationControl = document.querySelector<HTMLElement>(
+              '[data-location-fields] [aria-invalid="true"]',
+            );
+            if (locationControl) {
+              locationControl.scrollIntoView?.({ behavior: "smooth", block: "center" });
+              locationControl.focus({ preventScroll: true });
+              return;
+            }
             // A refused delivery rate is explained next to the delivery options,
             // never with the cart-items copy.
             const blocked = window.getCartBlockedMessage?.();

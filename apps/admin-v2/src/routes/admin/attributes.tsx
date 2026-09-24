@@ -9,7 +9,7 @@ import {
   postApiV1AdminAttributesBulkRestore,
 } from "@scalius/api-client/sdk";
 import { createListSearchValidator } from "~/lib/list-helpers";
-import { adoptListSearch, useListSearch } from "~/lib/list-search";
+import { adoptListSearch, listSearchKey, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
@@ -26,6 +26,7 @@ import { AttributeValueEditor } from "~/components/admin/attributes-manager/comp
 import { AttributeValuesViewer } from "~/components/admin/attributes-manager/components/AttributeValuesViewer";
 import { formatNumber, translate, useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
+import { dataTableMessages } from "~/i18n/data-table";
 
 const validateAttributeSearch = createListSearchValidator(
   ["name", "slug", "filterable", "updatedAt"] as const,
@@ -46,7 +47,7 @@ function listQuery(search: ReturnType<typeof validateAttributeSearch>, term: str
 export const Route = createFileRoute("/admin/attributes")({
   validateSearch: validateAttributeSearch,
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch("attributes", deps.q))),
+  loader: ({ context: { queryClient }, deps }) => warmRouteQuery(queryClient, listQuery(deps, adoptListSearch(listSearchKey("attributes", deps), deps.q))),
   head: () => ({ meta: [{ title: translate(catalogMessages, "attributes") }] }),
   component: AttributesPage,
   errorComponent: RouteErrorComponent,
@@ -56,8 +57,9 @@ const INVALIDATE = [queryKeys.attributes.all];
 
 function AttributesPage() {
   const search = Route.useSearch();
-  const [term] = useListSearch("attributes");
+  const [term] = useListSearch(listSearchKey("attributes", search));
   const t = useMessages(catalogMessages);
+  const tableCopy = useMessages(dataTableMessages);
   const { attributes: can } = useCatalogActionPermissions();
   const [editing, setEditingState] = useState<AttributeDto | "new" | null>(null);
   // The dialog stays mounted so it can animate closed; each opening gets a
@@ -120,6 +122,7 @@ function AttributesPage() {
     <>
       <ResourceListPage<AttributeDto>
         title={t("attributes")}
+        defaultSortLabel={tableCopy("nameAZ")}
         actions={can.canCreate ? <Button onClick={() => setEditing("new")}>{t("addAttribute")}</Button> : null}
         search={search}
         list="attributes"

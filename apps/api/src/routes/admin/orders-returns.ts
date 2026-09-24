@@ -264,9 +264,20 @@ app.openapi(approveRoute, async (c) => {
         bodyCommandKey,
         "commandKey",
     );
-    return ok(c, await approveOrderReturn(
-        c.get("db"), id, returnId, { ...payload, commandKey } as ApproveOrderReturnInput, actor(c),
-    ));
+    const input = { ...payload, commandKey } as ApproveOrderReturnInput;
+    const result = await approveOrderReturn(c.get("db"), id, returnId, input, actor(c));
+    // The review is its own step on the timeline (R3-ORD-14).
+    await recordOrderEvent(c.get("db"), {
+        orderId: id,
+        kind: "return_approved",
+        actorId: actor(c).id,
+        requestKey: commandKey,
+        data: {
+            approved: input.lines.reduce((sum, line) => sum + line.approvedQuantity, 0),
+            rejected: input.lines.reduce((sum, line) => sum + line.rejectedQuantity, 0),
+        },
+    });
+    return ok(c, result);
 });
 app.openapi(receiveRoute, async (c) => {
     const { id, returnId } = c.req.valid("param");
@@ -288,6 +299,7 @@ app.openapi(receiveRoute, async (c) => {
         data: {
             received: (payload as ReceiveOrderReturnInput).lines.reduce((sum, line) => sum + line.receivedQuantity, 0),
             restocked: result.restockedQuantity,
+            damaged: (payload as ReceiveOrderReturnInput).lines.reduce((sum, line) => sum + line.damagedQuantity, 0),
         },
     });
     const { availabilityTransitionVariantIds: _cacheSignal, ...response } = result;

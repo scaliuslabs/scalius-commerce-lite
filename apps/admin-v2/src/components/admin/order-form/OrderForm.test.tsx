@@ -28,10 +28,6 @@ vi.mock("@/lib/api-mutations/orders", () => ({
     reset: vi.fn(),
   }),
 }));
-vi.mock("@/lib/api-query-options/delivery", () => ({
-  deliveryLocationsQueryOptions: () => ({ queryKey: ["cities"], queryFn: async () => ({ locations: [] }) }),
-  getDeliveryLocations: async () => ({ locations: [] }),
-}));
 vi.mock("@/hooks/use-debounce", () => ({ useDebounce: <T,>(value: T) => value }));
 vi.mock("@/hooks/use-currency", () => ({
   useCurrency: () => ({ code: "BDT", fmt: (n: number) => `৳${n.toLocaleString("en-IN")}` }),
@@ -48,7 +44,7 @@ vi.mock("@/components/admin/resource/PageHeader", () => ({ PageHeader: () => nul
 vi.mock("../shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));
 vi.mock("./OrderItemsSection", () => ({ OrderItemsSection: () => null }));
 vi.mock("./SummarySection", () => ({ SummarySection: () => null }));
-vi.mock("./CustomerInfoSection", () => ({ CustomerInfoSection: () => null }));
+vi.mock("./CustomerInfoSection", () => ({ CustomerInfoSection: () => null, ORDER_LOCATION_IDS: { city: "order-city", zone: "order-zone", area: "order-area" } }));
 vi.mock("./ProductSearch", () => ({ PRODUCT_SEARCH_INPUT_ID: "order-product-search" }));
 
 import { OrderForm } from "../OrderForm";
@@ -93,6 +89,8 @@ describe("edit order review", () => {
         <OrderForm mode="amend" defaultValues={order} orderLabel="#1001" cashToCollect={2370} />
       </QueryClientProvider>,
     ));
+    // Let the amendment quote settle (a query, then its render).
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     await act(async () => {});
   });
 

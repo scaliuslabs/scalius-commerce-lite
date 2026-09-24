@@ -17,7 +17,13 @@ const rate = (patch: Partial<Parameters<typeof rateErrors>[0]> = {}) => ({
 
 describe("delivery charge validation", () => {
   it("accepts Bangla digits and an empty free-over amount", () => {
-    expect(rateErrors(rate({ fee: "৬০.৫০" }))).toEqual({});
+    expect(rateErrors(rate({ fee: "৬০" }), true)).toEqual({});
+  });
+
+  it("refuses paisa in a taka charge or free-over amount, and keeps decimals for other currencies", () => {
+    expect(rateErrors(rate({ fee: "৬০.৫০", freeOver: "999.99" }), true)).toEqual({ fee: "wholeTaka", freeOver: "wholeTaka" });
+    expect(rateErrors(rate({ fee: "60.00", freeOver: "1000" }), true)).toEqual({});
+    expect(rateErrors(rate({ fee: "৬০.৫০" }), false)).toEqual({});
   });
 
   it("bounds the charge and the free-over amount at ৳1,00,000", () => {

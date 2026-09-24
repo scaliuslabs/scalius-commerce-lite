@@ -296,6 +296,25 @@ describe("commerce structured data helpers", () => {
       currencyCode: "BDT",
       freeDelivery: false,
     }).map((detail) => detail.name)).toEqual(["Standard"]);
+    // A paid pickup point is never stated as a shipping rate (R3-MOB-06).
+    expect(buildOfferShippingDetails({
+      shippingMethods: [
+        rate("Standard Delivery", 110),
+        rate("Collection Point", 50, { kind: "pickup", pickupAddress: "Gulshan 1 kiosk" }),
+        rate("Express Delivery", 200),
+      ],
+      currencyCode: "BDT",
+      freeDelivery: false,
+    }).map((detail) => [detail.name, detail.shippingRate.value])).toEqual([
+      ["Standard Delivery", "110.00"],
+      ["Express Delivery", "200.00"],
+    ]);
+    // A pickup-only store claims no shipping rate, even for a free-delivery product.
+    expect(buildOfferShippingDetails({
+      shippingMethods: [rate("Collection Point", 50, { kind: "pickup", pickupAddress: "Gulshan 1 kiosk" })],
+      currencyCode: "BDT",
+      freeDelivery: true,
+    })).toEqual([]);
   });
 
   it("maps only schema-safe barcode types to GTIN fields", () => {

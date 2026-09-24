@@ -10,6 +10,7 @@ export type CheckoutFlowIssue =
     | "noOnline"
     | "amountInvalid"
     | "sslRange"
+    | "wholeTaka"
     | "codWithAdvance"
     | "advanceNeedsOnline";
 
@@ -22,14 +23,17 @@ export interface CheckoutFlowPreviewOptions {
     codEnabled: boolean;
     activeOnlineMethodCount: number;
     sslCommerzEnabled: boolean;
+    /** The store currency is paid in whole units (BDT): the advance has no paisa. */
+    wholeTaka?: boolean;
 }
 
 export function getCheckoutAdvancePaymentAmountIssue(
     amount: unknown,
-    options: { sslCommerzEnabled: boolean },
+    options: { sslCommerzEnabled: boolean; wholeTaka?: boolean },
 ): CheckoutFlowIssue | null {
     const numericAmount = Number(amount);
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) return "amountInvalid";
+    if (options.wholeTaka && !Number.isInteger(numericAmount)) return "wholeTaka";
     if (options.sslCommerzEnabled && (
         numericAmount < CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min ||
         numericAmount > CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max
@@ -57,6 +61,7 @@ export function getCheckoutFlowPreviewIssues(options: CheckoutFlowPreviewOptions
 
     const amountIssue = getCheckoutAdvancePaymentAmountIssue(options.partialPaymentAmount, {
         sslCommerzEnabled: options.sslCommerzEnabled,
+        wholeTaka: options.wholeTaka,
     });
     if (amountIssue) issues.push(amountIssue);
     if (options.checkoutMode === "guest_cod_only") issues.push("codWithAdvance");

@@ -18,13 +18,7 @@ import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -52,6 +46,7 @@ import {
 import { OfficialProviderMark } from "./provider-marks";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
+import { useWholeCashAmounts } from "../shared/MoneyInput";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading, useCloseSettingsDialog } from "./SettingsPage";
 import { currencyQuery, platformQuery } from "./StoreSettings";
 
@@ -530,20 +525,17 @@ export function PaymentMethodsCard() {
           <div className="border-t border-border px-4 py-4">
             {eligibleDefaults.length > 0 ? (
               <SettingsField id="default-payment-method" label={t("defaultMethod")}>
-                <Select
+                <NativeSelect
+                  id="default-payment-method"
+                  className="max-w-xs"
                   value={values.defaultMethod}
                   disabled={!canEdit}
                   onValueChange={(value) => setValues((draft) => ({ ...draft, defaultMethod: value as MethodKey }))}
                 >
-                  <SelectTrigger id="default-payment-method" className="max-w-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {eligibleDefaults.map((method) => (
-                      <SelectItem key={method} value={method}>{t(method)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {eligibleDefaults.map((method) => (
+                    <option key={method} value={method}>{t(method)}</option>
+                  ))}
+                </NativeSelect>
               </SettingsField>
             ) : (
               <p role="alert" className="text-body text-destructive">{t("needOneMethod")}</p>
@@ -562,6 +554,7 @@ export function PaymentOptionsCard() {
   const canEdit = useCanEditPayments();
   const methods = useQuery(paymentMethodsQuery);
   const { codEnabled, online } = usableMethods(methods.data);
+  const wholeTaka = useWholeCashAmounts();
   const issuesFor = (draft: CheckoutFlow) =>
     getCheckoutFlowPreviewIssues({
       checkoutMode: draft.checkoutMode,
@@ -572,6 +565,7 @@ export function PaymentOptionsCard() {
       codEnabled,
       activeOnlineMethodCount: online.length,
       sslCommerzEnabled: online.includes("sslcommerz"),
+      wholeTaka,
     });
   const { values, setValue, isLoaded, isLoadError, refetch } = useCheckoutFlowForm((draft) => issuesFor(draft).length === 0, t("optionsTitle"));
   if (isLoadError) return <SettingsLoadFailure title={t("loadFlow")} onRetry={refetch} />;
@@ -617,13 +611,13 @@ export function PaymentOptionsCard() {
           <Input
             id="advance-amount"
             type="number"
-            inputMode="decimal"
+            inputMode={wholeTaka ? "numeric" : "decimal"}
             min="0"
-            step="0.01"
+            step={wholeTaka ? "1" : "0.01"}
             className="max-w-40"
             value={Number.isFinite(values.partialPaymentAmount) ? values.partialPaymentAmount : ""}
             disabled={!canEdit}
-            aria-invalid={issues.includes("amountInvalid") || issues.includes("sslRange")}
+            aria-invalid={issues.includes("amountInvalid") || issues.includes("sslRange") || issues.includes("wholeTaka")}
             aria-describedby="advance-amount-note"
             onChange={(event) => setValue("partialPaymentAmount", Number(event.target.value))}
           />

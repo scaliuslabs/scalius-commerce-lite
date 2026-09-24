@@ -27,7 +27,8 @@ import {
     deliveryZones,
     shippingMethods,
 } from "@scalius/database/schema";
-import { fromMinor, toMinor } from "@scalius/shared/money";
+import { fromMinor, isWholeCashAmountMinor, toMinor, WHOLE_TAKA_MESSAGE } from "@scalius/shared/money";
+import type { StoreCurrency } from "../settings/store-money";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { defineSettingsDocument, SettingsRevisionConflictError } from "../settings/settings-store";
 
@@ -350,21 +351,24 @@ interface ParsedRate {
     isActive: boolean;
 }
 
-function amountToMinor(value: number, decimalPlaces: number, path: Issue["path"], issues: Issue[]): number {
+function amountToMinor(value: number, currency: StoreCurrency, path: Issue["path"], issues: Issue[]): number {
     if (!Number.isFinite(value) || value < 0 || value > MAX_DELIVERY_AMOUNT) {
         issues.push({ path, message: "Enter an amount from 0 to 1,00,000." });
         return 0;
     }
-    const minor = toMinor(value, decimalPlaces);
-    if (fromMinor(minor, decimalPlaces) !== value) {
-        issues.push({ path, message: `Use up to ${decimalPlaces} decimal places.` });
+    const minor = toMinor(value, currency.decimalPlaces);
+    if (fromMinor(minor, currency.decimalPlaces) !== value) {
+        issues.push({ path, message: `Use up to ${currency.decimalPlaces} decimal places.` });
+    } else if (!isWholeCashAmountMinor(minor, currency.code)) {
+        // Riders collect whole taka: a BDT delivery charge or threshold has no paisa.
+        issues.push({ path, message: WHOLE_TAKA_MESSAGE });
     }
     return minor;
 }
 
 function parseRates(
     rates: readonly DeliveryRateInput[],
-    decimalPlaces: number,
+    currency: StoreCurrency,
     issues: Issue[],
     inZone: boolean,
 ): ParsedRate[] {
@@ -397,10 +401,10 @@ function parseRates(
             pickupAddress,
             pickupHours,
             name,
-            feeMinor: amountToMinor(rate.fee, decimalPlaces, ["rates", index, "fee"], issues),
+            feeMinor: amountToMinor(rate.fee, currency, ["rates", index, "fee"], issues),
             freeOverMinor: freeOver === null
                 ? null
-                : amountToMinor(freeOver, decimalPlaces, ["rates", index, "freeOver"], issues),
+                : amountToMinor(freeOver, currency, ["rates", index, "freeOver"], issues),
             description: rate.description?.trim() || null,
             isActive: rate.isActive,
         };
@@ -489,7 +493,7 @@ function locationStatements(db: Database, zoneId: string, locationIds: readonly 
     return statements;
 }
 
-function parseZone(input: DeliveryZoneInput, decimalPlaces: number) {
+function parseZone(input: DeliveryZoneInput, currency: StoreCurrency) {
     const issues: Issue[] = [];
     const name = input.name.trim();
     if (!name) issues.push({ path: ["name"], message: "Enter a zone name." });
@@ -497,7 +501,7 @@ function parseZone(input: DeliveryZoneInput, decimalPlaces: number) {
     if (locationIds.length === 0) {
         issues.push({ path: ["locationIds"], message: "Choose at least one city, thana or area." });
     }
-    const rates = parseRates(input.rates, decimalPlaces, issues, true);
+    const rates = parseRates(input.rates, currency, issues, true);
     throwIssues(issues);
     return { name, locationIds, rates };
 }
@@ -534,9 +538,9 @@ function rethrowZoneWriteConflict(error: unknown): never {
 export async function createDeliveryZone(
     db: Database,
     input: DeliveryZoneInput,
-    decimalPlaces: number,
+    currency: StoreCurrency,
 ): Promise<{ id: string; revision: number }> {
-    const zone = parseZone(input, decimalPlaces);
+    const zone = parseZone(input, currency);
     await assertLocationsAssignable(db, null, zone.locationIds);
     const id = `dz_${nanoid()}`;
     try {
@@ -558,7 +562,7 @@ export async function updateDeliveryZone(
     id: string,
     input: DeliveryZoneInput,
     expectedRevision: number,
-    decimalPlaces: number,
+    currency: StoreCurrency,
 ): Promise<{ id: string; revision: number }> {
     const current = await db.select({ revision: deliveryZones.revision }).from(deliveryZones)
         .where(eq(deliveryZones.id, id)).get();
@@ -566,7 +570,7 @@ export async function updateDeliveryZone(
     if (current.revision !== expectedRevision) {
         throw new SettingsRevisionConflictError("delivery_zone", expectedRevision, current.revision);
     }
-    const zone = parseZone(input, decimalPlaces);
+    const zone = parseZone(input, currency);
     await assertLocationsAssignable(db, id, zone.locationIds);
     await assertCheckoutKeepsARate(db, id, zone.rates.filter((rate) => rate.isActive).length);
     try {
@@ -611,10 +615,10 @@ export async function updateEverywhereElseRates(
     db: Database,
     rates: readonly DeliveryRateInput[],
     expectedRevision: number,
-    decimalPlaces: number,
+    currency: StoreCurrency,
 ): Promise<{ revision: number }> {
     const issues: Issue[] = [];
-    const parsed = parseRates(rates, decimalPlaces, issues, false);
+    const parsed = parseRates(rates, currency, issues, false);
     throwIssues(issues);
     await assertCheckoutKeepsARate(db, null, parsed.filter((rate) => rate.isActive).length);
     try {
@@ -644,7 +648,7 @@ export async function applyDeliveryZoneTemplate(
     db: Database,
     template: DeliveryZoneTemplate,
     expectedRevision: number,
-    decimalPlaces: number,
+    currency: StoreCurrency,
 ): Promise<void> {
     const existing = await db.select({ id: deliveryZones.id }).from(deliveryZones).limit(1);
     if (existing.length > 0) {
@@ -685,12 +689,12 @@ export async function applyDeliveryZoneTemplate(
     ];
     const everywhereElse = parseRates(
         [{ name: "Outside Dhaka", fee: 120, description: "Delivery in 2–3 days", isActive: true }],
-        decimalPlaces,
+        currency,
         [],
         false,
     );
     const zoneStatements = zones.flatMap((input, sortOrder) => {
-        const zone = parseZone(input, decimalPlaces);
+        const zone = parseZone(input, currency);
         const id = `dz_${nanoid()}`;
         return [
             db.insert(deliveryZones).values({ id, name: zone.name, sortOrder }),

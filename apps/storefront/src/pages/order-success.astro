@@ -3,7 +3,9 @@ import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
 import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
 import { recommendationTitle } from "@/lib/recommendations";
+import { storeContactLinks } from "@/lib/store-contact";
 import {
   getProductRecommendations,
   getAccountOwnerReceiptProof,
@@ -756,6 +758,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       supportRequests={order.supportRequests}
       supportRequestActions={order.supportRequestActions}
       statusView={statusView}
+      storeContact={storeContactLinks(layoutData?.business)}
       copy={copy}
       client:load
     />
@@ -764,7 +767,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
         <h2 id="order-recommendations" class="mb-4 text-lg font-semibold text-foreground">
           {recommendationTitle(orderRecommendations.reason)}
         </h2>
-        <div class="product-grid">
+        <ProductGrid>
           {orderRecommendations.products.map((product) => (
             <ProductCard
               product={product}
@@ -772,7 +775,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
               currencyCode={layoutData?.currency?.code}
             />
           ))}
-        </div>
+        </ProductGrid>
       </section>
     )}
     </>

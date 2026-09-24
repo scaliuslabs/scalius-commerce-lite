@@ -25,17 +25,27 @@ beforeEach(() => {
 });
 
 describe("customer auth proxy", () => {
-  it("forwards guest-record paths whose ids carry underscores", async () => {
-    const response = await call("guest-orders/cust_V1a-x_9/send-code");
+  it.each(["phone/send-code", "phone/verify"])("forwards %s to the API", async (path) => {
+    const response = await call(path);
 
     expect(response.status).toBe(200);
     expect(mocks.fetch).toHaveBeenCalledWith(
-      "https://api.example.test/api/v1/customer-auth/guest-orders/cust_V1a-x_9/send-code",
+      `https://api.example.test/api/v1/customer-auth/${path}`,
       expect.objectContaining({ method: "POST" }),
     );
   });
 
-  it.each(["guest-orders/../admin", "guest-orders/a.b/verify", "guest-orders/a%2F/verify"])("rejects %s", async (path) => {
+  it("forwards record paths whose ids carry underscores", async () => {
+    const response = await call("orders/ord_V1a-x_9/payment-session");
+
+    expect(response.status).toBe(200);
+    expect(mocks.fetch).toHaveBeenCalledWith(
+      "https://api.example.test/api/v1/customer-auth/orders/ord_V1a-x_9/payment-session",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it.each(["phone/../admin", "orders/a.b/verify", "orders/a%2F/verify"])("rejects %s", async (path) => {
     const response = await call(path);
 
     expect(response.status).toBe(400);

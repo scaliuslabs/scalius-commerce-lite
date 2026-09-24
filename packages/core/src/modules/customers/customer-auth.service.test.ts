@@ -5,23 +5,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Database } from "@scalius/database/client";
 import { createMigratedSqlite, createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { ConflictError, NotFoundError, RateLimitError, ServiceUnavailableError, ValidationError } from "../../errors";
+import { ConflictError, RateLimitError, ValidationError } from "../../errors";
+import { saveSmsSettings } from "../../integrations/sms";
+import { getOrderDetails } from "../orders/orders.admin";
+import { getOfferedCustomerAuthPolicy } from "../settings/checkout-readiness";
 import { createAtomicCheckoutAttempt } from "../orders/checkout-attempts";
 import { commitStorefrontOrderPayload } from "../orders/orders.ingest";
 import type { StorefrontOrderCommitPayload } from "../orders/orders.types";
-import { getCustomerOrders, listCustomers } from "./customers.service";
+import {
+  createCustomer,
+  deleteCustomer,
+  getCustomerDetail,
+  getCustomerOrders,
+  listCustomers,
+  restoreCustomer,
+  updateCustomer,
+} from "./customers.service";
 import { linkVerifiedContactOrders } from "./customer-identity";
 import {
   buildCustomerAuthOtpStorageKey,
   persistCustomerAuthOtpChallenge,
 } from "./customer-auth-otp-challenges";
 import {
-  canSendPhoneProof,
   cleanupExpiredCustomerSessions,
   deleteCustomerSession,
-  listLinkedGuestRecords,
-  sendLinkedGuestOrdersCode,
-  verifyLinkedGuestOrdersCode,
+  getAccountPhoneVerificationPrompt,
+  sendAccountPhoneCode,
+  verifyAccountPhoneCode,
   deriveCustomerAuthOtpDeliveryCode,
   getCookieConfig,
   getCustomerBySession,
@@ -197,11 +207,13 @@ describe("unverified contacts never change identity (R2-BA-01, R2-MKT-02, R2-BA-
     const strangerHistory = await getCustomerOrders(db, stranger.customer.customerId!, {});
     expect(strangerHistory.orders).toEqual([]);
 
-    // 5. Proving the phone by code is what claims the guest record and its orders.
-    const proven = await verifyPhone(VICTIM_PHONE, await issuePhoneCode(VICTIM_PHONE));
-    expect(proven).toMatchObject({ status: "signed_in", customer: { customerId: victimRecord, name: "Victim V" } });
-    expect(orderLinks(firstOrder)).toEqual({ customerId: victimRecord, owner: victimRecord });
-    expect(orderLinks(secondOrder)).toEqual({ customerId: victimRecord, owner: victimRecord });
+    // 5. Proving the phone by code gives the owner an account with the phone's orders.
+    const code = await issuePhoneCode(VICTIM_PHONE);
+    const proven = await verifyPhone(VICTIM_PHONE, code, { name: "Victim V", email: "victim.phone@example.test" });
+    if (proven.status !== "signed_in") throw new Error("not signed in");
+    const ownerId = proven.customer.customerId!;
+    expect(orderLinks(firstOrder)).toEqual({ customerId: ownerId, owner: ownerId });
+    expect(orderLinks(secondOrder)).toEqual({ customerId: ownerId, owner: ownerId });
   });
 
   it("a guest checkout never renames, re-emails or re-addresses an existing customer", async () => {
@@ -259,104 +271,186 @@ describe("unverified contacts never change identity (R2-BA-01, R2-MKT-02, R2-BA-
   });
 });
 
-describe("an owner's sign-up never splits their customer record silently (R3)", () => {
+describe("a shared phone never exposes or files one person's orders under another (R4)", () => {
+  const SHARED_PHONE = "+8801799300002";
+  const OWN_PHONE = "+8801799300004";
   const OWNER_PHONE = "+8801799300011";
   const OWNER_EMAIL = "r3.owner@example.test";
-  const historyOf = (customerId: string) => sqlite.prepare(
-    "SELECT change_type AS type, order_id AS orderId, related_customer_id AS relatedId FROM customer_history WHERE customer_id = ? AND change_type LIKE 'order_moved_%' ORDER BY order_id",
+  const movesOf = (customerId: string) => sqlite.prepare(
+    "SELECT change_type AS type, order_id AS orderId, related_customer_id AS relatedId, verified_contact AS via FROM customer_history WHERE customer_id = ? AND change_type NOT IN ('created', 'updated', 'deleted') ORDER BY change_type, order_id",
   ).all(customerId);
   const record = (id: string) => sqlite.prepare(
-    "SELECT linked_account_id AS linkedAccountId, deleted_at IS NOT NULL AS retired, phone, phone_verified_at IS NOT NULL AS phoneVerified FROM customers WHERE id = ?",
+    "SELECT merged_into_customer_id AS mergedInto, deleted_at IS NOT NULL AS retired, origin, phone_verified_at IS NOT NULL AS phoneVerified FROM customers WHERE id = ?",
   ).get(id);
+  const enableSms = () => saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
+  const sendPhoneCode = async (accountId: string) => {
+    const sent = await sendAccountPhoneCode(db, {
+      accountId, ip: `203.0.113.${++ipCounter}`, encryptionKey: KEY, credentialEncryptionKey: KEY,
+    });
+    return { sent, code: await deriveCustomerAuthOtpDeliveryCode({ otpKey: sent.otpStorageKey, deliveryKey: sent.deliveryKey, encryptionKey: KEY }) };
+  };
 
-  async function ownerWithSplitRecord() {
+  it("tells a buyer nothing about a stranger's order on the phone they share (R3-SB-01)", async () => {
+    // Guest A orders with the shared phone; B orders with the same phone and their own email.
+    const strangersOrder = await placeGuestOrder({ phone: SHARED_PHONE, email: null, name: "R3-SB Guest Two" });
+    const ownOrder = await placeGuestOrder({ phone: SHARED_PHONE, email: "r3-sb+b4@example.test", name: "R3-SB Other Person" });
+    const guestRecord = orderLinks(strangersOrder)!.customerId as string;
+    expect(orderLinks(ownOrder)!.customerId).toBe(guestRecord);
+
+    // B signs up with the email and says their phone is another one.
+    const b = await createEmailAccount("r3-sb+b4@example.test", OWN_PHONE, "R3-SB Other Person");
+    const bId = b.customer.customerId!;
+    expect((await getCustomerOrders(db, bId, {})).orders.map((order) => order.id)).toEqual([ownOrder]);
+
+    // No code channel: no prompt at all. With one: only B's OWN phone, never the shared one.
+    expect(await getAccountPhoneVerificationPrompt(db, bId, KEY)).toBeNull();
+    await enableSms();
+    expect(await getAccountPhoneVerificationPrompt(db, bId, KEY)).toEqual({ phone: OWN_PHONE });
+
+    // The stranger's order stays on the phone's guest record, which no account claims.
+    expect(orderLinks(strangersOrder)).toEqual({ customerId: guestRecord, owner: null });
+    expect(record(guestRecord)).toMatchObject({ mergedInto: null, retired: 0, origin: "order" });
+    const { customers: listed } = await listCustomers(db, { limit: 50 });
+    expect(listed.find((row) => row.id === guestRecord)).toMatchObject({ kind: "guest", latestOrderName: "R3-SB Guest Two" });
+    expect(listed.find((row) => row.id === bId)).toMatchObject({ kind: "account", name: "R3-SB Other Person" });
+
+    // Proving B's own phone adds nothing of the stranger's.
+    const { code } = await sendPhoneCode(bId);
+    await expect(verifyAccountPhoneCode(db, { accountId: bId, code, encryptionKey: KEY, credentialEncryptionKey: KEY }))
+      .resolves.toEqual({ movedOrders: 0 });
+    expect(orderLinks(strangersOrder)).toEqual({ customerId: guestRecord, owner: null });
+    expect(await getAccountPhoneVerificationPrompt(db, bId, KEY)).toBeNull();
+  });
+
+  it("logs sign-up and every linked order with the verified contact, on both records (R3-ORD-12)", async () => {
     const withEmail = await placeGuestOrder({ phone: OWNER_PHONE, email: OWNER_EMAIL, name: "R3 Victim Owner" });
     const phoneOnly = await placeGuestOrder({ phone: OWNER_PHONE, email: null, name: "R3 Victim Owner" });
     const guestId = orderLinks(withEmail)!.customerId as string;
-    expect(orderLinks(phoneOnly)!.customerId).toBe(guestId);
-    const owner = await createEmailAccount(OWNER_EMAIL, OWNER_PHONE, "R3 Victim Owner");
-    return { withEmail, phoneOnly, guestId, ownerId: owner.customer.customerId! };
-  }
-
-  it("takes only the orders placed with the proven email, links the guest record and logs each move on both sides", async () => {
-    const { withEmail, phoneOnly, guestId, ownerId } = await ownerWithSplitRecord();
+    const ownerId = (await createEmailAccount(OWNER_EMAIL, OWNER_PHONE, "R3 Victim Owner")).customer.customerId!;
 
     expect(orderLinks(withEmail)).toEqual({ customerId: ownerId, owner: ownerId });
-    // The phone-only order stays: the account typed that phone but hasn't proven it.
     expect(orderLinks(phoneOnly)).toEqual({ customerId: guestId, owner: null });
-    expect(record(guestId)).toMatchObject({ linkedAccountId: ownerId, retired: 0 });
-    expect(historyOf(guestId)).toEqual([{ type: "order_moved_out", orderId: withEmail, relatedId: ownerId }]);
-    expect(historyOf(ownerId)).toEqual([{ type: "order_moved_in", orderId: withEmail, relatedId: guestId }]);
-
-    // The buyer is told what is left and where it was placed; the merchant sees whose it is.
-    expect(await listLinkedGuestRecords(db, ownerId)).toEqual([
-      { id: guestId, phone: OWNER_PHONE, destination: "01•••••011", orderCount: 1 },
+    expect(movesOf(ownerId)).toEqual([
+      { type: "order_moved_in", orderId: withEmail, relatedId: guestId, via: "email" },
+      { type: "signed_up", orderId: null, relatedId: null, via: "email" },
     ]);
-    const { customers: listed } = await listCustomers(db, { limit: 50 });
-    expect(listed.find((row) => row.id === guestId)?.linkedAccount).toEqual({ id: ownerId, name: "R3 Victim Owner" });
-    expect(listed.find((row) => row.id === ownerId)?.linkedAccount).toBeNull();
+    expect(movesOf(guestId)).toEqual([{ type: "order_moved_out", orderId: withEmail, relatedId: ownerId, via: "email" }]);
 
-    // Signing in again moves nothing more and logs nothing twice.
-    await linkVerifiedContactOrders(db, ownerId);
-    expect(historyOf(ownerId)).toHaveLength(1);
-  });
+    // A later signed-out order with the verified email is filed straight to the account, and logged.
+    const later = await placeGuestOrder({ phone: "+8801799300099", email: OWNER_EMAIL, name: "Someone Else" });
+    expect(orderLinks(later)).toEqual({ customerId: ownerId, owner: ownerId });
+    expect(movesOf(ownerId)).toContainEqual({ type: "order_linked", orderId: later, relatedId: null, via: "email" });
 
-  it("adds the rest once the account proves the phone, then retires the guest record out of every list", async () => {
-    const { phoneOnly, guestId, ownerId } = await ownerWithSplitRecord();
-
-    // No text channel locally: the notice can't offer a code, and asking for one says so.
-    expect(await canSendPhoneProof(db, KEY)).toBe(false);
-    await expect(sendLinkedGuestOrdersCode(db, {
-      accountId: ownerId, guestRecordId: guestId, ip: "203.0.113.90", encryptionKey: KEY, credentialEncryptionKey: KEY,
-    })).rejects.toBeInstanceOf(ServiceUnavailableError);
-
-    // A wrong code moves nothing.
-    const code = await issuePhoneCode(OWNER_PHONE);
-    await expect(verifyLinkedGuestOrdersCode(db, { accountId: ownerId, guestRecordId: guestId, code: code === "000000" ? "111111" : "000000", encryptionKey: KEY }))
+    // Proving the account's own phone brings the rest and merges the emptied guest record.
+    await enableSms();
+    expect(await getAccountPhoneVerificationPrompt(db, ownerId, KEY)).toEqual({ phone: OWNER_PHONE });
+    const { sent, code } = await sendPhoneCode(ownerId);
+    expect(sent.message).toBe("We sent a code to 01799-300011.");
+    const wrong = code === "000000" ? "111111" : "000000";
+    await expect(verifyAccountPhoneCode(db, { accountId: ownerId, code: wrong, encryptionKey: KEY, credentialEncryptionKey: KEY }))
       .rejects.toBeInstanceOf(ValidationError);
-    expect(orderLinks(phoneOnly)!.owner).toBeNull();
-
-    await expect(verifyLinkedGuestOrdersCode(db, { accountId: ownerId, guestRecordId: guestId, code, encryptionKey: KEY }))
+    await expect(verifyAccountPhoneCode(db, { accountId: ownerId, code, encryptionKey: KEY, credentialEncryptionKey: KEY }))
       .resolves.toEqual({ movedOrders: 1 });
     expect(orderLinks(phoneOnly)).toEqual({ customerId: ownerId, owner: ownerId });
-    expect(record(ownerId)).toMatchObject({ phone: OWNER_PHONE, phoneVerified: 1 });
-    expect(record(guestId)).toMatchObject({ linkedAccountId: ownerId, retired: 1 });
-    expect(historyOf(guestId).map((row) => row.orderId)).toContain(phoneOnly);
-    expect(await listLinkedGuestRecords(db, ownerId)).toEqual([]);
+    expect(record(ownerId)).toMatchObject({ phoneVerified: 1 });
+    expect(record(guestId)).toMatchObject({ mergedInto: ownerId, retired: 1 });
+    expect(movesOf(guestId)).toContainEqual({ type: "order_moved_out", orderId: phoneOnly, relatedId: ownerId, via: "phone" });
 
     // Merged, not trashed: neither the list, the trash nor search shows it.
     const active = await listCustomers(db, { limit: 50 });
     const trash = await listCustomers(db, { limit: 50, showTrashed: true });
-    const search = await listCustomers(db, { limit: 50, search: "R3 Victim" });
-    expect(active.customers.map((row) => row.id)).toEqual([ownerId]);
+    expect(active.customers.map((row) => row.id)).not.toContain(guestId);
     expect(trash.customers).toEqual([]);
-    expect(search.customers.map((row) => row.id)).toEqual([ownerId]);
-  });
-
-  it("offers nothing to a stranger who typed the phone, and refuses a phone another account proved", async () => {
-    const { guestId, ownerId } = await ownerWithSplitRecord();
-    const stranger = await createEmailAccount("stranger.r3@example.test", OWNER_PHONE, "Stranger");
-    const strangerId = stranger.customer.customerId!;
-
-    expect(await listLinkedGuestRecords(db, strangerId)).toEqual([]);
-    const code = await issuePhoneCode(OWNER_PHONE);
-    await expect(verifyLinkedGuestOrdersCode(db, { accountId: strangerId, guestRecordId: guestId, code, encryptionKey: KEY }))
-      .rejects.toBeInstanceOf(NotFoundError);
-
-    // Someone else proves the phone by signing in with it (that claims the guest record as their account).
-    await verifyPhone(OWNER_PHONE, code);
-    expect(record(guestId)).toMatchObject({ linkedAccountId: null });
-    expect(await listLinkedGuestRecords(db, ownerId)).toEqual([]);
   });
 
   it("refuses to prove a phone that another account already proved", async () => {
-    const { guestId, ownerId } = await ownerWithSplitRecord();
+    await enableSms();
+    const account = await createEmailAccount(BUYER_EMAIL, OWNER_PHONE);
     sqlite.prepare(
-      "INSERT INTO customers (id, name, phone, account_claimed_at, phone_verified_at) VALUES ('cust_phone_owner', 'Phone Owner', ?, unixepoch(), unixepoch())",
+      "INSERT INTO customers (id, name, phone, origin, account_claimed_at, phone_verified_at) VALUES ('cust_phone_owner', 'Phone Owner', ?, 'account', unixepoch(), unixepoch())",
     ).run(OWNER_PHONE);
-    const code = await issuePhoneCode(OWNER_PHONE);
-    await expect(verifyLinkedGuestOrdersCode(db, { accountId: ownerId, guestRecordId: guestId, code, encryptionKey: KEY }))
+    const { code } = await sendPhoneCode(account.customer.customerId!);
+    await expect(verifyAccountPhoneCode(db, { accountId: account.customer.customerId!, code, encryptionKey: KEY, credentialEncryptionKey: KEY }))
       .rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("titles checkout guest records by phone, and keeps a merchant's customer by name", async () => {
+    const order = await placeGuestOrder({ phone: SHARED_PHONE, email: null, name: "First Buyer" });
+    const guestId = orderLinks(order)!.customerId as string;
+    await placeGuestOrder({ phone: SHARED_PHONE, email: null, name: "Second Buyer" });
+    const merchant = await createCustomer(db, { name: "R3-ORD Owner রিনা", phone: OWN_PHONE, email: null, address: null, city: null, zone: null, area: null });
+    const impostor = await placeGuestOrder({ phone: OWN_PHONE, email: null, name: "R3-ORD Impostor" });
+
+    const { customers: listed } = await listCustomers(db, { limit: 50 });
+    expect(listed.find((row) => row.id === guestId)).toMatchObject({ kind: "guest", latestOrderName: "Second Buyer" });
+    expect(listed.find((row) => row.id === merchant.id)).toMatchObject({ kind: "merchant", name: "R3-ORD Owner রিনা" });
+    // The order keeps its own name; the merchant sees which record it is filed under.
+    const detail = await getOrderDetails(db, impostor);
+    expect(detail).toMatchObject({
+      customerName: "R3-ORD Impostor",
+      customerRecord: { id: merchant.id, name: "R3-ORD Owner রিনা", kind: "merchant" },
+    });
+    // Naming a guest record in the dashboard makes it the merchant's customer.
+    await updateCustomer(db, guestId, { name: "Named By Merchant" });
+    expect(await getCustomerDetail(db, guestId)).toMatchObject({ kind: "merchant", name: "Named By Merchant" });
+  });
+});
+
+describe("merchant changes are attributed and reversible (R3-ORD-13, R3-ORD-17)", () => {
+  const log = (customerId: string) => sqlite.prepare(
+    "SELECT change_type AS type, actor, actor_id AS actorId FROM customer_history WHERE customer_id = ? ORDER BY rowid",
+  ).all(customerId);
+
+  it("records the staff author, logs a restore from trash, and names the customer already using a phone", async () => {
+    const created = await createCustomer(db, { name: "Rina", phone: BUYER_PHONE, email: null, address: null, city: null, zone: null, area: null }, "staff_1");
+    await expect(createCustomer(db, { name: "Other", phone: BUYER_PHONE, email: null, address: null, city: null, zone: null, area: null }, "staff_1"))
+      .rejects.toMatchObject({ details: { customer: { id: created.id, name: "Rina", kind: "merchant" } } });
+
+    await updateCustomer(db, created.id, { name: "Rina Akter" }, "staff_2");
+    await deleteCustomer(db, created.id, "staff_2");
+    await restoreCustomer(db, created.id, "staff_1");
+    expect(await getCustomerDetail(db, created.id)).toMatchObject({ deletedAt: null, name: "Rina Akter" });
+    expect(log(created.id)).toEqual([
+      { type: "created", actor: "staff", actorId: "staff_1" },
+      { type: "updated", actor: "staff", actorId: "staff_2" },
+      { type: "deleted", actor: "staff", actorId: "staff_2" },
+      { type: "restored", actor: "staff", actorId: "staff_1" },
+    ]);
+
+    // A checkout guest record is made by the buyer; a merged one can't be restored.
+    const order = await placeGuestOrder({ phone: STRANGER_PHONE, email: "merge.me@example.test", name: "Merge Me" });
+    const guestId = orderLinks(order)!.customerId as string;
+    expect(log(guestId)).toEqual([{ type: "created", actor: "buyer", actorId: null }]);
+    await createEmailAccount("merge.me@example.test", STRANGER_PHONE, "Merge Me");
+    await expect(restoreCustomer(db, guestId, "staff_1")).rejects.toThrow("merged into an account");
+  });
+});
+
+describe("phone sign-in (R3-SB-07)", () => {
+  it("is offered whenever text codes can be sent, even if sign-in settings say email only", async () => {
+    const policy = { otpChannels: ["email"], requiredContactFields: [], optionalContactFields: [], defaultOtpChannel: "email" } as never;
+    expect((await getOfferedCustomerAuthPolicy(db, policy, { encryptionKey: KEY })).otpChannels).not.toContain("sms");
+    await expect(sendOtp(db, { method: "phone", identifier: BUYER_PHONE, ip: "203.0.113.200", encryptionKey: KEY, credentialEncryptionKey: KEY }))
+      .rejects.toThrow("Phone sign-in isn't available yet. Use your email.");
+
+    await saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
+    expect((await getOfferedCustomerAuthPolicy(db, policy, { encryptionKey: KEY })).otpChannels).toContain("sms");
+    await expect(sendOtp(db, { method: "phone", identifier: BUYER_PHONE, ip: "203.0.113.201", encryptionKey: KEY, credentialEncryptionKey: KEY }))
+      .resolves.toMatchObject({ message: "We sent you a code." });
+  });
+
+  it("gives a phone-proven buyer their own account and moves the phone's orders there, never renaming the guest record", async () => {
+    const guestOrder = await placeGuestOrder({ phone: BUYER_PHONE, email: null, name: "Guest Name" });
+    const guestId = orderLinks(guestOrder)!.customerId as string;
+    const code = await issuePhoneCode(BUYER_PHONE);
+    await expect(verifyPhone(BUYER_PHONE, code)).resolves.toMatchObject({ status: "needs_account_details" });
+    const signedIn = await verifyPhone(BUYER_PHONE, code, { name: "Real Owner", email: "real.owner@example.test" });
+    if (signedIn.status !== "signed_in") throw new Error("not signed in");
+    const accountId = signedIn.customer.customerId!;
+    expect(accountId).not.toBe(guestId);
+    expect(signedIn.customer).toMatchObject({ name: "Real Owner", phone: BUYER_PHONE });
+    expect(orderLinks(guestOrder)).toEqual({ customerId: accountId, owner: accountId });
+    expect(sqlite.prepare("SELECT merged_into_customer_id AS mergedInto, deleted_at IS NOT NULL AS retired FROM customers WHERE id = ?").get(guestId)).toEqual({ mergedInto: accountId, retired: 1 });
   });
 });
 
@@ -472,16 +566,6 @@ describe("one sign-in flow", () => {
     const second = await verifyEmail("attacker@example.test", code, { name: "X", phone: BUYER_PHONE });
     expect(second).toMatchObject({ status: "signed_in", isNewUser: true });
     expect(customerRows()).toHaveLength(2);
-  });
-
-  it("signs a phone-proven buyer into their guest profile and adds that phone's orders", async () => {
-    const guestOrder = await placeGuestOrder({ phone: BUYER_PHONE, email: null, name: "Guest Name" });
-    const signedIn = await verifyPhone(BUYER_PHONE, await issuePhoneCode(BUYER_PHONE));
-
-    expect(signedIn).toMatchObject({ status: "signed_in", isNewUser: true, customer: { name: "Guest Name", phone: BUYER_PHONE } });
-    expect(customerRows()).toEqual([expect.objectContaining({ claimed: 1, phone_verified: 1 })]);
-    if (signedIn.status !== "signed_in") return;
-    expect(orderOwner(guestOrder)).toBe(signedIn.customer.customerId);
   });
 
   it("adds orders placed while signed out with the verified email, on any device (BA-03)", async () => {

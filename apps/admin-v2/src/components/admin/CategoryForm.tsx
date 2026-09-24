@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -8,11 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { RichContent } from "../ui/rich-content";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { NativeSelect } from "../ui/native-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
-import { SearchListingCard } from "@/components/admin/search-listing/SearchListingCard";
+import { SearchListingCard, autoHandleFor } from "@/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminCategories, putApiV1AdminCategoriesById } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
@@ -32,7 +31,7 @@ interface CategoryFormProps {
   publishReadiness?: CategoryDetail["publishReadiness"];
 }
 
-type CategoryInput = ApiBody<typeof postApiV1AdminCategories>;
+type CategoryInput = Omit<ApiBody<typeof putApiV1AdminCategoriesById>, "expectedRevision" | "status">;
 function toCategoryInput(values: CategoryFormValues): CategoryInput {
   const { image } = values;
   return {
@@ -57,17 +56,12 @@ function toCategoryInput(values: CategoryFormValues): CategoryInput {
   };
 }
 
-function toHandle(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
 export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }: CategoryFormProps) {
   const navigate = useNavigate();
   const t = useMessages(categoryFormMessages);
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: categoryActions } = useCatalogActionPermissions();
   const canSave = isEdit ? categoryActions.canEdit : categoryActions.canCreate;
-  const handleEdited = useRef(isEdit);
 
   const form = useForm<CategoryFormInput, unknown, CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
@@ -90,7 +84,10 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
   const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<CategoryFormValues>({
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => apiData(postApiV1AdminCategories({ body: { status: data.status, ...toCategoryInput(data) } })),
+    // An empty address is made from the name on the server, with a number added if it is taken.
+    createFn: (data) => apiData(postApiV1AdminCategories({
+      body: { status: data.status, ...toCategoryInput(data), slug: data.slug || undefined },
+    })),
     updateFn: (data) => {
       if (!data.revision || !Number.isInteger(data.revision) || data.revision < 1) {
         throw new Error(t("reloadToSave"));
@@ -137,17 +134,8 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
     },
   });
 
-  // New categories take their web address from the name until the merchant edits it.
-  useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-      if (name === "name" && !handleEdited.current) {
-        form.setValue("slug", toHandle(value.name ?? ""));
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
-
   const name = form.watch("name");
+  const slug = form.watch("slug");
   const status = form.watch("status");
   const description = form.watch("description");
   const errors = form.formState.errors;
@@ -264,9 +252,10 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
             value={{
               title: form.watch("metaTitle") ?? "",
               description: form.watch("metaDescription") ?? "",
-              handle: form.watch("slug") ?? "",
+              handle: slug ?? "",
               hidden: form.watch("noIndex") === true,
             }}
+            autoHandle={!isEdit && !slug ? autoHandleFor(name ?? "", "category") : undefined}
             onChange={(next) => {
               if (next.title !== undefined) {
                 form.setValue("metaTitle", next.title || null, { shouldDirty: true });
@@ -275,7 +264,6 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                 form.setValue("metaDescription", next.description || null, { shouldDirty: true });
               }
               if (next.handle !== undefined) {
-                handleEdited.current = true;
                 form.setValue("slug", next.handle, { shouldDirty: true, shouldValidate: true });
                 // A saved main address must follow the category's own address.
                 if (form.getValues("canonicalPath") !== null) {
@@ -308,18 +296,13 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
                 name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <Select value={field.value} onValueChange={field.onChange} disabled={!canSave}>
-                      <FormControl>
-                        <SelectTrigger aria-label={t("status")}>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="published">{t("active")}</SelectItem>
-                        <SelectItem value="draft">{t("draft")}</SelectItem>
-                        <SelectItem value="internal">{t("hidden")}</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <NativeSelect value={field.value} onValueChange={field.onChange} disabled={!canSave} aria-label={t("status")}>
+                        <option value="published">{t("active")}</option>
+                        <option value="draft">{t("draft")}</option>
+                        <option value="internal">{t("hidden")}</option>
+                      </NativeSelect>
+                    </FormControl>
                     <FormDescription>
                       {t(status === "published" ? "activeHelp" : status === "internal" ? "hiddenHelp" : "draftHelp")}
                     </FormDescription>

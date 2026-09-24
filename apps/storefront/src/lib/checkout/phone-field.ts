@@ -297,7 +297,8 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
         () => {
           country = select.value;
           const code = button.querySelector("[data-phone-code]");
-          if (code) code.textContent = intl.callingCode(country);
+          // Bangladesh is typed locally (01…), so it shows the country, not +880.
+          if (code) code.textContent = country === "BD" ? "BD" : intl.callingCode(country);
           buyerHasEdited = true;
           const current = syncCanonical();
           persist(current.ok ? current.value : "");

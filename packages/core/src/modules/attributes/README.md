@@ -15,7 +15,7 @@ Product attribute CRUD, value management, and public storefront filter queries.
 
 | Schema | Fields |
 |--------|--------|
-| `createAttributeSchema` | name (min 2), slug (min 2, regex `^[a-z0-9]+(?:-[a-z0-9]+)*$`), filterable (default true), options (string array, max 500, optional) |
+| `createAttributeSchema` | name (min 2), slug (min 2, regex `^[a-z0-9]+(?:-[a-z0-9]+)*$`; optional, derived from the name with a `-2`, `-3`… suffix when omitted), filterable (default true), options (string array, max 500, optional) |
 | `updateAttributeSchema` | Same fields, all optional. Options can be nullable. |
 | `bulkActionSchema` | ids (string array, min 1), permanent (default false) |
 | `addValueSchema` | value (min 1) |

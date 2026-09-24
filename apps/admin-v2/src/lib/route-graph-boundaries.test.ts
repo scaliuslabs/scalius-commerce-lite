@@ -548,7 +548,7 @@ describe("admin route graph boundaries", () => {
     expect(settingsQueryOptionsSource).not.toContain("getStorefrontUrl");
     expect(routerSource).toContain("scrollRestoration: true");
     expect(routerSource).toContain(
-      'scrollToTopSelectors: ["#admin-main-scroll"]',
+      'scrollToTopSelectors: ["#admin-main-scroll", "[data-settings-scroll]"]',
     );
     expect(routerSource).toContain('scrollRestorationBehavior: "instant"');
     expect(adminRouteSource).toContain(

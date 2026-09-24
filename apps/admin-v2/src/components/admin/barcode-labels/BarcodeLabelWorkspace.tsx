@@ -16,13 +16,7 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Switch } from "~/components/ui/switch";
 import { useCurrency } from "~/hooks/use-currency";
@@ -391,19 +385,15 @@ export function BarcodeLabelWorkspace({
               <CardTitle>{t("labelSize")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Select
+              <NativeSelect
+                aria-label={t("labelSize")}
                 value={presetId}
                 onValueChange={(value) => setPreferences((current) => ({ ...current, presetId: value as LabelPresetId }))}
               >
-                <SelectTrigger className="w-full" aria-label={t("labelSize")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LABEL_PRESETS.map((candidate) => (
-                    <SelectItem key={candidate.id} value={candidate.id}>{t(`preset_${candidate.id}`)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {LABEL_PRESETS.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>{t(`preset_${candidate.id}`)}</option>
+                ))}
+              </NativeSelect>
 
               <fieldset className="space-y-3">
                 <legend className="pb-2 text-body font-medium">{t("showOnLabel")}</legend>

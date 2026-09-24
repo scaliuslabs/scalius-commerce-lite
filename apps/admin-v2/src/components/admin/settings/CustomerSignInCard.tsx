@@ -11,13 +11,7 @@ import {
 import { isReady } from "@scalius/shared/readiness";
 import { Checkbox } from "~/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -145,21 +139,18 @@ export function CustomerSignInCard() {
       </fieldset>
       {policy.otpChannels.length > 1 ? (
         <SettingsField id="signin-default" label={t("defaultChannel")}>
-          <Select
+          <NativeSelect
+            id="signin-default"
+            className="max-w-xs"
             value={policy.defaultOtpChannel}
             disabled={!canEdit}
             onValueChange={(value) =>
               setValue("policy", { ...policy, defaultOtpChannel: value as CustomerAuthOtpChannel })}
           >
-            <SelectTrigger id="signin-default" className="max-w-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {policy.otpChannels.map((channel) => (
-                <SelectItem key={channel} value={channel}>{t(channel)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {policy.otpChannels.map((channel) => (
+              <option key={channel} value={channel}>{t(channel)}</option>
+            ))}
+          </NativeSelect>
         </SettingsField>
       ) : null}
       <fieldset className="space-y-1">

@@ -146,23 +146,23 @@ describe("CategoryForm", () => {
     await settle();
   }
 
-  it("creates a draft category with a web address taken from the name", async () => {
+  it("creates a draft category and leaves its web address to the server", async () => {
     await render();
 
     expect(document.querySelector("h1")?.textContent).toBe("Add category");
     expect(document.body.textContent).toContain("Customers can't see it yet. Make it active when it's ready.");
-    type(byLabel("Name"), "Eid Panjabi 2026");
+    type(byLabel("Name"), "ঈদ পাঞ্জাবি 2026");
     await settle();
-    expect(document.body.textContent).toContain("https://shop.example/categories/eid-panjabi-2026");
+    expect(document.body.textContent).toContain("https://shop.example/categories/id-panjabi-2026");
     expect(document.querySelector("[data-save-bar]")?.textContent).toContain("Unsaved category");
 
     await click(button("Save"));
 
     expect(api.create).toHaveBeenCalledTimes(1);
+    expect(api.create.mock.calls[0]?.[0]?.body).not.toHaveProperty("slug", expect.anything());
     expect(api.create.mock.calls[0]?.[0]?.body).toEqual(
       expect.objectContaining({
-        name: "Eid Panjabi 2026",
-        slug: "eid-panjabi-2026",
+        name: "ঈদ পাঞ্জাবি 2026",
         status: "draft",
         canonicalPath: null,
         noIndex: false,
@@ -265,17 +265,14 @@ describe("CategoryForm", () => {
   });
 
   async function chooseStatus(label: string) {
-    const status = byLabel<HTMLButtonElement>("Status");
+    const status = byLabel<HTMLSelectElement>("Status");
+    const option = Array.from(status.options).find((candidate) => candidate.textContent === label);
+    if (!option) throw new Error(`No status ${label}`);
     await act(async () => {
-      status.focus();
-      status.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      status.value = option.value;
+      status.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await settle();
-    const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(
-      (candidate) => candidate.textContent === label,
-    );
-    if (!option) throw new Error(`No status ${label}`);
-    await click(option);
   }
 
   it("creates an active category and warns that it stays empty until products are added", async () => {
@@ -289,7 +286,7 @@ describe("CategoryForm", () => {
     expect(document.body.textContent).toContain("Customers can browse it on your store.");
     expect(document.body.textContent).toContain("It stays empty on your store until you add active products.");
     await click(button("Save"));
-    expect(api.create.mock.calls[0]?.[0]?.body).toEqual(expect.objectContaining({ status: "published", slug: "eid-sale" }));
+    expect(api.create.mock.calls[0]?.[0]?.body).toEqual(expect.objectContaining({ status: "published", name: "Eid sale" }));
   });
 
   it("explains each status and warns only when an active category has no active products", async () => {

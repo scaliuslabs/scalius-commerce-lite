@@ -110,7 +110,24 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         const automatic = await quote(db, null);
         expect(automatic.applied?.discounts).toEqual([expect.objectContaining({ method: "automatic", totalDiscountMinor: 64_000 })]);
         expect(automatic.snapshot?.cart.submittedCodes).toEqual([]);
-        await expect(quote(db, "TEN")).rejects.toThrow("Your cart already gets an equal or better discount.");
+        await expect(quote(db, "TEN")).rejects.toThrow("Everything 20% gives an equal or bigger discount, so Everything 20% is applied.");
+        expect((await preview(db, ["TEN"])).discounts).toEqual([expect.not.objectContaining({ replaces: expect.anything() })]);
+    });
+
+    it("says which discount applies when a code replaces an automatic one", async () => {
+        const db = openStore(provider);
+        await live(db, { name: "Eid 5%", effects: [orderOff(500)] });
+        await live(db, { name: "Save 10", codes: [{ code: "SAVE10" }], effects: [orderOff(1_000)] });
+        await live(db, { name: "Tee 50", codes: [{ code: "TEE50" }], effects: [percentOff(5_000, { productIds: ["prod_tee"] })] });
+
+        // The code saves more than the automatic offer and they can't be combined: the code applies and says so.
+        expect((await quote(db, "SAVE10")).discounts).toEqual([
+            expect.objectContaining({ code: "SAVE10", replaces: "Eid 5%" }),
+        ]);
+        // A code of another kind that also can't be combined, and saves more, replaces it too.
+        expect((await quote(db, "TEE50")).discounts).toEqual([
+            expect.objectContaining({ code: "TEE50", replaces: "Eid 5%" }),
+        ]);
     });
 
     it("stacks when one side allows it and keeps two exclusive discounts apart", async () => {
@@ -305,6 +322,17 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
             expect.objectContaining({ code: "SHIP", reason: "needs_delivery", message: "Choose your delivery address to use SHIP." }),
         ]);
         expect((await preview(db, ["SHIP"])).discounts).toEqual([expect.objectContaining({ code: "SHIP", shippingAmountMinor: 6_000 })]);
+    });
+
+    it("says only one delivery discount can be used when a second waits for the address too", async () => {
+        const db = openStore(provider);
+        await live(db, { name: "Free delivery", codes: [{ code: "SHIP" }], effects: [freeShipping] });
+        await live(db, { name: "Free delivery two", codes: [{ code: "SHIP2" }], effects: [freeShipping] });
+        const noAddress = await preview(db, ["SHIP", "SHIP2"], { shippingKnown: false, cart: { ...cart, shippingAmountMinor: 0 } });
+        expect(noAddress.rejectedCodes).toEqual([
+            expect.objectContaining({ code: "SHIP", reason: "needs_delivery" }),
+            expect.objectContaining({ code: "SHIP2", reason: "delivery_discount_applied", conflictsWith: "SHIP" }),
+        ]);
     });
 
     it("says a second delivery code can't help once delivery is free, before any minimum it still needs", async () => {

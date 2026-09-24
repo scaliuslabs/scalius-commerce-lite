@@ -49,9 +49,23 @@ import {
 import {
   fetchAuthoritativeTaxQuote,
   TaxQuoteCartChangedError,
+  TaxQuoteDeliveryLocationError,
   TaxQuoteDeliveryRateError,
 } from "../checkout/tax-quote-client";
-import { isDeliveryRateUnavailable } from "../checkout/tax-quote-error-contract";
+import {
+  isDeliveryRateUnavailable,
+  unavailableDeliveryLocation,
+  type DeliveryLocationLevel,
+} from "../checkout/tax-quote-error-contract";
+
+/**
+ * The merchant removed the city, thana or area the buyer chose: the checkout
+ * page clears that choice and asks again at the field (one message, never the
+ * connection copy).
+ */
+function rejectDeliveryLocation(field: DeliveryLocationLevel): void {
+  window.dispatchEvent(new CustomEvent("delivery-location-unavailable", { detail: { field } }));
+}
 import type { ShippingMethodDetail } from "../checkout/shipping-methods";
 import type {
   CheckoutDiscountFacts,
@@ -798,10 +812,13 @@ export async function validateCartSnapshot(): Promise<boolean> {
     if (deliveryRateRefused) {
       window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
     }
+    const locationGone = !response.ok && issues.length === 0 ? unavailableDeliveryLocation(json) : null;
+    if (locationGone) rejectDeliveryLocation(locationGone);
     if (!response.ok || !json?.success) {
       // A refusal with a reason (4xx) is said as is; an outage gets the store's own wording.
+      // A refused rate or a removed thana is said at its own field instead.
       cartValidationGlobalError =
-        issues.length > 0 || deliveryRateRefused
+        issues.length > 0 || deliveryRateRefused || locationGone
           ? ""
           : (response.status < 500 ? json?.error || json?.details?.message : "") ||
             activeCheckoutCopy().cartAvailabilityFailedText;
@@ -946,9 +963,11 @@ export async function updateTotals() {
     // re-reads the address's rates; only a real outage asks for a retry.
     const cartChanged = error instanceof TaxQuoteCartChangedError;
     const rateRefused = error instanceof TaxQuoteDeliveryRateError;
+    const locationGone = error instanceof TaxQuoteDeliveryLocationError;
     if (cartChanged) scheduleCartValidation();
     if (rateRefused) window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
-    await renderEstimate(cartChanged || rateRefused ? "" : activeCheckoutCopy().taxVerificationFailedText);
+    if (locationGone) rejectDeliveryLocation(error.field);
+    await renderEstimate(cartChanged || rateRefused || locationGone ? "" : activeCheckoutCopy().taxVerificationFailedText);
     updateCheckoutButtonState();
   }
 }

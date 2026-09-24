@@ -34,7 +34,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
@@ -213,17 +213,17 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     date: (epoch) => formatDateTime(new Date(epoch * 1_000), { dateStyle: "medium", timeStyle: "short" }),
     scope: (picked: Scope) => scopeLabel(picked, items),
   };
-  const summary = summarizeDraft(draft, currencyCode, format);
-  const prices = draft.appliesTo.ids.map((id) => appliesItems.get(id)?.price);
+  const { data: allDiscounts = [] } = useQuery(discountsQueryOptions());
+  const preview = combinationPreview(draft, allDiscounts, discount?.id);
+  const summary = summarizeDraft(draft, currencyCode, format, preview.filter((item) => item.stacks).length);
+  // Each product's highest price buyers pay: an amount above all of them makes every item free.
+  const prices = draft.appliesTo.ids.map((id) => appliesItems.get(id)?.priceRange?.to);
   const aboveEveryPrice = exceedsEveryPrice(
     draft,
     prices.every((price) => price !== undefined) ? (prices as number[]) : null,
     currencyCode,
   );
   const heading = draft.method === "code" ? draft.code.trim().toUpperCase() : draft.title.trim();
-  const { data: allDiscounts = [] } = useQuery(discountsQueryOptions());
-  const preview = combinationPreview(draft, allDiscounts, discount?.id);
-
   function update(patch: Partial<DiscountDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
   }
@@ -434,13 +434,14 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
                     warning={aboveEveryPrice ? t("warnAboveEveryPrice") : undefined}
                   >
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Select value={draft.valueKind} onValueChange={(valueKind) => update({ valueKind: valueKind as DiscountDraft["valueKind"] })}>
-                        <SelectTrigger aria-label={t("valueCard")}><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="percentage">{t("percentage")}</SelectItem>
-                          <SelectItem value="fixed">{t("fixedAmount")}</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <NativeSelect
+                        value={draft.valueKind}
+                        onValueChange={(valueKind) => update({ valueKind: valueKind as DiscountDraft["valueKind"] })}
+                        aria-label={t("valueCard")}
+                      >
+                        <option value="percentage">{t("percentage")}</option>
+                        <option value="fixed">{t("fixedAmount")}</option>
+                      </NativeSelect>
                       <NumberInput id="discount-value" value={draft.value} error={shown("value")} onValue={(value) => update({ value })} />
                     </div>
                   </Field>

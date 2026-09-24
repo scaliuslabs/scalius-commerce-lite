@@ -5,14 +5,28 @@ import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
 import { formatMoney } from "@/lib/currency";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { productCardImageSizes } from "@/lib/product-card-layout";
+import {
+  productCardImageLoading,
+  productCardImageSizes,
+  productGridFirstRow,
+  type ProductGridContext,
+} from "@/lib/product-card-layout";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { buildStorefrontThemeTokens } from "@scalius/shared/storefront-theme";
 
 interface Props {
   product: Product & { secondaryImageUrl?: string | null };
   currencySymbol?: string;
   currencyCode?: string;
-  priority?: boolean;
+  /** Position in its list; with `aboveFold`, the first row loads eagerly. */
+  index?: number;
+  /** The list starts in the first viewport (its first photo is a likely LCP). */
+  aboveFold?: boolean;
+  /**
+   * Where the card sits, for image `sizes`: a page-wide grid, the catalog
+   * grid beside the filter sidebar, or a horizontal collection rail.
+   */
+  context?: ProductGridContext;
   headingLevel?: "h2" | "h3";
 }
 
@@ -20,30 +34,35 @@ const {
   product,
   currencySymbol = DEFAULT_CURRENCY.symbol,
   currencyCode = DEFAULT_CURRENCY.code,
-  priority = false,
+  index,
+  aboveFold = false,
+  context = "grid",
   headingLevel = "h3",
 } = Astro.props;
 const TitleTag = headingLevel;
 const money = (price: number) =>
   formatMoney(price, { symbol: currencySymbol, code: currencyCode });
 
-// Card options come from the theme (Online store → Theme → Product cards).
-const { layout } = await currentRequestTheme(Astro.locals);
+// The card style (Online store -> Theme -> Layout) sets photo ratio, hover
+// photo, buy-now and badge placement; density and the container width set
+// the fluid grid the image `sizes` follow.
+const { theme, layout } = await currentRequestTheme(Astro.locals);
 const card = layout.productCard;
+const containerWidth = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
+const imageLoading = productCardImageLoading(
+  productGridFirstRow(layout.grid, containerWidth),
+  { index, aboveFold },
+);
 
 const hasDiscount = product.discountedPrice < product.price;
 const pricePrefix = product.priceVaries ? "From " : "";
-const discountBadge = formatDiscountBadge(
-  product.discountType,
-  product.discountPercentage,
-  product.discountAmount,
-);
+const discountBadge = formatDiscountBadge(product.price, product.discountedPrice);
 const soldOut = product.availableForSale === false;
 const productHref = `/products/${product.slug}`;
 
 const productImageUrl = getProductImageUrl(product.imageUrl, 480);
 const productImageSrcSet = getProductImageSrcSet(product.imageUrl);
-const imageSizes = productCardImageSizes(layout.grid);
+const imageSizes = productCardImageSizes(layout.grid, containerWidth, context);
 // A second photo on hover: pointer devices only (CSS), loaded lazily.
 const hoverImage = card.hoverImage && product.secondaryImageUrl
   ? {
@@ -63,9 +82,11 @@ const portrait = card.imageRatio === "portrait";
     optional "Buy now" sits above that link as its own control. */}
 <div
   data-theme-component="product-card"
+  data-card-ratio={card.imageRatio}
+  data-card-badge={card.badge}
   class="group relative flex flex-col h-full bg-card rounded-2xl overflow-hidden transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-border/50 hover:border-transparent"
 >
-  <div class:list={["relative overflow-hidden bg-muted", portrait ? "aspect-[4/5]" : "aspect-square"]}>
+  <div class:list={["product-card-media relative overflow-hidden bg-muted", portrait ? "aspect-[4/5]" : "aspect-square"]}>
     <img
       src={productImageUrl}
       srcset={productImageSrcSet}
@@ -73,9 +94,9 @@ const portrait = card.imageRatio === "portrait";
       alt={product.imageAlt || product.name}
       width={400}
       height={portrait ? 500 : 400}
-      loading={priority ? "eager" : "lazy"}
-      fetchpriority={priority ? "high" : "auto"}
-      decoding={priority ? "sync" : "async"}
+      loading={imageLoading.loading}
+      fetchpriority={imageLoading.fetchpriority}
+      decoding={imageLoading.decoding}
       class="w-full h-full object-cover object-center transition-transform duration-700 ease-out group-hover:scale-105"
     />
     {
@@ -119,7 +140,7 @@ const portrait = card.imageRatio === "portrait";
     >
       <a
         href={productHref}
-        class="after:absolute after:inset-0 after:content-['']"
+        class="product-card-link after:absolute after:inset-0 after:content-['']"
       >
         {product.name}
       </a>
@@ -149,16 +170,36 @@ const portrait = card.imageRatio === "portrait";
           data-astro-prefetch="false"
           rel="nofollow"
           class="relative z-10 mt-3 inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-          aria-label={`Buy ${product.name} now`}
         >
-          Buy now
+          {/* The name starts with the visible words (WCAG 2.5.3). */}
+          Buy now<span class="sr-only">: {product.name}</span>
         </a>
+      )
+    }
+    {
+      /* Cards that can't be bought in one tap keep the button's space, so
+         prices line up across a row of the quick card style (R3-CAT-11). */
+      card.quickBuy && !quickBuyHref && (
+        <span class="mt-3 block min-h-11" aria-hidden="true" data-quick-buy-spacer></span>
       )
     }
   </div>
 </div>
 
 <style>
+  /*
+   * The title link stretches over the card but sits inside the clamped title
+   * (overflow hidden), so its own outline would be clipped to an underline.
+   * Draw the focus ring on the card instead, inset so no scroller clips it.
+   */
+  .product-card-link:focus-visible {
+    outline: none;
+  }
+  [data-theme-component="product-card"]:has(.product-card-link:focus-visible) {
+    outline: 3px solid var(--ring);
+    outline-offset: -3px;
+  }
+
   /* The hover photo exists only where hover exists. */
   @media (hover: hover) and (pointer: fine) {
     .product-card-hover-image {

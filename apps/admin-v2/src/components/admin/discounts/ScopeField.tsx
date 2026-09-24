@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { NativeSelect } from "~/components/ui/native-select";
 import { useCurrency } from "~/hooks/use-currency";
 import { useDebounce } from "~/hooks/use-debounce";
 import { formatNumber, useMessages } from "~/i18n";
@@ -27,13 +27,14 @@ import {
   collectionsByIdsQueryOptions,
 } from "~/lib/api-query-options/collections";
 import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
+import { priceRangeText, type BuyerPriceRange } from "~/lib/format-utils";
 
 const LIMIT = 90;
 
 interface Option {
   id: string;
   name: string;
-  price?: number;
+  priceRange?: BuyerPriceRange | null;
   primaryImage?: string | null;
   isActive?: boolean;
 }
@@ -54,7 +55,7 @@ function useOptions(kind: ScopeKind, search: string, enabled: boolean) {
   return { query, options };
 }
 
-/** The picked products or collections, by id (name, and price for products). */
+/** The picked products or collections, by id (name, and price range for products). */
 export function useScopeItems(scope: Scope): Map<string, Option> {
   const { kind, ids } = scope;
   const products = useQuery({ ...productsByIdsQueryOptions(ids), enabled: kind === "products" && ids.length > 0 });
@@ -128,19 +129,15 @@ export function ScopeField({
 
   return (
     <div className="space-y-3">
-      <Select
+      <NativeSelect
         value={scope.kind}
         disabled={disabled}
         onValueChange={(kind) => onChange({ kind: kind as ScopeKind, ids: [] })}
+        aria-label={t("appliesTo")}
       >
-        <SelectTrigger aria-label={t("appliesTo")}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="collections">{t("specificCollections")}</SelectItem>
-          <SelectItem value="products">{t("specificProducts")}</SelectItem>
-        </SelectContent>
-      </Select>
+        <option value="collections">{t("specificCollections")}</option>
+        <option value="products">{t("specificProducts")}</option>
+      </NativeSelect>
       <div className="flex gap-2">
         <div className="flex-1">
           <Input
@@ -218,7 +215,7 @@ export function ScopeField({
                       ) : null}
                       <span className="min-w-0 flex-1 truncate">{option.name}</span>
                       {option.isActive === false ? <Badge variant="attention">{t("statusDraft")}</Badge> : null}
-                      {option.price !== undefined ? <span className="shrink-0 tabular-nums text-muted-foreground">{fmt(option.price)}</span> : null}
+                      {option.priceRange !== undefined ? <span className="shrink-0 tabular-nums text-muted-foreground">{priceRangeText(option.priceRange, fmt) ?? t("noPrice")}</span> : null}
                     </label>
                   </li>
                 ))}

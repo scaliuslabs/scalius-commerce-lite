@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 76,
-  name: "0076_guest_record_links",
+  version: 80,
+  name: "0080_whole_taka_amounts",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -158,8 +158,28 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "0fa004dc4ff1f70f010f91526b9a9f571ad2b8af382277503613fc445d933597",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 76,
+    name: "0076_guest_record_links",
     sourceSha256: "728ad7d908c014099cbc7bc8a70441867568585ddc9e9ba2dae46776106bbbe6",
+  },
+  {
+    version: 77,
+    name: "0077_optioned_product_price",
+    sourceSha256: "4e6fe06299dfaa5c0c4980454b308b76e158202a73327b375a31c1fdc83a33d0",
+  },
+  {
+    version: 78,
+    name: "0078_theme_document_v2",
+    sourceSha256: "f9097a979abd80378e94d9afec34363da94b31584f55bd71af717f2bdaafae1a",
+  },
+  {
+    version: 79,
+    name: "0079_guest_record_origin",
+    sourceSha256: "95b284f716293447b94c3474bf53e21d0262ed589ed91ed1087084bcbb7f1c2b",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "a88163d1389ab6e37e1812c5d11a35bfdb01e692be58fbdf2c328bc6c5ee631c",
   },
 ] as const;
 

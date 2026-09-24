@@ -35,6 +35,8 @@ interface FormContainerProps<
   unsavedLabel?: string;
   /** Success toast, e.g. "Category saved". */
   savedMessage?: string;
+  /** Replaces the permission notice when the record is read-only for another reason (e.g. it's in Trash). */
+  readOnlyNotice?: React.ReactNode;
 }
 
 function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends FieldValues>({
@@ -44,6 +46,7 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   save,
   className,
   header,
+  readOnlyNotice,
   children,
 }: {
   form: UseFormReturn<TFieldValues, unknown, TTransformedValues>;
@@ -52,6 +55,7 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   save: (values: TTransformedValues) => Promise<unknown>;
   className: string;
   header: React.ReactNode;
+  readOnlyNotice?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const t = useMessages(saveBarMessages);
@@ -72,7 +76,7 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
       {/* A flex gap, so the banner's hidden placeholder adds no space. */}
       <div className="flex flex-col gap-4">
         <SaveErrorBanner />
-        {canSave ? null : <ReadOnlyNotice />}
+        {canSave ? null : readOnlyNotice ?? <ReadOnlyNotice />}
         {/* Without the save permission the record opens read-only. */}
         <fieldset disabled={!canSave} className="min-w-0">
           {children}
@@ -110,6 +114,7 @@ export function FormContainer<
   formClassName = "pb-6",
   unsavedLabel,
   savedMessage,
+  readOnlyNotice,
 }: FormContainerProps<TFieldValues, TTransformedValues>) {
   return (
     <ErrorBoundary>
@@ -122,6 +127,7 @@ export function FormContainer<
             save={onSave}
             className={formClassName}
             header={<PageHeader backTo={backUrl} badge={badge} title={heading} />}
+            readOnlyNotice={readOnlyNotice}
           >
             {children}
           </EditorForm>

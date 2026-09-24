@@ -1,7 +1,8 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { RouteConfig, RouteHandler } from "@hono/zod-openapi";
 import { deliveryLocations } from "@scalius/database/schema";
-import { eq, and, isNull, like, sql } from "drizzle-orm";
+import { eq, and, asc, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import {
     countLocationDescendants,
     createLocation,
@@ -167,6 +168,8 @@ const deliveryLocationSchema = z.object({
     isActive: z.boolean(),
     sortOrder: z.number(),
     displayName: z.string().optional(),
+    /** Names of the parents, nearest first: a thana's city; an area's thana then city. */
+    parentPath: z.array(z.string()).optional(),
     /** Live places under a city or thana: what deleting it deletes too. */
     descendants: z.object({ zones: z.number().int(), areas: z.number().int() }).optional(),
 }).passthrough();
@@ -181,7 +184,9 @@ const listRoute = createRoute({
         query: z.object({
             type: z.enum(["city", "zone", "area"]).optional().openapi({ description: "Location type filter" }),
             parentId: z.string().trim().min(1).max(128).optional().openapi({ description: "Parent ID filter" }),
-            search: z.string().trim().max(120).optional().openapi({ description: "Search term" }),
+            id: z.string().trim().min(1).max(128).optional().openapi({ description: "One location by ID (to label a saved choice)" }),
+            isActive: z.enum(["true", "false"]).optional().openapi({ description: "Only active (true) or inactive (false) locations" }),
+            search: z.string().trim().max(120).optional().openapi({ description: "Search term: part of the name, any script; names starting with it come first" }),
             page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number" }),
             limit: z.coerce.number().int().min(1).max(500).default(100).openapi({ description: "Items per page" })
         })
@@ -207,17 +212,38 @@ app.openapi(listRoute, async (c) => {
 
         if (type) conditions.push(eq(deliveryLocations.type, type));
         if (parentId) conditions.push(eq(deliveryLocations.parentId, parentId));
-        if (search && search.trim() !== "") {
-            conditions.push(like(deliveryLocations.name, `%${search.trim()}%`));
+        if (query.id) conditions.push(eq(deliveryLocations.id, query.id));
+        if (query.isActive) conditions.push(eq(deliveryLocations.isActive, query.isActive === "true"));
+        const term = search?.trim().toLocaleLowerCase() ?? "";
+        const escaped = term.replace(/[\\%_]/g, (character) => `\\${character}`);
+        if (term) {
+            // lower() folds ASCII case; Bangla has no case, so it matches as typed.
+            conditions.push(sql`lower(${deliveryLocations.name}) LIKE ${`%${escaped}%`} ESCAPE '\\'`);
         }
 
-        const locations = await db
-            .select()
+        const parent = alias(deliveryLocations, "parent_location");
+        const grandparent = alias(deliveryLocations, "grandparent_location");
+        const rows = await db
+            .select({ location: deliveryLocations, parentName: parent.name, grandparentName: grandparent.name })
             .from(deliveryLocations)
+            .leftJoin(parent, eq(parent.id, deliveryLocations.parentId))
+            .leftJoin(grandparent, eq(grandparent.id, parent.parentId))
             .where(and(...conditions))
-            .orderBy(deliveryLocations.sortOrder)
+            .orderBy(
+                ...(term
+                    ? [sql`CASE WHEN lower(${deliveryLocations.name}) LIKE ${`${escaped}%`} ESCAPE '\\' THEN 0 ELSE 1 END`]
+                    : []),
+                asc(deliveryLocations.sortOrder),
+                asc(deliveryLocations.name),
+                asc(deliveryLocations.id),
+            )
             .limit(limit)
             .offset(offset);
+        const locations = rows.map((row) => row.location);
+        const pathOf = new Map(rows.map((row) => [
+            row.location.id,
+            [row.parentName, row.grandparentName].filter((name): name is string => Boolean(name)),
+        ]));
 
         const countResult = await db
             .select({ count: sql<number>`count(*)` })
@@ -238,6 +264,7 @@ app.openapi(listRoute, async (c) => {
                 externalIds,
                 metadata,
                 displayName: `${location.name}`,
+                parentPath: pathOf.get(location.id) ?? [],
                 ...(location.type === "area"
                     ? {}
                     : { descendants: descendants.get(location.id) ?? { zones: 0, areas: 0 } }),

@@ -75,6 +75,20 @@ describe("resource form addresses", () => {
     });
   });
 
+  it("lets a new item leave its address to the server, but not a saved one", () => {
+    expect(categoryFormSchema.safeParse({ ...category, slug: "" }).success).toBe(true);
+    expect(pageFormSchema.safeParse({ ...page, title: "Cart", slug: "" }).success).toBe(true);
+    expect(errorsOf(categoryFormSchema.safeParse({ ...category, id: "cat_1", slug: "" }))).toEqual({
+      slug: "Use 3 to 100 characters for the web address.",
+    });
+    expect(errorsOf(pageFormSchema.safeParse({ ...page, id: "page_1", slug: "" }))).toEqual({
+      slug: "Use 3 to 100 characters for the web address.",
+    });
+    expect(errorsOf(categoryFormSchema.safeParse({ ...category, slug: "ab" }))).toEqual({
+      slug: "Use 3 to 100 characters for the web address.",
+    });
+  });
+
   it("explains a malformed address in the merchant's language", () => {
     expect(errorsOf(categoryFormSchema.safeParse({ ...category, slug: "Eid Panjabi" }))).toEqual({
       slug: "Use lowercase letters, numbers and dashes, e.g. summer-sale.",

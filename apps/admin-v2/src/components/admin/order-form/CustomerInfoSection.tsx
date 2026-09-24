@@ -1,5 +1,5 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWatch } from "react-hook-form";
 import { ADMIN_PERMISSIONS } from "@/lib/admin-permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,132 +13,19 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Button } from "@/components/ui/button";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "@scalius/shared/utils";
 import { useOrderForm } from "./OrderFormContext";
-import type { DeliveryLocation } from "./types";
+import { LocationPicker } from "@/components/admin/location/LocationPicker";
+import { deliveryLocationByIdQueryOptions } from "@/lib/api-query-options/delivery";
 import { AdminPhoneInput } from "@/components/admin/shared/AdminPhoneInput";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { customersQueryOptions } from "@/lib/api-query-options/customers";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
-import { customerFill, customerLookupTerm, findCustomerByPhone } from "./customer-lookup";
+import { customerFill, customerLookupTerm, findCustomerByPhone, isGuestRecord } from "./customer-lookup";
 
-const SELECT_KEY = { city: "selectCity", zone: "selectZone", area: "selectArea" } as const;
-
-/** One searchable city / zone / area picker. */
-function LocationPicker({
-  name,
-  options,
-  disabled,
-  loading,
-  buttonRef,
-  onPick,
-}: {
-  name: keyof typeof SELECT_KEY;
-  options: DeliveryLocation[];
-  disabled?: boolean;
-  loading?: boolean;
-  buttonRef: React.RefObject<HTMLButtonElement | null>;
-  onPick: (location: DeliveryLocation) => void;
-}) {
-  const { form } = useOrderForm();
-  const t = useMessages(orderFormMessages);
-  const [open, setOpen] = React.useState(false);
-  const selectKey = SELECT_KEY[name];
-
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => {
-        const selected = options.find((option) => option.id === field.value);
-        return (
-          <FormItem className="flex flex-col">
-            <FormLabel>{t(name)}</FormLabel>
-            <Popover open={open} onOpenChange={setOpen}>
-              <PopoverTrigger asChild>
-                <FormControl>
-                  <Button
-                    ref={(el) => {
-                      field.ref(el);
-                      buttonRef.current = el;
-                    }}
-                    type="button"
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    disabled={disabled || loading}
-                    className="w-full justify-between"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === "ArrowDown") {
-                        e.preventDefault();
-                        setOpen(true);
-                      }
-                    }}
-                  >
-                    <span className={cn("truncate", !selected && "text-muted-foreground")}>
-                      {loading ? t("loading") : selected?.name ?? t(selectKey)}
-                    </span>
-                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </FormControl>
-              </PopoverTrigger>
-              <PopoverContent align="start">
-                <Command>
-                  <CommandInput
-                    placeholder={t(selectKey)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        setOpen(false);
-                        buttonRef.current?.focus();
-                      }
-                    }}
-                  />
-                  <CommandList>
-                    <CommandEmpty>{name === "area" && options.length === 0 ? t("noAreas") : t("noMatch")}</CommandEmpty>
-                    <CommandGroup>
-                      {options.map((option) => (
-                        <CommandItem
-                          key={option.id}
-                          value={option.name}
-                          onSelect={() => {
-                            onPick(option);
-                            setOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "h-4 w-4",
-                              option.id === field.value ? "opacity-100" : "opacity-0",
-                            )}
-                          />
-                          {option.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-            <FormMessage />
-          </FormItem>
-        );
-      }}
-    />
-  );
-}
+/** Element ids of the address pickers (focus on a validation error). */
+export const ORDER_LOCATION_IDS = { city: "order-city", zone: "order-zone", area: "order-area" } as const;
 
 /**
  * New orders only: once the phone is a complete number, finds the saved
@@ -146,7 +33,8 @@ function LocationPicker({
  * (name, email, last address). The phone goes to the API, never the URL.
  */
 function useReturningCustomer() {
-  const { form, isEdit, locations, loadZones, loadAreas } = useOrderForm();
+  const { form, isEdit } = useOrderForm();
+  const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const phone = useWatch({ control: form.control, name: "customerPhone" });
   const term = useDebounce(customerLookupTerm(phone ?? ""), 400);
@@ -162,40 +50,57 @@ function useReturningCustomer() {
   const [filledFor, setFilledFor] = React.useState<{ phone: string; filled: boolean } | null>(null);
 
   React.useEffect(() => {
-    if (!customer || filledFor?.phone === customer.phone || locations.cities.length === 0) return;
-    const values = form.getValues();
-    const fill = customerFill(customer, {
-      customerName: values.customerName ?? "",
-      customerEmail: values.customerEmail ?? null,
-      shippingAddress: values.shippingAddress ?? "",
-      city: values.city ?? "",
-      zone: values.zone ?? "",
-      area: values.area ?? null,
-    }, new Set(locations.cities.map((city) => city.id)));
-    const set = { shouldDirty: true, shouldValidate: true };
-    if (fill.customerName !== undefined) form.setValue("customerName", fill.customerName, set);
-    if (fill.customerEmail !== undefined) form.setValue("customerEmail", fill.customerEmail, set);
-    if (fill.shippingAddress !== undefined) form.setValue("shippingAddress", fill.shippingAddress, set);
-    if (fill.city !== undefined) form.setValue("city", fill.city, set);
-    if (fill.zone !== undefined) form.setValue("zone", fill.zone, set);
-    if (fill.area !== undefined) form.setValue("area", fill.area, set);
-    if (fill.city) void loadZones(fill.city);
-    if (fill.zone) void loadAreas(fill.zone);
-    setFilledFor({ phone: customer.phone, filled: Object.keys(fill).length > 0 });
-  }, [customer, filledFor, form, loadAreas, loadZones, locations.cities]);
+    if (!customer || filledFor?.phone === customer.phone) return;
+    let cancelled = false;
+    void (async () => {
+      // The saved address is used only while its city is still an active delivery city.
+      const city = customer.city
+        ? await queryClient.fetchQuery(deliveryLocationByIdQueryOptions(customer.city)).catch(() => null)
+        : null;
+      if (cancelled) return;
+      const values = form.getValues();
+      const fill = customerFill(customer, {
+        customerName: values.customerName ?? "",
+        customerEmail: values.customerEmail ?? null,
+        shippingAddress: values.shippingAddress ?? "",
+        city: values.city ?? "",
+        zone: values.zone ?? "",
+        area: values.area ?? null,
+      }, new Set(city?.type === "city" && city.isActive ? [city.id] : []));
+      const set = { shouldDirty: true, shouldValidate: true };
+      if (fill.customerName !== undefined) form.setValue("customerName", fill.customerName, set);
+      if (fill.customerEmail !== undefined) form.setValue("customerEmail", fill.customerEmail, set);
+      if (fill.shippingAddress !== undefined) form.setValue("shippingAddress", fill.shippingAddress, set);
+      if (fill.city !== undefined) {
+        form.setValue("city", fill.city, set);
+        form.setValue("cityName", city?.name ?? "");
+        form.setValue("zoneName", "");
+        form.setValue("areaName", null);
+      }
+      if (fill.zone !== undefined) form.setValue("zone", fill.zone, set);
+      if (fill.area !== undefined) form.setValue("area", fill.area, set);
+      setFilledFor({ phone: customer.phone, filled: Object.keys(fill).length > 0 });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [customer, filledFor, form, queryClient]);
 
   return customer ? { customer, filled: filledFor?.phone === customer.phone && filledFor.filled } : null;
 }
 
 /** Side column: Customer, Delivery address and Notes cards. */
 export function CustomerInfoSection() {
-  const { form, locations, isLoading, loadZones, loadAreas, refs, handleKeyDown } =
-    useOrderForm();
+  const { form, refs, handleKeyDown } = useOrderForm();
   const t = useMessages(orderFormMessages);
-  const [city, zone] = form.watch(["city", "zone"]);
+  const [city, zone, area, cityName, zoneName, areaName] = useWatch({
+    control: form.control,
+    name: ["city", "zone", "area", "cityName", "zoneName", "areaName"],
+  });
   const returning = useReturningCustomer();
+  const errors = form.formState.errors;
   // A picked location is an edit: mark it dirty so Save turns on.
-  const pick = { shouldDirty: true, shouldValidate: true };
+  const pick = { shouldDirty: true, shouldValidate: form.formState.isSubmitted };
 
   return (
     <>
@@ -245,12 +150,19 @@ export function CustomerInfoSection() {
                 </FormControl>
                 <FormDescription>
                   {returning
-                    ? [
-                        returning.customer.totalOrders === 1
-                          ? t("returningCustomerOne")
-                          : t("returningCustomer", { count: returning.customer.totalOrders }),
-                        returning.filled ? t("filledFromCustomer") : null,
-                      ].filter(Boolean).join(" ")
+                    ? isGuestRecord(returning.customer)
+                      ? [
+                          returning.customer.totalOrders === 1
+                            ? t("phoneOrdersOne")
+                            : t("phoneOrders", { count: returning.customer.totalOrders }),
+                          returning.filled ? t("nameFromLatestOrder") : null,
+                        ].filter(Boolean).join(" ")
+                      : [
+                          returning.customer.totalOrders === 1
+                            ? t("returningCustomerOne")
+                            : t("returningCustomer", { count: returning.customer.totalOrders }),
+                          returning.filled ? t("filledFromCustomer") : null,
+                        ].filter(Boolean).join(" ")
                     : t("phoneHelp")}
                 </FormDescription>
                 <FormMessage />
@@ -310,39 +222,22 @@ export function CustomerInfoSection() {
             )}
           />
           <LocationPicker
-            name="city"
-            options={locations.cities}
-            buttonRef={refs.cityButtonRef}
-            onPick={(location) => {
-              form.setValue("city", location.id, pick);
-              form.setValue("zone", "", { shouldDirty: true });
-              form.setValue("area", null, { shouldDirty: true });
-              void loadZones(location.id);
-              refs.zoneButtonRef.current?.focus();
+            ids={ORDER_LOCATION_IDS}
+            required={{ city: true, zone: true }}
+            refs={{ city: refs.cityButtonRef, zone: refs.zoneButtonRef, area: refs.areaButtonRef }}
+            value={{
+              city: city ? { id: city, name: cityName } : null,
+              zone: zone ? { id: zone, name: zoneName } : null,
+              area: area ? { id: area, name: areaName } : null,
             }}
-          />
-          <LocationPicker
-            name="zone"
-            options={locations.zones}
-            disabled={!city}
-            loading={isLoading.zones}
-            buttonRef={refs.zoneButtonRef}
-            onPick={(location) => {
-              form.setValue("zone", location.id, pick);
-              form.setValue("area", null, { shouldDirty: true });
-              void loadAreas(location.id);
-              refs.areaButtonRef.current?.focus();
-            }}
-          />
-          <LocationPicker
-            name="area"
-            options={locations.areas}
-            disabled={!zone}
-            loading={isLoading.areas}
-            buttonRef={refs.areaButtonRef}
-            onPick={(location) => {
-              form.setValue("area", location.id, pick);
-              refs.notesRef.current?.focus();
+            errors={{ city: errors.city?.message, zone: errors.zone?.message, area: errors.area?.message }}
+            onChange={(next) => {
+              form.setValue("city", next.city?.id ?? "", pick);
+              form.setValue("zone", next.zone?.id ?? "", pick);
+              form.setValue("area", next.area?.id ?? null, pick);
+              form.setValue("cityName", next.city?.name ?? "");
+              form.setValue("zoneName", next.zone?.name ?? "");
+              form.setValue("areaName", next.area?.name ?? null);
             }}
           />
         </CardContent>

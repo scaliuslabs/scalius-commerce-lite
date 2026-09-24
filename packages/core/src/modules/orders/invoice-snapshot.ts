@@ -100,6 +100,11 @@ export interface InvoiceDocument {
   contentHash: string | null;
   renderVersion: typeof INVOICE_RENDER_VERSION;
   orderVersion: number;
+  /**
+   * Refunds made after this invoice was issued (major units). The issued
+   * invoice itself never changes; this is printed under it as a credit.
+   */
+  refundedSinceIssue?: number;
 }
 
 export function formatInvoiceNumber(prefix: string, number: number): string {

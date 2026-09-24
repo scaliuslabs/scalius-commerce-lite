@@ -21,6 +21,7 @@ export const formMessages = defineMessages({
     emailInvalid: "Enter an email address like name@example.com.",
     phoneCountriesLoading: "Loading phone countries…",
     phoneCountriesRetry: "Couldn't load phone countries. Retry",
+    wholeTaka: "Taka amounts are whole numbers.",
   },
   bn: {
     nameLength: "৩ থেকে ১০০ অক্ষর লিখুন।",
@@ -41,5 +42,6 @@ export const formMessages = defineMessages({
     emailInvalid: "name@example.com এর মতো একটি ইমেইল ঠিকানা দিন।",
     phoneCountriesLoading: "ফোনের দেশগুলো লোড হচ্ছে…",
     phoneCountriesRetry: "ফোনের দেশগুলো লোড হয়নি। আবার চেষ্টা করুন",
+    wholeTaka: "টাকার পরিমাণ পূর্ণ সংখ্যায় দিন, পয়সা নয়।",
   },
 });
