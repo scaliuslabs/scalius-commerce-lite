@@ -250,7 +250,7 @@ describe("initCartFunctionality", () => {
     delete window.lastShippingEventDetail;
   });
 
-  it("keeps the cart in its loading state until the first availability check settles (no layout shift)", async () => {
+  it("paints the lines and totals before the availability check answers", async () => {
     let answer!: (response: Response) => void;
     vi.stubGlobal("fetch", vi.fn((url: string) =>
       String(url).includes("validate-cart")
@@ -258,27 +258,51 @@ describe("initCartFunctionality", () => {
         : Promise.resolve(new Response(JSON.stringify(VALID_CART), { status: 200, headers: { "Content-Type": "application/json" } }))));
     const root = document.getElementById("cartPageRoot")!;
     const init = initCartFunctionality();
-    await vi.advanceTimersByTimeAsync(100);
-    // Lines are rendered, but nothing is shown until the check answers.
-    expect(root.dataset.cartState).toBe("loading");
-    expect(document.getElementById("cartSummary")!.classList.contains("hidden")).toBe(true);
+    await vi.advanceTimersByTimeAsync(50);
+    // The check is still pending: the buyer already sees their lines and totals.
+    expect(root.dataset.cartState).toBe("items");
+    expect(document.querySelectorAll("#cartItems li")).toHaveLength(1);
+    expect(document.getElementById("cartSummary")!.classList.contains("hidden")).toBe(false);
     answer(new Response(JSON.stringify(VALID_CART), { status: 200, headers: { "Content-Type": "application/json" } }));
     await init;
     expect(root.dataset.cartState).toBe("items");
-    expect(document.getElementById("cartSummary")!.classList.contains("hidden")).toBe(false);
   });
 
-  it("shows the cart after at most 1.5s even when the availability check hangs", async () => {
-    vi.stubGlobal("fetch", vi.fn((url: string) =>
-      String(url).includes("validate-cart")
-        ? new Promise<Response>(() => {})
-        : Promise.resolve(new Response(JSON.stringify(VALID_CART), { status: 200, headers: { "Content-Type": "application/json" } }))));
-    const root = document.getElementById("cartPageRoot")!;
-    void initCartFunctionality();
-    await vi.advanceTimersByTimeAsync(1400);
-    expect(root.dataset.cartState).toBe("loading");
-    await vi.advanceTimersByTimeAsync(200);
-    expect(root.dataset.cartState).toBe("items");
+  it("lands an availability issue in the line's fixed controls slot and the banner below the totals", async () => {
+    const issue: CartValidationIssue = {
+      index: 0,
+      cartKey: CART_LINE_KEY,
+      productId: "prod_1",
+      variantId: "var_1",
+      code: "QUANTITY_UNAVAILABLE",
+      action: "reduce_quantity",
+      message: "Only 1 left.",
+      productName: "Rice",
+      variantLabel: null,
+      requestedQuantity: 3,
+      availableQuantity: 1,
+    };
+    await initCartFunctionality();
+    const line = () => document.querySelector("#cartItems li")!;
+    const controls = line().querySelector(".mt-2")!;
+    // Before: the controls row (stepper and price) holds the slot.
+    expect(controls.className).toContain("min-h-11");
+    expect(line().querySelectorAll("button[aria-label]").length).toBeGreaterThan(1);
+
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      data: { ...VALID_CART.data, valid: false, issues: [issue] },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    await window.validateCartSnapshot?.();
+
+    // After: the issue takes the same slot (same minimum height), with its repair action.
+    const slot = line().querySelector("[data-cart-line-issue]")!;
+    expect(slot).not.toBeNull();
+    expect(slot.className).toContain("mt-2");
+    expect(slot.className).toContain("min-h-11");
+    expect(slot.textContent).toContain("Only 1 left.");
+    expect(slot.innerHTML).toContain("reduceCartIssueItem");
+    expect(line().querySelectorAll(".mt-2")).toHaveLength(1);
   });
 
   it("keeps one checkout id and one abandoned-checkout listener across repeated init", async () => {

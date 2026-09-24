@@ -343,10 +343,9 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     </aside>
 
     <!-- The form comes first in reading and keyboard order; on phones the cart shows above it. -->
-    {/* While the cart loads, the grid holds a screen of space so the page
-        footer stays below the fold and nothing painted moves when the cart
-        appears (CLS). */}
-    <div class="grid gap-4 lg:grid-cols-12 lg:gap-8 group-data-[cart-state=loading]:min-h-[100svh]">
+    {/* The grid holds a screen of space from first paint, so the footer stays
+        below the fold and does not move when the lines render (CLS). */}
+    <div class="grid min-h-[100svh] content-start gap-4 lg:grid-cols-12 lg:gap-8">
       <div id="checkoutPanel" class="hidden order-2 min-w-0 lg:order-1 lg:col-span-7">
         <div id="checkoutSignInPrompt" class="mb-3" data-account-required={checkoutConfig.guestCheckoutEnabled === false ? "true" : "false"}>
           <button
@@ -590,13 +589,6 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             </a>
           </div>
 
-          <div
-            id="cartValidationMessage"
-            class="hidden group-data-[cart-state=loading]:!hidden mx-4 mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
-            role="alert"
-          >
-          </div>
-
           {/* Loading skeleton at a cart line's size; the real lines render
               hidden underneath and appear together with the summary. */}
           <div class="hidden p-4 group-data-[cart-state=loading]:block" data-cart-loading>
@@ -677,6 +669,14 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
             </form>
             <ul id="appliedCodes" class="hidden flex flex-wrap gap-2 pt-1"></ul>
             <ul id="discountOffers" class="hidden space-y-2" role="status"></ul>
+            {/* Cart-level availability answer: below the totals, never above
+                painted lines, so it lands without moving them. */}
+            <div
+              id="cartValidationMessage"
+              class="hidden mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+              role="alert"
+            >
+            </div>
           </div>
         </section>
       </div>
