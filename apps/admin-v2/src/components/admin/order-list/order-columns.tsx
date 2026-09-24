@@ -96,6 +96,7 @@ export function OrderAttentionBadges({ order }: { order: Pick<OrderListItem, "op
   );
 }
 
+/** Amount over its payment badge; the payment method is the badge's hover text, so rows stay two lines. */
 function TotalCell({ order }: { order: OrderListItem }) {
   const { fmt } = useCurrency();
   const t = useMessages(orderMessages);
@@ -103,10 +104,9 @@ function TotalCell({ order }: { order: OrderListItem }) {
     <div className="space-y-1 text-right">
       <p className="font-medium tabular-nums">{fmt(order.totalAmount)}</p>
       {orderBadgeVisibility(order).payment ? (
-        <div className="flex flex-wrap items-center justify-end gap-1">
+        <span title={paymentMethodLabel(t, order.paymentMethod)} className="inline-flex">
           <PaymentBadge order={order} />
-          <span className="text-body text-muted-foreground">{paymentMethodLabel(t, order.paymentMethod)}</span>
-        </div>
+        </span>
       ) : null}
     </div>
   );
@@ -206,7 +206,7 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
   const columns: ColumnDef<OrderListItem, unknown>[] = [
     {
       id: "order",
-      meta: meta("order", { primary: true, minWidth: 140 }),
+      meta: meta("order", { primary: true, minWidth: 110 }),
       header: () => <Title k="order" />,
       cell: ({ row }) => (
         <div className="flex flex-col">
@@ -217,7 +217,7 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     },
     {
       id: "customer",
-      meta: meta("customer", { priority: 90, minWidth: 180 }),
+      meta: meta("customer", { priority: 96, minWidth: 160 }),
       header: () => <Title k="customer" />,
       cell: ({ row }) => (
         <div className="min-w-0">
@@ -231,13 +231,13 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     },
     {
       id: "total",
-      meta: meta("total", { priority: 95, minWidth: 120, numeric: true }),
+      meta: meta("total", { priority: 95, minWidth: 100, numeric: true }),
       header: () => <Title k="total" />,
       cell: ({ row }) => <TotalCell order={row.original} />,
     },
     {
       id: "fulfillment",
-      meta: meta("fulfillment", { priority: 60, minWidth: 150 }),
+      meta: meta("fulfillment", { priority: 60, minWidth: 140 }),
       header: () => <Title k="fulfillment" />,
       cell: ({ row }) => <FulfillmentCell order={row.original} handlers={handlers} />,
     },
@@ -253,7 +253,7 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     },
     {
       id: "status",
-      meta: meta("status", { priority: 80, minWidth: 160 }),
+      meta: meta("status", { priority: 80, minWidth: 140 }),
       header: () => <Title k="status" />,
       cell: ({ row }) => <StatusCell order={row.original} handlers={handlers} />,
     },
