@@ -367,6 +367,7 @@ describe("CollectionForm", () => {
         { id: "prod_tupi", name: "Tupi", priceRange: { from: 250, to: 250, compareAt: null }, categoryId: "cat_curated", categoryName: "Curated Picks", isActive: false, primaryImage: null, variantCount: 0, available: 0 },
       ],
       pagination: { page: 1, limit: 10, total: 2, totalPages: 1 },
+      visibleOnline: 1,
     });
     await render({
       defaultValues: {
@@ -377,7 +378,8 @@ describe("CollectionForm", () => {
 
     await waitFor(() => expect(host.textContent).toContain("Cotton panjabi"));
     const preview = host.querySelector('section[aria-label="Products in this collection"]');
-    expect(text(preview?.textContent)).toContain("Products in this collection2 products");
+    // Both counts, as Shopify shows them: the draft is in the collection, not on the store (CAT-01).
+    expect(text(preview?.textContent)).toContain("Products in this collection2 products · 1 visible online");
     // The variants' range, as the store sells it, not the product-level price.
     expect(text(preview?.textContent)).toContain("৳2400–৳2600 · 2 variants · 7 in stock");
     expect(text(preview?.textContent)).toContain("Tupi৳250 · Out of stockDraft");

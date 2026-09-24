@@ -15097,6 +15097,10 @@ export type GetApiV1AdminCollectionsProductOptionsResponses = {
                 total: number;
                 totalPages: number;
             };
+            /**
+             * With categoryIds: how many of their products buyers see on the storefront. Null without categories.
+             */
+            visibleOnline: number | null;
         };
     };
 };

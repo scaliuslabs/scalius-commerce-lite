@@ -55,8 +55,10 @@ export function useProductOptions({
     return Array.from(byId.values());
   }, [query.data]);
   const total = query.data?.pages[0]?.pagination.total ?? 0;
+  /** With categories: how many of their products buyers see (the storefront's count). */
+  const visibleOnline = query.data?.pages[0]?.visibleOnline ?? null;
   const isLoading = search.trim() !== debouncedSearch || query.isPending || (query.isFetching && products.length === 0);
-  return { query, products, total, isLoading, searched: debouncedSearch };
+  return { query, products, total, visibleOnline, isLoading, searched: debouncedSearch };
 }
 
 /** "৳1,200 · 3 variants · 12 in stock", the resource picker's second line. */
