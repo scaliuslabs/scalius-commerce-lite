@@ -139,6 +139,26 @@ body {
     text-wrap: balance;
   }
 
+  /* Section headings (homepage blocks, collections, "You might also
+     like"): one size step up from phones, in the pairing's heading weight
+     and tracking. Editorial pairings (Boutique) step up once more on
+     computers, where a light serif needs the extra size to hold the page. */
+  .site-root .section-heading {
+    font-size: var(--text-xl);
+  }
+
+  @media (min-width: 40rem) {
+    .site-root .section-heading {
+      font-size: var(--text-2xl);
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .site-root[data-theme-typography="editorial"] .section-heading {
+      font-size: var(--text-3xl);
+    }
+  }
+
   /* Uppercase labels (badges, eyebrows) open up a little. */
   .site-root :where(.uppercase) {
     letter-spacing: var(--theme-label-tracking, 0.06em);
