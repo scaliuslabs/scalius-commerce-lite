@@ -415,10 +415,13 @@ app.openapi(postFulfillRoute, async (c) => {
             orderId,
             kind: "shipment_created",
             actorId: actorIdOf(c),
+            requestKey: result.shipmentId,
             data: {
                 courierName: data.courierName || null,
                 trackingId: data.trackingId || null,
                 final: result.isFinalShipment,
+                quantity: result.lines.reduce((sum, line) => sum + line.quantity, 0),
+                items: result.lines,
             },
         });
     }
@@ -429,6 +432,19 @@ app.openapi(postFulfillRoute, async (c) => {
         trackingId: typeof data.trackingId === "string" ? data.trackingId : null,
         source: "orders-manual-fulfillment",
     });
+    if (!replayed && !statusChange) {
+        // An earlier parcel of a split shipment: the buyer hears about each
+        // parcel as it leaves, not only when the last one does (R2-ORD-06).
+        await enqueueOrderNotificationsForStatus({
+            db,
+            queue: c.env.JOBS_QUEUE,
+            orderIds: [orderId],
+            newStatus: "shipped",
+            trackingByOrderId: { [orderId]: typeof data.trackingId === "string" ? data.trackingId : null },
+            dedupeKeyByOrderId: { [orderId]: `shipment:${result.shipmentId}:order_shipped` },
+            source: "orders-manual-fulfillment-parcel",
+        });
+    }
     return created(c, responseData);
 });
 

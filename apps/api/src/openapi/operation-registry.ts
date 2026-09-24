@@ -719,6 +719,7 @@ export const OPERATIONS = {
   "dashboard.orders.catalog_products": {},
   "dashboard.orders.cod_get": {},
   "dashboard.orders.comment_add": {},
+  "dashboard.orders.comment_delete": { risk: "destructive" },
   "dashboard.orders.cod_update": {
     risk: "financial",
     openWorld: true,

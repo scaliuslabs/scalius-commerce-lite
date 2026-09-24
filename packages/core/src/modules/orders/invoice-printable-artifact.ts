@@ -45,7 +45,7 @@ export function renderPrintableInvoice(document: InvoiceDocument): string {
     .slice(0, 10);
   const rows = order.items.map((item) => `
     <tr><td>${html(item.productName || item.productId)}${item.variantLabel ? `<small>${html(item.variantLabel)}</small>` : ""}</td>
-    <td>${item.quantity}</td><td>${formatMoney(item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)), order.currencyCode, decimals, true)}</td>
+    <td>${item.quantity}${item.returnedQuantity ? `<small>${item.returnedQuantity} returned</small>` : ""}</td><td>${formatMoney(item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)), order.currencyCode, decimals, true)}</td>
     <td>${formatMoney(itemTotal(item, decimals), order.currencyCode, decimals, true)}</td></tr>`).join("");
   const subtotalMinor = order.subtotalAmountMinor ?? Math.round((order.totalAmount - order.shippingCharge + (order.discountAmount ?? 0)) * (10 ** decimals));
   const shippingMinor = order.shippingAmountMinor ?? Math.round(order.shippingCharge * (10 ** decimals));

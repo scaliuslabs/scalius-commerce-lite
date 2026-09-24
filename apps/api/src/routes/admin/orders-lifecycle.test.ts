@@ -74,6 +74,10 @@ describe("admin order lifecycle routes", () => {
         const events = (await timeline.json() as { data: { events: Array<{ kind: string; data: unknown; actorName: string | null }> } }).data.events;
         expect(events.map((event) => event.kind)).toEqual(["request_resolved", "status_changed", "placed"]);
         expect(events[1]).toMatchObject({ data: { from: "pending", to: "cancelled", reason: "customer_request" }, actorName: "Nadia" });
+
+        // One message to the buyer: the cancellation, not also a request update (R2-ORD-08).
+        expect(sqlite.prepare("SELECT notification_type FROM order_notification_outbox WHERE order_id = 'order_a'").all())
+            .toEqual([{ notification_type: "order_cancelled" }]);
     });
 
     it("refuses to accept a cancellation for an order that was already sent", async () => {
@@ -126,6 +130,45 @@ describe("admin order lifecycle routes", () => {
             expect.objectContaining({ kind: "comment", body: "Confirmed by phone" }),
             expect.objectContaining({ kind: "details_edited", data: { fields: ["customerName", "customerPhone", "shippingAddress"] } }),
         ]);
+    });
+
+    it("posts a comment once per request key and lets its author delete it (R2-ORD-04)", async () => {
+        const post = () => app.request(
+            "/api/v1/admin/orders/order_b/timeline",
+            json("POST", { body: "Customer confirmed by phone", requestKey: "comment-draft-0001" }),
+            env,
+        );
+        const first = await (await post()).json() as { data: { id: string; own: boolean } };
+        const second = await (await post()).json() as { data: { id: string } };
+        expect(second.data.id).toBe(first.data.id);
+        expect(first.data.own).toBe(true);
+        expect(sqlite.prepare("SELECT count(*) AS n FROM order_events WHERE kind = 'comment'").get()).toEqual({ n: 1 });
+
+        sqlite.exec("INSERT INTO user (id, name, email, is_super_admin) VALUES ('admin_2', 'Rafi', 'rafi@example.test', 1)");
+        sqlite.exec(`UPDATE order_events SET actor_id = 'admin_2' WHERE id = '${first.data.id}'`);
+        const notMine = await app.request(`/api/v1/admin/orders/order_b/timeline/${first.data.id}`, { method: "DELETE" }, env);
+        expect(notMine.status).toBe(403);
+
+        sqlite.exec(`UPDATE order_events SET actor_id = 'admin_1' WHERE id = '${first.data.id}'`);
+        for (let click = 0; click < 2; click += 1) {
+            const deleted = await app.request(`/api/v1/admin/orders/order_b/timeline/${first.data.id}`, { method: "DELETE" }, env);
+            expect(deleted.status).toBe(200);
+        }
+        expect(sqlite.prepare("SELECT count(*) AS n FROM order_events WHERE kind = 'comment'").get()).toEqual({ n: 0 });
+    });
+
+    it("reports a repeated bulk confirm as done (R2-ORD-03)", async () => {
+        const run = () => app.request(
+            "/api/v1/admin/orders/bulk-confirm",
+            json("POST", { orderIds: ["order_b"], requestKey: "bulk-confirm-run-0001" }),
+            env,
+        );
+        for (let click = 0; click < 2; click += 1) {
+            const body = await (await run()).json() as { data: { results: unknown[] } };
+            expect(body.data.results).toEqual([{ orderId: "order_b", success: true }]);
+        }
+        expect(sqlite.prepare("SELECT count(*) AS n FROM order_events WHERE kind = 'status_changed'").get()).toEqual({ n: 1 });
+        expect(sqlite.prepare("SELECT count(*) AS n FROM order_notification_outbox WHERE order_id = 'order_b'").get()).toEqual({ n: 1 });
     });
 
     it("finds an order by its number", async () => {

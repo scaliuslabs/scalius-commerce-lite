@@ -76,9 +76,9 @@ export function ExportOrdersDialog({
   };
 
   const options: Array<{ value: OrderExportScope; label: string }> = [
+    ...(canSelectScope ? [{ value: "selected" as const, label: t("exportScope.selected", { count: selectedIds.length }) }] : []),
     { value: "page", label: t("exportScope.page", { count: pageIds.length }) },
     { value: "all", label: t(total === 1 ? "exportScope.allOne" : "exportScope.all", { count: total }) },
-    ...(canSelectScope ? [{ value: "selected" as const, label: t("exportScope.selected", { count: selectedIds.length }) }] : []),
   ];
 
   return (

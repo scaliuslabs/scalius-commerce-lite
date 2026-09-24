@@ -28,12 +28,13 @@ function isWholeNumber(value: number | null): value is number {
   return value !== null && Number.isSafeInteger(value) && value >= 0;
 }
 
-function isOrderQuantity(value: number | null): value is number {
-  return isWholeNumber(value)
-    && value >= MIN_ORDER_ITEM_QUANTITY
-    && value <= MAX_ORDER_ITEM_QUANTITY;
-}
-
+/**
+ * Quantity field. Every whole number the merchant types is kept as typed and
+ * passed on, even when it is too large, so the field, the line and the Save
+ * check all agree; the reason shows under the field until it is fixed
+ * ("Only 22 available."). Only an empty field or text that isn't a number goes
+ * back to the last quantity when the field is left.
+ */
 export function OrderItemQuantityInput({
   id,
   quantity,
@@ -49,23 +50,24 @@ export function OrderItemQuantityInput({
   className,
 }: OrderItemQuantityInputProps) {
   const t = useMessages(orderFormMessages);
-  // The typed number, kept even while it is empty or too large so the merchant sees what they typed.
   const [draft, setDraft] = React.useState<number | null>(quantity);
   const focusedRef = React.useRef(false);
-  const focusStartQuantityRef = React.useRef(quantity);
-  const maximumErrorId = React.useId();
-  const effectiveMaximum = Math.max(
-    0,
-    Math.min(MAX_ORDER_ITEM_QUANTITY, maxQuantity),
-  );
-  const exceedsMaximum = isOrderQuantity(draft) && draft > effectiveMaximum;
-  const isDraftValid = !disabled && isOrderQuantity(draft) && !exceedsMaximum;
-  const maximumDescriptionId = !disabled && exceedsMaximum && maximumExceededMessage
-    ? maximumErrorId
-    : undefined;
-  const ariaDescribedBy = [describedBy, maximumDescriptionId]
-    .filter(Boolean)
-    .join(" ") || undefined;
+  const messageId = React.useId();
+  const maximum = Math.max(0, Math.min(MAX_ORDER_ITEM_QUANTITY, maxQuantity));
+  const message = disabled || !isWholeNumber(draft)
+    ? null
+    : draft < MIN_ORDER_ITEM_QUANTITY
+      ? t("quantityMin")
+      : draft > MAX_ORDER_ITEM_QUANTITY
+        ? t("quantityMax")
+        : draft > maximum
+          ? maximumExceededMessage ?? null
+          : null;
+  const isDraftValid = !disabled
+    && isWholeNumber(draft)
+    && draft >= MIN_ORDER_ITEM_QUANTITY
+    && draft <= maximum;
+  const ariaDescribedBy = [describedBy, message ? messageId : null].filter(Boolean).join(" ") || undefined;
 
   React.useEffect(() => {
     if (!focusedRef.current) setDraft(quantity);
@@ -75,19 +77,6 @@ export function OrderItemQuantityInput({
     onValidityChange?.(isDraftValid);
   }, [isDraftValid, onValidityChange]);
 
-  /** Commits a valid draft, or puts back the last good quantity. Returns whether the draft was valid. */
-  function settle(): boolean {
-    if (isOrderQuantity(draft) && draft <= effectiveMaximum) {
-      if (draft !== quantity) onQuantityChange(draft);
-      return true;
-    }
-    // A whole number that is too large came from replacing the quantity; go back to where the edit started.
-    const fallbackQuantity = isWholeNumber(draft) ? focusStartQuantityRef.current : quantity;
-    setDraft(fallbackQuantity);
-    if (fallbackQuantity !== quantity) onQuantityChange(fallbackQuantity);
-    return false;
-  }
-
   return (
     <div>
       <NumberInput
@@ -95,44 +84,33 @@ export function OrderItemQuantityInput({
         integer
         value={draft}
         aria-label={t("quantityFor", { name: itemName })}
-        aria-invalid={(!disabled && exceedsMaximum) || undefined}
+        aria-invalid={message ? true : undefined}
         aria-describedby={ariaDescribedBy}
         placeholder={placeholder}
         disabled={disabled}
         className={cn("w-20", className)}
         onFocus={() => {
           focusedRef.current = true;
-          focusStartQuantityRef.current = quantity;
         }}
         onValueChange={(next) => {
           setDraft(next);
-          if (isOrderQuantity(next) && next <= effectiveMaximum) {
-            if (next !== quantity) onQuantityChange(next);
-          } else if (isWholeNumber(next) && quantity !== focusStartQuantityRef.current) {
-            // A multi-digit replacement can have a valid prefix before the
-            // completed draft exceeds stock (for example, 2 then 21). Restore
-            // the quantity from the start of this edit instead of committing
-            // that accidental prefix.
-            onQuantityChange(focusStartQuantityRef.current);
-          }
+          if (isWholeNumber(next) && next !== quantity) onQuantityChange(next);
         }}
         onBlur={() => {
           focusedRef.current = false;
-          settle();
+          // Empty or not a number: show the quantity the line still has.
+          if (!isWholeNumber(draft)) setDraft(quantity);
         }}
         onKeyDown={(event) => {
           if (event.key !== "Enter") return;
           event.preventDefault();
-          if (settle()) onEnter?.();
+          if (!isWholeNumber(draft)) setDraft(quantity);
+          else if (isDraftValid) onEnter?.();
         }}
       />
-      {maximumDescriptionId ? (
-        <p
-          id={maximumErrorId}
-          className="mt-1 text-body text-destructive"
-          role="alert"
-        >
-          {maximumExceededMessage}
+      {message ? (
+        <p id={messageId} className="mt-1 text-body text-destructive" role="alert">
+          {message}
         </p>
       ) : null}
     </div>

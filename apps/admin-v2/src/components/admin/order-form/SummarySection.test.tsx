@@ -89,7 +89,7 @@ vi.mock("lucide-react", () => ({
 
 // No shipping-rate access in these tests: the delivery method picker stays hidden.
 vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: undefined }) }));
-vi.mock("react-hook-form", () => ({ useWatch: () => testState.shippingValue }));
+vi.mock("react-hook-form", () => ({ useWatch: () => ["", "", null, null] }));
 vi.mock("~/contexts/PermissionContext", () => ({
   usePermissions: () => ({ hasPermission: () => false }),
 }));

@@ -1,5 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { recordOrderEvent } from "./order-timeline";
 import type { Database } from "@scalius/database/client";
 import {
   deliveryShipments,
@@ -664,6 +665,15 @@ async function createVerifiedOrderSupportRequest(
     }
     throw error;
   }
+
+  // Staff see the buyer's own words on the order timeline (R2-ORD-15).
+  await recordOrderEvent(db, {
+    orderId,
+    kind: "request_submitted",
+    requestKey: requestId,
+    body: reason,
+    data: { type: input.type, reason },
+  });
 
   const updatedSupportRequests = await listOrderSupportRequests(db, orderId);
   const request = updatedSupportRequests.find((item) => item.id === requestId);

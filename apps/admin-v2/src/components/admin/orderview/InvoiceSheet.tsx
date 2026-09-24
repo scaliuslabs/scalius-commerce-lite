@@ -2,6 +2,7 @@
    print) that must not follow the dashboard theme, so it carries its own stylesheet and classes. */
 import type { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
@@ -82,8 +83,8 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
 
       <section className="invoice-meta">
         <div>
-          <h2>{document.status === "issued" ? t("invoice.title") : t("invoice.draft")}</h2>
-          <p className="strong">{document.invoiceNumber ?? t("invoice.notIssued")}</p>
+          <h2>{t("invoice.title")}</h2>
+          {document.status === "issued" && document.invoiceNumber ? <p className="strong">{document.invoiceNumber}</p> : null}
           {issuedAt ? <p>{formatDateTime(issuedAt, { dateStyle: "medium" })}</p> : null}
           <p>{o("order", { number: formatOrderNumber(order.orderNumber, order.id) })}</p>
           <p>
@@ -94,7 +95,8 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
         <div>
           <h2>{t("invoice.billTo")}</h2>
           <p className="strong">{order.customerName}</p>
-          <p>{order.customerPhone}</p>
+          {/* Local format, as the customer writes it: 01712345678. */}
+          <p>{formatPhoneForProvider(order.customerPhone)}</p>
           {order.customerEmail ? <p>{order.customerEmail}</p> : null}
           <p>{formatLocationParts(order.shippingAddress, order.areaName, order.zoneName, order.cityName)}</p>
         </div>
@@ -117,6 +119,7 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
                 <td>
                   {item.productName || t("items.unnamed")}
                   {item.variantLabel ? <small>{item.variantLabel}</small> : null}
+                  {(item.returnedQuantity ?? 0) > 0 ? <small>{t("items.returned", { count: item.returnedQuantity ?? 0 })}</small> : null}
                 </td>
                 <td>{formatNumber(item.quantity)}</td>
                 <td>{line ? minor(line.unitPriceMinor) : money(item.price)}</td>
