@@ -347,7 +347,9 @@ export const STOREFRONT_LISTING_TOOLBAR = {
   "category-banner": { requires: [] },
   "subcategory-pills": { requires: [atLeast("categoryDepth", 2)] },
   "popular-filter-chips": { requires: [has("hasKeySpecs")] },
-  "aspect-chips": { requires: [has("hasKeySpecs")] },
+  // eBay's phone chips, one per filterable facet (today's attributes and
+  // option axes); the storefront leaves them out without a multi-value facet.
+  "aspect-chips": { requires: [] },
   "result-count": { requires: [] },
   sort: { requires: [] },
   "per-page": { requires: [] },
