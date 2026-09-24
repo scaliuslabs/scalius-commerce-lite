@@ -257,6 +257,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 5,
         postgresStatements: 5,
       },
+      {
+        version: 76,
+        name: "0076_guest_record_links",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
     ]);
   });
 
@@ -381,6 +387,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 73, name: "0073_combinable_discount_codes" },
           { version: 74, name: "0074_verified_customer_identity" },
           { version: 75, name: "0075_theme_layout_reset" },
+          { version: 76, name: "0076_guest_record_links" },
         ],
       });
     } finally {

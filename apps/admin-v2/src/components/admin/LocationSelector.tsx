@@ -3,6 +3,8 @@ import { useFormContext, useWatch } from "react-hook-form";
 import { Loader2 } from "lucide-react";
 
 import type { CustomerFormValues } from "~/lib/form-schemas";
+import { useMessages } from "~/i18n";
+import { customersMessages } from "~/i18n/customers";
 import { getDeliveryLocations } from "~/lib/api-query-options/delivery";
 import {
   FormControl,
@@ -34,6 +36,7 @@ const selectTriggerClassName = "h-11 sm:h-9";
 const selectItemClassName = "min-h-11 sm:min-h-8";
 
 export function LocationSelector() {
+  const t = useMessages(customersMessages);
   const form = useFormContext<CustomerFormValues>();
   const cityValue = useWatch({ control: form.control, name: "city" });
   const zoneValue = useWatch({ control: form.control, name: "zone" });
@@ -144,7 +147,7 @@ export function LocationSelector() {
         name="city"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>City</FormLabel>
+            <FormLabel>{t("fieldCity")}</FormLabel>
             <Select
               value={field.value || "_none"}
               onValueChange={(value) => {
@@ -168,25 +171,25 @@ export function LocationSelector() {
                   className={selectTriggerClassName}
                   aria-busy={loadingCities}
                 >
-                  <SelectValue placeholder="Select city">
+                  <SelectValue placeholder={t("selectCity")}>
                     {loadingCities ? (
                       <span className="flex items-center">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading…
+                        {t("loadingLocations")}
                       </span>
                     ) : field.value ? (
                       cities.find((city) => city.id === field.value)?.name ||
                       form.getValues("cityName") ||
                       field.value
                     ) : (
-                      "Select city"
+                      t("selectCity")
                     )}
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
                 <SelectItem value="_none" className={selectItemClassName}>
-                  No city selected
+                  {t("noCity")}
                 </SelectItem>
                 {cities.map((city) => (
                   <SelectItem
@@ -209,7 +212,7 @@ export function LocationSelector() {
         name="zone"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Zone</FormLabel>
+            <FormLabel>{t("fieldZone")}</FormLabel>
             <Select
               value={field.value || "_none"}
               onValueChange={(value) => {
@@ -232,25 +235,25 @@ export function LocationSelector() {
                   className={selectTriggerClassName}
                   aria-busy={loadingZones}
                 >
-                  <SelectValue placeholder="Select zone">
+                  <SelectValue placeholder={t("selectZone")}>
                     {loadingZones ? (
                       <span className="flex items-center">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading…
+                        {t("loadingLocations")}
                       </span>
                     ) : field.value ? (
                       zones.find((zone) => zone.id === field.value)?.name ||
                       form.getValues("zoneName") ||
                       field.value
                     ) : (
-                      "Select zone"
+                      t("selectZone")
                     )}
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
                 <SelectItem value="_none" className={selectItemClassName}>
-                  No zone selected
+                  {t("noZone")}
                 </SelectItem>
                 {zones.map((zone) => (
                   <SelectItem
@@ -273,7 +276,7 @@ export function LocationSelector() {
         name="area"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Area</FormLabel>
+            <FormLabel>{t("fieldArea")}</FormLabel>
             <Select
               value={field.value || "_none"}
               onValueChange={(value) => {
@@ -292,25 +295,25 @@ export function LocationSelector() {
                   className={selectTriggerClassName}
                   aria-busy={loadingAreas}
                 >
-                  <SelectValue placeholder="Select area">
+                  <SelectValue placeholder={t("selectArea")}>
                     {loadingAreas ? (
                       <span className="flex items-center">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading…
+                        {t("loadingLocations")}
                       </span>
                     ) : field.value ? (
                       areas.find((area) => area.id === field.value)?.name ||
                       form.getValues("areaName") ||
                       field.value
                     ) : (
-                      "Select area"
+                      t("selectArea")
                     )}
                   </SelectValue>
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
                 <SelectItem value="_none" className={selectItemClassName}>
-                  No area selected
+                  {t("noArea")}
                 </SelectItem>
                 {areas.map((area) => (
                   <SelectItem

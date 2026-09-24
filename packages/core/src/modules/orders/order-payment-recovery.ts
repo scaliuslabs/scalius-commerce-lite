@@ -14,6 +14,7 @@ import { createAuthOtpDeliveryKey, maskOtpIdentifier } from "../customers/otp-de
 import type { OtpQueuePayload } from "../customers/otp-transport";
 import { enforceOtpSendRateLimits } from "../customers/customer-auth-rate-limit";
 import { OTP_LOCKED_MESSAGE } from "../customers/customer-auth-otp-challenges";
+import { maskContact } from "../customers/customer-identity";
 import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
 import {
     createOrderPaymentRecoveryLink,
@@ -266,13 +267,7 @@ export class NoOrderCodeChannelError extends AppError {
 
 /** "b•••@example.com" or "01•••••678": enough for the buyer to know where to look. */
 export function maskOrderContact(method: RecoveryMethod, target: string): string {
-    if (method === "email") {
-        const [local = "", domain = ""] = target.split("@");
-        return `${local.slice(0, 1)}•••@${domain}`;
-    }
-    const digits = target.replace(/\D/g, "");
-    const local = digits.startsWith("880") ? `0${digits.slice(3)}` : digits;
-    return `${local.slice(0, 2)}•••••${local.slice(-3)}`;
+    return maskContact(method, target);
 }
 
 /**

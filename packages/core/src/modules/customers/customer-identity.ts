@@ -8,9 +8,10 @@
 // Invariant: an order an account owns is also filed under that account
 // (orders.customer_id = orders.account_owner_customer_id), so the merchant and
 // the buyer always see the same orders.
-import { and, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { customers, orders } from "@scalius/database/schema";
+import { customerHistory, customers, orders } from "@scalius/database/schema";
 
 export interface OrderContact {
     phone: string;
@@ -31,6 +32,17 @@ export interface OrderCustomerChoice {
     customerId: string;
     /** Set when a verified contact on the order belongs to an account. */
     accountOwnerCustomerId: string | null;
+}
+
+/** How a contact is shown before it is proven: "r•••@example.com", "01•••••678". */
+export function maskContact(method: "email" | "phone", target: string): string {
+    if (method === "email") {
+        const [local = "", domain = ""] = target.split("@");
+        return `${local.slice(0, 1)}•••@${domain}`;
+    }
+    const digits = target.replace(/\D/g, "");
+    const local = digits.startsWith("880") ? `0${digits.slice(3)}` : digits;
+    return `${local.slice(0, 2)}•••••${local.slice(-3)}`;
 }
 
 export function normalizeContactEmail(email: string | null | undefined): string | null {
@@ -95,10 +107,12 @@ export function chooseOrderCustomer(
 
 /**
  * After an account proves an email/phone: unowned orders placed with that
- * verified contact join the account on both sides (merchant and buyer), and a
- * guest record left with no orders is retired (merged into the account).
- * Returns the ordered statements to run in the caller's batch; empty when the
- * account has nothing verified.
+ * verified contact join the account on both sides (merchant and buyer).
+ * Every order that leaves another record is written to both change logs, the
+ * guest record it left is linked to the account (its other orders wait until
+ * the account proves their contact too), and a guest record left with no
+ * orders is retired. Returns the ordered statements for the caller's batch;
+ * empty when the account has nothing verified.
  */
 export function buildVerifiedContactOrderLink(
     db: Database,
@@ -111,9 +125,35 @@ export function buildVerifiedContactOrderLink(
     if (email) contactMatch.push(sql`lower(trim(${orders.customerEmail})) = ${email}`);
     if (contactMatch.length === 0) return [];
     const joins = sql`${orders.accountOwnerCustomerId} IS NULL AND ${orders.deletedAt} IS NULL AND (${sql.join(contactMatch, sql` OR `)})`;
+    const leaves = and(joins, isNotNull(orders.customerId), ne(orders.customerId, input.customerId))!;
 
+    // All of these read the orders before the last statement moves them.
     return [
-        // Evaluated before the move: guest records whose every order is about to join the account.
+        movedOrderHistory(db, {
+            changeType: "order_moved_out",
+            owner: customers,
+            ownerId: sql`${orders.customerId}`,
+            relatedId: sql`${input.customerId}`,
+            join: eq(customers.id, orders.customerId),
+            where: leaves,
+        }),
+        movedOrderHistory(db, {
+            changeType: "order_moved_in",
+            owner: account,
+            ownerId: sql`${input.customerId}`,
+            relatedId: sql`${orders.customerId}`,
+            join: eq(account.id, input.customerId),
+            where: leaves,
+        }),
+        db.update(customers)
+            .set({ linkedAccountId: input.customerId, updatedAt: sql`unixepoch()` })
+            .where(and(
+                isNull(customers.accountClaimedAt),
+                isNull(customers.deletedAt),
+                isNull(customers.linkedAccountId),
+                sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = ${customers.id} AND ${joins})`,
+            )),
+        // Guest records whose every order is about to join the account.
         db.update(customers)
             .set({ deletedAt: sql`unixepoch()`, updatedAt: sql`unixepoch()` })
             .where(and(
@@ -126,6 +166,41 @@ export function buildVerifiedContactOrderLink(
             .set({ customerId: input.customerId, accountOwnerCustomerId: input.customerId })
             .where(joins),
     ];
+}
+
+const account = alias(customers, "account");
+
+/** One change-log row per moving order on one side, with that record's current details. */
+function movedOrderHistory(
+    db: Database,
+    input: {
+        changeType: "order_moved_in" | "order_moved_out";
+        owner: typeof customers | typeof account;
+        ownerId: SQL;
+        relatedId: SQL;
+        join: SQL;
+        where: SQL;
+    },
+) {
+    const { owner } = input;
+    return db.insert(customerHistory).select(db.select({
+        id: sql<string>`'chist_' || lower(hex(randomblob(12)))`.as("id"),
+        customerId: sql<string>`${input.ownerId}`.as("customer_id"),
+        name: owner.name,
+        email: owner.email,
+        phone: owner.phone,
+        address: owner.address,
+        city: owner.city,
+        zone: owner.zone,
+        area: owner.area,
+        cityName: owner.cityName,
+        zoneName: owner.zoneName,
+        areaName: owner.areaName,
+        changeType: sql<string>`${input.changeType}`.as("change_type"),
+        orderId: orders.id,
+        relatedCustomerId: sql<string>`${input.relatedId}`.as("related_customer_id"),
+        createdAt: sql<number>`unixepoch()`.as("created_at"),
+    }).from(orders).innerJoin(owner, input.join).where(input.where));
 }
 
 /** Links verified-contact guest orders for a signed-in account (any device). */
