@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Alert } from "~/components/ui/alert";
+import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -70,7 +70,7 @@ export function ApproveReturnDialog({
           <DialogDescription>{t("returns.reviewHelp")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {mutation.isError ? <Alert variant="destructive">{orderErrorMessage(mutation.error)}</Alert> : null}
+          {mutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(mutation.error)}</AlertDescription></Alert> : null}
           <ul className="divide-y rounded-md border">
             {orderReturn.lines.map((line) => {
               const name = getOrderItemName(itemsById.get(line.orderItemId));

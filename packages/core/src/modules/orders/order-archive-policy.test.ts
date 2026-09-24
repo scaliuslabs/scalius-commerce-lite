@@ -6,7 +6,7 @@ import {
 } from "./order-archive-policy";
 
 describe("order archive status policy", () => {
-  it.each(["cancelled", "completed", "returned", "refunded"])(
+  it.each(["cancelled", "delivered", "completed", "returned", "refunded"])(
     "allows finished status %s",
     (status) => {
       expect(isOrderArchiveStatusEligible(status)).toBe(true);
@@ -20,10 +20,10 @@ describe("order archive status policy", () => {
     "processing",
     "confirmed",
     "shipped",
-    "delivered",
-    "partially_refunded",
-  ])("keeps operational status %s in the active workspace", (status) => {
+  ])("keeps open status %s in the active workspace, and says why", (status) => {
     expect(isOrderArchiveStatusEligible(status)).toBe(false);
-    expect(getOrderArchiveStatusBlockedReason(status)).toMatch(/before archiving/i);
+    expect(getOrderArchiveStatusBlockedReason(status)).toBe(
+      "Only finished orders can be archived: delivered, cancelled, returned or refunded.",
+    );
   });
 });

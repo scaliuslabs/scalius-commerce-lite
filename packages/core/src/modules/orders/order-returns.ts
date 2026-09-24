@@ -472,8 +472,15 @@ export async function createOrderReturn(
   if (order.version !== input.expectedOrderVersion) {
     throw new ConflictError("Order changed while the return was being prepared. Reload and try again.");
   }
-  if (!RETURNABLE_ORDER_STATUSES.has(order.status)) {
-    throw new ValidationError("Returns can be requested only after an order is shipped, delivered, or completed.");
+  // A parcel still with the courier comes back with Mark returned; a return
+  // is for goods the customer received (R3-ORD-14).
+  const returnable = source === "cod_return_to_sender"
+    ? RETURNABLE_ORDER_STATUSES.has(order.status)
+    : order.status === OrderStatus.DELIVERED || order.status === OrderStatus.COMPLETED;
+  if (!returnable) {
+    throw new ValidationError(order.status === OrderStatus.SHIPPED
+      ? "This order hasn't been delivered yet. If the parcel is coming back, use Mark returned."
+      : "Returns can be requested only after an order is delivered.");
   }
 
   const requestedIds = input.lines.map((line) => line.orderItemId);
