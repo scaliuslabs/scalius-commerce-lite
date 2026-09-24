@@ -73,7 +73,7 @@
           "version": {
             "type": "number",
             "enum": [
-              2
+              3
             ]
           },
           "mode": {
@@ -190,30 +190,16 @@
                 "additionalProperties": false
               },
               "typography": {
-                "type": "object",
-                "properties": {
-                  "heading": {
-                    "type": "string",
-                    "enum": [
-                      "system",
-                      "modern",
-                      "editorial"
-                    ]
-                  },
-                  "body": {
-                    "type": "string",
-                    "enum": [
-                      "system",
-                      "modern",
-                      "humanist"
-                    ]
-                  }
-                },
-                "required": [
-                  "heading",
-                  "body"
-                ],
-                "additionalProperties": false
+                "type": "string",
+                "enum": [
+                  "retail",
+                  "market",
+                  "editorial",
+                  "fresh",
+                  "beauty",
+                  "heritage",
+                  "tech"
+                ]
               },
               "radius": {
                 "type": "string",
@@ -221,6 +207,13 @@
                   "square",
                   "subtle",
                   "rounded"
+                ]
+              },
+              "buttonShape": {
+                "type": "string",
+                "enum": [
+                  "radius",
+                  "pill"
                 ]
               },
               "containerWidth": {
@@ -268,6 +261,7 @@
               "colors",
               "typography",
               "radius",
+              "buttonShape",
               "containerWidth",
               "components"
             ],
@@ -314,6 +308,22 @@
                   "filmstrip",
                   "stacked"
                 ]
+              },
+              "navigation": {
+                "type": "string",
+                "enum": [
+                  "menu",
+                  "mega",
+                  "pills",
+                  "sidebar"
+                ]
+              },
+              "mobileNavigation": {
+                "type": "string",
+                "enum": [
+                  "drawer",
+                  "tabs"
+                ]
               }
             },
             "required": [
@@ -321,7 +331,9 @@
               "footer",
               "card",
               "density",
-              "productPage"
+              "productPage",
+              "navigation",
+              "mobileNavigation"
             ],
             "additionalProperties": false
           },
@@ -5616,6 +5628,9 @@
                               "href": {
                                 "type": "string"
                               },
+                              "imageUrl": {
+                                "type": "string"
+                              },
                               "openInNewTab": {
                                 "type": "boolean"
                               },
@@ -5633,6 +5648,9 @@
                                     "href": {
                                       "type": "string"
                                     },
+                                    "imageUrl": {
+                                      "type": "string"
+                                    },
                                     "openInNewTab": {
                                       "type": "boolean"
                                     },
@@ -5648,6 +5666,9 @@
                                             "type": "string"
                                           },
                                           "href": {
+                                            "type": "string"
+                                          },
+                                          "imageUrl": {
                                             "type": "string"
                                           },
                                           "openInNewTab": {
@@ -5936,6 +5957,9 @@
                               "href": {
                                 "type": "string"
                               },
+                              "imageUrl": {
+                                "type": "string"
+                              },
                               "openInNewTab": {
                                 "type": "boolean"
                               },
@@ -6134,6 +6158,9 @@
                                   "href": {
                                     "type": "string"
                                   },
+                                  "imageUrl": {
+                                    "type": "string"
+                                  },
                                   "openInNewTab": {
                                     "type": "boolean"
                                   },
@@ -6151,6 +6178,9 @@
                                         "href": {
                                           "type": "string"
                                         },
+                                        "imageUrl": {
+                                          "type": "string"
+                                        },
                                         "openInNewTab": {
                                           "type": "boolean"
                                         },
@@ -6166,6 +6196,9 @@
                                                 "type": "string"
                                               },
                                               "href": {
+                                                "type": "string"
+                                              },
+                                              "imageUrl": {
                                                 "type": "string"
                                               },
                                               "openInNewTab": {
@@ -10374,6 +10407,9 @@
                               "href": {
                                 "type": "string"
                               },
+                              "imageUrl": {
+                                "type": "string"
+                              },
                               "openInNewTab": {
                                 "type": "boolean"
                               },
@@ -10391,6 +10427,9 @@
                                     "href": {
                                       "type": "string"
                                     },
+                                    "imageUrl": {
+                                      "type": "string"
+                                    },
                                     "openInNewTab": {
                                       "type": "boolean"
                                     },
@@ -10406,6 +10445,9 @@
                                             "type": "string"
                                           },
                                           "href": {
+                                            "type": "string"
+                                          },
+                                          "imageUrl": {
                                             "type": "string"
                                           },
                                           "openInNewTab": {
@@ -10496,6 +10538,9 @@
                                         "href": {
                                           "type": "string"
                                         },
+                                        "imageUrl": {
+                                          "type": "string"
+                                        },
                                         "openInNewTab": {
                                           "type": "boolean"
                                         },
@@ -10513,6 +10558,9 @@
                                               "href": {
                                                 "type": "string"
                                               },
+                                              "imageUrl": {
+                                                "type": "string"
+                                              },
                                               "openInNewTab": {
                                                 "type": "boolean"
                                               },
@@ -10528,6 +10576,9 @@
                                                       "type": "string"
                                                     },
                                                     "href": {
+                                                      "type": "string"
+                                                    },
+                                                    "imageUrl": {
                                                       "type": "string"
                                                     },
                                                     "openInNewTab": {

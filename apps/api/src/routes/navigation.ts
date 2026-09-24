@@ -16,6 +16,7 @@ const publicNavigationLeafSchema = z.object({
   id: z.string(),
   title: z.string(),
   href: z.string().optional(),
+  imageUrl: z.string().optional(),
   openInNewTab: z.boolean().optional(),
 });
 const publicNavigationChildSchema = publicNavigationLeafSchema.extend({

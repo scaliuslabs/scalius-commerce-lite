@@ -53,6 +53,8 @@ export interface ResolvedNavigationItem {
   id: string;
   title: string;
   href?: string;
+  /** Photo of the linked category (published, non-empty image only). */
+  imageUrl?: string;
   openInNewTab?: boolean;
   subMenu?: ResolvedNavigationItem[];
 }

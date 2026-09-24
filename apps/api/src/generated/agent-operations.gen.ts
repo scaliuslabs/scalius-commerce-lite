@@ -62845,7 +62845,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "version": {
                       "type": "number",
                       "enum": [
-                        2
+                        3
                       ]
                     },
                     "mode": {
@@ -62962,30 +62962,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "additionalProperties": false
                         },
                         "typography": {
-                          "type": "object",
-                          "properties": {
-                            "heading": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "editorial"
-                              ]
-                            },
-                            "body": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "humanist"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "heading",
-                            "body"
-                          ],
-                          "additionalProperties": false
+                          "type": "string",
+                          "enum": [
+                            "retail",
+                            "market",
+                            "editorial",
+                            "fresh",
+                            "beauty",
+                            "heritage",
+                            "tech"
+                          ]
                         },
                         "radius": {
                           "type": "string",
@@ -62993,6 +62979,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "square",
                             "subtle",
                             "rounded"
+                          ]
+                        },
+                        "buttonShape": {
+                          "type": "string",
+                          "enum": [
+                            "radius",
+                            "pill"
                           ]
                         },
                         "containerWidth": {
@@ -63040,6 +63033,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "colors",
                         "typography",
                         "radius",
+                        "buttonShape",
                         "containerWidth",
                         "components"
                       ],
@@ -63086,6 +63080,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "filmstrip",
                             "stacked"
                           ]
+                        },
+                        "navigation": {
+                          "type": "string",
+                          "enum": [
+                            "menu",
+                            "mega",
+                            "pills",
+                            "sidebar"
+                          ]
+                        },
+                        "mobileNavigation": {
+                          "type": "string",
+                          "enum": [
+                            "drawer",
+                            "tabs"
+                          ]
                         }
                       },
                       "required": [
@@ -63093,7 +63103,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "footer",
                         "card",
                         "density",
-                        "productPage"
+                        "productPage",
+                        "navigation",
+                        "mobileNavigation"
                       ],
                       "additionalProperties": false
                     },
@@ -63331,7 +63343,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "version": {
                   "type": "number",
                   "enum": [
-                    2
+                    3
                   ]
                 },
                 "mode": {
@@ -63448,30 +63460,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "additionalProperties": false
                     },
                     "typography": {
-                      "type": "object",
-                      "properties": {
-                        "heading": {
-                          "type": "string",
-                          "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
-                          ]
-                        },
-                        "body": {
-                          "type": "string",
-                          "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "heading",
-                        "body"
-                      ],
-                      "additionalProperties": false
+                      "type": "string",
+                      "enum": [
+                        "retail",
+                        "market",
+                        "editorial",
+                        "fresh",
+                        "beauty",
+                        "heritage",
+                        "tech"
+                      ]
                     },
                     "radius": {
                       "type": "string",
@@ -63479,6 +63477,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "square",
                         "subtle",
                         "rounded"
+                      ]
+                    },
+                    "buttonShape": {
+                      "type": "string",
+                      "enum": [
+                        "radius",
+                        "pill"
                       ]
                     },
                     "containerWidth": {
@@ -63526,6 +63531,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "colors",
                     "typography",
                     "radius",
+                    "buttonShape",
                     "containerWidth",
                     "components"
                   ],
@@ -63572,6 +63578,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "filmstrip",
                         "stacked"
                       ]
+                    },
+                    "navigation": {
+                      "type": "string",
+                      "enum": [
+                        "menu",
+                        "mega",
+                        "pills",
+                        "sidebar"
+                      ]
+                    },
+                    "mobileNavigation": {
+                      "type": "string",
+                      "enum": [
+                        "drawer",
+                        "tabs"
+                      ]
                     }
                   },
                   "required": [
@@ -63579,7 +63601,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "footer",
                     "card",
                     "density",
-                    "productPage"
+                    "productPage",
+                    "navigation",
+                    "mobileNavigation"
                   ],
                   "additionalProperties": false
                 },
@@ -63845,7 +63869,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "version": {
                       "type": "number",
                       "enum": [
-                        2
+                        3
                       ]
                     },
                     "mode": {
@@ -63962,30 +63986,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "additionalProperties": false
                         },
                         "typography": {
-                          "type": "object",
-                          "properties": {
-                            "heading": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "editorial"
-                              ]
-                            },
-                            "body": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "humanist"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "heading",
-                            "body"
-                          ],
-                          "additionalProperties": false
+                          "type": "string",
+                          "enum": [
+                            "retail",
+                            "market",
+                            "editorial",
+                            "fresh",
+                            "beauty",
+                            "heritage",
+                            "tech"
+                          ]
                         },
                         "radius": {
                           "type": "string",
@@ -63993,6 +64003,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "square",
                             "subtle",
                             "rounded"
+                          ]
+                        },
+                        "buttonShape": {
+                          "type": "string",
+                          "enum": [
+                            "radius",
+                            "pill"
                           ]
                         },
                         "containerWidth": {
@@ -64040,6 +64057,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "colors",
                         "typography",
                         "radius",
+                        "buttonShape",
                         "containerWidth",
                         "components"
                       ],
@@ -64086,6 +64104,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "filmstrip",
                             "stacked"
                           ]
+                        },
+                        "navigation": {
+                          "type": "string",
+                          "enum": [
+                            "menu",
+                            "mega",
+                            "pills",
+                            "sidebar"
+                          ]
+                        },
+                        "mobileNavigation": {
+                          "type": "string",
+                          "enum": [
+                            "drawer",
+                            "tabs"
+                          ]
                         }
                       },
                       "required": [
@@ -64093,7 +64127,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "footer",
                         "card",
                         "density",
-                        "productPage"
+                        "productPage",
+                        "navigation",
+                        "mobileNavigation"
                       ],
                       "additionalProperties": false
                     },
@@ -64331,7 +64367,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "version": {
                   "type": "number",
                   "enum": [
-                    2
+                    3
                   ]
                 },
                 "mode": {
@@ -64448,30 +64484,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "additionalProperties": false
                     },
                     "typography": {
-                      "type": "object",
-                      "properties": {
-                        "heading": {
-                          "type": "string",
-                          "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
-                          ]
-                        },
-                        "body": {
-                          "type": "string",
-                          "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "heading",
-                        "body"
-                      ],
-                      "additionalProperties": false
+                      "type": "string",
+                      "enum": [
+                        "retail",
+                        "market",
+                        "editorial",
+                        "fresh",
+                        "beauty",
+                        "heritage",
+                        "tech"
+                      ]
                     },
                     "radius": {
                       "type": "string",
@@ -64479,6 +64501,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "square",
                         "subtle",
                         "rounded"
+                      ]
+                    },
+                    "buttonShape": {
+                      "type": "string",
+                      "enum": [
+                        "radius",
+                        "pill"
                       ]
                     },
                     "containerWidth": {
@@ -64526,6 +64555,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "colors",
                     "typography",
                     "radius",
+                    "buttonShape",
                     "containerWidth",
                     "components"
                   ],
@@ -64572,6 +64602,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "filmstrip",
                         "stacked"
                       ]
+                    },
+                    "navigation": {
+                      "type": "string",
+                      "enum": [
+                        "menu",
+                        "mega",
+                        "pills",
+                        "sidebar"
+                      ]
+                    },
+                    "mobileNavigation": {
+                      "type": "string",
+                      "enum": [
+                        "drawer",
+                        "tabs"
+                      ]
                     }
                   },
                   "required": [
@@ -64579,7 +64625,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "footer",
                     "card",
                     "density",
-                    "productPage"
+                    "productPage",
+                    "navigation",
+                    "mobileNavigation"
                   ],
                   "additionalProperties": false
                 },
@@ -64851,7 +64899,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "version": {
                   "type": "number",
                   "enum": [
-                    2
+                    3
                   ]
                 },
                 "mode": {
@@ -64968,30 +65016,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "additionalProperties": false
                     },
                     "typography": {
-                      "type": "object",
-                      "properties": {
-                        "heading": {
-                          "type": "string",
-                          "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
-                          ]
-                        },
-                        "body": {
-                          "type": "string",
-                          "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "heading",
-                        "body"
-                      ],
-                      "additionalProperties": false
+                      "type": "string",
+                      "enum": [
+                        "retail",
+                        "market",
+                        "editorial",
+                        "fresh",
+                        "beauty",
+                        "heritage",
+                        "tech"
+                      ]
                     },
                     "radius": {
                       "type": "string",
@@ -64999,6 +65033,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "square",
                         "subtle",
                         "rounded"
+                      ]
+                    },
+                    "buttonShape": {
+                      "type": "string",
+                      "enum": [
+                        "radius",
+                        "pill"
                       ]
                     },
                     "containerWidth": {
@@ -65046,6 +65087,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "colors",
                     "typography",
                     "radius",
+                    "buttonShape",
                     "containerWidth",
                     "components"
                   ],
@@ -65092,6 +65134,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "filmstrip",
                         "stacked"
                       ]
+                    },
+                    "navigation": {
+                      "type": "string",
+                      "enum": [
+                        "menu",
+                        "mega",
+                        "pills",
+                        "sidebar"
+                      ]
+                    },
+                    "mobileNavigation": {
+                      "type": "string",
+                      "enum": [
+                        "drawer",
+                        "tabs"
+                      ]
                     }
                   },
                   "required": [
@@ -65099,7 +65157,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "footer",
                     "card",
                     "density",
-                    "productPage"
+                    "productPage",
+                    "navigation",
+                    "mobileNavigation"
                   ],
                   "additionalProperties": false
                 },
@@ -65554,7 +65614,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "version": {
                       "type": "number",
                       "enum": [
-                        2
+                        3
                       ]
                     },
                     "mode": {
@@ -65671,30 +65731,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "additionalProperties": false
                         },
                         "typography": {
-                          "type": "object",
-                          "properties": {
-                            "heading": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "editorial"
-                              ]
-                            },
-                            "body": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "humanist"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "heading",
-                            "body"
-                          ],
-                          "additionalProperties": false
+                          "type": "string",
+                          "enum": [
+                            "retail",
+                            "market",
+                            "editorial",
+                            "fresh",
+                            "beauty",
+                            "heritage",
+                            "tech"
+                          ]
                         },
                         "radius": {
                           "type": "string",
@@ -65702,6 +65748,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "square",
                             "subtle",
                             "rounded"
+                          ]
+                        },
+                        "buttonShape": {
+                          "type": "string",
+                          "enum": [
+                            "radius",
+                            "pill"
                           ]
                         },
                         "containerWidth": {
@@ -65749,6 +65802,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "colors",
                         "typography",
                         "radius",
+                        "buttonShape",
                         "containerWidth",
                         "components"
                       ],
@@ -65795,6 +65849,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "filmstrip",
                             "stacked"
                           ]
+                        },
+                        "navigation": {
+                          "type": "string",
+                          "enum": [
+                            "menu",
+                            "mega",
+                            "pills",
+                            "sidebar"
+                          ]
+                        },
+                        "mobileNavigation": {
+                          "type": "string",
+                          "enum": [
+                            "drawer",
+                            "tabs"
+                          ]
                         }
                       },
                       "required": [
@@ -65802,7 +65872,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "footer",
                         "card",
                         "density",
-                        "productPage"
+                        "productPage",
+                        "navigation",
+                        "mobileNavigation"
                       ],
                       "additionalProperties": false
                     },
@@ -66021,7 +66093,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "version": {
                       "type": "number",
                       "enum": [
-                        2
+                        3
                       ]
                     },
                     "mode": {
@@ -66138,30 +66210,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "additionalProperties": false
                         },
                         "typography": {
-                          "type": "object",
-                          "properties": {
-                            "heading": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "editorial"
-                              ]
-                            },
-                            "body": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "humanist"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "heading",
-                            "body"
-                          ],
-                          "additionalProperties": false
+                          "type": "string",
+                          "enum": [
+                            "retail",
+                            "market",
+                            "editorial",
+                            "fresh",
+                            "beauty",
+                            "heritage",
+                            "tech"
+                          ]
                         },
                         "radius": {
                           "type": "string",
@@ -66169,6 +66227,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "square",
                             "subtle",
                             "rounded"
+                          ]
+                        },
+                        "buttonShape": {
+                          "type": "string",
+                          "enum": [
+                            "radius",
+                            "pill"
                           ]
                         },
                         "containerWidth": {
@@ -66216,6 +66281,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "colors",
                         "typography",
                         "radius",
+                        "buttonShape",
                         "containerWidth",
                         "components"
                       ],
@@ -66262,6 +66328,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "filmstrip",
                             "stacked"
                           ]
+                        },
+                        "navigation": {
+                          "type": "string",
+                          "enum": [
+                            "menu",
+                            "mega",
+                            "pills",
+                            "sidebar"
+                          ]
+                        },
+                        "mobileNavigation": {
+                          "type": "string",
+                          "enum": [
+                            "drawer",
+                            "tabs"
+                          ]
                         }
                       },
                       "required": [
@@ -66269,7 +66351,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "footer",
                         "card",
                         "density",
-                        "productPage"
+                        "productPage",
+                        "navigation",
+                        "mobileNavigation"
                       ],
                       "additionalProperties": false
                     },
@@ -66582,7 +66666,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "version": {
                       "type": "number",
                       "enum": [
-                        2
+                        3
                       ]
                     },
                     "mode": {
@@ -66699,30 +66783,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "additionalProperties": false
                         },
                         "typography": {
-                          "type": "object",
-                          "properties": {
-                            "heading": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "editorial"
-                              ]
-                            },
-                            "body": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "humanist"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "heading",
-                            "body"
-                          ],
-                          "additionalProperties": false
+                          "type": "string",
+                          "enum": [
+                            "retail",
+                            "market",
+                            "editorial",
+                            "fresh",
+                            "beauty",
+                            "heritage",
+                            "tech"
+                          ]
                         },
                         "radius": {
                           "type": "string",
@@ -66730,6 +66800,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "square",
                             "subtle",
                             "rounded"
+                          ]
+                        },
+                        "buttonShape": {
+                          "type": "string",
+                          "enum": [
+                            "radius",
+                            "pill"
                           ]
                         },
                         "containerWidth": {
@@ -66777,6 +66854,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "colors",
                         "typography",
                         "radius",
+                        "buttonShape",
                         "containerWidth",
                         "components"
                       ],
@@ -66823,6 +66901,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "filmstrip",
                             "stacked"
                           ]
+                        },
+                        "navigation": {
+                          "type": "string",
+                          "enum": [
+                            "menu",
+                            "mega",
+                            "pills",
+                            "sidebar"
+                          ]
+                        },
+                        "mobileNavigation": {
+                          "type": "string",
+                          "enum": [
+                            "drawer",
+                            "tabs"
+                          ]
                         }
                       },
                       "required": [
@@ -66830,7 +66924,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "footer",
                         "card",
                         "density",
-                        "productPage"
+                        "productPage",
+                        "navigation",
+                        "mobileNavigation"
                       ],
                       "additionalProperties": false
                     },
@@ -67049,7 +67145,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "version": {
                       "type": "number",
                       "enum": [
-                        2
+                        3
                       ]
                     },
                     "mode": {
@@ -67166,30 +67262,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "additionalProperties": false
                         },
                         "typography": {
-                          "type": "object",
-                          "properties": {
-                            "heading": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "editorial"
-                              ]
-                            },
-                            "body": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "humanist"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "heading",
-                            "body"
-                          ],
-                          "additionalProperties": false
+                          "type": "string",
+                          "enum": [
+                            "retail",
+                            "market",
+                            "editorial",
+                            "fresh",
+                            "beauty",
+                            "heritage",
+                            "tech"
+                          ]
                         },
                         "radius": {
                           "type": "string",
@@ -67197,6 +67279,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "square",
                             "subtle",
                             "rounded"
+                          ]
+                        },
+                        "buttonShape": {
+                          "type": "string",
+                          "enum": [
+                            "radius",
+                            "pill"
                           ]
                         },
                         "containerWidth": {
@@ -67244,6 +67333,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "colors",
                         "typography",
                         "radius",
+                        "buttonShape",
                         "containerWidth",
                         "components"
                       ],
@@ -67290,6 +67380,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "filmstrip",
                             "stacked"
                           ]
+                        },
+                        "navigation": {
+                          "type": "string",
+                          "enum": [
+                            "menu",
+                            "mega",
+                            "pills",
+                            "sidebar"
+                          ]
+                        },
+                        "mobileNavigation": {
+                          "type": "string",
+                          "enum": [
+                            "drawer",
+                            "tabs"
+                          ]
                         }
                       },
                       "required": [
@@ -67297,7 +67403,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "footer",
                         "card",
                         "density",
-                        "productPage"
+                        "productPage",
+                        "navigation",
+                        "mobileNavigation"
                       ],
                       "additionalProperties": false
                     },
@@ -67631,7 +67739,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "version": {
                         "type": "number",
                         "enum": [
-                          2
+                          3
                         ]
                       },
                       "mode": {
@@ -67748,30 +67856,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "additionalProperties": false
                           },
                           "typography": {
-                            "type": "object",
-                            "properties": {
-                              "heading": {
-                                "type": "string",
-                                "enum": [
-                                  "system",
-                                  "modern",
-                                  "editorial"
-                                ]
-                              },
-                              "body": {
-                                "type": "string",
-                                "enum": [
-                                  "system",
-                                  "modern",
-                                  "humanist"
-                                ]
-                              }
-                            },
-                            "required": [
-                              "heading",
-                              "body"
-                            ],
-                            "additionalProperties": false
+                            "type": "string",
+                            "enum": [
+                              "retail",
+                              "market",
+                              "editorial",
+                              "fresh",
+                              "beauty",
+                              "heritage",
+                              "tech"
+                            ]
                           },
                           "radius": {
                             "type": "string",
@@ -67779,6 +67873,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                               "square",
                               "subtle",
                               "rounded"
+                            ]
+                          },
+                          "buttonShape": {
+                            "type": "string",
+                            "enum": [
+                              "radius",
+                              "pill"
                             ]
                           },
                           "containerWidth": {
@@ -67826,6 +67927,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "colors",
                           "typography",
                           "radius",
+                          "buttonShape",
                           "containerWidth",
                           "components"
                         ],
@@ -67872,6 +67974,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                               "filmstrip",
                               "stacked"
                             ]
+                          },
+                          "navigation": {
+                            "type": "string",
+                            "enum": [
+                              "menu",
+                              "mega",
+                              "pills",
+                              "sidebar"
+                            ]
+                          },
+                          "mobileNavigation": {
+                            "type": "string",
+                            "enum": [
+                              "drawer",
+                              "tabs"
+                            ]
                           }
                         },
                         "required": [
@@ -67879,7 +67997,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "footer",
                           "card",
                           "density",
-                          "productPage"
+                          "productPage",
+                          "navigation",
+                          "mobileNavigation"
                         ],
                         "additionalProperties": false
                       },
@@ -68178,7 +68298,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "version": {
                       "type": "number",
                       "enum": [
-                        2
+                        3
                       ]
                     },
                     "mode": {
@@ -68295,30 +68415,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "additionalProperties": false
                         },
                         "typography": {
-                          "type": "object",
-                          "properties": {
-                            "heading": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "editorial"
-                              ]
-                            },
-                            "body": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "humanist"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "heading",
-                            "body"
-                          ],
-                          "additionalProperties": false
+                          "type": "string",
+                          "enum": [
+                            "retail",
+                            "market",
+                            "editorial",
+                            "fresh",
+                            "beauty",
+                            "heritage",
+                            "tech"
+                          ]
                         },
                         "radius": {
                           "type": "string",
@@ -68326,6 +68432,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "square",
                             "subtle",
                             "rounded"
+                          ]
+                        },
+                        "buttonShape": {
+                          "type": "string",
+                          "enum": [
+                            "radius",
+                            "pill"
                           ]
                         },
                         "containerWidth": {
@@ -68373,6 +68486,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "colors",
                         "typography",
                         "radius",
+                        "buttonShape",
                         "containerWidth",
                         "components"
                       ],
@@ -68419,6 +68533,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "filmstrip",
                             "stacked"
                           ]
+                        },
+                        "navigation": {
+                          "type": "string",
+                          "enum": [
+                            "menu",
+                            "mega",
+                            "pills",
+                            "sidebar"
+                          ]
+                        },
+                        "mobileNavigation": {
+                          "type": "string",
+                          "enum": [
+                            "drawer",
+                            "tabs"
+                          ]
                         }
                       },
                       "required": [
@@ -68426,7 +68556,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "footer",
                         "card",
                         "density",
-                        "productPage"
+                        "productPage",
+                        "navigation",
+                        "mobileNavigation"
                       ],
                       "additionalProperties": false
                     },
@@ -68645,7 +68777,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "version": {
                       "type": "number",
                       "enum": [
-                        2
+                        3
                       ]
                     },
                     "mode": {
@@ -68762,30 +68894,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                           "additionalProperties": false
                         },
                         "typography": {
-                          "type": "object",
-                          "properties": {
-                            "heading": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "editorial"
-                              ]
-                            },
-                            "body": {
-                              "type": "string",
-                              "enum": [
-                                "system",
-                                "modern",
-                                "humanist"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "heading",
-                            "body"
-                          ],
-                          "additionalProperties": false
+                          "type": "string",
+                          "enum": [
+                            "retail",
+                            "market",
+                            "editorial",
+                            "fresh",
+                            "beauty",
+                            "heritage",
+                            "tech"
+                          ]
                         },
                         "radius": {
                           "type": "string",
@@ -68793,6 +68911,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "square",
                             "subtle",
                             "rounded"
+                          ]
+                        },
+                        "buttonShape": {
+                          "type": "string",
+                          "enum": [
+                            "radius",
+                            "pill"
                           ]
                         },
                         "containerWidth": {
@@ -68840,6 +68965,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "colors",
                         "typography",
                         "radius",
+                        "buttonShape",
                         "containerWidth",
                         "components"
                       ],
@@ -68886,6 +69012,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "filmstrip",
                             "stacked"
                           ]
+                        },
+                        "navigation": {
+                          "type": "string",
+                          "enum": [
+                            "menu",
+                            "mega",
+                            "pills",
+                            "sidebar"
+                          ]
+                        },
+                        "mobileNavigation": {
+                          "type": "string",
+                          "enum": [
+                            "drawer",
+                            "tabs"
+                          ]
                         }
                       },
                       "required": [
@@ -68893,7 +69035,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "footer",
                         "card",
                         "density",
-                        "productPage"
+                        "productPage",
+                        "navigation",
+                        "mobileNavigation"
                       ],
                       "additionalProperties": false
                     },
@@ -78841,6 +78985,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "href": {
                     "type": "string"
                   },
+                  "imageUrl": {
+                    "type": "string"
+                  },
                   "openInNewTab": {
                     "type": "boolean"
                   },
@@ -78858,6 +79005,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "href": {
                           "type": "string"
                         },
+                        "imageUrl": {
+                          "type": "string"
+                        },
                         "openInNewTab": {
                           "type": "boolean"
                         },
@@ -78873,6 +79023,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                                 "type": "string"
                               },
                               "href": {
+                                "type": "string"
+                              },
+                              "imageUrl": {
                                 "type": "string"
                               },
                               "openInNewTab": {
@@ -78963,6 +79116,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "href": {
                               "type": "string"
                             },
+                            "imageUrl": {
+                              "type": "string"
+                            },
                             "openInNewTab": {
                               "type": "boolean"
                             },
@@ -78980,6 +79136,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                                   "href": {
                                     "type": "string"
                                   },
+                                  "imageUrl": {
+                                    "type": "string"
+                                  },
                                   "openInNewTab": {
                                     "type": "boolean"
                                   },
@@ -78995,6 +79154,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                                           "type": "string"
                                         },
                                         "href": {
+                                          "type": "string"
+                                        },
+                                        "imageUrl": {
                                           "type": "string"
                                         },
                                         "openInNewTab": {
@@ -79089,7 +79251,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "version": {
                   "type": "number",
                   "enum": [
-                    2
+                    3
                   ]
                 },
                 "mode": {
@@ -79206,30 +79368,16 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "additionalProperties": false
                     },
                     "typography": {
-                      "type": "object",
-                      "properties": {
-                        "heading": {
-                          "type": "string",
-                          "enum": [
-                            "system",
-                            "modern",
-                            "editorial"
-                          ]
-                        },
-                        "body": {
-                          "type": "string",
-                          "enum": [
-                            "system",
-                            "modern",
-                            "humanist"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "heading",
-                        "body"
-                      ],
-                      "additionalProperties": false
+                      "type": "string",
+                      "enum": [
+                        "retail",
+                        "market",
+                        "editorial",
+                        "fresh",
+                        "beauty",
+                        "heritage",
+                        "tech"
+                      ]
                     },
                     "radius": {
                       "type": "string",
@@ -79237,6 +79385,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "square",
                         "subtle",
                         "rounded"
+                      ]
+                    },
+                    "buttonShape": {
+                      "type": "string",
+                      "enum": [
+                        "radius",
+                        "pill"
                       ]
                     },
                     "containerWidth": {
@@ -79284,6 +79439,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "colors",
                     "typography",
                     "radius",
+                    "buttonShape",
                     "containerWidth",
                     "components"
                   ],
@@ -79330,6 +79486,22 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "filmstrip",
                         "stacked"
                       ]
+                    },
+                    "navigation": {
+                      "type": "string",
+                      "enum": [
+                        "menu",
+                        "mega",
+                        "pills",
+                        "sidebar"
+                      ]
+                    },
+                    "mobileNavigation": {
+                      "type": "string",
+                      "enum": [
+                        "drawer",
+                        "tabs"
+                      ]
                     }
                   },
                   "required": [
@@ -79337,7 +79509,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "footer",
                     "card",
                     "density",
-                    "productPage"
+                    "productPage",
+                    "navigation",
+                    "mobileNavigation"
                   ],
                   "additionalProperties": false
                 },
@@ -80735,6 +80909,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "href": {
                     "type": "string"
                   },
+                  "imageUrl": {
+                    "type": "string"
+                  },
                   "openInNewTab": {
                     "type": "boolean"
                   },
@@ -80884,6 +81061,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "href": {
                     "type": "string"
                   },
+                  "imageUrl": {
+                    "type": "string"
+                  },
                   "openInNewTab": {
                     "type": "boolean"
                   },
@@ -80901,6 +81081,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                         "href": {
                           "type": "string"
                         },
+                        "imageUrl": {
+                          "type": "string"
+                        },
                         "openInNewTab": {
                           "type": "boolean"
                         },
@@ -80916,6 +81099,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                                 "type": "string"
                               },
                               "href": {
+                                "type": "string"
+                              },
+                              "imageUrl": {
                                 "type": "string"
                               },
                               "openInNewTab": {
@@ -81037,6 +81223,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "href": {
                         "type": "string"
                       },
+                      "imageUrl": {
+                        "type": "string"
+                      },
                       "openInNewTab": {
                         "type": "boolean"
                       },
@@ -81054,6 +81243,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                             "href": {
                               "type": "string"
                             },
+                            "imageUrl": {
+                              "type": "string"
+                            },
                             "openInNewTab": {
                               "type": "boolean"
                             },
@@ -81069,6 +81261,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                                     "type": "string"
                                   },
                                   "href": {
+                                    "type": "string"
+                                  },
+                                  "imageUrl": {
                                     "type": "string"
                                   },
                                   "openInNewTab": {

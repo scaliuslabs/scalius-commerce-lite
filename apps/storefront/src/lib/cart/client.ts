@@ -314,7 +314,17 @@ function handleAbandonedCheckout() {
   }, 1500); // Debounce for 1.5 seconds
 }
 
-function syncCartPagePresentation(ready: boolean): void {
+/**
+ * While true, the cart page stays in its loading state even once lines are
+ * rendered: the first availability check settles before the cart is shown,
+ * so an issue banner or repair action never pushes painted content down
+ * (CLS). initCartFunctionality caps the hold.
+ */
+let cartRevealHeld = false;
+const CART_REVEAL_HOLD_MS = 1500;
+
+function syncCartPagePresentation(requestedReady: boolean): void {
+  const ready = requestedReady && !cartRevealHeld;
   const root = document.getElementById("cartPageRoot");
   const cartItems = document.getElementById("cartItems");
   const cartSummary = document.getElementById("cartSummary");
@@ -1439,11 +1449,23 @@ export async function initCartFunctionality() {
     { signal: runtimeSignal },
   );
 
-  await renderCartItems();
-  if (applyPendingCartRepairState()) {
+  cartRevealHeld = true;
+  let firstValidation: Promise<boolean> = Promise.resolve(true);
+  try {
     await renderCartItems();
+    if (applyPendingCartRepairState()) {
+      await renderCartItems();
+    }
+    firstValidation = validateCartSnapshot();
+    await Promise.race([
+      firstValidation,
+      new Promise((resolve) => setTimeout(resolve, CART_REVEAL_HOLD_MS)),
+    ]);
+  } finally {
+    cartRevealHeld = false;
   }
-  await validateCartSnapshot();
+  syncCartPagePresentation(true);
+  await firstValidation;
   updateCheckoutButtonState();
 }
 

@@ -16,6 +16,8 @@ import {
   STOREFRONT_DENSITIES,
   buildStorefrontThemeTokens,
   STOREFRONT_HEADER_STYLES,
+  STOREFRONT_MOBILE_NAVIGATION_STYLES,
+  STOREFRONT_NAVIGATION_STYLES,
   STOREFRONT_PRODUCT_PAGE_LAYOUTS,
   STOREFRONT_STYLE_PRESET_KEYS,
   resolveStorefrontThemeLayout,
@@ -97,6 +99,7 @@ async function render(
   theme: StorefrontThemeDocument,
   props: object,
   slots?: Record<string, string>,
+  url = "https://shop.test/",
 ): Promise<string> {
   const requestTheme = {
     theme,
@@ -109,7 +112,7 @@ async function render(
     slots,
     // The shape lib/storefront-theme-context keeps per request.
     locals: { storefrontTheme: Promise.resolve(requestTheme) },
-    request: new Request("https://shop.test/"),
+    request: new Request(url),
   });
 }
 
@@ -298,7 +301,10 @@ const GALLERY_MEDIA = ["front", "back", "detail"].map((name, index) => ({
 
 // ─── The matrix: every Style preset with every layout choice ─────────────
 
-const LAYOUT_CHOICES: { [Axis in keyof StorefrontThemeLayout]: readonly StorefrontThemeLayout[Axis][] } = {
+// Navigation has its own matrix below (every style with every header style),
+// which renders only the Layout, so this one stays fast.
+type MatrixAxis = Exclude<keyof StorefrontThemeLayout, "navigation" | "mobileNavigation">;
+const LAYOUT_CHOICES: { [Axis in MatrixAxis]: readonly StorefrontThemeLayout[Axis][] } = {
   header: STOREFRONT_HEADER_STYLES,
   footer: STOREFRONT_FOOTER_STYLES,
   card: STOREFRONT_CARD_STYLES,
@@ -540,6 +546,221 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
   expect(Boolean(priceBadge)).toBe(card.badge === "price");
   expect(soldOut.textContent).toContain("Sold out");
 }
+
+// ─── Navigation: every style with every phone style and header style ─────
+
+/** Three levels, photos on some categories, a parent without a link. */
+const NAVIGATION = [
+  {
+    id: "women",
+    title: "Women",
+    href: "/categories/women",
+    imageUrl: image("women"),
+    subMenu: [
+      {
+        id: "sarees",
+        title: "Sarees",
+        href: "/categories/sarees",
+        imageUrl: image("sarees"),
+        subMenu: [
+          { id: "silk", title: "Silk sarees", href: "/categories/silk-sarees" },
+          { id: "cotton", title: "Cotton sarees", href: "/categories/cotton-sarees" },
+        ],
+      },
+      { id: "kurtis", title: "Kurtis", href: "/categories/kurtis" },
+    ],
+  },
+  { id: "men", title: "Men", subMenu: [{ id: "panjabi", title: "Panjabi", href: "/categories/panjabi", imageUrl: image("panjabi") }] },
+  { id: "sale", title: "Sale", href: "/sale" },
+];
+const CURRENT_PAGE = "https://shop.test/categories/silk-sarees";
+
+const NAVIGATION_MATRIX = STOREFRONT_NAVIGATION_STYLES.flatMap((navigation) =>
+  STOREFRONT_MOBILE_NAVIGATION_STYLES.flatMap((mobileNavigation) =>
+    STOREFRONT_HEADER_STYLES.map((header) => ({ navigation, mobileNavigation, header })),
+  ),
+);
+
+function navigationTheme(layout: Partial<StorefrontThemeLayout>): StorefrontThemeDocument {
+  const base = storefrontStylePresetTheme("classic");
+  return storefrontThemeDocumentSchema.parse({ ...base, layout: { ...base.layout, ...layout } });
+}
+
+async function renderNavigationPage(
+  theme: StorefrontThemeDocument,
+  props: object = {},
+  url = CURRENT_PAGE,
+): Promise<Document> {
+  const data = { ...layoutData({ business: true }), navigation: NAVIGATION };
+  return parse(
+    await render(
+      "/src/layouts/Layout.astro",
+      theme,
+      { title: "Silk sarees", layoutData: data, ...props },
+      { default: '<section class="max-w-7xl mx-auto"><h1>Silk sarees</h1></section>' },
+      url,
+    ),
+  );
+}
+
+/** Every disclosure button controls an existing panel whose visibility matches. */
+function assertDisclosures(page: Document) {
+  const buttons = Array.from(page.querySelectorAll("button[data-disclosure]"));
+  for (const button of buttons) {
+    const expanded = button.getAttribute("aria-expanded");
+    expect(["true", "false"]).toContain(expanded);
+    const panel = page.getElementById(button.getAttribute("aria-controls") ?? "");
+    expect(panel, button.outerHTML).not.toBeNull();
+    expect(panel!.hasAttribute("hidden")).toBe(expanded === "false");
+    // An icon-only toggle still has a name.
+    expect(button.textContent?.trim()).not.toBe("");
+  }
+  expect(page.querySelector('[role="menu"], [role="menubar"], [role="menuitem"]')).toBeNull();
+  return buttons;
+}
+
+const expanded = (page: Document, panelId: string) =>
+  page.querySelector(`[aria-controls="${panelId}"]`)?.getAttribute("aria-expanded");
+
+describe("navigation styles", () => {
+  it.each(NAVIGATION_MATRIX)("$navigation / $mobileNavigation / $header", async (layout) => {
+    const page = await renderNavigationPage(navigationTheme(layout));
+    expect(duplicateIds(page)).toEqual([]);
+    const header = page.querySelector("#main-header")!;
+    expect(header.getAttribute("data-navigation")).toBe(layout.navigation);
+    const popups = assertDisclosures(page).filter((button) => button.getAttribute("data-disclosure") === "popup");
+
+    // Desktop menu row: menu and mega only; the classic bar folds the dropdown
+    // menu into itself on scroll (a second, compact copy).
+    const menuRow = layout.navigation === "menu" || layout.navigation === "mega";
+    const condensed = layout.navigation === "menu" && layout.header === "classic";
+    expect(Boolean(page.querySelector("#desktop-nav"))).toBe(menuRow);
+    expect(Boolean(page.querySelector("#desktop-nav-compact"))).toBe(condensed);
+    expect(header.hasAttribute("data-header-condense")).toBe(condensed);
+    if (menuRow) {
+      const nav = page.querySelector("#desktop-nav")!;
+      expect(nav.getAttribute("data-nav-style")).toBe(layout.navigation);
+      expect(nav.querySelector("[data-nav-overflow]")).not.toBeNull();
+      // Women (split link + button), Men (button only), More; Sale is a link.
+      expect(popups.filter((button) => nav.contains(button))).toHaveLength(3);
+      expect(nav.querySelector('a[href="/categories/women"]')!.getAttribute("aria-current")).toBe("true");
+      expect(nav.querySelector('a[href="/sale"]')!.hasAttribute("aria-current")).toBe(false);
+      expect(nav.querySelector("#desktop-nav-more [data-nav-more-index='0'] a[href='/categories/sarees']")).not.toBeNull();
+    }
+    if (layout.navigation === "menu") {
+      // Third level nested under its parent inside the dropdown.
+      const dropdown = page.querySelector("#desktop-nav-panel-0")!;
+      expect(dropdown.classList.contains("desktop-nav-dropdown")).toBe(true);
+      expect(dropdown.querySelector(".nav-dropdown-sublist a[href='/categories/silk-sarees']")!.getAttribute("aria-current")).toBe("page");
+      expect(page.querySelector(".mega-panel")).toBeNull();
+    }
+    if (layout.navigation === "mega") {
+      const women = page.querySelector("#desktop-nav-panel-0")!;
+      const men = page.querySelector("#desktop-nav-panel-1")!;
+      expect(women.classList.contains("mega-panel")).toBe(true);
+      // One column per second-level item, headed by its link, then its links.
+      const columns = Array.from(women.querySelectorAll(".mega-column"));
+      expect(columns.map((column) => column.querySelector(".mega-column-title")!.textContent)).toEqual(["Sarees", "Kurtis"]);
+      expect(Array.from(columns[0]!.querySelectorAll(".mega-links a")).map((link) => link.getAttribute("href"))).toEqual([
+        "/categories/silk-sarees",
+        "/categories/cotton-sarees",
+      ]);
+      // Photos only where the category has one: small, lazy, decorative, fixed size.
+      expect(columns[0]!.querySelector("img")!.getAttribute("src")).toBe(image("sarees"));
+      expect(columns[1]!.querySelector("img")).toBeNull();
+      for (const photo of Array.from(page.querySelectorAll(".mega-panel img"))) {
+        expect(photo.getAttribute("alt")).toBe("");
+        expect(photo.getAttribute("loading")).toBe("lazy");
+        expect(photo.getAttribute("width")).toBeTruthy();
+        expect(photo.getAttribute("height")).toBeTruthy();
+      }
+      // "Shop all" for a parent with a link (on its photo when it has one).
+      expect(women.querySelector(".mega-feature")!.getAttribute("href")).toBe("/categories/women");
+      expect(women.querySelector(".mega-feature")!.textContent).toContain("Shop all Women");
+      expect(men.querySelector(".mega-shop-all")).toBeNull();
+      expect(men.querySelector(".mega-column img")!.getAttribute("src")).toBe(image("panjabi"));
+    }
+
+    // Pills: one row of top-level links; a parent without a link offers its children.
+    const pills = page.querySelector("#pill-nav");
+    expect(Boolean(pills)).toBe(layout.navigation === "pills");
+    if (pills) {
+      expect(header.contains(pills)).toBe(true);
+      expect(pills.querySelector("[data-pill-scroller]")).not.toBeNull();
+      expect(Array.from(pills.querySelectorAll("a")).map((link) => link.getAttribute("href"))).toEqual([
+        "/categories/women",
+        "/categories/panjabi",
+        "/sale",
+      ]);
+      expect(pills.querySelector('a[href="/categories/women"]')!.getAttribute("aria-current")).toBe("true");
+      expect(pills.querySelector("button")).toBeNull();
+    }
+
+    // Sidebar: beside <main> in the shell; the current section renders expanded.
+    const sidebar = page.querySelector("#sidebar-nav");
+    const shell = page.querySelector(".site-shell")!;
+    expect(shell.contains(page.querySelector("main"))).toBe(true);
+    expect(Boolean(sidebar)).toBe(layout.navigation === "sidebar");
+    expect(shell.getAttribute("data-site-shell")).toBe(layout.navigation === "sidebar" ? "sidebar" : null);
+    if (sidebar) {
+      expect(sidebar.parentElement).toBe(shell);
+      expect(expanded(page, "sidebar-nav-0-panel")).toBe("true");
+      expect(expanded(page, "sidebar-nav-0-0-panel")).toBe("true");
+      expect(expanded(page, "sidebar-nav-1-panel")).toBe("false");
+      expect(sidebar.querySelector('a[href="/categories/silk-sarees"]')!.getAttribute("aria-current")).toBe("page");
+    }
+
+    // The phone drawer is an accordion that opens on the current section.
+    expect(expanded(page, "mobile-nav-0-panel")).toBe("true");
+    expect(expanded(page, "mobile-nav-1-panel")).toBe("false");
+    expect(page.querySelector("#mobile-menu-panel [data-menu-toggle]")).toBeNull();
+
+    // Tab bar only for `tabs`, wired to the header's openers.
+    const tabs = page.querySelector("#mobile-tab-bar");
+    expect(Boolean(tabs)).toBe(layout.mobileNavigation === "tabs");
+    expect(page.documentElement.getAttribute("data-mobile-nav")).toBe(layout.mobileNavigation === "tabs" ? "tabs" : null);
+    if (tabs) {
+      const items = Array.from(tabs.querySelectorAll(".mobile-tab"));
+      // Visible labels (the cart count badge is aria-hidden).
+      expect(items.map((item) => item.querySelector(":scope > span:last-child")!.textContent)).toEqual([
+        "Home",
+        "Categories",
+        "Search",
+        "Cart",
+        "Account",
+      ]);
+      const categories = tabs.querySelector("[data-mobile-menu-open]")!;
+      expect(categories.getAttribute("aria-controls")).toBe("mobile-menu-panel");
+      expect(categories.getAttribute("aria-expanded")).toBe("false");
+      expect(categories.getAttribute("aria-current")).toBe("true");
+      expect(tabs.querySelector("[data-search-open]")).not.toBeNull();
+      expect(tabs.querySelector("[data-cart-open] #mobile-cart-count")).not.toBeNull();
+      expect(tabs.querySelector('a[data-account-link][href="/account"]')).not.toBeNull();
+      expect(tabs.querySelector('a[href="/"]')!.hasAttribute("aria-current")).toBe(false);
+    } else {
+      expect(page.querySelector("#mobile-cart-count")).toBeNull();
+    }
+  });
+
+  it("keeps the sidebar and tab bar off checkout, cart and focused pages", async () => {
+    const theme = navigationTheme({ navigation: "sidebar", mobileNavigation: "tabs" });
+    // Cart and checkout render without the header.
+    const checkout = await renderNavigationPage(theme, { hideHeader: true, hideFooter: true }, "https://shop.test/checkout");
+    expect(checkout.querySelector("#sidebar-nav")).toBeNull();
+    expect(checkout.querySelector("#mobile-tab-bar")).toBeNull();
+    expect(checkout.querySelector(".site-shell")!.hasAttribute("data-site-shell")).toBe(false);
+    expect(checkout.documentElement.hasAttribute("data-mobile-nav")).toBe(false);
+
+    const receipt = await renderNavigationPage(theme, { hideNavigationSidebar: true }, "https://shop.test/order-success");
+    expect(receipt.querySelector("#sidebar-nav")).toBeNull();
+    expect(receipt.querySelector("#mobile-tab-bar")).not.toBeNull();
+
+    const home = await renderNavigationPage(theme, {}, "https://shop.test/");
+    expect(home.querySelector('#mobile-tab-bar a[href="/"]')!.getAttribute("aria-current")).toBe("page");
+    expect(home.querySelector("#mobile-tab-bar [data-mobile-menu-open]")!.hasAttribute("aria-current")).toBe(false);
+    expect(expanded(home, "sidebar-nav-0-panel")).toBe("false");
+  });
+});
 
 // ─── Custom mode: builder sections ────────────────────────────────────────
 

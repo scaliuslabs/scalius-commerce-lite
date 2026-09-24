@@ -1155,6 +1155,8 @@ describe("site settings cache invalidation", () => {
       lowContrast,
       unsafeColor,
       { ...DEFAULT_STOREFRONT_THEME, version: 1 },
+      { ...DEFAULT_STOREFRONT_THEME, version: 2 },
+      { ...DEFAULT_STOREFRONT_THEME, layout: { ...DEFAULT_STOREFRONT_THEME.layout, navigation: "tabs" } },
       { ...DEFAULT_STOREFRONT_THEME, layout: { ...DEFAULT_STOREFRONT_THEME.layout, header: "floating" } },
       { ...DEFAULT_STOREFRONT_THEME, layout: { ...DEFAULT_STOREFRONT_THEME.layout, sidebar: "left" } },
       {
