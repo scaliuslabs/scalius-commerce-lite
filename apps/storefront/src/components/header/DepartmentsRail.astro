@@ -39,9 +39,11 @@ const onHome = Astro.url.pathname === "/";
 </nav>
 
 <style>
+  /* The tab sits at the start of its row, whatever the row's alignment. */
   .drail {
     display: none;
     flex-shrink: 0;
+    margin-inline-end: auto;
   }
 
   @media (min-width: 64rem) {
