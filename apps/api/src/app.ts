@@ -51,6 +51,7 @@ import {
 
 // Admin routes
 import { adminAuthMiddleware } from "./middleware/admin-auth";
+import { privateNoStore } from "./middleware/private-no-store";
 import {
   cookieOriginGuardMiddleware,
   dashboardOriginGuardMiddleware,
@@ -186,9 +187,14 @@ app.route("/webhooks/steadfast", steadfastWebhookRoutes);
 // Payment gateways: /webhooks/{provider}. Registered after the courier routes.
 app.route("/webhooks", paymentWebhookRoutes);
 
+
 // Apply protection only to paths needing it. The storefront order router is
 // public but proof/origin guarded: checkout create/cart-validation/status/receipt
 // must stay reachable without a bearer token.
+// Dashboard responses (including refusals) carry merchant data: never let a
+// browser, proxy or back/forward cache keep them.
+app.use("/cache/*", privateNoStore);
+app.use("/admin/*", privateNoStore);
 app.use("/cache/*", dashboardOriginGuardMiddleware);
 app.use("/cache/*", adminAuthMiddleware);
 app.use("/orders/*", cookieOriginGuardMiddleware);

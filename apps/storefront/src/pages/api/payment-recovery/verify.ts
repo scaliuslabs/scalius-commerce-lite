@@ -14,16 +14,12 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   const fields = await readOrderCodeFields(request);
-  if (!fields?.orderId || !fields.channel || !fields.code) {
+  if (!fields?.orderId || !fields.code) {
     return orderCodeJsonResponse({ success: false, errorCode: "PAYMENT_RECOVERY_INVALID_VERIFICATION" }, 400);
   }
 
-  const result = await verifyPaymentRecoveryCode({
-    orderId: fields.orderId,
-    channel: fields.channel,
-    code: fields.code,
-  });
+  const result = await verifyPaymentRecoveryCode({ orderId: fields.orderId, code: fields.code });
   return result.ok
     ? verifiedReceiptResponse(result.data, "json")
-    : orderCodeFailureResponse(result.failure, { includeMessage: false });
+    : orderCodeFailureResponse(result.failure);
 };

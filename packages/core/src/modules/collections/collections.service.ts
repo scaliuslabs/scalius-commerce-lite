@@ -38,8 +38,9 @@ import {
 } from "../categories/categories.publication";
 import {
     loadProductMediaProjections,
+    resolveProductCardImages,
     resolveProductImageRepresentation,
-    type ProductImageRepresentation,
+    type ProductCardImages,
 } from "../products/products.media";
 
 // ─────────────────────────────────────────
@@ -949,14 +950,11 @@ export type ResolvedProduct = {
     hasVariants: boolean;
     availableForSale: boolean;
     priceVaries: boolean;
-    imageUrl: string | null;
-    imageMediaId: string | null;
-    imageAlt: string | null;
-};
+} & ProductCardImages;
 
 function enrichProduct(
     p: RawProduct,
-    image: ProductImageRepresentation,
+    images: ProductCardImages,
     decimalPlaces: number,
 ): ResolvedProduct {
     const { hasVariants, availableForSale, storeCurrencyCode: _storeCurrencyCode, ...product } = p;
@@ -964,9 +962,7 @@ function enrichProduct(
         ...presentBuyerPricing(product, decimalPlaces),
         hasVariants: Boolean(hasVariants),
         availableForSale: Boolean(availableForSale),
-        imageUrl: image?.url ?? null,
-        imageMediaId: image?.mediaId ?? null,
-        imageAlt: image?.altText ?? null,
+        ...images,
     };
 }
 
@@ -980,7 +976,7 @@ async function enrichProductsWithMedia(
         row.id,
         enrichProduct(
             row,
-            resolveProductImageRepresentation(mediaMap.get(row.id) ?? []),
+            resolveProductCardImages(mediaMap.get(row.id) ?? []),
             decimalPlaces,
         ),
     ]));

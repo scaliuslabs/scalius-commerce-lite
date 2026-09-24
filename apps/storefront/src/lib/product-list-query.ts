@@ -61,6 +61,42 @@ export function isIndexableProductListView(currentFilters: ProductListFilterStat
   return Object.keys(currentFilters).every((key) => key === "page");
 }
 
+/**
+ * A page number past the last page does not exist: the listing answers 404
+ * instead of an indexable empty page (Google: soft 404s waste crawl budget).
+ * Page 1 always exists, so a genuinely empty listing keeps its empty state.
+ */
+export function isMissingProductListPage(pagination: { page: number; totalPages: number }): boolean {
+  return pagination.page > Math.max(1, pagination.totalPages);
+}
+
+/**
+ * Meta description for a listing the merchant has not described, built from
+ * its own products: "Shop Home Refresh: Press Glass Storage Set, Loop
+ * Silicone Utensil Set, Echo Mini Speaker and more." Up to three names while
+ * it stays within `maxLength` characters.
+ */
+export function productListMetaDescription(
+  name: string,
+  productNames: readonly string[],
+  maxLength = 155,
+): string {
+  const names = [...new Set(productNames.map((productName) => productName.trim()).filter(Boolean))];
+  const sentence = (shown: readonly string[]) => {
+    if (shown.length === 0) return `Shop ${name}.`;
+    const list = shown.length < names.length
+      ? `${shown.join(", ")} and more`
+      : shown.length === 1 ? shown[0] : `${shown.slice(0, -1).join(", ")} and ${shown.at(-1)}`;
+    return `Shop ${name}: ${list}.`;
+  };
+  let shown: string[] = [];
+  for (const productName of names.slice(0, 3)) {
+    if (sentence([...shown, productName]).length > maxLength) break;
+    shown = [...shown, productName];
+  }
+  return sentence(shown);
+}
+
 /** A listing page's self-canonical URL: the resource URL plus `?page=N` after page 1. */
 export function productListCanonicalUrl(resourceUrl: string | null, page: number): string | null {
   if (!resourceUrl) return null;

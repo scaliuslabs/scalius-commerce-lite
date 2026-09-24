@@ -15,6 +15,8 @@ describe("create order prefill from an abandoned checkout", () => {
       city: "city_1",
       zone: "zone_1",
       area: "",
+      shippingMethodId: "rate_1",
+      shippingCharge: 80,
       items: [
         { productId: "prod_1", variantId: "sku_1", quantity: 2, productName: "Panjabi", variantLabel: "Size: L" },
         { productId: "prod_2", variantId: null, quantity: 1 },
@@ -30,6 +32,8 @@ describe("create order prefill from an abandoned checkout", () => {
       city: "city_1",
       zone: "zone_1",
       area: null,
+      shippingMethodId: "rate_1",
+      shippingCharge: 80,
       items: [{
         productId: "prod_1",
         variantId: "sku_1",

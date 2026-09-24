@@ -8,10 +8,12 @@ export type NotificationIssue =
   | "whatsappNotSetUp"
   | "providerSetup"
   | "stopped"
+  | "noChannel"
+  | "turnedOff"
   | "other";
 
 /** Missing a recipient or a channel setup: sending again can't help. */
-const UNSENDABLE_ISSUES = new Set<NotificationIssue>(["noEmail", "noPhone", "smsNotSetUp", "whatsappNotSetUp"]);
+const UNSENDABLE_ISSUES = new Set<NotificationIssue>(["noEmail", "noPhone", "smsNotSetUp", "whatsappNotSetUp", "noChannel"]);
 /** The store never set this channel up, so nothing was tried on it. */
 const CHANNEL_NOT_SET_UP = new Set<NotificationIssue>(["smsNotSetUp", "whatsappNotSetUp"]);
 
@@ -21,6 +23,8 @@ const SUCCESSFUL = new Set(["accepted", "delivered"]);
 export function notificationIssue(value: string | null | undefined): NotificationIssue | null {
   const text = value?.trim().toLowerCase();
   if (!text) return null;
+  // Turned off in Notifications: sendable again once it's back on.
+  if (text.includes("notification_turned_off")) return "turnedOff";
   if (text.includes("missing_email_recipient") || text.includes("missing email")) return "noEmail";
   if (/missing_(sms|whatsapp)_recipient|invalid_whatsapp_recipient|missing sms recipient/.test(text)) return "noPhone";
   if (text.includes("missing_sms_provider")) return "smsNotSetUp";
@@ -57,7 +61,8 @@ export function summarizeNotificationDelivery(
   outbox: Pick<OrderNotificationOutboxDto, "status" | "receipts">,
 ): string {
   const customerReceipts = outbox.receipts.filter((receipt) => receipt.channel !== "push");
-  if (customerReceipts.length === 0) return outbox.status;
+  // "Sent" needs a delivery record: a message no customer channel took wasn't sent.
+  if (customerReceipts.length === 0) return outbox.status === "sent" ? "skipped" : outbox.status;
   const attempted = attemptedCustomerReceipts(customerReceipts);
   // Nothing could be tried: no channel set up, or no address on any of them.
   if (attempted.length === 0) return "skipped";
@@ -110,13 +115,27 @@ export function notificationChannelLines(receipts: readonly OrderNotificationRec
 }
 
 /**
+ * Why the whole message didn't reach the customer when no channel line says
+ * so: nothing on record for any customer channel, or no channel set up.
+ */
+export function notificationOutboxIssue(
+  outbox: Pick<OrderNotificationOutboxDto, "status" | "lastError" | "receipts">,
+): NotificationIssue | null {
+  const customerReceipts = outbox.receipts.filter((receipt) => receipt.channel !== "push");
+  if (customerReceipts.length === 0) {
+    const issue = notificationIssue(outbox.lastError);
+    return issue ?? (outbox.status === "sent" ? "noChannel" : null);
+  }
+  return notificationChannelLines(customerReceipts).length === 0 ? "noChannel" : null;
+}
+
+/**
  * Whether sending (again) can reach the customer: not when every channel
  * lacks a recipient or isn't set up.
  */
-export function canSendNotificationAgain(outbox: Pick<OrderNotificationOutboxDto, "lastError" | "receipts">): boolean {
-  if (!outbox.receipts.some((receipt) => receipt.channel !== "push")) {
-    const issue = notificationIssue(outbox.lastError);
-    return !issue || !UNSENDABLE_ISSUES.has(issue);
-  }
+export function canSendNotificationAgain(outbox: Pick<OrderNotificationOutboxDto, "status" | "lastError" | "receipts">): boolean {
+  const issue = notificationOutboxIssue(outbox);
+  if (issue && UNSENDABLE_ISSUES.has(issue)) return false;
+  if (!outbox.receipts.some((receipt) => receipt.channel !== "push")) return true;
   return attemptedCustomerReceipts(outbox.receipts).length > 0;
 }

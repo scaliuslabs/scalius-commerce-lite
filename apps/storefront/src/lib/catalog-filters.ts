@@ -11,9 +11,11 @@ function selectedValues(currentFilters: ProductListFilterState, key: string): st
 }
 
 /**
- * Facets worth showing: at least two values that still match products (a
- * single-value facet filters nothing), or any facet the buyer already uses so
- * the selection can be undone. Values beyond the first ten are folded.
+ * Facets worth showing: at least two values, one of which still matches
+ * products (a single-value facet filters nothing), or any facet the buyer
+ * already uses so the selection can be undone. Values the other selections
+ * rule out stay listed with a zero count (rendered disabled) so the list does
+ * not jump. Values beyond the first ten are folded.
  */
 export function visibleCatalogFacets(
   facets: readonly ProductFacet[],
@@ -31,7 +33,8 @@ export function visibleCatalogFacets(
       };
     })
     .filter((facet) =>
-      facet.selectedCount > 0 || facet.values.filter(({ count }) => count > 0).length >= 2,
+      facet.selectedCount > 0 ||
+      (facet.values.length >= 2 && facet.values.some(({ count }) => count > 0)),
     );
 }
 
@@ -44,8 +47,42 @@ export function showsCatalogPriceFilter(
     Boolean(priceRange && priceRange.max > priceRange.min);
 }
 
-export function showProductsLabel(total: number): string {
-  return `Show ${total.toLocaleString("en-IN")} ${total === 1 ? "product" : "products"}`;
+/** The phone sheet's apply button for a selection matching `total` products. */
+export function catalogApplyButton(total: number): { label: string; disabled: boolean } {
+  return total === 0
+    ? { label: "No matching products", disabled: true }
+    : { label: `Show ${total.toLocaleString("en-IN")} ${total === 1 ? "product" : "products"}`, disabled: false };
+}
+
+/**
+ * Shows the counts for the pending selection: every facet value's count (the
+ * API counts each facet against the other facets' selections), unticked
+ * zero-count values disabled so no combination leads to an empty list, and
+ * the apply button. Values missing from the facets match nothing; without
+ * facets only the button changes.
+ */
+export function applyCatalogFilterCounts(
+  form: HTMLFormElement,
+  facets: readonly ProductFacet[] | null,
+  total: number,
+): void {
+  const counts = new Map(facets?.map((facet) => [
+    facet.slug,
+    new Map(facet.values.map(({ value, count }) => [value, count])),
+  ]));
+  const inputs = facets ? form.querySelectorAll<HTMLInputElement>("input[data-catalog-facet]") : [];
+  for (const input of inputs) {
+    const count = counts.get(input.name)?.get(input.value) ?? 0;
+    input.disabled = count === 0 && !input.checked;
+    const countLabel = input.closest("label")?.querySelector("[data-catalog-facet-count]");
+    if (countLabel) countLabel.textContent = String(count);
+  }
+  const apply = form.querySelector<HTMLButtonElement>("[data-catalog-filter-apply]");
+  if (apply) {
+    const { label, disabled } = catalogApplyButton(total);
+    apply.textContent = label;
+    apply.disabled = disabled;
+  }
 }
 
 /** The filter form as listing URL params, without empty fields. */
@@ -90,6 +127,7 @@ export function setupCatalogFilters(): void {
     clearTimeout(countTimer);
     countRequest?.abort();
     apply.textContent = "Show products";
+    apply.disabled = false;
     countTimer = setTimeout(async () => {
       const request = new AbortController();
       countRequest = request;
@@ -98,9 +136,14 @@ export function setupCatalogFilters(): void {
           createApiUrl(`${endpoint}?${catalogCountQuery(catalogFilterSearchParams(form))}`),
           { signal: request.signal },
         );
-        const body = (await response.json()) as { data?: { pagination?: { total?: unknown } } };
+        const body = (await response.json()) as {
+          data?: { pagination?: { total?: unknown }; facets?: unknown };
+        };
         const total = body.data?.pagination?.total;
-        if (response.ok && typeof total === "number") apply.textContent = showProductsLabel(total);
+        const facets = body.data?.facets;
+        if (response.ok && typeof total === "number") {
+          applyCatalogFilterCounts(form, Array.isArray(facets) ? facets as ProductFacet[] : null, total);
+        }
       } catch {
         // Keep the neutral label; applying still works.
       }

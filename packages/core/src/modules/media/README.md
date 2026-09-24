@@ -38,11 +38,19 @@ length and part-1 signature checks finish before the storage side effect.
   recently touched first, skipping media touched in the last hour. A failure
   only touches `updated_at`, so a broken image waits an hour and goes behind
   every other candidate.
-- Permanent delete requires trash and zero live poster/product associations or
-  retained order-item image snapshots,
-  returns bounded dependency counts/samples, atomically claims `deleting`
-  behind `NOT EXISTS` guards, confirms R2 deletion, then commits terminal D1
-  state. Retrying a `deleting` row repairs the final transition.
+- Usage (`media.usage.ts`) is the one list of places that can show a file:
+  product photos, video covers, and media URLs saved in product descriptions
+  and extra sections, categories, collections, pages/blog posts, homepage
+  banners, theme logo/icon, navigation (social links, footer text), invoice
+  logo, social sharing image and staff photos. Files list pages carry
+  `usageCount` and `keptForOrders`; `GET /{id}/usage` names the places.
+  Text surfaces are read in compound SELECTs of at most five terms (D1 limit).
+- Trash keeps a used file showing everywhere (projections accept `trashed`).
+- Permanent delete requires trash and no usage and no retained order-item
+  image snapshot; it answers 409 `MEDIA_DEPENDENCY_CONFLICT` with the usage,
+  atomically claims `deleting` behind the same `NOT EXISTS` guards, confirms
+  R2 deletion, then commits terminal D1 state. Retrying a `deleting` row
+  repairs the final transition.
 - Expired multipart cleanup claims `aborting` before the R2 side effect and is
   bounded to 50 sessions per reconciliation call.
 
@@ -62,6 +70,7 @@ Mounted at `/api/v1/admin/media`:
 | PATCH | `/{id}` | CAS metadata/poster/folder update |
 | POST | `/{id}/trash` | CAS move to trash |
 | POST | `/{id}/restore` | CAS restore |
+| GET | `/{id}/usage` | Places that show the file and past-order count |
 | DELETE | `/{id}/permanent` | Guarded, repairable hard delete |
 | POST | `/move` | Up to 90 per-item CAS moves using one `json_each` claim set |
 | GET/POST | `/folders` | Cursor list/create flat folders |

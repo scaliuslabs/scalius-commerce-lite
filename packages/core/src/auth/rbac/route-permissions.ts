@@ -276,6 +276,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_EDIT },
   },
+  "/api/v1/admin/orders/*/timeline/*": {
+    DELETE: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
   "/api/v1/admin/orders/*/shipments": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
@@ -513,6 +516,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/media/*/original": {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
   },
+  "/api/v1/admin/media/*/usage": {
+    GET: { permission: PERMISSIONS.MEDIA_VIEW },
+  },
   "/api/v1/admin/media/folders": {
     GET: { permission: PERMISSIONS.MEDIA_VIEW },
     POST: { permission: PERMISSIONS.MEDIA_MANAGE_FOLDERS },
@@ -698,10 +704,12 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   "/api/v1/admin/settings/stripe": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/sslcommerz": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/auth": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
@@ -1038,6 +1046,9 @@ export const ROUTE_PERMISSIONS: Record<string, RouteConfig> = {
   },
   "/api/v1/admin/inventory/stock-set": {
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/default-alert-level": {
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   "/api/v1/admin/inventory/*/alert-level": {
     PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },

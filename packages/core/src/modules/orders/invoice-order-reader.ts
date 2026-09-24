@@ -1,15 +1,17 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "@scalius/database/client";
 import {
-  orderDiscountAllocations,
   orderItems,
   orderPayments,
+  orderReturnLines,
+  orderReturns,
   orders,
   PaymentRecordStatus,
 } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import type { InvoiceOrderSnapshot } from "./invoice-snapshot";
+import { listOrderDiscountLines } from "../promotions/order-discount-lines";
 import { orderMoneyAmounts, orderMoneySelection } from "./order-money";
 
 /**
@@ -89,20 +91,22 @@ export async function readInvoiceOrderSource(
     .where(eq(orderItems.orderId, orderId))
     .orderBy(asc(orderItems.createdAt), asc(orderItems.id));
 
-  const discountRows = await db
+  // Units received back on open or finished returns, per line.
+  const returnedRows = await db
     .select({
-      name: orderDiscountAllocations.promotionName,
-      code: orderDiscountAllocations.promotionCode,
-      amountMinor: sql<number>`SUM(${orderDiscountAllocations.discountAmountMinor})`,
+      orderItemId: orderReturnLines.orderItemId,
+      quantity: sql<number>`SUM(${orderReturnLines.receivedQuantity})`,
     })
-    .from(orderDiscountAllocations)
-    .where(eq(orderDiscountAllocations.orderId, orderId))
-    .groupBy(
-      orderDiscountAllocations.promotionId,
-      orderDiscountAllocations.promotionName,
-      orderDiscountAllocations.promotionCode,
-    )
-    .orderBy(asc(orderDiscountAllocations.promotionName));
+    .from(orderReturnLines)
+    .innerJoin(orderReturns, eq(orderReturns.id, orderReturnLines.returnId))
+    .where(and(
+      eq(orderReturnLines.orderId, orderId),
+      notInArray(orderReturns.status, ["cancelled", "rejected"]),
+    ))
+    .groupBy(orderReturnLines.orderItemId);
+  const returnedByItem = new Map(returnedRows.map((row) => [row.orderItemId, Number(row.quantity) || 0]));
+
+  const discountRows = await listOrderDiscountLines(db, orderId);
 
   const {
     paidAmountMinor: _paidAmountMinor,
@@ -114,13 +118,17 @@ export async function readInvoiceOrderSource(
     ...orderFacts,
     ...orderMoneyAmounts(order),
     refundedAmount: fromMinor(Number(refundedMinor) || 0, order.currencyDecimalPlaces),
+    // As on the order page: `amount` is everything saved, `shippingAmount` the part off delivery.
     discounts: discountRows.map((row) => ({
-      name: row.name,
+      name: row.title,
       code: row.code,
-      amount: fromMinor(Number(row.amountMinor) || 0, order.currencyDecimalPlaces),
+      kind: row.kind,
+      amount: fromMinor(row.amountMinor + row.shippingAmountMinor, order.currencyDecimalPlaces),
+      shippingAmount: fromMinor(row.shippingAmountMinor, order.currencyDecimalPlaces),
     })),
     items: items.map((item) => ({
       ...item,
+      returnedQuantity: returnedByItem.get(item.id) ?? 0,
       price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
     })),
   };

@@ -6,6 +6,7 @@ import { errorResponseFromError } from "../../../utils/api-response";
 const mocks = vi.hoisted(() => ({
   bumpCacheGeneration: vi.fn(),
   createLocation: vi.fn(),
+  deleteLocations: vi.fn(),
   updateLocation: vi.fn(),
   getLocationById: vi.fn(),
   getCheckoutDeliveryReadiness: vi.fn(),
@@ -17,7 +18,9 @@ vi.mock("../../../utils/cache-generation", () => ({
 }));
 
 vi.mock("@scalius/core/modules/delivery/locations", () => ({
+  countLocationDescendants: vi.fn(async () => new Map()),
   createLocation: mocks.createLocation,
+  deleteLocations: mocks.deleteLocations,
   getLocationById: mocks.getLocationById,
   updateLocation: mocks.updateLocation,
 }));
@@ -276,17 +279,10 @@ describe("delivery location cache invalidation", () => {
         hasActiveDeliveryHierarchy: false,
         issues: [{
           code: "missing_active_delivery_location",
-          message: "Add at least one active city with an active zone before checkout can accept orders.",
+          message: "Add at least one active city with an active thana before checkout can accept orders.",
         }],
       });
-    const db = {
-      update: vi.fn(() => ({
-        set: vi.fn(() => ({
-          where: vi.fn(async () => undefined),
-        })),
-      })),
-    };
-    const { app, env } = createTestApp(db);
+    const { app, env } = createTestApp();
 
     const response = await app.request(
       "/api/v1/admin/settings/delivery-locations",
@@ -305,6 +301,6 @@ describe("delivery location cache invalidation", () => {
         code: "VALIDATION_ERROR",
       },
     });
-    expect(db.update).not.toHaveBeenCalled();
+    expect(mocks.deleteLocations).not.toHaveBeenCalled();
   });
 });

@@ -32,6 +32,7 @@ const orderItemSchema = z.object({
   discountAmountMinor: nullableMoneySchema,
   taxableAmountMinor: nullableMoneySchema,
   taxAmountMinor: nullableMoneySchema,
+  returnedQuantity: z.number().int().nonnegative().optional(),
 });
 
 const invoiceOrderSchema = z.object({
@@ -73,7 +74,15 @@ const invoiceOrderSchema = z.object({
   paidAmount: z.number().nullable(),
   balanceDue: z.number().nullable(),
   refundedAmount: z.number().optional(),
-  discounts: z.array(z.object({ name: z.string(), code: z.string().nullable(), amount: z.number() })).optional(),
+  discounts: z.array(z.object({
+    name: z.string(),
+    code: z.string().nullable(),
+    kind: z.string().optional(),
+    /** Everything this discount saved (items and delivery). */
+    amount: z.number(),
+    /** The part off delivery, shown on the delivery line; absent on older invoices. */
+    shippingAmount: z.number().optional(),
+  })).optional(),
   createdAt: z.union([z.string(), z.number()]),
   updatedAt: z.union([z.string(), z.number()]),
   items: z.array(orderItemSchema),

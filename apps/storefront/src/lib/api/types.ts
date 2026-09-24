@@ -36,6 +36,7 @@ import type {
 } from "@scalius/api-client/types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type { ProductCondition } from "@scalius/shared/product-condition";
+import type { CustomerOrderProgress, CustomerOrderTimelineEvent } from "./customer-auth";
 
 export type {
   GetProductsResponse,
@@ -169,6 +170,8 @@ export interface Product {
   imageUrl?: string | null;
   imageMediaId?: string | null;
   imageAlt?: string | null;
+  /** Listing cards only: the next gallery photo, shown on hover. Never a video. */
+  secondaryImageUrl?: string | null;
   category?: CategorySummary;
   hasVariants: boolean;
   availableForSale?: boolean;
@@ -177,9 +180,24 @@ export interface Product {
   offers?: ProductBuyGetOffer[];
 }
 
+/**
+ * What a recommendation list mostly is, so its title stays honest:
+ * "Customers also bought" only for `also_bought` (real co-purchases by two or
+ * more buyers), "You might also like" for `similar`, "Popular right now" and
+ * "New arrivals" for lists without source products.
+ */
+export type ProductRecommendationReason = "also_bought" | "similar" | "popular" | "new_arrivals";
+
+export interface ProductRecommendations {
+  reason: ProductRecommendationReason;
+  products: Product[];
+}
+
 export interface ProductBuyGetOffer {
   promotionId: string;
   title: string;
+  /** "buy": `products` are what the buyer gets; "get": this product is given and `products` are what to buy. */
+  role: "buy" | "get";
   buyQuantity: number | null;
   buyAmount: number | null;
   getQuantity: number;
@@ -477,6 +495,16 @@ export interface OrderReceiptSupportRequestAction {
   disabledReason: string | null;
 }
 
+export interface OrderReceiptDiscount {
+  promotionId: string;
+  title: string;
+  code: string | null;
+  /** The discount's main effect; delivery savings are in `shippingAmount` whatever the kind. */
+  kind: "buy_x_get_y" | "product" | "order" | "shipping";
+  amount: number;
+  shippingAmount: number;
+}
+
 export interface OrderReceipt {
   id: string;
   /** Short per-store number ("#1001"); absent until every order has one. */
@@ -501,6 +529,10 @@ export interface OrderReceipt {
   shippingMethodBaseAmountMinor?: number | null;
   shippingFeeWaived?: boolean | null;
   discountAmountMinor?: number | null;
+  /** Each discount used: `amount` off the items, `shippingAmount` off delivery. */
+  discounts?: OrderReceiptDiscount[];
+  /** The buyer's order note. */
+  notes?: string | null;
   taxAmountMinor?: number;
   totalAmountMinor?: number | null;
   taxLabel?: string | null;
@@ -522,6 +554,19 @@ export interface OrderReceipt {
   supportRequests: OrderReceiptSupportRequest[];
   supportRequestActions: OrderReceiptSupportRequestAction[];
   supportRequestIntro: string;
+  /** Where the order is: the same tracker and dated updates as the account order page. */
+  tracking?: OrderReceiptTracking | null;
+}
+
+export interface OrderReceiptTracking {
+  progress: CustomerOrderProgress;
+  timeline: CustomerOrderTimelineEvent[];
+  shipments: Array<{
+    statusLabel: string;
+    courierName: string | null;
+    trackingId: string | null;
+    trackingUrl: string | null;
+  }>;
 }
 
 export type CreateOrderPayload = OrderPostRequest;

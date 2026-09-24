@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { Link } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef, Row } from "~/components/admin/data-table/table-config";
 import { DataTable } from "~/components/admin/data-table/DataTable";
-import { DataTableColumnHeader } from "~/components/admin/data-table/DataTableColumnHeader";
+import { IdText, NameText } from "~/components/admin/data-table/cells";
+import { sortHeader } from "~/components/admin/resource/columns";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
@@ -44,12 +45,14 @@ const STATUS_HELP = { inStock: "inStockHelp", lowStock: "lowStockHelp", soldOut:
 
 const selectVariants = createDataSelector<InventoryVariant>("variants");
 
-/** The one stock-status mapping: label key + Badge variant. */
-export function stockStatus(variant: Pick<InventoryVariant, "available" | "lowStockThreshold">) {
+/**
+ * The one stock-status mapping: label key + Badge variant. The alert level is
+ * the variant's own, else the store level (0 turns it off).
+ */
+export function stockStatus(variant: Pick<InventoryVariant, "available" | "lowStockThreshold">, storeLevel: number | null) {
+  const level = variant.lowStockThreshold ?? storeLevel;
   if (variant.available <= 0) return { key: "soldOut", badge: "destructive" } as const;
-  if (variant.lowStockThreshold && variant.available <= variant.lowStockThreshold) {
-    return { key: "lowStock", badge: "warning" } as const;
-  }
+  if (level && variant.available <= level) return { key: "lowStock", badge: "warning" } as const;
   return { key: "inStock", badge: "success" } as const;
 }
 
@@ -58,8 +61,13 @@ function VariantCell({ variant }: { variant: InventoryVariant }) {
 }
 
 /** The Available number opens its breakdown (on hand, committed) by click, tap or keyboard. */
-function AvailableBreakdown({ variant, children }: { variant: InventoryVariant; children: ReactNode }) {
+function AvailableBreakdown({ variant, storeLevel, children }: {
+  variant: InventoryVariant;
+  storeLevel: number | null;
+  children: ReactNode;
+}) {
   const t = useMessages(inventoryMessages);
+  const ownLevel = variant.lowStockThreshold;
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -89,7 +97,9 @@ function AvailableBreakdown({ variant, children }: { variant: InventoryVariant; 
         <p className="flex justify-between gap-4 border-t pt-2 mt-3 text-body">
           <span className="text-muted-foreground">{t("alertLevelShort")}</span>
           <span className="font-medium tabular-nums">
-            {variant.lowStockThreshold === null ? t("alertOff") : formatNumber(variant.lowStockThreshold)}
+            {ownLevel === null
+              ? storeLevel ? t("alertStoreLevel", { level: storeLevel }) : t("alertOff")
+              : ownLevel === 0 ? t("alertOff") : formatNumber(ownLevel)}
           </span>
         </p>
       </PopoverContent>
@@ -97,9 +107,9 @@ function AvailableBreakdown({ variant, children }: { variant: InventoryVariant; 
   );
 }
 
-function StockBadge({ variant }: { variant: InventoryVariant }) {
+function StockBadge({ variant, storeLevel }: { variant: InventoryVariant; storeLevel: number | null }) {
   const t = useMessages(inventoryMessages);
-  const status = stockStatus(variant);
+  const status = stockStatus(variant, storeLevel);
   // A focusable trigger so the one-line definition also opens from the keyboard.
   return (
     <Tooltip>
@@ -119,18 +129,16 @@ export function VariantName({ productId, productName, optionLabel }: {
   optionLabel: string | null;
 }) {
   const t = useMessages(inventoryMessages);
+  // The product on at most two lines, its option values muted on one (the whole value on hover).
   return (
-    <Link
-      to="/admin/products/$productId/edit"
-      params={{ productId }}
-      className="flex min-w-0 gap-1 text-body font-medium hover:underline"
-    >
-      <span className="truncate">{productName ?? t("unknownProduct")}</span>
-      {optionLabel ? (
-        // The variant keeps its full width (up to half the row); only the product name is shortened.
-        <span className="max-w-1/2 shrink-0 truncate font-normal text-muted-foreground">· {optionLabel}</span>
-      ) : null}
-    </Link>
+    <NameText
+      name={(
+        <Link to="/admin/products/$productId/edit" params={{ productId }} className="hover:underline">
+          {productName ?? t("unknownProduct")}
+        </Link>
+      )}
+      detail={optionLabel ? <span title={optionLabel}>{optionLabel}</span> : null}
+    />
   );
 }
 
@@ -156,6 +164,9 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   const [adjusting, setAdjusting] = useState<InventoryVariant | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSession, setAdjustSession] = useState(0);
+  const listQuery = inventoryQueryOptions(variantsQuery(filters, page, limit, sort));
+  // The same cached query the table reads; it also carries the store alert level.
+  const storeLevel = useQuery({ ...listQuery, placeholderData: keepPreviousData }).data?.defaultLowStockThreshold ?? null;
 
   const adjustButton = (variant: InventoryVariant) => permissions.canAdjustStock ? (
     <Button
@@ -179,44 +190,43 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
     createSelectColumn<InventoryVariant>({ getLabel: (row) => (row as InventoryVariant).sku }),
     {
       accessorKey: "productName",
-      header: ({ column }) => <DataTableColumnHeader column={column} title={t("product")} />,
+      header: sortHeader(t("product")),
+      meta: { primary: true, minWidth: 220 },
       cell: ({ row }) => <VariantCell variant={row.original} />,
     },
     {
       accessorKey: "sku",
-      header: ({ column }) => <DataTableColumnHeader column={column} title={t("sku")} />,
-      cell: ({ row }) => <span className="font-mono text-body text-muted-foreground">{row.original.sku}</span>,
+      header: sortHeader(t("sku")),
+      // Stock is picked by SKU: it outlasts the status badge when space runs out.
+      meta: { priority: 92, minWidth: 150 },
+      cell: ({ row }) => <IdText value={row.original.sku} copy className="text-muted-foreground" />,
     },
     {
       // "Available" is the one stock number; on hand and committed live in its breakdown.
       accessorKey: "available",
-      header: ({ column }) => (
-        <div className="flex justify-end">
-          <DataTableColumnHeader column={column} title={t("available")} />
-        </div>
-      ),
+      header: sortHeader(t("available")),
+      meta: { numeric: true, priority: 95, minWidth: 100 },
       cell: ({ row }) => (
-        <div className="flex justify-end">
-          <AvailableBreakdown variant={row.original}>{formatNumber(row.original.available)}</AvailableBreakdown>
-        </div>
+        <AvailableBreakdown variant={row.original} storeLevel={storeLevel}>{formatNumber(row.original.available)}</AvailableBreakdown>
       ),
     },
     {
       id: "status",
-      header: () => r("status"),
-      cell: ({ row }) => <StockBadge variant={row.original} />,
+      header: r("status"),
+      meta: { priority: 90, minWidth: 120 },
+      cell: ({ row }) => <StockBadge variant={row.original} storeLevel={storeLevel} />,
       enableSorting: false,
     },
     {
       id: "actions",
-      cell: ({ row }) => <div className="text-right">{adjustButton(row.original)}</div>,
+      cell: ({ row }) => adjustButton(row.original),
       enableSorting: false,
     },
   ];
 
   const { table, isFetching, isLoading, error, refetch, selectedIds, clearSelection } = useServerTable<InventoryVariant>({
     columns,
-    queryOptions: inventoryQueryOptions(variantsQuery(filters, page, limit, sort)),
+    queryOptions: listQuery,
     dataSelector: selectVariants,
     currentPage: page,
     currentLimit: limit,
@@ -256,11 +266,10 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
         </span>
         <div className="min-w-0 flex-1 space-y-1">
           <VariantCell variant={variant} />
-          {/* The SKU is how stock is picked: shown whole, wrapping if it must. */}
-          <p className="break-all font-mono text-body text-muted-foreground">{variant.sku}</p>
+          <IdText value={variant.sku} copy className="text-muted-foreground" />
           <div className="flex min-w-0 items-center gap-2">
-            <StockBadge variant={variant} />
-            <AvailableBreakdown variant={variant}>{t("availableCount", { count: variant.available })}</AvailableBreakdown>
+            <StockBadge variant={variant} storeLevel={storeLevel} />
+            <AvailableBreakdown variant={variant} storeLevel={storeLevel}>{t("availableCount", { count: variant.available })}</AvailableBreakdown>
           </div>
         </div>
         <div className="self-center">{adjustButton(variant)}</div>
@@ -281,6 +290,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
         itemLabel={t("variantsItem")}
         pageSizeOptions={[20, 50, 100]}
         mobileCardRenderer={mobileCard}
+        layoutKey="inventory-variants"
         toolbar={<div className="px-2 pt-2"><DataTableToolbar
             searchValue={search}
             onSearchChange={(value) => onFiltersChange({ q: value })}
@@ -320,6 +330,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       <AdjustStockDialog
         key={adjustSession}
         variant={adjusting}
+        storeLevel={storeLevel}
         open={adjustOpen && permissions.canAdjustStock}
         onClose={() => setAdjustOpen(false)}
         onSaved={() => void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all })}

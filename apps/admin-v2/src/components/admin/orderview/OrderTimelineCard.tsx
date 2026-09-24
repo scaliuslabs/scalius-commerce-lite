@@ -1,7 +1,17 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Textarea } from "~/components/ui/textarea";
 import { useCurrency } from "~/hooks/use-currency";
 import { useHydrated } from "~/hooks/use-hydrated";
@@ -10,7 +20,7 @@ import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
-import { orderErrorMessage, useAddOrderComment } from "~/lib/api-mutations/orders";
+import { orderErrorMessage, useAddOrderComment, useDeleteOrderComment } from "~/lib/api-mutations/orders";
 import { orderTimelineQueryOptions } from "~/lib/api-query-options/orders";
 import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
 import { describeTimelineEvent } from "~/lib/order-timeline-display";
@@ -28,17 +38,35 @@ export function OrderTimelineCard({ order }: { order: Order }) {
   const hydrated = useHydrated();
   const canComment = useOrderActionPermissions().canEditOrders;
   const [comment, setComment] = useState("");
+  // One key per draft: a double Post adds the comment once; a new draft gets a new key.
+  const requestKey = useRef<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const query = useQuery({ ...orderTimelineQueryOptions(order.id), enabled: hydrated });
   const mutation = useAddOrderComment();
+  const deleteMutation = useDeleteOrderComment();
   const saved = resolveSavedOrderMoneySummary(order);
   const money = (amount: number) => (saved ? formatSavedMajorAmount(amount, saved) : fmt(amount));
   const events = query.data?.events ?? [];
 
+  const post = () => {
+    const body = comment.trim();
+    if (!body || mutation.isPending) return;
+    requestKey.current ??= crypto.randomUUID();
+    mutation.mutate({ orderId: order.id, body, requestKey: requestKey.current }, {
+      onSuccess: () => {
+        setComment("");
+        requestKey.current = null;
+      },
+    });
+  };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const body = comment.trim();
-    if (!body) return;
-    mutation.mutate({ orderId: order.id, body }, { onSuccess: () => setComment("") });
+    post();
+  };
+  const postOnShortcut = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+    event.preventDefault();
+    post();
   };
 
   return (
@@ -56,8 +84,11 @@ export function OrderTimelineCard({ order }: { order: Order }) {
               rows={2}
               maxLength={COMMENT_MAX_LENGTH}
               disabled={mutation.isPending}
+              aria-keyshortcuts="Control+Enter Meta+Enter"
+              onKeyDown={postOnShortcut}
               onChange={(event) => {
                 setComment(event.target.value);
+                requestKey.current = null;
                 if (mutation.isError) mutation.reset();
               }}
             />
@@ -89,15 +120,44 @@ export function OrderTimelineCard({ order }: { order: Order }) {
                 <li key={event.id} className="space-y-0.5">
                   <p className={comment ? "whitespace-pre-wrap break-words" : undefined}>{line.text}</p>
                   {line.detail ? <p className="whitespace-pre-wrap break-words text-muted-foreground">{line.detail}</p> : null}
-                  <p className="text-muted-foreground">
-                    {[event.actorName, formatOrderTimestamp(event.createdAt)].filter(Boolean).join(" · ")}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-x-2">
+                    <p className="text-muted-foreground">
+                      {[event.actorName, formatOrderTimestamp(event.createdAt)].filter(Boolean).join(" · ")}
+                    </p>
+                    {comment && event.own ? (
+                      <Button type="button" variant="link" size="sm" onClick={() => setDeleting(event.id)}>
+                        {t("timeline.delete")}
+                      </Button>
+                    ) : null}
+                  </div>
                 </li>
               );
             })}
           </ol>
         )}
       </CardContent>
+      <AlertDialog open={deleting !== null} onOpenChange={(open) => !open && !deleteMutation.isPending && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("timeline.deleteTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("timeline.deleteBody")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>{r("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                if (!deleting) return;
+                deleteMutation.mutate({ orderId: order.id, eventId: deleting }, { onSettled: () => setDeleting(null) });
+              }}
+            >
+              {t("timeline.delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

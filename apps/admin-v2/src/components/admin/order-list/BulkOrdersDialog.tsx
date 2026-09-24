@@ -33,7 +33,7 @@ interface BulkOrdersDialogProps {
   action: OrderBulkAction | null;
   /** The orders the action is about; null while "all matching orders" are still loading. */
   orders: OrderListItem[] | null;
-  /** How many orders the merchant selected (all matching orders counts every one). */
+  /** How many orders the merchant selected (all matching orders counts every one); the title's count until the orders load. */
   selectedCount: number;
   /** One extra line under the preview, e.g. that only the first 1,000 orders are included. */
   note?: string;
@@ -123,6 +123,8 @@ export function BulkOrdersDialog({
   const visibleFailures = outcome?.failures.slice(0, 5) ?? [];
   const hiddenFailures = (outcome?.failures.length ?? 0) - visibleFailures.length;
   const blocked = !plan || eligibleCount === 0 || (current === "ship" && !providerId);
+  // The title counts only the orders the action will change ("Confirm 3 orders", not the 5 selected).
+  const titleCount = eligibleCount > 0 ? eligibleCount : selectedCount;
 
   return (
     <Dialog
@@ -133,7 +135,7 @@ export function BulkOrdersDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t(pluralKey(`bulkTitle.${current}`, selectedCount), { count: selectedCount })}</DialogTitle>
+          <DialogTitle>{t(pluralKey(`bulkTitle.${current}`, titleCount), { count: titleCount })}</DialogTitle>
           <DialogDescription>
             {plan
               ? eligibleCount > 0
@@ -216,7 +218,7 @@ export function BulkOrdersDialog({
               if (plan && !blocked && !running) onRun(plan.eligible, { courierName, note: sendNote, providerId });
             }}
           >
-            {t(`bulkRun.${current}`)}
+            {t(pluralKey(`bulkRun.${current}`, titleCount))}
           </Button>
         </DialogFooter>
       </DialogContent>

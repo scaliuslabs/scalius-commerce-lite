@@ -3,6 +3,7 @@ import { isPublicMediaUrl } from "./platform-config";
 
 export const HERO_SLIDE_LIMIT = 12;
 export const HERO_SLIDE_TITLE_LIMIT = 160;
+export const HERO_SLIDE_BUTTON_LABEL_LIMIT = 40;
 export const HERO_SLIDE_URL_LIMIT = 2_048;
 export const HERO_SLIDE_PRESENTATION = {
   desktop: { width: 1_300, height: 500 },
@@ -26,9 +27,18 @@ export const HERO_SLIDE_DEFAULT_FOCAL_POINT: Readonly<HeroSlideFocalPoint> = {
 export interface HeroSlide {
   id: string;
   url: string;
+  /** The image's alt text (what it shows); never drawn over the banner. */
   title: string;
+  /** Optional words drawn over the banner; empty for artwork that has its own text. */
+  heading: string;
+  /** Optional button over the banner; shown only with a link. */
+  buttonLabel: string;
   link: string;
   focalPoint: HeroSlideFocalPoint;
+}
+
+function optionalText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 export type HeroSlidesValidationResult =
@@ -121,11 +131,19 @@ export function validateAndNormalizeHeroSlides(
 
     const title = typeof row.title === "string" ? row.title.trim() : "";
     if (!title) {
-      errors.push(`Slide ${position} needs descriptive image text.`);
+      errors.push(`Slide ${position} needs alt text that describes the image.`);
     } else if (title.length > HERO_SLIDE_TITLE_LIMIT) {
       errors.push(
-        `Slide ${position} image text must be ${HERO_SLIDE_TITLE_LIMIT} characters or fewer.`,
+        `Slide ${position} alt text must be ${HERO_SLIDE_TITLE_LIMIT} characters or fewer.`,
       );
+    }
+    const heading = optionalText(row.heading);
+    if (heading.length > HERO_SLIDE_TITLE_LIMIT) {
+      errors.push(`Slide ${position} heading must be ${HERO_SLIDE_TITLE_LIMIT} characters or fewer.`);
+    }
+    const buttonLabel = optionalText(row.buttonLabel);
+    if (buttonLabel.length > HERO_SLIDE_BUTTON_LABEL_LIMIT) {
+      errors.push(`Slide ${position} button label must be ${HERO_SLIDE_BUTTON_LABEL_LIMIT} characters or fewer.`);
     }
 
     const parsedLink = parseNavigationHref(row.link);
@@ -143,6 +161,8 @@ export function validateAndNormalizeHeroSlides(
         id,
         url,
         title,
+        heading,
+        buttonLabel,
         link: parsedLink.href ?? "",
         focalPoint,
       });

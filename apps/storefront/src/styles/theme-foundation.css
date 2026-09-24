@@ -206,12 +206,49 @@ html.dark {
   outline: 2px solid var(--foreground);
 }
 
-/* Surfaces painted with the primary color carry primary-foreground text. */
-.site-root :where(footer, .bg-primary) :focus-visible {
+/* Dark or primary surfaces (footer, the header account/cart pill) carry
+   light text, so the ring takes the text color and stays visible on them. */
+.site-root :where(footer, .bg-primary, .bg-card-foreground) :focus-visible {
   outline-color: currentColor;
 }
 
 /* Focused targets scroll clear of the sticky header (WCAG 2.4.11). */
 html {
   scroll-padding-top: calc(var(--header-height, 3.5rem) + 0.5rem);
+}
+
+/* Product grids follow the theme's products-per-row (Theme → Layout):
+   1 or 2 on phones, up to 3 on tablets, the chosen 2/3/4 on desktop. Grids
+   beside a filter sidebar reach the desktop count only on wide screens. */
+.site-root {
+  --grid-mobile: 2;
+  --grid-desktop: 4;
+}
+.site-root[data-theme-grid-mobile="1"] { --grid-mobile: 1; }
+.site-root[data-theme-grid-desktop="2"] { --grid-desktop: 2; }
+.site-root[data-theme-grid-desktop="3"] { --grid-desktop: 3; }
+
+.product-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(var(--grid-mobile), minmax(0, 1fr));
+}
+
+@media (min-width: 40rem) {
+  .product-grid {
+    gap: 1rem;
+    grid-template-columns: repeat(min(var(--grid-desktop), 3), minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .product-grid:not(.product-grid--beside-filters) {
+    grid-template-columns: repeat(var(--grid-desktop), minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 80rem) {
+  .product-grid--beside-filters {
+    grid-template-columns: repeat(var(--grid-desktop), minmax(0, 1fr));
+  }
 }

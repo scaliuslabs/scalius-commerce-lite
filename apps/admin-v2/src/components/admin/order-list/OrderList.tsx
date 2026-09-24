@@ -23,7 +23,7 @@ import { ordersQueryOptions } from "~/lib/api-query-options/orders";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { createDataSelector, getCanonicalPageForPagination } from "~/lib/list-helpers";
 import { useListSearch } from "~/lib/list-search";
-import { useMessages } from "~/i18n";
+import { translate, useLocale, useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages } from "~/i18n/order-list";
 import { BulkOrdersDialog } from "./BulkOrdersDialog";
@@ -70,6 +70,7 @@ export function OrderList({
   onChange: (updates: Partial<OrderListSearch>, options?: { replace?: boolean }) => void;
 }) {
   const t = useMessages(orderListMessages);
+  const locale = useLocale();
   const tr = useMessages(resourceMessages);
   const orderActions = useOrderActionPermissions();
   const [term, setTerm] = useListSearch(ORDER_SEARCH_LIST);
@@ -96,8 +97,11 @@ export function OrderList({
         onRestore: restore,
         onStatusUpdate: changeStatus,
         onShipmentRefreshed: () => void refetchRef.current(),
+        label: (key) => translate(orderListMessages, key),
       }),
-    [showArchived, dateField, orderActions, updatingStatusIds, archive, restore, changeStatus],
+    // The locale re-labels the columns for the column menu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showArchived, dateField, orderActions, updatingStatusIds, archive, restore, changeStatus, locale],
   );
 
   const {
@@ -253,6 +257,7 @@ export function OrderList({
         itemLabel={t("itemLabel")}
         pageSizeOptions={[10, 20, 50, 100]}
         mobileCardRenderer={mobileCardRenderer}
+        layoutKey="orders"
         toolbar={<div className="px-2 pt-2"><OrderListToolbar
             search={search}
             term={term}

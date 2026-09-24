@@ -38,7 +38,7 @@ function productFixture(slug: string): ProductPageData {
     category: undefined,
     media: [],
     variants: [],
-    relatedProducts: [],
+    recommendations: { reason: "similar", products: [] },
   };
 }
 

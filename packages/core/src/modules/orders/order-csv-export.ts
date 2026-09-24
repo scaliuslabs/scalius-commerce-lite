@@ -201,6 +201,7 @@ export interface OrderCsvRow {
   discountAmount: number;
   totalAmount: number;
   paidAmount: number;
+  refundedAmount: number;
   balanceDue: number;
   codStatus: string | null;
   courierName: string | null;
@@ -228,7 +229,7 @@ function orderColumns(order: OrderCsvRow): unknown[] {
     order.zoneName,
     order.cityName,
     label(ORDER_STATUS_LABELS, order.status),
-    label(PAYMENT_STATUS_LABELS, order.paymentStatus),
+    paymentLabel(order),
     label(PAYMENT_METHOD_LABELS, order.paymentMethod),
     label(FULFILLMENT_STATUS_LABELS, order.fulfillmentStatus),
     order.courierName,
@@ -236,8 +237,24 @@ function orderColumns(order: OrderCsvRow): unknown[] {
   ];
 }
 
+/**
+ * The order page's payment wording: a cancelled or returned order that was
+ * never paid owes nothing, rather than reading "Unpaid".
+ */
+function paymentLabel(order: OrderCsvRow): string {
+  if (["cancelled", "returned"].includes(order.status) && (order.paymentStatus ?? "unpaid") === "unpaid") {
+    return "Nothing due";
+  }
+  return label(PAYMENT_STATUS_LABELS, order.paymentStatus);
+}
+
+/** What the customer paid before any refund (cash handed to the rider, or online). */
+function amountReceived(order: OrderCsvRow): number {
+  return Math.round((order.paidAmount + order.refundedAmount) * 100) / 100;
+}
+
 const ORDER_HEADERS = [
-  "Order", "Date", "Customer", "Phone", "Email", "Address", "Area", "Zone", "City",
+  "Order", "Date", "Customer", "Phone", "Email", "Address", "Area", "Thana", "City",
   "Status", "Payment", "Payment method", "Delivery", "Courier", "Tracking",
 ];
 
@@ -253,7 +270,7 @@ export function createOrdersCsvArtifactBuilder(
   if (format === "items") {
     return createCsvArtifactBuilder<OrderCsvRow>([
       ...ORDER_HEADERS, "Product", "Variant", "Quantity", "Unit price", "Line total",
-      "Delivery charge", "Discount", "Order total", "Cash to collect",
+      "Delivery charge", "Discount", "Order total", "Paid", "Refunded", "Cash to collect",
     ], (order) => (order.lines.length > 0 ? order.lines : [null]).map((line, index) => [
       ...orderColumns(order),
       line?.productName ?? "",
@@ -265,12 +282,14 @@ export function createOrdersCsvArtifactBuilder(
       index === 0 ? order.shippingCharge : "",
       index === 0 ? order.discountAmount : "",
       index === 0 ? order.totalAmount : "",
+      index === 0 ? amountReceived(order) : "",
+      index === 0 ? order.refundedAmount : "",
       index === 0 ? cashToCollect(order) : "",
     ]), maxBytes);
   }
   return createCsvArtifactBuilder<OrderCsvRow>([
     ...ORDER_HEADERS, "Items", "Item count", "Subtotal", "Delivery charge", "Discount",
-    "Total", "Paid", "Cash to collect", "Cash on delivery", "Note",
+    "Total", "Paid", "Refunded", "Cash to collect", "Cash on delivery", "Note",
   ], (order) => [[
     ...orderColumns(order),
     order.lines.map(describeLine).join("; "),
@@ -279,7 +298,8 @@ export function createOrdersCsvArtifactBuilder(
     order.shippingCharge,
     order.discountAmount,
     order.totalAmount,
-    order.paidAmount,
+    amountReceived(order),
+    order.refundedAmount,
     cashToCollect(order),
     order.paymentMethod === "cod" ? label(COD_STATUS_LABELS, order.codStatus) : "",
     order.notes,

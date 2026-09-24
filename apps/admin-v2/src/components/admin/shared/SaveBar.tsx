@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { getServerFnError } from "~/lib/api-helpers";
 import { Button } from "~/components/ui/button";
-import { readSettingsRevisionConflict } from "~/lib/admin-api-error";
+import { AdminApiResponseError, readSettingsRevisionConflict } from "~/lib/admin-api-error";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { UnsavedChangesGuard } from "./UnsavedChangesGuard";
@@ -61,6 +61,12 @@ export interface SaveBarEntry {
   reload?: () => Promise<unknown>;
 }
 
+/**
+ * Why the last save failed, so the bar and banner offer the one action that
+ * helps: fix the fields, try again, or reload what someone else saved.
+ */
+export type SaveFailureKind = "validation" | "connection" | "conflict";
+
 export interface SaveScopeState {
   dirty: boolean;
   busy: boolean;
@@ -71,6 +77,8 @@ export interface SaveScopeState {
   fieldErrors: Record<string, string>;
   /** The last save failed (listed problems or marked fields). */
   failed: boolean;
+  /** What kind of failure that was; null when the last save didn't fail. */
+  failure: SaveFailureKind | null;
   /** Save was pressed while fields were invalid; their messages are showing. */
   revealed: boolean;
   /** Saves every dirty entry; false when any failed (their edits are kept). */
@@ -92,6 +100,8 @@ interface SaveFailure {
   fieldErrors: Record<string, string>;
   /** Cards refused because someone else saved first, and their banner lines. */
   conflicts: Array<{ line: string; reload: () => Promise<unknown> }>;
+  /** The other failures: input the server refused, or a server that couldn't be reached. */
+  kind: "validation" | "connection" | null;
   attempt: number;
   /**
    * Inline validation shows once a field is left (blur). Pressing Save with
@@ -99,7 +109,7 @@ interface SaveFailure {
    */
   reveal: number;
 }
-const NO_FAILURE: SaveFailure = { errors: [], fieldErrors: {}, conflicts: [], attempt: 0, reveal: 0 };
+const NO_FAILURE: SaveFailure = { errors: [], fieldErrors: {}, conflicts: [], kind: null, attempt: 0, reveal: 0 };
 /** Kept apart from the registry so a failed save re-renders only the banner and marked fields. */
 const SaveErrorsContext = createContext<SaveFailure & {
   clearField: (id: string) => void;
@@ -114,6 +124,17 @@ const SaveErrorsContext = createContext<SaveFailure & {
 function describeSaveError(error: unknown): string {
   if (readSettingsRevisionConflict(error)) return translate(saveBarMessages, "conflict");
   return getServerFnError(error);
+}
+
+/** Offline, timed out or a server fault: nothing for the merchant to fix, so Retry. */
+function isConnectionFailure(error: unknown): boolean {
+  if (error instanceof AdminApiResponseError) return error.status >= 500;
+  return error instanceof Error && ["TypeError", "AbortError", "TimeoutError"].includes(error.name);
+}
+
+function failureKind(failure: SaveFailure): SaveFailureKind | null {
+  if (failure.conflicts.length > 0) return "conflict";
+  return failure.errors.length > 0 || Object.keys(failure.fieldErrors).length > 0 ? failure.kind : null;
 }
 
 /** The on-screen control (and its label) that shows an API body path. */
@@ -214,6 +235,7 @@ export function SaveScope({
     errors: failure.errors,
     fieldErrors: failure.fieldErrors,
     failed: failure.errors.length > 0 || Object.keys(failure.fieldErrors).length > 0,
+    failure: failureKind(failure),
     revealed: failure.reveal > 0,
     async saveAll() {
       if (list.some((entry) => entry.dirty && entry.invalid)) {
@@ -225,6 +247,7 @@ export function SaveScope({
       const errors: string[] = [];
       const fieldErrors: Record<string, string> = {};
       const conflicts: SaveFailure["conflicts"] = [];
+      let kind: SaveFailure["kind"] = null;
       let failed = false;
       try {
         // Cards are separate documents: save each, keep the edits of any that fail.
@@ -238,6 +261,9 @@ export function SaveScope({
             errors.push(...lines);
             if (entry.reload && readSettingsRevisionConflict(error)) {
               conflicts.push({ line: lines[0]!, reload: entry.reload });
+            } else if (kind !== "validation") {
+              // Something to fix outranks "try again": a retry can't fix it.
+              kind = isConnectionFailure(error) ? "connection" : "validation";
             }
           }
         }
@@ -248,6 +274,7 @@ export function SaveScope({
         errors,
         fieldErrors,
         conflicts,
+        kind,
         attempt: previous.attempt + 1,
         reveal: failed ? previous.reveal : 0,
       }));
@@ -290,7 +317,10 @@ export function useServerFieldError(id: string): { error: string | undefined; cl
  */
 export function SaveErrorBanner() {
   const t = useMessages(saveBarMessages);
-  const { errors, fieldErrors, conflicts, attempt, reveal, reloadConflicts } = useContext(SaveErrorsContext);
+  const failure = useContext(SaveErrorsContext);
+  const { errors, fieldErrors, conflicts, attempt, reveal, reloadConflicts } = failure;
+  const scope = useContext(SaveStateContext);
+  const kind = failureKind(failure);
   const ref = useRef<HTMLDivElement>(null);
   const anchor = useRef<HTMLSpanElement>(null);
   const [inDialog, setInDialog] = useState(false);
@@ -331,7 +361,9 @@ export function SaveErrorBanner() {
         <Alert ref={ref} tabIndex={-1} variant="destructive" className="scroll-mt-4">
           <CircleAlert aria-hidden="true" />
           <AlertTitle>
-            {count === 1 ? (errors.length ? t("notSavedOne") : t("fixOne")) : t("notSavedMany", { count })}
+            {kind !== "validation" || (count === 1 && errors.length)
+              ? t("notSavedOne")
+              : count === 1 ? t("fixOne") : t("notSavedMany", { count })}
           </AlertTitle>
           {errors.length === 0 ? null : (
             <AlertDescription>
@@ -361,6 +393,19 @@ export function SaveErrorBanner() {
                   {t("reloadKeepEdits")}
                 </Button>
               )}
+              {/* A dialog's own Save sits right below; a page gets Retry here. */}
+              {kind === "connection" && scope && !inDialog ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  loading={scope.busy}
+                  onClick={() => void scope.saveAll()}
+                >
+                  {t("retry")}
+                </Button>
+              ) : null}
             </AlertDescription>
           )}
         </Alert>
@@ -399,7 +444,13 @@ const SAVE_BUTTON =
 
 function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?: string }) {
   const t = useMessages(saveBarMessages);
-  const { dirty, busy, invalid, failed, revealed } = state;
+  const { dirty, busy, invalid, failure, revealed } = state;
+  // The bar says what happened and the one action that helps (Polaris: the bar mirrors the banner).
+  const message =
+    failure === "conflict" ? t("conflictBar")
+      : failure === "connection" ? t("retryBar")
+        : failure === "validation" ? (Object.keys(state.fieldErrors).length ? t("fixErrors") : t("notSavedBar"))
+          : invalid && revealed ? t("fixErrors") : unsavedLabel ?? t("unsavedChanges");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const saveRef = useRef(state.saveAll);
   saveRef.current = state.saveAll;
@@ -439,9 +490,7 @@ function SaveBar({ state, unsavedLabel }: { state: SaveScopeState; unsavedLabel?
             >
               <p className="flex min-w-0 items-center gap-2 text-body font-medium" aria-live="polite">
                 <AlertCircle className="size-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">
-                  {failed ? t("notSavedBar") : invalid && revealed ? t("fixErrors") : unsavedLabel ?? t("unsavedChanges")}
-                </span>
+                <span className="truncate">{message}</span>
               </p>
               <div className="flex shrink-0 gap-1.5">
                 <button

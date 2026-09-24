@@ -22,7 +22,11 @@ export type AlertFilter = (typeof ALERT_FILTERS)[number];
 export type MovementType = (typeof MOVEMENT_TYPES)[number];
 export type MovementFilter = (typeof MOVEMENT_FILTERS)[number];
 
-/** Inventory list state in the URL: the tab, enum filters and calendar dates. */
+/**
+ * Inventory list state in the URL: the tab, enum filters and calendar dates.
+ * `q` is only a one-time deep link: the route adopts it as the session search
+ * term and removes it from the address.
+ */
 export type InventorySearch = {
   section: InventoryWorkspaceSection;
   stock: StockFilter;
@@ -30,6 +34,7 @@ export type InventorySearch = {
   type: MovementFilter;
   from: string;
   to: string;
+  q?: string;
 };
 
 /** Values equal to these are stripped from the URL. */
@@ -40,10 +45,10 @@ export const INVENTORY_SEARCH_DEFAULTS = {
   type: "all",
   from: "",
   to: "",
-} as const satisfies InventorySearch;
+} as const satisfies Omit<InventorySearch, "q">;
 
 /** What a tab filters by: the URL state plus the search term, which lives in the session (`useListSearch("inventory")`). */
-export type InventoryFilters = InventorySearch & { q: string };
+export type InventoryFilters = Omit<InventorySearch, "q"> & { q: string };
 
 export type InventoryFiltersChange = (patch: Partial<Omit<InventoryFilters, "section">>) => void;
 
@@ -63,6 +68,7 @@ export function validateInventorySearch(search: Record<string, unknown>): Invent
     type: pick(search.type, MOVEMENT_FILTERS, "all"),
     from: calendarDate(search.from),
     to: calendarDate(search.to),
+    ...(typeof search.q === "string" ? { q: search.q.trim().slice(0, 120) } : {}),
   };
 }
 

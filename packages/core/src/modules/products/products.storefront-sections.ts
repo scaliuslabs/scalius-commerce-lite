@@ -1,3 +1,4 @@
+import { effectiveLowStockThresholdSql } from "../inventory/low-stock-policy";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import {
@@ -13,9 +14,7 @@ import {
     products,
 } from "@scalius/database/schema";
 import {
-    buyerPricingSelection,
     catalogDiscountedPrice,
-    presentBuyerPricing,
     presentCatalogPrice,
     storeCurrencyCodeSql,
     storeCurrencyFromCode,
@@ -34,7 +33,6 @@ import {
 } from "./products.public-eligibility";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { loadVariantSelectedOptions } from "./products.option-model";
-import { buildBuyerCatalogPricingProjection } from "./products.buyer-projection";
 import {
     resolveProductImageRepresentation,
     resolveProductMediaProjectionRows,
@@ -43,6 +41,12 @@ import {
 } from "./products.media";
 import type { ProductMediaProjection } from "./products.media";
 import type { ProductMediaProjectionRow } from "./products.media";
+import {
+    MAX_RECOMMENDATION_LIMIT,
+    getStorefrontProductRecommendations,
+    rankProductRecommendations,
+    type ProductRecommendationItem,
+} from "./products.recommendations";
 import { unixToDate } from "@scalius/shared/utils";
 
 export const STOREFRONT_PRODUCT_TEXT_CHUNK_MAX = 12_000;
@@ -75,29 +79,12 @@ type StorefrontProductSectionSource = {
     category: Record<string, any> | null;
     media: ProductMediaProjection[];
     variants: Array<Record<string, any>>;
-    relatedProducts: PublicRelatedProduct[];
+    recommendations: { products: readonly ProductRecommendationItem[] };
 };
 export type StorefrontProductDetail = StorefrontProductSectionSource;
 type PublicProductAttribute = { name: string; slug: string; value: string };
 type PublicProductAdditionalInfo = { id: string; title: string; content: string };
 type PublicProductCategoryIdentity = { id: string; name: string; slug: string };
-type PublicRelatedProduct = {
-    id: string;
-    name: string;
-    price: number;
-    slug: string;
-    discountType: string | null;
-    discountPercentage: number | null;
-    discountAmount: number | null;
-    discountedPrice: number;
-    hasVariants: boolean;
-    availableForSale: boolean;
-    priceVaries: boolean;
-    freeDelivery: boolean;
-    imageUrl: string | null;
-    imageMediaId: string | null;
-    imageAlt: string | null;
-};
 
 function chunkText(value: string | null, offset: number) {
     const text = value ?? "";
@@ -142,7 +129,7 @@ export function projectStorefrontProductSection(
     const product = detail.product;
     const attributes = product.attributes as PublicProductAttribute[];
     const additionalInfo = product.additionalInfo as PublicProductAdditionalInfo[];
-    const relatedProducts = detail.relatedProducts as PublicRelatedProduct[];
+    const relatedProducts = detail.recommendations.products;
 
     if (section === "summary") {
         return assertBoundedResult({
@@ -424,15 +411,8 @@ async function readSummary(
             variants: sql<number>`(SELECT count(*) FROM product_variants WHERE product_id = ${identity.id} AND deleted_at IS NULL)`,
         }).from(products).where(eq(products.id, identity.id)).get(),
         selectCheckoutProductMediaProjectionRows(db, [identity.id], []),
-        identity.categoryId
-            ? db.select({ id: products.id }).from(products).where(and(
-                eq(products.categoryId, identity.categoryId),
-                sql`${products.id} != ${identity.id}`,
-                eq(products.isActive, true),
-                isNull(products.deletedAt),
-                publicProductHasBuyerResolvableSku(),
-            )).limit(6)
-            : Promise.resolve([]),
+        rankProductRecommendations(db, { productIds: [identity.id], limit: MAX_RECOMMENDATION_LIMIT })
+            .then((ranked) => ranked.rows),
     ]);
     const mediaProjection = resolveProductMediaProjectionRows(
         primaryProjectionRows as unknown as ProductMediaProjectionRow[],
@@ -691,7 +671,7 @@ export async function getStorefrontProductSection(
                 reservedStock: productVariants.reservedStock,
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
-                lowStockThreshold: productVariants.lowStockThreshold,
+                lowStockThreshold: effectiveLowStockThresholdSql(),
                 barcode: productVariants.barcode,
                 barcodeType: productVariants.barcodeType,
                 discountType: productVariants.discountType,
@@ -752,50 +732,12 @@ export async function getStorefrontProductSection(
         });
     }
 
-    const pricing = buildBuyerCatalogPricingProjection(db);
-    const limit = Math.min(query.limit, 10);
-    const relatedConditions = identity.categoryId ? and(
-        eq(products.categoryId, identity.categoryId),
-        sql`${products.id} != ${identity.id}`,
-        eq(products.isActive, true),
-        isNull(products.deletedAt),
-        publicProductHasBuyerResolvableSku(),
-    ) : undefined;
-    const [rows, relatedCountRow] = relatedConditions && query.offset < 6
-        ? await Promise.all([db.select({
-            id: products.id,
-            name: products.name,
-            ...buyerPricingSelection(pricing),
-            slug: products.slug,
-            hasVariants: pricing.hasCustomerOptions,
-            availableForSale: pricing.availableForSale,
-            freeDelivery: products.freeDelivery,
-        }).from(products).innerJoin(pricing, eq(products.id, pricing.productId))
-            .where(relatedConditions).orderBy(asc(products.id))
-            .limit(Math.min(limit, 6 - query.offset)).offset(query.offset),
-        db.select({ total: count() }).from(products).where(relatedConditions).get()])
-        : [[], undefined];
-    const mediaRows = rows.length
-        ? await selectCheckoutProductMediaProjectionRows(db, rows.map((row) => row.id), [])
-        : [];
-    const mediaMap = resolveProductMediaProjectionRows(
-        mediaRows as unknown as ProductMediaProjectionRow[],
-    );
-    const items = rows.map((row) => {
-        const image = resolveProductImageRepresentation(mediaMap.get(row.id) ?? []);
-        return {
-            ...presentBuyerPricing(row, decimalPlaces),
-            hasVariants: Boolean(row.hasVariants),
-            availableForSale: Boolean(row.availableForSale),
-            imageUrl: image?.url ?? null,
-            imageMediaId: image?.mediaId ?? null,
-            imageAlt: image?.altText ?? null,
-        };
+    const recommendations = await getStorefrontProductRecommendations(db, {
+        productIds: [identity.id],
+        limit: MAX_RECOMMENDATION_LIMIT,
     });
-    const total = Math.min(6, Number(relatedCountRow?.total ?? 0));
     return assertBoundedResult({
         section: "related_products" as const,
-        items,
-        ...pagination(total, query.offset, query.limit, 10),
+        ...page(recommendations.products, query.offset, query.limit, 10),
     });
 }

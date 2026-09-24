@@ -4,6 +4,15 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
+  STOREFRONT_CARD_BADGE_PLACEMENTS,
+  STOREFRONT_CARD_IMAGE_RATIOS,
+  STOREFRONT_FOOTER_STYLES,
+  STOREFRONT_HEADER_STYLES,
+  STOREFRONT_HOMEPAGE_SECTIONS,
+  STOREFRONT_PRODUCT_GALLERY_LAYOUTS,
+  STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS,
+} from "@scalius/shared/storefront-theme";
+import {
   getHomepageData,
   getLayoutData,
   getPageRenderData,
@@ -35,6 +44,7 @@ const storefrontProductCardSchema = z.object({
   imageUrl: z.string().nullable(),
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
+  secondaryImageUrl: z.string().nullable(),
 });
 const storefrontCategoryCardSchema = z.object({
   id: z.string(),
@@ -185,6 +195,22 @@ const layoutDataSchema = z.object({
       inputs: z.enum(["outlined", "filled"]),
       cards: z.enum(["bordered", "elevated", "flat"]),
     }),
+    layout: z.object({
+      header: z.enum(STOREFRONT_HEADER_STYLES),
+      footer: z.enum(STOREFRONT_FOOTER_STYLES),
+      productCard: z.object({
+        imageRatio: z.enum(STOREFRONT_CARD_IMAGE_RATIOS),
+        hoverImage: z.boolean(),
+        quickBuy: z.boolean(),
+        badge: z.enum(STOREFRONT_CARD_BADGE_PLACEMENTS),
+      }),
+      grid: z.object({ desktop: z.number().int(), mobile: z.number().int() }),
+      productPage: z.object({
+        gallery: z.enum(STOREFRONT_PRODUCT_GALLERY_LAYOUTS),
+        thumbnails: z.enum(STOREFRONT_PRODUCT_THUMBNAIL_PLACEMENTS),
+      }),
+      homepage: z.array(z.enum(STOREFRONT_HOMEPAGE_SECTIONS)),
+    }),
   }),
   media: z.object({
     canonicalCdnUrl: z.string(),
@@ -241,6 +267,8 @@ const layoutDataSchema = z.object({
     quantityLimitText: z.string(),
     saleOfferText: z.string(),
     saleOfferSpendText: z.string(),
+    saleOfferGetText: z.string(),
+    saleOfferGetSpendText: z.string(),
     freeBenefitText: z.string(),
     percentBenefitText: z.string(),
   }),

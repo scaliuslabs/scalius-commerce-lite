@@ -39,6 +39,10 @@ const description = tag
   ? `Articles tagged ${tag}.`
   : "Stories, guides, and updates from our store.";
 const title = tag ? `${tag} articles` : "Blog";
+// The newest post image previews the blog when shared.
+const firstFeaturedImage = articles
+  .map((article) => article.featuredImage?.url)
+  .find((url): url is string => Boolean(url));
 const tags = [...new Set(articles.flatMap((article) => article.tags))].sort(
   (a, b) => a.localeCompare(b),
 );
@@ -55,7 +59,7 @@ const blogJsonLd =
           .map((article) => {
             const url = buildAbsoluteStorefrontSeoUrl(`/blog/${article.slug}`);
             return url
-              ? { "@type": "BlogPosting", headline: article.title, url }
+              ? { "@type": "BlogPosting", headline: article.title.trim(), url }
               : null;
           })
           .filter(Boolean),
@@ -98,6 +102,7 @@ function pageHref(nextPage: number): string {
   layoutData={layoutData}
   canonicalUrl={canonicalUrl ?? undefined}
   noindex={isFilteredView}
+  fallbackOgImage={firstFeaturedImage ? mediaImageUrl(firstFeaturedImage, 1200) : undefined}
 >
   <Fragment slot="head">
     <link

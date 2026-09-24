@@ -10,6 +10,7 @@ import type {
   PaginatedResponse,
   BuyerPriceRange,
   ProductFacet,
+  ProductRecommendations,
 } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
@@ -19,26 +20,64 @@ import {
   getApiV1CategoriesBySlugProducts,
   getApiV1ProductsSearch,
   getApiV1ProductsSitemap,
+  getApiV1ProductsRecommendations,
 } from "@scalius/api-client/sdk";
 import { buildCanonicalQueryString } from "@/lib/canonical-query";
 import { normalizeSearchQuery } from "@/lib/search-query";
+import { isProductRecommendations, recommendationSourceIds } from "@/lib/recommendations";
 
 /**
  * A comprehensive data structure for a single product page,
- * including the main product, its category, ordered media, variants, and related items.
+ * including the main product, its category, ordered media, variants, and ranked recommendations.
  */
 export interface ProductPageData {
   product: Product;
   category: Product["category"];
   media: ProductMedia[];
   variants: ProductVariant[];
-  relatedProducts: Product[];
+  recommendations: ProductRecommendations;
 }
 
 export type ProductBySlugResult =
   | { state: "found"; data: ProductPageData }
   | { state: "not_found" }
   | { state: "unavailable" };
+
+/**
+ * Ranked recommendations for the given products (an order's items), or the
+ * store's popular/newest products without ids. Null when the API is
+ * unavailable, so pages leave the row out.
+ */
+export async function getProductRecommendations(
+  productIds: readonly string[] = [],
+  limit = 8,
+): Promise<ProductRecommendations | null> {
+  const sourceIds = recommendationSourceIds(productIds);
+  const query = sourceIds.length > 0
+    ? { productIds: sourceIds.join(","), limit }
+    : { limit };
+  return withEdgeCache(
+    `product_recommendations_${sourceIds.join(",") || "store"}_${limit}`,
+    async () => {
+      try {
+        const { data, error } = await getApiV1ProductsRecommendations({
+          client: getConfiguredSdkClient(),
+          query,
+        });
+        if (error) {
+          console.error("Error fetching product recommendations:", error);
+          return null;
+        }
+        const recommendations = unwrapData<ProductRecommendations>(data);
+        return isProductRecommendations(recommendations) ? recommendations : null;
+      } catch (error: unknown) {
+        console.error("Error fetching product recommendations:", error);
+        return null;
+      }
+    },
+    { ttlSeconds: CACHE_TTL.AVAILABILITY },
+  );
+}
 
 function normalizeProductPageData(payload: unknown): ProductPageData | null {
   const candidate = unwrapData<ProductPageData>(payload);
@@ -49,7 +88,7 @@ function normalizeProductPageData(payload: unknown): ProductPageData | null {
     typeof candidate.product !== "object" ||
     !Array.isArray(candidate.media) ||
     !Array.isArray(candidate.variants) ||
-    !Array.isArray(candidate.relatedProducts)
+    !isProductRecommendations(candidate.recommendations)
   ) {
     return null;
   }

@@ -11,7 +11,7 @@ import {
   type CustomerAuthRequestOption,
 } from "@scalius/shared/customer-auth-policy";
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
-import { normalizeBdMobile } from "@scalius/shared/phone-input";
+import { BD_MOBILE_REQUIRED_MESSAGE, isBangladeshNumber, normalizeBdMobile } from "@scalius/shared/phone-input";
 import { validateStorefrontPhone } from "@/lib/phone-country-policy";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -71,6 +71,7 @@ export function checkPhone(value: string, policy?: PhoneCountryPolicy): ContactC
   if (!value.trim()) return { ok: false, message: "Enter your phone number." };
   const bd = normalizeBdMobile(value);
   if (bd) return { ok: true, value: bd };
+  if (isBangladeshNumber(value)) return { ok: false, message: `${BD_MOBILE_REQUIRED_MESSAGE}.` };
   const result = validateStorefrontPhone(value, policy);
   return result.ok
     ? { ok: true, value: result.value }
@@ -98,29 +99,33 @@ export interface NewAccountInput {
   email: string;
 }
 
+export type NewAccountField = "name" | "phone" | "email";
+
 export type NewAccountCheck =
   | { ok: true; account: { name: string; phone?: string; email?: string } }
-  | { ok: false; field: "name" | "phone" | "email"; message: string };
+  | { ok: false; errors: Array<{ field: NewAccountField; message: string }> };
 
+/** Checks every field at once, in form order, so each error shows under its field. */
 export function checkNewAccount(
   ui: CustomerAuthUiModel,
   input: NewAccountInput,
   policy?: PhoneCountryPolicy,
 ): NewAccountCheck {
+  const errors: Array<{ field: NewAccountField; message: string }> = [];
   const name = input.name.trim();
-  if (!name) return { ok: false, field: "name", message: "Enter your name." };
+  if (!name) errors.push({ field: "name", message: "Enter your name." });
   const account: { name: string; phone?: string; email?: string } = { name };
   if (ui.newAccount.phone !== "hidden" && (ui.newAccount.phone === "required" || input.phone.trim())) {
     const phone = checkPhone(input.phone, policy);
-    if (!phone.ok) return { ok: false, field: "phone", message: phone.message };
-    account.phone = phone.value;
+    if (phone.ok) account.phone = phone.value;
+    else errors.push({ field: "phone", message: phone.message });
   }
   if (ui.newAccount.email !== "hidden" && (ui.newAccount.email === "required" || input.email.trim())) {
     const email = checkEmail(input.email);
-    if (!email.ok) return { ok: false, field: "email", message: email.message };
-    account.email = email.value;
+    if (email.ok) account.email = email.value;
+    else errors.push({ field: "email", message: email.message });
   }
-  return { ok: true, account };
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, account };
 }
 
 /** "2:00", "0:45": the honest wait shown next to a disabled button. */

@@ -1,6 +1,7 @@
-import type { Database } from "@scalius/database/client";
-import { deliveryLocations } from "@scalius/database/schema";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { safeBatch, type Database } from "@scalius/database/client";
+import { deliveryLocations, deliveryZoneLocations } from "@scalius/database/schema";
+import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { createId } from "@paralleldrive/cuid2";
 import { normalizeRequiredDeliveryLocationName } from "./location-names";
 
@@ -130,6 +131,85 @@ export async function updateLocation(db: Database, id: string, data: Partial<Loc
     .where(and(eq(deliveryLocations.id, id), isNull(deliveryLocations.deletedAt)));
 
   return getLocationById(db, id);
+}
+
+// ─────────────────────────────────────────
+// Deleting a place with everything under it
+// ─────────────────────────────────────────
+
+/** One bound parameter for any number of ids (D1 allows 100 per statement). */
+const idSet = (ids: readonly string[]): SQL =>
+  sql`SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)})`;
+
+/** The ids of `roots`, their children and their grandchildren (city → thana → area). */
+function subtreeIds(roots: readonly string[]): SQL {
+  const set = idSet(roots);
+  return sql`SELECT place.id FROM delivery_locations place
+    WHERE place.id IN (${set})
+       OR place.parent_id IN (${set})
+       OR place.parent_id IN (SELECT child.id FROM delivery_locations child WHERE child.parent_id IN (${set}))`;
+}
+
+export interface LocationDescendants {
+  /** Live places one level down (thanas under a city, areas under a thana). */
+  zones: number;
+  areas: number;
+}
+
+/** How many live thanas and areas sit under each location, keyed by its id. */
+export async function countLocationDescendants(
+  db: Database,
+  ids: readonly string[],
+): Promise<Map<string, LocationDescendants>> {
+  const counts = new Map<string, LocationDescendants>();
+  if (ids.length === 0) return counts;
+  const set = idSet(ids);
+  const parent = alias(deliveryLocations, "parent_place");
+  const [children, grandchildren] = await Promise.all([
+    db
+      .select({ root: deliveryLocations.parentId, type: deliveryLocations.type, count: sql<number>`count(*)` })
+      .from(deliveryLocations)
+      .where(and(isNull(deliveryLocations.deletedAt), sql`${deliveryLocations.parentId} IN (${set})`))
+      .groupBy(deliveryLocations.parentId, deliveryLocations.type),
+    db
+      .select({ root: parent.parentId, count: sql<number>`count(*)` })
+      .from(deliveryLocations)
+      .innerJoin(parent, eq(parent.id, deliveryLocations.parentId))
+      .where(and(
+        isNull(deliveryLocations.deletedAt),
+        eq(deliveryLocations.type, "area"),
+        sql`${parent.parentId} IN (${set})`,
+      ))
+      .groupBy(parent.parentId),
+  ]);
+  const entry = (id: string) => counts.get(id) ?? counts.set(id, { zones: 0, areas: 0 }).get(id)!;
+  for (const row of children) {
+    if (!row.root) continue;
+    if (row.type === "zone") entry(row.root).zones += Number(row.count);
+    if (row.type === "area") entry(row.root).areas += Number(row.count);
+  }
+  for (const row of grandchildren) {
+    if (row.root) entry(row.root).areas += Number(row.count);
+  }
+  return counts;
+}
+
+/**
+ * Deletes locations with their thanas and areas, and takes all of them out of
+ * delivery zones, in one batch. Rows are soft-deleted: past orders and courier
+ * bookings still read their names and courier ids.
+ */
+export async function deleteLocations(db: Database, ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const subtree = subtreeIds(ids);
+  const now = sql`(cast(strftime('%s','now') as int))`;
+  await safeBatch(db, [
+    db.delete(deliveryZoneLocations).where(sql`${deliveryZoneLocations.locationId} IN (${subtree})`),
+    db
+      .update(deliveryLocations)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(and(isNull(deliveryLocations.deletedAt), sql`${deliveryLocations.id} IN (${subtree})`)),
+  ] as never);
 }
 
 /** Get a location by ID */

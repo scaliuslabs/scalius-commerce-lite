@@ -243,6 +243,26 @@ describe("option matrix editor model", () => {
     expect(getOptionMatrixIssue(options, rows, [], false, { committedByVariantId: new Map([["one", 5]]) })?.message).toBe(issue("issueBelowCommitted"));
   });
 
+  it("asks only the new variants to carry the stock of variants an option change replaced", () => {
+    const options = [option("size", "Size", [["m", "M"], ["xl", "XL"]])];
+    const saved = variant("var_m", ["m"], 10);
+    const added = { ...variant("draft_xl", ["xl"], 0) };
+    // Saved rows keep their own stock; the replaced 6 must land on new rows.
+    expect(getOptionMatrixIssue(options, [saved, added], [], false, { requiredStockAllocation: 6, allocationScope: "new" }))
+      .toMatchObject({ message: issue("issueReplaceStock", { required: 6, allocated: 0 }) });
+    added.stock = 6;
+    expect(getOptionMatrixIssue(options, [saved, added], [], false, { requiredStockAllocation: 6, allocationScope: "new" })).toBeNull();
+  });
+
+  it("marks an option still being filled in, so its message waits for Save", () => {
+    expect(getOptionMatrixIssue([option("size", "Size", [])], [], [], true)).toMatchObject({ incomplete: true });
+    expect(getOptionMatrixIssue([option("size", "", [["s", "S"]])], [], [], true)).toMatchObject({ incomplete: true });
+    expect(getOptionMatrixIssue([
+      option("one", "Size", [["s", "S"]]),
+      option("two", "size", [["m", "M"]]),
+    ], [], [], true)?.incomplete).toBeUndefined();
+  });
+
   it("validates simple product inventory", () => {
     const simple = (draft: { sku: string; trackInventory: boolean; stock: number; barcode?: string | null }) =>
       ({ barcode: null, barcodeType: null, weight: null, ...draft });

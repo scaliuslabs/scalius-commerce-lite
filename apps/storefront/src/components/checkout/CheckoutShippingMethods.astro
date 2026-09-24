@@ -17,6 +17,9 @@ interface Props {
   failedText: string;
   retryText: string;
   loadingText: string;
+  feeChangedText: string;
+  replacedText: string;
+  goneText: string;
 }
 
 const { shippingMethods, shippingMethodLabel, ...copy } = Astro.props;
@@ -33,13 +36,17 @@ const { shippingMethods, shippingMethodLabel, ...copy } = Astro.props;
   data-failed-text={copy.failedText}
   data-retry-text={copy.retryText}
   data-loading-text={copy.loadingText}
+  data-fee-changed-text={copy.feeChangedText}
+  data-replaced-text={copy.replacedText}
+  data-gone-text={copy.goneText}
 >
   <script is:inline type="application/json" data-shipping-rates set:html={serializeJsonForInlineScript(shippingMethods)} />
-  <fieldset id="shippingMethods" aria-describedby="shippingMethodNote shippingMethodError">
+  <fieldset id="shippingMethods" class="rounded-lg" aria-describedby="shippingMethodNotice shippingMethodNote shippingMethodError">
     <legend class="mb-2 block text-sm font-medium text-foreground">{shippingMethodLabel}</legend>
     <p id="shippingMethodNote" class="mb-2 text-sm text-muted-foreground" role="status" data-shipping-note>
       {copy.chooseAddressText}
     </p>
+    <p id="shippingMethodNotice" class="mb-2 hidden rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert" data-shipping-notice></p>
     <div class="grid grid-cols-1 gap-2 sm:grid-cols-2" data-shipping-options></div>
   </fieldset>
   <p id="shippingMethodError" class="mt-1 hidden text-sm font-medium text-destructive" role="alert"></p>

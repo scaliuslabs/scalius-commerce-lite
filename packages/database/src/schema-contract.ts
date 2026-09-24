@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 73,
-  name: "0073_combinable_discount_codes",
+  version: 75,
+  name: "0075_theme_layout_reset",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -143,8 +143,18 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "d30f2fc33db16f5c02a5b8be890d9cad078975edf126d6fc6b14c2c33d77cafd",
   },
   {
-    ...CURRENT_DATABASE_SCHEMA,
+    version: 73,
+    name: "0073_combinable_discount_codes",
     sourceSha256: "f0cce9701c13e51366a10988ce7595395b1e7763523fa8180acc17b9273ea582",
+  },
+  {
+    version: 74,
+    name: "0074_verified_customer_identity",
+    sourceSha256: "e678a6ac0d06ccaa55b95159fd8fd4564e262356c4694254d3cd4729004b36d6",
+  },
+  {
+    ...CURRENT_DATABASE_SCHEMA,
+    sourceSha256: "0fa004dc4ff1f70f010f91526b9a9f571ad2b8af382277503613fc445d933597",
   },
 ] as const;
 

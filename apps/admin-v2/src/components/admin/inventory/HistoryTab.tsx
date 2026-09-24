@@ -19,6 +19,7 @@ import { inventoryQueryOptions, type InventoryMovement } from "~/lib/api-query-o
 import { adminCalendarDateKey } from "~/lib/admin-time";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { cn } from "@scalius/shared/utils";
+import { IdText } from "~/components/admin/data-table/cells";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
@@ -241,15 +242,13 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
                         ? t(`type_${movement.type as MovementType}`)
                         : movement.type}
                     </Badge>
-                    <span className="text-body font-medium">
+                    <span className="line-clamp-2 min-w-0 break-words text-body font-medium">
                       {movement.productName ?? t("unknownProduct")}
                       {movement.optionLabel ? (
                         <span className="font-normal text-muted-foreground"> · {movement.optionLabel}</span>
                       ) : null}
                     </span>
-                    <span className="break-all font-mono text-body text-muted-foreground">
-                      {movement.variantSku ?? movement.variantId.slice(0, 8)}
-                    </span>
+                    <IdText value={movement.variantSku ?? movement.variantId.slice(0, 8)} copy className="text-muted-foreground" />
                   </div>
                   <MovementDetails movement={movement} />
                 </div>

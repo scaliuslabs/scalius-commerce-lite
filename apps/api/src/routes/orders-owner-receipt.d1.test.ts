@@ -77,6 +77,75 @@ describe("account owner receipt access", () => {
     expect(Number(sqlite.prepare("SELECT COUNT(*) AS n FROM order_receipts").get()?.n)).toBe(0);
   });
 
+  it("names each discount the order used, delivery savings apart, and echoes the order note", async () => {
+    sqlite.exec(`
+      UPDATE orders SET notes = ' দয়া করে ফোন করুন ', subtotal_amount_minor = 50000, shipping_amount_minor = 8000,
+        discount_amount_minor = 18000, currency_code = 'BDT' WHERE id = 'ORDEROWNED000001';
+      INSERT INTO products (id, name, slug, price_minor) VALUES ('prod_kettle', 'Kettle', 'kettle', 50000);
+      INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_minor, line_subtotal_minor)
+        VALUES ('item_1', 'ORDEROWNED000001', 'prod_kettle', 1, 50000, 50000);
+      INSERT INTO promotions (id, name, method, status) VALUES ('promo_eid', 'Eid sale', 'code', 'active'), ('promo_ship', 'Free delivery', 'code', 'active');
+      INSERT INTO promotion_codes (id, promotion_id, code, normalized_code) VALUES ('pc_eid', 'promo_eid', 'EID10', 'EID10'), ('pc_ship', 'promo_ship', 'SHIPFREE', 'SHIPFREE');
+      INSERT INTO promotion_effects (id, promotion_id, kind, target, allocation, config, position) VALUES
+        ('eff_eid', 'promo_eid', 'fixed_amount_off', 'line', 'across', '{"amountMinor":10000,"currencyCode":"BDT"}', 0),
+        ('eff_ship', 'promo_ship', 'free', 'shipping', 'once', '{}', 0);
+      INSERT INTO order_discount_allocations (id, order_id, order_item_id, promotion_id, effect_id, promotion_revision,
+        evaluator_version, method, promotion_name, promotion_code, effect_kind, target, currency_code,
+        base_amount_minor, discount_amount_minor, quantity) VALUES
+        ('alloc_eid', 'ORDEROWNED000001', 'item_1', 'promo_eid', 'eff_eid', 1, 1, 'code', 'Eid sale', 'EID10', 'fixed_amount_off', 'line', 'BDT', 50000, 10000, 1),
+        ('alloc_ship', 'ORDEROWNED000001', NULL, 'promo_ship', 'eff_ship', 1, 1, 'code', 'Free delivery', 'SHIPFREE', 'free', 'shipping', 'BDT', 8000, 8000, NULL);
+    `);
+    const proof = await ownerProof({ Authorization: service(), "X-Customer-Session": OWNER_SESSION });
+    const { data } = await proof.json() as { data: { receiptToken: string } };
+    const { data: { order } } = await (await receipt(data.receiptToken)).json() as {
+      data: { order: { discounts: unknown[]; notes: string | null } };
+    };
+    expect(order.discounts).toEqual([
+      { promotionId: "promo_eid", title: "Eid sale", code: "EID10", kind: "product", amount: 100, shippingAmount: 0 },
+      { promotionId: "promo_ship", title: "Free delivery", code: "SHIPFREE", kind: "shipping", amount: 0, shippingAmount: 80 },
+    ]);
+    expect(order.notes).toBe("দয়া করে ফোন করুন");
+
+    // The account order page lists the same discounts.
+    const detail = await publicBuyerApp.request(
+      "https://api.example.test/api/v1/customer-auth/orders/ORDEROWNED000001",
+      { headers: { Cookie: `cs_tok=${OWNER_SESSION}` } },
+      env(),
+    );
+    expect(detail.status).toBe(200);
+    const { data: accountOrder } = await detail.json() as { data: { discounts: unknown[] } };
+    expect(accountOrder.discounts).toEqual(order.discounts);
+  });
+
+  it("tells a tracked order where it is: dated steps, and each parcel's courier and tracking link (R2-SJ-04)", async () => {
+    sqlite.exec(`
+      UPDATE orders SET status = 'shipped', created_at = 1790000000 WHERE id = 'ORDEROWNED000001';
+      INSERT INTO order_notification_outbox (id, dedupe_key, order_id, notification_type, source, payload, created_at, updated_at)
+        VALUES ('outbox_confirmed', 'dedupe_confirmed', 'ORDEROWNED000001', 'order_confirmed', 'test', '{}', 1790000600, 1790000600);
+      INSERT INTO delivery_shipments (id, order_id, provider_type, tracking_id, tracking_url, courier_name, status, created_at, updated_at)
+        VALUES ('ship_1', 'ORDEROWNED000001', 'manual', ' PX-1001 ', 'https://track.example.test/PX-1001', 'Pathao', 'in_transit', 1790001200, 1790001200),
+               ('ship_2', 'ORDEROWNED000001', 'manual', NULL, 'javascript:alert(1)', NULL, 'pending', 1790001300, 1790001300);
+    `);
+    const proof = await ownerProof({ Authorization: service(), "X-Customer-Session": OWNER_SESSION });
+    const { data } = await proof.json() as { data: { receiptToken: string } };
+    const { data: { order } } = await (await receipt(data.receiptToken)).json() as {
+      data: { order: { tracking: {
+        progress: { steps: Array<{ key: string; done: boolean; happenedAt: string | null }> };
+        shipments: unknown[];
+      } } };
+    };
+    expect(order.tracking.progress.steps).toEqual([
+      expect.objectContaining({ key: "placed", done: true, happenedAt: new Date(1790000000 * 1000).toISOString() }),
+      expect.objectContaining({ key: "confirmed", done: true, happenedAt: new Date(1790000600 * 1000).toISOString() }),
+      expect.objectContaining({ key: "shipped", done: true, happenedAt: new Date(1790001200 * 1000).toISOString() }),
+      expect.objectContaining({ key: "delivered", done: false, happenedAt: null }),
+    ]);
+    expect(order.tracking.shipments).toEqual([
+      { statusLabel: "Booked with courier", courierName: null, trackingId: null, trackingUrl: null },
+      { statusLabel: "On its way", courierName: "Pathao", trackingId: "PX-1001", trackingUrl: "https://track.example.test/PX-1001" },
+    ]);
+  });
+
   it("keeps guests on the proof rule", async () => {
     expect((await receipt()).status).toBe(404);
     expect((await receipt("chk_not_a_real_proof")).status).toBe(404);

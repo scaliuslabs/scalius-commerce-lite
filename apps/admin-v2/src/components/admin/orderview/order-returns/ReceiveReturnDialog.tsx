@@ -27,6 +27,19 @@ import { createReturnCommandKey, getOrderItemName, clampQuantity } from "./share
 
 interface ReceiptDraft { received: number; restock: number }
 
+/** What the merchant is expected to receive: every approved unit still out, all back in stock when tracked. */
+export function defaultReceiptDraft(lines: readonly OrderReturnLineDto[]): Record<string, ReceiptDraft> {
+  return Object.fromEntries(lines.map((line) => {
+    const outstanding = getOutstandingReceiptQuantity(line);
+    return [line.id, { received: outstanding, restock: line.inventoryTracked ? outstanding : 0 }];
+  }));
+}
+
+/** A typed quantity as a whole number of at least 0; more than expected is kept so it can be flagged. */
+function typedQuantity(value: number | null): number {
+  return clampQuantity(value, Number.MAX_SAFE_INTEGER);
+}
+
 /**
  * Receipt lines for the API. A tracked item is split into back-in-stock and
  * damaged; an untracked item is only received, which the server records as
@@ -60,17 +73,21 @@ export function ReceiveReturnDialog({
 }) {
   const t = useMessages(orderDetailMessages);
   const r = useMessages(resourceMessages);
-  // Nothing is pre-filled: what goes back on sale is the merchant's call.
-  const [draft, setDraft] = useState<Record<string, ReceiptDraft>>({});
+  // Pre-filled with what is expected back; the merchant lowers it for anything missing or damaged.
+  const [draft, setDraft] = useState<Record<string, ReceiptDraft>>(() => defaultReceiptDraft(orderReturn?.lines ?? []));
   const [notes, setNotes] = useState("");
   const mutation = useReceiveOrderReturn();
   const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));
   if (!orderReturn) return <Dialog open={false} onOpenChange={onOpenChange} />;
   const lines = buildReceiptLines(orderReturn.lines, draft);
   const received = lines.reduce((sum, line) => sum + line.receivedQuantity, 0);
+  const tooMany = orderReturn.lines.some((line) => {
+    const current = draft[line.id];
+    return current !== undefined && (current.received > getOutstandingReceiptQuantity(line) || current.restock > current.received);
+  });
 
   const submit = () => {
-    if (lines.length === 0) return;
+    if (lines.length === 0 || tooMany || mutation.isPending) return;
     const intent = { expectedVersion: orderReturn.version, notes: notes.trim() || null, lines };
     mutation.mutate(
       { orderId: orderReturn.orderId, returnId: orderReturn.id, commandKey: commandKey.current.get("receive", intent), ...intent },
@@ -98,12 +115,18 @@ export function ReceiveReturnDialog({
               const current = draft[line.id] ?? { received: 0, restock: 0 };
               const name = getOrderItemName(itemsById.get(line.orderItemId));
               if (outstanding === 0) return null;
+              const receivedError = current.received > outstanding ? t("returns.receiveTooMany", { count: outstanding }) : null;
+              const restockError = !receivedError && current.restock > current.received ? t("returns.restockTooMany") : null;
+              const errorId = `receipt-${line.id}-error`;
+              // Back in stock follows Received until the merchant sets it apart.
               const setReceived = (value: number | null) => {
-                const next = clampQuantity(value, outstanding);
-                setDraft((existing) => ({
-                  ...existing,
-                  [line.id]: { received: next, restock: line.inventoryTracked ? Math.min(existing[line.id]?.restock ?? 0, next) : 0 },
-                }));
+                const next = typedQuantity(value);
+                setDraft((existing) => {
+                  const previous = existing[line.id] ?? { received: 0, restock: 0 };
+                  const restock = !line.inventoryTracked ? 0
+                    : previous.restock === previous.received ? Math.min(next, outstanding) : Math.min(previous.restock, next);
+                  return { ...existing, [line.id]: { received: next, restock } };
+                });
               };
               return (
                 <li key={line.id} className="space-y-2 px-3 py-2 text-body">
@@ -121,7 +144,10 @@ export function ReceiveReturnDialog({
                         <NumberInput
                           integer
                           aria-label={t("returns.receivedQty", { name })}
+                          aria-invalid={Boolean(receivedError) || undefined}
+                          aria-describedby={receivedError ? errorId : undefined}
                           value={current.received}
+                          disabled={mutation.isPending}
                           onValueChange={setReceived}
                         />
                       </Label>
@@ -130,18 +156,20 @@ export function ReceiveReturnDialog({
                         <NumberInput
                           integer
                           aria-label={t("returns.restockQty", { name })}
-                          disabled={current.received === 0}
+                          aria-invalid={Boolean(restockError) || undefined}
+                          aria-describedby={restockError ? errorId : undefined}
+                          disabled={current.received === 0 || mutation.isPending}
                           value={current.restock}
                           onValueChange={(value) => setDraft((existing) => ({
                             ...existing,
-                            [line.id]: { ...current, restock: clampQuantity(value, current.received) },
+                            [line.id]: { ...current, restock: typedQuantity(value) },
                           }))}
                         />
                       </Label>
                       <div className="grid gap-1 font-medium">
                         <span>{t("returns.damaged")}</span>
-                        <p className="py-2 font-normal tabular-nums" aria-label={t("returns.damagedQty", { count: current.received - current.restock })}>
-                          {formatNumber(current.received - current.restock)}
+                        <p className="py-2 font-normal tabular-nums" aria-label={t("returns.damagedQty", { count: Math.max(0, current.received - current.restock) })}>
+                          {formatNumber(Math.max(0, current.received - current.restock))}
                         </p>
                       </div>
                     </div>
@@ -151,11 +179,15 @@ export function ReceiveReturnDialog({
                       <NumberInput
                         integer
                         aria-label={t("returns.receivedQty", { name })}
+                        aria-invalid={Boolean(receivedError) || undefined}
+                        aria-describedby={receivedError ? errorId : undefined}
                         value={current.received}
+                        disabled={mutation.isPending}
                         onValueChange={setReceived}
                       />
                     </Label>
                   )}
+                  {receivedError || restockError ? <p id={errorId} className="text-destructive">{receivedError ?? restockError}</p> : null}
                 </li>
               );
             })}
@@ -167,7 +199,7 @@ export function ReceiveReturnDialog({
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>{r("cancel")}</Button>
-          <Button type="button" onClick={submit} disabled={lines.length === 0} loading={mutation.isPending}>
+          <Button type="button" onClick={submit} disabled={lines.length === 0 || tooMany} loading={mutation.isPending}>
             {received > 0 ? t("returns.receiveCount", { count: received }) : t("returns.receiveSubmit")}
           </Button>
         </DialogFooter>

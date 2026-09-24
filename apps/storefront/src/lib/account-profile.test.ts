@@ -85,6 +85,11 @@ beforeEach(() => {
     <div id="authState" class="hidden">
       <form id="signOutForm"><button type="submit">Sign out</button></form>
       <span id="profileName"></span><span id="profileEmail"></span><span id="profilePhone"></span>
+      <button id="nameToggle">Edit</button><p id="nameSaved" class="hidden">Name saved</p>
+      <form id="nameForm" class="hidden">
+        <input id="fieldProfileName" /><p id="fieldProfileNameError" class="hidden"></p>
+        <p id="nameSaveStatus"></p><button id="saveNameBtn" type="submit">Save name</button>
+      </form>
       <button id="profileToggle">Edit</button><div id="profileSummary"></div><p id="profileSaved" class="hidden">Address saved</p>
       <form id="profileForm" class="hidden">
         <input id="fieldName" /><p id="fieldNameError" class="hidden"></p>
@@ -190,6 +195,44 @@ describe("account order history", () => {
   });
 });
 
+describe("account profile name", () => {
+  it("edits the account name on its own and never touches the address", async () => {
+    const renamed = { ...customer, name: "Rahim Uddin" };
+    updateCustomerProfile.mockResolvedValueOnce({ success: true, customer: renamed });
+    await initializeAccountPage();
+    expect(element("nameToggle").textContent).toBe("Edit");
+    element("nameToggle").click();
+    expect(element("nameForm").classList.contains("hidden")).toBe(false);
+    expect(element("nameToggle").textContent).toBe("Cancel");
+    expect(field("fieldProfileName").value).toBe(customer.name);
+    expect(document.activeElement).toBe(field("fieldProfileName"));
+
+    field("fieldProfileName").value = " ";
+    element<HTMLFormElement>("nameForm").dispatchEvent(new Event("submit", { cancelable: true }));
+    expect(element("fieldProfileNameError").textContent).toBe("Enter your full name.");
+    expect(updateCustomerProfile).not.toHaveBeenCalled();
+
+    field("fieldProfileName").value = " Rahim Uddin ";
+    element<HTMLFormElement>("nameForm").dispatchEvent(new Event("submit", { cancelable: true }));
+    await vi.waitFor(() => expect(element("nameSaved").classList.contains("hidden")).toBe(false));
+    expect(updateCustomerProfile).toHaveBeenCalledWith({ name: "Rahim Uddin" });
+    expect(element("profileName").textContent).toBe("Rahim Uddin");
+    expect(element("nameForm").classList.contains("hidden")).toBe(true);
+    expect(field("fieldName").value).toBe("Rahim Uddin");
+  });
+
+  it("keeps the typed name and says the store could not be reached", async () => {
+    updateCustomerProfile.mockResolvedValueOnce({ success: false, unavailable: true, status: 502, error: "Proxy error" });
+    await initializeAccountPage();
+    element("nameToggle").click();
+    field("fieldProfileName").value = "Draft name";
+    element<HTMLFormElement>("nameForm").dispatchEvent(new Event("submit", { cancelable: true }));
+    await vi.waitFor(() => expect(element("nameSaveStatus").textContent).toBe("We couldn't reach the store. Check your connection and try again."));
+    expect(field("fieldProfileName").value).toBe("Draft name");
+    expect(element("profileName").textContent).toBe(customer.name);
+  });
+});
+
 describe("account delivery details", () => {
   it("shows the saved address collapsed and turns Edit into Cancel while editing", async () => {
     await initializeAccountPage();
@@ -244,25 +287,24 @@ describe("account delivery details", () => {
     await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
     save();
     expect(element("fieldAddressError").textContent).toBe("Enter a complete delivery address (at least 10 characters).");
-    expect(element("fieldZoneError").textContent).toBe("Choose a zone.");
+    expect(element("fieldZoneError").textContent).toBe("Choose a thana to continue.");
     expect(updateCustomerProfile).not.toHaveBeenCalled();
   });
 
-  it("clears the whole address, saves and collapses with Address saved", async () => {
-    const cleared = { ...customer, address: null, city: null, cityName: null, zone: null, zoneName: null, area: null, areaName: null };
-    updateCustomerProfile.mockResolvedValueOnce({ success: true, customer: cleared });
+  it("never reports Address saved for an empty address: it asks for each missing field", async () => {
+    getCustomerSession.mockResolvedValue({
+      authenticated: true, customer: { ...customer, address: null, city: null, cityName: null, zone: null, zoneName: null, area: null, areaName: null },
+    });
     await initializeAccountPage();
     element("profileToggle").click();
-    field("fieldAddress").value = "";
-    change("fieldCity", "");
     save();
-    await vi.waitFor(() => expect(updateCustomerProfile).toHaveBeenCalledWith({
-      name: customer.name, address: "", city: "", zone: "", area: "",
-    }));
-    await vi.waitFor(() => expect(element("profileForm").classList.contains("hidden")).toBe(true));
-    expect(element("profileSaved").classList.contains("hidden")).toBe(false);
-    expect(element("profileSummary").textContent).toBe("Add a delivery address for faster checkout");
-    expect(element("profileToggle").textContent).toBe("Add address");
+    expect(element("fieldAddressError").textContent).toBe("Enter your delivery address.");
+    expect(element("fieldCityError").textContent).toBe("Choose a city.");
+    expect(field("fieldAddress").getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(field("fieldAddress"));
+    expect(updateCustomerProfile).not.toHaveBeenCalled();
+    expect(element("profileSaved").classList.contains("hidden")).toBe(true);
+    expect(element("profileForm").classList.contains("hidden")).toBe(false);
   });
 
   it("updates the summary from the saved profile", async () => {
@@ -350,7 +392,7 @@ describe("account delivery details", () => {
     nextZones.resolve([{ id: "zone_sadar", name: "Bagerhat Sadar" }]);
     await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
     save();
-    expect(element("fieldZoneError").textContent).toBe("Choose a zone.");
+    expect(element("fieldZoneError").textContent).toBe("Choose a thana to continue.");
     const nextAreas = deferred<typeof areas>();
     getAreas.mockReturnValueOnce(nextAreas.promise);
     change("fieldZone", "zone_sadar");
@@ -461,12 +503,12 @@ describe("account delivery details", () => {
     }));
   });
 
-  it("explains an empty zone list", async () => {
+  it("explains an empty thana list", async () => {
     await initializeAccountPage();
     getZones.mockResolvedValueOnce([]);
     change("fieldCity");
     await vi.waitFor(() => expect(field("fieldZone").disabled).toBe(false));
-    expect(element("profileSaveStatus").textContent).toContain("No zones are available");
+    expect(element("profileSaveStatus").textContent).toContain("No thanas are available");
     field("fieldAddress").value = "";
     change("fieldCity", "");
     expect(saveButton().disabled).toBe(false);

@@ -2,6 +2,7 @@
    print) that must not follow the dashboard theme, so it carries its own stylesheet and classes. */
 import type { getApiV1AdminOrdersByIdInvoice } from "@scalius/api-client/sdk";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
@@ -15,6 +16,7 @@ import {
   resolveSavedOrderMoneySummary,
 } from "~/lib/order-tax-presentation";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
+import { summarizeOrderDiscounts } from "~/lib/order-discount-summary";
 import { formatLocationParts } from "~/lib/location-presentation";
 import { taxLabelText } from "./OrderItemsCard";
 
@@ -48,17 +50,39 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
     businessInfo.email,
     businessInfo.taxId ? `${t("invoice.taxId")}: ${businessInfo.taxId}` : null,
   ].filter(Boolean);
-  const discounts: Array<[string, string]> = (order.discounts ?? []).length > 0
-    ? (order.discounts ?? []).map((entry) => [
-        entry.code ? t("summary.discountCode", { code: entry.code }) : entry.name,
-        `−${money(entry.amount)}`,
-      ])
-    : (saved ? saved.discountMinor : discount) > 0
-      ? [[t("summary.discount"), `−${saved ? minor(saved.discountMinor) : money(discount)}`]]
-      : [];
+  const decimals = saved?.decimalPlaces ?? 2;
+  const amount = (minorAmount: number) => (saved ? minor(minorAmount) : money(minorAmount / 10 ** decimals));
+  const discountSummary = summarizeOrderDiscounts({
+    discounts: order.discounts ?? [],
+    shippingMinor: saved ? saved.shippingMinor : Math.round(order.shippingCharge * 10 ** decimals),
+    discountMinor: saved ? saved.discountMinor : Math.round(discount * 10 ** decimals),
+    decimalPlaces: decimals,
+  });
+  // Delivery savings on the delivery line ("Free (CODE)", the fee noted), item savings one line each.
+  const deliveryValue = [
+    discountSummary.deliveryChargedMinor === 0 && discountSummary.deliveryStruckMinor !== null
+      ? t("delivery.free")
+      : amount(discountSummary.deliveryChargedMinor),
+    discountSummary.deliveryDiscountNames.length > 0 ? ` (${discountSummary.deliveryDiscountNames.join(", ")})` : "",
+  ].join("");
+  const deliveryDetails = [
+    delivery.details,
+    discountSummary.deliveryStruckMinor !== null
+      ? t("invoice.deliveryWas", { amount: amount(discountSummary.deliveryStruckMinor) })
+      : null,
+  ].filter(Boolean).join(" ");
+  const discounts: Array<[string, string]> = [
+    ...discountSummary.itemDiscounts.map(({ name, amountMinor }): [string, string] => [
+      `${t("summary.discount")} · ${name}`,
+      `−${amount(amountMinor)}`,
+    ]),
+    ...(discountSummary.otherDiscountMinor > 0
+      ? [[t("summary.discount"), `−${amount(discountSummary.otherDiscountMinor)}`] as [string, string]]
+      : []),
+  ];
   const totals: Array<[string, string, string?]> = [
     [t("summary.subtotal"), saved ? minor(saved.subtotalMinor) : money(order.totalAmount - order.shippingCharge + discount)],
-    [delivery.label, saved ? minor(saved.shippingMinor) : money(order.shippingCharge), delivery.details],
+    [delivery.label, deliveryValue, deliveryDetails],
     ...discounts,
     ...(saved && saved.taxMinor > 0
       ? [[
@@ -82,8 +106,8 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
 
       <section className="invoice-meta">
         <div>
-          <h2>{document.status === "issued" ? t("invoice.title") : t("invoice.draft")}</h2>
-          <p className="strong">{document.invoiceNumber ?? t("invoice.notIssued")}</p>
+          <h2>{t("invoice.title")}</h2>
+          {document.status === "issued" && document.invoiceNumber ? <p className="strong">{document.invoiceNumber}</p> : null}
           {issuedAt ? <p>{formatDateTime(issuedAt, { dateStyle: "medium" })}</p> : null}
           <p>{o("order", { number: formatOrderNumber(order.orderNumber, order.id) })}</p>
           <p>
@@ -94,7 +118,8 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
         <div>
           <h2>{t("invoice.billTo")}</h2>
           <p className="strong">{order.customerName}</p>
-          <p>{order.customerPhone}</p>
+          {/* Local format, as the customer writes it: 01712345678. */}
+          <p>{formatPhoneForProvider(order.customerPhone)}</p>
           {order.customerEmail ? <p>{order.customerEmail}</p> : null}
           <p>{formatLocationParts(order.shippingAddress, order.areaName, order.zoneName, order.cityName)}</p>
         </div>
@@ -117,6 +142,7 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
                 <td>
                   {item.productName || t("items.unnamed")}
                   {item.variantLabel ? <small>{item.variantLabel}</small> : null}
+                  {(item.returnedQuantity ?? 0) > 0 ? <small>{t("items.returned", { count: item.returnedQuantity ?? 0 })}</small> : null}
                 </td>
                 <td>{formatNumber(item.quantity)}</td>
                 <td>{line ? minor(line.unitPriceMinor) : money(item.price)}</td>

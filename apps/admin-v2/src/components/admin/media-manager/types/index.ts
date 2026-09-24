@@ -34,6 +34,15 @@ export interface LibraryMediaFile extends MediaFile {
   updatedAt: Date;
   trashedAt: Date | null;
   deletedAt: Date | null;
+  /** Places that show the file (products, categories, banners, theme…). */
+  usageCount: number;
+  /** Past orders show this picture, so it can't be deleted permanently. */
+  keptForOrders: boolean;
+}
+
+/** Trash keeps a used file showing; permanent delete waits until nothing uses it. */
+export function canDeletePermanently(file: Pick<LibraryMediaFile, "usageCount" | "keptForOrders">): boolean {
+  return file.usageCount === 0 && !file.keptForOrders;
 }
 
 export interface MediaFolder {

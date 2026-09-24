@@ -1,5 +1,6 @@
 import type { RuntimeApiApp } from "./base-app";
 import { adminAuthMiddleware } from "../middleware/admin-auth";
+import { privateNoStore } from "../middleware/private-no-store";
 import { dashboardOriginGuardMiddleware } from "../middleware/cookie-origin-guard";
 import { webhookBodyLimitMiddleware } from "../middleware/webhook-body-limit";
 import { agentArtifactRoutes } from "../routes/agent-artifacts";
@@ -23,6 +24,7 @@ export function registerSystemRoutes(app: RuntimeApiApp): void {
   // Payment gateways: /webhooks/{provider}. Registered after the courier routes.
   app.route("/webhooks", paymentWebhookRoutes);
 
+  app.use("/cache/*", privateNoStore);
   app.use("/cache/*", dashboardOriginGuardMiddleware);
   app.use("/cache/*", adminAuthMiddleware);
   app.route("/cache", cacheControlRoutes);

@@ -50,6 +50,8 @@ const isWhole = (value: number | null): value is number => value !== null && Num
 
 interface AdjustStockDialogProps {
   variant: InventoryVariant | null;
+  /** The store-wide alert level an empty field falls back to. */
+  storeLevel?: number | null;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -60,7 +62,7 @@ interface AdjustStockDialogProps {
  * operation key per stock intent. Always mounted; the parent re-keys it per
  * opening so every opening starts clean.
  */
-export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustStockDialogProps) {
+export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, onSaved }: AdjustStockDialogProps) {
   const t = useMessages(inventoryMessages);
   const r = useMessages(resourceMessages);
   const [mode, setMode] = useState<AdjustmentMode>("relative");
@@ -362,6 +364,7 @@ export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustSto
                   integer
                   className="w-24"
                   value={alertLevel}
+                  placeholder={storeLevel ? formatNumber(storeLevel) : undefined}
                   aria-invalid={errors.alertLevel ? true : undefined}
                   aria-describedby={errors.alertLevel ? "inventory-alert-level-error" : "inventory-alert-level-help"}
                   onValueChange={(next) => {
@@ -372,7 +375,9 @@ export function AdjustStockDialog({ variant, open, onClose, onSaved }: AdjustSto
                 <span className="text-body">{t("alertOrFewer")}</span>
               </div>
               {fieldError("alertLevel", "inventory-alert-level-error") ?? (
-                <p id="inventory-alert-level-help" className="text-body text-muted-foreground">{t("alertLevelHelp")}</p>
+                <p id="inventory-alert-level-help" className="text-body text-muted-foreground">
+                  {storeLevel ? t("alertLevelDefaultHelp", { level: storeLevel }) : t("alertLevelHelp")}
+                </p>
               )}
             </div>
           </form>

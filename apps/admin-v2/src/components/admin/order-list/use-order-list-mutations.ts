@@ -22,17 +22,26 @@ function invalidateAfterOrderChange(queryClient: QueryClient) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
 }
 
+/**
+ * `requestKey` is made once per dialog opening and reused when the merchant
+ * retries: the server replays an order it already handled for that key.
+ */
 type BulkInput =
-  | { action: "confirm"; orderIds: string[] }
-  | { action: "send"; orderIds: string[]; courierName?: string; note?: string }
+  | { action: "confirm"; orderIds: string[]; requestKey: string }
+  | { action: "send"; orderIds: string[]; requestKey: string; courierName?: string; note?: string }
   | { action: "ship"; orderIds: string[]; providerId: string };
 
 async function runBulkChunk(input: BulkInput, orderIds: string[]) {
   if (input.action === "confirm") {
-    return (await apiData(postApiV1AdminOrdersBulkConfirm({ body: { orderIds } }))).results;
+    return (await apiData(postApiV1AdminOrdersBulkConfirm({ body: { orderIds, requestKey: input.requestKey } }))).results;
   }
   if (input.action === "send") {
-    const body = { orderIds, courierName: input.courierName || undefined, note: input.note || undefined };
+    const body = {
+      orderIds,
+      requestKey: input.requestKey,
+      courierName: input.courierName || undefined,
+      note: input.note || undefined,
+    };
     return (await apiData(postApiV1AdminOrdersBulkFulfill({ body }))).results;
   }
   const body = { orderIds, providerId: input.providerId, options: {} };

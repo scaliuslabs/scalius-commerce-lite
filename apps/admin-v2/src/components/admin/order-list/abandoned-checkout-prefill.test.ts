@@ -12,6 +12,7 @@ const checkoutData = JSON.stringify({
   area: "",
   cityName: "Dhaka",
   zoneName: "Mirpur",
+  shipping: { id: "rate_dhaka_standard", fee: 80, freeOver: null, name: "Standard delivery", kind: "delivery" },
   cart: {
     items: [
       { id: "prod_1", variantId: "var_1", name: "Cotton kurta", quantity: 2, price: 800, options: [{ name: "Size", value: "L" }, { name: "Color", value: "Black" }] },
@@ -22,7 +23,7 @@ const checkoutData = JSON.stringify({
 });
 
 describe("create order from an abandoned checkout", () => {
-  it("carries the customer, the delivery area ids and every cart line", () => {
+  it("carries the customer, the delivery area ids, the delivery method and charge, and every cart line", () => {
     const display = parseAbandonedCheckoutDisplay({ id: "1", checkoutId: "chk_session_abcdef123456", customerPhone: null, checkoutData });
     const prefill = buildOrderPrefill(checkoutData, display);
     expect(prefill).toMatchObject({
@@ -32,6 +33,8 @@ describe("create order from an abandoned checkout", () => {
       city: "city_dhaka",
       zone: "zone_mirpur",
       area: null,
+      shippingMethodId: "rate_dhaka_standard",
+      shippingCharge: 80,
     });
     expect(prefill.customerPhone).toBe("+8801712345601");
     expect(prefill.items).toEqual([
@@ -50,6 +53,8 @@ describe("create order from an abandoned checkout", () => {
       city: "",
       zone: "",
       area: null,
+      shippingMethodId: null,
+      shippingCharge: null,
       items: [],
     });
   });

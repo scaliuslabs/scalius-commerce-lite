@@ -34,7 +34,7 @@ function data(): ProductPageData {
       { ...base, id: "var_digital", optionCombinationKey: "digital", sku: "DIGITAL", stock: 10, selectedOptions: [{ optionDefinitionId: "format", optionValueId: "digital", name: "Format", value: "Digital", position: 0, valuePosition: 0, standardMapping: "none" }] },
       { ...base, id: "var_print", optionCombinationKey: "print", sku: "PRINT", stock: 0, selectedOptions: [{ optionDefinitionId: "format", optionValueId: "print", name: "Format", value: "Print", position: 0, valuePosition: 1, standardMapping: "none" }] },
     ],
-    relatedProducts: [],
+    recommendations: { reason: "similar", products: [] },
   };
 }
 

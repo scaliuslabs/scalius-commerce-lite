@@ -1,5 +1,6 @@
 // src/modules/products/products.storefront.ts
 // Storefront product queries — public-facing read-only operations.
+import { effectiveLowStockThresholdSql } from "../inventory/low-stock-policy";
 import {
     products,
     categories,
@@ -64,10 +65,16 @@ import {
 } from "../categories/categories.publication";
 import {
     loadProductMediaProjections,
+    resolveProductCardImages,
     resolveProductImageRepresentation,
     resolveSkuImageRepresentation,
     type ProductMediaProjection,
 } from "./products.media";
+import {
+    DEFAULT_RECOMMENDATION_LIMIT,
+    getStorefrontProductRecommendations,
+    type ProductRecommendations,
+} from "./products.recommendations";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 type AttributeFilter = NonNullable<StorefrontProductFilterInput["attributeFilters"]>[number];
@@ -423,12 +430,13 @@ function isOptionFilter(filter: AttributeFilter): boolean {
 const OPTION_AXIS_KEY_SQL = (axis: string) => sql.raw(`replace(${axis}.normalized_name, ' ', '-')`);
 
 /**
- * Products that have a live SKU for one of the selected values of every
- * selected option axis (OR within an axis, AND across axes). `exceptAxis`
- * skips the axis whose own facet counts are being computed.
+ * The SKU carries one of the selected values on every selected option axis
+ * (OR within an axis, AND across axes). Matching one SKU, not the product,
+ * keeps "Chalk + 42" to products that sell a Chalk 42 (Shopify's variant
+ * filtering). `exceptAxis` skips the axis whose own facet counts are being
+ * computed.
  */
-function buildOptionFilterCondition(optionFilters: AttributeFilter[], exceptAxis?: SQL): SQL | undefined {
-    if (optionFilters.length === 0) return undefined;
+function skuMatchesOptionFilters(optionFilters: AttributeFilter[], skuId: SQL, exceptAxis?: SQL): SQL {
     const filtersJson = JSON.stringify(optionFilters.map((filter) => ({
         key: filter.slug.slice(OPTION_FACET_PREFIX.length),
         values: filter.values.map(normalizeProductOptionIdentity),
@@ -438,23 +446,32 @@ function buildOptionFilterCondition(optionFilters: AttributeFilter[], exceptAxis
         FROM json_each(${filtersJson}) AS selected_option
         WHERE ${exceptAxis ? sql`CAST(json_extract(selected_option.value, '$.key') AS TEXT) <> ${exceptAxis} AND ` : sql``}NOT EXISTS (
             SELECT 1
-            FROM product_variants AS option_filter_sku
-            INNER JOIN product_variant_option_values AS option_filter_assignment
-                ON option_filter_assignment.variant_id = option_filter_sku.id
+            FROM product_variant_option_values AS option_filter_assignment
             INNER JOIN product_option_definitions AS option_filter_axis
                 ON option_filter_axis.id = option_filter_assignment.option_definition_id
                AND option_filter_axis.deleted_at IS NULL
             INNER JOIN product_option_values AS option_filter_value
                 ON option_filter_value.id = option_filter_assignment.option_value_id
                AND option_filter_value.deleted_at IS NULL
-            WHERE option_filter_sku.product_id = ${products.id}
-              AND option_filter_sku.deleted_at IS NULL
+            WHERE option_filter_assignment.variant_id = ${skuId}
               AND ${OPTION_AXIS_KEY_SQL("option_filter_axis")} = CAST(json_extract(selected_option.value, '$.key') AS TEXT)
               AND option_filter_value.normalized_value IN (
                   SELECT CAST(value AS TEXT)
                   FROM json_each(json_extract(selected_option.value, '$.values'))
               )
         )
+    )`;
+}
+
+/** Products with a live SKU that matches every selected option axis. */
+function buildOptionFilterCondition(optionFilters: AttributeFilter[]): SQL | undefined {
+    if (optionFilters.length === 0) return undefined;
+    return sql`EXISTS (
+        SELECT 1
+        FROM product_variants AS option_filter_sku
+        WHERE option_filter_sku.product_id = ${products.id}
+          AND option_filter_sku.deleted_at IS NULL
+          AND ${skuMatchesOptionFilters(optionFilters, sql.raw("option_filter_sku.id"))}
     )`;
 }
 
@@ -470,7 +487,14 @@ function buildResultScopedOptionFacetQuery(
     const facetAxis = alias(productOptionDefinitions, "facet_option_axis");
     const facetValue = alias(productOptionValues, "facet_option_value");
     const axisKey = OPTION_AXIS_KEY_SQL("facet_option_axis");
-    const matchesOtherSelectedAxes = buildOptionFilterCondition(optionFilters, axisKey) ?? sql`1 = 1`;
+    // A value counts products whose SKU with that value also matches the
+    // other selected axes and attributes, so every offered value leads to a
+    // real product. Values that match nothing stay listed with a zero count.
+    const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "option_facet_filtered_products");
+    const matchesOtherSelectedAxes = and(
+        optionFilters.length > 0 ? skuMatchesOptionFilters(optionFilters, sql`${facetSku.id}`, axisKey) : undefined,
+        attributeSubquery ? sql`${attributeSubquery.productId} IS NOT NULL` : undefined,
+    ) ?? sql`1 = 1`;
     let query = db
         .select({
             id: sql<string>`${OPTION_FACET_PREFIX} || ${axisKey}`,
@@ -498,9 +522,8 @@ function buildResultScopedOptionFacetQuery(
         .where(and(...baseConditions))
         .groupBy(axisKey, facetValue.normalizedValue)
         .$dynamic();
-    const attributeSubquery = buildAttributeProductSubquery(db, attributeFilters, "option_facet_filtered_products");
     if (attributeSubquery) {
-        query = query.innerJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
+        query = query.leftJoin(attributeSubquery, eq(products.id, attributeSubquery.productId));
     }
     return query;
 }
@@ -510,9 +533,10 @@ function buildResultScopedFacetQuery(
     buyerPricing: BuyerCatalogPricingProjection,
     baseConditions: SQL[],
     attributeFilters: AttributeFilter[],
+    optionCondition: SQL | undefined,
 ) {
     const filtersJson = JSON.stringify(attributeFilters);
-    const matchesOtherSelectedFacets = sql`NOT EXISTS (
+    const matchesOtherSelectedAttributes = sql`NOT EXISTS (
         SELECT 1
         FROM json_each(${filtersJson}) AS selected_filter
         WHERE CAST(json_extract(selected_filter.value, '$.slug') AS TEXT) <> ${productAttributes.slug}
@@ -531,6 +555,9 @@ function buildResultScopedFacetQuery(
                 )
           )
     )`;
+    const matchesOtherSelectedFacets = optionCondition
+        ? sql`${matchesOtherSelectedAttributes} AND ${optionCondition}`
+        : matchesOtherSelectedAttributes;
 
     return db
         .select({
@@ -732,7 +759,7 @@ async function readStorefrontFeedVariantMap(
                 priceMinor: productVariants.priceMinor,
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
-                lowStockThreshold: productVariants.lowStockThreshold,
+                lowStockThreshold: effectiveLowStockThresholdSql(),
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,
@@ -819,8 +846,8 @@ async function readStorefrontCatalogResults(
     const attributeFilters = (params.attributeFilters ?? []).filter((filter) => !isOptionFilter(filter));
     const priceBounds = priceFilterBoundsMinor(params);
     const buyerPricing = buildBuyerCatalogPricingProjection(db);
-    // Option-facet counts exclude their own axis, so they read the conditions
-    // before the option filter is applied; every other query reads both.
+    // Facet counts apply every selection except their own facet's, so they
+    // read the scope conditions before the option filter is applied.
     const unfilteredOptionConditions = buildStorefrontProductConditions(db, { ...params, ...priceBounds }, {}, buyerPricing);
     const priceRangeConditions = buildStorefrontProductConditions(db, params, {}, buyerPricing);
     if (scope.condition) {
@@ -901,8 +928,9 @@ async function readStorefrontCatalogResults(
     const facetQuery = buildResultScopedFacetQuery(
         db,
         buyerPricing,
-        conditions,
+        unfilteredOptionConditions,
         attributeFilters,
+        optionCondition,
     );
     const optionFacetQuery = buildResultScopedOptionFacetQuery(
         db,
@@ -928,8 +956,8 @@ async function readStorefrontCatalogResults(
                 .map((product) => product.categoryId)
                 .filter((id): id is string => Boolean(id)),
         )];
-    const [imageMap, categoriesData] = await Promise.all([
-        readPrimaryProductImageMap(db, productIds),
+    const [mediaMap, categoriesData] = await Promise.all([
+        loadProductMediaProjections(db, productIds),
         categoryIds.length > 0
             ? db
                 .select({ id: categories.id, name: categories.name, slug: categories.slug })
@@ -947,7 +975,6 @@ async function readStorefrontCatalogResults(
         availableForSale,
         ...product
     }: StorefrontProductListRowWithVariants) => {
-        const image = imageMap.get(product.id);
         const category = scope.fixedCategory ?? (
             product.categoryId ? categoryMap.get(product.categoryId) ?? null : null
         );
@@ -956,9 +983,7 @@ async function readStorefrontCatalogResults(
             categoryId: category?.id ?? null,
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
-            imageUrl: image?.url ?? null,
-            imageMediaId: image?.mediaId ?? null,
-            imageAlt: image?.alt ?? null,
+            ...resolveProductCardImages(mediaMap.get(product.id) ?? []),
             category,
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
             updatedAt: unixToDate(product.updatedAt)?.toISOString() ?? null,
@@ -1358,13 +1383,13 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     if (!productRow) return null;
     const { category, storeCurrencyCode, ...product } = productRow;
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
-    const buyerPricing = buildBuyerCatalogPricingProjection(db);
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
     const promises: Promise<{ type: string; data: unknown }>[] = [
         mediaMapPromise.then((mediaMap) => ({
             type: "media",
-            data: mediaMap.get(product.id) ?? [],
+            // Buyers never need the file's name in Files.
+            data: (mediaMap.get(product.id) ?? []).map(({ filename: _filename, ...item }) => item),
         })),
 
         db.select({
@@ -1379,7 +1404,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             reservedStock: productVariants.reservedStock,
             isDefault: productVariants.isDefault,
             trackInventory: productVariants.trackInventory,
-            lowStockThreshold: productVariants.lowStockThreshold,
+            lowStockThreshold: effectiveLowStockThresholdSql(),
             barcode: productVariants.barcode,
             barcodeType: productVariants.barcodeType,
             discountType: productVariants.discountType,
@@ -1423,55 +1448,19 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             .then((res: Array<{ name: string; value: string; slug: string }>) => ({ type: "attributes", data: res })),
     ];
 
-    if (product.categoryId) {
-        promises.push(
-            (async () => {
-                const relatedProds = await db.select({
-                    id: products.id, name: products.name,
-                    ...buyerPricingSelection(buyerPricing),
-                    slug: products.slug,
-                    hasVariants: buyerPricing.hasCustomerOptions,
-                    availableForSale: buyerPricing.availableForSale,
-                    freeDelivery: products.freeDelivery,
-                }).from(products)
-                    .innerJoin(buyerPricing, eq(products.id, buyerPricing.productId))
-                    .where(and(
-                        eq(products.categoryId, product.categoryId!),
-                        eq(products.isActive, true),
-                        isNull(products.deletedAt),
-                        publicProductHasBuyerResolvableSku(),
-                        sql`${products.id} != ${product.id}`,
-                    )).limit(6).all();
-
-                if (relatedProds.length === 0) return { type: "relatedProducts", data: [] };
-
-                const relatedIds = relatedProds.map((p) => p.id);
-                const relatedImageMap = await readPrimaryProductImageMap(db, relatedIds);
-
-                return {
-                    type: "relatedProducts",
-                    data: relatedProds.map((rp) => {
-                        const imgData = relatedImageMap.get(rp.id);
-                        return {
-                            ...presentBuyerPricing(rp, decimalPlaces),
-                            hasVariants: Boolean(rp.hasVariants),
-                            availableForSale: Boolean(rp.availableForSale),
-                            imageUrl: imgData?.url || null,
-                            imageMediaId: imgData?.mediaId ?? null,
-                            imageAlt: imgData?.alt || null,
-                        };
-                    }),
-                };
-            })(),
-        );
-    }
+    promises.push(
+        getStorefrontProductRecommendations(db, {
+            productIds: [product.id],
+            limit: DEFAULT_RECOMMENDATION_LIMIT,
+        }).then((data) => ({ type: "recommendations", data })),
+    );
 
     const results = await Promise.all(promises);
 
     const mediaItems = (results.find((r) => r.type === "media")?.data as ProductMediaProjection[]) || [];
     const variants = (results.find((r) => r.type === "variants")?.data as unknown[]) || [];
     const additionalInfo = (results.find((r) => r.type === "additionalInfo")?.data as unknown[]) || [];
-    const relatedProducts = (results.find((r) => r.type === "relatedProducts")?.data as unknown[]) || [];
+    const recommendations = results.find((r) => r.type === "recommendations")!.data as ProductRecommendations;
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
     const offers = (results.find((r) => r.type === "offers")?.data as unknown[]) || [];
 
@@ -1541,7 +1530,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         category,
         media: publicMedia,
         variants: formattedVariants,
-        relatedProducts,
+        recommendations,
     };
 }
 
@@ -1595,7 +1584,7 @@ async function readStorefrontSearchVariantMap(
                 priceMinor: productVariants.priceMinor,
                 stock: productVariants.stock,
                 reservedStock: productVariants.reservedStock,
-                lowStockThreshold: productVariants.lowStockThreshold,
+                lowStockThreshold: effectiveLowStockThresholdSql(),
                 isDefault: productVariants.isDefault,
                 trackInventory: productVariants.trackInventory,
                 discountType: productVariants.discountType,

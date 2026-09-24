@@ -1,7 +1,8 @@
 ---
 import SearchBar from "../search/SearchBar.astro";
 import { Phone, ShoppingCart, Menu, Search } from "lucide-react";
-import type { HeaderData, SocialLink } from "@/lib/api";
+import type { HeaderData } from "@/lib/api";
+import type { StorefrontHeaderStyle } from "@scalius/shared/storefront-theme";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import {
   getMobileHeaderLogoWidth,
@@ -12,26 +13,26 @@ import { telHref } from "@/lib/store-identity";
 
 interface Props {
   headerData: HeaderData;
+  /** Without a header menu there is no second row (and no second rule). */
+  hasNavigation: boolean;
+  /**
+   * classic: logo left, search centre, icons right; collapses into a compact
+   * menu on scroll. centered: logo in the middle, search as an icon, menu row
+   * below. marketplace: a wide search bar that stays put (and a search bar
+   * under the header on phones), as Daraz/Chaldal shoppers expect.
+   */
+  variant: StorefrontHeaderStyle;
 }
 
-const { headerData } = Astro.props;
+const { headerData, hasNavigation, variant } = Astro.props;
 const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
-const socialLinks = (headerData.social ?? []).filter(
-  (item): item is SocialLink & { url: string } => Boolean(item.url),
-);
+// Social links live in the footer and the phone menu, so the desktop header
+// reaches My Account and the cart in a few tab stops (logo, search, call).
 const phoneHref =
   headerData.contact.isEnabled !== false ? telHref(headerData.contact.phone) : null;
-const hasDesktopPhone = Boolean(phoneHref);
-const desktopSocialWidth =
-  socialLinks.length > 0
-    ? socialLinks.length * 36 + (socialLinks.length - 1) * 4
-    : 0;
-const expandedActionsLgWidth = desktopSocialWidth;
-const expandedActionsXlWidth =
-  desktopSocialWidth +
-  (desktopSocialWidth > 0 && hasDesktopPhone ? 12 : 0) +
-  (hasDesktopPhone ? 40 : 0);
+const expandedActionsLgWidth = 0;
+const expandedActionsXlWidth = phoneHref ? 40 : 0;
 ---
 
 {
@@ -50,6 +51,7 @@ const expandedActionsXlWidth =
 
 <div
   id="main-header"
+  data-header-style={variant}
   class="sticky top-0 z-50 w-full bg-background/95 backdrop-blur-xl border-b border-border transition-[box-shadow,background-color,border-color] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group/header"
 >
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -72,7 +74,10 @@ const expandedActionsXlWidth =
         <button
           id="mobile-search-toggle"
           type="button"
-          class="flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:bg-accent"
+          class:list={[
+            "flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted active:bg-accent",
+            variant === "marketplace" && "hidden",
+          ]}
           aria-label="Search"
         >
           <Search className="h-5 w-5 stroke-[1.5]" />
@@ -80,9 +85,10 @@ const expandedActionsXlWidth =
       </div>
 
       <div
-        class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:translate-x-0 lg:translate-y-0 shrink-0 z-20 flex items-center justify-center lg:justify-start"
+        class="header-logo absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 lg:static lg:translate-x-0 lg:translate-y-0 shrink-0 z-20 flex items-center justify-center lg:justify-start"
       >
-        <a href="/" class="block group" aria-label="Go to homepage">
+        {/* The logo's alt text (the store name) is the link's name. */}
+        <a href="/" class="block group">
           {
             headerData.logo.src ? (
               <img
@@ -95,7 +101,6 @@ const expandedActionsXlWidth =
                 width={240}
                 height={80}
                 loading="eager"
-                fetchpriority="high"
                 decoding="async"
               />
             ) : (
@@ -141,55 +146,6 @@ const expandedActionsXlWidth =
           <div
             class="header-expanded-actions absolute inset-y-0 left-0 flex items-center gap-3"
           >
-            {
-              socialLinks.length > 0 && (
-                <div class="flex items-center gap-1">
-                  {socialLinks.map((item) => {
-                    const displayTitle =
-                      item.label || item.platform || "Social";
-                    const href = item.url.startsWith("http")
-                      ? item.url
-                      : `https://${item.url}`;
-
-                    return (
-                      <a
-                        href={href}
-                        data-astro-prefetch={getStorefrontPrefetchAttribute(
-                          href,
-                          Astro.url,
-                        )}
-                        class="group flex items-center justify-center h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-all duration-200"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={displayTitle}
-                        title={displayTitle}
-                      >
-                        {item.iconUrl ? (
-                          <img
-                            data-desktop-header-image
-                            data-deferred-src={mediaImageUrl(item.iconUrl, 160)}
-                            alt=""
-                            aria-hidden="true"
-                            class="w-4 h-4 object-contain"
-                            loading="lazy"
-                            decoding="async"
-                            fetchpriority="low"
-                          />
-                        ) : (
-                          <span
-                            aria-hidden="true"
-                            class="w-4 h-4 flex items-center justify-center text-xs font-bold uppercase"
-                          >
-                            {displayTitle.charAt(0)}
-                          </span>
-                        )}
-                      </a>
-                    );
-                  })}
-                </div>
-              )
-            }
-
             {
               phoneHref && (
                 <a
@@ -237,7 +193,7 @@ const expandedActionsXlWidth =
           <button
             type="button"
             id="cart-button"
-            class="relative flex h-11 min-w-11 cursor-pointer items-center gap-2 pl-1.5 outline-none active:scale-[0.98] lg:gap-3 lg:pl-2"
+            class="relative flex h-11 min-w-11 cursor-pointer items-center gap-2 rounded-full pl-1.5 active:scale-[0.98] lg:gap-3 lg:pl-2"
             aria-label="Open shopping cart"
           >
             <span
@@ -267,11 +223,23 @@ const expandedActionsXlWidth =
       </div>
     </div>
 
-    <div class="header-full-nav-row hidden border-t border-border lg:block">
-      <div class="py-2 flex justify-center relative z-50">
-        <slot name="desktop-nav-full" />
-      </div>
-    </div>
+    {
+      variant === "marketplace" && (
+        <div class="pb-3 lg:hidden">
+          <SearchBar mobileView />
+        </div>
+      )
+    }
+
+    {
+      hasNavigation && (
+        <div class="header-full-nav-row hidden border-t border-border lg:block">
+          <div class="py-2 flex justify-center relative z-50">
+            <slot name="desktop-nav-full" />
+          </div>
+        </div>
+      )
+    }
   </div>
 </div>
 
@@ -302,7 +270,7 @@ const expandedActionsXlWidth =
       visibility 0s linear 160ms;
   }
 
-  #main-header.is-scrolled .header-expanded-center {
+  #main-header[data-header-style="classic"].is-scrolled .header-expanded-center {
     pointer-events: none;
     visibility: hidden;
     opacity: 0;
@@ -313,7 +281,7 @@ const expandedActionsXlWidth =
       visibility 0s linear 160ms;
   }
 
-  #main-header.is-scrolled .header-compact-center {
+  #main-header[data-header-style="classic"].is-scrolled .header-compact-center {
     pointer-events: auto;
     visibility: visible;
     opacity: 1;
@@ -336,7 +304,7 @@ const expandedActionsXlWidth =
       border-color 120ms ease;
   }
 
-  #main-header.is-scrolled .header-full-nav-row {
+  #main-header[data-header-style="classic"].is-scrolled .header-full-nav-row {
     max-height: 0;
     overflow: hidden;
     border-top-width: 0;
@@ -379,12 +347,12 @@ const expandedActionsXlWidth =
       visibility 0s linear 160ms;
   }
 
-  #main-header.is-scrolled .header-action-morph {
+  #main-header[data-header-style="classic"].is-scrolled .header-action-morph {
     width: 2.5rem;
     margin-right: 0.75rem;
   }
 
-  #main-header.is-scrolled .header-expanded-actions {
+  #main-header[data-header-style="classic"].is-scrolled .header-expanded-actions {
     pointer-events: none;
     visibility: hidden;
     opacity: 0;
@@ -395,7 +363,7 @@ const expandedActionsXlWidth =
       visibility 0s linear 160ms;
   }
 
-  #main-header.is-scrolled .header-scroll-search {
+  #main-header[data-header-style="classic"].is-scrolled .header-scroll-search {
     pointer-events: auto;
     visibility: visible;
     opacity: 1;
@@ -428,9 +396,46 @@ const expandedActionsXlWidth =
       margin-right: var(--header-actions-gap-xl);
     }
 
-    #main-header.is-scrolled .header-action-morph {
+    #main-header[data-header-style="classic"].is-scrolled .header-action-morph {
       width: 2.5rem;
       margin-right: 0.75rem;
+    }
+  }
+
+  /* Centered: logo in the middle, search as an icon, the menu row below. */
+  @media (min-width: 64rem) {
+    #main-header[data-header-style="centered"] .header-logo {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    #main-header[data-header-style="centered"] .header-expanded-center,
+    #main-header[data-header-style="centered"] .header-compact-center,
+    #main-header[data-header-style="centered"] .header-expanded-actions {
+      display: none;
+    }
+
+    #main-header[data-header-style="centered"] .header-action-morph {
+      width: 2.5rem;
+      margin-right: 0.75rem;
+    }
+
+    #main-header[data-header-style="centered"] .header-scroll-search {
+      pointer-events: auto;
+      visibility: visible;
+      opacity: 1;
+      transform: none;
+    }
+
+    /* Marketplace: a wide search bar that never collapses. */
+    #main-header[data-header-style="marketplace"] .header-expanded-center {
+      max-width: 44rem;
+    }
+
+    #main-header[data-header-style="marketplace"] .header-compact-center {
+      display: none;
     }
   }
 
@@ -510,22 +515,6 @@ const expandedActionsXlWidth =
   document
     .getElementById("scrolled-search-trigger")
     ?.addEventListener("click", triggerSearch);
-
-  const phoneBtn = document.getElementById("desktop-phone-btn");
-  const iconSuccess = document.getElementById("phone-icon-success");
-  if (phoneBtn && iconSuccess) {
-    phoneBtn.addEventListener("click", async () => {
-      const phone = phoneBtn.getAttribute("data-phone");
-      if (!phone) return;
-      try {
-        await navigator.clipboard.writeText(phone);
-        iconSuccess.classList.remove("translate-y-full");
-        setTimeout(() => iconSuccess.classList.add("translate-y-full"), 2000);
-      } catch {
-        window.location.href = `tel:${phone}`;
-      }
-    });
-  }
 
   window.addEventListener("scroll", scheduleScrollState, { passive: true });
   applyScrollState();

@@ -141,4 +141,27 @@ describe("ShipmentCard recovery authority", () => {
     });
     expect(host.textContent).toContain(en["fulfill.open"]);
   });
+
+  it("lists what each parcel holds", async () => {
+    const line = (id: string, productName: string, quantity: number) => ({
+      id, productId: `p_${id}`, variantId: null, quantity, shippedQuantity: quantity, price: 600,
+      productName, productImage: null, variantLabel: null,
+    });
+    const parcel = (id: string, shipmentItems: string | null) => ({
+      id, orderId: order.id, providerId: null, providerType: "manual", externalId: null, trackingId: null,
+      status: "in_transit", rawStatus: null, shipmentItems, createdAt: 1_783_000_000,
+    });
+    await render({
+      shipmentRecovery: undefined,
+      status: "shipped",
+      items: [line("i1", "Kurta", 4), line("i2", "Attar", 1)],
+      shipments: [
+        parcel("s1", JSON.stringify([{ itemId: "i1", quantity: 2 }])),
+        parcel("s2", JSON.stringify([{ itemId: "i1", quantity: 2 }, { itemId: "i2", quantity: 1 }])),
+      ],
+    });
+    const parcels = [...host.querySelectorAll("#order-shipments ul.divide-y > li")].map((row) =>
+      [...row.querySelectorAll("ul li")].map((item) => item.textContent));
+    expect(parcels).toEqual([["2 × Kurta"], ["2 × Kurta", "1 × Attar"]]);
+  });
 });

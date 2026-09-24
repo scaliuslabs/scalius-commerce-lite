@@ -41,13 +41,18 @@ describe("catalog filter facets", () => {
     const facets = [
       facet("brand", [["Northline", 10]]),
       facet("option.size", [["41", 4], ["42", 6]]),
-      facet("color", [["Red", 3], ["Blue", 0]]),
-      facet("material", [["Cotton", 0], ["Silk", 1]]),
+      facet("finish", [["Matte", 0], ["Gloss", 0]]),
     ];
 
     expect(visibleCatalogFacets(facets, {}).map(({ slug }) => slug)).toEqual(["option.size"]);
     expect(visibleCatalogFacets(facets, { brand: "Northline" }).map(({ slug }) => slug))
       .toEqual(["brand", "option.size"]);
+  });
+
+  it("keeps a facet steady when another selection rules some of its values out", () => {
+    const [color] = visibleCatalogFacets([facet("option.color", [["Black", 2], ["Chalk", 0]])], { "option.size": "42" });
+
+    expect(color!.preview.map(({ value, count }) => [value, count])).toEqual([["Black", 2], ["Chalk", 0]]);
   });
 
   it("folds long value lists after ten and marks selected values", () => {
@@ -125,5 +130,60 @@ describe("catalog filter form", () => {
       "https://api.test/api/v1/categories/footwear/products?search=running+shoe&option.size=42&limit=1",
     );
     expect(apply.textContent).toBe("Show 5 products");
+  });
+
+  it("updates every value's count to the pending selection and never offers a dead end", async () => {
+    document.body.innerHTML = `
+      <form data-catalog-filters data-count-endpoint="/categories/footwear/products">
+        ${[["option.size", "41", 4], ["option.size", "42", 6], ["option.color", "Black", 7], ["option.color", "Chalk", 1]]
+          .map(([name, value, count]) => `
+            <label>
+              <input type="checkbox" name="${name}" value="${value}" data-catalog-facet />
+              <span data-catalog-facet-count>${count}</span>
+            </label>`).join("")}
+        <button type="submit" data-catalog-filter-apply>Show 10 products</button>
+      </form>
+    `;
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    setupCatalogFilters();
+    const form = document.querySelector("form")!;
+    const input = (value: string) => form.querySelector<HTMLInputElement>(`input[value="${value}"]`)!;
+    const count = (value: string) => input(value).closest("label")!.querySelector("[data-catalog-facet-count]")!.textContent;
+    const apply = form.querySelector<HTMLButtonElement>("[data-catalog-filter-apply]")!;
+    // The API counts each axis against the other axes' selections; Chalk is
+    // not sold in 42, so it is missing from the colour counts.
+    const respond = (total: number, facets: unknown[]) => ({
+      ok: true,
+      json: async () => ({ success: true, data: { pagination: { total }, facets } }),
+    });
+    const fetchMock = vi.fn().mockResolvedValue(respond(6, [
+      facet("option.size", [["41", 4], ["42", 6]]),
+      facet("option.color", [["Black", 6]]),
+    ]));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.useFakeTimers();
+
+    input("42").click();
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect([count("41"), count("42"), count("Black"), count("Chalk")]).toEqual(["4", "6", "6", "0"]);
+    expect(input("Chalk").disabled).toBe(true);
+    expect(input("Black").disabled).toBe(false);
+    expect(apply.textContent).toBe("Show 6 products");
+    expect(apply.disabled).toBe(false);
+
+    // A selection that already matches nothing stays undoable, and the
+    // button says so instead of offering "Show 0 products".
+    fetchMock.mockResolvedValue(respond(0, [facet("option.size", [["41", 0], ["42", 0]])]));
+    input("Black").click();
+    expect(apply.disabled).toBe(false);
+    await vi.advanceTimersByTimeAsync(300);
+    vi.useRealTimers();
+
+    expect(input("42").disabled).toBe(false);
+    expect(input("Black").disabled).toBe(false);
+    expect(input("41").disabled).toBe(true);
+    expect(apply.textContent).toBe("No matching products");
+    expect(apply.disabled).toBe(true);
   });
 });

@@ -179,7 +179,7 @@ const pageUrl = (page: number) =>
       <slot name="empty" />
     ) : (
       <Fragment>
-        <div class="mb-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div class="product-grid product-grid--beside-filters mb-8">
           {products.map((product, index) => (
             <ProductCard
               product={product}
