@@ -14,6 +14,8 @@ import {
 
 type ProductVariant = Product["variants"][number];
 
+export const orderLineQuantityId = (index: number) => `order-line-${index}-quantity`;
+
 interface OrderItemsTableProps {
   resolvedVariantsById?: Record<string, ProductVariant>;
 }
@@ -83,6 +85,7 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
               </p>
             </div>
             <OrderItemQuantityInput
+              id={orderLineQuantityId(index)}
               quantity={item.quantity}
               itemName={name}
               onQuantityChange={(quantity) => handleQuantityChange(index, quantity)}

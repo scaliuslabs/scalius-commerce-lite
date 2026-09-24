@@ -110,8 +110,21 @@ function TotalCell({ order }: { order: OrderListItem }) {
   );
 }
 
+/**
+ * What the order page says about delivery when the courier status is out of
+ * date: a returned order reads "Returned" and a recorded failed cash-on-delivery
+ * attempt "Delivery failed · attempt 1", never "In transit".
+ */
+export function useDeliveryOverride(order: Pick<OrderListItem, "status" | "cod">): string | undefined {
+  const t = useMessages(orderListMessages);
+  if (order.status.toLowerCase() === "returned") return t("shipment.returned");
+  if (order.cod?.status === "failed") return t("deliveryFailed", { count: order.cod.deliveryAttempts });
+  return undefined;
+}
+
 function FulfillmentCell({ order, handlers }: { order: OrderListItem; handlers: OrderRowHandlers }) {
   const t = useMessages(orderListMessages);
+  const deliveryOverride = useDeliveryOverride(order);
   const shipment = order.latestShipment;
   const locked = order.shipmentRecovery?.activeLock === true;
   return (
@@ -123,6 +136,7 @@ function FulfillmentCell({ order, handlers }: { order: OrderListItem; handlers: 
       {shipment ? (
         <ShipmentStatusIndicator
           shipment={{ id: shipment.id, status: shipment.status, orderId: order.id }}
+          label={deliveryOverride}
           showLastChecked={false}
           canRefresh={
             handlers.orderActions.canManageOrderShipments

@@ -32,7 +32,7 @@ import {
 } from "~/components/admin/delivery-providers/ProviderIcon";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useHydrated } from "~/hooks/use-hydrated";
-import { useMessages } from "~/i18n";
+import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailLabel, orderDetailMessages, shipmentRecoveryCopy } from "~/i18n/order-detail";
 import { fulfillmentStatusLabel, orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
@@ -50,10 +50,12 @@ import { queryKeys } from "~/lib/query-keys";
 import { canTransitionTo } from "@scalius/shared/order-state";
 import { cn } from "@scalius/shared/utils";
 import { canSendWithOwnCourier, ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
+import { useCancelRequestGuard } from "./CancelRequestGuard";
+import { getOrderItemName } from "./order-returns/shared";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import { statusBadgeVariant } from "./status-badges";
-import type { Order, OrderShipment } from "./types";
+import type { Order, OrderItem, OrderShipment } from "./types";
 import type { OrderActionRequest } from "./primary-action";
 
 type Outcome = "confirmed_existing" | "confirmed_not_created" | "confirmed_cancelled";
@@ -73,6 +75,29 @@ function trackingUrlFor(shipment: OrderShipment): string | null {
   if (shipment.providerType === "pathao") return `https://merchant.pathao.com/tracking?consignment_id=${id}`;
   if (shipment.providerType === "steadfast") return `https://steadfast.com.bd/t/${id}`;
   return null;
+}
+
+/**
+ * What one parcel holds, e.g. "2 × Kurta". `shipmentItems` is JSON
+ * `[{ itemId, quantity }]`; null (or unreadable) means the whole order.
+ */
+export function shipmentLines(
+  shipment: Pick<OrderShipment, "shipmentItems">,
+  items: readonly OrderItem[],
+): Array<{ id: string; name: string; quantity: number }> {
+  let parsed: unknown;
+  try {
+    parsed = shipment.shipmentItems ? JSON.parse(shipment.shipmentItems) : null;
+  } catch {
+    parsed = null;
+  }
+  if (!Array.isArray(parsed)) return items.map((item) => ({ id: item.id, name: getOrderItemName(item), quantity: item.quantity }));
+  const byId = new Map(items.map((item) => [item.id, item]));
+  return parsed.flatMap((entry: { itemId?: unknown; quantity?: unknown }) => {
+    const quantity = typeof entry?.quantity === "number" ? entry.quantity : 0;
+    if (typeof entry?.itemId !== "string" || quantity <= 0) return [];
+    return [{ id: entry.itemId, name: getOrderItemName(byId.get(entry.itemId)), quantity }];
+  });
 }
 
 function toIsoTimestamp(value: OrderShipment["lastChecked"]): string | undefined {
@@ -282,6 +307,7 @@ function ShipmentRecoveryNotice({ order, canManage, onCourierCheck }: {
 
 function ShipmentRow({
   shipment,
+  items,
   canManage,
   refreshBlockedReason,
   statusLabel,
@@ -289,6 +315,7 @@ function ShipmentRow({
   onUpdated,
 }: {
   shipment: OrderShipment;
+  items: readonly OrderItem[];
   canManage: boolean;
   refreshBlockedReason?: string;
   /** Overrides the courier status, e.g. "Delivery failed". */
@@ -321,6 +348,11 @@ function ShipmentRow({
         {provider}
         {shipment.providerType !== "manual" && shipment.courierName && shipment.courierName !== shipment.providerName ? ` · ${shipment.courierName}` : ""}
       </p>
+      <ul className="text-muted-foreground">
+        {shipmentLines(shipment, items).map((line) => (
+          <li key={line.id} className="break-words tabular-nums">{formatNumber(line.quantity)} × {line.name}</li>
+        ))}
+      </ul>
       {shipment.trackingId ? (
         <p className="text-muted-foreground">
           {t("shipments.trackingId")}: <code>{shipment.trackingId}</code>
@@ -352,7 +384,11 @@ function ShipmentRow({
   );
 }
 
-function BookCourier({ order, focusRequest }: { order: Order; focusRequest?: number }) {
+function BookCourier({ order, focusRequest, guard }: {
+  order: Order;
+  focusRequest?: number;
+  guard: (run: () => void) => void;
+}) {
   const t = useMessages(orderDetailMessages);
   const queryClient = useQueryClient();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -420,7 +456,7 @@ function BookCourier({ order, focusRequest }: { order: Order; focusRequest?: num
         <Button
           className="shrink-0"
           loading={mutation.isPending}
-          onClick={() => mutation.mutate({ orderId: order.id, providerId, options: {} })}
+          onClick={() => guard(() => mutation.mutate({ orderId: order.id, providerId, options: {} }))}
           disabled={!providerId || readiness?.canCreateShipment === false || read.status !== "ready" || locked || missingArea}
         >
           {t("shipments.book")}
@@ -444,6 +480,8 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
   const cardRef = useRef<HTMLDivElement>(null);
   const [courierCheckOpen, setCourierCheckOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const cancelRequest = useCancelRequestGuard(order);
+  const guardSend = (run: () => void) => cancelRequest.guard("send", run);
   const canManage = useOrderActionPermissions().canManageOrderShipments;
   const read = order.operationalReads?.shipments ?? { status: "ready" as const, refreshing: false };
   const shipments = order.shipments ?? [];
@@ -515,6 +553,7 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
                 <ShipmentRow
                   key={shipment.id}
                   shipment={shipment}
+                  items={order.items}
                   canManage={canManage}
                   refreshBlockedReason={refreshBlockedReason}
                   statusLabel={shipment.id !== openShipmentId
@@ -531,9 +570,9 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
         ) : null}
         {canBook || canSend ? (
           <section className="space-y-2 border-t pt-4">
-            {canBook ? <BookCourier order={order} focusRequest={request?.action === "bookCourier" ? request.id : undefined} /> : null}
+            {canBook ? <BookCourier order={order} guard={guardSend} focusRequest={request?.action === "bookCourier" ? request.id : undefined} /> : null}
             {canSend ? (
-              <Button type="button" variant="outline" className="w-full" onClick={() => setSending(true)}>
+              <Button type="button" variant="outline" className="w-full" onClick={() => guardSend(() => setSending(true))}>
                 {t("fulfill.open")}
               </Button>
             ) : null}
@@ -541,6 +580,7 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
         ) : null}
       </CardContent>
       <ManualFulfillmentDialog order={order} open={sending} onOpenChange={setSending} />
+      {cancelRequest.dialog}
       <CourierCheckDialog
         order={order}
         shipmentId={order.shipmentRecovery?.shipmentId ?? ""}

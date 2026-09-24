@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveOrderPrimaryAction } from "./primary-action";
+import { resolveOrderPrimaryAction, unitsLeftToSend } from "./primary-action";
 import type { Order } from "./types";
 
 const all = { canChangeOrderStatus: true, canManageOrderShipments: true, canUpdateOrderCod: true };
@@ -34,6 +34,31 @@ describe("order primary phone action", () => {
       },
     });
     expect(resolveOrderPrimaryAction(loading, all)).toBeNull();
+  });
+
+  it("keeps sending the rest of a partly sent order as the next step", () => {
+    const partlySent = order({
+      status: "shipped",
+      items: [{ ...item, quantity: 4, shippedQuantity: 2 }],
+      shipments: [{ id: "s1", orderId: "ord_1", providerId: null, providerType: "manual", externalId: null, trackingId: null, status: "in_transit", rawStatus: null, createdAt: 1 }],
+    });
+    expect(resolveOrderPrimaryAction(partlySent, all)).toBe("sendOwnCourier");
+    expect(unitsLeftToSend(partlySent)).toBe(2);
+    // Nothing sent yet, or everything sent: the usual steps.
+    expect(unitsLeftToSend(order({ status: "confirmed" }))).toBe(0);
+    expect(resolveOrderPrimaryAction(order({ ...partlySent, items: [{ ...item, quantity: 4, shippedQuantity: 4 }] }), all)).toBe("collectCod");
+  });
+
+  it("puts an open cancellation request first", () => {
+    const requested = order({
+      status: "pending",
+      supportRequests: [{ id: "req_1", type: "cancel_pre_shipment", active: true, status: "submitted" }] as Order["supportRequests"],
+    });
+    expect(resolveOrderPrimaryAction(requested, { ...all, canResolveOrderSupportRequests: true })).toBe("reviewCancellation");
+    // Without the right to answer it, the order's own next step stays.
+    expect(resolveOrderPrimaryAction(requested, all)).toBe("confirm");
+    const answered = order({ ...requested, supportRequests: [{ ...requested.supportRequests![0]!, active: false }] });
+    expect(resolveOrderPrimaryAction(answered, { ...all, canResolveOrderSupportRequests: true })).toBe("confirm");
   });
 
   it("offers nothing on an archived order", () => {

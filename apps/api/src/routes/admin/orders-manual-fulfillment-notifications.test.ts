@@ -64,6 +64,7 @@ describe("admin manual fulfillment notifications", () => {
             isFinalShipment: true,
             fulfillmentStatus: "complete",
             availabilityTransitionVariantIds: [],
+            lines: [{ itemId: "item_1", quantity: 2 }],
             statusChange: {
                 orderId: "order_1",
                 previousStatus: "confirmed",

@@ -1,15 +1,17 @@
-import { translate } from "~/i18n";
-import { orderFormMessages } from "~/i18n/order-form";
 import type { Product } from "./types";
 
 type ProductVariant = Product["variants"][number];
 
+/**
+ * The option choice for a line ("Size: L, Color: Black"). A simple product's
+ * one default SKU has no label: the product name says it all.
+ */
 export function orderItemVariantLabel(variant: ProductVariant | undefined): string {
   if (!variant) return "—";
   return variant.selectedOptions
     .map((option) => `${option.name}: ${option.value}`)
     .join(", ")
-    || (variant.isDefault ? translate(orderFormMessages, "defaultVariant") : variant.sku || "—");
+    || (variant.isDefault ? "" : variant.sku || "—");
 }
 
 /**

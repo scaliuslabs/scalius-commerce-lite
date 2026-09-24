@@ -39946,6 +39946,10 @@ export type PostApiV1AdminOrdersByIdRefundData = {
         reason?: string;
         gateway?: 'stripe' | 'sslcommerz' | 'cod';
         manualSettlementConfirmed?: boolean;
+        /**
+         * One key per refund (per dialog opening). Repeating it returns the first refund.
+         */
+        requestKey?: string;
     };
     path: {
         id: string;
@@ -40038,6 +40042,7 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             amount: number;
             isFullRefund: boolean;
             manualSettlementRecorded?: boolean;
+            replayed?: boolean;
             notificationCount: number;
             sideEffectErrors: number;
             error?: string;
@@ -40288,6 +40293,7 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                     discountAmountMinor: number | null;
                     taxableAmountMinor: number | null;
                     taxAmountMinor: number | null;
+                    returnedQuantity?: number;
                 }>;
             };
             invoiceNumber: string | null;
@@ -40500,6 +40506,7 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                     discountAmountMinor: number | null;
                     taxableAmountMinor: number | null;
                     taxAmountMinor: number | null;
+                    returnedQuantity?: number;
                 }>;
             };
             invoiceNumber: string | null;
@@ -41991,6 +41998,7 @@ export type PostApiV1AdminOrdersData = {
             quantity: number;
         }>;
         requestKey?: string;
+        shippingMethodId?: string | null;
     };
     headers?: {
         /**
@@ -43104,6 +43112,7 @@ export type PostApiV1AdminOrdersBulkShipResponse = PostApiV1AdminOrdersBulkShipR
 export type PostApiV1AdminOrdersBulkConfirmData = {
     body: {
         orderIds: Array<string>;
+        requestKey?: string;
     };
     path?: never;
     query?: never;
@@ -43171,6 +43180,7 @@ export type PostApiV1AdminOrdersBulkFulfillData = {
         orderIds: Array<string>;
         courierName?: string;
         note?: string;
+        requestKey?: string;
     };
     path?: never;
     query?: never;
@@ -43267,12 +43277,16 @@ export type GetApiV1AdminOrdersByIdTimelineResponses = {
         data: {
             events: Array<{
                 id: string;
-                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+                kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
                 body: string | null;
                 data: {
                     [key: string]: unknown;
                 } | null;
                 actorName: string | null;
+                /**
+                 * The viewer wrote this comment and may delete it.
+                 */
+                own: boolean;
                 createdAt: string | number;
             }>;
         };
@@ -43284,6 +43298,10 @@ export type GetApiV1AdminOrdersByIdTimelineResponse = GetApiV1AdminOrdersByIdTim
 export type PostApiV1AdminOrdersByIdTimelineData = {
     body: {
         body: string;
+        /**
+         * One key per comment draft. Posting it again returns the first comment.
+         */
+        requestKey?: string;
     };
     path: {
         id: string;
@@ -43360,18 +43378,106 @@ export type PostApiV1AdminOrdersByIdTimelineResponses = {
         success: true;
         data: {
             id: string;
-            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
+            kind: 'placed' | 'comment' | 'status_changed' | 'details_edited' | 'items_edited' | 'shipment_created' | 'cod_collected' | 'cod_failed' | 'cod_returned' | 'refund_recorded' | 'return_created' | 'return_received' | 'request_submitted' | 'request_resolved' | 'archived' | 'unarchived' | 'invoice_issued';
             body: string | null;
             data: {
                 [key: string]: unknown;
             } | null;
             actorName: string | null;
+            /**
+             * The viewer wrote this comment and may delete it.
+             */
+            own: boolean;
             createdAt: string | number;
         };
     };
 };
 
 export type PostApiV1AdminOrdersByIdTimelineResponse = PostApiV1AdminOrdersByIdTimelineResponses[keyof PostApiV1AdminOrdersByIdTimelineResponses];
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdData = {
+    body?: never;
+    path: {
+        id: string;
+        eventId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/timeline/{eventId}';
+};
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdError = DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors[keyof DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors];
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses = {
+    /**
+     * Comment deleted (or already gone)
+     */
+    200: {
+        success: true;
+        data: {
+            deleted: true;
+        };
+    };
+};
+
+export type DeleteApiV1AdminOrdersByIdTimelineByEventIdResponse = DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses[keyof DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses];
 
 export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkData = {
     body?: never;
