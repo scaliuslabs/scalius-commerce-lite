@@ -84,6 +84,8 @@ export function createMigratedSqlite(options: MigratedSqliteOptions = {}): Datab
   }
   // Table-rebuild migrations toggle the pragma themselves; set it last.
   sqlite.exec(`PRAGMA foreign_keys = ${options.foreignKeys === false ? "OFF" : "ON"}`);
+  // Cloudflare D1 rejects a compound SELECT with more than five terms; fail here too.
+  (sqlite as unknown as { limits: { compoundSelect: number } }).limits.compoundSelect = 5;
   return sqlite;
 }
 

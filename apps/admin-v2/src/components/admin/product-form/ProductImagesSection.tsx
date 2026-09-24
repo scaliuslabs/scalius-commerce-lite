@@ -57,6 +57,7 @@ function asProductMedia(file: MediaFile, primary: boolean, sortOrder: number): P
     posterUrl: libraryFile.posterUrl ?? null,
     effectiveAltText: libraryFile.altText?.trim() || file.filename,
     altText: "",
+    filename: file.filename,
     caption: libraryFile.caption ?? null,
     width: libraryFile.width ?? null,
     height: libraryFile.height ?? null,
@@ -71,10 +72,13 @@ function normalizeOrder(items: ProductMediaItem[]): ProductMediaItem[] {
   return items.map((item, sortOrder) => ({ ...item, sortOrder }));
 }
 
+/** View-only staff see the media without any edit controls, as Shopify does. */
 export const ProductImagesSection = memo(function ProductImagesSection({
   form,
+  readOnly = false,
 }: {
   form: UseFormReturn<ProductFormValues>;
+  readOnly?: boolean;
 }) {
   const t = useMessages(productMessages);
   const [editingId, setEditingId] = React.useState<string | null>(null);
@@ -112,13 +116,14 @@ export const ProductImagesSection = memo(function ProductImagesSection({
             <FormItem>
               <div className="space-y-3">
                 {field.value.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                  <div className={cn("grid gap-2 sm:grid-cols-3 lg:grid-cols-4", readOnly ? "grid-cols-3" : "grid-cols-1")}>
                     {(showAll ? field.value : field.value.slice(0, 12)).map((item, index) => (
                       <ProductMediaTile
                         key={item.id}
                         item={item}
                         index={index}
                         count={field.value.length}
+                        readOnly={readOnly}
                         onMove={(direction) => {
                           const target = index + direction;
                           if (target < 0 || target >= field.value.length) return;
@@ -143,6 +148,8 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                       />
                     ))}
                   </div>
+                ) : readOnly ? (
+                  <p className="text-body text-muted-foreground">{t("noMedia")}</p>
                 ) : null}
                 {field.value.length > 12 ? (
                   <Button type="button" variant="ghost" size="sm" onClick={() => setShowAll((current) => !current)}>
@@ -160,7 +167,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                     ))}
                   />
                 ) : null}
-                <MediaManager
+                {readOnly ? null : <MediaManager
                   capability="both"
                   unavailableFileIds={attachedMediaIds}
                   trigger={(
@@ -171,7 +178,7 @@ export const ProductImagesSection = memo(function ProductImagesSection({
                   )}
                   onSelect={(file) => field.onChange(addMedia(field.value, [file]))}
                   onSelectMultiple={(files) => field.onChange(addMedia(field.value, files))}
-                />
+                />}
               </div>
               <FormMessage />
             </FormItem>
@@ -186,6 +193,7 @@ function ProductMediaTile({
   item,
   index,
   count,
+  readOnly,
   onMove,
   onSetFeatured,
   onEdit,
@@ -194,6 +202,7 @@ function ProductMediaTile({
   item: ProductMediaItem;
   index: number;
   count: number;
+  readOnly: boolean;
   onMove: (direction: -1 | 1) => void;
   onSetFeatured: () => void;
   onEdit: () => void;
@@ -203,7 +212,10 @@ function ProductMediaTile({
   const m = useMessages(productMediaMessages);
   const isVideo = item.kind === "video";
   const position = positionLabel(m, item, index, count);
-  const named = m("named", { item: position, name: item.effectiveAltText });
+  // The product's own description when set, else the file's name: never the
+  // product title, which every photo would share after a reload.
+  const name = item.altText.trim() || item.filename || item.effectiveAltText;
+  const named = m("named", { item: position, name });
   const previewUrl = item.kind === "image" ? item.url : item.posterUrl;
   const duration = durationLabel(item.durationMs);
   const note = item.status === "trashed"
@@ -212,12 +224,12 @@ function ProductMediaTile({
       ? t("videoNoCover")
       : null;
   return (
-    <article aria-label={named} className="grid grid-cols-3 gap-2 sm:block sm:space-y-1">
+    <article aria-label={named} className={readOnly ? "space-y-1" : "grid grid-cols-3 gap-2 sm:block sm:space-y-1"}>
       <div className={cn("relative aspect-square overflow-hidden rounded-md border bg-muted", item.status === "trashed" && "border-destructive")}>
         {previewUrl ? (
           <img
             src={mediaImageUrl(previewUrl, 320)}
-            alt=""
+            alt={name}
             className="h-full w-full object-contain object-center"
             loading="lazy"
             decoding="async"
@@ -247,7 +259,7 @@ function ProductMediaTile({
       </div>
       <div className="col-span-2 min-w-0 space-y-1">
         {note ? <span className="block truncate text-body text-destructive">{note}</span> : null}
-        <div className="flex flex-wrap items-center justify-between gap-1">
+        {readOnly ? null : <div className="flex flex-wrap items-center justify-between gap-1">
           <div className="flex items-center">
             <TileAction tip={m("moveEarlier")} label={m("moveEarlierItem", { item: position })} disabled={index === 0} onClick={() => onMove(-1)}>
               <ArrowLeft />
@@ -272,7 +284,7 @@ function ProductMediaTile({
               <Trash2 />
             </TileAction>
           </div>
-        </div>
+        </div>}
       </div>
     </article>
   );

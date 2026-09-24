@@ -7,7 +7,7 @@ import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { MediaFilterBar, MediaGallery, MediaPreview, MediaUploadQueue } from "./components";
 import { OptimizeImagesButton } from "./components/OptimizeImagesButton";
 import type { useMediaManager } from "./hooks/useMediaManager";
-import { capabilityAccept, mediaLimitKey, type LibraryMediaFile, type MediaCapability, type MediaFile } from "./types";
+import { canDeletePermanently, capabilityAccept, mediaLimitKey, type LibraryMediaFile, type MediaCapability, type MediaFile } from "./types";
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
 import { resourceMessages } from "~/i18n/resource";
@@ -32,19 +32,45 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
   const r = useMessages(resourceMessages);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [confirm, setConfirm] = useState<{ file?: LibraryMediaFile } | null>(null);
+  const [confirm, setConfirm] = useState<{ action: "trash" | "permanent"; file?: LibraryMediaFile } | null>(null);
   const { cancelSelection, selectionMode, showPreview } = mm;
   const canUpload = mm.view === "ready";
   const filtered = Boolean(mm.filters.search) || (capability === "both" && Boolean(mm.filters.kind)) || mm.currentFolderId !== "all";
+  const usedSelected = mm.selectedLibraryFiles.filter((file) => file.usageCount > 0).length;
+  const deletable = mm.selectedLibraryFiles.filter(canDeletePermanently);
 
+  // Trashing an unused file is undoable from the toast; a used one asks first
+  // because it keeps showing where it's used.
   const lifecycle = (file: LibraryMediaFile, action: Lifecycle) => {
-    if (action === "permanent") setConfirm({ file });
+    if (action === "permanent" || (action === "trash" && file.usageCount > 0)) setConfirm({ action, file });
     else void mm.mutateOne(file, action);
   };
   const bulkLifecycle = (action: Lifecycle) => {
-    if (action === "permanent") setConfirm({});
+    if (action === "permanent" && deletable.length > 0) setConfirm({ action });
+    else if (action === "trash" && usedSelected > 0) setConfirm({ action });
     else void mm.mutateSelected(action);
   };
+
+  /** Names the file when exactly one is affected; bulk copy counts the rest. */
+  const confirmCopy = (() => {
+    if (!confirm) return null;
+    if (confirm.action === "permanent") {
+      const one = confirm.file ?? (deletable.length === 1 ? deletable[0] : undefined);
+      return {
+        title: one ? t("deleteOneTitle", { name: one.filename }) : t("deleteManyTitle", { count: deletable.length }),
+        description: t("deleteBody"),
+        confirmLabel: r("deletePermanently"),
+      };
+    }
+    const one = confirm.file ?? (mm.selectedLibraryFiles.length === 1 ? mm.selectedLibraryFiles[0] : undefined);
+    return {
+      title: one ? t("trashOneTitle", { name: one.filename }) : t("trashManyTitle", { count: mm.selectedFileIds.length }),
+      description: one
+        ? `${one.usageCount === 1 ? t("trashUsedOne") : t("trashUsedMany", { count: one.usageCount })} ${t("usedKeepsShowing")}`
+        : `${t("trashUsedSome", { count: usedSelected })} ${t("trashUsedSomeHelp")}`,
+      confirmLabel: r("moveToTrash"),
+    };
+  })();
   const navigate = (direction: -1 | 1) => {
     const index = mm.files.findIndex((file) => file.id === mm.previewFile?.id);
     const next = mm.files[index + direction];
@@ -203,13 +229,15 @@ export function MediaWorkspace({ manager: mm, capability, picker = false, multip
         onOpenChange={(open) => {
           if (!open) setConfirm(null);
         }}
-        title={confirm?.file ? t("deleteOneTitle", { name: confirm.file.filename }) : t("deleteManyTitle", { count: selected })}
-        description={t("deleteBody")}
-        confirmLabel={r("deletePermanently")}
+        title={confirmCopy?.title ?? ""}
+        description={confirmCopy?.description ?? ""}
+        confirmLabel={confirmCopy?.confirmLabel}
+        variant={confirm?.action === "trash" ? "default" : "destructive"}
         cancelLabel={r("cancel")}
         onConfirm={() => {
-          if (confirm?.file) void mm.mutateOne(confirm.file, "permanent");
-          else void mm.mutateSelected("permanent");
+          if (!confirm) return;
+          if (confirm.file) void mm.mutateOne(confirm.file, confirm.action);
+          else void mm.mutateSelected(confirm.action);
           setConfirm(null);
         }}
       />

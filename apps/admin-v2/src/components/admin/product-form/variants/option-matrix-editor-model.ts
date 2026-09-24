@@ -50,6 +50,8 @@ export interface DraftIssue {
   message: string;
   variantId?: string;
   field?: DraftIssueField;
+  /** An option still being filled in (no name or no value yet): shown only once Save is pressed. */
+  incomplete?: boolean;
 }
 
 /** Fields shown only after a row is expanded ("More fields"). */
@@ -343,8 +345,13 @@ export function optionTopologySignature(options: readonly DraftOption[]): string
 
 export interface MatrixIssueContext {
   committedByVariantId?: ReadonlyMap<string, number>;
-  /** Simple stock that must be shared out when options are first added. */
+  /**
+   * Stock that must move to the new variants: a product's simple stock when options
+   * are first added ("all" rows), or the stock of variants an option change
+   * replaces (only the new, unsaved rows), as the server requires.
+   */
   requiredStockAllocation?: number;
+  allocationScope?: "all" | "new";
   blockedCommittedStock?: number;
   allowSavedImageRemovalConfirmation?: boolean;
   /** Active products need every variant priced above 0. */
@@ -364,8 +371,8 @@ export function getOptionMatrixIssue(
     return variants.length > 0 || combinationsPending ? at("issueKeepOneOption") : null;
   }
   if (options.length > MAX_PRODUCT_OPTION_AXES) return at("issueTooManyOptions", { max: MAX_PRODUCT_OPTION_AXES });
-  if (options.some((option) => !option.name.trim())) return at("issueNameOptions");
-  if (options.some((option) => option.values.length === 0)) return at("addOptionValues");
+  if (options.some((option) => !option.name.trim())) return { ...at("issueNameOptions"), incomplete: true };
+  if (options.some((option) => option.values.length === 0)) return { ...at("addOptionValues"), incomplete: true };
   if (new Set(options.map((option) => normalized(option.name))).size !== options.length) return at("issueOptionNamesUnique");
   const mapped = options.map((option) => option.standardMapping).filter((mapping) => mapping !== "none");
   if (new Set(mapped).size !== mapped.length) return at("issueOptionTypeUnique");
@@ -417,8 +424,13 @@ export function getOptionMatrixIssue(
   if ((context.blockedCommittedStock ?? 0) > 0) return at("issueOptionsCommitted");
   const required = context.requiredStockAllocation ?? 0;
   if (required > 0) {
-    const allocated = variants.reduce((total, variant) => total + (variant.trackInventory ? variant.stock : 0), 0);
-    if (allocated !== required) return at("issueAllocateStock", { required, allocated });
+    const newOnly = context.allocationScope === "new";
+    const allocated = variants
+      .filter((variant) => !newOnly || variant.id.startsWith("draft_"))
+      .reduce((total, variant) => total + (variant.trackInventory ? variant.stock : 0), 0);
+    if (allocated !== required) {
+      return at(newOnly ? "issueReplaceStock" : "issueAllocateStock", { required, allocated });
+    }
   }
   return null;
 }

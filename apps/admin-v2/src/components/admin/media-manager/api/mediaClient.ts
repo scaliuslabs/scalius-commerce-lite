@@ -4,6 +4,7 @@ import {
   deleteApiV1AdminMediaFoldersById,
   deleteApiV1AdminMediaUploadsById,
   getApiV1AdminMedia,
+  getApiV1AdminMediaByIdUsage,
   getApiV1AdminMediaFolders,
   getApiV1AdminMediaUploadsById,
   patchApiV1AdminMediaById,
@@ -37,7 +38,11 @@ interface ApiEnvelope<T> {
   data?: T;
 }
 
-export type MediaFileDto = ApiResult<typeof getApiV1AdminMedia>["files"][number];
+type MediaListFileDto = ApiResult<typeof getApiV1AdminMedia>["files"][number];
+/** Single-file responses (upload, trash, restore…) carry no usage; list pages do. */
+export type MediaFileDto = Omit<MediaListFileDto, "usageCount" | "keptForOrders">
+  & Partial<Pick<MediaListFileDto, "usageCount" | "keptForOrders">>;
+export type MediaUsage = ApiResult<typeof getApiV1AdminMediaByIdUsage>;
 type MediaFolderDto = ApiResult<typeof getApiV1AdminMediaFolders>["folders"][number];
 export type MediaUploadSession = ApiResult<typeof getApiV1AdminMediaUploadsById>["session"];
 
@@ -68,6 +73,8 @@ export function toMediaFile(file: MediaFileDto): LibraryMediaFile {
     updatedAt: date(file.updatedAt),
     trashedAt: file.trashedAt == null ? null : date(file.trashedAt),
     deletedAt: file.deletedAt == null ? null : date(file.deletedAt),
+    usageCount: file.usageCount ?? 0,
+    keptForOrders: file.keptForOrders ?? false,
   };
 }
 
@@ -109,6 +116,11 @@ export class MediaApiClient {
       view: filters.view,
     } }));
     return { files: data.files.map(toMediaFile), pagination: data.pagination };
+  }
+
+  /** Where one file is used (products first) and how many past orders keep it. */
+  static async fetchUsage(fileId: string): Promise<MediaUsage> {
+    return apiData(getApiV1AdminMediaByIdUsage({ path: { id: fileId } }));
   }
 
   static async fetchFolders(): Promise<MediaFolder[]> {

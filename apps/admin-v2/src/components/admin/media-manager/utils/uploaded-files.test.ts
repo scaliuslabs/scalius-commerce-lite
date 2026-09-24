@@ -37,6 +37,8 @@ function file(
     updatedAt: createdAt,
     trashedAt: null,
     deletedAt: null,
+    usageCount: 0,
+    keptForOrders: false,
     ...overrides,
   };
 }
