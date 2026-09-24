@@ -7,25 +7,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Order, ShipmentRecovery } from "./types";
 import { ShipmentCard } from "./ShipmentCard";
 import { orderDetailMessages } from "~/i18n/order-detail";
+import { queryKeys } from "~/lib/query-keys";
 
 const en = orderDetailMessages.en;
 
-const mocks = vi.hoisted(() => ({ canManage: true, repair: vi.fn() }));
+const mocks = vi.hoisted(() => ({ canManage: true, repair: vi.fn(), delivered: vi.fn(), cameBack: vi.fn() }));
 vi.mock("~/hooks/use-order-action-permissions", () => ({
-  useOrderActionPermissions: () => ({ canManageOrderShipments: mocks.canManage }),
+  useOrderActionPermissions: () => ({ canManageOrderShipments: mocks.canManage, canChangeOrderStatus: mocks.canManage }),
 }));
 vi.mock("~/lib/api-mutations/orders", () => ({
   orderErrorMessage: (error: Error) => error.message,
   useCreateOrderShipment: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
+  useMarkOrderDelivered: () => ({ mutate: mocks.delivered, isPending: false }),
+  useMarkParcelReturned: () => ({ mutate: mocks.cameBack, isPending: false }),
   useReconcileShipment: () => ({ mutate: mocks.repair, reset: vi.fn(), isPending: false }),
   useLookupUnknownShipment: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
   useResolveUnknownShipment: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
 }));
+vi.mock("~/lib/api-query-options/orders", async () => {
+  const { queryKeys: keys } = await import("~/lib/query-keys");
+  return { orderCodQueryOptions: (id: string) => ({ queryKey: keys.orders.cod(id), queryFn: () => new Promise(() => undefined) }) };
+});
 vi.mock("./ManualFulfillmentDialog", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./ManualFulfillmentDialog")>()),
   ManualFulfillmentDialog: () => null,
 }));
-vi.mock("~/components/admin/ShipmentStatusIndicator", () => ({ default: () => null }));
+vi.mock("~/components/admin/ShipmentStatusIndicator", () => ({
+  default: ({ label }: { label?: string }) => (label ? <p data-testid="shipment-status">{label}</p> : null),
+}));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: React.ReactNode }) => <a href="/admin/settings/shipping">{children}</a>,
 }));
@@ -163,5 +172,55 @@ describe("ShipmentCard recovery authority", () => {
     const parcels = [...host.querySelectorAll("#order-shipments ul.divide-y > li")].map((row) =>
       [...row.querySelectorAll("ul li")].map((item) => item.textContent));
     expect(parcels).toEqual([["2 × Kurta"], ["2 × Kurta", "1 × Attar"]]);
+  });
+
+  const kurta = (quantity: number, shippedQuantity: number) => ({
+    id: "i1", productId: "p1", variantId: null, quantity, shippedQuantity, price: 600,
+    productName: "Kurta", productImage: null, variantLabel: null,
+  });
+  const riderParcel = (quantity: number) => ({
+    id: "s1", orderId: order.id, providerId: null, providerType: "manual", courierName: "R3 Rider Jamal",
+    externalId: null, trackingId: null, status: "in_transit", rawStatus: null,
+    shipmentItems: JSON.stringify([{ itemId: "i1", quantity }]), createdAt: 1_783_000_000,
+  });
+
+  it("words a failed own-rider delivery once, with the attempt and reason (R3-ORD-05)", async () => {
+    client.setQueryData(queryKeys.orders.cod(order.id), {
+      tracking: { codStatus: "failed", deliveryAttempts: 1, failureReason: "no_cash", failureNote: "Will pay tomorrow" },
+    });
+    await render({ shipmentRecovery: undefined, status: "shipped", items: [kurta(2, 2)], shipments: [riderParcel(2)] });
+    const label = en["shipments.failedAttempt"].replace("{count}", "1").replace("{reason}", en["cod.reason.no_cash"]);
+    expect(host.querySelector('[data-testid="shipment-status"]')?.textContent).toBe(label);
+    expect(host.textContent?.split(en["cod.status.failed"]).length).toBe(2);
+    expect(host.textContent).toContain("Will pay tomorrow");
+    expect(host.textContent).not.toContain(en["shipmentRecovery.failed"]);
+  });
+
+  it("records an own-rider parcel of a part-sent order as came back, after confirming", async () => {
+    await render({ shipmentRecovery: undefined, status: "confirmed", fulfillmentStatus: "partial", items: [kurta(3, 1)], shipments: [riderParcel(1)] });
+    const button = [...host.querySelectorAll("button")].find((element) => element.textContent === en["shipments.cameBack"]);
+    await act(async () => button!.click());
+    const dialog = document.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain(en["shipments.cameBackOne"]);
+    expect(mocks.cameBack).not.toHaveBeenCalled();
+    const confirm = [...dialog!.querySelectorAll("button")].find((element) => element.textContent === en["shipments.cameBack"]);
+    await act(async () => confirm!.click());
+    expect(mocks.cameBack).toHaveBeenCalledWith({ orderId: order.id, shipmentId: "s1" }, expect.anything());
+  });
+
+  it("offers Mark delivered for a shipped, fully sent order paid online", async () => {
+    await render({
+      shipmentRecovery: undefined, status: "shipped", paymentMethod: "stripe", paymentStatus: "paid", paidAmount: 1200, balanceDue: 0,
+      items: [kurta(2, 2)], shipments: [riderParcel(2)],
+    });
+    const button = [...host.querySelectorAll("button")].find((element) => element.textContent === en["primary.markDelivered"]);
+    await act(async () => button!.click());
+    expect(mocks.delivered).toHaveBeenCalledWith({ orderId: order.id });
+    expect([...host.querySelectorAll("button")].some((element) => element.textContent === en["shipments.cameBack"])).toBe(false);
+  });
+
+  it("offers no Mark delivered for a cash order: collecting the cash delivers it", async () => {
+    await render({ shipmentRecovery: undefined, status: "shipped", items: [kurta(2, 2)], shipments: [riderParcel(2)] });
+    expect(host.textContent).not.toContain(en["primary.markDelivered"]);
   });
 });

@@ -54,15 +54,17 @@ export function OrderItemQuantityInput({
   const focusedRef = React.useRef(false);
   const messageId = React.useId();
   const maximum = Math.max(0, Math.min(MAX_ORDER_ITEM_QUANTITY, maxQuantity));
+  // The tighter limit speaks: "Only 22 available." for 150, not "can't be more than 99".
+  const stockIsTighter = maxQuantity < MAX_ORDER_ITEM_QUANTITY && maximumExceededMessage !== undefined;
   const message = disabled || !isWholeNumber(draft)
     ? null
     : draft < MIN_ORDER_ITEM_QUANTITY
       ? t("quantityMin")
-      : draft > MAX_ORDER_ITEM_QUANTITY
-        ? t("quantityMax")
-        : draft > maximum
+      : draft <= maximum
+        ? null
+        : stockIsTighter || draft <= MAX_ORDER_ITEM_QUANTITY
           ? maximumExceededMessage ?? null
-          : null;
+          : t("quantityMax");
   const isDraftValid = !disabled
     && isWholeNumber(draft)
     && draft >= MIN_ORDER_ITEM_QUANTITY
