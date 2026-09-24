@@ -362,8 +362,11 @@ describe("dashboard order lifecycle on D1 storage", () => {
         expect(sqlite.prepare("SELECT status FROM delivery_shipments WHERE order_id = ? ORDER BY created_at").all(id))
             .toEqual([{ status: "delivery_failed" }, { status: "delivery_failed" }]);
 
+        // Both parcels are listed; parcels created in the same second have no defined order.
         const details = (await loadOrderExportDetails(db, [id])).get(id)!;
-        expect(details).toMatchObject({ courierName: "Rider Jamal; Own courier", trackingId: "TRK-1; TRK-2" });
+        const parts = (value: string | null | undefined) => (value ?? "").split("; ").sort();
+        expect(parts(details.courierName)).toEqual(["Own courier", "Rider Jamal"]);
+        expect(parts(details.trackingId)).toEqual(["TRK-1", "TRK-2"]);
 
         const { returnId } = await processCodAction(db, id, { action: "returned" }) as { returnId: string };
         expect(sqlite.prepare("SELECT status FROM delivery_shipments WHERE order_id = ?").all(id))
