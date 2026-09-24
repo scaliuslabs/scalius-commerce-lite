@@ -1,5 +1,6 @@
 // src/server/index.ts
 
+import type { Context, Next } from "hono";
 import { swaggerUI } from "@hono/swagger-ui";
 import { productRoutes } from "./routes/products";
 import authRoutes from "./routes/auth";
@@ -186,9 +187,22 @@ app.route("/webhooks/steadfast", steadfastWebhookRoutes);
 // Payment gateways: /webhooks/{provider}. Registered after the courier routes.
 app.route("/webhooks", paymentWebhookRoutes);
 
+async function privateNoStore(c: Context, next: Next): Promise<void> {
+  // Set before next() so error responses built from this context carry it too.
+  c.header("Cache-Control", "private, no-store");
+  await next();
+  if (!c.res.headers.get("Cache-Control")?.includes("no-store")) {
+    c.res.headers.set("Cache-Control", "private, no-store");
+  }
+}
+
 // Apply protection only to paths needing it. The storefront order router is
 // public but proof/origin guarded: checkout create/cart-validation/status/receipt
 // must stay reachable without a bearer token.
+// Dashboard responses (including refusals) carry merchant data: never let a
+// browser, proxy or back/forward cache keep them.
+app.use("/cache/*", privateNoStore);
+app.use("/admin/*", privateNoStore);
 app.use("/cache/*", dashboardOriginGuardMiddleware);
 app.use("/cache/*", adminAuthMiddleware);
 app.use("/orders/*", cookieOriginGuardMiddleware);
