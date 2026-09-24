@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { resolvePublicAttributeFilters } from "../attributes/attributes.public";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { search } from "../../search";
+import { getHomepageData } from "../storefront/storefront.service";
 import { getProductsByIds, listProducts } from "./products.admin";
 import {
     getStorefrontCategoryProducts,
@@ -186,6 +187,45 @@ describe("catalogue-scale query plans", () => {
         expect(new Set(listing.products.map((product) => product.category?.id)).size).toBeGreaterThanOrEqual(99);
         expect(feed.products).toHaveLength(100);
         expect(Math.max(...queries.map((query) => query.params.length))).toBeLessThanOrEqual(100);
+    });
+
+    it("reads homepage section lists and their card media scoped to the cards they show", async () => {
+        const { db, queries, plans } = setup();
+        sqlite!.exec(`
+            UPDATE products SET discount_type = 'percentage', discount_bps = 1000 WHERE id = 'prod_b';
+            INSERT INTO collections (id, name, presentation, config) VALUES
+                ('col_dyn', 'Laptops', 'grid', '{"source":"dynamic","categoryIds":["cat_laptop"],"maxProducts":8}');
+        `);
+        const home = await getHomepageData(db, {
+            requests: {
+                lists: [
+                    { key: "newest", source: { kind: "newest" }, limit: 2 },
+                    { key: "on-sale", source: { kind: "on-sale" }, limit: 4 },
+                    { key: "popular", source: { kind: "popular" }, limit: 4 },
+                    { key: "category:cat_phone", source: { kind: "category", categoryId: "cat_phone" }, limit: 4 },
+                    { key: "collection:col_dyn", source: { kind: "collection", collectionId: "col_dyn" }, limit: 4 },
+                ],
+                mediaIds: ["med_a"],
+            },
+        });
+
+        const ids = (key: string) => home.sections.lists.find((list) => list.key === key)?.products.map((product) => product.id);
+        expect(ids("newest")).toEqual(["prod_a", "prod_b"]);
+        expect(ids("on-sale")).toEqual(["prod_b"]);
+        expect(ids("popular")).toEqual([]);
+        expect(ids("category:cat_phone")).toEqual(["prod_c"]);
+        expect(ids("collection:col_dyn")).toEqual(["prod_a", "prod_b"]);
+        expect(home.sections.lists.find((list) => list.key === "newest")?.products[0]?.imageUrl).toContain("media/a.webp");
+        const pricingPlans = plans(joinsPricing);
+        expect(pricingPlans.length).toBeGreaterThanOrEqual(5);
+        for (const plan of pricingPlans) {
+            expect(plan).not.toMatch(/SCAN buyer_pricing_sku/);
+            expect(plan).not.toMatch(/SCAN (products|product_media|media)\b/);
+        }
+        for (const plan of plans((sql) => sql.includes("product_media_poster"))) {
+            expect(plan).not.toMatch(/SCAN (product_media|media)\b/);
+        }
+        expect(Math.max(...queries.map((query) => query.params.length))).toBeLessThanOrEqual(90);
     });
 
     it("looks SKUs up by their identity index", async () => {

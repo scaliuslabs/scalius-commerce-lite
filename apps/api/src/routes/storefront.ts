@@ -10,7 +10,16 @@ import {
 } from "@scalius/core/modules/storefront/storefront.service";
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings/site-settings.service";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
-import { NotFoundError } from "../utils/api-error";
+import { NotFoundError, ValidationError } from "../utils/api-error";
+import {
+  HOME_MAX_MEDIA,
+  HOME_MAX_PRODUCT_LISTS,
+  HOME_MEDIA_PARAM,
+  HOME_PRODUCT_LIST_LIMIT,
+  HOME_PRODUCT_LIST_PARAM,
+  parseHomeSectionRequestParams,
+  type HomeSectionRequests,
+} from "@scalius/shared/storefront-theme";
 import {
   CACHE_GENERATION_HEADER,
   normalizeCacheGeneration,
@@ -82,6 +91,27 @@ const heroSliderSchema = z.object({
   type: z.string(),
   images: z.array(heroSlideSchema).max(12),
 });
+const homepageProductListSchema = z.object({
+  /** `storefrontProductSourceKey(source)`: newest, on-sale, popular, collection:<id>, category:<id>. */
+  key: z.string(),
+  products: z.array(storefrontProductCardSchema).max(HOME_PRODUCT_LIST_LIMIT),
+  /** The category a category list reads (published categories only). */
+  category: z.object({
+    id: z.string(),
+    name: z.string(),
+    slug: z.string(),
+    canonicalPath: z.string().nullable(),
+  }).nullable(),
+  /** The collection a collection list reads (active collections only). */
+  collection: z.object({ id: z.string(), title: z.string() }).nullable(),
+});
+const homepageMediaSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  alt: z.string(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+});
 const homepageDataSchema = z.object({
   seo: z.object({
     homepageTitle: z.string().nullable(),
@@ -116,8 +146,18 @@ const homepageDataSchema = z.object({
       enabled: z.boolean(),
     }),
   }),
+  /**
+   * What the theme's homepage sections show: one product list per source
+   * (each section takes its first N) and the section images, in request
+   * order (`homeSectionRequests` in @scalius/shared/storefront-theme).
+   */
+  sections: z.object({
+    lists: z.array(homepageProductListSchema).max(HOME_MAX_PRODUCT_LISTS),
+    media: z.array(homepageMediaSchema).max(HOME_MAX_MEDIA),
+  }),
 });
 type HomepageData = z.infer<typeof homepageDataSchema>;
+const repeatedParam = z.union([z.string().max(80), z.array(z.string().max(80)).max(HOME_MAX_MEDIA)]).optional();
 
 const navigationLeafSchema = z.object({
   id: z.string().optional(),
@@ -264,18 +304,34 @@ const homepageRoute = createRoute({
   operationId: "storefront.homepage.get",
   tags: ["Storefront"],
   summary: "Get consolidated homepage data (SEO, hero, collections, categories, and policy facts)",
+  description:
+    `Without \`${HOME_PRODUCT_LIST_PARAM}\` or \`${HOME_MEDIA_PARAM}\`, the section lists and images are the published theme's. A theme preview names its draft's instead: \`${HOME_PRODUCT_LIST_PARAM}=<limit>~<source key>\` per product list and \`${HOME_MEDIA_PARAM}=<media id>\` per image.`,
+  request: {
+    query: z.object({
+      [HOME_PRODUCT_LIST_PARAM]: repeatedParam.openapi({ description: "A product list to read: <limit>~<source key>, repeated" }),
+      [HOME_MEDIA_PARAM]: repeatedParam.openapi({ description: "A section image to read by media id, repeated" }),
+    }),
+  },
   responses: {
     200: {
       description: "Homepage data",
       content: { "application/json": { schema: successEnvelope(homepageDataSchema) } },
     },
+    400: errorResponses[400],
     500: errorResponses[500],
   }
 });
 
 app.openapi(homepageRoute, async (c) => {
   const db = c.get("db");
-  const data = await getHomepageData(db) as unknown as HomepageData;
+  const products = c.req.queries(HOME_PRODUCT_LIST_PARAM) ?? [];
+  const media = c.req.queries(HOME_MEDIA_PARAM) ?? [];
+  let requests: HomeSectionRequests | undefined;
+  if (products.length > 0 || media.length > 0) {
+    requests = parseHomeSectionRequestParams(products, media) ?? undefined;
+    if (!requests) throw new ValidationError("Invalid homepage section reads");
+  }
+  const data = await getHomepageData(db, { requests }) as unknown as HomepageData;
   return ok(c, data);
 });
 

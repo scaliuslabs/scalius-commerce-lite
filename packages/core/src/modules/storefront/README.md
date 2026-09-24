@@ -6,6 +6,7 @@ Batched D1 queries for the public storefront API. Shapes homepage and layout dat
 
 - `index.ts` -- barrel exports (re-exports everything from `storefront.service.ts`)
 - `storefront.service.ts` -- `getHomepageData()`, `getLayoutData()`
+- `homepage-sections.ts` -- the homepage section product lists and images, planned into the homepage's second batch
 
 ## Local Helpers
 
@@ -14,23 +15,37 @@ Batched D1 queries for the public storefront API. Shapes homepage and layout dat
 
 ## Service Functions
 
-### `getHomepageData(db)`
+### `getHomepageData(db, { requests? })`
 
-Fetches and shapes all homepage data in **two batched D1 round-trips**.
+Fetches and shapes all homepage data in **two batched D1 round trips**
+(`apps/api/src/storefront-render-budget.test.ts` measures it on a store
+whose theme uses every section type).
 
-**Batch 1** (3 parallel queries):
-1. `seo` and `homepage` settings documents (siteTitle, homepageTitle, homepageMetaDescription, homepage rails)
-2. Active hero sliders from `heroSliders` (desktop + mobile)
-3. Active collections metadata from `collections` (ordered by sortOrder)
+**Batch 1**: the `seo` and `homepage` settings documents, active hero
+sliders, active collections (metadata), the category-rail categories, and
+the published theme row. The theme's sections say which product lists and
+images to read (`homeSectionRequests` in `@scalius/shared/storefront-theme`);
+a theme preview passes `requests` for its draft instead.
 
-**Batch 2** (driven by Batch 1 results):
-- `resolveCollectionProductsBatch()` from the collections service resolves products, categories, and featured products for all collections in a batched operation.
+**Batch 2** (one `db.batch`, skipped when nothing needs it):
+- `planCollectionProducts()` (collections service): products of the
+  homepage collections and of collection-sourced section lists;
+- `planHomeProductLists()` (`homepage-sections.ts`): newest, on sale,
+  popular (distinct buyers in real orders of 30 days) and category lists;
+- `planHomeMedia()`: section images (ready or trashed images only);
+- the hero rendition lookup for slides still on an original upload.
 
-Returns: `{ seo, hero, collections }`.
+Every product statement is scoped to the products it returns (the buyer
+pricing projection never ranks the whole catalogue) and brings a media
+statement for exactly the same rows, so card images need no third round
+trip. `products.catalog-scale-plans.d1.test.ts` guards the query plans.
 
-- **SEO**: Defaults to "Scalius Commerce" / "Welcome to Scalius Commerce" if no settings row exists.
+Returns: `{ seo, hero, collections, presentation, sections: { lists, media } }`.
+
+- **SEO**: unset copy stays null (the storefront titles the page with the store name).
 - **Hero**: Separate revision-guarded `desktop` and `mobile` documents. Images are validated through the shared bounded hero contract; malformed or unsafe saved documents fail closed to no public slides.
-- **Collections**: Filtered to only include collections with resolved products. Config is JSON-parsed via `safeJsonParse()`. Includes `categories`, `products`, and `featuredProduct` from resolution.
+- **Collections**: only `showOnHomepage` collections with resolved products, with `categories`, `products` and `featuredProduct`.
+- **Section lists**: one per source key, in request order, with the public category or active collection it reads (for titles and "View all"); a list with nothing to show is empty, and its sections render nothing.
 
 ### `getLayoutData(db)`
 

@@ -351,6 +351,11 @@ export type StorefrontThemeDocument = {
             version: 1;
             settings: {
                 layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen';
+                sideBanners?: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
             };
         } | {
             id: string;
@@ -3143,11 +3148,31 @@ export type PostApiV1MetaEventsResponse = PostApiV1MetaEventsResponses[keyof Pos
 export type GetApiV1StorefrontHomepageData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * A product list to read: <limit>~<source key>, repeated
+         */
+        product?: string | Array<string>;
+        /**
+         * A section image to read by media id, repeated
+         */
+        media?: string | Array<string>;
+    };
     url: '/api/v1/storefront/homepage';
 };
 
 export type GetApiV1StorefrontHomepageErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
     /**
      * Server error
      */
@@ -3275,6 +3300,47 @@ export type GetApiV1StorefrontHomepageResponses = {
                 trustStrip: {
                     enabled: boolean;
                 };
+            };
+            sections: {
+                lists: Array<{
+                    key: string;
+                    products: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                        price: number;
+                        discountType: string | null;
+                        discountPercentage: number | null;
+                        discountAmount: number | null;
+                        discountedPrice: number;
+                        priceVaries: boolean;
+                        availableForSale: boolean;
+                        freeDelivery: boolean;
+                        categoryId: string | null;
+                        hasVariants: boolean;
+                        imageUrl: string | null;
+                        imageMediaId: string | null;
+                        imageAlt: string | null;
+                        secondaryImageUrl: string | null;
+                    }>;
+                    category: {
+                        id: string;
+                        name: string;
+                        slug: string;
+                        canonicalPath: string | null;
+                    } | null;
+                    collection: {
+                        id: string;
+                        title: string;
+                    } | null;
+                }>;
+                media: Array<{
+                    id: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                }>;
             };
         };
     };

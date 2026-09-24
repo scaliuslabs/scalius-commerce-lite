@@ -45,7 +45,11 @@ import {
     loadProductMediaProjections,
     resolveProductCardImages,
     resolveProductImageRepresentation,
+    resolveProductMediaProjectionRows,
+    selectProductMediaProjectionRows,
     type ProductCardImages,
+    type ProductMediaProjection,
+    type ProductMediaProjectionRow,
 } from "../products/products.media";
 
 // ─────────────────────────────────────────
@@ -939,8 +943,8 @@ export async function getPublicCollectionCatalog(
     };
 }
 
-/** Product select shape used for collection product resolution. */
-const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjection) => ({
+/** Product select shape used for collection product resolution (and every homepage product list). */
+export const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjection) => ({
     id: products.id,
     name: products.name,
     slug: products.slug,
@@ -952,7 +956,7 @@ const buildCollectionProductSelect = (buyerPricing: BuyerCatalogPricingProjectio
     storeCurrencyCode: storeCurrencyCodeSql().as("collection_store_currency_code"),
 });
 
-type RawProduct = BuyerPricingMinor & {
+export type RawProduct = BuyerPricingMinor & {
     id: string;
     name: string;
     slug: string;
@@ -993,20 +997,23 @@ function enrichProduct(
     };
 }
 
+/** Buyer cards for product rows, with the card images from their gallery rows. */
+export function resolveProductCards(
+    rows: readonly RawProduct[],
+    mediaByProductId: ReadonlyMap<string, ProductMediaProjection[]>,
+): Map<string, ResolvedProduct> {
+    const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
+    return new Map(rows.map((row) => [
+        row.id,
+        enrichProduct(row, resolveProductCardImages(mediaByProductId.get(row.id) ?? []), decimalPlaces),
+    ]));
+}
+
 async function enrichProductsWithMedia(
     db: Database,
     rows: readonly RawProduct[],
 ): Promise<Map<string, ResolvedProduct>> {
-    const mediaMap = await loadProductMediaProjections(db, rows.map((row) => row.id));
-    const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
-    return new Map(rows.map((row) => [
-        row.id,
-        enrichProduct(
-            row,
-            resolveProductCardImages(mediaMap.get(row.id) ?? []),
-            decimalPlaces,
-        ),
-    ]));
+    return resolveProductCards(rows, await loadProductMediaProjections(db, rows.map((row) => row.id)));
 }
 
 export interface CollectionProductResult {
@@ -1015,33 +1022,47 @@ export interface CollectionProductResult {
     featuredProduct: ResolvedProduct | null;
 }
 
+type BatchStatement = Parameters<typeof safeBatch>[1][number];
+
+export interface CollectionProductsRequest {
+    /** The result's key (a collection id, or a homepage list's key). */
+    key: string;
+    config: unknown;
+    /** Products to show; the collection's own `maxProducts` when left out. */
+    maxProducts?: number;
+}
+
 /**
- * Batch-resolve products for multiple collections.
- * Used by the homepage endpoint to avoid unbounded category product reads.
- *
- * Returns a Map from collection ID to resolved products/categories/featured.
+ * Statements for one D1 batch and how to read their results: every
+ * collection's products (pinned list, newest per member category, the
+ * featured product), the member categories, and **the card media of exactly
+ * those products** (each media statement selects its products with the
+ * same conditions, order and limit as its product statement). The caller
+ * can put these in a batch with its own reads, so collection cards cost one
+ * round trip with no dependent media wave.
  */
-export async function resolveCollectionProductsBatch(
+export function planCollectionProducts(
     db: Database,
-    parsedCollections: {
-        id: string;
-        config: unknown;
-    }[],
-): Promise<Map<string, CollectionProductResult>> {
-    // Gather all IDs across collections
+    requests: readonly CollectionProductsRequest[],
+): {
+    statements: BatchStatement[];
+    resolve(results: readonly unknown[]): Map<string, CollectionProductResult>;
+} {
     const allProductIds = new Set<string>();
     const categoryProductLimitsById = new Map<string, number>();
     const allFeaturedIds = new Set<string>();
+    const maxProductsOf = (request: CollectionProductsRequest, cfg: ReturnType<typeof normalizeCollectionConfig>) =>
+        Math.min(Math.max(request.maxProducts ?? (cfg.maxProducts || 8), 1), 36);
 
-    for (const col of parsedCollections) {
-        const cfg = normalizeCollectionConfig(col.config);
+    for (const request of requests) {
+        const cfg = normalizeCollectionConfig(request.config);
         const membership = collectionMembershipForConfig(cfg);
         membership.productIds.forEach((id) => allProductIds.add(id));
         if (membership.source === "dynamic") {
             membership.categoryIds.forEach((id) => {
                 categoryProductLimitsById.set(
                     id,
-                    Math.max(categoryProductLimitsById.get(id) ?? 0, cfg.maxProducts),
+                    Math.max(categoryProductLimitsById.get(id) ?? 0, maxProductsOf(request, cfg)),
                 );
             });
         }
@@ -1062,127 +1083,149 @@ export async function resolveCollectionProductsBatch(
     const idSetCondition = (ids: string[]) => sql`${products.id} IN (
                     SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)})
                 )`;
-    const pinnedPricing = pricingFor(idSetCondition(productIdsArr));
-    const featuredPricing = pricingFor(idSetCondition(featuredIdsArr));
 
-    const noopQuery = db.select({ id: sql`NULL` }).from(products).where(sql`1 = 0`);
+    const statements: BatchStatement[] = [];
+    const productSlots: number[] = [];
+    const mediaSlots: number[] = [];
+    const push = (statement: BatchStatement) => statements.push(statement) - 1;
+    /**
+     * A product statement and the media statement of the same rows. Eligible
+     * products always have a buyer pricing row, so the id query can skip the
+     * pricing projection and still select exactly the product statement's rows.
+     */
+    const productList = (scope: SQL, conditions: SQL[], order?: { limit: number }) => {
+        const pricing = pricingFor(scope);
+        const rows = db.select(buildCollectionProductSelect(pricing)).from(products)
+            .innerJoin(pricing, eq(products.id, pricing.productId))
+            .where(and(...conditions));
+        const ids = db.select({ id: products.id }).from(products).where(and(...conditions));
+        productSlots.push(push(order
+            ? rows.orderBy(desc(products.createdAt), asc(products.id)).limit(order.limit)
+            : rows));
+        mediaSlots.push(push(selectProductMediaProjectionRows(db, order
+            ? ids.orderBy(desc(products.createdAt), asc(products.id)).limit(order.limit)
+            : ids)));
+        return productSlots.length - 1;
+    };
 
-    const batchResults = await safeBatch(db, [
-        productIdsArr.length > 0
-            ? db.select(buildCollectionProductSelect(pinnedPricing)).from(products)
-                .innerJoin(pinnedPricing, eq(products.id, pinnedPricing.productId))
-                .where(and(...publicCollectionProductConditions(idSetCondition(productIdsArr))))
-            : noopQuery,
-        ...categoryProductLimits.map(({ categoryId, maxProducts }) => {
-            const categoryPricing = pricingFor(eq(products.categoryId, categoryId));
-            return db.select(buildCollectionProductSelect(categoryPricing))
-                .from(products)
-                .innerJoin(categoryPricing, eq(products.id, categoryPricing.productId))
-                .where(and(
-                    ...publicCollectionProductConditions(eq(products.categoryId, categoryId)),
-                    publishedCategoryIdExists(products.categoryId),
-                ))
-                .orderBy(desc(products.createdAt), asc(products.id))
-                .limit(maxProducts);
-        }),
-        categoryIdsArr.length > 0
-            ? db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(and(
-                sql`${categories.id} IN (
+    const pinnedList = productIdsArr.length > 0
+        ? productList(idSetCondition(productIdsArr), publicCollectionProductConditions(idSetCondition(productIdsArr)))
+        : null;
+    const categoryLists = categoryProductLimits.map(({ categoryId, maxProducts }) => productList(eq(products.categoryId, categoryId), [
+        ...publicCollectionProductConditions(eq(products.categoryId, categoryId)),
+        publishedCategoryIdExists(products.categoryId),
+    ], { limit: maxProducts }));
+    const featuredList = featuredIdsArr.length > 0
+        ? productList(idSetCondition(featuredIdsArr), publicCollectionProductConditions(idSetCondition(featuredIdsArr)))
+        : null;
+    const categoryMetadataSlot = categoryIdsArr.length > 0
+        ? push(db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(and(
+            sql`${categories.id} IN (
                     SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIdsArr)})
                 )`,
-                ...publicCategoryConditions(),
-            ))
-            : noopQuery,
-        featuredIdsArr.length > 0
-            ? db.select(buildCollectionProductSelect(featuredPricing)).from(products)
-                .innerJoin(featuredPricing, eq(products.id, featuredPricing.productId))
-                .where(and(...publicCollectionProductConditions(idSetCondition(featuredIdsArr))))
-            : noopQuery,
-    ]);
-    const categoryProductsStartIndex = 1;
-    const categoryMetadataIndex = categoryProductsStartIndex + categoryProductLimits.length;
-    const featuredProductsIndex = categoryMetadataIndex + 1;
-    const allRawProducts = [
-        ...(batchResults[0] as RawProduct[]),
-        ...categoryProductLimits.flatMap((_, index) =>
-            batchResults[categoryProductsStartIndex + index] as RawProduct[]
-        ),
-        ...(batchResults[featuredProductsIndex] as RawProduct[]),
-    ];
-    const resolvedProductsById = await enrichProductsWithMedia(db, allRawProducts);
+            ...publicCategoryConditions(),
+        )))
+        : null;
 
-    // Build lookup maps
-    const specificProductsById = new Map<string, ResolvedProduct>();
-    for (const prod of batchResults[0] as RawProduct[]) {
-        const resolved = prod.id ? resolvedProductsById.get(prod.id) : null;
-        if (resolved) specificProductsById.set(prod.id, resolved);
-    }
+    return {
+        statements,
+        resolve(results) {
+            const rowsOf = (list: number | null) =>
+                list === null ? [] : results[productSlots[list]!] as RawProduct[];
+            const mediaRows = mediaSlots.flatMap((slot) => results[slot] as ProductMediaProjectionRow[]);
+            const resolvedProductsById = resolveProductCards(
+                [...rowsOf(pinnedList), ...categoryLists.flatMap(rowsOf), ...rowsOf(featuredList)],
+                resolveProductMediaProjectionRows(mediaRows),
+            );
 
-    const categoryProductsByCategoryId = new Map<string, ResolvedProduct[]>();
-    categoryProductLimits.forEach(({ categoryId }, index) => {
-        const productsData = batchResults[categoryProductsStartIndex + index] as RawProduct[];
-        const resolvedProducts = productsData
-            .filter((prod) => prod.id && prod.categoryId === categoryId)
-            .flatMap((prod) => {
-                const resolved = resolvedProductsById.get(prod.id);
-                return resolved ? [resolved] : [];
-            });
-        if (resolvedProducts.length > 0) {
-            categoryProductsByCategoryId.set(categoryId, resolvedProducts);
-        }
-    });
-
-    const categoryMetadataById = new Map<string, { id: string; name: string; slug: string }>();
-    for (const cat of batchResults[categoryMetadataIndex] as { id: string; name: string; slug: string }[]) {
-        if (cat.id) categoryMetadataById.set(cat.id, cat);
-    }
-
-    const featuredProductsById = new Map<string, ResolvedProduct>();
-    for (const prod of batchResults[featuredProductsIndex] as RawProduct[]) {
-        const resolved = prod.id ? resolvedProductsById.get(prod.id) : null;
-        if (resolved) featuredProductsById.set(prod.id, resolved);
-    }
-
-    // Resolve per-collection
-    const results = new Map<string, CollectionProductResult>();
-
-    for (const col of parsedCollections) {
-        const cfg = normalizeCollectionConfig(col.config);
-        const membership = collectionMembershipForConfig(cfg);
-        const productIds = membership.productIds;
-        const categoryIds = membership.categoryIds;
-        const maxProducts = Math.min(Math.max(cfg.maxProducts || 8, 1), 24);
-
-        let collectionProducts: ResolvedProduct[] = [];
-        let collectionCategories: { id: string; name: string; slug: string }[] = [];
-
-        if (productIds.length > 0) {
-            collectionProducts = productIds
-                .map((id) => specificProductsById.get(id))
-                .filter((p): p is ResolvedProduct => p != null)
-                .slice(0, maxProducts);
-        } else if (categoryIds.length > 0) {
-            const all: ResolvedProduct[] = [];
-            for (const catId of categoryIds) {
-                all.push(...(categoryProductsByCategoryId.get(catId) || []));
+            const specificProductsById = new Map<string, ResolvedProduct>();
+            for (const prod of rowsOf(pinnedList)) {
+                const resolved = prod.id ? resolvedProductsById.get(prod.id) : null;
+                if (resolved) specificProductsById.set(prod.id, resolved);
             }
-            const seen = new Set<string>();
-            collectionProducts = all.filter((p) => {
-                if (seen.has(p.id)) return false;
-                seen.add(p.id);
-                return true;
-            }).slice(0, maxProducts);
-            collectionCategories = categoryIds
-                .map((id) => categoryMetadataById.get(id))
-                .filter((c): c is { id: string; name: string; slug: string } => c != null);
-        }
 
-        const featuredProduct = cfg.featuredProductId
-            ? featuredProductsById.get(cfg.featuredProductId) ?? null
-            : null;
+            const categoryProductsByCategoryId = new Map<string, ResolvedProduct[]>();
+            categoryProductLimits.forEach(({ categoryId }, index) => {
+                const resolvedProducts = rowsOf(categoryLists[index]!)
+                    .filter((prod) => prod.id && prod.categoryId === categoryId)
+                    .flatMap((prod) => {
+                        const resolved = resolvedProductsById.get(prod.id);
+                        return resolved ? [resolved] : [];
+                    });
+                if (resolvedProducts.length > 0) {
+                    categoryProductsByCategoryId.set(categoryId, resolvedProducts);
+                }
+            });
 
-        results.set(col.id, { products: collectionProducts, categories: collectionCategories, featuredProduct });
-    }
+            const categoryMetadataById = new Map<string, { id: string; name: string; slug: string }>();
+            const categoryRows = categoryMetadataSlot === null
+                ? []
+                : results[categoryMetadataSlot] as { id: string; name: string; slug: string }[];
+            for (const cat of categoryRows) {
+                if (cat.id) categoryMetadataById.set(cat.id, cat);
+            }
 
-    return results;
+            const featuredProductsById = new Map<string, ResolvedProduct>();
+            for (const prod of rowsOf(featuredList)) {
+                const resolved = prod.id ? resolvedProductsById.get(prod.id) : null;
+                if (resolved) featuredProductsById.set(prod.id, resolved);
+            }
+
+            const resolvedByKey = new Map<string, CollectionProductResult>();
+            for (const request of requests) {
+                const cfg = normalizeCollectionConfig(request.config);
+                const membership = collectionMembershipForConfig(cfg);
+                const productIds = membership.productIds;
+                const categoryIds = membership.categoryIds;
+                const maxProducts = maxProductsOf(request, cfg);
+
+                let collectionProducts: ResolvedProduct[] = [];
+                let collectionCategories: { id: string; name: string; slug: string }[] = [];
+
+                if (productIds.length > 0) {
+                    collectionProducts = productIds
+                        .map((id) => specificProductsById.get(id))
+                        .filter((p): p is ResolvedProduct => p != null)
+                        .slice(0, maxProducts);
+                } else if (categoryIds.length > 0) {
+                    const all: ResolvedProduct[] = [];
+                    for (const catId of categoryIds) {
+                        all.push(...(categoryProductsByCategoryId.get(catId) || []));
+                    }
+                    const seen = new Set<string>();
+                    collectionProducts = all.filter((p) => {
+                        if (seen.has(p.id)) return false;
+                        seen.add(p.id);
+                        return true;
+                    }).slice(0, maxProducts);
+                    collectionCategories = categoryIds
+                        .map((id) => categoryMetadataById.get(id))
+                        .filter((c): c is { id: string; name: string; slug: string } => c != null);
+                }
+
+                const featuredProduct = cfg.featuredProductId
+                    ? featuredProductsById.get(cfg.featuredProductId) ?? null
+                    : null;
+
+                resolvedByKey.set(request.key, { products: collectionProducts, categories: collectionCategories, featuredProduct });
+            }
+            return resolvedByKey;
+        },
+    };
+}
+
+/**
+ * Batch-resolve products for multiple collections in one D1 batch (products,
+ * categories and card media together). Returns a Map from collection ID to
+ * resolved products/categories/featured.
+ */
+export async function resolveCollectionProductsBatch(
+    db: Database,
+    parsedCollections: {
+        id: string;
+        config: unknown;
+    }[],
+): Promise<Map<string, CollectionProductResult>> {
+    const plan = planCollectionProducts(db, parsedCollections.map(({ id, config }) => ({ key: id, config })));
+    return plan.resolve(plan.statements.length > 0 ? await safeBatch(db, plan.statements) : []);
 }

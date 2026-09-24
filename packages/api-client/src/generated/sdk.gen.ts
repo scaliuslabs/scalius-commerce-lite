@@ -283,6 +283,8 @@ export const postApiV1MetaEvents = <ThrowOnError extends boolean = false>(option
 
 /**
  * Get consolidated homepage data (SEO, hero, collections, categories, and policy facts)
+ *
+ * Without `product` or `media`, the section lists and images are the published theme's. A theme preview names its draft's instead: `product=<limit>~<source key>` per product list and `media=<media id>` per image.
  */
 export const getApiV1StorefrontHomepage = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1StorefrontHomepageData, ThrowOnError>): RequestResult<GetApiV1StorefrontHomepageResponses, GetApiV1StorefrontHomepageErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1StorefrontHomepageResponses, GetApiV1StorefrontHomepageErrors, ThrowOnError>({ url: '/api/v1/storefront/homepage', ...options });
 
