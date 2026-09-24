@@ -184,6 +184,12 @@ describe("discount form model", () => {
     // Nothing typed yet: no "Minimum purchase of ৳0" and no "Gets 1 item at 0% off".
     expect(keys(draft("order", { minimum: "amount" }))).toEqual(["summaryNoLimits", "summaryNoCombine", "summaryActiveFrom"]);
     expect(keys(draft("buy_get", { getValueKind: "percentage" }))).toEqual(["summaryNoLimits", "summaryNoCombine", "summaryActiveFrom"]);
+    // Nothing ticked here, but other discounts combine with this one (a tick on either is enough):
+    // the Summary says so instead of "Can't combine" above a list of discounts it stacks with.
+    const combination = (value: DiscountDraft, stacking: number) =>
+      summarizeDraft(value, "BDT", FORMAT, stacking).map(({ key }) => key).filter((key) => key.includes("ombine"));
+    expect(combination(draft("order"), 2)).toEqual(["summaryCombinesWhereAllowed"]);
+    expect(combination(draft("order"), 0)).toEqual(["summaryNoCombine"]);
 
     const lines = summarizeDraft(draft("buy_get", {
       buyValue: "2", buyScope: { kind: "products", ids: ["prod_Panjabi"] },

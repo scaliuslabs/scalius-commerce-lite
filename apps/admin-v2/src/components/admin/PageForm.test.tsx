@@ -204,7 +204,7 @@ describe("PageForm", () => {
         tags: ["Guides"],
       }),
     });
-    expect(toastMock.success).toHaveBeenCalledWith("Changes saved");
+    expect(toastMock.success).toHaveBeenCalledWith("Blog post saved");
   });
 
   it("refuses a web address the store already uses", async () => {

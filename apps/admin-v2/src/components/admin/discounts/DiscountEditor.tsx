@@ -213,7 +213,9 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     date: (epoch) => formatDateTime(new Date(epoch * 1_000), { dateStyle: "medium", timeStyle: "short" }),
     scope: (picked: Scope) => scopeLabel(picked, items),
   };
-  const summary = summarizeDraft(draft, currencyCode, format);
+  const { data: allDiscounts = [] } = useQuery(discountsQueryOptions());
+  const preview = combinationPreview(draft, allDiscounts, discount?.id);
+  const summary = summarizeDraft(draft, currencyCode, format, preview.filter((item) => item.stacks).length);
   const prices = draft.appliesTo.ids.map((id) => appliesItems.get(id)?.price);
   const aboveEveryPrice = exceedsEveryPrice(
     draft,
@@ -221,9 +223,6 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
     currencyCode,
   );
   const heading = draft.method === "code" ? draft.code.trim().toUpperCase() : draft.title.trim();
-  const { data: allDiscounts = [] } = useQuery(discountsQueryOptions());
-  const preview = combinationPreview(draft, allDiscounts, discount?.id);
-
   function update(patch: Partial<DiscountDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
   }

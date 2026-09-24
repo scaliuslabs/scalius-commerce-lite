@@ -562,7 +562,7 @@ function ThemeCards() {
 export function ThemePage() {
   const t = useMessages(onlineStoreMessages);
   return (
-    <SaveBarProvider>
+    <SaveBarProvider savedMessage={t("themeSaved")}>
       <OnlineStorePage title={t("themeTitle")}>
         <ThemeCards />
       </OnlineStorePage>
