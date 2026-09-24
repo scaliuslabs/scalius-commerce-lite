@@ -30,8 +30,9 @@ export const ALL: APIRoute = async ({ request, params }) => {
 
   const subpath = params.path || "";
 
-  // Security: reject path traversal and restrict to safe characters
-  if (subpath.includes("..") || !/^[a-zA-Z0-9/-]*$/.test(subpath)) {
+  // Security: reject path traversal and restrict to safe characters.
+  // Record ids ("cust_…", nanoid) use letters, digits, "_" and "-".
+  if (subpath.includes("..") || !/^[a-zA-Z0-9_/-]*$/.test(subpath)) {
     return new Response("Bad request", { status: 400 });
   }
 

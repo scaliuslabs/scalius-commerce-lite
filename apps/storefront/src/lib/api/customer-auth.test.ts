@@ -5,7 +5,9 @@ import {
   getCustomerOrderDetail,
   getCustomerOrders,
   getCustomerSession,
+  sendGuestOrdersCode,
   verifyCustomerOtp,
+  verifyGuestOrders,
 } from "./customer-auth";
 
 describe("customer auth API helpers", () => {
@@ -537,5 +539,63 @@ describe("customer auth API helpers", () => {
     expect(JSON.stringify(result)).not.toContain("provider_unknown");
     expect(JSON.stringify(result)).not.toContain("reconcile_required");
     expect(JSON.stringify(result)).not.toContain("providerRefundId");
+  });
+  it("reads guest orders on an unverified phone and drops malformed entries", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: {
+        orders: [],
+        unclaimedGuestOrders: [
+          { id: "cust_guest_1", destination: "01•••••011", orderCount: 2, canVerify: false },
+          { id: "cust_guest_2", destination: "01•••••022", orderCount: 1 },
+          { id: "", destination: "01•••••033", orderCount: 1, canVerify: true },
+          { id: "cust_guest_4", destination: "01•••••044", orderCount: 0, canVerify: true },
+        ],
+      },
+    }), { status: 200 })));
+
+    const result = await getCustomerOrders();
+    expect(result.unclaimedGuestOrders).toEqual([
+      { id: "cust_guest_1", destination: "01•••••011", orderCount: 2, canVerify: false },
+      { id: "cust_guest_2", destination: "01•••••022", orderCount: 1, canVerify: true },
+    ]);
+  });
+
+  it("sends and checks guest-order codes through the same-origin proxy, the code only in the body", async () => {
+    const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith("/send-code")
+      ? { success: true, data: { message: "We sent a code to 01•••••011.", destination: "01•••••011", resendAfterSeconds: 45 } }
+      : { success: true, data: { movedOrders: 2, message: "2 orders were added to your account." } }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(sendGuestOrdersCode("cust_guest_1")).resolves.toEqual({
+      success: true, message: "We sent a code to 01•••••011.", destination: "01•••••011", resendAfterSeconds: 45,
+    });
+    await expect(verifyGuestOrders("cust_guest_1", "123456")).resolves.toEqual({
+      success: true, movedOrders: 2, message: "2 orders were added to your account.",
+    });
+    const [sendUrl, sendInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const [verifyUrl, verifyInit] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(sendUrl).toBe("/api/customer-auth/guest-orders/cust_guest_1/send-code");
+    expect(sendInit.method).toBe("POST");
+    expect(verifyUrl).toBe("/api/customer-auth/guest-orders/cust_guest_1/verify");
+    expect(JSON.parse(String(verifyInit.body))).toEqual({ code: "123456" });
+  });
+
+  it("keeps the server's guest-order code failures: waits, unavailable setup and conflicts", async () => {
+    const reply = (status: number, error: unknown) => new Response(JSON.stringify({ success: false, error }), { status });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(reply(429, { code: "RATE_LIMITED", message: "Too many codes.", details: { retryAfterSeconds: 90 } }))
+      .mockResolvedValueOnce(reply(503, { code: "OTP_UNAVAILABLE", message: "Text message codes are unavailable right now. Contact the store." }))
+      .mockResolvedValueOnce(reply(409, { code: "CONFLICT", message: "This phone number is verified on another account. Sign in with it instead." })));
+
+    await expect(sendGuestOrdersCode("cust_guest_1")).resolves.toEqual({
+      success: false, status: 429, error: "Too many codes.", retryAfterSeconds: 90,
+    });
+    await expect(sendGuestOrdersCode("cust_guest_1")).resolves.toMatchObject({
+      success: false, status: 503, error: "Text message codes are unavailable right now. Contact the store.",
+    });
+    await expect(verifyGuestOrders("cust_guest_1", "123456")).resolves.toMatchObject({
+      success: false, status: 409, error: "This phone number is verified on another account. Sign in with it instead.",
+    });
   });
 });

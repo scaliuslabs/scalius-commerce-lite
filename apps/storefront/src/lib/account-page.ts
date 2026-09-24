@@ -9,6 +9,7 @@ import {
   type CustomerOrder,
 } from "@/lib/api/customer-auth";
 import { getAreas, getCities, getZones } from "@/lib/api/shipping";
+import { renderGuestOrderNotices } from "@/lib/account-guest-orders";
 import { getShippingAddressError } from "@/lib/checkout/shipping-address";
 import { getProductImageUrl } from "@/lib/product-media";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -115,8 +116,10 @@ async function loadAccountOrders(runId: number): Promise<void> {
   const showMoreContainer = byId("showMoreContainer");
   const showMoreBtn = byId<HTMLButtonElement>("showMoreBtn");
   const ordersRetryBtn = byId<HTMLButtonElement>("ordersRetryBtn");
+  const guestNotices = document.getElementById("guestOrderNotices");
   ordersRetryBtn.disabled = true;
   ordersRetryBtn.onclick = () => void loadAccountOrders(runId);
+  if (guestNotices) renderGuestOrderNotices(guestNotices, [], { onClaimed: () => undefined });
   ordersList.innerHTML = "";
   emptyOrders.classList.add("hidden");
   ordersError.classList.add("hidden");
@@ -134,6 +137,18 @@ async function loadAccountOrders(runId: number): Promise<void> {
       : result.unavailable ? ACCOUNT_OFFLINE_MESSAGE : result.error || ACCOUNT_OFFLINE_MESSAGE;
     ordersError.classList.remove("hidden");
     return;
+  }
+
+  // Orders placed with a phone this account hasn't verified: offer to verify it.
+  if (guestNotices) {
+    renderGuestOrderNotices(guestNotices, result.unclaimedGuestOrders ?? [], {
+      onClaimed: async (message) => {
+        const status = document.getElementById("guestOrdersStatus");
+        if (status) status.textContent = message;
+        await loadAccountOrders(runId);
+        if (accountWindow.__scaliusAccountInitRun === runId) document.getElementById("ordersHeading")?.focus();
+      },
+    });
   }
 
   const totalOrders = result.summary?.totalOrders ?? result.orders.length;
@@ -297,6 +312,8 @@ export async function initializeAccountPage(): Promise<void> {
 
   let customer = session.customer;
   renderProfile(customer);
+  const guestOrdersStatus = document.getElementById("guestOrdersStatus");
+  if (guestOrdersStatus) guestOrdersStatus.textContent = "";
   loadingState.classList.add("hidden");
   authState.classList.remove("hidden");
 

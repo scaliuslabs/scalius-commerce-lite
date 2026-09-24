@@ -111,9 +111,12 @@ const error = "mt-1 hidden text-sm text-destructive";
 
         <section aria-labelledby="ordersHeading">
           <div class="mb-4 flex items-baseline justify-between gap-3">
-            <h2 id="ordersHeading" class="text-xl font-semibold text-foreground">Orders</h2>
+            <h2 id="ordersHeading" tabindex="-1" class="text-xl font-semibold text-foreground focus:outline-none">Orders</h2>
             <span id="orderCount" class="text-sm text-muted-foreground"></span>
           </div>
+
+          <p id="guestOrdersStatus" role="status" aria-live="polite" class="mb-4 text-sm text-primary empty:hidden"></p>
+          <div id="guestOrderNotices" class="mb-4 hidden space-y-3"></div>
 
           <div id="emptyOrders" class="hidden rounded-xl border border-dashed border-border p-10 text-center">
             <h3 class="mb-1 text-base font-semibold text-foreground">No orders yet</h3>

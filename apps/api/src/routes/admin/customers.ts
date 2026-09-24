@@ -19,6 +19,7 @@ import {
 import { fromMinor } from "@scalius/shared/money";
 import { customers, customerHistory, orders, deliveryLocations } from "@scalius/database/schema";
 import { eq, sql, inArray, isNull, and } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { NotFoundError } from "../../utils/api-error";
 
 import { ok, created, noContent } from "../../utils/api-response";
@@ -64,9 +65,15 @@ const customerHistoryEntrySchema = z.object({
     cityName: z.string().nullable(),
     zoneName: z.string().nullable(),
     areaName: z.string().nullable(),
-    changeType: z.string(),
+    changeType: z.string().openapi({ description: "created, updated, deleted, or order_moved_in / order_moved_out (see `order` and `relatedCustomer`)" }),
+    /** The order that moved, for order_moved_in / order_moved_out. */
+    order: z.object({ id: z.string(), orderNumber: z.number().int().nullable() }).nullable(),
+    /** The other record in the move: the guest record it came from, or the account it went to. */
+    relatedCustomer: z.object({ id: z.string(), name: z.string() }).nullable(),
     createdAt: timestampSchema,
 });
+
+const customerLinkSchema = z.object({ id: z.string(), name: z.string() });
 
 const customerHistoryOrderSchema = z.object({
     id: z.string(),
@@ -81,6 +88,10 @@ const customerHistoryCustomerSchema = customerDetailSchema.extend({
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
     deletedAt: optionalNullableTimestampSchema,
+    /** On a guest record: the account that took its orders placed with a contact it proved (merged when `deletedAt` is set). */
+    linkedAccount: customerLinkSchema.nullable(),
+    /** On an account: guest records still holding orders placed with a contact it hasn't proven. */
+    guestRecords: z.array(customerLinkSchema.extend({ orderCount: z.number().int() })),
 });
 
 const customerHistoryPayloadSchema = z.object({
@@ -326,7 +337,11 @@ app.openapi(getHistoryRoute, async (c) => {
     const historyOffset = (historyPage - 1) * historyLimit;
     const ordersOffset = (ordersPage - 1) * ordersLimit;
 
-    const [customerResults, history, customerOrders, historyCountRows, orderCountRows] = await db.batch([
+    const linkedAccount = alias(customers, "linked_account");
+    const relatedCustomer = alias(customers, "related_customer");
+    const movedOrder = alias(orders, "moved_order");
+    const guestRecord = alias(customers, "guest_record");
+    const [customerResults, history, customerOrders, historyCountRows, orderCountRows, guestRecords] = await db.batch([
         db
             .select({
                 id: customers.id,
@@ -338,20 +353,27 @@ app.openapi(getHistoryRoute, async (c) => {
                 zone: customers.zone,
                 area: customers.area,
                 accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
+                linkedAccountId: sql<string | null>`${linkedAccount.id}`.as("linked_account_id"),
+                linkedAccountName: sql<string | null>`${linkedAccount.name}`.as("linked_account_name"),
                 totalOrders: metrics.totalOrders,
                 totalSpentMinor: metrics.totalSpentMinor,
                 spendDecimalPlaces: metrics.spendDecimalPlaces,
                 lastOrderAt: metrics.lastOrderAt,
                 createdAt: sql<number>`CAST(${customers.createdAt} AS INTEGER)`,
                 updatedAt: sql<number>`CAST(${customers.updatedAt} AS INTEGER)`,
+                deletedAt: sql<number | null>`CAST(${customers.deletedAt} AS INTEGER)`,
             })
             .from(customers)
             .leftJoin(orders, and(
                 eq(orders.customerId, customers.id),
                 isNull(orders.deletedAt),
             ))
+            .leftJoin(linkedAccount, and(
+                eq(linkedAccount.id, customers.linkedAccountId),
+                isNull(customers.accountClaimedAt),
+            ))
             .where(eq(customers.id, id))
-            .groupBy(customers.id),
+            .groupBy(customers.id, linkedAccount.id),
         db
             .select({
                 id: customerHistory.id,
@@ -366,9 +388,15 @@ app.openapi(getHistoryRoute, async (c) => {
                 zoneName: customerHistory.zoneName,
                 areaName: customerHistory.areaName,
                 changeType: customerHistory.changeType,
+                orderId: customerHistory.orderId,
+                orderNumber: sql<number | null>`${movedOrder.orderNumber}`.as("moved_order_number"),
+                relatedCustomerId: customerHistory.relatedCustomerId,
+                relatedCustomerName: sql<string | null>`${relatedCustomer.name}`.as("related_customer_name"),
                 createdAt: sql<number>`CAST(${customerHistory.createdAt} AS INTEGER)`,
             })
             .from(customerHistory)
+            .leftJoin(movedOrder, eq(movedOrder.id, customerHistory.orderId))
+            .leftJoin(relatedCustomer, eq(relatedCustomer.id, customerHistory.relatedCustomerId))
             .where(eq(customerHistory.customerId, id))
             .orderBy(sql`${customerHistory.createdAt} DESC`)
             .limit(historyLimit)
@@ -401,6 +429,16 @@ app.openapi(getHistoryRoute, async (c) => {
                 eq(orders.customerId, id),
                 isNull(orders.deletedAt),
             )),
+        db
+            .select({ id: guestRecord.id, name: guestRecord.name, orderCount: sql<number>`COUNT(${orders.id})` })
+            .from(guestRecord)
+            .innerJoin(orders, and(eq(orders.customerId, guestRecord.id), isNull(orders.deletedAt)))
+            .where(and(
+                eq(guestRecord.linkedAccountId, id),
+                isNull(guestRecord.accountClaimedAt),
+                isNull(guestRecord.deletedAt),
+            ))
+            .groupBy(guestRecord.id),
     ]);
 
     const customer = customerResults[0];
@@ -427,9 +465,12 @@ app.openapi(getHistoryRoute, async (c) => {
         locations.forEach((loc) => locationMap.set(loc.id, loc.name));
     }
 
-    const { totalSpentMinor, spendDecimalPlaces, ...customerFacts } = customer;
+    const { totalSpentMinor, spendDecimalPlaces, linkedAccountId, linkedAccountName, ...customerFacts } = customer;
     const enrichedCustomer = {
         ...customerFacts,
+        deletedAt: customer.deletedAt ? new Date(customer.deletedAt * 1000) : null,
+        linkedAccount: linkedAccountId ? { id: linkedAccountId, name: linkedAccountName ?? "" } : null,
+        guestRecords: guestRecords.map((record) => ({ ...record, orderCount: Number(record.orderCount) })),
         totalSpent: paidSpendAmount({ totalSpentMinor, spendDecimalPlaces }),
         accountClaimedAt: customer.accountClaimedAt ? new Date(customer.accountClaimedAt * 1000) : null,
         lastOrderAt: customer.lastOrderAt ? new Date(customer.lastOrderAt * 1000) : null,
@@ -440,8 +481,10 @@ app.openapi(getHistoryRoute, async (c) => {
         areaName: customer.area ? locationMap.get(customer.area) || customer.area : null,
     };
 
-    const enrichedHistory = history.map((record) => ({
+    const enrichedHistory = history.map(({ orderId, orderNumber, relatedCustomerId, relatedCustomerName, ...record }) => ({
         ...record,
+        order: orderId ? { id: orderId, orderNumber: orderNumber ?? null } : null,
+        relatedCustomer: relatedCustomerId ? { id: relatedCustomerId, name: relatedCustomerName ?? "" } : null,
         createdAt: new Date(record.createdAt * 1000),
         cityName: record.city ? locationMap.get(record.city) || record.city : "",
         zoneName: record.zone ? locationMap.get(record.zone) || record.zone : "",

@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { formatPhoneForDisplay } from "@scalius/shared/customer-utils";
@@ -6,6 +7,7 @@ import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { fetchCustomerHistory } from "~/lib/api-query-options/customers";
@@ -46,6 +48,98 @@ function snapshot(change: {
     zone: change.zoneName || change.zone || "",
     city: change.cityName || change.city || "",
   };
+}
+
+type HistoryPage = Awaited<ReturnType<typeof fetchCustomerHistory>>;
+type HistoryEntry = HistoryPage["history"][number];
+type CustomerFacts = HistoryPage["customer"];
+
+/** Order moves between a guest record and the account that proved its contact. */
+const isMove = (entry: HistoryEntry) => entry.changeType === "order_moved_in" || entry.changeType === "order_moved_out";
+
+/** The next older entry that carries a contact snapshot (order moves carry none). */
+function olderSnapshot(entries: HistoryEntry[], index: number): HistoryEntry | undefined {
+  return entries.slice(index + 1).find((entry) => !isMove(entry));
+}
+
+/** Fills the `{token}` placeholders of a translated sentence with links. */
+function withLinks(sentence: string, links: Record<string, ReactNode>): ReactNode {
+  return sentence.split(/(\{\w+\})/).map((part, index) => {
+    const token = /^\{(\w+)\}$/.exec(part)?.[1];
+    return <Fragment key={index}>{token && token in links ? links[token] : part}</Fragment>;
+  });
+}
+
+const linkClass = "text-link hover:underline";
+
+function CustomerLink({ customer }: { customer: { id: string; name: string } }) {
+  return (
+    <Link to="/admin/customers/$customerId/edit" params={{ customerId: customer.id }} className={linkClass}>
+      {customer.name}
+    </Link>
+  );
+}
+
+/**
+ * How this record relates to a buyer account: a guest record still holding
+ * orders the account hasn't claimed, a retired guest record merged into the
+ * account, or an account with guest records left to claim.
+ */
+function AccountLinks({ customer }: { customer: CustomerFacts }) {
+  const t = useMessages(customersMessages);
+  const account = customer.linkedAccount;
+  if (account && customer.deletedAt) {
+    return (
+      <Alert variant="info" role="note">
+        <AlertTitle>{withLinks(t("mergedInto"), { name: <CustomerLink customer={account} /> })}</AlertTitle>
+      </Alert>
+    );
+  }
+  if (account) {
+    return (
+      <Alert variant="info" role="note">
+        <AlertTitle>{t("guestOrders")}</AlertTitle>
+        <AlertDescription>{withLinks(t("guestOrdersBody"), { name: <CustomerLink customer={account} /> })}</AlertDescription>
+      </Alert>
+    );
+  }
+  const guests = customer.guestRecords;
+  if (guests.length === 0) return null;
+  return (
+    <Alert variant="info" role="note">
+      <AlertDescription>
+        <ul>
+          {guests.map((guest) => (
+            <li key={guest.id}>
+              {withLinks(
+                guest.orderCount === 1 ? t("guestOrdersOnOne") : t("guestOrdersOn", { count: guest.orderCount }),
+                { name: <CustomerLink customer={guest} /> },
+              )}
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+/** One line for an order that moved in from, or out to, another record. */
+function OrderMove({ entry }: { entry: HistoryEntry }) {
+  const t = useMessages(customersMessages);
+  const order = entry.order ? (
+    <Link to="/admin/orders/$orderId" params={{ orderId: entry.order.id }} className={linkClass}>
+      {formatOrderNumber(entry.order.orderNumber, entry.order.id)}
+    </Link>
+  ) : "—";
+  const name = entry.relatedCustomer ? <CustomerLink customer={entry.relatedCustomer} /> : "—";
+  return (
+    <li className="text-body">
+      <p>
+        {withLinks(t(entry.changeType === "order_moved_in" ? "orderMovedIn" : "orderMovedOut"), { order, name })}
+        <span className="text-muted-foreground"> · {day(entry.createdAt)}</span>
+      </p>
+    </li>
+  );
 }
 
 /** What an entry changed against the one before it (the next, older entry). */
@@ -93,6 +187,7 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
 
   return (
     <>
+      {first ? <AccountLinks customer={first.customer} /> : null}
       <Card>
         <CardHeader>
           <CardTitle>{t("recentOrders")}</CardTitle>
@@ -145,8 +240,9 @@ export function CustomerActivity({ customerId }: { customerId: string }) {
           {history.isSuccess && changes.length === 0 ? <p className="text-body text-muted-foreground">{t("noHistory")}</p> : null}
           <ol className="space-y-3">
             {changes.map((change, index) => {
-              // Newest first: an update is shown as what it changed against the entry below it.
-              const older = changes[index + 1];
+              if (isMove(change)) return <OrderMove key={change.id} entry={change} />;
+              // Newest first: an update is shown as what it changed against the snapshot below it.
+              const older = olderSnapshot(changes, index);
               const fields = change.changeType === "updated" && older
                 ? changedFields(snapshot(change), snapshot(older))
                 : changedFields(snapshot(change), undefined);
