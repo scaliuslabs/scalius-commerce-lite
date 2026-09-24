@@ -32355,6 +32355,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   },
                   "minItems": 1,
                   "maxItems": 90
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
                 }
               },
               "required": [
@@ -32465,6 +32471,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "note": {
                   "type": "string",
                   "maxLength": 500
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$"
                 }
               },
               "required": [
@@ -33288,6 +33300,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 2000
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "description": "One key per comment draft. Posting it again returns the first comment."
                 }
               },
               "required": [
@@ -33329,6 +33348,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "refund_recorded",
                 "return_created",
                 "return_received",
+                "request_submitted",
                 "request_resolved",
                 "archived",
                 "unarchived",
@@ -33348,6 +33368,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "string",
               "nullable": true
             },
+            "own": {
+              "type": "boolean",
+              "description": "The viewer wrote this comment and may delete it."
+            },
             "createdAt": {
               "anyOf": [
                 {
@@ -33365,7 +33389,88 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
             "body",
             "data",
             "actorName",
+            "own",
             "createdAt"
+          ]
+        }
+      },
+      "required": [
+        "success",
+        "data"
+      ]
+    }
+  },
+  {
+    "operationId": "dashboard.orders.comment_delete",
+    "method": "DELETE",
+    "pathTemplate": "/api/v1/admin/orders/{id}/timeline/{eventId}",
+    "summary": "Delete one of your own comments from the order timeline",
+    "tags": [
+      "Admin - Orders"
+    ],
+    "surface": "dashboard",
+    "exposure": "execute",
+    "principals": [
+      "admin"
+    ],
+    "risk": "destructive",
+    "openWorld": false,
+    "idempotency": "none",
+    "revision": "none",
+    "batch": "sequential",
+    "transport": "json",
+    "maxResponseBytes": 65536,
+    "maxRequestBytes": 1048576,
+    "sensitiveOutput": false,
+    "oneTimeSecretOutput": false,
+    "requiredClientAction": null,
+    "artifactOutput": null,
+    "continuationOutput": null,
+    "rbac": {
+      "type": "permission",
+      "permission": "orders.edit"
+    },
+    "inputSchema": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "id",
+          "in": "path"
+        },
+        {
+          "schema": {
+            "type": "string"
+          },
+          "required": true,
+          "name": "eventId",
+          "in": "path"
+        }
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "enum": [
+            true
+          ]
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "deleted": {
+              "type": "boolean",
+              "enum": [
+                true
+              ]
+            }
+          },
+          "required": [
+            "deleted"
           ]
         }
       },
@@ -33513,6 +33618,12 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 "requestKey": {
                   "type": "string",
                   "format": "uuid"
+                },
+                "shippingMethodId": {
+                  "type": "string",
+                  "nullable": true,
+                  "minLength": 1,
+                  "maxLength": 180
                 }
               },
               "required": [
@@ -36240,6 +36351,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "taxAmountMinor": {
                         "type": "number",
                         "nullable": true
+                      },
+                      "returnedQuantity": {
+                        "type": "integer",
+                        "minimum": 0
                       }
                     },
                     "required": [
@@ -36759,6 +36874,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "taxAmountMinor": {
                         "type": "number",
                         "nullable": true
+                      },
+                      "returnedQuantity": {
+                        "type": "integer",
+                        "minimum": 0
                       }
                     },
                     "required": [
@@ -40365,6 +40484,13 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                 },
                 "manualSettlementConfirmed": {
                   "type": "boolean"
+                },
+                "requestKey": {
+                  "type": "string",
+                  "minLength": 8,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]+$",
+                  "description": "One key per refund (per dialog opening). Repeating it returns the first refund."
                 }
               }
             }
@@ -40401,6 +40527,9 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
               "type": "boolean"
             },
             "manualSettlementRecorded": {
+              "type": "boolean"
+            },
+            "replayed": {
               "type": "boolean"
             },
             "notificationCount": {
@@ -43710,6 +43839,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                       "refund_recorded",
                       "return_created",
                       "return_received",
+                      "request_submitted",
                       "request_resolved",
                       "archived",
                       "unarchived",
@@ -43729,6 +43859,10 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                     "type": "string",
                     "nullable": true
                   },
+                  "own": {
+                    "type": "boolean",
+                    "description": "The viewer wrote this comment and may delete it."
+                  },
                   "createdAt": {
                     "anyOf": [
                       {
@@ -43746,6 +43880,7 @@ export const AGENT_OPERATIONS: readonly AgentOperationManifestEntry[] = [
                   "body",
                   "data",
                   "actorName",
+                  "own",
                   "createdAt"
                 ]
               }
@@ -87247,6 +87382,14 @@ export const AGENT_WORKFLOW_CATALOG: AgentWorkflowCatalog = {
         "mode": "operation-fallback",
         "workflowIds": [
           "operation.dashboard.orders.comment_add"
+        ]
+      },
+      {
+        "operationId": "dashboard.orders.comment_delete",
+        "surface": "dashboard",
+        "mode": "operation-fallback",
+        "workflowIds": [
+          "operation.dashboard.orders.comment_delete"
         ]
       },
       {

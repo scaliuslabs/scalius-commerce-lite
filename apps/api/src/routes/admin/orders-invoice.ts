@@ -32,6 +32,7 @@ const orderItemSchema = z.object({
   discountAmountMinor: nullableMoneySchema,
   taxableAmountMinor: nullableMoneySchema,
   taxAmountMinor: nullableMoneySchema,
+  returnedQuantity: z.number().int().nonnegative().optional(),
 });
 
 const invoiceOrderSchema = z.object({

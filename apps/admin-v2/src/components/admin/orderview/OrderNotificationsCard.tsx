@@ -16,7 +16,7 @@ import { useResendOrderNotification, useRetryOrderNotification } from "~/lib/api
 import {
   canSendNotificationAgain,
   notificationChannelLines,
-  notificationIssue,
+  notificationOutboxIssue,
   summarizeNotificationDelivery,
 } from "~/lib/order-notification-display";
 import { formatOrderTimestamp } from "./formatters";
@@ -36,7 +36,11 @@ function MessageRow({ orderId, message, canRetry }: {
   const resendMutation = useResendOrderNotification();
   const status = summarizeNotificationDelivery(message);
   const lines = notificationChannelLines(message.receipts);
-  const outboxIssue = message.receipts.length === 0 ? notificationIssue(message.lastError) : null;
+  const outboxIssue = notificationOutboxIssue(message);
+  const statusLabel = orderDetailLabel(t, "messages.status.", status);
+  // One channel whose outcome is the badge: don't say "Sent" twice.
+  const repeatsBadge = lines.length === 1 && !lines[0]!.issue
+    && orderDetailLabel(t, "messages.status.", lines[0]!.status) === statusLabel;
   const sendable = canSendNotificationAgain(message);
   const retrying = retryMutation.isPending && retryMutation.variables?.outboxId === message.id;
   const resending = resendMutation.isPending && resendMutation.variables?.outboxId === message.id;
@@ -47,7 +51,7 @@ function MessageRow({ orderId, message, canRetry }: {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="font-medium">{orderDetailLabel(t, "messages.type.", message.notificationType)}</span>
-          <Badge variant={statusBadgeVariant(status)}>{orderDetailLabel(t, "messages.status.", status)}</Badge>
+          <Badge variant={statusBadgeVariant(status)}>{statusLabel}</Badge>
           {sentAt ? <span className="text-muted-foreground">{sentAt}</span> : null}
         </div>
         {canRetry && sendable && RETRYABLE.has(message.status) ? (
@@ -72,7 +76,7 @@ function MessageRow({ orderId, message, canRetry }: {
           {[
             orderDetailLabel(t, "messages.channel.", line.channel),
             line.recipient ? line.recipient : line.count > 1 ? t("messages.recipients", { count: line.count }) : null,
-            orderDetailLabel(t, "messages.status.", line.status),
+            repeatsBadge ? null : orderDetailLabel(t, "messages.status.", line.status),
             line.issue ? t(`messages.issue.${line.issue}`) : null,
           ].filter(Boolean).join(" · ")}
         </p>

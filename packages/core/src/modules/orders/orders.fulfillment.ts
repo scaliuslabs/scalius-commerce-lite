@@ -2,6 +2,7 @@
 // Fulfillment and status update functions for orders.
 
 import type { Database } from "@scalius/database/client";
+import { hasOrderEvent, recordOrderEvent } from "./order-timeline";
 import {
     orders,
     orderItems,
@@ -36,7 +37,7 @@ import {
     noActivePaymentSessionAttemptForOrderIdCondition,
 } from "../payments/payment-session-attempts";
 
-import { sql, eq, and, inArray, getTableColumns, type SQL } from "drizzle-orm";
+import { sql, eq, and, inArray, notInArray, getTableColumns, type SQL } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import {
     canProcessOrderCodAction,
@@ -182,12 +183,12 @@ async function markManualDeliveryEvidence(
             eq(deliveryShipments.orderId, orderId),
             eq(deliveryShipments.providerType, "manual"),
             sql`${deliveryShipments.providerId} IS NULL`,
+            // A parcel that failed once and was delivered on the next try is delivered.
             sql`${deliveryShipments.status} NOT IN (
                 ${ShipmentStatus.DELIVERED},
                 ${ShipmentStatus.RETURNED},
                 ${ShipmentStatus.CANCELLED},
-                ${ShipmentStatus.FAILED},
-                ${ShipmentStatus.DELIVERY_FAILED}
+                ${ShipmentStatus.FAILED}
             )`,
         )),
     ];
@@ -1284,6 +1285,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             assertOrderCodActionAllowed(order.status, "failed");
             const failResult = await recordCODFailure(db, { orderId, reason: body.reason as "other" | "not_home" | "refused" | "no_cash" | "wrong_address", notes: body.notes as string | undefined });
             if (!failResult.success) throw new ValidationError(failResult.error || "COD failure recording failed");
+            await setOpenOwnCourierParcels(db, orderId, ShipmentStatus.DELIVERY_FAILED);
             return {
                 message: "COD failure recorded",
                 availabilityTransitionVariantIds: [],
@@ -1355,6 +1357,32 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
 
 const COURIER_RETURN_REASON = "Returned by the courier";
 
+/**
+ * Own-courier parcels follow what the merchant records for the order, so the
+ * list, the detail page and the export agree: a failed attempt fails every
+ * parcel still out, and a return to sender returns every parcel not delivered
+ * (R2-ORD-05). Courier-booked parcels keep the courier's own status.
+ */
+async function setOpenOwnCourierParcels(
+    db: Database,
+    orderId: string,
+    status: typeof ShipmentStatus.DELIVERY_FAILED | typeof ShipmentStatus.RETURNED,
+): Promise<void> {
+    const settled = status === ShipmentStatus.RETURNED
+        ? [ShipmentStatus.DELIVERED, ShipmentStatus.RETURNED, ShipmentStatus.CANCELLED, ShipmentStatus.FAILED]
+        : [ShipmentStatus.DELIVERED, ShipmentStatus.RETURNED, ShipmentStatus.CANCELLED, ShipmentStatus.FAILED, ShipmentStatus.DELIVERY_FAILED];
+    await db.update(deliveryShipments).set({
+        status,
+        rawStatus: status,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(
+        eq(deliveryShipments.orderId, orderId),
+        eq(deliveryShipments.providerType, "manual"),
+        sql`${deliveryShipments.providerId} IS NULL`,
+        notInArray(deliveryShipments.status, settled),
+    ));
+}
+
 async function markOrderReturnedToSender(db: Database, orderId: string): Promise<void> {
     const current = await db.select({ status: orders.status, version: orders.version })
         .from(orders).where(eq(orders.id, orderId)).get();
@@ -1372,6 +1400,7 @@ async function markOrderReturnedToSender(db: Database, orderId: string): Promise
     if (updated.length === 0) {
         throw new ConflictError("This order changed. Reload to see the latest.");
     }
+    await setOpenOwnCourierParcels(db, orderId, ShipmentStatus.RETURNED);
 }
 
 export async function getOrderShipments(db: Database, orderId: string) {
@@ -1477,6 +1506,7 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
                 isFinalShipment: replay.isFinalShipment ?? false,
                 fulfillmentStatus: order.fulfillmentStatus,
                 availabilityTransitionVariantIds: [] as string[],
+                lines: [] as ShipmentLine[],
                 replayed: true,
                 statusChange: undefined,
             };
@@ -1616,6 +1646,8 @@ export async function createFulfillmentShipment(db: Database, orderId: string, b
         isFinalShipment,
         fulfillmentStatus: newFulfillmentStatus,
         availabilityTransitionVariantIds,
+        /** What this parcel holds, for the timeline and the shipping message. */
+        lines,
         replayed: false,
         ...(shouldShipOrder
             ? {
@@ -1716,6 +1748,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     validateTransition("order", currentStatus, nextStatus);
 
     if (nextStatus === OrderStatus.CANCELLED) {
+        await assertNothingWithTheCourier(db, orderId);
         await assertGenericCancellationPaymentSafe(db, orderId, existingOrder);
     }
 
@@ -1733,7 +1766,7 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
         noActiveRefundAttemptForOrderIdCondition(orderId),
         noActivePaymentSessionAttemptForOrderIdCondition(orderId),
         ...(nextStatus === OrderStatus.CANCELLED
-            ? [noUnsafeCancellationPaymentCondition(orderId)]
+            ? [noUnsafeCancellationPaymentCondition(orderId), nothingSentCondition(orderId)]
             : []),
     )).returning({ id: orders.id });
 
@@ -1796,6 +1829,27 @@ export async function updateOrderStatus(db: Database, orderId: string, status: s
     };
 }
 
+/**
+ * Units already handed to a courier are out of the building: cancelling would
+ * put them back into sellable stock while a rider still holds them (R2-ORD-02).
+ * They must come back as a return, or be delivered, first.
+ */
+async function assertNothingWithTheCourier(db: Database, orderId: string): Promise<void> {
+    const row = await db.select({
+        sent: sql<number>`coalesce(sum(${orderItems.shippedQuantity}), 0)`,
+    }).from(orderItems).where(eq(orderItems.orderId, orderId)).get();
+    const sent = Number(row?.sent ?? 0);
+    if (sent > 0) {
+        throw new ValidationError(sent === 1
+            ? "1 item is with the courier. Mark it returned or delivered first."
+            : `${sent} items are with the courier. Mark them returned or delivered first.`);
+    }
+}
+
+function nothingSentCondition(orderId: string) {
+    return sql`NOT EXISTS (SELECT 1 FROM ${orderItems} WHERE ${orderItems.orderId} = ${orderId} AND ${orderItems.shippedQuantity} > 0)`;
+}
+
 export interface BulkOrderActionResult {
     orderId: string;
     success: boolean;
@@ -1804,19 +1858,37 @@ export interface BulkOrderActionResult {
 
 /**
  * Confirms each new order in the selection (the phone-confirmation queue).
- * Orders past that stage are reported as skipped, never changed.
+ * Orders past that stage are reported as skipped, never changed. With a
+ * request key, running the same selection again (double click, retry) reports
+ * the orders it already confirmed as done instead of failed.
  */
-export async function bulkConfirmOrders(db: Database, orderIds: readonly string[]) {
+export async function bulkConfirmOrders(
+    db: Database,
+    orderIds: readonly string[],
+    options: { requestKey?: string; actorId?: string | null } = {},
+) {
     const results: Array<BulkOrderActionResult & { update?: StatusUpdateResult }> = [];
+    const eventKey = options.requestKey ? `bulk-confirm:${options.requestKey}` : null;
     for (const orderId of orderIds) {
         try {
             const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
             if (!order) throw new NotFoundError("Order not found");
+            if (eventKey && await hasOrderEvent(db, orderId, "status_changed", eventKey)) {
+                results.push({ orderId, success: true });
+                continue;
+            }
             if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.PROCESSING) {
                 results.push({ orderId, success: false, error: "Only new orders can be confirmed." });
                 continue;
             }
             const update = await updateOrderStatus(db, orderId, OrderStatus.CONFIRMED);
+            await recordOrderEvent(db, {
+                orderId,
+                kind: "status_changed",
+                actorId: options.actorId ?? null,
+                requestKey: eventKey,
+                data: { from: order.status, to: OrderStatus.CONFIRMED },
+            });
             results.push({ orderId, success: true, update });
         } catch (error: unknown) {
             results.push({ orderId, success: false, error: error instanceof Error ? error.message : "Couldn't confirm this order." });
@@ -1825,17 +1897,25 @@ export async function bulkConfirmOrders(db: Database, orderIds: readonly string[
     return results;
 }
 
-/** Own-courier "Mark as sent" for whole confirmed orders. */
+/**
+ * Own-courier "Mark as sent" for whole confirmed orders. With a request key,
+ * running the same selection again reports the orders it already sent as done.
+ */
 export async function bulkFulfillOrders(
     db: Database,
     orderIds: readonly string[],
-    options: { courierName?: string; note?: string },
+    options: { courierName?: string; note?: string; requestKey?: string },
 ) {
     const results: Array<BulkOrderActionResult & { shipment?: Awaited<ReturnType<typeof createFulfillmentShipment>> }> = [];
+    const shipmentKey = options.requestKey ? `bulk:${options.requestKey}` : null;
     for (const orderId of orderIds) {
         try {
             const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, orderId)).get();
             if (!order) throw new NotFoundError("Order not found");
+            if (shipmentKey && await findShipmentByRequestKey(db, orderId, shipmentKey)) {
+                results.push({ orderId, success: true });
+                continue;
+            }
             if (order.status !== OrderStatus.CONFIRMED) {
                 results.push({
                     orderId,
@@ -1849,6 +1929,7 @@ export async function bulkFulfillOrders(
             const shipment = await createFulfillmentShipment(db, orderId, {
                 courierName: options.courierName,
                 note: options.note,
+                ...(shipmentKey ? { requestKey: shipmentKey } : {}),
             });
             results.push({ orderId, success: true, shipment });
         } catch (error: unknown) {

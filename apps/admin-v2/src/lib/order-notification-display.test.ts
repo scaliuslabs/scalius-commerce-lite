@@ -4,6 +4,7 @@ import {
   canSendNotificationAgain,
   notificationChannelLines,
   notificationIssue,
+  notificationOutboxIssue,
   summarizeNotificationDelivery,
 } from "./order-notification-display";
 
@@ -25,6 +26,7 @@ describe("order notification display", () => {
     expect(notificationIssue("Resend API error 401: unauthorized")).toBe("providerSetup");
     expect(notificationIssue("delivery_attempt_limit_reached")).toBe("stopped");
     expect(notificationIssue("socket hang up")).toBe("other");
+    expect(notificationIssue("notification_turned_off")).toBe("turnedOff");
     expect(notificationIssue(null)).toBeNull();
   });
 
@@ -84,13 +86,32 @@ describe("order notification display", () => {
     })).toBe("skipped");
   });
 
+  it("never calls a message sent when no customer channel has a delivery record", () => {
+    const nothing = { status: "sent", lastError: null, receipts: [] };
+    expect(summarizeNotificationDelivery(nothing)).toBe("skipped");
+    expect(notificationOutboxIssue(nothing)).toBe("noChannel");
+    expect(canSendNotificationAgain(nothing)).toBe(false);
+    // A staff device isn't the customer.
+    const staffOnly = { ...nothing, receipts: [receipt({ channel: "push", recipientMasked: null })] };
+    expect(summarizeNotificationDelivery(staffOnly)).toBe("skipped");
+    expect(notificationOutboxIssue(staffOnly)).toBe("noChannel");
+    // The recorded reason wins over the generic one.
+    expect(notificationOutboxIssue({ ...nothing, lastError: "missing_email_recipient" })).toBe("noEmail");
+    // Every channel unset: no line explains it, so the message does.
+    expect(notificationOutboxIssue({
+      ...nothing,
+      receipts: [receipt({ channel: "sms", status: "skipped", lastError: "missing_sms_provider" })],
+    })).toBe("noChannel");
+    expect(notificationOutboxIssue({ ...nothing, receipts: [receipt({})] })).toBeNull();
+  });
+
   it("offers sending again only when some channel can reach the customer", () => {
     const noEmail = receipt({ status: "skipped", recipientMasked: null, lastError: "missing_email_recipient" });
-    expect(canSendNotificationAgain({ lastError: null, receipts: [noEmail] })).toBe(false);
-    expect(canSendNotificationAgain({ lastError: null, receipts: [noEmail, receipt({ id: "r2", channel: "sms" })] })).toBe(true);
-    expect(canSendNotificationAgain({ lastError: "missing_email_recipient", receipts: [] })).toBe(false);
-    expect(canSendNotificationAgain({ lastError: "timeout", receipts: [] })).toBe(true);
+    expect(canSendNotificationAgain({ status: "sent", lastError: null, receipts: [noEmail] })).toBe(false);
+    expect(canSendNotificationAgain({ status: "sent", lastError: null, receipts: [noEmail, receipt({ id: "r2", channel: "sms" })] })).toBe(true);
+    expect(canSendNotificationAgain({ status: "sent", lastError: "missing_email_recipient", receipts: [] })).toBe(false);
+    expect(canSendNotificationAgain({ status: "sent", lastError: "timeout", receipts: [] })).toBe(true);
     const smsNotSetUp = receipt({ id: "r3", channel: "sms", status: "skipped", lastError: "missing_sms_provider" });
-    expect(canSendNotificationAgain({ lastError: null, receipts: [noEmail, smsNotSetUp] })).toBe(false);
+    expect(canSendNotificationAgain({ status: "sent", lastError: null, receipts: [noEmail, smsNotSetUp] })).toBe(false);
   });
 });

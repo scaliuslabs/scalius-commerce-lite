@@ -76,8 +76,9 @@ describe("order list mutations", () => {
   it("reports which orders didn't go through instead of failing the whole run", async () => {
     let outcome: Awaited<ReturnType<typeof bulk.mutateAsync>> | undefined;
     await act(async () => {
-      outcome = await bulk.mutateAsync({ action: "confirm", orderIds: ["o-1", "o-2"] });
+      outcome = await bulk.mutateAsync({ action: "confirm", orderIds: ["o-1", "o-2"], requestKey: "run-1" });
     });
+    expect(sdk.postApiV1AdminOrdersBulkConfirm).toHaveBeenCalledWith({ body: { orderIds: ["o-1", "o-2"], requestKey: "run-1" } });
     expect(outcome).toEqual({
       succeeded: ["o-1"],
       failures: [{ orderId: "o-2", error: "Only new orders can be confirmed." }],

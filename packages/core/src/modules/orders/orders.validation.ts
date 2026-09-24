@@ -57,6 +57,8 @@ const sellableOrderContentSchema = orderBaseContentSchema.extend({
 /** Schema for creating a new order (POST /api/orders). */
 export const createOrderSchema = sellableOrderContentSchema.extend({
     requestKey: z.uuid("A valid manual-order request key is required"),
+    /** The delivery method picked, so the order keeps its name; the charge may still be edited. */
+    shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

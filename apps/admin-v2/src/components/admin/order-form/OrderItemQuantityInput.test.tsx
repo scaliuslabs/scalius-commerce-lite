@@ -98,7 +98,7 @@ describe("OrderItemQuantityInput", () => {
     expect(onQuantityChange).not.toHaveBeenCalled();
   });
 
-  it("does not commit values outside the order contract", async () => {
+  it("keeps a quantity above 99 as typed and explains the limit", async () => {
     const onQuantityChange = vi.fn();
     await act(async () => root.render(
       <OrderItemQuantityInput
@@ -113,14 +113,15 @@ describe("OrderItemQuantityInput", () => {
 
     await act(async () => input.focus());
     await act(async () => setInputValue(input, "100"));
-    expect(onQuantityChange).not.toHaveBeenCalled();
+    expect(onQuantityChange).toHaveBeenLastCalledWith(100);
 
     await act(async () => input.blur());
-    expect(input.value).toBe("3");
-    expect(onQuantityChange).not.toHaveBeenCalled();
+    expect(input.value).toBe("100");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(host.textContent).toContain("Quantity can't be more than 99");
   });
 
-  it("explains and rejects quantities above the known stock snapshot", async () => {
+  it("keeps a quantity above the stock snapshot and its message until it is fixed", async () => {
     const onQuantityChange = vi.fn();
     const onValidityChange = vi.fn();
     await act(async () => root.render(
@@ -144,12 +145,15 @@ describe("OrderItemQuantityInput", () => {
     expect(host.textContent).toContain(
       "Only 5 units are available for this order.",
     );
-    expect(onQuantityChange).not.toHaveBeenCalled();
+    expect(onQuantityChange).toHaveBeenLastCalledWith(8);
     expect(onValidityChange).toHaveBeenLastCalledWith(false);
 
+    // No silent clamp or revert when the field is left.
     await act(async () => input.blur());
-    expect(input.value).toBe("3");
-    expect(onQuantityChange).not.toHaveBeenCalled();
+    expect(input.value).toBe("8");
+    expect(host.textContent).toContain(
+      "Only 5 units are available for this order.",
+    );
 
     await act(async () => input.focus());
     await act(async () => setInputValue(input, "5"));
@@ -157,7 +161,7 @@ describe("OrderItemQuantityInput", () => {
     expect(onValidityChange).toHaveBeenLastCalledWith(true);
   });
 
-  it("restores the pre-edit quantity instead of a valid multi-digit prefix", async () => {
+  it("keeps a typed 0 or 21 as typed with its reason instead of jumping to the maximum", async () => {
     const onQuantityChange = vi.fn();
     function ControlledQuantity() {
       const [quantity, setQuantity] = useState(20);
@@ -166,7 +170,7 @@ describe("OrderItemQuantityInput", () => {
           quantity={quantity}
           itemName="Studio Lamp"
           maxQuantity={20}
-          maximumExceededMessage="Only 20 units are available for this order."
+          maximumExceededMessage="Only 20 available."
           onQuantityChange={(nextQuantity) => {
             onQuantityChange(nextQuantity);
             setQuantity(nextQuantity);
@@ -181,18 +185,16 @@ describe("OrderItemQuantityInput", () => {
     await act(async () => input.focus());
 
     await act(async () => setInputValue(input, "2"));
-    expect(onQuantityChange).toHaveBeenLastCalledWith(2);
-
     await act(async () => setInputValue(input, "21"));
-    expect(input.value).toBe("21");
-    expect(onQuantityChange).toHaveBeenLastCalledWith(20);
-    expect(host.textContent).toContain(
-      "Only 20 units are available for this order.",
-    );
+    expect(onQuantityChange).toHaveBeenLastCalledWith(21);
+    expect(host.textContent).toContain("Only 20 available.");
 
+    await act(async () => setInputValue(input, "0"));
     await act(async () => input.blur());
-    expect(input.value).toBe("20");
-    expect(onQuantityChange).toHaveBeenLastCalledWith(20);
+    expect(input.value).toBe("0");
+    expect(onQuantityChange).toHaveBeenLastCalledWith(0);
+    expect(host.textContent).toContain("Quantity must be at least 1");
+    expect(host.textContent).not.toContain("Only 20 available.");
   });
 
   it("leaves out-of-stock explanation to the disabled field guidance", async () => {

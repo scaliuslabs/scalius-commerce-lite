@@ -32,6 +32,7 @@ import {
     paymentPlans,
     webhookEvents,
     orderDiscountAllocations,
+    shippingMethods,
     CodStatus,
     OrderStatus,
     PaymentMethod,
@@ -87,7 +88,7 @@ import type {
 } from "./orders.types";
 import { orderNumberSearchCondition } from "./order-number";
 import { recordOrderEvent } from "./order-timeline";
-import { buildPhoneSearchTerms, isLikelyPhoneSearch } from "./orders.search";
+import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "./orders.search";
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "./shipment-claim";
 import { PROVIDER_OUTCOME_UNKNOWN } from "../delivery/types";
 import { computeOrderPaymentState } from "../payments/payment-state";
@@ -1335,7 +1336,12 @@ export async function listOrders(db: Database, options: {
         const phoneCondition = isLikelyPhoneSearch(trimmedSearch)
             ? buildPhoneSearchCondition(phoneSearchTerms)
             : undefined;
-        const ftsCondition = ftsMatch(db, "orders_fts", "orders", trimmedSearch);
+        // A full email finds that address only: "rahim@x.com" must not also
+        // find "rahima@x.com" through word matching (R2-ORD-14).
+        const emailSearch = isEmailSearch(trimmedSearch);
+        const ftsCondition = emailSearch
+            ? sql`lower(${orders.customerEmail}) = lower(${trimmedSearch})`
+            : ftsMatch(db, "orders_fts", "orders", trimmedSearch);
         // Merchants also look orders up by the courier's consignment or tracking id.
         const courierIdCondition = sql`EXISTS (
             SELECT 1 FROM ${deliveryShipments}
@@ -1348,7 +1354,7 @@ export async function listOrders(db: Database, options: {
             (condition): condition is SQL => condition !== undefined,
         );
         whereConditions.push(sql`(${sql.join(matches, sql` OR `)})`);
-        const ftsRank = ftsCondition && isFts5SearchEnabled(db)
+        const ftsRank = ftsCondition && !emailSearch && isFts5SearchEnabled(db)
             ? sql`COALESCE(
                     (SELECT rank FROM orders_fts WHERE rowid = orders.rowid AND orders_fts MATCH ${sanitizeFtsQuery(trimmedSearch)}),
                     999999
@@ -1412,9 +1418,10 @@ export async function listOrders(db: Database, options: {
 
     const orderByExpressions = (() => {
         if (rankExpression && sort === "relevance") {
+            // Equally good matches read newest first.
             return [
                 rankExpression,
-                sql`${orders.updatedAt} desc`,
+                sql`${orders.createdAt} desc`,
                 sql`${orders.id} desc`,
             ];
         }
@@ -1670,6 +1677,9 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
     const details = new Map<string, {
         shippingAddress: string;
         notes: string | null;
+        /** Every parcel's courier and tracking, in the order they left. */
+        courierName: string | null;
+        trackingId: string | null;
         lines: Array<{
             productName: string | null;
             variantLabel: string | null;
@@ -1679,7 +1689,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
         }>;
     }>();
     for (const chunk of chunkIds(orderIds)) {
-        const [orderRows, itemRows] = await Promise.all([
+        const [orderRows, itemRows, shipmentRows] = await Promise.all([
             db.select({
                 id: orders.id,
                 shippingAddress: orders.shippingAddress,
@@ -1694,10 +1704,39 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
                 unitPriceMinor: orderItems.unitPriceMinor,
                 lineSubtotalMinor: orderItems.lineSubtotalMinor,
             }).from(orderItems).where(inArray(orderItems.orderId, chunk)).orderBy(orderItems.createdAt, orderItems.id).all(),
+            db.select({
+                orderId: deliveryShipments.orderId,
+                courierName: deliveryShipments.courierName,
+                providerName: deliveryProviders.name,
+                providerType: deliveryShipments.providerType,
+                trackingId: deliveryShipments.trackingId,
+                status: deliveryShipments.status,
+            }).from(deliveryShipments)
+                .leftJoin(deliveryProviders, eq(deliveryProviders.id, deliveryShipments.providerId))
+                .where(inArray(deliveryShipments.orderId, chunk))
+                .orderBy(deliveryShipments.createdAt, deliveryShipments.id)
+                .all(),
         ]);
         const places = new Map(orderRows.map((row) => [row.id, row.currencyDecimalPlaces]));
+        const parcels = new Map<string, { couriers: Set<string>; tracking: Set<string> }>();
+        for (const shipment of shipmentRows) {
+            if (shipment.status === ShipmentStatus.CANCELLED || shipment.status === ShipmentStatus.FAILED) continue;
+            const entry = parcels.get(shipment.orderId) ?? { couriers: new Set<string>(), tracking: new Set<string>() };
+            const courier = shipment.courierName?.trim() || shipment.providerName?.trim()
+                || (shipment.providerType === "manual" ? "Own courier" : "");
+            if (courier) entry.couriers.add(courier);
+            if (shipment.trackingId?.trim()) entry.tracking.add(shipment.trackingId.trim());
+            parcels.set(shipment.orderId, entry);
+        }
         for (const row of orderRows) {
-            details.set(row.id, { shippingAddress: row.shippingAddress, notes: row.notes, lines: [] });
+            const parcel = parcels.get(row.id);
+            details.set(row.id, {
+                shippingAddress: row.shippingAddress,
+                notes: row.notes,
+                courierName: parcel?.couriers.size ? [...parcel.couriers].join("; ") : null,
+                trackingId: parcel?.tracking.size ? [...parcel.tracking].join("; ") : null,
+                lines: [],
+            });
         }
         for (const item of itemRows) {
             const decimals = places.get(item.orderId) ?? 2;
@@ -2141,6 +2180,20 @@ export async function createOrder(
             totalAmountMinor: taxQuote.totalMinor,
             paidAmountMinor: 0,
         });
+        const shippingMethod = data.shippingMethodId
+            ? await db.select({
+                id: shippingMethods.id,
+                name: shippingMethods.name,
+                description: shippingMethods.description,
+                feeMinor: shippingMethods.feeMinor,
+            }).from(shippingMethods).where(and(
+                eq(shippingMethods.id, data.shippingMethodId),
+                isNull(shippingMethods.deletedAt),
+            )).get()
+            : null;
+        if (data.shippingMethodId && !shippingMethod) {
+            throw new ValidationError("That delivery method no longer exists. Choose another.");
+        }
         const existingCustomer = await db
             .select()
             .from(customers)
@@ -2181,6 +2234,7 @@ export async function createOrder(
             quote,
             reservationEntries,
             inventoryPlan,
+            shippingMethod,
         };
     })().catch(async (error) => {
         await markAdminOrderCreateAttemptFailed(db, attempt, error).catch(() => undefined);
@@ -2198,6 +2252,7 @@ export async function createOrder(
         quote,
         reservationEntries,
         inventoryPlan,
+        shippingMethod,
     } = prepared;
     let customerId = existingCustomer?.id;
 
@@ -2285,6 +2340,12 @@ export async function createOrder(
             currencyDecimalPlaces: taxQuote.decimalPlaces,
             subtotalAmountMinor: taxQuote.subtotalMinor,
             shippingAmountMinor: taxQuote.shippingMinor,
+            ...(shippingMethod ? {
+                shippingMethodId: shippingMethod.id,
+                shippingMethodName: shippingMethod.name,
+                shippingMethodDescription: shippingMethod.description,
+                shippingMethodBaseAmountMinor: shippingMethod.feeMinor,
+            } : {}),
             discountAmountMinor: taxQuote.discountMinor,
             taxAmountMinor: taxQuote.taxMinor,
             totalAmountMinor: taxQuote.totalMinor,

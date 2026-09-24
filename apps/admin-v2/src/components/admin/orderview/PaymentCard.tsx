@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Alert } from "~/components/ui/alert";
@@ -71,7 +71,7 @@ type Payment = OrderPaymentsPayload["payments"][number];
 type SessionAttempt = OrderPaymentsPayload["paymentSessionAttempts"][number];
 
 const COD_FAILURE_REASONS: CodFailureReason[] = ["not_home", "refused", "no_cash", "wrong_address", "other"];
-const REFUND_REASONS = ["requested_by_customer", "duplicate", "fraudulent", "out_of_stock"] as const;
+const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", "fraudulent", "out_of_stock"] as const;
 const MANUAL_REFUND_CHECK_STATUSES = new Set(["processing", "provider_unknown", "reconcile_required", "pending"]);
 const RECOVERY_LINK_GATEWAYS = new Set(["sslcommerz"]);
 
@@ -132,6 +132,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const [refundAmountError, setRefundAmountError] = useState<string | null>(null);
   const [refundReason, setRefundReason] = useState<string>("requested_by_customer");
   const [manualSettlementConfirmed, setManualSettlementConfirmed] = useState(false);
+  // One key per opened refund dialog: a repeated submit replays the first refund.
+  const refundRequestKey = useRef("");
   const [codAction, setCodAction] = useState<CodAction | null>(null);
   const [collectedBy, setCollectedBy] = useState("");
   const [collectorError, setCollectorError] = useState<string | null>(null);
@@ -223,9 +225,11 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   };
   const openRefund = () => {
     refundMutation.reset();
-    setRefundAmount(initialRefundAmount(order));
+    const owed = initialRefundAmount(order);
+    setRefundAmount(owed);
     setRefundAmountError(null);
-    setRefundReason("requested_by_customer");
+    setRefundReason(owed === null ? "requested_by_customer" : "returned_items");
+    refundRequestKey.current = crypto.randomUUID();
     setManualSettlementConfirmed(false);
     setRefundOpen(true);
   };
@@ -269,7 +273,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       ? null
       : t("refund.amountInvalid", { amount: money(paid) });
 
-  function handleIssueRefund() {
+  function handleIssueRefund(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (refundMutation.isPending || isRefundLocked || (requiresManualSettlementConfirmation && !manualSettlementConfirmed)) return;
     const problem = refundAmountProblem();
     setRefundAmountError(problem);
     if (problem) {
@@ -279,6 +285,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
     refundMutation.mutate(
       {
         orderId: order.id,
+        requestKey: refundRequestKey.current,
         amount: refundValue,
         reason: refundReason,
         manualSettlementConfirmed: requiresManualSettlementConfirmation ? true : undefined,
@@ -466,8 +473,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                 {codTracking.deliveryAttempts > 0 ? <Row label={t("cod.attempts")} value={formatNumber(codTracking.deliveryAttempts)} /> : null}
                 {codTracking.collectedBy ? <Row label={t("cod.collectedBy")} value={codTracking.collectedBy} /> : null}
                 {codTracking.collectedAmount ? <Row label={t("cod.collectedAmount")} value={money(codTracking.collectedAmount)} /> : null}
-                {codTracking.failureReason ? <Row label={t("cod.failureReason")} value={orderDetailLabel(t, "cod.reason.", codTracking.failureReason)} /> : null}
-                {codTracking.failureNote ? <Row label={t("cod.notes")} value={codTracking.failureNote} /> : null}
+                {codTracking.codStatus === "failed" && codTracking.failureReason ? <Row label={t("cod.failureReason")} value={orderDetailLabel(t, "cod.reason.", codTracking.failureReason)} /> : null}
+                {codTracking.codStatus === "failed" && codTracking.failureNote ? <Row label={t("cod.notes")} value={codTracking.failureNote} /> : null}
               </dl>
             ) : null}
             {codRead.status === "ready" && codOpen && (canRecordCodCollection || (isCOD && (canRecordCodFailure || canRecordCodReturn))) ? (
@@ -670,7 +677,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             <DialogTitle>{t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue")}</DialogTitle>
             <DialogDescription>{t(requiresManualSettlementConfirmation ? "refund.manualHelp" : "refund.help")}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <form id="order-refund" method="post" className="space-y-4" onSubmit={handleIssueRefund} noValidate>
             {refundMutation.isError ? <Alert variant="destructive">{orderErrorMessage(refundMutation.error)}</Alert> : null}
             <div className="space-y-2">
               <Label htmlFor="refundAmount">{t("refund.amount", { symbol })}</Label>
@@ -715,13 +722,14 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                 <Label htmlFor="manualSettlementConfirmed">{t("refund.manualConfirm")}</Label>
               </div>
             ) : null}
-          </div>
+          </form>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRefundOpen(false)} disabled={refundMutation.isPending}>
               {r("cancel")}
             </Button>
             <Button
-              onClick={handleIssueRefund}
+              type="submit"
+              form="order-refund"
               loading={refundMutation.isPending}
               disabled={isRefundLocked || (requiresManualSettlementConfirmation && !manualSettlementConfirmed)}
             >
