@@ -40,6 +40,7 @@ import {
   type NotificationQueueMessage,
   type OrderNotificationQueueMessage,
   composeAuthOtpMessage,
+  flushPendingNotificationOutbox,
   readStoreIdentity,
   getNotificationProviderBlock,
   isNotificationProviderBreakerFailure,
@@ -717,8 +718,17 @@ async function processQueueMessage(
     // Idempotent: the ledger's unique request keys make redeliveries safe.
 
     case "order.auto_fulfil": {
-      const outcome = await autoFulfilOrder(db, payload.orderId);
+      const outcome = await autoFulfilOrder(db, payload.orderId, undefined, {
+        credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+      });
       if (outcome.delivered) await bumpCacheGeneration({ env, executionCtx });
+      // Hand the delivery messages (gift-card codes, downloads) to the queue
+      // now instead of waiting for the 15-minute outbox flush.
+      if (outcome.fulfilledTypes.length > 0) {
+        await flushPendingNotificationOutbox({ db, queue: env.JOBS_QUEUE, limit: 50 }).catch((error: unknown) => {
+          console.warn(`[Queue] auto-fulfil outbox flush for ${payload.orderId.slice(0, 12)} failed:`, error instanceof Error ? error.message : "unknown error");
+        });
+      }
       break;
     }
 
