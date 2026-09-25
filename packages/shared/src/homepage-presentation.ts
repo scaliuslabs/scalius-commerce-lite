@@ -11,9 +11,21 @@ export interface HomepageTrustStripConfig {
   enabled: boolean;
 }
 
+/**
+ * `catalog` is the usual homepage; `landing` opens the store on one
+ * product's landing page (the BD F-commerce shape, SYNTHESIS §8.13). A
+ * landing homepage whose product is not buyable renders the catalog homepage.
+ */
+export const HOMEPAGE_MODES = ["catalog", "landing"] as const;
+export type HomepageMode = (typeof HOMEPAGE_MODES)[number];
+export const MAX_HOMEPAGE_LANDING_PRODUCT_ID_LENGTH = 180;
+
 export interface HomepagePresentationConfig {
   categoryRail: HomepageCategoryRailConfig;
   trustStrip: HomepageTrustStripConfig;
+  homeMode: HomepageMode;
+  /** The product a landing homepage shows; kept while the mode is `catalog`. */
+  landingProductId: string | null;
 }
 
 export const DEFAULT_HOMEPAGE_PRESENTATION: HomepagePresentationConfig = {
@@ -25,6 +37,8 @@ export const DEFAULT_HOMEPAGE_PRESENTATION: HomepagePresentationConfig = {
   trustStrip: {
     enabled: false,
   },
+  homeMode: "catalog",
+  landingProductId: null,
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -59,12 +73,21 @@ function cleanCategoryIds(value: unknown): string[] {
   return categoryIds;
 }
 
+function cleanLandingProductId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const id = value.trim();
+  return id && id.length <= MAX_HOMEPAGE_LANDING_PRODUCT_ID_LENGTH ? id : null;
+}
+
 export function sanitizeHomepagePresentationConfig(
   value: unknown,
 ): HomepagePresentationConfig {
   const root = asRecord(value);
   const categoryRail = asRecord(root.categoryRail);
   const trustStrip = asRecord(root.trustStrip);
+  const landingProductId = cleanLandingProductId(root.landingProductId);
+  // Landing mode needs its product; without one the homepage is the catalog.
+  const homeMode: HomepageMode = root.homeMode === "landing" && landingProductId ? "landing" : "catalog";
 
   return {
     categoryRail: {
@@ -79,6 +102,8 @@ export function sanitizeHomepagePresentationConfig(
         ? trustStrip.enabled
         : DEFAULT_HOMEPAGE_PRESENTATION.trustStrip.enabled,
     },
+    homeMode,
+    landingProductId,
   };
 }
 

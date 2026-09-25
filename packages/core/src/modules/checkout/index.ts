@@ -8,6 +8,7 @@ export * from "./commit";
 export * from "./post-commit";
 export * from "./attempts";
 export * from "./cart-validation";
+export * from "./bundle-discounts";
 export * from "./authority";
 export * from "./policy";
 export * from "./abandoned/snapshot";

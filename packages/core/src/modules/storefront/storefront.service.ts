@@ -14,6 +14,8 @@ import {
   categories,
   checkoutLanguages,
   media,
+  productBuyerState,
+  products,
 } from "@scalius/database/schema";
 import { eq, isNull, isNotNull, inArray, and, or, sql } from "drizzle-orm";
 import {
@@ -262,6 +264,27 @@ export async function getHomepageData(db: Database, options: {
       .from(themeSettings)
       .where(eq(themeSettings.id, "default"))
       .limit(1),
+
+    // 5. A landing homepage's product, only while it is public (the buyer
+    // state projection's single-sourced rule); otherwise no row, and the
+    // homepage is the catalog.
+    db
+      .select({ id: products.id, slug: products.slug })
+      .from(products)
+      .innerJoin(productBuyerState, and(
+        eq(productBuyerState.productId, products.id),
+        eq(productBuyerState.isPublic, true),
+      ))
+      .where(sql`${products.id} = (
+        SELECT CASE
+          WHEN json_valid(${settings.value}) AND json_extract(${settings.value}, '$.homeMode') = 'landing'
+            THEN json_extract(${settings.value}, '$.landingProductId')
+        END
+        FROM ${settings}
+        WHERE ${settings.category} = ${homepageDocument.key}
+          AND ${settings.key} = ${SETTINGS_DOCUMENT_ROW_KEY}
+      )`)
+      .limit(1),
   ]);
 
   const [
@@ -270,8 +293,10 @@ export async function getHomepageData(db: Database, options: {
     collectionResults,
     categoryResults,
     themeResults,
+    landingResults,
   ] =
     batchResults;
+  const landingProduct = (landingResults as Array<{ id: string; slug: string }>)[0] ?? null;
 
   const rows = documentRows as SettingsDocumentRow[];
   const [seo, homepage] = await Promise.all([
@@ -427,6 +452,10 @@ export async function getHomepageData(db: Database, options: {
       trustStrip: {
         enabled: homepageConfig.trustStrip.enabled,
       },
+      // "landing" only while its product is public; the storefront then
+      // opens on that product's landing page.
+      homeMode: landingProduct ? "landing" as const : "catalog" as const,
+      landingProduct,
     },
     sections: {
       lists,

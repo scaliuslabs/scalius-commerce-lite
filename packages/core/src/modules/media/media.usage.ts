@@ -6,8 +6,8 @@ import {
     media,
     orderItems,
     pages,
+    productContentBlocks,
     productMedia,
-    productRichContent,
     products,
     settings,
     user,
@@ -93,9 +93,10 @@ function textReferenceSources(): SQL[] {
         sql`SELECT 'product' AS kind, ${products.id} AS ref_id, ${products.name} AS name,
                 ${trashedFlag(products.deletedAt)} AS trashed, ${productBody} AS body
             FROM ${products} WHERE ${hasMediaUrl(productBody)}`,
-        sql`SELECT 'product' AS kind, ${products.id} AS ref_id, ${products.name} AS name, ${trashedFlag(products.deletedAt)} AS trashed, ${productRichContent.content} AS body
-            FROM ${productRichContent} INNER JOIN ${products} ON ${products.id} = ${productRichContent.productId}
-            WHERE ${hasMediaUrl(sql`${productRichContent.content}`)}`,
+        // Content blocks' HTML and links (legacy tabs are mirrored into them).
+        sql`SELECT 'product' AS kind, ${products.id} AS ref_id, ${products.name} AS name, ${trashedFlag(products.deletedAt)} AS trashed, ${productContentBlocks.settings} AS body
+            FROM ${productContentBlocks} INNER JOIN ${products} ON ${products.id} = ${productContentBlocks.productId}
+            WHERE ${hasMediaUrl(sql`${productContentBlocks.settings}`)}`,
         sql`SELECT 'category' AS kind, ${categories.id} AS ref_id, ${categories.name} AS name, ${trashedFlag(categories.deletedAt)} AS trashed, ${categoryBody} AS body
             FROM ${categories} WHERE ${hasMediaUrl(categoryBody)}`,
         sql`SELECT 'collection' AS kind, ${collections.id} AS ref_id, ${collections.name} AS name, ${trashedFlag(collections.deletedAt)} AS trashed, ${collectionBody} AS body
@@ -133,6 +134,14 @@ function textReferenceGroups(): SQL[] {
 const idSet = (ids: readonly string[]) =>
     sql`(SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
 
+/**
+ * A content block names a file by id as a JSON string value (image, video,
+ * poster, gallery); media ids never need JSON escaping, so the quoted id is
+ * an exact match.
+ */
+const blockNamesMedia = (mediaId: SQL) =>
+    sql`instr(${productContentBlocks.settings}, '"' || ${mediaId} || '"') > 0`;
+
 type UsageRow = { media_id: string; kind: MediaUsageKind; ref_id: string; name: string | null; trashed: number };
 
 /**
@@ -154,7 +163,13 @@ async function loadUsageRows(db: Database, ids: readonly string[]): Promise<Usag
         UNION ALL
         SELECT ${brands.logoMediaId}, 'brand', ${brands.id}, ${brands.name}, ${trashedFlag(brands.deletedAt)}
         FROM ${brands}
-        WHERE ${brands.logoMediaId} IN ${idSet(ids)}`);
+        WHERE ${brands.logoMediaId} IN ${idSet(ids)}
+        UNION ALL
+        SELECT block_file.id, 'product', ${products.id}, ${products.name}, ${trashedFlag(products.deletedAt)}
+        FROM ${media} AS block_file
+        INNER JOIN ${productContentBlocks} ON ${blockNamesMedia(sql`block_file.id`)}
+        INNER JOIN ${products} ON ${products.id} = ${productContentBlocks.productId}
+        WHERE block_file.id IN ${idSet(ids)}`);
     for (const group of textReferenceGroups()) {
         rows.push(...await db.all<UsageRow>(sql`
             SELECT k.id AS media_id, t.kind AS kind, t.ref_id AS ref_id, t.name AS name, t.trashed AS trashed
@@ -244,5 +259,7 @@ export function noMediaUsage(id: string, objectKey: string): SQL {
         SELECT 1 FROM ${orderItems} WHERE ${orderItems.productImageMediaId} = ${id}
     ) AND NOT EXISTS (
         SELECT 1 FROM ${brands} WHERE ${brands.logoMediaId} = ${id}
+    ) AND NOT EXISTS (
+        SELECT 1 FROM ${productContentBlocks} WHERE ${blockNamesMedia(sql`${id}`)}
     ) AND ${sql.join(textGuards, sql` AND `)}`;
 }

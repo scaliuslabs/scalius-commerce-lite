@@ -119,6 +119,7 @@ export async function listCollections(
             sortOrder: collections.sortOrder,
             isActive: collections.isActive,
             version: collections.version,
+            listingTemplate: collections.listingTemplate,
             canonicalPath: collections.canonicalPath,
             noIndex: collections.noIndex,
             excludeFromSitemap: collections.excludeFromSitemap,
@@ -183,6 +184,7 @@ export async function getCollectionSection(
                 sortOrder: collections.sortOrder,
                 isActive: collections.isActive,
                 version: collections.version,
+                listingTemplate: collections.listingTemplate,
                 canonicalPath: collections.canonicalPath,
                 noIndex: collections.noIndex,
                 excludeFromSitemap: collections.excludeFromSitemap,
@@ -534,6 +536,7 @@ export async function createCollection(
             metaDescription: data.metaDescription,
             sortOrder: maxSortOrder,
             config: stringifyCollectionConfig(data.config),
+            listingTemplate: data.listingTemplate ?? null,
         })
         .returning()
         .get();
@@ -593,6 +596,7 @@ export async function updateCollection(
     if (data.metaTitle !== undefined) updateData.metaTitle = data.metaTitle;
     if (data.metaDescription !== undefined) updateData.metaDescription = data.metaDescription;
     if (data.config !== undefined) updateData.config = stringifyCollectionConfig(nextConfig);
+    if (data.listingTemplate !== undefined) updateData.listingTemplate = data.listingTemplate;
 
     const updated = await db
         .update(collections)

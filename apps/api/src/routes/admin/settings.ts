@@ -14,6 +14,7 @@ import { customerRequestPolicyRoutes } from "./settings/customer-requests";
 import { storePoliciesRoutes } from "./settings/policies";
 import { platformSettingsRoutes } from "./settings/platform";
 import { feedRowPreviewRoutes } from "./settings/feed-row-preview";
+import { emiSettingsRoutes } from "./settings/emi";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -34,5 +35,6 @@ app.route("/notification-channels", notificationChannelsRoutes);
 app.route("/", smsSettingsRoutes);
 app.route("/", customerRequestPolicyRoutes);
 app.route("/", storePoliciesRoutes);
+app.route("/", emiSettingsRoutes);
 
 export { app as adminSettingsRoutes };

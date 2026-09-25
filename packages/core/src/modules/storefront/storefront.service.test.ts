@@ -125,6 +125,8 @@ describe("storefront homepage data", () => {
     await saveHomepagePresentationSettings(db, {
       categoryRail: { enabled: true, title: "Shop", categoryIds: ["cat_b", "cat_draft", "cat_a"] },
       trustStrip: { enabled: false },
+      homeMode: "catalog",
+      landingProductId: null,
     }, 0);
 
     const unsaved = await getHomepageData(db);
@@ -139,6 +141,34 @@ describe("storefront homepage data", () => {
       homepageTitle: "River & Loom",
       homepageMetaDescription: null,
     });
+  });
+
+  it("opens on the landing product only while it is public, with no extra round trip", async () => {
+    let batches = 0;
+    const { db, sqlite } = createSqliteD1Database({ beforeBatch: () => { batches += 1; } });
+    sqlite.exec(`
+      INSERT INTO products (id, name, price_minor, slug, is_active) VALUES ('p_honey', 'Honey', 90000, 'sundarbans-honey', 1);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory)
+        VALUES ('v_honey', 'p_honey', 'HONEY', 90000, 5, 0, 1, 1);
+    `);
+    await rebuildCatalogProjections(db);
+    const rail = { categoryRail: { enabled: false, title: "", categoryIds: [] }, trustStrip: { enabled: false } };
+    batches = 0;
+    expect((await getHomepageData(db)).presentation).toMatchObject({ homeMode: "catalog", landingProduct: null });
+    const catalogBatches = batches;
+
+    await saveHomepagePresentationSettings(db, { ...rail, homeMode: "landing", landingProductId: "p_honey" }, 0);
+    batches = 0;
+    expect((await getHomepageData(db)).presentation).toMatchObject({
+      homeMode: "landing",
+      landingProduct: { id: "p_honey", slug: "sundarbans-honey" },
+    });
+    expect(batches).toBe(catalogBatches);
+
+    // A landing product that stops being public falls back to the catalog homepage.
+    sqlite.exec("UPDATE products SET is_active = 0 WHERE id = 'p_honey'");
+    await rebuildCatalogProjections(db);
+    expect((await getHomepageData(db)).presentation).toMatchObject({ homeMode: "catalog", landingProduct: null });
   });
 
   it("reads the published theme's section lists and images in two batches", async () => {
