@@ -12,12 +12,10 @@ import type { Product, ProductMedia } from "@/lib/api";
 import { hasProductImage, resolveProductImageUrl } from "@/lib/product-media";
 
 export interface PageGalleryItem {
-  /** The product media id; `video-link` for the product's YouTube link. */
+  /** The product media id. */
   id: string;
   mediaId: string | null;
   kind: "image" | "video";
-  /** Video: an uploaded `file` or an `embed` (YouTube, privacy-enhanced). */
-  videoKind: "file" | "embed" | null;
   /** Image: the CDN URL every slot derives from. Video: the file or embed URL. */
   url: string;
   /** Video: the poster's base URL (a slot sizes it); null without one. */
@@ -26,12 +24,6 @@ export interface PageGalleryItem {
   /** Video: "0:32"; null when unknown. */
   duration: string | null;
   isPrimary: boolean;
-}
-
-/** A YouTube link as main media: the embed and its poster. */
-export interface PageVideoLink {
-  embedUrl: string;
-  posterUrl: string;
 }
 
 export function formatVideoDuration(durationMs: number | null): string | null {
@@ -45,39 +37,21 @@ export function formatVideoDuration(durationMs: number | null): string | null {
 export function productGalleryItems(
   product: Pick<Product, "name" | "imageAlt">,
   media: readonly ProductMedia[],
-  videoLink: PageVideoLink | null = null,
 ): PageGalleryItem[] {
   const fallbackAlt = product.imageAlt?.trim() || product.name;
-  const items = media
+  return media
     .filter((item) => (item.kind === "video" ? Boolean(item.url) : hasProductImage(item.url)))
     .sort((left, right) => left.sortOrder - right.sortOrder || left.id.localeCompare(right.id))
     .map((item): PageGalleryItem => ({
       id: item.id,
       mediaId: item.mediaId,
       kind: item.kind,
-      videoKind: item.kind === "video" ? "file" : null,
       url: item.kind === "video" ? item.url : resolveProductImageUrl(item.url),
       posterUrl: item.kind === "video" && item.posterUrl ? resolveProductImageUrl(item.posterUrl) : null,
       altText: item.altText?.trim() || fallbackAlt,
       duration: item.kind === "video" ? formatVideoDuration(item.durationMs) : null,
       isPrimary: item.isPrimary,
     }));
-  if (!videoLink) return items;
-  // The product's video link is its main media: first, and featured.
-  return [
-    {
-      id: "video-link",
-      mediaId: null,
-      kind: "video",
-      videoKind: "embed",
-      url: videoLink.embedUrl,
-      posterUrl: videoLink.posterUrl,
-      altText: `${product.name} video`,
-      duration: null,
-      isPrimary: true,
-    },
-    ...items.map((item) => ({ ...item, isPrimary: false })),
-  ];
 }
 
 /** The item the page paints first: the `?variant=` SKU photo, else the primary, else the first. */

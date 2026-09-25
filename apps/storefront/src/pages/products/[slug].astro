@@ -21,15 +21,30 @@ import ProductEmiLine from "@/components/product/ProductEmiLine.astro";
 import DigitalPromise from "@/components/product/DigitalPromise.astro";
 import WarrantyRow from "@/components/product/WarrantyRow.astro";
 import ProductReviews from "@/components/product/reviews/ProductReviews.astro";
+import ProductModule from "@/components/product/modules/ProductModule.astro";
+import ProductSpecTable from "@/components/product/modules/ProductSpecTable.astro";
+import ProductFeatureList from "@/components/product/modules/ProductFeatureList.astro";
+import ProductContentBlocks from "@/components/product/modules/ProductContentBlocks.astro";
+import ProductWarrantyModule from "@/components/product/modules/ProductWarrantyModule.astro";
+import ProductDetails from "@/components/product/ProductDetails.astro";
+import {
+  KEY_ATTRIBUTES_MAX,
+  descriptionInInfoColumn,
+  featuresPlacement,
+  productPageModules,
+  renderedContentBlocks,
+} from "@/components/product/lib/product-page-modules";
 import ReviewsSummary from "@/components/product/reviews/ReviewsSummary.astro";
 import { reviewStructuredData } from "@/lib/review-structured-data";
 import { pickReviewCopy } from "@/components/product/reviews/review-format";
 import { pickReviewFormCopy } from "@/lib/account-reviews";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
-import { GALLERY_IMAGE_WIDTHS, productGalleryMainSlot } from "@/components/product/lib/gallery-images";
+import { productGalleryMainSlot } from "@/components/product/lib/gallery-images";
+import { featuredGalleryItem, productGalleryItems } from "@/components/product/lib/gallery-media";
 import { getProductImageUrl, hasProductImage, productImageSources } from "@/lib/product-media";
 import { resolveMediaUrl } from "@/lib/media-url";
+import { responsiveImageSources } from "@/lib/responsive-image";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import {
@@ -99,15 +114,28 @@ if (productResult.state === "unavailable" || !layoutData) {
   return response;
 }
 
-// Theme -> Layout -> Product page: gallery beside or stacked, thumbnails.
+// Theme -> Layout -> Product page: the gallery, the buy box's look and the
+// modules below the fold, in the template's order.
 const { layout: themeLayout, resolved: resolvedTheme } = await resolveRequestTheme(Astro, layoutData);
 const productPageLayout = themeLayout.productPage;
+const buyBoxLook = themeLayout.buyBox.look;
 // The EMI line shows only in a buy box that asks for it (spec, tech); the
 // classic buy box has no such setting and stays as it is.
-const buyBoxShowsEmi = resolvedTheme.blocks.product.buyBox.settings.emi === true;
+const buyBoxShowsEmi = themeLayout.buyBox.emi;
 
 const productData = productResult.data;
 const { product, category, media, variants, recommendations } = productData;
+// Modules the product has data for, in the template's order (a module with
+// nothing to show is left out); the description stays in the buy box on
+// classic and Dawn.
+const pageModules = productPageModules(resolvedTheme.blocks.product.below, product, {
+  look: buyBoxLook,
+  hasRelated: recommendations.products.length > 0,
+});
+const detailsInBuyBox = descriptionInInfoColumn(buyBoxLook);
+const featuresAt = featuresPlacement(pageModules, buyBoxLook);
+const specificationRows = product.attributes ?? [];
+const keySpecificationRows = specificationRows.filter((row) => row.keySpec).slice(0, KEY_ATTRIBUTES_MAX);
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
 const configuredCurrencyDecimalPlaces = layoutData.currency?.decimalPlaces;
@@ -228,36 +256,24 @@ const productImageCandidates = [
   ...media.map((item) => (item.kind === "image" ? item.url : item.posterUrl)),
 ].filter((url): url is string => hasProductImage(url));
 const primaryImageUrl = productImageCandidates[0] ?? null;
-const orderedGalleryMedia = media
-  .filter((item) =>
-    item.kind === "video" ? Boolean(item.url) : hasProductImage(item.url),
-  )
-  .sort(
-    (left, right) =>
-      left.sortOrder - right.sortOrder || left.id.localeCompare(right.id),
-  );
-const featuredGalleryMedia =
-  orderedGalleryMedia.find((item) => item.isPrimary) ??
-  orderedGalleryMedia[0] ??
-  null;
-// ProductGallery renders the exact SKU image of a `?variant=` link first;
-// the LCP preload fetches the same candidate its <img> srcset/sizes pick.
+// The gallery's own order and featured item (lib/gallery-media): the LCP
+// preload names exactly the file the first paint shows, with the srcset and
+// sizes of its slot. A `?variant=` link features that SKU's photo; a video
+// first paints its poster (in the photo's slot), never the video.
+const galleryItems = productGalleryItems(product, media);
 const initialGalleryProductMediaId = queryVariantSelection?.variant.imageId ?? null;
-const initialGalleryMedia =
-  orderedGalleryMedia.find(
-    (item) => item.id === initialGalleryProductMediaId && item.kind === "image",
-  ) ?? featuredGalleryMedia;
+const initialGalleryMedia = featuredGalleryItem(galleryItems, initialGalleryProductMediaId);
+const galleryMainSlot = productGalleryMainSlot(productPageLayout, galleryItems.length > 1);
 const initialGalleryPreload =
   initialGalleryMedia?.kind === "video"
     ? initialGalleryMedia.posterUrl
-      ? { src: getProductImageUrl(initialGalleryMedia.posterUrl, GALLERY_IMAGE_WIDTHS.main) }
+      ? responsiveImageSources(initialGalleryMedia.posterUrl, galleryMainSlot)
       : null
-    : initialGalleryMedia || primaryImageUrl
-      ? productImageSources(
-          initialGalleryMedia?.url ?? primaryImageUrl,
-          productGalleryMainSlot(productPageLayout, orderedGalleryMedia.length > 1),
-        )
-      : null;
+    : initialGalleryMedia
+      ? responsiveImageSources(initialGalleryMedia.url, galleryMainSlot)
+      : primaryImageUrl
+        ? productImageSources(primaryImageUrl, galleryMainSlot)
+        : null;
 const serializedProductImageUrl = getProductImageUrl(primaryImageUrl, 640);
 const schemaImageUrls = storefrontUrl
   ? Array.from(
@@ -454,7 +470,12 @@ const primarySchemaAvailability = selectedBuyerVariant
 const schemaDescription = productSchemaDescription(product.description, product.name);
 // Rating and reviews join the Product or ProductGroup root, from the same
 // `product.reviews` the summary and the module render (none at 0 or when off).
-const reviewSchema = reviewStructuredData(product);
+// Review items are stated only where the page shows them (the `reviews`
+// module); the rating stays with the summary under the title.
+const pageReviewSchema = reviewStructuredData(product);
+const reviewSchema = pageReviewSchema && !pageModules.includes("reviews")
+  ? { aggregateRating: pageReviewSchema.aggregateRating }
+  : pageReviewSchema;
 const productJsonLd =
   !product.noIndex && canonicalUrl
     ? serializeJsonForInlineScript(
@@ -629,19 +650,20 @@ const productCategoryAnalytics = productCategory
     data-fb-category-details={JSON.stringify(productCategoryAnalytics)}
     data-fb-variants-details={JSON.stringify(fbViewVariants)}
   >
-    <div class="lg:pt-2" data-product-stacked-crumbs={productPageLayout.gallery === "stacked" ? "" : undefined}>
+    <div class="lg:pt-2">
       <ProductBreadcrumbs product={product} category={productCategory} />
     </div>
 
     <section
       class="mx-auto max-w-7xl px-3 py-1.5 sm:px-6 sm:py-4 lg:px-8 lg:py-6"
     >
-      <ProductPageLayout gallery={productPageLayout.gallery}>
+      <ProductPageLayout gallery={productPageLayout.gallery} factsColumn={buyBoxLook?.facts === "column"}>
         <ProductGallery
           product={product}
           media={media}
           layout={productPageLayout}
           initialProductMediaId={initialGalleryProductMediaId}
+          playVideoLabel={productPageCopy.productPlayVideoText}
         />
         <ProductSummary
           product={product}
@@ -656,8 +678,19 @@ const productCategoryAnalytics = productCategory
           quickBuyNotice={quickBuyNotice}
           actionCopy={productPageCopy}
           fulfilmentBadge={fulfilmentBadge}
+          look={buyBoxLook}
+          details={detailsInBuyBox}
+          detailsFeatures={featuresAt === "description"}
         >
           <ReviewsSummary slot="after-title" product={product} copy={reviewCopy} />
+          {featuresAt === "buy-box" && buyBoxLook && buyBoxLook.features !== "none" && (
+            <ProductFeatureList
+              slot="after-title"
+              features={product.features ?? []}
+              variant={buyBoxLook.features}
+              title={productPageCopy.productKeyFeaturesText}
+            />
+          )}
           {buyBoxShowsEmi && product.emi && (
             <ProductEmiLine slot="after-price" emi={product.emi} currencyCode={currencyCode} currencySymbol={currencySymbol} />
           )}
@@ -670,14 +703,58 @@ const productCategoryAnalytics = productCategory
 
     <StickyBuyBar productName={product.name} />
 
-    {/* The template's `reviews` module: after the description, before related products. */}
-    <ProductReviews product={product} copy={reviewCopy} formCopy={reviewFormCopy} language={reviewLanguage} storeName={sellerSchemaName} />
-
-    <RelatedProducts
-      recommendations={recommendations}
-      currencySymbol={currencySymbol}
-      currencyCode={currencyCode}
-    />
+    {/* The template's modules below the fold, in its order. */}
+    {pageModules.map((module) => {
+      switch (module) {
+        case "description":
+          return (
+            <ProductModule id="description">
+              <ProductDetails product={product} features={featuresAt === "description"} />
+            </ProductModule>
+          );
+        case "about-bullets":
+          return (
+            <ProductModule id="about" title={productPageCopy.productAboutItemText}>
+              <ProductFeatureList features={product.features ?? []} variant="bullets" />
+            </ProductModule>
+          );
+        case "key-attributes":
+          return (
+            <ProductModule id="highlights" title={productPageCopy.productHighlightsText}>
+              <div class="max-w-3xl"><ProductSpecTable rows={keySpecificationRows} /></div>
+            </ProductModule>
+          );
+        case "spec-table":
+          return (
+            <ProductModule id="specifications" title={productPageCopy.productSpecificationsText}>
+              <div class="max-w-4xl"><ProductSpecTable rows={specificationRows} /></div>
+            </ProductModule>
+          );
+        case "content-blocks":
+          return (
+            <ProductModule id="content">
+              <ProductContentBlocks
+                blocks={renderedContentBlocks(product)}
+                media={product.contentBlockMedia ?? []}
+                playVideoLabel={productPageCopy.productPlayVideoText}
+                productName={product.name}
+              />
+            </ProductModule>
+          );
+        case "warranty":
+          return <ProductWarrantyModule product={product} />;
+        case "reviews":
+          return <ProductReviews product={product} copy={reviewCopy} formCopy={reviewFormCopy} language={reviewLanguage} storeName={sellerSchemaName} />;
+        case "related":
+          return (
+            <RelatedProducts
+              recommendations={recommendations}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+            />
+          );
+      }
+    })}
   </div>
 
   {/* Product discovery data stays server-rendered but follows visible buyer

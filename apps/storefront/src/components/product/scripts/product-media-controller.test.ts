@@ -116,10 +116,12 @@ function renderGallery(
           <img data-mobile-main-image src="/placeholder-product.svg" />
         </button>
         <div data-video-stage class="hidden">
-          <div data-video-placeholder></div>
-          <media-theme-microvideo data-product-video-player>
-            <video data-product-video controls slot="media"></video>
-          </media-theme-microvideo>
+          <a data-video-facade data-gallery-video data-video-kind="file"
+            data-video-src="/demo.mp4" data-video-title="Demonstration"
+            data-label-template="Play video: {title}" href="/demo.mp4">
+            <img data-video-poster />
+            <span data-video-duration hidden></span>
+          </a>
         </div>
         <div data-thumbnail-rail="desktop">${buttons}</div>
         <div data-thumbnail-rail="mobile">${buttons}</div>
@@ -393,7 +395,7 @@ describe("product gallery photo switching", () => {
     });
   });
 
-  it("selects a featured video without autoplay or eager offscreen video sources", () => {
+  it("shows a featured video as its poster, with no player and no video bytes until play", () => {
     const root = renderGallery();
     const changes: ProductMediaChangeDetail[] = [];
     window.addEventListener(
@@ -404,13 +406,10 @@ describe("product gallery photo switching", () => {
 
     initProductMediaGallery(root);
 
-    const video = root.querySelector<HTMLVideoElement>("[data-product-video]")!;
-    expect(video.src).toContain("/demo.mp4");
-    expect(video.preload).toBe("metadata");
-    expect(video.autoplay).toBe(false);
-    expect(
-      root.querySelector("[data-video-stage]")!.classList.contains("hidden"),
-    ).toBe(false);
+    const stage = root.querySelector<HTMLElement>("[data-video-stage]")!;
+    expect(stage.classList.contains("hidden")).toBe(false);
+    expect(root.querySelector("video")).toBeNull();
+    expect(root.querySelector<HTMLImageElement>("[data-video-poster]")!.getAttribute("src")).toBe("/poster.jpg");
     expect(changes[0]).toMatchObject({
       kind: "video",
       productMediaId: "pmed_video",
@@ -420,23 +419,29 @@ describe("product gallery photo switching", () => {
     });
   });
 
-  it("keeps the video on screen until the chosen photo is decoded", async () => {
+  it("mounts the player in the same box on press and removes it on a photo", async () => {
     const root = renderGallery();
     initProductMediaGallery(root);
-    const video = root.querySelector<HTMLVideoElement>("[data-product-video]")!;
-    const videoStage = root.querySelector<HTMLElement>("[data-video-stage]")!;
+    const stage = root.querySelector<HTMLElement>("[data-video-stage]")!;
+    const facade = stage.querySelector<HTMLElement>("[data-video-facade]")!;
     const mobileStage = root.querySelector<HTMLElement>(
       "[data-image-stage='mobile']",
     )!;
 
-    button(root, "pmed_front").click();
-    expect(videoStage.classList.contains("hidden")).toBe(false);
+    facade.click();
+    const video = stage.querySelector<HTMLVideoElement>("video[data-video-player]")!;
+    expect(video.getAttribute("src")).toBe("/demo.mp4");
+    expect(video.controls).toBe(true);
+    expect(facade.hidden).toBe(true);
 
+    button(root, "pmed_front").click();
+    expect(stage.classList.contains("hidden")).toBe(false);
     FakeImage.created.at(-1)!.finishDecode();
     await flush();
-    expect(videoStage.classList.contains("hidden")).toBe(true);
+    expect(stage.classList.contains("hidden")).toBe(true);
+    expect(stage.querySelector("video")).toBeNull();
+    expect(facade.hidden).toBe(false);
     expect(mobileStage.classList.contains("hidden")).toBe(false);
-    expect(video.getAttribute("src")).toBeNull();
     expect(mainImages(root)[0]!.getAttribute("srcset")).toBe(srcset("front"));
 
     // Switching to the video is immediate and cancels any pending photo.
@@ -444,7 +449,8 @@ describe("product gallery photo switching", () => {
     button(root, "pmed_video").click();
     FakeImage.created.at(-1)!.finishDecode();
     await flush();
-    expect(videoStage.classList.contains("hidden")).toBe(false);
+    expect(stage.classList.contains("hidden")).toBe(false);
+    expect(facade.getAttribute("aria-label")).toBe("Play video: Demonstration");
     expect(mainImages(root)[0]!.getAttribute("srcset")).toBe(srcset("front"));
   });
 

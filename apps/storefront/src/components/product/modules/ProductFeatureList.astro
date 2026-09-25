@@ -1,0 +1,40 @@
+---
+// The product's key features: Star Tech's list in the buy box, Target's
+// chips, or Amazon's "About this item" bullets below the fold.
+import { Check } from "lucide-react";
+
+interface Props {
+  features: readonly string[];
+  variant: "list" | "chips" | "bullets";
+  /** A small heading over the buy-box list ("Key features"). */
+  title?: string | null;
+}
+
+const { features, variant, title = null } = Astro.props;
+---
+
+{features.length > 0 && (
+  variant === "chips" ? (
+    <ul class="mt-2 flex flex-wrap gap-1.5" data-product-features="chips">
+      {features.map((feature) => (
+        <li class="rounded-full bg-muted px-2.5 py-1 text-sm text-foreground">{feature}</li>
+      ))}
+    </ul>
+  ) : variant === "list" ? (
+    <div class="mt-2" data-product-features="list">
+      {title && <p class="mb-1 text-sm font-semibold text-foreground">{title}</p>}
+      <ul class="space-y-1 text-sm text-foreground">
+        {features.map((feature) => (
+          <li class="flex items-start gap-1.5">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <span>{feature}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ) : (
+    <ul class="max-w-3xl list-disc space-y-2 pl-5 text-sm text-foreground lg:text-base" data-product-features="bullets">
+      {features.map((feature) => <li>{feature}</li>)}
+    </ul>
+  )
+)}

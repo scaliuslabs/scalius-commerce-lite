@@ -7,10 +7,15 @@ import type { ResponsiveImageSources } from "@/lib/responsive-image";
 import type { VideoFacadeKind } from "./scripts/video-facade";
 
 interface Props {
-  kind: VideoFacadeKind;
-  /** The file (uploaded video) or the privacy-enhanced embed URL. */
+  /** An uploaded file (default) or a privacy-enhanced embed URL. */
+  kind?: VideoFacadeKind;
   src: string;
+  /** The player's accessible name. */
   title: string;
+  /** The facade's accessible name ("Play video: …"), in the store's language. */
+  label: string;
+  /** The label with a `{title}` placeholder, for a gallery that swaps videos. */
+  labelTemplate?: string;
   poster: ResponsiveImageSources | null;
   /** The poster is the page's first paint (LCP): fetched eagerly, at high priority. */
   eager?: boolean;
@@ -18,10 +23,19 @@ interface Props {
   duration?: string | null;
   /** The gallery's own controller binds this facade (it swaps media too). */
   gallery?: boolean;
-  class?: string;
 }
 
-const { kind, src, title, poster, eager = false, duration = null, gallery = false, class: className } = Astro.props;
+const {
+  kind = "file",
+  src,
+  title,
+  label,
+  labelTemplate,
+  poster,
+  eager = false,
+  duration = null,
+  gallery = false,
+} = Astro.props;
 ---
 
 <a
@@ -30,12 +44,10 @@ const { kind, src, title, poster, eager = false, duration = null, gallery = fals
   data-video-kind={kind}
   data-video-src={src}
   data-video-title={title}
+  data-label-template={labelTemplate}
   href={src}
-  class:list={[
-    "group/video absolute inset-0 flex items-center justify-center overflow-hidden bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
-    className,
-  ]}
-  aria-label={`Play video: ${title}`}
+  class="group/video absolute inset-0 flex items-center justify-center overflow-hidden bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+  aria-label={label}
 >
   <img
     data-video-poster
@@ -63,3 +75,12 @@ const { kind, src, title, poster, eager = false, duration = null, gallery = fals
     class="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-xs font-semibold leading-none text-white"
   >{duration ?? ""}</span>
 </a>
+
+<script>
+  import { bindVideoFacades } from "./scripts/video-facade";
+
+  // Facades outside the gallery (the stacked list, content blocks); the
+  // gallery's controller binds its own stage facade.
+  bindVideoFacades();
+  document.addEventListener("astro:page-load", () => bindVideoFacades());
+</script>

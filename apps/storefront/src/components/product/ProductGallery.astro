@@ -9,12 +9,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import {
-  getProductImageUrl,
-  hasProductImage,
-  productImageSources,
-  resolveProductImageUrl,
-} from "@/lib/product-media";
+import { productImageSources, resolveProductImageUrl } from "@/lib/product-media";
 import { responsiveImageSources } from "@/lib/responsive-image";
 import {
   GALLERY_IMAGE_WIDTHS,
@@ -22,6 +17,8 @@ import {
   productGalleryThumbnailSlot,
   type ProductGalleryLayout,
 } from "./lib/gallery-images";
+import { featuredGalleryItem, productGalleryItems } from "./lib/gallery-media";
+import VideoFacade from "./VideoFacade.astro";
 
 interface Props {
   product: Product;
@@ -33,35 +30,23 @@ interface Props {
    * rendered first so the LCP photo is the one the buyer asked for.
    */
   initialProductMediaId?: string | null;
+  /** "Play video: {title}" in the store's language. */
+  playVideoLabel?: string;
 }
 
 const {
   product,
   media,
-  layout = { gallery: "beside", thumbnails: "beside" },
+  layout = { gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null },
   initialProductMediaId = null,
+  playVideoLabel = "Play video: {title}",
 } = Astro.props;
 const thumbnails = layout.thumbnails;
 const desktopThumb = GALLERY_CONFIG.thumbnails.desktop;
 const mobileThumb = GALLERY_CONFIG.thumbnails.mobile;
 
-const galleryMedia = media
-  .filter((item) =>
-    item.kind === "video" ? Boolean(item.url) : hasProductImage(item.url),
-  )
-  .sort(
-    (left, right) =>
-      left.sortOrder - right.sortOrder || left.id.localeCompare(right.id),
-  );
-const featuredMedia =
-  (initialProductMediaId
-    ? galleryMedia.find(
-        (item) => item.id === initialProductMediaId && item.kind === "image",
-      )
-    : undefined) ??
-  galleryMedia.find((item) => item.isPrimary) ??
-  galleryMedia[0] ??
-  null;
+const galleryMedia = productGalleryItems(product, media);
+const featuredMedia = featuredGalleryItem(galleryMedia, initialProductMediaId);
 const hasMultipleMedia = galleryMedia.length > 1;
 const mainSlot = productGalleryMainSlot(layout, hasMultipleMedia);
 const thumbnailSlots = {
@@ -72,28 +57,16 @@ const thumbnailSlots = {
 // helper (responsiveImageSources) and the same slot.
 const productFallbackUrl = resolveProductImageUrl(product.imageUrl);
 
-function formatDuration(durationMs: number | null): string | null {
-  if (!durationMs || durationMs <= 0) return null;
-  const totalSeconds = Math.round(durationMs / 1_000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = String(totalSeconds % 60).padStart(2, "0");
-  return `${minutes}:${seconds}`;
-}
-
 const galleryItems = galleryMedia.map((item) => {
-  const altText =
-    item.altText?.trim() || product.imageAlt?.trim() || product.name;
   const thumbSource = item.kind === "video" ? item.posterUrl : item.url;
   return {
     item,
-    altText,
-    duration: item.kind === "video" ? formatDuration(item.durationMs) : null,
+    altText: item.altText,
+    duration: item.duration,
     /** Image: the CDN URL the slots derive from. Video: the video file. */
-    url: item.kind === "video" ? item.url : resolveProductImageUrl(item.url),
-    posterUrl:
-      item.kind === "video" && item.posterUrl
-        ? getProductImageUrl(item.posterUrl, GALLERY_IMAGE_WIDTHS.main)
-        : null,
+    url: item.url,
+    /** Video: the poster's CDN URL; the main slot sizes it like a photo. */
+    posterUrl: item.posterUrl,
     thumbs: thumbSource
       ? {
           mobile: productImageSources(thumbSource, thumbnailSlots.mobile),
@@ -105,6 +78,7 @@ const galleryItems = galleryMedia.map((item) => {
 
 const initialMedia =
   galleryItems.find(({ item }) => item.id === featuredMedia?.id) ?? null;
+const videoFirst = initialMedia?.item.kind === "video";
 const initialImage =
   initialMedia?.item.kind === "image"
     ? initialMedia
@@ -113,6 +87,30 @@ const initialImageUrl = initialImage?.url ?? productFallbackUrl;
 const initialImageSources = responsiveImageSources(initialImageUrl, mainSlot);
 const initialImageAlt =
   initialImage?.altText ?? product.imageAlt?.trim() ?? product.name;
+// The video stage holds one facade: the featured video, else the first one
+// (a thumbnail swaps its file and poster in). No video, no stage.
+const stageVideo = videoFirst
+  ? initialMedia
+  : (galleryItems.find(({ item }) => item.kind === "video") ?? null);
+const posterSources = (posterUrl: string | null) =>
+  posterUrl ? responsiveImageSources(posterUrl, mainSlot) : null;
+// When the video comes first its poster is the first paint: the photo
+// stages stay hidden, so their photo must not download at high priority.
+const mainImageLoading = videoFirst ? "lazy" : "eager";
+const mainImagePriority = videoFirst ? "low" : "high";
+// A 3:4 portrait stage (and Amazon's narrow strip) set inline; the square
+// stage keeps today's classes untouched.
+const stageStyle = layout.stageRatio === 1 ? undefined : `aspect-ratio: ${layout.stageRatio};`;
+const railStyle = layout.thumbnailSize === null ? "" : ` --gallery-thumb: ${layout.thumbnailSize}px;`;
+// Stacked (Dawn) and grid (Target): every photo in the wide column on
+// computers, the featured one first; phones keep the stage and the strip.
+const listMedia =
+  layout.gallery === "beside"
+    ? []
+    : initialMedia
+      ? [initialMedia, ...galleryItems.filter((entry) => entry !== initialMedia)]
+      : [];
+const playLabel = (title: string) => playVideoLabel.replace("{title}", title);
 ---
 
 <div
@@ -124,16 +122,19 @@ const initialImageAlt =
   data-fallback-media-id={product.imageMediaId ?? undefined}
   data-fallback-alt={product.imageAlt?.trim() || product.name}
   data-thumbnails={thumbnails}
+  data-gallery={layout.gallery}
   class="group/gallery relative w-full lg:col-span-7 xl:col-span-6"
 >
   <div
     class:list={[
       "gallery-layout flex flex-col gap-2 lg:sticky lg:gap-5",
-      hasMultipleMedia
-        ? "lg:grid lg:grid-cols-[80px_1fr] xl:grid-cols-[100px_1fr]"
-        : "lg:block",
+      !hasMultipleMedia
+        ? "lg:block"
+        : layout.thumbnailSize === null || thumbnails === "below"
+          ? "lg:grid lg:grid-cols-[80px_1fr] xl:grid-cols-[100px_1fr]"
+          : "lg:grid lg:grid-cols-[var(--gallery-thumb)_1fr] lg:gap-3",
     ]}
-    style={`top: 5rem; --gallery-mobile-max-height: ${GALLERY_CONFIG.mainImage.maxHeightMobile};`}
+    style={`top: 5rem; --gallery-mobile-max-height: ${GALLERY_CONFIG.mainImage.maxHeightMobile};${railStyle}`}
   >
     <div
       class:list={[
@@ -149,8 +150,9 @@ const initialImageAlt =
             data-mobile-image-trigger
             class:list={[
               "mobile-media-stage relative aspect-square w-full cursor-zoom-in overflow-hidden rounded-lg bg-muted text-left transition-transform duration-200 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground lg:hidden motion-reduce:transition-none",
-              initialMedia?.item.kind === "video" && "hidden",
+              videoFirst && "hidden",
             ]}
+            style={stageStyle}
             aria-label="Open product image zoom"
           >
             <img
@@ -162,8 +164,8 @@ const initialImageAlt =
               width="600"
               height="600"
               class="h-full w-full object-contain object-center"
-              loading="eager"
-              fetchpriority="high"
+              loading={mainImageLoading}
+              fetchpriority={mainImagePriority}
               decoding="sync"
             />
             <span
@@ -178,13 +180,14 @@ const initialImageAlt =
             data-image-stage="desktop"
             class:list={[
               "relative hidden aspect-square w-full cursor-zoom-in overflow-hidden rounded-xl bg-muted lg:block",
-              initialMedia?.item.kind === "video" && "lg:!hidden",
+              videoFirst && "lg:!hidden",
             ]}
+            style={stageStyle}
           >
             <div
               data-desktop-image-zoom
               class="group relative aspect-square w-full cursor-crosshair overflow-hidden rounded-xl border border-border bg-background"
-              style="contain: layout style;"
+              style={`contain: layout style;${stageStyle ? ` ${stageStyle}` : ""}`}
             >
               {/* Same src/srcset/sizes as the mobile image: the browser picks
                   one candidate and fetches it once for both. */}
@@ -197,8 +200,8 @@ const initialImageAlt =
                 width={GALLERY_IMAGE_WIDTHS.main}
                 height={GALLERY_IMAGE_WIDTHS.main}
                 class="h-full w-full object-contain object-center transition-opacity duration-150 motion-reduce:transition-none"
-                loading="eager"
-                fetchpriority="high"
+                loading={mainImageLoading}
+                fetchpriority={mainImagePriority}
                 decoding="async"
               />
               <div
@@ -215,53 +218,27 @@ const initialImageAlt =
             </div>
           </div>
 
-          <div
-            data-video-stage
-            class:list={[
-              "mobile-media-stage relative aspect-square w-full overflow-hidden rounded-lg bg-muted lg:rounded-xl",
-              initialMedia?.item.kind !== "video" && "hidden",
-            ]}
-          >
+          {stageVideo && (
             <div
-              data-video-placeholder
+              data-video-stage
               class:list={[
-                "pointer-events-none absolute inset-0 z-0 flex flex-col items-center justify-center gap-2 bg-muted text-muted-foreground",
-                initialMedia?.posterUrl && "hidden",
+                "mobile-media-stage relative aspect-square w-full overflow-hidden rounded-lg bg-muted lg:rounded-xl",
+                !videoFirst && "hidden",
               ]}
+              style={stageStyle}
             >
-              <span
-                class="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background shadow-sm"
-                aria-hidden="true"
-              >
-                <Play className="ml-0.5 h-5 w-5 fill-current" />
-              </span>
-              <span class="text-sm font-medium">Product video</span>
+              <VideoFacade
+                src={stageVideo.url}
+                title={stageVideo.altText}
+                label={playLabel(stageVideo.altText)}
+                labelTemplate={playVideoLabel}
+                poster={posterSources(stageVideo.posterUrl)}
+                eager={videoFirst}
+                duration={stageVideo.duration}
+                gallery
+              />
             </div>
-            <media-theme-microvideo
-              data-product-video-player
-              class="relative z-10 block h-full w-full overflow-hidden bg-transparent"
-              style="--media-primary-color: rgb(255 255 255 / 0.96); --media-secondary-color: rgb(0 0 0 / 0.82);"
-            >
-              <video
-                data-product-video
-                slot="media"
-                controls
-                playsinline
-                preload={initialMedia?.item.kind === "video"
-                  ? "metadata"
-                  : "none"}
-                src={initialMedia?.item.kind === "video"
-                  ? initialMedia.url
-                  : undefined}
-                poster={initialMedia?.item.kind === "video"
-                  ? (initialMedia.posterUrl ?? undefined)
-                  : undefined}
-                class="h-full w-full bg-transparent object-contain"
-                aria-label={initialMedia?.item.kind === "video"
-                  ? initialMedia.altText
-                  : "Product video"}></video>
-            </media-theme-microvideo>
-          </div>
+          )}
         </div>
 
         {
@@ -295,6 +272,7 @@ const initialImageAlt =
                       data-media-kind={itemData.item.kind}
                       data-media-url={itemData.url}
                       data-poster-url={itemData.posterUrl ?? undefined}
+                      data-video-duration={itemData.duration ?? undefined}
                       data-alt-text={itemData.altText}
                       aria-label={
                         itemData.item.kind === "video"
@@ -406,6 +384,7 @@ const initialImageAlt =
                 data-media-kind={itemData.item.kind}
                 data-media-url={itemData.url}
                 data-poster-url={itemData.posterUrl ?? undefined}
+                data-video-duration={itemData.duration ?? undefined}
                 data-alt-text={itemData.altText}
                 aria-label={
                   itemData.item.kind === "video"
@@ -480,6 +459,43 @@ const initialImageAlt =
       )
     }
   </div>
+
+  {listMedia.length > 0 && (
+    <ul class="gallery-list hidden gap-2 lg:grid" aria-label="Product media">
+      {listMedia.map((entry, index) => {
+        const sources = entry.item.kind === "image"
+          ? responsiveImageSources(entry.url, mainSlot)
+          : null;
+        return (
+          <li class="relative aspect-square w-full overflow-hidden rounded-xl bg-muted" style={stageStyle}>
+            {sources ? (
+              <img
+                src={sources.src}
+                srcset={sources.srcset}
+                sizes={sources.sizes}
+                alt={entry.altText}
+                width={GALLERY_IMAGE_WIDTHS.main}
+                height={GALLERY_IMAGE_WIDTHS.main}
+                class="h-full w-full object-contain object-center"
+                loading={index === 0 ? "eager" : "lazy"}
+                fetchpriority={index === 0 ? "high" : undefined}
+                decoding="async"
+              />
+            ) : (
+              <VideoFacade
+                src={entry.url}
+                title={entry.altText}
+                label={playLabel(entry.altText)}
+                poster={posterSources(entry.posterUrl)}
+                eager={index === 0}
+                duration={entry.duration}
+              />
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  )}
 
   <div
     data-mobile-zoom-modal
@@ -596,14 +612,22 @@ const initialImageAlt =
     }
     [data-thumbnails="below"] .gallery-desktop-rail {
       order: 2;
-      height: 6rem;
+      height: calc(var(--gallery-thumb, 5.5rem) + 0.5rem);
     }
     [data-thumbnails="below"] [data-thumbnail-rail="desktop"] {
       flex-direction: row;
     }
     [data-thumbnails="below"] .gallery-desktop-rail .thumbnail-btn {
-      width: 5.5rem;
-      height: 5.5rem;
+      width: var(--gallery-thumb, 5.5rem);
+      height: var(--gallery-thumb, 5.5rem);
+    }
+    /* Stacked and grid: the list replaces the stage and the rail. */
+    [data-gallery="stacked"] .gallery-layout,
+    [data-gallery="grid"] .gallery-layout {
+      display: none;
+    }
+    [data-gallery="grid"] .gallery-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
   @media (max-width: 1023px) {

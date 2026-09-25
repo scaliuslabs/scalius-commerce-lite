@@ -26,6 +26,7 @@ import {
 } from "./lib/product-actions";
 import { describeBuyGetOffer, describeBundleTiers } from "./lib/product-offers";
 import { moneyPlaces, pickBuyerInputCopy } from "./lib/buyer-inputs";
+import type { StorefrontBuyBoxLook } from "@scalius/shared/storefront-theme";
 
 interface Props {
   product: Product;
@@ -42,6 +43,12 @@ interface Props {
   actionCopy?: Partial<ProductActionCopy & CheckoutLanguageData>;
   /** A fulfilment badge beside the stock badge ("No delivery needed" for services). */
   fulfilmentBadge?: string | null;
+  /** The template's buy-box look; null keeps today's classic buy box untouched. */
+  look?: StorefrontBuyBoxLook | null;
+  /** The description tabs sit in the buy box (classic, Dawn); false moves them below the fold. */
+  details?: boolean;
+  /** The key features show in the buy box or in "About this item": the tabs leave them out. */
+  detailsFeatures?: boolean;
 }
 
 const {
@@ -56,7 +63,26 @@ const {
   quickBuyNotice = null,
   actionCopy: providedCopy = {},
   fulfilmentBadge = null,
+  look = null,
+  details = true,
+  detailsFeatures = true,
 } = Astro.props;
+
+// A template's buy box: its reference type scale and buttons as CSS custom
+// properties read by the scoped rules below (none on classic).
+const lookStyle = look
+  ? [
+      `--bb-title-phone: ${look.title.size.phone}px`,
+      `--bb-title-desktop: ${look.title.size.desktop}px`,
+      `--bb-title-weight: ${look.title.weight}`,
+      `--bb-price-phone: ${look.price.size.phone}px`,
+      `--bb-price-desktop: ${look.price.size.desktop}px`,
+      `--bb-price-weight: ${look.price.weight}`,
+      `--bb-cta-height: ${look.cta.height}px`,
+      `--bb-cta-max: ${look.cta.maxWidth === null ? "none" : `${look.cta.maxWidth}px`}`,
+    ].join("; ")
+  : undefined;
+const factsColumn = look?.facts === "column";
 
 const pageCopy: CheckoutLanguageData = { ...ENGLISH_CHECKOUT_LANGUAGE_DATA, ...providedCopy };
 const actionCopy: ProductActionCopy = pageCopy;
@@ -168,8 +194,18 @@ function optionAriaLabel(
 }
 ---
 
-<div class="lg:col-span-5 xl:col-span-6">
-  <div class="flex h-full flex-col">
+<div
+  class="lg:col-span-5 xl:col-span-6"
+  data-buy-box-look={look ? "" : undefined}
+  data-cta-shape={look?.cta.shape}
+  data-cta-layout={look?.cta.layout}
+  data-cta-first={look?.cta.first}
+  data-price-tone={look?.price.tone}
+  data-buy-box-card={look?.card ? "" : undefined}
+  data-facts-column={factsColumn ? "" : undefined}
+  style={lookStyle}
+>
+  <div class="buy-box-body flex h-full flex-col">
     <div class="mb-2 border-b border-border pb-2">
       <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{product.name}</h1>
       <slot name="after-title" />
@@ -315,7 +351,7 @@ function optionAriaLabel(
       </div>
 
       <p id="variant-availability-status" class="sr-only" aria-live="polite" aria-atomic="true"></p>
-      <div class="flex gap-2 pt-1">
+      <div class="buy-box-ctas flex gap-2 pt-1">
         <button type="submit" form={buyFormId} data-action="add-to-cart" disabled={actionPresentation.addToCart.disabled} class="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-primary bg-background px-2 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:border-border disabled:bg-muted disabled:text-muted-foreground" aria-label={actionPresentation.addToCart.ariaLabel}>
           <ShoppingCart className="mr-1.5 h-4 w-4" aria-hidden="true" /><span data-action-label="add-to-cart">{actionPresentation.addToCart.label}</span>
         </button>
@@ -324,7 +360,78 @@ function optionAriaLabel(
         </button>
       </div>
     </div>
-    <slot name="after-actions" />
-    <ProductDetails product={product} />
+    {factsColumn ? (
+      <aside class="buy-box-facts">
+        <slot name="after-actions" />
+      </aside>
+    ) : (
+      <slot name="after-actions" />
+    )}
+    {details && <ProductDetails product={product} features={detailsFeatures} />}
   </div>
 </div>
+
+<style>
+  /* Template buy boxes (never classic): the reference type scale, button
+     shape, height, order and width, a bordered card, a facts column. */
+  [data-buy-box-look] h1 {
+    font-size: var(--bb-title-phone);
+    font-weight: var(--bb-title-weight);
+  }
+  [data-buy-box-look] .product-price {
+    font-size: var(--bb-price-phone);
+    font-weight: var(--bb-price-weight);
+  }
+  [data-buy-box-look][data-price-tone="primary"] .product-price {
+    color: var(--primary);
+  }
+  [data-buy-box-look] .buy-box-ctas {
+    max-width: var(--bb-cta-max);
+  }
+  [data-buy-box-look] .buy-box-ctas > button {
+    min-height: var(--bb-cta-height);
+    font-size: 0.9375rem;
+  }
+  [data-cta-shape="pill"] .buy-box-ctas > button {
+    border-radius: 9999px;
+  }
+  [data-cta-layout="stack"] .buy-box-ctas {
+    flex-direction: column;
+  }
+  [data-cta-first="buy-now"] .buy-box-ctas > [data-action="buy-now"] {
+    order: -1;
+  }
+  [data-buy-box-card] > .buy-box-body {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+  }
+  @media (min-width: 64rem) {
+    [data-buy-box-look] h1 {
+      font-size: var(--bb-title-desktop);
+    }
+    [data-buy-box-look] .product-price {
+      font-size: var(--bb-price-desktop);
+    }
+    [data-buy-box-card] > .buy-box-body {
+      padding: 1.5rem;
+    }
+  }
+  /* Daraz / Amazon: delivery, cash on delivery, returns and warranty in a
+     284px column at the right of the buy box on wide screens. */
+  @media (min-width: 80rem) {
+    [data-facts-column] > .buy-box-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 284px;
+      column-gap: 1.5rem;
+      align-items: start;
+    }
+    [data-facts-column] .buy-box-body > * {
+      grid-column: 1;
+    }
+    [data-facts-column] .buy-box-body > .buy-box-facts {
+      grid-column: 2;
+      grid-row: 1 / span 3;
+    }
+  }
+</style>

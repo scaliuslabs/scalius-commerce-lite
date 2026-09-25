@@ -1,0 +1,113 @@
+---
+// The product's content blocks at the template's `content-blocks` place:
+// rich text, a feature list, questions and answers, a statement and a video
+// (poster first, the player loads on press, in a reserved 16:9 box). Tabs
+// stay in the description; other block types wait for their renderer.
+import RichContent from "@/components/RichContent.astro";
+import type { ProductPageBlockMedia, ProductPageContentBlock } from "@/lib/api";
+import { resolveProductImageUrl } from "@/lib/product-media";
+import { responsiveImageSources } from "@/lib/responsive-image";
+import VideoFacade from "../VideoFacade.astro";
+
+interface Props {
+  blocks: readonly ProductPageContentBlock[];
+  media: readonly ProductPageBlockMedia[];
+  /** "Play video: {title}" in the store's language. */
+  playVideoLabel: string;
+  productName: string;
+}
+
+const { blocks, media, playVideoLabel, productName } = Astro.props;
+const mediaById = new Map(media.map((item) => [item.id, item]));
+// A block video spans the page container at most (1216px), 16:9.
+const POSTER_SLOT = { width: 960, sizes: "(max-width: 1279px) calc(100vw - 32px), 1216px" };
+const posterSources = (url: string | null | undefined) =>
+  url ? responsiveImageSources(resolveProductImageUrl(url), POSTER_SLOT) : null;
+
+function videoOf(block: Extract<ProductPageContentBlock, { type: "video" }>) {
+  const title = block.settings.heading || productName;
+  const source = block.settings.source;
+  if (source.kind === "embed") {
+    const poster = source.posterMediaId ? mediaById.get(source.posterMediaId) : undefined;
+    return { kind: "embed" as const, src: source.url, title, poster: posterSources(poster?.url) };
+  }
+  const file = mediaById.get(source.mediaId);
+  if (!file || file.kind !== "video") return null;
+  return { kind: "file" as const, src: file.url, title, poster: posterSources(file.posterUrl) };
+}
+
+function statementParts(text: string, accent: string): [string, string, string] {
+  const at = accent ? text.indexOf(accent) : -1;
+  return at < 0 ? [text, "", ""] : [text.slice(0, at), accent, text.slice(at + accent.length)];
+}
+---
+
+<div class="space-y-8" data-product-content-blocks>
+  {blocks.map((block) => {
+    if (block.type === "rich-text") {
+      return (
+        <div data-content-block={block.type}>
+          {block.settings.title && <h3 class="mb-2 text-lg font-semibold text-foreground">{block.settings.title}</h3>}
+          <div class="prose prose-sm max-w-none text-foreground"><RichContent content={block.settings.html} /></div>
+        </div>
+      );
+    }
+    if (block.type === "feature-list") {
+      return (
+        <div data-content-block={block.type}>
+          {block.settings.heading && <h3 class="mb-3 text-lg font-semibold text-foreground">{block.settings.heading}</h3>}
+          <ul class:list={["grid gap-3", block.settings.style === "cards" ? "sm:grid-cols-2 lg:grid-cols-3" : ""]}>
+            {block.settings.items.map((item) => (
+              <li class:list={[block.settings.style === "cards" && "rounded-lg border border-border bg-card p-4"]}>
+                <p class="font-medium text-foreground">{item.title}</p>
+                {item.text && <p class="mt-1 text-sm text-muted-foreground">{item.text}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+    if (block.type === "faq") {
+      return (
+        <div data-content-block={block.type}>
+          {block.settings.heading && <h3 class="mb-3 text-lg font-semibold text-foreground">{block.settings.heading}</h3>}
+          <div class="divide-y divide-border rounded-lg border border-border">
+            {block.settings.items.map((item) => (
+              <details class="group px-4 py-3">
+                <summary class="flex min-h-11 cursor-pointer list-none items-center font-medium text-foreground">{item.question}</summary>
+                <p class="pb-1 text-sm text-muted-foreground">{item.answer}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    if (block.type === "statement") {
+      const [before, accent, after] = statementParts(block.settings.text, block.settings.accent);
+      return (
+        <p data-content-block={block.type} class="max-w-4xl text-2xl font-semibold leading-snug text-foreground lg:text-3xl">
+          {before}{accent && <span class="text-primary">{accent}</span>}{after}
+        </p>
+      );
+    }
+    if (block.type === "video") {
+      const video = videoOf(block);
+      if (!video) return null;
+      return (
+        <div data-content-block={block.type}>
+          {block.settings.heading && <h3 class="mb-3 text-lg font-semibold text-foreground">{block.settings.heading}</h3>}
+          <div class="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
+            <VideoFacade
+              kind={video.kind}
+              src={video.src}
+              title={video.title}
+              label={playVideoLabel.replace("{title}", video.title)}
+              poster={video.poster}
+            />
+          </div>
+        </div>
+      );
+    }
+    return null;
+  })}
+</div>
