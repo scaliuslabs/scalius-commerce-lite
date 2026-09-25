@@ -3,18 +3,21 @@
 // the grid's columns respond to, so the grid fits whatever room it has.
 // `list-row` shows one card per row, photo beside the text, while the grid
 // is narrower than the tablet step (pass the same value to each ProductCard
-// for its image `sizes`).
+// for its image `sizes`). `data-*` attributes and `style` go on the frame
+// (listing layouts mark their results and override the grid's variables).
 import type { ProductGridPhoneLayout } from "@/lib/product-card-layout";
 
 interface Props {
   class?: string;
   phoneLayout?: ProductGridPhoneLayout;
+  style?: string;
+  [data: `data-${string}`]: string | undefined;
 }
 
-const { class: className, phoneLayout = "grid" } = Astro.props;
+const { class: className, phoneLayout = "grid", ...frame } = Astro.props;
 ---
 
-<div class:list={["product-grid-frame", className]}>
+<div class:list={["product-grid-frame", className]} {...frame}>
   <div class="product-grid" data-phone-layout={phoneLayout === "list-row" ? "list-row" : undefined}>
     <slot />
   </div>

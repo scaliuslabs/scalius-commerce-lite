@@ -1,8 +1,14 @@
 ---
 // Server-rendered listing filters: a plain GET form of native controls, so a
 // tap or Space works the moment the HTML arrives (no hydration) and filtering
-// works without JavaScript. `setupCatalogFilters()` adds instant apply on
-// desktop and the live "Show N products" count in the phone sheet.
+// works without JavaScript. `setupCatalogFilters()` adds instant apply in the
+// desktop sidebar and the live "Show N products" count in the phone sheet
+// and the filter drawer.
+//
+// `presentation` is where the form sits: the sidebar (a bottom sheet on
+// phones) or a drawer at every width, whose apply bar stays inside it. Each
+// facet renders by its display type (lib/catalog-listing): checkboxes,
+// colour swatches, or checkboxes with a search field for long lists.
 import type { BuyerPriceRange, ProductFacet } from "@/lib/api";
 import type { ProductListFilterState, ProductListSort } from "@/lib/product-list-query";
 import {
@@ -10,6 +16,7 @@ import {
   showsCatalogPriceFilter,
   visibleCatalogFacets,
 } from "@/lib/catalog-filters";
+import { catalogFacetAnchor, catalogFacetDisplay } from "@/lib/catalog-listing";
 import { formatMoney } from "@/lib/currency";
 import { Search } from "lucide-react";
 
@@ -26,6 +33,9 @@ interface Props {
   countEndpoint: string;
   currencySymbol: string;
   currencyCode: string;
+  presentation?: "sidebar" | "drawer";
+  /** Give each facet group an id, so aspect chips can open the form at it. */
+  facetAnchors?: boolean;
 }
 
 const {
@@ -41,10 +51,16 @@ const {
   countEndpoint,
   currencySymbol,
   currencyCode,
+  presentation = "sidebar",
+  facetAnchors = false,
 } = Astro.props;
 
+const drawer = presentation === "drawer";
 const money = (amount: number) => formatMoney(amount, { symbol: currencySymbol, code: currencyCode });
-const shownFacets = visibleCatalogFacets(facets, currentFilters);
+const shownFacets = visibleCatalogFacets(facets, currentFilters).map((facet) => ({
+  ...facet,
+  ...catalogFacetDisplay(facet),
+}));
 const applyButton = catalogApplyButton(total);
 const showPrice = showsCatalogPriceFilter(priceRange, currentFilters);
 const single = (key: string) => {
@@ -52,7 +68,8 @@ const single = (key: string) => {
   return Array.isArray(value) ? value.at(-1) : value;
 };
 // The search itself is removed from its chip; "Clear all" clears refinements.
-const hasActiveFilters = Object.keys(currentFilters).some((key) => !["page", "sortBy", "q"].includes(key));
+const hasActiveFilters = Object.keys(currentFilters).some((key) => !["page", "sortBy", "limit", "q"].includes(key));
+const pageSize = single("limit");
 const switches = [
   { name: "hasDiscount", label: "On sale" },
   { name: "freeDelivery", label: "Free delivery" },
@@ -63,6 +80,7 @@ const summary =
 const chevron = "h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180";
 const priceInput =
   "h-11 w-full rounded-lg border border-border bg-background pl-7 pr-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:h-10 lg:text-sm";
+const anchor = (slug: string) => (facetAnchors ? catalogFacetAnchor(slug) : undefined);
 ---
 
 <form
@@ -71,10 +89,12 @@ const priceInput =
   autocomplete="off"
   data-catalog-filters
   data-count-endpoint={countEndpoint}
+  data-catalog-apply={drawer ? "sheet" : undefined}
   class="grow overflow-y-auto"
 >
   {sortBy !== defaultSort && <input type="hidden" name="sortBy" value={sortBy} />}
-  <div class="space-y-3 p-4 pb-28 lg:p-6 lg:pb-6">
+  {pageSize && <input type="hidden" name="limit" value={pageSize} />}
+  <div class:list={["space-y-3 p-4", drawer ? "lg:p-5" : "pb-28 lg:p-6 lg:pb-6"]}>
     <div class="relative mb-6">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <label for="catalog-filter-search" class="sr-only">{searchLabel}</label>
@@ -113,7 +133,7 @@ const priceInput =
     </details>
 
     {showPrice && (
-      <details open class:list={["group", section]}>
+      <details open id={facetAnchors ? "catalog-facet-price" : undefined} class:list={["group", section]}>
         <summary class={summary}>
           Price
           <svg class={chevron} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -144,55 +164,101 @@ const priceInput =
               </div>
             ))}
           </div>
-          <button
-            type="submit"
-            class="mt-3 hidden min-h-10 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted lg:inline-flex"
-          >
-            Apply price
-          </button>
+          {!drawer && (
+            <button
+              type="submit"
+              class="mt-3 hidden min-h-10 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted lg:inline-flex"
+            >
+              Apply price
+            </button>
+          )}
         </div>
       </details>
     )}
 
     {shownFacets.map((facet, index) => (
-      <details open={index < 3 || facet.selectedCount > 0} class:list={["group", section]}>
+      <details open={index < 3 || facet.selectedCount > 0} id={anchor(facet.slug)} class:list={["group", section]}>
         <summary class={summary}>
           {facet.name}
           <svg class={chevron} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
         </summary>
-        <fieldset class="space-y-1 px-4 pb-4">
-          <legend class="sr-only">{facet.name}</legend>
-          {[facet.preview, facet.more].map((values, group) => {
-            const options = values.map(({ value, count, selected }) => (
-              <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent">
+        {facet.display === "swatch" ? (
+          <fieldset class="px-4 pb-4" data-catalog-facet-display="swatch">
+            <legend class="sr-only">{facet.name}</legend>
+            <div class="flex flex-wrap gap-2">
+              {[...facet.preview, ...facet.more].map(({ value, count, selected }) => (
+                <label class="catalog-swatch relative inline-flex min-h-11 max-w-full cursor-pointer items-center gap-2 rounded-full border border-border bg-background py-1.5 pl-1.5 pr-3 text-sm text-foreground transition-colors hover:border-foreground/40 has-checked:border-foreground has-checked:ring-1 has-checked:ring-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring has-disabled:cursor-not-allowed has-disabled:opacity-40">
+                  <input
+                    type="checkbox"
+                    name={facet.slug}
+                    value={value}
+                    checked={selected}
+                    disabled={count === 0 && !selected}
+                    data-catalog-facet
+                    class="peer sr-only"
+                  />
+                  <span
+                    class="h-7 w-7 shrink-0 rounded-full border border-foreground/15"
+                    style={`background:${facet.swatches.get(value)}`}
+                    aria-hidden="true"
+                  ></span>
+                  <span class="min-w-0 truncate font-medium">{value}</span>
+                  <span class="tabular-nums text-muted-foreground" data-catalog-facet-count>{count}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : (
+          <fieldset class="space-y-1 px-4 pb-4" data-catalog-facet-list={facet.display === "search-list" ? "" : undefined}>
+            <legend class="sr-only">{facet.name}</legend>
+            {facet.display === "search-list" && (
+              // Shown by JavaScript: without it every value is listed (and
+              // the rest folded), so the field would do nothing.
+              <div class="relative mb-2" data-catalog-facet-search hidden>
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                {/* No name: it narrows the list and is never submitted. */}
                 <input
-                  type="checkbox"
-                  name={facet.slug}
-                  value={value}
-                  checked={selected}
-                  disabled={count === 0 && !selected}
-                  data-catalog-facet
-                  class="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  type="search"
+                  aria-label={`Search ${facet.name}`}
+                  placeholder={`Search ${facet.name}`}
+                  data-catalog-facet-query
+                  class="h-11 w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-base text-foreground focus:border-primary focus:ring-2 focus:ring-primary lg:h-10 lg:text-sm"
                 />
-                <span class="min-w-0 flex-1 truncate font-medium text-foreground">{value}</span>
-                <span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>{count}</span>
-              </label>
-            ));
-            return group === 0 ? options : values.length > 0 && (
-              <details open={values.some(({ selected }) => selected)} class="group/more">
-                <summary class="flex min-h-11 cursor-pointer list-none items-center px-2 text-sm font-medium text-primary hover:underline [&::-webkit-details-marker]:hidden">
-                  <span class="group-open/more:hidden">Show {values.length} more</span>
-                  <span class="hidden group-open/more:inline">Show less</span>
-                </summary>
-                {options}
-              </details>
-            );
-          })}
-        </fieldset>
+                <p class="px-2 pt-2 text-sm text-muted-foreground" data-catalog-facet-search-empty hidden>No matches</p>
+              </div>
+            )}
+            {[facet.preview, facet.more].map((values, group) => {
+              const options = values.map(({ value, count, selected }) => (
+                <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm transition-colors hover:bg-muted has-disabled:cursor-not-allowed has-disabled:opacity-40 has-disabled:hover:bg-transparent">
+                  <input
+                    type="checkbox"
+                    name={facet.slug}
+                    value={value}
+                    checked={selected}
+                    disabled={count === 0 && !selected}
+                    data-catalog-facet
+                    class="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  <span class="min-w-0 flex-1 truncate font-medium text-foreground">{value}</span>
+                  <span class="tabular-nums text-sm text-muted-foreground" data-catalog-facet-count>{count}</span>
+                </label>
+              ));
+              return group === 0 ? options : values.length > 0 && (
+                <details open={values.some(({ selected }) => selected)} class="group/more">
+                  <summary class="flex min-h-11 cursor-pointer list-none items-center px-2 text-sm font-medium text-primary hover:underline [&::-webkit-details-marker]:hidden">
+                    <span class="group-open/more:hidden">Show {values.length} more</span>
+                    <span class="hidden group-open/more:inline">Show less</span>
+                  </summary>
+                  {options}
+                </details>
+              );
+            })}
+          </fieldset>
+        )}
       </details>
     ))}
 
-    {hasActiveFilters && (
+    {hasActiveFilters && !drawer && (
       <a
         href={resetPath}
         class="hidden min-h-10 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted lg:flex"
@@ -200,17 +266,24 @@ const priceInput =
         Clear all
       </a>
     )}
-    <noscript>
-      <button
-        type="submit"
-        class="hidden min-h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground lg:flex"
-      >
-        Apply filters
-      </button>
-    </noscript>
+    {!drawer && (
+      <noscript>
+        <button
+          type="submit"
+          class="hidden min-h-10 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground lg:flex"
+        >
+          Apply filters
+        </button>
+      </noscript>
+    )}
   </div>
 
-  <div class="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] lg:hidden">
+  <div
+    class:list={[
+      "z-50 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))]",
+      drawer ? "sticky bottom-0" : "fixed inset-x-0 bottom-0 lg:hidden",
+    ]}
+  >
     <div class:list={["grid gap-3", hasActiveFilters ? "grid-cols-2" : "grid-cols-1"]}>
       {hasActiveFilters && (
         <a

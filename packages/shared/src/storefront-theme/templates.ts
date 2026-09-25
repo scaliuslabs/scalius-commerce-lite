@@ -352,7 +352,9 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
       card: ["standard"],
-      listing: { layout: ["sidebar-grid"], toolbar: ["breadcrumb", "result-count", "sort", "per-page"], phoneLayout: "grid", paging: "numbered" },
+      // No per-page: the default listing stays today's (pixel-identical), and
+      // most stores get no extra crawl variant.
+      listing: { layout: ["sidebar-grid"], toolbar: ["breadcrumb", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "classic", buyBox: ["classic"], below: ["description", "related"], sticky: BUY_BAR },
       footer: "product-widgets",
     }),
