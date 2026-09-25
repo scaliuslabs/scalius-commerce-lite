@@ -14,7 +14,7 @@ import { orderFormDataQueryOptions, orderQueryOptions } from "~/lib/api-query-op
 import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 import { OrderFormRouteError } from "../-OrderFormRouteError";
-import { orderEditState, savedDeliveryMethod } from "../-order-form-route-state";
+import { formItems, formProducts, orderEditState, savedDeliveryMethod } from "../-order-form-route-state";
 import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/orders/$orderId/edit")({
@@ -25,10 +25,20 @@ export const Route = createFileRoute("/admin/orders/$orderId/edit")({
       // The cash still to collect, for the review's "before → after" line, and the delivery method.
       queryClient.ensureQueryData(orderQueryOptions(params.orderId)),
     ]);
-    const { shippingMethodId, savedShippingMethod } = savedDeliveryMethod(order);
+    const { shippingMethodId, shippingMethodKind, savedShippingMethod } = savedDeliveryMethod(order);
+    const products = formProducts(data.productsWithVariants);
     return {
       ...data,
-      defaultValues: { ...data.defaultValues, shippingMethodId },
+      productsWithVariants: products,
+      defaultValues: {
+        ...data.defaultValues,
+        shippingMethodId,
+        shippingMethodKind,
+        shippingAddress: data.defaultValues.shippingAddress ?? "",
+        city: data.defaultValues.city ?? "",
+        zone: data.defaultValues.zone ?? "",
+        items: formItems(data.defaultValues.items, products),
+      },
       savedShippingMethod,
       cashToCollect: order.balanceDue,
     };

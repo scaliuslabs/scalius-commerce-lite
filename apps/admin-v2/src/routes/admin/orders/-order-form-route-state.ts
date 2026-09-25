@@ -1,4 +1,8 @@
 import type { OrderFormMessageKey } from "~/i18n/order-form";
+import type { FulfillmentKind } from "@scalius/shared/fulfilment";
+import type { ResolvedLineProperty } from "@scalius/shared/line-properties";
+import type { OrderItem, Product } from "~/components/admin/order-form/types";
+import { customizationFromView, type CustomizationView } from "~/components/admin/order-form/order-line-properties";
 
 interface EditState {
   allowed: boolean;
@@ -44,10 +48,60 @@ export function orderEditState(readiness: { items: EditState; details: EditState
  * saved method is preselected (and named even when no longer offered), never
  * "Custom charge" for an order placed with a named method.
  */
-export function savedDeliveryMethod(order: { shippingMethodId: string | null; shippingMethodName: string | null }) {
-  if (!order.shippingMethodId) return { shippingMethodId: null, savedShippingMethod: null };
+export function savedDeliveryMethod(order: {
+  shippingMethodId: string | null;
+  shippingMethodName: string | null;
+  /** Pickup orders keep no address; the edit form must not ask for one. */
+  shippingMethodKind?: "delivery" | "pickup" | null;
+}) {
+  const shippingMethodKind = order.shippingMethodKind ?? null;
+  if (!order.shippingMethodId) return { shippingMethodId: null, shippingMethodKind, savedShippingMethod: null };
   return {
     shippingMethodId: order.shippingMethodId,
-    savedShippingMethod: { id: order.shippingMethodId, name: order.shippingMethodName ?? order.shippingMethodId },
+    shippingMethodKind,
+    savedShippingMethod: {
+      id: order.shippingMethodId,
+      name: order.shippingMethodName ?? order.shippingMethodId,
+      kind: shippingMethodKind,
+    },
   };
+}
+
+type FormDataProduct = {
+  id: string;
+  variants: Array<{ id: string; fulfillmentKind?: FulfillmentKind }>;
+  customizationSchema?: CustomizationView | null;
+};
+type FormDataItem = Pick<OrderItem, "orderItemId" | "productId" | "variantId" | "quantity" | "price"> & {
+  properties?: Array<Pick<ResolvedLineProperty, "key" | "label" | "displayValue" | "priceMinor"> & Partial<ResolvedLineProperty>>;
+};
+
+/** The edit form's products, with the buyer inputs each asks for (for lines added while editing). */
+export function formProducts<P extends FormDataProduct>(products: readonly P[]): Array<P & Pick<Product, "customization">> {
+  return products.map((product) => ({ ...product, customization: customizationFromView(product.customizationSchema ?? null) }));
+}
+
+/**
+ * Saved lines as the edit form holds them: what each SKU is (a pickup or
+ * service order asks no address) and the inputs frozen on it, shown but never
+ * sent again (a kept line keeps them).
+ */
+export function formItems(items: readonly FormDataItem[], products: readonly FormDataProduct[]): OrderItem[] {
+  const kinds = new Map(products.flatMap((product) => product.variants.map((variant) => [variant.id, variant.fulfillmentKind] as const)));
+  return items.map(({ properties, ...item }) => ({
+    ...item,
+    fulfillmentKind: (item.variantId ? kinds.get(item.variantId) : undefined) ?? "physical",
+    ...(properties?.length
+      ? {
+          propertiesDisplay: properties.map((property) => ({
+            key: property.key,
+            type: property.type ?? "text",
+            label: property.label,
+            value: property.value ?? property.displayValue,
+            displayValue: property.displayValue,
+            priceMinor: property.priceMinor,
+          })),
+        }
+      : {}),
+  }));
 }
