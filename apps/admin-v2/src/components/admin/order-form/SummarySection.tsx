@@ -276,10 +276,12 @@ export function SummarySection() {
             <dt className="text-muted-foreground">{t("subtotal")}</dt>
             <dd>{fmt(subtotal)}</dd>
           </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">{t("deliveryCharge")}</dt>
-            <dd>{shippingInvalid ? "—" : fmt(shipping)}</dd>
-          </div>
+          {hasPhysical ? (
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">{t("deliveryCharge")}</dt>
+              <dd>{shippingInvalid ? "—" : fmt(shipping)}</dd>
+            </div>
+          ) : null}
           {discount > 0 ? (
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">{t("discount")}</dt>

@@ -226,7 +226,7 @@ export function OrderView({ order }: { order: Order }) {
             <div className="contents lg:col-span-2 lg:block lg:space-y-4">
               {/* Messages: the order's requests, its conversation and the reply box (hidden without access). */}
               <div className="order-2 lg:order-none"><OrderConversationCard order={order} request={request} /></div>
-              <div className="order-3 space-y-4 lg:order-none"><OrderFulfilmentCards order={order} request={request} onRecordPayment={() => setRequest({ action: "collectCod", id: Date.now() })} /></div>
+              <div id="order-fulfilment" className="order-3 scroll-mt-4 space-y-4 lg:order-none"><OrderFulfilmentCards order={order} request={request} onRecordPayment={() => setRequest({ action: "collectCod", id: Date.now() })} /></div>
               <div className="order-4 lg:order-none"><OrderSummaryCard order={order} /></div>
               {hasDeliveryCard(order) ? <div className="order-4 lg:order-none"><ShipmentCard order={order} /></div> : null}
               <div className="order-5 lg:order-none"><PaymentCard order={order} request={request} /></div>

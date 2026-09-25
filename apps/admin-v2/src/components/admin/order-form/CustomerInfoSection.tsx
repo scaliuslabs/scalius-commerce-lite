@@ -14,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useOrderForm } from "./OrderFormContext";
-import { isPhysicalLine, orderNeedsAddress } from "./order-line-properties";
+import { orderNeedsAddress } from "./order-line-properties";
 import { LocationPicker } from "@/components/admin/location/LocationPicker";
 import { deliveryLocationByIdQueryOptions } from "@/lib/api-query-options/delivery";
 import { AdminPhoneInput } from "@/components/admin/shared/AdminPhoneInput";
@@ -102,7 +102,7 @@ export function CustomerInfoSection() {
   const needsAddress = orderNeedsAddress({ items: items ?? [], shippingMethodKind });
   const noAddressReason = needsAddress
     ? null
-    : (items ?? []).some(isPhysicalLine) ? t("pickupNoAddress") : t("noDeliveryNoAddress");
+    : shippingMethodKind === "pickup" ? t("pickupNoAddress") : t("noDeliveryNoAddress");
   const returning = useReturningCustomer();
   const errors = form.formState.errors;
   // A picked location is an edit: mark it dirty so Save turns on.

@@ -69,7 +69,8 @@ export function statusBlockText(
  */
 export function courierNextStep(order: Pick<Order, "status" | "paymentMethod">): { href: string; label: OrderDetailMessageKey } {
   const status = order.status.toLowerCase();
-  if (status !== "shipped") return { href: "#order-shipments", label: "shipments.cameBack" };
+  // A part-sent order's parcel comes back from its fulfilment card's menu.
+  if (status !== "shipped") return { href: "#order-fulfilment", label: "shipments.cameBack" };
   return order.paymentMethod === "cod"
     ? { href: "#order-payment", label: "cod.markReturned" }
     : { href: "#order-shipments", label: "primary.markDelivered" };
