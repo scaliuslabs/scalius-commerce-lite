@@ -17,7 +17,7 @@ import { issueManualGiftCard } from "./issue";
 import { applyGiftCardCode, checkGiftCardBalance, findGiftCardByCode, GiftCardUnusableError } from "./tender";
 import { listBuyerGiftCards, revealBuyerGiftCardCode, saveGiftCardToAccount, GiftCardSaveFailedError } from "./buyer";
 import { adjustGiftCardBalance, getGiftCardForStaff, giftCardLiabilitySummary, listGiftCardsForStaff, updateGiftCardForStaff } from "./admin";
-import { resolveGiftCardIssuedMessage } from "./notification";
+import { resolveGiftCardIssuedMessage, resolveGiftCardSentMessage } from "./notification";
 
 const TEST_KEY = "test-credential-encryption-key-0123456789abcdef";
 const MASTER = "test-master-secret-0123456789abcdefghijklmnopqrstuvwxyz";
@@ -198,6 +198,18 @@ describe("gift-card issue, lookup and buyer surfaces", () => {
             amountMinor: 100000,
         });
         expect(normalizeGiftCardCode(message!.code)).toBe(await decryptGiftCardCode(keys, String(cards[0]!.code_ciphertext)));
+
+        // The buyer hears where each card went, without the code.
+        const sent = all<{ subject_id: string; payload: string }>(
+            "SELECT subject_id, payload FROM notification_outbox WHERE notification_type = 'gift_card_sent' ORDER BY subject_id",
+        );
+        expect(sent.map((row) => row.subject_id).sort()).toEqual(cards.map((card) => String(card.id)).sort());
+        expect(await resolveGiftCardSentMessage(db, { giftCardId: String(cards[0]!.id) })).toMatchObject({
+            recipientMasked: "s•••@example.test",
+            buyer: { name: "Rahim", email: "rahim@example.test", phone: "+8801712345601" },
+            amountMinor: 100000,
+            orderId: "ord_gc_1",
+        });
     });
 
     it("fails closed without the key and leaves the lines owed", async () => {
@@ -209,6 +221,8 @@ describe("gift-card issue, lookup and buyer surfaces", () => {
         await autoFulfilOrder(db, "ord_gc_2", FULFILLER_REGISTRY, { credentialEncryptionKey: TEST_KEY });
         expect(one("SELECT customer_id, recipient_email FROM gift_cards WHERE source_order_id = 'ord_gc_2'"))
             .toEqual({ customer_id: "cust_1", recipient_email: null });
+        // Bought for themselves: no "sent to" confirmation.
+        expect(one<{ n: number }>("SELECT count(*) AS n FROM notification_outbox WHERE notification_type = 'gift_card_sent'").n).toBe(0);
         expect(await countBuyerGiftCards(db, "cust_1")).toBe(1);
     });
 

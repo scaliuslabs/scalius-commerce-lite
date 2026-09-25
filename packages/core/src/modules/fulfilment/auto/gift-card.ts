@@ -124,6 +124,18 @@ export const giftCardFulfiller: AutoFulfiller = {
                     source: "gift-card-fulfiller",
                     data: { orderId: context.orderId },
                 }).statement as unknown as BatchItem<"sqlite">);
+                // Sent to someone else: the buyer hears where it went (no code).
+                if (recipient?.email || recipient?.phone) {
+                    statements.push(buildNotificationOutboxInsert(db, {
+                        subjectType: "gift_card",
+                        subjectId: giftCardId,
+                        audience: "customer",
+                        notificationType: "gift_card_sent",
+                        dedupeKey: `gift_card_sent:${giftCardId}`,
+                        source: "gift-card-fulfiller",
+                        data: { orderId: context.orderId },
+                    }).statement as unknown as BatchItem<"sqlite">);
+                }
             }
         }
         return statements;

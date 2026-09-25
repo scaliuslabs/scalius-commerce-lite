@@ -35,7 +35,7 @@ import {
 } from "@scalius/core/modules/notifications/browser";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { resolveDigitalDeliveryContent } from "./notification-content/digital";
-import { resolveGiftCardIssuedContent } from "./notification-content/gift-card";
+import { resolveGiftCardIssuedContent, resolveGiftCardSentContent } from "./notification-content/gift-card";
 import { resolveReviewRequestContent } from "./notification-content/review-request";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { logOpsEvent } from "./utils/ops-log";
@@ -295,16 +295,20 @@ async function dispatchGiftCardNotification(
   db: Db,
   env: Env,
 ): Promise<DispatchResult> {
-  if (claim.notificationType !== "gift_card_issued") {
-    return { kind: "unsupported", reason: `unsupported_notification_type: ${claim.notificationType}` };
+  const type = claim.notificationType;
+  if (type !== "gift_card_issued" && type !== "gift_card_sent") {
+    return { kind: "unsupported", reason: `unsupported_notification_type: ${type}` };
   }
-  const resolvedClaim = { ...claim, notificationType: claim.notificationType };
-  const content = await resolveGiftCardIssuedContent(db, env, { giftCardId: claim.subjectId, data: claim.data });
+  const resolvedClaim = { ...claim, notificationType: type };
+  const input = { giftCardId: claim.subjectId, data: claim.data };
+  const content = type === "gift_card_issued"
+    ? await resolveGiftCardIssuedContent(db, env, input)
+    : await resolveGiftCardSentContent(db, env, input);
   if (!content) return nothingToSend(db, resolvedClaim, null);
 
   return fromDispatch(await sendResolvedNotification(db, {
     outboxId: claim.outboxId,
-    notificationType: "gift_card_issued",
+    notificationType: type,
     subjectType: "gift_card",
     subjectId: claim.subjectId,
     orderId: content.orderId,

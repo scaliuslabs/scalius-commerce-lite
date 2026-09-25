@@ -97,6 +97,11 @@ export {
     type BuyerGiftCard,
     type BuyerGiftCardTransaction,
 } from "./buyer";
-export { resolveGiftCardIssuedMessage, type GiftCardIssuedMessage } from "./notification";
+export {
+    resolveGiftCardIssuedMessage,
+    resolveGiftCardSentMessage,
+    type GiftCardIssuedMessage,
+    type GiftCardSentMessage,
+} from "./notification";
 export { maskGiftCardContact, maskGiftCardRecipient } from "./mask";
 export { GIFT_CARD_LINE_PROPERTY_KEYS, giftCardLineRecipientIssue } from "./line-recipient";

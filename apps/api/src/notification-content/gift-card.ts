@@ -12,7 +12,7 @@ import type {
   NotificationExtraTemplateData,
   ResolvedNotificationRecipient,
 } from "@scalius/core/modules/notifications";
-import { resolveGiftCardIssuedMessage } from "@scalius/core/modules/gift-cards";
+import { resolveGiftCardIssuedMessage, resolveGiftCardSentMessage } from "@scalius/core/modules/gift-cards";
 import { getDecimalPlaces, formatMoney } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -72,6 +72,25 @@ export async function resolveGiftCardIssuedContent(
       gift_card_message: message.message ?? "",
       gift_card_sender: message.senderName ?? "",
       gift_card_link: storeLink(env),
+    },
+  };
+}
+
+/** Send-time content for `gift_card_sent`: the buyer's confirmation, no code. */
+export async function resolveGiftCardSentContent(
+  db: Database,
+  _env: Env,
+  input: GiftCardIssuedContentInput,
+): Promise<GiftCardIssuedContent | null> {
+  const message = await resolveGiftCardSentMessage(db, { giftCardId: input.giftCardId });
+  if (!message) return null;
+  return {
+    recipient: message.buyer,
+    orderId: message.orderId,
+    orderNumber: formatOrderNumber(message.orderNumber, message.orderId),
+    extraTemplateData: {
+      gift_card_value: formatMoney(fromMinor(message.amountMinor, getDecimalPlaces(message.currencyCode)), { code: message.currencyCode }),
+      gift_card_recipient: message.recipientMasked,
     },
   };
 }
