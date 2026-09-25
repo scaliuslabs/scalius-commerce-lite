@@ -829,6 +829,7 @@ export function SectionEditor({ sections, notes, media, onChange }: {
             <DialogDescription className="sr-only">{t("editSection", { name: editingName })}</DialogDescription>
           </DialogHeader>
           <form
+            method="post"
             className="space-y-4"
             noValidate
             onSubmit={(event) => {
