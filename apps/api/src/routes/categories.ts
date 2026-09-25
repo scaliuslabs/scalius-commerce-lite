@@ -34,22 +34,32 @@ const includeSubcategoriesSchema = z
       "List products of the category's published sub-categories too (default). \"false\" lists the category's own products only.",
   });
 
+// Review ratings on listing cards and the "N★ & up" facet (Wave B §2.4).
+const cardRatingSchema = z.object({
+  average: z.number().min(1).max(5).openapi({ description: "Average of the published reviews, two decimals truncated (4.66)." }),
+  count: z.number().int().min(1).openapi({ description: "Published reviews." }),
+}).nullable().openapi({ description: "Published-review rating; null when the product has no published review." });
+const ratingFacetSchema = z.array(z.object({
+  min: z.number().int().min(1).max(4).openapi({ description: "Whole stars: products averaging at least this (`minRating`)." }),
+  count: z.number().int().min(0).openapi({ description: "Products matching the other selections and this threshold." }),
+})).max(4).openapi({
+  description: "\"N★ & up\" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.",
+});
+const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().openapi({
+  description: "Only products whose published-review average is at least this many whole stars (1-4).",
+});
+
+const listingSortSchema = z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount", "rating"]);
+
 // Schema for category product filtering
 const categoryProductFilterSchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
-  sort: z
-    .enum([
-      "newest",
-      "price-asc",
-      "price-desc",
-      "name-asc",
-      "name-desc",
-      "discount",
-    ])
+  sort: listingSortSchema
     .optional()
     .default("newest")
-    .openapi({ description: "Sort order" }),
+    .openapi({ description: "Sort order. `rating`: the Bayesian review rank, unreviewed products last." }),
+  minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional().openapi({ description: "Search within category" }),
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
@@ -133,11 +143,13 @@ const storefrontCategoryProductSchema = z.object({
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
+  rating: cardRatingSchema,
 });
 
 const appliedCategoryFiltersSchema = z.object({
   attributes: z.array(appliedFacetFilterSchema),
-  sort: z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"]),
+  sort: listingSortSchema,
+  minRating: z.number().int().min(1).max(4).optional(),
   search: z.string().optional(),
   minPrice: z.number().min(0).optional(),
   maxPrice: z.number().min(0).optional(),
@@ -149,8 +161,8 @@ const agentCategoryProductFilterSchema = z.object({
   includeSubcategories: includeSubcategoriesSchema,
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
   limit: z.coerce.number().int().min(1).max(20).optional().default(20),
-  sort: z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"])
-    .optional().default("newest"),
+  sort: listingSortSchema.optional().default("newest"),
+  minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional(),
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
@@ -442,6 +454,7 @@ const getCategoryProductsRoute = createRoute({
           max: z.number().min(0),
         }),
         facets: z.array(productFacetSchema),
+        ratingFacet: ratingFacetSchema,
         appliedFilters: appliedCategoryFiltersSchema,
       })) } },
     },
@@ -503,6 +516,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     sort: params.sort,
   };
   if (normalizedSearch) appliedFilters.search = normalizedSearch;
+  if (params.minRating !== undefined) appliedFilters.minRating = params.minRating;
   if (params.minPrice !== undefined) appliedFilters.minPrice = params.minPrice;
   if (params.maxPrice !== undefined) appliedFilters.maxPrice = params.maxPrice;
   if (params.freeDelivery !== undefined) appliedFilters.freeDelivery = params.freeDelivery;
@@ -514,6 +528,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     pagination: result.pagination,
     priceRange: result.priceRange,
     facets: result.facets,
+    ratingFacet: result.ratingFacet,
     appliedFilters,
   });
 });
@@ -547,6 +562,7 @@ const getCategoryProductSummariesRoute = createRoute({
         pagination: paginationSchema,
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
         facets: z.array(productFacetSchema),
+        ratingFacet: ratingFacetSchema,
         appliedFilters: appliedCategoryFiltersSchema,
       })) } },
     },
@@ -591,6 +607,7 @@ app.openapi(getCategoryProductSummariesRoute, async (c) => {
   };
   const normalizedSearch = normalizePublicFtsSearchQuery(params.search);
   if (normalizedSearch) appliedFilters.search = normalizedSearch;
+  if (params.minRating !== undefined) appliedFilters.minRating = params.minRating;
   if (params.minPrice !== undefined) appliedFilters.minPrice = params.minPrice;
   if (params.maxPrice !== undefined) appliedFilters.maxPrice = params.maxPrice;
   if (params.freeDelivery !== undefined) appliedFilters.freeDelivery = params.freeDelivery;

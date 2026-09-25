@@ -1,6 +1,7 @@
 // src/routes/admin/settings/notification-channels.ts
-// The notifications document: customer rules per order event, staff alerts
-// (push per event, email for every new order) and the WhatsApp order template.
+// The notifications document: customer rules per event, staff alerts (push per
+// event, email for every new order and the events that allow it) and the
+// WhatsApp order template.
 // One GET feeds both dashboard cards; each card saves its part with the
 // revision it loaded.
 
@@ -22,6 +23,8 @@ import {
 } from "@scalius/core/modules/notifications";
 import {
     ORDER_NOTIFICATION_TYPES,
+    RESOLVED_NOTIFICATION_TYPES,
+    STAFF_ALERT_NOTIFICATION_TYPES,
     type OrderNotificationType,
 } from "@scalius/core/modules/notifications/browser";
 import type { Database } from "@scalius/database/client";
@@ -39,11 +42,21 @@ import { ValidationError } from "../../../utils/api-error";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-/** One entry per order event, plus the thread events each audience can use (§10). */
-const notificationEventsSchema = <T extends z.ZodTypeAny, C extends z.ZodTypeAny>(channel: T, conversation: Record<string, C>) => z.object({
+/**
+ * One entry per order event, plus the non-order events each audience can use:
+ * thread events (Wave A §10) and the Wave B review, digital and gift card
+ * events (Wave B §10). The extra events are optional so an older dashboard's
+ * payload stays valid; an omitted event falls back to its default.
+ */
+const notificationEventsSchema = <T extends z.ZodTypeAny, C extends z.ZodTypeAny>(channel: T, extra: Record<string, C>) => z.object({
     ...Object.fromEntries(ORDER_NOTIFICATION_TYPES.map((event) => [event, z.array(channel)])) as Record<OrderNotificationType, z.ZodArray<T>>,
-    ...Object.fromEntries(Object.entries(conversation).map(([event, schema]) => [event, z.array(schema).optional()])),
+    ...Object.fromEntries(Object.entries(extra).map(([event, schema]) => [event, z.array(schema).optional()])),
 }).strict();
+
+/** Every extra event of one audience on the same channel list. */
+function extraEvents<C extends z.ZodTypeAny>(events: readonly string[], channel: C): Record<string, C> {
+    return Object.fromEntries(events.map((event) => [event, channel]));
+}
 
 const channelsSchema = z.record(z.string(), z.array(z.string()));
 const expectedRevisionSchema = z.number().int().nonnegative();
@@ -77,17 +90,19 @@ const notificationSettingsSchema = z.object({
 });
 
 const updateCustomerNotificationSettingsSchema = z.object({
-    channels: notificationEventsSchema(z.enum(["email", "sms", "whatsapp"]), {
-        conversation_reply: z.enum(["email", "sms"]),
-    }),
+    channels: notificationEventsSchema(
+        z.enum(["email", "sms", "whatsapp"]),
+        extraEvents(["conversation_reply", ...RESOLVED_NOTIFICATION_TYPES], z.enum(["email", "sms"])),
+    ),
     whatsappTemplate: whatsappTemplateSchema.optional(),
     expectedRevision: expectedRevisionSchema,
 }).strict();
 
 const updateStaffNotificationSettingsSchema = z.object({
-    channels: notificationEventsSchema(z.literal("push"), {
-        conversation_message: z.enum(["push", "email"]),
-    }),
+    channels: notificationEventsSchema(
+        z.literal("push"),
+        extraEvents(["conversation_message", ...STAFF_ALERT_NOTIFICATION_TYPES], z.enum(["push", "email"])),
+    ),
     emailRecipients: z.array(z.string().max(254)).max(STAFF_EMAIL_RECIPIENTS_MAX),
     expectedRevision: expectedRevisionSchema,
 }).strict();

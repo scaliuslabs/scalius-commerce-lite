@@ -19,7 +19,7 @@ import {
   updateStaffThread,
   type ConversationActor,
 } from "@scalius/core/modules/conversations";
-import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
+import { CONVERSATION_LIMITS, CONVERSATION_SUBJECT_TYPES } from "@scalius/shared/conversation";
 import { created, ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import {
@@ -76,7 +76,7 @@ app.openapi(createRoute({
     query: z.object({
       status: z.enum(["open", "pending", "closed", "all"]).optional(),
       assignee: z.string().max(128).optional().openapi({ description: "`me`, `none` or a staff user id" }),
-      subjectType: z.enum(["order", "store"]).optional(),
+      subjectType: z.enum(CONVERSATION_SUBJECT_TYPES).optional().openapi({ description: "What the conversation is about: an order, a store question, a review or a warranty claim" }),
       q: z.string().max(100).optional().openapi({ description: "Subject, customer name or order number" }),
       cursor: z.string().max(100).optional(),
     }),
