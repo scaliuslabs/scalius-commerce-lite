@@ -4,6 +4,7 @@
 // The column is part of the product aggregate (writes advance the aggregate
 // revision) and of the checkout authority fence (a change fails in-flight
 // checkouts).
+import { withGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient";
 import {
     CUSTOMIZATION_SCHEMA_VERSION,
     parseCustomizationSchema,
@@ -125,12 +126,15 @@ export interface StoredCustomizationRead {
 export function readStoredCustomization(
     stored: string | null | undefined,
     decimalPlaces: number,
+    options: { giftCard?: boolean } = {},
 ): StoredCustomizationRead {
     const parsed = parseStoredCustomizationSchema(stored);
     if (!parsed.ok) return { customization: null, requiresCustomization: false, invalid: true };
+    // Buyers of a gift card also see the recipient inputs (@scalius/shared/gift-card-recipient).
+    const schema = options.giftCard ? withGiftCardRecipientFields(parsed.schema) : parsed.schema;
     return {
-        customization: presentCustomizationSchema(parsed.schema, decimalPlaces),
-        requiresCustomization: parsed.schema?.fields.some((field) => field.required) ?? false,
+        customization: presentCustomizationSchema(schema, decimalPlaces),
+        requiresCustomization: schema?.fields.some((field) => field.required) ?? false,
         invalid: false,
     };
 }

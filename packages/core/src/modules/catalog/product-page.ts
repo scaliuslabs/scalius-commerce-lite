@@ -154,7 +154,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         ...product
     } = productRow;
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
-    const customization = readStoredCustomization(storedCustomization, decimalPlaces);
+    const customization = readStoredCustomization(storedCustomization, decimalPlaces, { giftCard: product.isGiftCard === true });
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
     const variantRowsPromise = db.select({
