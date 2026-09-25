@@ -500,11 +500,11 @@ export function createPublicPartReader(deps: PublicPartReaderDeps) {
     let statement: Promise<{ snapshot: ValidationSnapshot; verdicts: DvcVerdict[] }> | null = null;
     const startStatement = () => {
       if (statement) return statement;
-      const began = now();
+      const began = performance.now();
       statement = (async () => {
         const { deps: keysToCheck, since } = validationInput(hits);
         const snapshot = await readValidationSnapshot(deps.db(), keysToCheck, since);
-        summary.validationMs = now() - began;
+        summary.validationMs = Math.round((performance.now() - began) * 100) / 100;
         return { snapshot, verdicts: judgeDvcEntries(hits, snapshot, now()) };
       })();
       // Keep the data center's snapshot current for the next batch's misses.

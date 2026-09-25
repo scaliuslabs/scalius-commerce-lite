@@ -69,17 +69,16 @@ export async function readValidationSnapshot(
   since: number,
 ): Promise<ValidationSnapshot> {
   const rows = await namedRows<{ s: unknown; floor: unknown; pv: unknown; pr: unknown; dep: unknown; seq: unknown }>(db.all(sql`
-    SELECT c."seq" AS s, c."floor" AS floor,
+    SELECT COALESCE(c."seq", 0) AS s, COALESCE(c."floor", 0) AS floor,
       (SELECT st."value" FROM "settings" st WHERE st."category" = 'platform' AND st."key" = 'document') AS pv,
       (SELECT st."revision" FROM "settings" st WHERE st."category" = 'platform' AND st."key" = 'document') AS pr,
       d."dep" AS dep, d."seq" AS seq
-    FROM "cache_clock" c
+    FROM (SELECT 1 AS one) base
+    LEFT JOIN "cache_clock" c ON c."id" = 1
     LEFT JOIN "cache_dep" d
       ON d."seq" > ${since}
       AND d."dep" IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(deps)}))
-    WHERE c."id" = 1
   `), ["s", "floor", "pv", "pr", "dep", "seq"]);
-  if (rows.length === 0) throw new Error("cache_clock row is missing");
   const changed = new Map<string, number>();
   for (const row of rows) {
     if (row.dep !== null && row.dep !== undefined) changed.set(String(row.dep), toNumber(row.seq));
@@ -109,12 +108,11 @@ export async function readFrontierDelta(
     ? sql`SELECT "dep", "seq" FROM "cache_dep" ORDER BY "seq" DESC LIMIT ${bounded + 1}`
     : sql`SELECT "dep", "seq" FROM "cache_dep" WHERE "seq" > ${since} ORDER BY "seq" LIMIT ${bounded + 1}`;
   const rows = await namedRows<{ s: unknown; floor: unknown; dep: unknown; seq: unknown }>(db.all(sql`
-    SELECT c."seq" AS s, c."floor" AS floor, d."dep" AS dep, d."seq" AS seq
-    FROM "cache_clock" c
-    LEFT JOIN (${window}) d ON d."seq" <= c."seq"
-    WHERE c."id" = 1
+    SELECT COALESCE(c."seq", 0) AS s, COALESCE(c."floor", 0) AS floor, d."dep" AS dep, d."seq" AS seq
+    FROM (SELECT 1 AS one) base
+    LEFT JOIN "cache_clock" c ON c."id" = 1
+    LEFT JOIN (${window}) d ON d."seq" <= COALESCE(c."seq", 0)
   `), ["s", "floor", "dep", "seq"]);
-  if (rows.length === 0) throw new Error("cache_clock row is missing");
   const clock = toNumber(rows[0]!.s);
   const floor = toNumber(rows[0]!.floor);
   const ascending = rows
@@ -159,13 +157,12 @@ export async function checkHashedDependencies(
   hashes: readonly string[],
 ): Promise<CacheFrontierCheck> {
   const rows = await namedRows<{ s: unknown; floor: unknown; dep: unknown }>(db.all(sql`
-    SELECT c."seq" AS s, c."floor" AS floor, d."dep" AS dep
-    FROM "cache_clock" c
+    SELECT COALESCE(c."seq", 0) AS s, COALESCE(c."floor", 0) AS floor, d."dep" AS dep
+    FROM (SELECT 1 AS one) base
+    LEFT JOIN "cache_clock" c ON c."id" = 1
     LEFT JOIN (SELECT "dep", "seq" FROM "cache_dep" WHERE "seq" > ${s0} ORDER BY "seq" LIMIT ${FRONTIER_CHECK_MAX_ROWS + 1}) d
-      ON d."seq" <= c."seq"
-    WHERE c."id" = 1
+      ON d."seq" <= COALESCE(c."seq", 0)
   `), ["s", "floor", "dep"]);
-  if (rows.length === 0) throw new Error("cache_clock row is missing");
   const S = toNumber(rows[0]!.s);
   const floor = toNumber(rows[0]!.floor);
   const scanned = rows.filter((row) => row.dep !== null && row.dep !== undefined);
@@ -176,7 +173,7 @@ export async function checkHashedDependencies(
 
 /** The clock now; after a committed write it is at least that write's seq. */
 export async function readCommitSeq(db: Database): Promise<number> {
-  const rows = await namedRows<{ s: unknown }>(db.all(sql`SELECT "seq" AS s FROM "cache_clock" WHERE "id" = 1`), ["s"]);
+  const rows = await namedRows<{ s: unknown }>(db.all(sql`SELECT COALESCE((SELECT "seq" FROM "cache_clock" WHERE "id" = 1), 0) AS s`), ["s"]);
   return toNumber(rows[0]?.s);
 }
 
