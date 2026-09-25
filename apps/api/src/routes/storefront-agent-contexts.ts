@@ -121,10 +121,17 @@ const cartProjectionSchema = z.object({
   items: z.array(cartItemSchema),
   subtotal: z.number(),
   hasFreeDeliveryProduct: z.boolean(),
+  /** Some line is physical: a delivery or pickup method is needed. */
+  requiresDeliveryMethod: z.boolean().optional(),
+  /** Some line ships to an address. */
+  requiresShipping: z.boolean().optional(),
   delivery: z.object({
+    /** `pickup`: collected at the store, no address. */
+    kind: z.enum(["delivery", "pickup"]).nullable().optional(),
     shippingCharge: z.number(),
-    cityName: z.string(),
-    zoneName: z.string(),
+    /** Null for pickup. */
+    cityName: z.string().nullable(),
+    zoneName: z.string().nullable(),
     areaName: z.string().nullable(),
   }).optional(),
 });

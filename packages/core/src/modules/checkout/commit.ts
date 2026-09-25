@@ -104,7 +104,8 @@ type ReservationEntry = {
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
 const INVENTORY_COMMIT_MAX_CONFLICTS = 3;
 const INVENTORY_COMMIT_BASE_BACKOFF_MS = 5;
-const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 18;
+// Bound values per order line; the D1 limit is 100 per statement.
+export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 22;
 const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 13;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
 const CHECKOUT_AUTHORITY_CHANGED = "CHECKOUT_AUTHORITY_CHANGED";
@@ -386,6 +387,12 @@ function buildOrderWriteBatch(
             shippingMethodDescription: od.shippingMethodDescription,
             shippingMethodBaseAmountMinor: od.shippingMethodBaseAmountMinor,
             shippingFeeWaived: od.shippingFeeWaived,
+            // Pre-Wave A payloads (a prepared payload in flight) carry an
+            // address and ship; the orders trigger re-checks the address.
+            requiresShipping: od.requiresShipping ?? true,
+            shippingMethodKind: od.shippingMethodKind ?? null,
+            pickupAddress: od.pickupAddress ?? null,
+            pickupHours: od.pickupHours ?? null,
             discountAmountMinor: od.discountAmountMinor,
             taxAmountMinor: od.taxAmountMinor,
             totalAmountMinor: od.totalAmountMinor,
@@ -429,6 +436,11 @@ function buildOrderWriteBatch(
             taxableAmountMinor: item.taxableAmountMinor,
             taxAmountMinor: item.taxAmountMinor,
             fulfillmentStatus: "pending" as const,
+            fulfillmentType: item.fulfillmentType ?? "ship",
+            properties: item.properties ?? null,
+            propertiesPriceMinor: item.propertiesPriceMinor ?? 0,
+            baseUnitPriceMinor: item.baseUnitPriceMinor
+                ?? item.unitPriceMinor - (item.propertiesPriceMinor ?? 0),
             createdAt: sql`unixepoch()`,
         }));
         for (const chunk of chunkRowsForD1(

@@ -58,6 +58,9 @@ export interface DeliveryRateRow {
     isActive: boolean;
     deletedAt?: Date | number | null;
     kind?: DeliveryRateKind;
+    /** Where and when a pickup rate's orders are collected (snapshotted on the order). */
+    pickupAddress?: string | null;
+    pickupHours?: string | null;
 }
 
 /** Live, active rates by id. */
@@ -74,6 +77,8 @@ export function selectDeliveryRateRowsByIds(db: Database, rawIds: readonly strin
             isActive: shippingMethods.isActive,
             deletedAt: shippingMethods.deletedAt,
             kind: shippingMethods.kind,
+            pickupAddress: shippingMethods.pickupAddress,
+            pickupHours: shippingMethods.pickupHours,
         })
         .from(shippingMethods);
     if (ids.length === 0) return query.limit(0);

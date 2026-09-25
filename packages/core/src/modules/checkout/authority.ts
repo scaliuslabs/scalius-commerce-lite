@@ -62,8 +62,9 @@ const CHECKOUT_SETTINGS_DOCUMENTS = [
 export interface StorefrontCheckoutAuthorityInput {
     items: StorefrontCartValidationItem[];
     inventoryPool?: string | null;
-    city: string;
-    zone: string;
+    /** Needed only for a `delivery` rate. */
+    city?: string | null;
+    zone?: string | null;
     area?: string | null;
     shippingMethodId?: string | null;
     customerEmail?: string | null;

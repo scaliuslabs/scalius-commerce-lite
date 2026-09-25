@@ -17,9 +17,21 @@ import { fromMinor } from "@scalius/shared/money";
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
+    assertStorefrontLineFulfilment,
+    resolveCartPaymentMethods,
+    storefrontLinePropertiesHashes,
     validateStorefrontDeliveryPreflight,
     validateStorefrontCartItems,
 } from "@scalius/core/modules/checkout";
+import { getActivePaymentMethods } from "@scalius/core/modules/payments";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import {
+    allowedPaymentMethodsSchema,
+    deliveryMethodKindSchema,
+    fulfillmentTypeSchema,
+    linePropertiesInputSchema,
+    orderLinePropertySchema,
+} from "../../schemas/order-lines";
 import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote } from "@scalius/core/modules/tax";
 import { type TaxQuote } from "@scalius/core/modules/tax/browser";
 import { ValidationError } from "../../utils/api-error";
@@ -41,6 +53,7 @@ const taxQuoteItemSchema = z.object({
   quantity: z.number().int().min(1).max(99),
   productName: z.string().max(200).optional().nullable(),
   variantLabel: z.string().max(200).optional().nullable(),
+  properties: linePropertiesInputSchema,
 });
 
 const taxQuoteResponseSchema = z.object({
@@ -62,7 +75,14 @@ const taxQuoteResponseSchema = z.object({
   taxAmount: z.number(),
   totalMinor: z.number().int(),
   totalAmount: z.number(),
-  shippingMethod: storefrontShippingMethodSnapshotSchema,
+  /** Null when the cart has nothing physical (no delivery method, no fee). */
+  shippingMethod: storefrontShippingMethodSnapshotSchema.nullable(),
+  deliveryMethodKind: deliveryMethodKindSchema.nullable(),
+  /** Some line ships: the order needs the delivery address. */
+  requiresShipping: z.boolean(),
+  /** Pickup location and hours, for a pickup method. */
+  pickup: z.object({ address: z.string().nullable(), hours: z.string().nullable() }).nullable(),
+  allowedPaymentMethods: allowedPaymentMethodsSchema,
   discounts: z.array(quotedDiscountLineSchema).openapi({
     description: "One line per applied discount (automatic and code), with its own amount.",
   }),
@@ -80,6 +100,10 @@ const taxQuoteResponseSchema = z.object({
     unitPrice: z.number(),
     productName: z.string(),
     variantLabel: z.string().nullable(),
+    fulfillmentType: fulfillmentTypeSchema,
+    properties: z.array(orderLinePropertySchema),
+    propertiesPriceMinor: z.number().int(),
+    propertiesHash: z.string(),
   })),
 });
 
@@ -100,10 +124,12 @@ const taxQuoteRoute = createRoute({
               InventoryPool.PREORDER,
               InventoryPool.BACKORDER,
             ]).default(InventoryPool.REGULAR),
-            city: z.string().min(1).max(180),
-            zone: z.string().min(1).max(180),
+            /** Required for a delivery method; omitted for pickup or when nothing is physical. */
+            city: z.string().min(1).max(180).optional().nullable(),
+            zone: z.string().min(1).max(180).optional().nullable(),
             area: z.string().max(180).optional().nullable(),
-            shippingMethodId: z.string().min(1).max(180),
+            /** Required when a line is physical; omitted when nothing is. */
+            shippingMethodId: z.string().min(1).max(180).optional().nullable(),
             discountCodes: discountCodesSchema,
             customerPhone: phoneNumberSchema.optional().nullable(),
           }).strict(),
@@ -133,7 +159,6 @@ async function resolveAuthoritativeTaxQuote(
   },
   cartValidation: TaxQuoteCartValidationResult,
   delivery: TaxQuoteDeliveryResult,
-  destination: { city: string; zone: string; area?: string | null },
   currencyCode: string,
 ): Promise<{ quote: TaxQuote; discount: StorefrontDiscountQuote }> {
   const decimalPlaces = getDecimalPlaces(currencyCode);
@@ -155,10 +180,11 @@ async function resolveAuthoritativeTaxQuote(
   });
 
   const quote = await calculateStorefrontTaxQuote(db, {
+    // No address (pickup, service, digital): only store-wide rates apply.
     destination: {
-      city: destination.city,
-      zone: destination.zone,
-      area: destination.area ?? null,
+      city: delivery.fulfilment.requiresShipping ? delivery.address?.city ?? null : null,
+      zone: delivery.fulfilment.requiresShipping ? delivery.address?.zone ?? null : null,
+      area: delivery.fulfilment.requiresShipping ? delivery.address?.area ?? null : null,
       cityName: delivery.cityName,
       zoneName: delivery.zoneName,
       areaName: delivery.areaName,
@@ -189,7 +215,10 @@ app.openapi(taxQuoteRoute, async (c) => {
         getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>),
       )
     : null;
-  const currency = await getCurrencySettings(db);
+  const [currency, paymentMethods] = await Promise.all([
+    getCurrencySettings(db),
+    getActivePaymentMethods(db, getCredentialEncryptionKey(c.env as Record<string, unknown>)),
+  ]);
   const cartValidation = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.currencyCode,
@@ -205,6 +234,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     area: data.area,
     shippingMethodId: data.shippingMethodId,
   }, cartValidation);
+  const lineTypes = assertStorefrontLineFulfilment(cartValidation, delivery);
+  const linePropertiesHashes = await storefrontLinePropertiesHashes(cartValidation);
   const { quote, discount } = await resolveAuthoritativeTaxQuote(
     db,
     {
@@ -214,7 +245,6 @@ app.openapi(taxQuoteRoute, async (c) => {
     },
     cartValidation,
     delivery,
-    data,
     currency.currencyCode,
   );
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
@@ -223,6 +253,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     quoteFingerprint: await buildStorefrontCheckoutQuoteFingerprint(
       quote,
       delivery.shippingMethod,
+      linePropertiesHashes,
     ),
     displayLabel: quote.displayLabel,
     pricesIncludeTax: quote.pricesIncludeTax,
@@ -241,8 +272,12 @@ app.openapi(taxQuoteRoute, async (c) => {
     totalMinor: quote.totalMinor,
     totalAmount: toAmount(quote.totalMinor),
     shippingMethod: delivery.shippingMethod,
+    deliveryMethodKind: delivery.kind,
+    requiresShipping: delivery.fulfilment.requiresShipping,
+    pickup: delivery.pickup,
+    allowedPaymentMethods: resolveCartPaymentMethods(paymentMethods.enabledMethods, delivery.fulfilment),
     ...presentStorefrontDiscountQuote(discount, quote.decimalPlaces),
-    items: cartValidation.items.map((item) => ({
+    items: cartValidation.items.map((item, position) => ({
       cartKey: item.cartKey ?? null,
       productId: item.productId,
       variantId: item.variantId,
@@ -250,6 +285,13 @@ app.openapi(taxQuoteRoute, async (c) => {
       unitPrice: toAmount(item.unitPriceMinor),
       productName: item.productName,
       variantLabel: item.variantLabel,
+      fulfillmentType: lineTypes[position]!,
+      properties: item.properties.map((property) => ({
+        ...property,
+        price: toAmount(property.priceMinor),
+      })),
+      propertiesPriceMinor: item.propertiesPriceMinor,
+      propertiesHash: linePropertiesHashes[position]!,
     })),
   });
 });

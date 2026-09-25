@@ -15950,17 +15950,34 @@
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
+                        "requiresDeliveryMethod": {
+                          "type": "boolean"
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
                         "delivery": {
                           "type": "object",
                           "properties": {
+                            "kind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ]
+                            },
                             "shippingCharge": {
                               "type": "number"
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "areaName": {
                               "type": "string",
@@ -16511,17 +16528,34 @@
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
+                        "requiresDeliveryMethod": {
+                          "type": "boolean"
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
                         "delivery": {
                           "type": "object",
                           "properties": {
+                            "kind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ]
+                            },
                             "shippingCharge": {
                               "type": "number"
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "areaName": {
                               "type": "string",
@@ -17124,17 +17158,34 @@
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
+                        "requiresDeliveryMethod": {
+                          "type": "boolean"
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
                         "delivery": {
                           "type": "object",
                           "properties": {
+                            "kind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ]
+                            },
                             "shippingCharge": {
                               "type": "number"
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "areaName": {
                               "type": "string",
@@ -17735,17 +17786,34 @@
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
+                        "requiresDeliveryMethod": {
+                          "type": "boolean"
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
                         "delivery": {
                           "type": "object",
                           "properties": {
+                            "kind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ]
+                            },
                             "shippingCharge": {
                               "type": "number"
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "areaName": {
                               "type": "string",
@@ -18340,17 +18408,34 @@
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
+                        "requiresDeliveryMethod": {
+                          "type": "boolean"
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
                         "delivery": {
                           "type": "object",
                           "properties": {
+                            "kind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ]
+                            },
                             "shippingCharge": {
                               "type": "number"
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "areaName": {
                               "type": "string",
@@ -18953,17 +19038,34 @@
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
+                        "requiresDeliveryMethod": {
+                          "type": "boolean"
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
                         "delivery": {
                           "type": "object",
                           "properties": {
+                            "kind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ]
+                            },
                             "shippingCharge": {
                               "type": "number"
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "areaName": {
                               "type": "string",
@@ -19552,17 +19654,34 @@
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
+                        "requiresDeliveryMethod": {
+                          "type": "boolean"
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
                         "delivery": {
                           "type": "object",
                           "properties": {
+                            "kind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ]
+                            },
                             "shippingCharge": {
                               "type": "number"
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "areaName": {
                               "type": "string",
@@ -20181,17 +20300,34 @@
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
+                        "requiresDeliveryMethod": {
+                          "type": "boolean"
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
                         "delivery": {
                           "type": "object",
                           "properties": {
+                            "kind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ]
+                            },
                             "shippingCharge": {
                               "type": "number"
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "areaName": {
                               "type": "string",
@@ -20783,17 +20919,34 @@
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
+                        "requiresDeliveryMethod": {
+                          "type": "boolean"
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
                         "delivery": {
                           "type": "object",
                           "properties": {
+                            "kind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ]
+                            },
                             "shippingCharge": {
                               "type": "number"
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "areaName": {
                               "type": "string",
@@ -32372,7 +32525,21 @@
                                 "nullable": true
                               },
                               "shippingAddress": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "requiresShipping": {
+                                "type": "boolean"
+                              },
+                              "shippingMethodKind": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "delivery",
+                                  "pickup",
+                                  null
+                                ],
+                                "description": "`delivery` ships to the buyer's address; `pickup` is collected at the store."
                               },
                               "cityName": {
                                 "type": "string",
@@ -32524,6 +32691,8 @@
                               "paymentMethod",
                               "fulfillmentStatus",
                               "shippingAddress",
+                              "requiresShipping",
+                              "shippingMethodKind",
                               "cityName",
                               "zoneName",
                               "notes",
@@ -34153,13 +34322,56 @@
                               "nullable": true
                             },
                             "shippingAddress": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "city": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "requiresShipping": {
+                              "type": "boolean"
+                            },
+                            "shippingMethodKind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ],
+                              "description": "`delivery` ships to the buyer's address; `pickup` is collected at the store."
+                            },
+                            "pickup": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "address": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "hours": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "readyAt": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "address",
+                                "hours",
+                                "readyAt"
+                              ]
+                            },
+                            "conversationId": {
+                              "type": "string",
+                              "nullable": true
                             },
                             "area": {
                               "type": "string",
@@ -34228,6 +34440,10 @@
                             "shippingAddress",
                             "city",
                             "zone",
+                            "requiresShipping",
+                            "shippingMethodKind",
+                            "pickup",
+                            "conversationId",
                             "area",
                             "cityName",
                             "zoneName",
@@ -34306,6 +34522,74 @@
                               "fulfillmentStatus": {
                                 "type": "string"
                               },
+                              "fulfillmentType": {
+                                "type": "string",
+                                "enum": [
+                                  "ship",
+                                  "pickup",
+                                  "digital",
+                                  "gift_card",
+                                  "service"
+                                ],
+                                "description": "How the order line reaches the buyer, frozen when the order is placed."
+                              },
+                              "fulfilledQuantity": {
+                                "type": "integer"
+                              },
+                              "properties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "textarea",
+                                        "select",
+                                        "checkbox"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "displayValue": {
+                                      "type": "string"
+                                    },
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "priceMinor": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "type",
+                                    "label",
+                                    "value",
+                                    "displayValue",
+                                    "price",
+                                    "priceMinor"
+                                  ]
+                                }
+                              },
+                              "propertiesPrice": {
+                                "type": "number"
+                              },
+                              "propertiesPriceMinor": {
+                                "type": "integer"
+                              },
+                              "baseUnitPriceMinor": {
+                                "type": "integer",
+                                "nullable": true
+                              },
                               "createdAt": {
                                 "$ref": "#/components/schemas/NullableTimestamp"
                               }
@@ -34328,9 +34612,99 @@
                               "taxableAmountMinor",
                               "taxAmountMinor",
                               "fulfillmentStatus",
+                              "fulfillmentType",
+                              "fulfilledQuantity",
+                              "properties",
+                              "propertiesPrice",
+                              "propertiesPriceMinor",
+                              "baseUnitPriceMinor",
                               "createdAt"
                             ],
                             "additionalProperties": {}
+                          }
+                        },
+                        "fulfillments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "ship",
+                                  "pickup",
+                                  "digital",
+                                  "gift_card",
+                                  "service"
+                                ],
+                                "description": "How the order line reaches the buyer, frozen when the order is placed."
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "lines": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "orderItemId": {
+                                      "type": "string"
+                                    },
+                                    "quantity": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true
+                                    }
+                                  },
+                                  "required": [
+                                    "orderItemId",
+                                    "quantity"
+                                  ]
+                                }
+                              },
+                              "tracking": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "shipmentId": {
+                                    "type": "string"
+                                  },
+                                  "courierName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "trackingId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "trackingUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "shipmentId",
+                                  "courierName",
+                                  "trackingId",
+                                  "trackingUrl",
+                                  "status"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "kind",
+                              "createdAt",
+                              "lines",
+                              "tracking"
+                            ]
                           }
                         },
                         "shipments": {
@@ -35027,6 +35401,7 @@
                       "required": [
                         "order",
                         "items",
+                        "fulfillments",
                         "shipments",
                         "payments",
                         "refundAttempts",
@@ -42058,6 +42433,15 @@
                                     "type": "number",
                                     "nullable": true
                                   },
+                                  "fulfillmentKind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "physical",
+                                      "digital",
+                                      "service"
+                                    ],
+                                    "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
+                                  },
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
@@ -42085,6 +42469,7 @@
                                   "discountType",
                                   "discountPercentage",
                                   "discountAmount",
+                                  "fulfillmentKind",
                                   "createdAt",
                                   "updatedAt"
                                 ]
@@ -42589,6 +42974,102 @@
                                 "type": "string"
                               }
                             },
+                            "isGiftCard": {
+                              "type": "boolean"
+                            },
+                            "customization": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "fields": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "key": {
+                                        "type": "string"
+                                      },
+                                      "label": {
+                                        "type": "string"
+                                      },
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "text",
+                                          "textarea",
+                                          "select",
+                                          "checkbox"
+                                        ]
+                                      },
+                                      "required": {
+                                        "type": "boolean"
+                                      },
+                                      "help": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "maxLength": {
+                                        "type": "integer",
+                                        "nullable": true
+                                      },
+                                      "price": {
+                                        "type": "number"
+                                      },
+                                      "priceMinor": {
+                                        "type": "integer"
+                                      },
+                                      "options": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "value": {
+                                              "type": "string"
+                                            },
+                                            "label": {
+                                              "type": "string"
+                                            },
+                                            "price": {
+                                              "type": "number"
+                                            },
+                                            "priceMinor": {
+                                              "type": "integer"
+                                            }
+                                          },
+                                          "required": [
+                                            "value",
+                                            "label",
+                                            "price",
+                                            "priceMinor"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "key",
+                                      "label",
+                                      "type",
+                                      "required",
+                                      "help",
+                                      "maxLength",
+                                      "price",
+                                      "priceMinor",
+                                      "options"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "fields"
+                              ],
+                              "description": "Buyer inputs asked on the product page, in schema order."
+                            },
+                            "requiresCustomization": {
+                              "type": "boolean"
+                            },
+                            "customizationUnavailable": {
+                              "type": "boolean"
+                            },
                             "attributes": {
                               "type": "array",
                               "items": {
@@ -42746,6 +43227,10 @@
                             "imageAlt",
                             "options",
                             "features",
+                            "isGiftCard",
+                            "customization",
+                            "requiresCustomization",
+                            "customizationUnavailable",
                             "attributes",
                             "additionalInfo",
                             "offers"
@@ -43018,6 +43503,15 @@
                                 "type": "number",
                                 "nullable": true
                               },
+                              "fulfillmentKind": {
+                                "type": "string",
+                                "enum": [
+                                  "physical",
+                                  "digital",
+                                  "service"
+                                ],
+                                "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
+                              },
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
@@ -43053,6 +43547,7 @@
                               "discountType",
                               "discountPercentage",
                               "discountAmount",
+                              "fulfillmentKind",
                               "createdAt",
                               "updatedAt",
                               "deletedAt"
@@ -47506,7 +48001,132 @@
                               "type": "boolean"
                             },
                             "shippingAddress": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "requiresShipping": {
+                              "type": "boolean"
+                            },
+                            "shippingMethodKind": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "delivery",
+                                "pickup",
+                                null
+                              ],
+                              "description": "`delivery` ships to the buyer's address; `pickup` is collected at the store."
+                            },
+                            "pickup": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "address": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "hours": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "readyAt": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "address",
+                                "hours",
+                                "readyAt"
+                              ]
+                            },
+                            "fulfillments": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "ship",
+                                      "pickup",
+                                      "digital",
+                                      "gift_card",
+                                      "service"
+                                    ],
+                                    "description": "How the order line reaches the buyer, frozen when the order is placed."
+                                  },
+                                  "createdAt": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "lines": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "orderItemId": {
+                                          "type": "string"
+                                        },
+                                        "quantity": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "exclusiveMinimum": true
+                                        }
+                                      },
+                                      "required": [
+                                        "orderItemId",
+                                        "quantity"
+                                      ]
+                                    }
+                                  },
+                                  "tracking": {
+                                    "type": "object",
+                                    "nullable": true,
+                                    "properties": {
+                                      "shipmentId": {
+                                        "type": "string"
+                                      },
+                                      "courierName": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "trackingId": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "trackingUrl": {
+                                        "type": "string",
+                                        "nullable": true
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "shipmentId",
+                                      "courierName",
+                                      "trackingId",
+                                      "trackingUrl",
+                                      "status"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "createdAt",
+                                  "lines",
+                                  "tracking"
+                                ]
+                              }
+                            },
+                            "conversationId": {
+                              "type": "string",
+                              "nullable": true
                             },
                             "totalAmount": {
                               "type": "number"
@@ -47762,10 +48382,12 @@
                               "type": "boolean"
                             },
                             "city": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "area": {
                               "type": "string",
@@ -47858,6 +48480,74 @@
                                   },
                                   "taxAmountMinor": {
                                     "type": "integer"
+                                  },
+                                  "fulfillmentType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "ship",
+                                      "pickup",
+                                      "digital",
+                                      "gift_card",
+                                      "service"
+                                    ],
+                                    "description": "How the order line reaches the buyer, frozen when the order is placed."
+                                  },
+                                  "fulfilledQuantity": {
+                                    "type": "integer"
+                                  },
+                                  "properties": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "text",
+                                            "textarea",
+                                            "select",
+                                            "checkbox"
+                                          ]
+                                        },
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "type": "string"
+                                        },
+                                        "displayValue": {
+                                          "type": "string"
+                                        },
+                                        "price": {
+                                          "type": "number"
+                                        },
+                                        "priceMinor": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "key",
+                                        "type",
+                                        "label",
+                                        "value",
+                                        "displayValue",
+                                        "price",
+                                        "priceMinor"
+                                      ]
+                                    }
+                                  },
+                                  "propertiesPrice": {
+                                    "type": "number"
+                                  },
+                                  "propertiesPriceMinor": {
+                                    "type": "integer"
+                                  },
+                                  "baseUnitPriceMinor": {
+                                    "type": "integer",
+                                    "nullable": true
                                   }
                                 },
                                 "required": [
@@ -47873,7 +48563,13 @@
                                   "lineSubtotalMinor",
                                   "discountAmountMinor",
                                   "taxableAmountMinor",
-                                  "taxAmountMinor"
+                                  "taxAmountMinor",
+                                  "fulfillmentType",
+                                  "fulfilledQuantity",
+                                  "properties",
+                                  "propertiesPrice",
+                                  "propertiesPriceMinor",
+                                  "baseUnitPriceMinor"
                                 ]
                               }
                             },
@@ -48012,6 +48708,11 @@
                             "customerEmail",
                             "accountLinked",
                             "shippingAddress",
+                            "requiresShipping",
+                            "shippingMethodKind",
+                            "pickup",
+                            "fulfillments",
+                            "conversationId",
                             "totalAmount",
                             "shippingCharge",
                             "discountAmount",
@@ -49093,6 +49794,29 @@
                         "variantLabel": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "value": {
+                                "type": "string",
+                                "maxLength": 1000
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value"
+                            ]
+                          },
+                          "maxItems": 10,
+                          "description": "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
                         }
                       },
                       "required": [
@@ -49187,7 +49911,10 @@
                                   "VARIANT_UNAVAILABLE",
                                   "VARIANT_MISMATCH",
                                   "QUANTITY_UNAVAILABLE",
-                                  "PRICE_CHANGED"
+                                  "PRICE_CHANGED",
+                                  "PROPERTIES_REQUIRED",
+                                  "PROPERTIES_INVALID",
+                                  "FULFILMENT_UNAVAILABLE"
                                 ]
                               },
                               "action": {
@@ -49196,7 +49923,8 @@
                                   "remove",
                                   "select_variant",
                                   "reduce_quantity",
-                                  "refresh_item"
+                                  "refresh_item",
+                                  "edit_properties"
                                 ]
                               },
                               "message": {
@@ -49221,6 +49949,10 @@
                               },
                               "currentPrice": {
                                 "type": "number"
+                              },
+                              "propertyKey": {
+                                "type": "string",
+                                "nullable": true
                               }
                             },
                             "required": [
@@ -49263,6 +49995,84 @@
                               "unitPrice": {
                                 "type": "number"
                               },
+                              "baseUnitPrice": {
+                                "type": "number"
+                              },
+                              "propertiesPrice": {
+                                "type": "number"
+                              },
+                              "propertiesPriceMinor": {
+                                "type": "integer"
+                              },
+                              "properties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "textarea",
+                                        "select",
+                                        "checkbox"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "displayValue": {
+                                      "type": "string"
+                                    },
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "priceMinor": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "type",
+                                    "label",
+                                    "value",
+                                    "displayValue",
+                                    "price",
+                                    "priceMinor"
+                                  ]
+                                }
+                              },
+                              "propertiesHash": {
+                                "type": "string"
+                              },
+                              "fulfillmentKind": {
+                                "type": "string",
+                                "enum": [
+                                  "physical",
+                                  "digital",
+                                  "service"
+                                ],
+                                "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
+                              },
+                              "fulfillmentType": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "ship",
+                                  "pickup",
+                                  "digital",
+                                  "gift_card",
+                                  "service",
+                                  null
+                                ],
+                                "description": "How the order line reaches the buyer, frozen when the order is placed."
+                              },
                               "productName": {
                                 "type": "string"
                               },
@@ -49293,6 +50103,13 @@
                               "variantId",
                               "quantity",
                               "unitPrice",
+                              "baseUnitPrice",
+                              "propertiesPrice",
+                              "propertiesPriceMinor",
+                              "properties",
+                              "propertiesHash",
+                              "fulfillmentKind",
+                              "fulfillmentType",
                               "productName",
                               "variantLabel",
                               "freeDelivery",
@@ -49308,9 +50125,40 @@
                         "hasFreeDeliveryProduct": {
                           "type": "boolean"
                         },
+                        "requiresDeliveryMethod": {
+                          "type": "boolean"
+                        },
+                        "deliveryMethodKind": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "delivery",
+                            "pickup",
+                            null
+                          ],
+                          "description": "`delivery` ships to the buyer's address; `pickup` is collected at the store."
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
+                        "allowedPaymentMethods": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Payment methods this cart may use. Cash on delivery is offered only when something is shipped, collected or performed."
+                        },
                         "delivery": {
                           "type": "object",
                           "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "delivery",
+                                "pickup"
+                              ],
+                              "description": "`delivery` ships to the buyer's address; `pickup` is collected at the store."
+                            },
                             "shippingCharge": {
                               "type": "number"
                             },
@@ -49349,22 +50197,44 @@
                               ]
                             },
                             "cityName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "zoneName": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "areaName": {
                               "type": "string",
                               "nullable": true
+                            },
+                            "pickup": {
+                              "type": "object",
+                              "nullable": true,
+                              "properties": {
+                                "address": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "hours": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "address",
+                                "hours"
+                              ]
                             }
                           },
                           "required": [
+                            "kind",
                             "shippingCharge",
                             "shippingMethod",
                             "cityName",
                             "zoneName",
-                            "areaName"
+                            "areaName",
+                            "pickup"
                           ]
                         }
                       },
@@ -49373,7 +50243,11 @@
                         "issues",
                         "items",
                         "subtotal",
-                        "hasFreeDeliveryProduct"
+                        "hasFreeDeliveryProduct",
+                        "requiresDeliveryMethod",
+                        "deliveryMethodKind",
+                        "requiresShipping",
+                        "allowedPaymentMethods"
                       ]
                     }
                   },
@@ -49537,6 +50411,29 @@
                           "type": "string",
                           "nullable": true,
                           "maxLength": 200
+                        },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "value": {
+                                "type": "string",
+                                "maxLength": 1000
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value"
+                            ]
+                          },
+                          "maxItems": 10,
+                          "description": "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
                         }
                       },
                       "required": [
@@ -49559,11 +50456,13 @@
                   },
                   "city": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1,
                     "maxLength": 180
                   },
                   "zone": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1,
                     "maxLength": 180
                   },
@@ -49574,6 +50473,7 @@
                   },
                   "shippingMethodId": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1,
                     "maxLength": 180
                   },
@@ -49596,10 +50496,7 @@
                   }
                 },
                 "required": [
-                  "items",
-                  "city",
-                  "zone",
-                  "shippingMethodId"
+                  "items"
                 ],
                 "additionalProperties": false
               }
@@ -49682,6 +50579,7 @@
                         },
                         "shippingMethod": {
                           "type": "object",
+                          "nullable": true,
                           "properties": {
                             "id": {
                               "type": "string",
@@ -49713,6 +50611,44 @@
                             "baseAmountMinor",
                             "feeWaived"
                           ]
+                        },
+                        "deliveryMethodKind": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "delivery",
+                            "pickup",
+                            null
+                          ],
+                          "description": "`delivery` ships to the buyer's address; `pickup` is collected at the store."
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
+                        },
+                        "pickup": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "address": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "hours": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "address",
+                            "hours"
+                          ]
+                        },
+                        "allowedPaymentMethods": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Payment methods this cart may use. Cash on delivery is offered only when something is shipped, collected or performed."
                         },
                         "discounts": {
                           "type": "array",
@@ -49984,6 +50920,67 @@
                               "variantLabel": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "fulfillmentType": {
+                                "type": "string",
+                                "enum": [
+                                  "ship",
+                                  "pickup",
+                                  "digital",
+                                  "gift_card",
+                                  "service"
+                                ],
+                                "description": "How the order line reaches the buyer, frozen when the order is placed."
+                              },
+                              "properties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "textarea",
+                                        "select",
+                                        "checkbox"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "displayValue": {
+                                      "type": "string"
+                                    },
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "priceMinor": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "type",
+                                    "label",
+                                    "value",
+                                    "displayValue",
+                                    "price",
+                                    "priceMinor"
+                                  ]
+                                }
+                              },
+                              "propertiesPriceMinor": {
+                                "type": "integer"
+                              },
+                              "propertiesHash": {
+                                "type": "string"
                               }
                             },
                             "required": [
@@ -49992,7 +50989,11 @@
                               "quantity",
                               "unitPrice",
                               "productName",
-                              "variantLabel"
+                              "variantLabel",
+                              "fulfillmentType",
+                              "properties",
+                              "propertiesPriceMinor",
+                              "propertiesHash"
                             ]
                           }
                         }
@@ -50017,6 +51018,10 @@
                         "totalMinor",
                         "totalAmount",
                         "shippingMethod",
+                        "deliveryMethodKind",
+                        "requiresShipping",
+                        "pickup",
+                        "allowedPaymentMethods",
                         "discounts",
                         "offers",
                         "rejectedCodes",
@@ -50175,15 +51180,18 @@
                   },
                   "shippingAddress": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 10,
                     "maxLength": 500
                   },
                   "city": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "zone": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "area": {
@@ -50244,6 +51252,29 @@
                         "variantLabel": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "value": {
+                                "type": "string",
+                                "maxLength": 1000
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value"
+                            ]
+                          },
+                          "maxItems": 10,
+                          "description": "Buyer inputs the product asks for (engraving text, gift wrap, a fit choice). A ticked checkbox sends \"true\"; empty optional fields are omitted. Same SKU with different inputs is a different line."
                         }
                       },
                       "required": [
@@ -50299,10 +51330,6 @@
                   "customerName",
                   "customerPhone",
                   "customerEmail",
-                  "shippingAddress",
-                  "city",
-                  "zone",
-                  "area",
                   "notes",
                   "items",
                   "shippingCharge"
@@ -50366,6 +51393,9 @@
                         },
                         "decimalPlaces": {
                           "type": "integer"
+                        },
+                        "requiresShipping": {
+                          "type": "boolean"
                         },
                         "message": {
                           "type": "string"
@@ -158435,12 +159465,13 @@
                 "unpaid",
                 "cod_to_collect",
                 "delivery_failed",
-                "returned"
+                "returned",
+                "ready_for_pickup"
               ],
-              "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned."
+              "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
             },
             "required": false,
-            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).",
             "name": "view",
             "in": "query"
           },
@@ -158504,6 +159535,21 @@
             "required": false,
             "description": "Filter by fulfillment status",
             "name": "fulfillmentStatus",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "delivery",
+                "pickup",
+                "none"
+              ],
+              "description": "How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical)."
+            },
+            "required": false,
+            "description": "How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical).",
+            "name": "deliveryMethod",
             "in": "query"
           },
           {
@@ -159032,6 +160078,23 @@
                               },
                               "refundedAmount": {
                                 "type": "number"
+                              },
+                              "requiresShipping": {
+                                "type": "boolean",
+                                "description": "Some line ships, so the order has a delivery address."
+                              },
+                              "shippingMethodKind": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "delivery",
+                                  "pickup",
+                                  null
+                                ],
+                                "description": "The order's one delivery method; null when nothing physical was bought (service or digital only)."
+                              },
+                              "pickupReadyAt": {
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -159068,7 +160131,10 @@
                               "openRequestType",
                               "cod",
                               "refundDue",
-                              "refundedAmount"
+                              "refundedAmount",
+                              "requiresShipping",
+                              "shippingMethodKind",
+                              "pickupReadyAt"
                             ]
                           }
                         },
@@ -159184,15 +160250,18 @@
                   },
                   "shippingAddress": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 10,
                     "maxLength": 500
                   },
                   "city": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "zone": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "area": {
@@ -159240,6 +160309,28 @@
                           "type": "integer",
                           "minimum": 1,
                           "maximum": 99
+                        },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "value": {
+                                "type": "string",
+                                "maxLength": 1000
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value"
+                            ]
+                          },
+                          "maxItems": 10
                         }
                       },
                       "required": [
@@ -159266,10 +160357,6 @@
                   "customerName",
                   "customerPhone",
                   "customerEmail",
-                  "shippingAddress",
-                  "city",
-                  "zone",
-                  "area",
                   "notes",
                   "discountAmount",
                   "shippingCharge",
@@ -159533,12 +160620,13 @@
                 "unpaid",
                 "cod_to_collect",
                 "delivery_failed",
-                "returned"
+                "returned",
+                "ready_for_pickup"
               ],
-              "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned."
+              "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet)."
             },
             "required": false,
-            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+            "description": "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).",
             "name": "view",
             "in": "query"
           },
@@ -160559,6 +161647,23 @@
                               },
                               "refundedAmount": {
                                 "type": "number"
+                              },
+                              "requiresShipping": {
+                                "type": "boolean",
+                                "description": "Some line ships, so the order has a delivery address."
+                              },
+                              "shippingMethodKind": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "delivery",
+                                  "pickup",
+                                  null
+                                ],
+                                "description": "The order's one delivery method; null when nothing physical was bought (service or digital only)."
+                              },
+                              "pickupReadyAt": {
+                                "$ref": "#/components/schemas/NullableTimestamp"
                               }
                             },
                             "required": [
@@ -160595,7 +161700,10 @@
                               "openRequestType",
                               "cod",
                               "refundDue",
-                              "refundedAmount"
+                              "refundedAmount",
+                              "requiresShipping",
+                              "shippingMethodKind",
+                              "pickupReadyAt"
                             ]
                           }
                         },
@@ -161367,10 +162475,12 @@
                 "properties": {
                   "city": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "zone": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "area": {
@@ -161394,6 +162504,28 @@
                           "type": "integer",
                           "minimum": 1,
                           "maximum": 99
+                        },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "value": {
+                                "type": "string",
+                                "maxLength": 1000
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value"
+                            ]
+                          },
+                          "maxItems": 10
                         }
                       },
                       "required": [
@@ -161413,12 +162545,15 @@
                   "shippingCharge": {
                     "type": "number",
                     "minimum": 0
+                  },
+                  "shippingMethodId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 180
                   }
                 },
                 "required": [
-                  "city",
-                  "zone",
-                  "area",
                   "items",
                   "discountAmount",
                   "shippingCharge"
@@ -161887,15 +163022,18 @@
                   },
                   "shippingAddress": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 10,
                     "maxLength": 500
                   },
                   "city": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "zone": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "area": {
@@ -161948,6 +163086,28 @@
                           "minimum": 1,
                           "maximum": 99
                         },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "value": {
+                                "type": "string",
+                                "maxLength": 1000
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value"
+                            ]
+                          },
+                          "maxItems": 10
+                        },
                         "orderItemId": {
                           "type": "string",
                           "minLength": 1
@@ -161967,10 +163127,6 @@
                   "customerName",
                   "customerPhone",
                   "customerEmail",
-                  "shippingAddress",
-                  "city",
-                  "zone",
-                  "area",
                   "notes",
                   "discountAmount",
                   "shippingCharge",
@@ -162438,15 +163594,18 @@
                   },
                   "shippingAddress": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 10,
                     "maxLength": 500
                   },
                   "city": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "zone": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "area": {
@@ -162499,6 +163658,28 @@
                           "minimum": 1,
                           "maximum": 99
                         },
+                        "properties": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "value": {
+                                "type": "string",
+                                "maxLength": 1000
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "value"
+                            ]
+                          },
+                          "maxItems": 10
+                        },
                         "orderItemId": {
                           "type": "string",
                           "minLength": 1
@@ -162526,10 +163707,6 @@
                   "customerName",
                   "customerPhone",
                   "customerEmail",
-                  "shippingAddress",
-                  "city",
-                  "zone",
-                  "area",
                   "notes",
                   "discountAmount",
                   "shippingCharge",
@@ -165382,6 +166559,74 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "fulfillmentType": {
+                                "type": "string",
+                                "enum": [
+                                  "ship",
+                                  "pickup",
+                                  "digital",
+                                  "gift_card",
+                                  "service"
+                                ],
+                                "description": "How the order line reaches the buyer, frozen when the order is placed."
+                              },
+                              "fulfilledQuantity": {
+                                "type": "integer"
+                              },
+                              "properties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "key": {
+                                      "type": "string"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text",
+                                        "textarea",
+                                        "select",
+                                        "checkbox"
+                                      ]
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "type": "string"
+                                    },
+                                    "displayValue": {
+                                      "type": "string"
+                                    },
+                                    "price": {
+                                      "type": "number"
+                                    },
+                                    "priceMinor": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "key",
+                                    "type",
+                                    "label",
+                                    "value",
+                                    "displayValue",
+                                    "price",
+                                    "priceMinor"
+                                  ]
+                                }
+                              },
+                              "propertiesPrice": {
+                                "type": "number"
+                              },
+                              "propertiesPriceMinor": {
+                                "type": "integer"
+                              },
+                              "baseUnitPriceMinor": {
+                                "type": "integer",
+                                "nullable": true
+                              },
                               "id": {
                                 "type": "string"
                               },
@@ -165440,6 +166685,12 @@
                               }
                             },
                             "required": [
+                              "fulfillmentType",
+                              "fulfilledQuantity",
+                              "properties",
+                              "propertiesPrice",
+                              "propertiesPriceMinor",
+                              "baseUnitPriceMinor",
                               "id",
                               "productId",
                               "variantId",
@@ -165927,6 +167178,23 @@
                         "refundedAmount": {
                           "type": "number"
                         },
+                        "requiresShipping": {
+                          "type": "boolean",
+                          "description": "Some line ships, so the order has a delivery address."
+                        },
+                        "shippingMethodKind": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "delivery",
+                            "pickup",
+                            null
+                          ],
+                          "description": "The order's one delivery method; null when nothing physical was bought (service or digital only)."
+                        },
+                        "pickupReadyAt": {
+                          "$ref": "#/components/schemas/NullableTimestamp"
+                        },
                         "editReadiness": {
                           "type": "object",
                           "properties": {
@@ -166081,6 +167349,154 @@
                               "updatedAt"
                             ]
                           }
+                        },
+                        "pickup": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "address": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "hours": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "readyAt": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "address",
+                            "hours",
+                            "readyAt"
+                          ]
+                        },
+                        "fulfillments": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "ship",
+                                  "pickup",
+                                  "digital",
+                                  "gift_card",
+                                  "service"
+                                ],
+                                "description": "How the order line reaches the buyer, frozen when the order is placed."
+                              },
+                              "createdAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "lines": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "orderItemId": {
+                                      "type": "string"
+                                    },
+                                    "quantity": {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "exclusiveMinimum": true
+                                    }
+                                  },
+                                  "required": [
+                                    "orderItemId",
+                                    "quantity"
+                                  ]
+                                }
+                              },
+                              "tracking": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "shipmentId": {
+                                    "type": "string"
+                                  },
+                                  "courierName": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "trackingId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "trackingUrl": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "shipmentId",
+                                  "courierName",
+                                  "trackingId",
+                                  "trackingUrl",
+                                  "status"
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "voided"
+                                ]
+                              },
+                              "actorType": {
+                                "type": "string",
+                                "enum": [
+                                  "admin",
+                                  "system"
+                                ]
+                              },
+                              "cashCollected": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "voidedAt": {
+                                "$ref": "#/components/schemas/NullableTimestamp"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "kind",
+                              "createdAt",
+                              "lines",
+                              "tracking",
+                              "status",
+                              "actorType",
+                              "cashCollected",
+                              "voidedAt"
+                            ]
+                          }
+                        },
+                        "conversation": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "unread": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "unread"
+                          ]
                         }
                       },
                       "required": [
@@ -166139,8 +167555,14 @@
                         "cod",
                         "refundDue",
                         "refundedAmount",
+                        "requiresShipping",
+                        "shippingMethodKind",
+                        "pickupReadyAt",
                         "editReadiness",
-                        "supportRequests"
+                        "supportRequests",
+                        "pickup",
+                        "fulfillments",
+                        "conversation"
                       ]
                     }
                   },
@@ -166262,15 +167684,18 @@
                   },
                   "shippingAddress": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 10,
                     "maxLength": 500
                   },
                   "city": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "zone": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1
                   },
                   "area": {
@@ -166286,10 +167711,6 @@
                   "customerName",
                   "customerPhone",
                   "customerEmail",
-                  "shippingAddress",
-                  "city",
-                  "zone",
-                  "area",
                   "expectedVersion"
                 ]
               }
@@ -166856,6 +168277,74 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "fulfillmentType": {
+                            "type": "string",
+                            "enum": [
+                              "ship",
+                              "pickup",
+                              "digital",
+                              "gift_card",
+                              "service"
+                            ],
+                            "description": "How the order line reaches the buyer, frozen when the order is placed."
+                          },
+                          "fulfilledQuantity": {
+                            "type": "integer"
+                          },
+                          "properties": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "text",
+                                    "textarea",
+                                    "select",
+                                    "checkbox"
+                                  ]
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "string"
+                                },
+                                "displayValue": {
+                                  "type": "string"
+                                },
+                                "price": {
+                                  "type": "number"
+                                },
+                                "priceMinor": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "type",
+                                "label",
+                                "value",
+                                "displayValue",
+                                "price",
+                                "priceMinor"
+                              ]
+                            }
+                          },
+                          "propertiesPrice": {
+                            "type": "number"
+                          },
+                          "propertiesPriceMinor": {
+                            "type": "integer"
+                          },
+                          "baseUnitPriceMinor": {
+                            "type": "integer",
+                            "nullable": true
+                          },
                           "id": {
                             "type": "string"
                           },
@@ -166914,6 +168403,12 @@
                           }
                         },
                         "required": [
+                          "fulfillmentType",
+                          "fulfilledQuantity",
+                          "properties",
+                          "propertiesPrice",
+                          "propertiesPriceMinor",
+                          "baseUnitPriceMinor",
                           "id",
                           "productId",
                           "variantId",
@@ -168550,6 +170045,15 @@
                                       "type": "string",
                                       "nullable": true
                                     },
+                                    "fulfillmentKind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "physical",
+                                        "digital",
+                                        "service"
+                                      ],
+                                      "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
+                                    },
                                     "createdAt": {
                                       "anyOf": [
                                         {
@@ -168832,6 +170336,1152 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "orders.view"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/fulfillments": {
+      "post": {
+        "operationId": "dashboard.orders.fulfillment_create",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Hand over order lines: send with your own rider, picked up at the counter, or service done",
+        "description": "The only way units are marked handed over. When the last line that blocks delivery is handed over and the money is settled, the order becomes delivered (pickup and service); the last ship line makes it shipped.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "requestKey": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Retry key: repeating the request returns the first result instead of acting twice."
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "ship",
+                      "pickup",
+                      "service"
+                    ],
+                    "description": "`ship`: mark as sent with your own rider. `pickup`: the buyer collected it. `service`: the service was performed."
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "itemId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 180
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 99
+                        }
+                      },
+                      "required": [
+                        "itemId",
+                        "quantity"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 99,
+                    "description": "Which units to hand over; part of a line is fine. Omit for every unit of this kind not handed over yet."
+                  },
+                  "tracking": {
+                    "type": "object",
+                    "properties": {
+                      "courierName": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "trackingId": {
+                        "type": "string",
+                        "maxLength": 180
+                      },
+                      "trackingUrl": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "note": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      "shipmentAmount": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "Own-rider parcel details; only for `ship`."
+                  },
+                  "cashReceived": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Cash on delivery taken at the counter or the service in the same action (`pickup`/`service`, major units). Must equal the balance due."
+                  }
+                },
+                "required": [
+                  "requestKey",
+                  "kind"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Fulfilment recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "orderId": {
+                          "type": "string"
+                        },
+                        "fulfillmentId": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "ship",
+                            "pickup",
+                            "digital",
+                            "gift_card",
+                            "service"
+                          ],
+                          "description": "How the order line reaches the buyer, frozen when the order is placed."
+                        },
+                        "lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "orderItemId": {
+                                "type": "string"
+                              },
+                              "quantity": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "exclusiveMinimum": true
+                              }
+                            },
+                            "required": [
+                              "orderItemId",
+                              "quantity"
+                            ]
+                          }
+                        },
+                        "shipmentId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "orderStatus": {
+                          "type": "string"
+                        },
+                        "fulfillmentStatus": {
+                          "type": "string"
+                        },
+                        "replayed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "orderId",
+                        "fulfillmentId",
+                        "kind",
+                        "lines",
+                        "shipmentId",
+                        "orderStatus",
+                        "fulfillmentStatus",
+                        "replayed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_shipments"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/fulfillments/{fulfillmentId}/void": {
+      "post": {
+        "operationId": "dashboard.orders.fulfillment_void",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Void an own-rider parcel that came back: its units go back on the unsent list",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "fulfillmentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "requestKey": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Retry key: repeating the request returns the first result instead of acting twice."
+                  }
+                },
+                "required": [
+                  "requestKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fulfilment voided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "orderId": {
+                          "type": "string"
+                        },
+                        "fulfillmentId": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "integer"
+                        },
+                        "replayed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "orderId",
+                        "fulfillmentId",
+                        "quantity",
+                        "replayed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_shipments"
+        }
+      }
+    },
+    "/api/v1/admin/orders/{id}/pickup-ready": {
+      "post": {
+        "operationId": "dashboard.orders.pickup_ready",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Mark a pickup order ready to collect and tell the buyer",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "requestKey": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Retry key: repeating the request returns the first result instead of acting twice."
+                  }
+                },
+                "required": [
+                  "requestKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Order marked ready for pickup",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "orderId": {
+                          "type": "string"
+                        },
+                        "pickupReadyAt": {
+                          "type": "string"
+                        },
+                        "replayed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "orderId",
+                        "pickupReadyAt",
+                        "replayed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "required",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.manage_shipments"
         }
       }
     },
@@ -170339,6 +172989,104 @@
                       ]
                     }
                   },
+                  "customizationSchema": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "fields": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "pattern": "^[a-z0-9_]{1,40}$"
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 60
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "text",
+                                "textarea",
+                                "select",
+                                "checkbox"
+                              ]
+                            },
+                            "required": {
+                              "type": "boolean"
+                            },
+                            "help": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 200
+                            },
+                            "maxLength": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 1000
+                            },
+                            "price": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 99999999,
+                              "description": "Added to one unit's price when the buyer uses this input, in major units."
+                            },
+                            "options": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 60
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 60
+                                  },
+                                  "price": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 99999999,
+                                    "description": "Added to one unit's price when the buyer uses this input, in major units."
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "label"
+                                ]
+                              },
+                              "maxItems": 20
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "label",
+                            "type"
+                          ]
+                        },
+                        "maxItems": 10
+                      }
+                    },
+                    "required": [
+                      "fields"
+                    ],
+                    "description": "Buyer inputs asked on the product page (at most 10 fields)."
+                  },
+                  "fulfillmentKind": {
+                    "type": "string",
+                    "enum": [
+                      "physical",
+                      "service"
+                    ],
+                    "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
+                  },
                   "optionMatrix": {
                     "type": "object",
                     "properties": {
@@ -170492,6 +173240,14 @@
                               "nullable": true,
                               "minimum": 0,
                               "maximum": 99999999
+                            },
+                            "fulfillmentKind": {
+                              "type": "string",
+                              "enum": [
+                                "physical",
+                                "service"
+                              ],
+                              "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
                             }
                           },
                           "required": [
@@ -170561,6 +173317,14 @@
                         "minimum": 0,
                         "maximum": 1000000,
                         "description": "Weight in grams."
+                      },
+                      "fulfillmentKind": {
+                        "type": "string",
+                        "enum": [
+                          "physical",
+                          "service"
+                        ],
+                        "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
                       }
                     },
                     "required": [
@@ -175561,6 +178325,99 @@
                         "freeDelivery": {
                           "type": "boolean"
                         },
+                        "isGiftCard": {
+                          "type": "boolean"
+                        },
+                        "customizationSchema": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "fields": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "text",
+                                      "textarea",
+                                      "select",
+                                      "checkbox"
+                                    ]
+                                  },
+                                  "required": {
+                                    "type": "boolean"
+                                  },
+                                  "help": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "maxLength": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "price": {
+                                    "type": "number"
+                                  },
+                                  "priceMinor": {
+                                    "type": "integer"
+                                  },
+                                  "options": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "value": {
+                                          "type": "string"
+                                        },
+                                        "label": {
+                                          "type": "string"
+                                        },
+                                        "price": {
+                                          "type": "number"
+                                        },
+                                        "priceMinor": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "value",
+                                        "label",
+                                        "price",
+                                        "priceMinor"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "label",
+                                  "type",
+                                  "required",
+                                  "help",
+                                  "maxLength",
+                                  "price",
+                                  "priceMinor",
+                                  "options"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "fields"
+                          ],
+                          "description": "Buyer inputs asked on the product page, in schema order."
+                        },
+                        "customizationSchemaInvalid": {
+                          "type": "boolean"
+                        },
                         "createdAt": {
                           "anyOf": [
                             {
@@ -175725,6 +178582,15 @@
                               "barcodeType": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "fulfillmentKind": {
+                                "type": "string",
+                                "enum": [
+                                  "physical",
+                                  "digital",
+                                  "service"
+                                ],
+                                "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                               },
                               "createdAt": {
                                 "anyOf": [
@@ -175930,6 +178796,9 @@
                         "discountType",
                         "discountAmount",
                         "freeDelivery",
+                        "isGiftCard",
+                        "customizationSchema",
+                        "customizationSchemaInvalid",
                         "createdAt",
                         "updatedAt",
                         "deletedAt",
@@ -176206,6 +179075,104 @@
                         "sortOrder"
                       ]
                     }
+                  },
+                  "customizationSchema": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "fields": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "pattern": "^[a-z0-9_]{1,40}$"
+                            },
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 60
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "text",
+                                "textarea",
+                                "select",
+                                "checkbox"
+                              ]
+                            },
+                            "required": {
+                              "type": "boolean"
+                            },
+                            "help": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 200
+                            },
+                            "maxLength": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 1000
+                            },
+                            "price": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 99999999,
+                              "description": "Added to one unit's price when the buyer uses this input, in major units."
+                            },
+                            "options": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 60
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 60
+                                  },
+                                  "price": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 99999999,
+                                    "description": "Added to one unit's price when the buyer uses this input, in major units."
+                                  }
+                                },
+                                "required": [
+                                  "value",
+                                  "label"
+                                ]
+                              },
+                              "maxItems": 20
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "label",
+                            "type"
+                          ]
+                        },
+                        "maxItems": 10
+                      }
+                    },
+                    "required": [
+                      "fields"
+                    ],
+                    "description": "Buyer inputs asked on the product page (at most 10 fields)."
+                  },
+                  "fulfillmentKind": {
+                    "type": "string",
+                    "enum": [
+                      "physical",
+                      "service"
+                    ],
+                    "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
                   },
                   "id": {
                     "type": "string"
@@ -178262,6 +181229,14 @@
                     "minimum": 0,
                     "maximum": 99999999
                   },
+                  "fulfillmentKind": {
+                    "type": "string",
+                    "enum": [
+                      "physical",
+                      "service"
+                    ],
+                    "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
+                  },
                   "expectedAggregateRevision": {
                     "type": "integer",
                     "minimum": 1
@@ -178421,6 +181396,15 @@
                         "barcodeType": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "fulfillmentKind": {
+                          "type": "string",
+                          "enum": [
+                            "physical",
+                            "digital",
+                            "service"
+                          ],
+                          "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                         },
                         "createdAt": {
                           "anyOf": [
@@ -179072,6 +182056,15 @@
                                 "type": "string",
                                 "nullable": true
                               },
+                              "fulfillmentKind": {
+                                "type": "string",
+                                "enum": [
+                                  "physical",
+                                  "digital",
+                                  "service"
+                                ],
+                                "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
+                              },
                               "createdAt": {
                                 "anyOf": [
                                   {
@@ -179671,6 +182664,14 @@
                     "minimum": 0,
                     "maximum": 99999999
                   },
+                  "fulfillmentKind": {
+                    "type": "string",
+                    "enum": [
+                      "physical",
+                      "service"
+                    ],
+                    "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
+                  },
                   "expectedStockVersion": {
                     "type": "integer",
                     "minimum": 0,
@@ -179834,6 +182835,15 @@
                         "barcodeType": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "fulfillmentKind": {
+                          "type": "string",
+                          "enum": [
+                            "physical",
+                            "digital",
+                            "service"
+                          ],
+                          "description": "What the SKU is: `physical` (shipped or picked up), `digital`, or `service` (performed, nothing delivered)."
                         },
                         "createdAt": {
                           "anyOf": [
@@ -180997,6 +184007,14 @@
                           "nullable": true,
                           "minimum": 0,
                           "maximum": 99999999
+                        },
+                        "fulfillmentKind": {
+                          "type": "string",
+                          "enum": [
+                            "physical",
+                            "service"
+                          ],
+                          "description": "physical: shipped or picked up. service: performed, nothing delivered (no address needed)."
                         }
                       },
                       "required": [
@@ -221587,11 +224605,27 @@
           ]
         },
         {
+          "operationId": "dashboard.orders.fulfillment_create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.fulfillment_create"
+          ]
+        },
+        {
           "operationId": "dashboard.orders.fulfillment_get",
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
             "dashboard.order-fulfill"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.fulfillment_void",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.fulfillment_void"
           ]
         },
         {
@@ -221717,6 +224751,14 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.order-refund"
+          ]
+        },
+        {
+          "operationId": "dashboard.orders.pickup_ready",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.pickup_ready"
           ]
         },
         {

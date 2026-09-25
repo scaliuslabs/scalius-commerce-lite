@@ -25,6 +25,12 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
 import { orderMoneyAmounts, orderMoneySelection } from "../orders/money";
+import {
+    presentOrderLineFulfilment,
+    presentOrderPickup,
+    presentShippingMethodKind,
+} from "../orders/line-presentation";
+import { findOrderConversationId, listBuyerOrderFulfilments } from "../orders/fulfilment-reads";
 import { customerKind } from "./customer-identity";
 import { ftsMatch } from "../../search/fts5";
 import type { Database } from "@scalius/database/client";
@@ -104,6 +110,11 @@ export function buildCustomerOrderItemDetailProjection() {
         discountAmountMinor: orderItems.discountAmountMinor,
         taxableAmountMinor: orderItems.taxableAmountMinor,
         taxAmountMinor: orderItems.taxAmountMinor,
+        fulfillmentType: orderItems.fulfillmentType,
+        fulfilledQuantity: orderItems.fulfilledQuantity,
+        properties: orderItems.properties,
+        propertiesPriceMinor: orderItems.propertiesPriceMinor,
+        baseUnitPriceMinor: orderItems.baseUnitPriceMinor,
         createdAt: sql<number>`CAST(${orderItems.createdAt} AS INTEGER)`,
     };
 }
@@ -994,6 +1005,8 @@ export async function getCustomerOrders(
             cityName: orders.cityName,
             zoneName: orders.zoneName,
             areaName: orders.areaName,
+            requiresShipping: orders.requiresShipping,
+            shippingMethodKind: orders.shippingMethodKind,
             notes: orders.notes,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`
         })
@@ -1031,10 +1044,12 @@ export async function getCustomerOrders(
             paymentMethod: string;
             fulfillmentStatus: string;
             expectedDelivery: string | null;
-            shippingAddress: string;
+            shippingAddress: string | null;
             cityName: string | null;
             zoneName: string | null;
             areaName: string | null;
+            requiresShipping: boolean;
+            shippingMethodKind: "delivery" | "pickup" | null;
             notes: string | null;
             createdAt: number | null;
         }>,
@@ -1233,6 +1248,11 @@ export async function getCustomerOwnedOrderForDetail(
             cityName: orders.cityName,
             zoneName: orders.zoneName,
             areaName: orders.areaName,
+            requiresShipping: orders.requiresShipping,
+            shippingMethodKind: orders.shippingMethodKind,
+            pickupAddress: orders.pickupAddress,
+            pickupHours: orders.pickupHours,
+            pickupReadyAt: orders.pickupReadyAt,
             notes: orders.notes,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
@@ -1450,6 +1470,11 @@ export async function getCustomerOrderDetailForOrder(
         getCustomerRequestPolicy(db),
     ]);
     const supportRequests = supportRequestRows.map(customerSupportRequestView);
+    // A second wave keeps this read within six simultaneous D1 connections.
+    const [fulfillments, conversationId] = await Promise.all([
+        listBuyerOrderFulfilments(db, orderId),
+        findOrderConversationId(db, orderId),
+    ]);
 
     const [items, shipments, payments, plans, codRows, statusEvents] = batchedRows as [
         Array<{
@@ -1468,6 +1493,11 @@ export async function getCustomerOrderDetailForOrder(
             discountAmountMinor: number;
             taxableAmountMinor: number;
             taxAmountMinor: number;
+            fulfillmentType: string;
+            fulfilledQuantity: number;
+            properties: string | null;
+            propertiesPriceMinor: number;
+            baseUnitPriceMinor: number | null;
             createdAt: number | null;
         }>,
         Array<{
@@ -1526,9 +1556,21 @@ export async function getCustomerOrderDetailForOrder(
     const formattedItems = items.map(({
         productImageObjectKey,
         productImageStatus,
+        fulfillmentType,
+        fulfilledQuantity,
+        properties,
+        propertiesPriceMinor,
+        baseUnitPriceMinor,
         ...item
     }) => ({
         ...item,
+        ...presentOrderLineFulfilment({
+            fulfillmentType,
+            fulfilledQuantity,
+            properties,
+            propertiesPriceMinor,
+            baseUnitPriceMinor,
+        }, order.currencyDecimalPlaces),
         price: amount(item.unitPriceMinor),
         unitPrice: amount(item.unitPriceMinor),
         lineTotal: amount(item.unitPriceMinor * item.quantity),
@@ -1629,18 +1671,22 @@ export async function getCustomerOrderDetailForOrder(
             expectedDelivery: order.expectedDelivery,
             customerName: order.customerName,
             customerPhone: order.customerPhone,
-            // Nullable from migration 0083; always present until the Wave A S3 contract.
-            shippingAddress: order.shippingAddress ?? "",
-            city: order.city ?? "",
-            zone: order.zone ?? "",
+            shippingAddress: order.shippingAddress,
+            city: order.city,
+            zone: order.zone,
             area: order.area,
             cityName: order.cityName,
             zoneName: order.zoneName,
             areaName: order.areaName,
+            requiresShipping: order.requiresShipping,
+            shippingMethodKind: presentShippingMethodKind(order.shippingMethodKind),
+            pickup: presentOrderPickup(order),
+            conversationId,
             notes: order.notes,
             createdAt: timestampToIso(order.createdAt),
             updatedAt: timestampToIso(order.updatedAt),
         },
+        fulfillments,
         items: formattedItems,
         shipments: formattedShipments,
         payments: formattedPayments,

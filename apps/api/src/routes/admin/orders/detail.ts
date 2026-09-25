@@ -22,6 +22,7 @@ import {
     readStoreDecimalPlaces,
 } from "@scalius/core/modules/products";
 import { fromMinor } from "@scalius/shared/money";
+import { presentOrderLineFulfilment } from "@scalius/core/modules/orders/browser";
 import {
     orderPayments,
     paymentPlans,
@@ -512,6 +513,11 @@ app.openapi(getItemsRoute, async (c) => {
             discountAmountMinor: orderItems.discountAmountMinor,
             taxableAmountMinor: orderItems.taxableAmountMinor,
             taxAmountMinor: orderItems.taxAmountMinor,
+            fulfillmentType: orderItems.fulfillmentType,
+            fulfilledQuantity: orderItems.fulfilledQuantity,
+            properties: orderItems.properties,
+            propertiesPriceMinor: orderItems.propertiesPriceMinor,
+            baseUnitPriceMinor: orderItems.baseUnitPriceMinor,
         })
         .from(orderItems)
         .innerJoin(orders, eq(orders.id, orderItems.orderId))
@@ -520,6 +526,7 @@ app.openapi(getItemsRoute, async (c) => {
 
     return ok(c, items.map(({ productImageObjectKey, productImageStatus, currencyDecimalPlaces, ...item }) => ({
         ...item,
+        ...presentOrderLineFulfilment(item, currencyDecimalPlaces),
         price: fromMinor(item.unitPriceMinor, currencyDecimalPlaces),
         productImage:
             productImageObjectKey &&

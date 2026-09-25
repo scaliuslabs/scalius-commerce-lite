@@ -34,6 +34,8 @@ import {
     buildPaymentRecoverySummary,
 } from "./shared";
 import { buildOrderEditReadiness } from "./readiness";
+import { presentOrderLineFulfilment, presentOrderPickup } from "../line-presentation";
+import { findOrderConversationForStaff, listAdminOrderFulfilments } from "../fulfilment-reads";
 
 const ORDER_EDIT_EVIDENCE_KEYS = [
     "inventoryAction",
@@ -104,6 +106,8 @@ async function getOrderDetailsOnce(
             cityName: orders.cityName,
             zoneName: orders.zoneName,
             areaName: orders.areaName,
+            pickupAddress: orders.pickupAddress,
+            pickupHours: orders.pickupHours,
             version: orders.version,
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
@@ -145,6 +149,11 @@ async function getOrderDetailsOnce(
                 discountAmountMinor: orderItems.discountAmountMinor,
                 taxableAmountMinor: orderItems.taxableAmountMinor,
                 taxAmountMinor: orderItems.taxAmountMinor,
+                fulfillmentType: orderItems.fulfillmentType,
+                fulfilledQuantity: orderItems.fulfilledQuantity,
+                properties: orderItems.properties,
+                propertiesPriceMinor: orderItems.propertiesPriceMinor,
+                baseUnitPriceMinor: orderItems.baseUnitPriceMinor,
             })
             .from(orderItems)
             .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
@@ -179,6 +188,11 @@ async function getOrderDetailsOnce(
     ]);
 
     if (!orderRow) return null;
+    // A second wave keeps the read within six simultaneous D1 connections.
+    const [fulfillments, conversation] = await Promise.all([
+        listAdminOrderFulfilments(db, id, orderRow.currencyDecimalPlaces),
+        findOrderConversationForStaff(db, id),
+    ]);
     const { recordId, recordName, recordPhone, recordAccountClaimedAt, recordOrigin, ...order } = orderRow;
     const customerRecord = recordId && recordName !== null && recordPhone !== null
         ? { id: recordId, name: recordName, phone: recordPhone, accountClaimedAt: recordAccountClaimedAt, origin: recordOrigin }
@@ -205,6 +219,7 @@ async function getOrderDetailsOnce(
         discountAmountMinor: item.discountAmountMinor,
         taxableAmountMinor: item.taxableAmountMinor,
         taxAmountMinor: item.taxAmountMinor,
+        ...presentOrderLineFulfilment(item, order.currencyDecimalPlaces),
     }));
 
     const latestShipmentRow = latestShipments[0] ?? null;
@@ -237,11 +252,14 @@ async function getOrderDetailsOnce(
         ...publicOrder,
         ...orderMoneyAmounts(order),
         ...presentOrderListFacts(order),
-        // The address columns are nullable from migration 0083, but no order is
-        // written without one until the address-optional contract (Wave A S3).
-        shippingAddress: order.shippingAddress ?? "",
-        city: order.city ?? "",
-        zone: order.zone ?? "",
+        pickup: presentOrderPickup({
+            shippingMethodKind: order.shippingMethodKind,
+            pickupAddress: order.pickupAddress,
+            pickupHours: order.pickupHours,
+            pickupReadyAt: order.pickupReadyAt,
+        }),
+        fulfillments,
+        conversation,
         createdAt: new Date(order.createdAt * 1000),
         updatedAt: new Date(order.updatedAt * 1000),
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,

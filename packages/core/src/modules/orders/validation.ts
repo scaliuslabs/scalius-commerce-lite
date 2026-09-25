@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
+import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
 
 export const MAX_ORDER_LINE_ITEMS = 99;
 
@@ -14,13 +15,19 @@ const orderBaseContentSchema = z.object({
         .max(100, "Customer name must be less than 100 characters"),
     customerPhone: phoneNumberSchema,
     customerEmail: z.email().nullable(),
+    /**
+     * Required only when something ships (a physical line with a delivery
+     * method); pickup, service-only and digital orders carry none.
+     */
     shippingAddress: z
         .string()
         .min(10, "Address must be at least 10 characters")
-        .max(500, "Address must be less than 500 characters"),
-    city: z.string().min(1, "City is required"),
-    zone: z.string().min(1, "Zone is required"),
-    area: z.string().nullable(),
+        .max(500, "Address must be less than 500 characters")
+        .nullable()
+        .optional(),
+    city: z.string().min(1, "City is required").nullable().optional(),
+    zone: z.string().min(1, "Zone is required").nullable().optional(),
+    area: z.string().nullable().optional(),
     cityName: z.string().optional(),
     zoneName: z.string().optional(),
     areaName: z.string().nullable().optional(),
@@ -37,6 +44,12 @@ const orderBaseContentSchema = z.object({
         .min(0, "Shipping charge must be greater than or equal to 0"),
 });
 
+/** Buyer inputs for one line, as the storefront sends them (line-item properties). */
+export const orderLinePropertiesInputSchema = z.array(z.object({
+    key: z.string().min(1).max(40),
+    value: z.string().max(LINE_PROPERTY_INPUT_LIMITS.valueLength),
+})).max(LINE_PROPERTY_INPUT_LIMITS.entries);
+
 const sellableOrderItemSchema = z.object({
     productId: z.string().min(1, "Product is required"),
     variantId: z.string().nullable(),
@@ -45,6 +58,8 @@ const sellableOrderItemSchema = z.object({
         .int("Quantity must be a whole number")
         .min(1, "Quantity must be at least 1")
         .max(99, "Quantity must be at most 99"),
+    /** Buyer inputs the product asks for; priced from its schema. */
+    properties: orderLinePropertiesInputSchema.optional(),
 });
 
 const sellableOrderContentSchema = orderBaseContentSchema.extend({
@@ -57,7 +72,11 @@ const sellableOrderContentSchema = orderBaseContentSchema.extend({
 /** Schema for creating a new order (POST /api/orders). */
 export const createOrderSchema = sellableOrderContentSchema.extend({
     requestKey: z.uuid("A valid manual-order request key is required"),
-    /** The delivery method picked, so the order keeps its name; the charge may still be edited. */
+    /**
+     * The delivery method picked: a pickup method needs no address, a
+     * delivery method needs one. Required when a line is physical. The charge
+     * may still be edited.
+     */
     shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
 });
 
@@ -75,6 +94,9 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
     items: true,
     discountAmount: true,
     shippingCharge: true,
+}).extend({
+    /** Decides pickup vs delivery (and so whether the address is taxed). */
+    shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
 });
 
 export type QuoteManualOrderInput = z.infer<typeof quoteManualOrderSchema>;
@@ -85,6 +107,10 @@ const amendableOrderItemSchema = sellableOrderItemSchema.extend({
 
 export const previewManualOrderAmendmentSchema = orderBaseContentSchema.extend({
     expectedVersion: z.number().int().min(1),
+    /**
+     * Kept lines (with `orderItemId`) keep their frozen buyer inputs; new lines
+     * may send `properties`.
+     */
     items: z.array(amendableOrderItemSchema)
         .min(1, "Add at least one sellable item")
         .max(MAX_ORDER_LINE_ITEMS, `Add at most ${MAX_ORDER_LINE_ITEMS} sellable items`),

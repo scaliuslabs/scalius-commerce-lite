@@ -46,7 +46,12 @@ async function rateIdByName(db: ReturnType<typeof seedLocations>["db"], name: st
     return all.find((candidate) => candidate.name === name)!.id;
 }
 
-const cart = (subtotalMinor: number) => ({ hasFreeDeliveryProduct: false, subtotalMinor });
+// One physical line: the cart needs a delivery method.
+const cart = (subtotalMinor: number) => ({
+    hasFreeDeliveryProduct: false,
+    subtotalMinor,
+    items: [{ fulfillmentKind: "physical" as const, isGiftCard: false }],
+});
 
 describe("delivery zone resolution", () => {
     it("picks the most specific zone: area, then zone, then city, then everywhere else", async () => {

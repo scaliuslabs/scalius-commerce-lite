@@ -1,6 +1,11 @@
 // Dashboard order list, export, payment-recovery lists, and the order form product picker.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { ORDER_LIST_VIEWS, listOrders, loadOrderExportDetails } from "@scalius/core/modules/orders";
+import {
+    ORDER_DELIVERY_METHOD_FILTERS,
+    ORDER_LIST_VIEWS,
+    listOrders,
+    loadOrderExportDetails,
+} from "@scalius/core/modules/orders";
 import { listProducts } from "@scalius/core/modules/products";
 import { fromMinor } from "@scalius/shared/money";
 import { FulfillmentStatus, PaymentStatus, productVariants } from "@scalius/database/schema";
@@ -34,7 +39,7 @@ const paymentStatusQuerySchema = z.enum([
 ]);
 
 const orderListViewQuerySchema = z.enum(ORDER_LIST_VIEWS).openapi({
-    description: "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed or returned.",
+    description: "Order tab: unfulfilled, unpaid (money still expected), cod_to_collect, delivery_failed, returned, or ready_for_pickup (marked ready, not collected yet).",
 });
 
 const ORDER_LIST_SORTS = ["relevance", "customerName", "totalAmount", "createdAt", "updatedAt"] as const;
@@ -46,6 +51,10 @@ const fulfillmentStatusQuerySchema = z.enum([
     FulfillmentStatus.PARTIAL,
     FulfillmentStatus.COMPLETE,
 ]);
+
+const deliveryMethodQuerySchema = z.enum(ORDER_DELIVERY_METHOD_FILTERS).openapi({
+    description: "How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical).",
+});
 
 const paymentRecoveryQuerySchema = z.enum([
     "recoverable",
@@ -163,6 +172,7 @@ const listOrdersRoute = createRoute({
             paymentStatus: paymentStatusQuerySchema.optional().openapi({ description: "Filter by payment status" }),
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment method" }),
             fulfillmentStatus: fulfillmentStatusQuerySchema.optional().openapi({ description: "Filter by fulfillment status" }),
+            deliveryMethod: deliveryMethodQuerySchema.optional(),
             paymentRecovery: paymentRecoveryQuerySchema.optional().openapi({ description: "Filter by hosted-payment recovery state" }),
             archived: z.enum(["true", "false"]).optional().openapi({ description: "Show archived orders" }),
             sort: z.enum(ORDER_LIST_SORTS).optional().openapi({
@@ -202,6 +212,7 @@ app.openapi(listOrdersRoute, async (c) => {
         paymentStatus: query.paymentStatus,
         paymentMethod: query.paymentMethod,
         fulfillmentStatus: query.fulfillmentStatus,
+        deliveryMethod: query.deliveryMethod,
         paymentRecovery: query.paymentRecovery,
         showArchived: query.archived === "true",
         sort: effectiveSort,

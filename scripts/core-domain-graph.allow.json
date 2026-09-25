@@ -25,6 +25,7 @@
     "categories -> products",
     "checkout -> customers",
     "checkout -> delivery",
+    "checkout -> fulfilment",
     "checkout -> inventory",
     "checkout -> notifications",
     "checkout -> orders",

@@ -14,6 +14,7 @@ import { ValidationError } from "@scalius/core/errors";
 import type { ProductWithDetails } from "../types";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { presentCatalogPrice, readStoreDecimalPlaces } from "../money";
+import { readStoredCustomization } from "../customization";
 import { bpsToPercent, fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
@@ -470,6 +471,8 @@ export async function getProductDetails(
             freeDelivery: products.freeDelivery,
             taxClassId: products.taxClassId,
             taxClassificationVersion: products.taxClassificationVersion,
+            isGiftCard: products.isGiftCard,
+            customizationSchema: products.customizationSchema,
             category: {
                 name: categories.name,
             },
@@ -503,8 +506,11 @@ export async function getProductDetails(
         loadProductVariantSelectedOptions(db, id),
     ]);
     if (!result) return null;
+    const customization = readStoredCustomization(result.customizationSchema, decimalPlaces);
     return {
         ...presentCatalogPrice(result, decimalPlaces),
+        customizationSchema: customization.customization,
+        customizationSchemaInvalid: customization.invalid,
         createdAt: requireProductTimestamp(result.createdAt, "created timestamp"),
         updatedAt: requireProductTimestamp(result.updatedAt, "updated timestamp"),
         deletedAt: result.deletedAt
