@@ -594,6 +594,31 @@ describe("runScheduledMaintenance", () => {
     expect(MEDIA_RENDITION_BACKFILL_CONCURRENCY).toBeLessThanOrEqual(3);
   });
 
+  it("still runs the later sweeps and the rendition backfill when a sweep keeps failing, then fails the run", async () => {
+    const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
+    const first = new Error("abandoned checkout sweep broken");
+    mocks.cleanupStaleAbandonedCheckouts.mockRejectedValueOnce(first);
+    mocks.reconcileDueRefundAttempts.mockRejectedValueOnce(new Error("refund provider down"));
+    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 3, generated: 3, failed: 0, hasMore: false });
+
+    await expect(runScheduledMaintenance(env, createExecutionContext())).rejects.toBe(first);
+
+    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalled();
+    expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
+    expect(mocks.pruneExpiredIdentityHandoffEvents).toHaveBeenCalled();
+    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledTimes(1);
+    // The renditions it saved still reach buyers.
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails the run when only the rendition backfill fails", async () => {
+    const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
+    mocks.backfillMissingMediaVariants.mockRejectedValueOnce(new Error("D1 read failed"));
+
+    await expect(runScheduledMaintenance(env, createExecutionContext())).rejects.toThrow("D1 read failed");
+    expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
+  });
+
   it("logs operation and run failure timings before rethrowing scheduled errors", async () => {
     const error = new Error("D1 queue overloaded");
     mocks.cleanupStaleAbandonedCheckouts.mockRejectedValueOnce(error);

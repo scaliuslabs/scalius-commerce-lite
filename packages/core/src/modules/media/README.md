@@ -46,7 +46,16 @@ length and part-1 signature checks finish before the storage side effect.
   is 10 minutes old; one cache-generation bump per run that rendered any. It
   skips media touched in the last 10 minutes (an upload's own pipeline and
   job). A failure only touches `updated_at`, so a broken image leaves the run
-  and next time goes behind every other candidate.
+  and next time goes behind every other candidate. Each commerce sweep before
+  it is isolated, so a sweep that keeps failing no longer starves the backfill;
+  the run still fails with the first error after the backfill ran.
+- Self-healing on read (`apps/api/src/utils/media-rendition-hints.ts`): when a
+  public read renders (a cache miss) and its body still publishes a still
+  original (`media/<id>.<jpg|png|webp|avif>`), up to 8 ids per read get the
+  same delayed `media.render_variants` job, deduplicated by a 15-minute KV
+  marker `media:rendition-hint:<id>`, with one masked log line per enqueue.
+  Buyers keep seeing the original until the job renders and bumps the
+  generation.
 - Usage (`media.usage.ts`) is the one list of places that can show a file:
   product photos, video covers, and media URLs saved in product descriptions
   and extra sections, categories, collections, pages/blog posts, homepage
