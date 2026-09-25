@@ -1,4 +1,4 @@
-// The storefront theme contract (document version 4). The pieces live in
+// The storefront theme contract (document version 5). The pieces live in
 // ./storefront-theme/*; this barrel keeps `@scalius/shared/storefront-theme`
 // the one import path. Contract and rules: ./storefront-theme.md.
 export * from "./storefront-theme/contrast";

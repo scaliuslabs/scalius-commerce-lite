@@ -1,9 +1,66 @@
 ---
-// Owned by B2 (reviews storefront): the line's review form (works without JavaScript) or the buyer's review; renders nothing until B2 ships it.
+// B2 (reviews): the receipt's per-line review block, server-rendered so the
+// form works without JavaScript (track-order opens this receipt too). A line
+// with a review gets it with its status and, when the buyer's reviews could
+// be read with the receipt proof, an "Edit review" disclosure. Those reviews
+// are read once per page, only when some line already has one. The copy is
+// the receipt's checkout language.
 import type { LineExtrasContext, OrderLine } from "@/lib/order-line-extras";
+import { getActiveCheckoutLanguage } from "@/lib/api";
+import { getCheckoutLanguagePreset } from "@scalius/shared/checkout-language";
+import {
+  pickReviewFormCopy,
+  readLineReviewExtra,
+  readReviewNotice,
+  safeReviewReturnPath,
+  type BuyerReview,
+  type ReviewAccess,
+} from "@/lib/account-reviews";
+import { readBuyerReviewsForRequest } from "@/lib/account-reviews-server";
+import { reviewLineActionMarkup } from "./review-line-action";
 
 export interface Props {
   line: OrderLine;
   context: LineExtrasContext;
 }
+
+const { line, context } = Astro.props;
+const extra = readLineReviewExtra(line.extras?.review);
+
+/**
+ * One read of the buyer's reviews per request and order, shared by every
+ * line: kept on the request's own `locals`, never in a module global.
+ */
+function readOrderReviews(access: ReviewAccess, orderId: string): Promise<readonly BuyerReview[] | null> {
+  const locals = Astro.locals as { reviewReads?: Map<string, Promise<readonly BuyerReview[] | null>> };
+  const reads = locals.reviewReads ??= new Map();
+  let read = reads.get(orderId);
+  if (!read) {
+    read = readBuyerReviewsForRequest(Astro.request, access).then((result) => (result.ok ? result.data.reviews : null));
+    reads.set(orderId, read);
+  }
+  return read;
+}
+
+let markup = "";
+if (extra) {
+  const access: ReviewAccess = context.access === "receipt" ? { kind: "receipt", orderId: context.orderId } : { kind: "account" };
+  const [language, reviews] = await Promise.all([
+    getActiveCheckoutLanguage().catch(() => null),
+    extra.review ? readOrderReviews(access, context.orderId) : Promise.resolve(null),
+  ]);
+  markup = reviewLineActionMarkup(line, context, {
+    copy: pickReviewFormCopy(language?.languageData, getCheckoutLanguagePreset(language?.code)),
+    returnTo: safeReviewReturnPath(`${Astro.url.pathname}${Astro.url.search}`) ?? undefined,
+    notice: readReviewNotice(Astro.url.search),
+    reviews,
+  });
+}
 ---
+{markup && <Fragment set:html={markup} />}
+
+<script>
+  import { setupReviewForms } from "./review-form-client";
+
+  setupReviewForms();
+</script>

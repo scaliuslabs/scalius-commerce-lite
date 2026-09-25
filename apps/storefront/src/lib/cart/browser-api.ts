@@ -7,14 +7,31 @@ import type { AbandonedCheckoutPayload } from "@/lib/api/abandoned-checkouts";
 import { browserApiUrl } from "@/lib/api/browser-url";
 import {
   parseDiscountFacts,
+  parsePreviewBundleDiscountLine,
   type CheckoutDiscountFacts,
 } from "@/lib/checkout/tax-quote-contract";
+import { fromMinor, toMinor } from "@scalius/shared/money";
+import { getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
 
 interface DiscountPreviewItem {
   id: string;
   price: number;
+  /** Unit price before buyer-input surcharges: what quantity bundles price from. */
+  basePrice?: number;
   quantity: number;
   variantId?: string;
+}
+
+/** The line's unit price without its buyer-input surcharges. */
+function basePriceOf(item: CartItem): number | undefined {
+  const surchargeMinor = (item.properties ?? []).reduce((sum, property) => sum + (property.priceMinor ?? 0), 0);
+  if (!(surchargeMinor > 0)) return undefined;
+  const places = getDecimalPlaces(getCurrencyCode());
+  try {
+    return fromMinor(Math.max(0, toMinor(Number(item.price), places) - surchargeMinor), places);
+  } catch {
+    return undefined;
+  }
 }
 
 export interface DiscountPreviewBody {
@@ -32,12 +49,16 @@ export function buildDiscountPreviewBody(
 ): DiscountPreviewBody {
   return {
     codes,
-    items: items.map((item) => ({
-      id: item.id,
-      price: Number(item.price),
-      quantity: Number(item.quantity),
-      ...(item.variantId ? { variantId: item.variantId } : {}),
-    })),
+    items: items.map((item) => {
+      const basePrice = basePriceOf(item);
+      return {
+        id: item.id,
+        price: Number(item.price),
+        ...(basePrice !== undefined ? { basePrice } : {}),
+        quantity: Number(item.quantity),
+        ...(item.variantId ? { variantId: item.variantId } : {}),
+      };
+    }),
     ...(shippingCost !== undefined ? { shippingCost } : {}),
     ...(customerPhone ? { customerPhone } : {}),
   };
@@ -101,10 +122,14 @@ async function requestDiscountPreview(body: DiscountPreviewBody): Promise<Discou
       | null;
     if (!response.ok || !json?.data) return { ok: false, message: errorMessage(json) };
     const totalDiscount = Number(json.data.totalDiscount);
+    const facts = parseDiscountFacts(json.data);
+    // A quantity-bundle saving is part of totalDiscount; list it like the quote does.
+    const bundleLine = parsePreviewBundleDiscountLine(json.data);
+    if (bundleLine) facts.discounts = [...facts.discounts, bundleLine];
     return {
       ok: true,
       totalDiscount: Number.isFinite(totalDiscount) && totalDiscount > 0 ? totalDiscount : 0,
-      ...parseDiscountFacts(json.data),
+      ...facts,
     };
   } catch {
     return { ok: false, message: null };

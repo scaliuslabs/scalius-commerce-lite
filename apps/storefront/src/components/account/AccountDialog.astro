@@ -1,0 +1,38 @@
+---
+// An account edit dialog, like Shopify's profile editors: an HTML popover, so
+// its Edit button opens it without JavaScript. `inline` renders the same form
+// in the page instead (a failed save shows its errors where the buyer is).
+import { accountUi as ui } from "@/lib/account-ui";
+
+export interface Props {
+  id: string;
+  title: string;
+  inline?: boolean;
+}
+
+const { id, title, inline = false } = Astro.props;
+const titleId = `${id}-title`;
+---
+
+<div
+  id={id}
+  popover={inline ? undefined : "auto"}
+  role={inline ? undefined : "dialog"}
+  aria-labelledby={titleId}
+  class:list={[
+    ui.card,
+    inline
+      ? "my-4 p-4 sm:p-5"
+      : "fixed inset-0 m-auto h-fit max-h-[calc(100dvh-2rem)] w-[min(calc(100%-2rem),30rem)] overflow-y-auto p-5 text-foreground shadow-xl backdrop:bg-black/50 sm:p-6",
+  ]}
+>
+  <div class="mb-4 flex items-start justify-between gap-3">
+    <h2 id={titleId} class="text-lg font-semibold text-foreground">{title}</h2>
+    {!inline && (
+      <button type="button" popovertarget={id} popovertargetaction="hide" class="-mr-2 -mt-2 inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Close">
+        <svg aria-hidden="true" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    )}
+  </div>
+  <slot />
+</div>

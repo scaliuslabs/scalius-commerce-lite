@@ -4,6 +4,7 @@ import {
   hydrateCartFromStorage,
   syncCartFromStorage,
   addToCart,
+  startBuyNow,
   addDiscountCode,
   removeCartItemByKey,
   removeDiscountCode,
@@ -125,6 +126,12 @@ let cartValidationTimer: ReturnType<typeof setTimeout> | null = null;
 let cartValidationSequence = 0;
 let isApplyingCartSnapshot = false;
 let cartTaxQuoteSequence = 0;
+/**
+ * The cart lines a refused quote already sent back to the availability check.
+ * That check re-renders the totals, which quote again: without this, a line
+ * the buyer has not fixed yet (sold out, too many) re-checks forever.
+ */
+let quoteRefusalRecheckedLines: string | null = null;
 let discountValidationSequence = 0;
 let pendingDiscountValidation: number | null = null;
 /** The latest server discount facts, for the applied-code list. */
@@ -356,7 +363,8 @@ async function processQuickBuy() {
       if (data.cartItem) {
         // Buyer inputs (from the product page's no-JS form) come with the
         // line; the analytics events below never carry them.
-        if (!(await addToCart(data.cartItem))) return;
+        // Buy now buys only this item; the buyer's cart is set aside, untouched.
+        if (!(await startBuyNow(data.cartItem))) return;
 
         const dynamicCurrency = window.__CURRENCY_CODE__ || "BDT";
         if (data.addToCartEvent) {
@@ -806,7 +814,10 @@ function applyPendingCartRepairState(): boolean {
   return true;
 }
 
-export async function validateCartSnapshot(): Promise<boolean> {
+export async function validateCartSnapshot(
+  /** Re-render the lines even when the check changed nothing (a page shown again). */
+  { renderUnchanged = true }: { renderUnchanged?: boolean } = {},
+): Promise<boolean> {
   const { items } = cartStore.get();
   const payloadItems = cartValidationPayload(items);
   const sequence = ++cartValidationSequence;
@@ -840,6 +851,10 @@ export async function validateCartSnapshot(): Promise<boolean> {
       return !hasBlockingCartIssues();
     }
 
+    // What the lines show: a check that changes none of it re-renders (and
+    // re-prices) nothing, so choosing a delivery option quotes once.
+    const shown = () => JSON.stringify([cartStore.get().items, cartValidationIssues, cartValidationGlobalError, cartQuantityLimits, latestAllowedPaymentMethods]);
+    const shownBefore = shown();
     const rawIssues = json?.data?.issues ?? json?.details?.itemIssues ?? [];
     const issues = Array.isArray(rawIssues) ? rawIssues : [];
     const summaryMessage =
@@ -878,7 +893,7 @@ export async function validateCartSnapshot(): Promise<boolean> {
       if (issues.length === 0) clearCartValidationSummary();
       updateCartValidationMessage();
     }
-    await renderCartItems();
+    if (renderUnchanged || shown() !== shownBefore) await renderCartItems();
     updateCheckoutButtonState();
 
     if (!response.ok || !json?.success) {
@@ -902,7 +917,7 @@ function scheduleCartValidation() {
   cartValidationSequence += 1;
   if (cartValidationTimer) clearTimeout(cartValidationTimer);
   cartValidationTimer = setTimeout(() => {
-    void validateCartSnapshot();
+    void validateCartSnapshot({ renderUnchanged: false });
   }, 350);
 }
 
@@ -1019,7 +1034,13 @@ export async function updateTotals() {
     const cartChanged = error instanceof TaxQuoteCartChangedError;
     const rateRefused = error instanceof TaxQuoteDeliveryRateError;
     const locationGone = error instanceof TaxQuoteDeliveryLocationError;
-    if (cartChanged) scheduleCartValidation();
+    if (cartChanged) {
+      const lines = JSON.stringify(cartStore.get().items);
+      if (lines !== quoteRefusalRecheckedLines) {
+        quoteRefusalRecheckedLines = lines;
+        scheduleCartValidation();
+      }
+    }
     if (rateRefused) window.dispatchEvent(new CustomEvent("delivery-rate-rejected"));
     if (locationGone) rejectDeliveryLocation(error.field);
     await renderEstimate(cartChanged || rateRefused || locationGone ? "" : activeCheckoutCopy().taxVerificationFailedText);
@@ -1116,6 +1137,16 @@ export async function renderCartItems() {
 
   await updateTotals();
   syncCartPagePresentation(true);
+}
+
+/**
+ * Re-reads the page's payment facts after the cart page changes them (the
+ * buyer chose the gift-card step, so a cart cash cannot pay is no longer
+ * blocked here: the payment step prices it).
+ */
+export function refreshCartBlockingState() {
+  updateCartValidationMessage();
+  updateCheckoutButtonState();
 }
 
 export function updateCheckoutButtonState() {
@@ -1238,13 +1269,15 @@ async function handleApplyDiscount() {
       return;
     }
     const rejection = preview.rejectedCodes.find((candidate) => candidate.code === code);
-    if (rejection && !isPendingCodeReason(rejection.reason)) {
+    // A code the bundle saving beats is kept: it wins again if the cart changes.
+    if (rejection && !isPendingCodeReason(rejection.reason) && !rejection.bundleSavesMore) {
       showDiscountMessage(describeRejectedCode(rejection, copy), "error");
       return;
     }
     codeInput.value = "";
     addDiscountCode(code);
     if (rejection) {
+      // A kept code that adds nothing now says why under the code itself.
       showDiscountMessage("", "success");
       if (rejection.requiresCustomerPhone) {
         document.getElementById("customerPhone-input")?.focus();
@@ -1302,6 +1335,7 @@ function removeLineWithUndo(cartKey: string): void {
 // --- Initialization ---
 export async function initCartFunctionality() {
   const runtimeSignal = resetCartRuntimeListeners();
+  quoteRefusalRecheckedLines = null;
   hydrateCartFromStorage();
   hostedPaymentRecoverySession = readHostedPaymentRecoverySession();
   reconcileHostedPaymentRecoveryWithCart();

@@ -171,3 +171,37 @@ export function shouldShowStartingVariantPrice(
 ): boolean {
   return hasCustomerOptions && !exactVariant;
 }
+
+/**
+ * The choice the product page opens on and the SKUs its first price is read
+ * from. One answer for the buy box and for the page's metadata (Open Graph,
+ * Product JSON-LD, analytics), so they always state the price the buyer sees.
+ * A link to a sold-out combination still shows that combination.
+ */
+export function initialVariantPresentation<TVariant extends Variant>(
+  options: ProductOptionDefinition[],
+  variants: TVariant[],
+  initialVariant: TVariant | null = null,
+  initialUnavailableVariant: TVariant | null = null,
+): {
+  selection: VariantSelection;
+  selectedVariant: TVariant | null;
+  stockVariant: TVariant | null;
+  pricingVariants: TVariant[];
+} {
+  const selection = initialUnavailableVariant
+    ? selectedValueMap(initialUnavailableVariant)
+    : initialVariant
+      ? selectedValueMap(initialVariant)
+      : createInitialSelection(options, variants);
+  const selectedVariant = initialVariant
+    ?? (resolveExactVariantSelection(variants, selection)?.variant as TVariant | undefined)
+    ?? null;
+  const stockVariant = initialUnavailableVariant ?? selectedVariant;
+  const pricingVariants = stockVariant
+    ? [stockVariant]
+    : Object.keys(selection).length
+      ? (filterVariantsBySelection(variants, selection) as TVariant[])
+      : variants;
+  return { selection, selectedVariant, stockVariant, pricingVariants };
+}

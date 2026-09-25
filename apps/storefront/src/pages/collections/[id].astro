@@ -179,6 +179,7 @@ const collectionJsonLd =
       pagination,
       facets,
       priceRange: collection.priceRange,
+      ratingFacet: collection.ratingFacet,
       queryState,
       pathname: collectionPath,
       resetPath: collectionPath,
@@ -189,6 +190,7 @@ const collectionJsonLd =
       currencyCode,
       listingName: collection.name,
       subListings: catalogCategoryLinks(categories),
+      listingTemplate: collection.listingTemplate ?? null,
     }}
     content={!hasListingQuery && collectionContent ? { html: collectionContent, label: `${collection.name} guide` } : null}
   >

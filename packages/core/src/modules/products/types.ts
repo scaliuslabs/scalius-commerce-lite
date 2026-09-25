@@ -163,6 +163,8 @@ export interface StorefrontProductFilterInput {
     maxPrice?: number;
     freeDelivery?: "true" | "false";
     hasDiscount?: "true" | "false";
+    /** "true": only products a buyer can buy now (the stored availability band). */
+    inStock?: "true";
     ids?: string;
     /**
      * Resolved facet filters (catalog/facets.ts `resolvePublicAttributeFilters`):

@@ -29,6 +29,10 @@ interface FormContainerProps<
   form: UseFormReturn<TFieldValues, unknown, TTransformedValues>;
   /** Saves valid values; throws when the save failed (after marking any fields). */
   onSave: (values: TTransformedValues) => Promise<unknown>;
+  /** Fields the server set on save (new id, next revision), from what `onSave` resolved with. */
+  savedValues?: (result: unknown) => Partial<TFieldValues>;
+  /** After a revision conflict: loads the latest saved record and keeps the merchant's edits. */
+  reload?: () => Promise<unknown>;
   children: React.ReactNode;
   formClassName?: string;
   /** Save bar text while creating, e.g. "Unsaved category" (Shopify names the new record). */
@@ -44,6 +48,8 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   saving,
   canSave,
   save,
+  savedValues,
+  reload,
   className,
   header,
   readOnlyNotice,
@@ -53,13 +59,15 @@ function EditorForm<TFieldValues extends FieldValues, TTransformedValues extends
   saving: boolean;
   canSave: boolean;
   save: (values: TTransformedValues) => Promise<unknown>;
+  savedValues?: (result: unknown) => Partial<TFieldValues>;
+  reload?: () => Promise<unknown>;
   className: string;
   header: React.ReactNode;
   readOnlyNotice?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const t = useMessages(saveBarMessages);
-  useFormSaveBar({ form, saving, locked: !canSave, save });
+  useFormSaveBar({ form, saving, locked: !canSave, save, savedValues, reload });
   const scope = useSaveScope();
   return (
     <form
@@ -110,6 +118,8 @@ export function FormContainer<
   canSave,
   form,
   onSave,
+  savedValues,
+  reload,
   children,
   formClassName = "pb-6",
   unsavedLabel,
@@ -125,6 +135,8 @@ export function FormContainer<
             saving={isSubmitting}
             canSave={canSave}
             save={onSave}
+            savedValues={savedValues}
+            reload={reload}
             className={formClassName}
             header={<PageHeader backTo={backUrl} badge={badge} title={heading} />}
             readOnlyNotice={readOnlyNotice}

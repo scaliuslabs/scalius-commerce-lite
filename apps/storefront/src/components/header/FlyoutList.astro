@@ -55,9 +55,7 @@ const link = (item: NavigationItem) => ({
             <details class="fly-menu" data-menu="popup" data-menu-hover>
               <summary class:list={["fly-toggle", !item.href && "fly-link"]}>
                 {item.href ? <span class="sr-only">{item.title} submenu</span> : <span>{item.title}</span>}
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="m6 4 4 4-4 4" />
-                </svg>
+                <i class="nav-chevron nav-chevron--right" aria-hidden="true"></i>
               </summary>
               <div class="fly-panel" data-menu-panel>
                 <Astro.self items={children} mode={mode} parent={item} depth={depth + 1} />
@@ -80,7 +78,7 @@ const link = (item: NavigationItem) => ({
   }
 </ul>
 
-<style>
+<style is:global>
   .fly-list {
     display: flex;
     flex-direction: column;
@@ -193,7 +191,7 @@ const link = (item: NavigationItem) => ({
     background: var(--accent);
   }
 
-  .fly-toggle svg {
+  .fly-toggle .nav-chevron {
     width: 0.875rem;
     height: 0.875rem;
     fill: none;
@@ -228,7 +226,7 @@ const link = (item: NavigationItem) => ({
   }
 
   .fly-menu[data-flip] > .fly-panel,
-  :global([data-flip]) .fly-panel {
+  [data-flip] .fly-panel {
     left: auto;
     right: 100%;
   }

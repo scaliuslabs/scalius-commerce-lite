@@ -58,6 +58,11 @@ import {
 } from "./attempts";
 import { MAX_ORDER_LINE_ITEMS } from "../orders/validation";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";
+import {
+    GiftCardChangedError,
+    buildGiftCardRedemptionStatements,
+    isGiftCardLedgerError,
+} from "../gift-cards";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
 
@@ -123,6 +128,10 @@ const AGENT_CONTEXT_CHECKOUT_CONFLICT = "AGENT_STOREFRONT_CONTEXT_CHECKOUT_CONFL
 function checkoutGuardError(error: unknown): Error | null {
     if (isBatchGuardError(error, CHECKOUT_AUTHORITY_CHANGED)) {
         return new ValidationError(CHECKOUT_AUTHORITY_CHANGED_MESSAGE);
+    }
+    // A card spent, disabled or expired since the quote (the ledger guards, G2).
+    if (isGiftCardLedgerError(error)) {
+        return new GiftCardChangedError();
     }
     if (isBatchGuardError(error, AGENT_CONTEXT_CHECKOUT_CONFLICT)) {
         return new ConflictError(
@@ -391,6 +400,7 @@ function buildOrderWriteBatch(
             customerName: od.customerName,
             customerPhone: od.customerPhone,
             customerEmail: od.customerEmail,
+            customerWhatsapp: od.customerWhatsapp ?? null,
             shippingAddress: od.shippingAddress,
             city: od.city,
             zone: od.zone,
@@ -643,6 +653,20 @@ function buildOrderWriteBatch(
                 createdAt: sql`unixepoch()`,
             }));
         }
+    }
+
+    // The gift-card hold (§4.3): after the order row, which it references.
+    const redemptions = payload.giftCardRedemptions ?? [];
+    if (redemptions.length > 0) {
+        const redeemedMinor = redemptions.reduce((total, redemption) => total + redemption.appliedMinor, 0);
+        if (redeemedMinor !== od.paidAmountMinor || od.paidAmountMinor + od.balanceDueMinor !== od.totalAmountMinor) {
+            throw new ValidationError("Committed gift-card tender does not match the order payment state.");
+        }
+        writes.push(...buildGiftCardRedemptionStatements(db, {
+            orderId: od.id,
+            currencyCode: od.currencyCode,
+            redemptions,
+        }) as SQLiteBatchItem[]);
     }
 
     if (

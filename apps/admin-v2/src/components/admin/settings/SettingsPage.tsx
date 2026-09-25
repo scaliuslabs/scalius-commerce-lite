@@ -52,18 +52,18 @@ export function SettingsPage({
   return (
     <TargetCardContext.Provider value={hash}>
       <div className="mx-auto w-full max-w-3xl space-y-4">
-        <div className="flex min-h-11 flex-wrap items-center gap-2 pr-10 lg:min-h-9">
+        <div className="flex min-h-11 flex-wrap items-center gap-2 md:min-h-9">
           <Link
             to={back?.to ?? "/admin/settings"}
             aria-label={back?.label ?? t("settings")}
             className={cn(
-              "-ml-2 grid size-11 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground lg:size-9",
-              !back && "lg:hidden",
+              "-ml-2 grid size-11 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground md:size-9",
+              !back && "md:hidden",
             )}
           >
             <ArrowLeft className="size-5" aria-hidden="true" />
           </Link>
-          {back ? null : <Icon className="hidden size-5 text-muted-foreground lg:block" aria-hidden="true" />}
+          {back ? null : <Icon className="hidden size-5 text-muted-foreground md:block" aria-hidden="true" />}
           <h1 className="mr-auto text-heading-lg">{title ?? t(page)}</h1>
           {actions}
         </div>

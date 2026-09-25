@@ -23,7 +23,7 @@ import {
   pruneExpiredIdentityHandoffEvents,
 } from "@scalius/core/auth";
 import { reconcileDueRefundAttempts, reconcileExternalRefundWebhooks } from "@scalius/core/modules/payments";
-import { backfillMissingMediaVariants } from "@scalius/core/modules/media";
+import { backfillMissingMediaVariants, enqueueMediaVariantsBacklog } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
@@ -56,7 +56,7 @@ export const STALE_QUEUED_PAYMENT_WEBHOOK_SWEEP_LIMIT = 25;
 export const STALE_QUEUED_PAYMENT_WEBHOOK_MAX_AGE_MINUTES = 6 * 60;
 /**
  * Rendition backfill budget. Each image costs one R2 read, one Images info
- * call, up to six Images transforms, six R2 writes and a few D1 queries: a
+ * call, up to thirteen Images transforms and R2 writes, and a few D1 queries: a
  * few seconds of wall time but little Worker CPU (the transforms run in the
  * Images service). The backfill runs last and starts no new image once the
  * run is this old, so the run ends well inside the 15-minute cron wall limit
@@ -67,6 +67,21 @@ export const MEDIA_RENDITION_BACKFILL_DEADLINE_MS = 10 * 60 * 1_000;
 export const MEDIA_RENDITION_BACKFILL_CONCURRENCY = 2;
 /** CPU guard against the 30 s cron CPU limit (~tens of ms of our CPU per image). */
 export const MEDIA_RENDITION_BACKFILL_MAX_PER_RUN = 240;
+/**
+ * With the jobs queue, the backlog is fanned out instead of rendered inline
+ * two at a time: up to this many images per 15-minute run, 10 `sendBatch`
+ * calls of 100 (the Queues per-call limit), no delay. Queue consumers render
+ * them in parallel (Queues runs up to 250 concurrent consumer invocations),
+ * so a large backlog (the 0094 ladder migration sends every image back to
+ * its original) is re-rendered within minutes instead of one 240-image run
+ * per 15 minutes. Each job bumps the generation when it renders.
+ * Each image is up to thirteen Images transforms (the 1.2x ladder): 1,000
+ * images are 13,000 unique transformations, billed per unique transformation
+ * per month (5,000 included; a free account stops transforming beyond that
+ * and its cards keep their placeholders until the allowance resets). New
+ * dashboard uploads encode their ladder in the browser and cost none.
+ */
+export const MEDIA_RENDITION_FANOUT_MAX_PER_RUN = 1_000;
 
 type ScheduledMaintenanceMetadata = {
   cron?: string;
@@ -311,6 +326,23 @@ async function runScheduledMaintenanceInner(
   });
 
   await isolated(async () => {
+    // Automatic fulfilment backstop (Wave A §2.6): settled orders whose digital
+    // or gift-card lines were not handed over. A no-op until Wave B registers
+    // an automatic fulfiller. It runs before the
+    // notification flush so the mail it queues (keys, gift cards, the staff
+    // key-exhausted alert) goes out in this same run.
+    const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db, undefined, {
+      credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+    }));
+    if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
+      console.log(
+        `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
+          `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
+      );
+    }
+  });
+
+  await isolated(async () => {
     const notificationOutbox = await timed("notification_outbox_flush", () =>
       flushPendingNotificationOutbox({
         db,
@@ -327,21 +359,6 @@ async function runScheduledMaintenanceInner(
         `[scheduled] Notification outbox flush: scanned=${notificationOutbox.scanned}, ` +
           `enqueued=${notificationOutbox.enqueued}, failed=${notificationOutbox.failed}, ` +
           `skipped=${notificationOutbox.skipped}, staleQueued=${notificationOutbox.staleQueued}`,
-      );
-    }
-  });
-
-  await isolated(async () => {
-    // Automatic fulfilment backstop (Wave A §2.6): settled orders whose digital
-    // or gift-card lines were not handed over. A no-op until Wave B registers
-    // an automatic fulfiller.
-    const autoFulfil = await timed("auto_fulfil_sweep", () => sweepAutoFulfilment(db, undefined, {
-      credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-    }));
-    if (autoFulfil.scanned > 0 || autoFulfil.failed > 0) {
-      console.log(
-        `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
-          `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
       );
     }
   });
@@ -588,6 +605,17 @@ async function runScheduledMaintenanceInner(
   await isolated(async () => {
     const images = env.IMAGES;
     if (images) {
+      const queue = env.JOBS_QUEUE;
+      if (queue) {
+        const fanout = await timed("media_rendition_fanout", () =>
+          enqueueMediaVariantsBacklog(db, queue, { skip: 0, limit: MEDIA_RENDITION_FANOUT_MAX_PER_RUN }),
+        ).catch(() => null);
+        if (fanout && fanout.queued > 0) {
+          console.log(`[scheduled] Media rendition backlog: queued=${fanout.queued}, hasMore=${fanout.hasMore}`);
+          return;
+        }
+      }
+      // No queue, or it refused the backlog: render inline.
       const renditions = await timed("media_rendition_backfill", () =>
         backfillMissingMediaVariants(db, env.BUCKET, images, {
           deadline: runContext.startedAt + MEDIA_RENDITION_BACKFILL_DEADLINE_MS,

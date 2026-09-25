@@ -37,6 +37,8 @@ export const orders = sqliteTable("orders", {
     customerName: text("customer_name").notNull(),
     customerPhone: text("customer_phone").notNull(),
     customerEmail: text("customer_email"),
+    /** Separate WhatsApp number, when Customer accounts collects one; null means the phone. */
+    customerWhatsapp: text("customer_whatsapp"),
     /**
      * Present exactly when something ships (`requiresShipping`); pickup,
      * service-only and digital orders carry no address. A trigger enforces it.

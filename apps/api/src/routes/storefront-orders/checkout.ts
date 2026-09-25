@@ -9,7 +9,9 @@ import {
     isOnlinePaymentMethod,
     listPaymentMethodIds,
 } from "@scalius/core/modules/payments";
-import { phoneNumberSchema } from "@scalius/shared/customer-utils";
+import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/customer-utils";
+import { readMasterSecret } from "@scalius/shared/runtime-secrets";
+import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
@@ -19,6 +21,7 @@ import {
     buildStorefrontCheckoutQuoteFingerprint,
 } from "@scalius/core/modules/checkout/browser";
 import {
+    assertStorefrontGiftCardTenderReviewed,
     buildCheckoutAttemptIdentity,
     commitStorefrontOrderPayload,
     createAtomicCheckoutAttempt,
@@ -42,6 +45,7 @@ import { errorResponses, serviceUnavailableResponse, conflictResponse } from "..
 import { linePropertiesInputSchema } from "../../schemas/order-lines";
 import {
     getCustomerSessionTokenFromRequest,
+    giftCardHandlesSchema,
     persistedStorefrontVariantIdSchema,
     scheduleCheckoutSuccessRecoveryHints,
     scheduleCheckoutFailureStatusHint,
@@ -126,11 +130,13 @@ async function assertCheckoutOrderPolicy(
 ): Promise<CheckoutOrderPolicyResult> {
   const db = c.get("db");
   const checkoutSettings = authority.checkoutSettings;
-  const checkoutSettingsSnapshot = assertStorefrontCheckoutPolicy(
-    customerPhone,
-    paymentMethod,
-    authority,
-  );
+  const checkoutSettingsSnapshot = paymentMethod === GIFT_CARD_PAYMENT_METHOD
+    ? assertGiftCardCheckoutPolicy(customerPhone, authority)
+    : assertStorefrontCheckoutPolicy(
+      customerPhone,
+      paymentMethod,
+      authority,
+    );
 
   const sessionToken = getCustomerSessionTokenFromRequest(c);
   if (!sessionToken) {
@@ -169,6 +175,32 @@ async function assertCheckoutOrderPolicy(
   };
 }
 
+/**
+ * An order the buyer's gift cards cover needs no enabled payment method (the
+ * gift card is the tender, not a checkout setting); the contact rules still
+ * hold. Prepare refuses `gift_card` unless the cards cover the whole order.
+ */
+function assertGiftCardCheckoutPolicy(
+  customerPhone: string,
+  authority: Pick<StorefrontCheckoutAuthoritySnapshot, "checkoutSettings" | "allowedCountries">,
+): CheckoutSettingsSnapshot {
+  try {
+    assertPhoneCountryAllowed(customerPhone, {
+      countries: authority.allowedCountries.allowedCountries,
+      mode: authority.allowedCountries.allowedCountriesMode,
+    });
+  } catch (error) {
+    throw new ValidationError(
+      error instanceof Error ? error.message : "Phone number is not accepted for checkout.",
+    );
+  }
+  return {
+    checkoutMode: authority.checkoutSettings.checkoutMode,
+    partialPaymentEnabled: authority.checkoutSettings.partialPaymentEnabled,
+    partialPaymentAmount: authority.checkoutSettings.partialPaymentAmount,
+  };
+}
+
 const createOrderSchema = z.object({
   checkoutRequestId: z
     .string()
@@ -188,6 +220,8 @@ const createOrderSchema = z.object({
     .max(100, "Customer name must be less than 100 characters"),
   customerPhone: phoneNumberSchema,
   customerEmail: z.email().nullable(),
+  /** Kept only when Customer accounts asks for a separate WhatsApp number. */
+  customerWhatsapp: z.string().trim().max(32).nullable().optional(),
   /**
    * Required only when something ships: a physical line with a delivery
    * rate. Pickup, service-only and digital orders omit it (and it is ignored
@@ -228,12 +262,25 @@ const createOrderSchema = z.object({
     .min(0, "Shipping charge must be greater than or equal to 0"),
   /** A delivery or pickup rate; required when a line is physical. */
   shippingMethodId: z.string().optional().nullable(),
+  /** `gift_card` only when the applied gift cards cover the whole order. */
   paymentMethod: z
-    .enum(listPaymentMethodIds() as [string, ...string[]])
+    .enum([...(listPaymentMethodIds() as [string, ...string[]]), GIFT_CARD_PAYMENT_METHOD])
     .default(PaymentMethod.COD),
   inventoryPool: z
     .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
-    .default(InventoryPool.REGULAR)
+    .default(InventoryPool.REGULAR),
+  giftCards: giftCardHandlesSchema,
+  expectedAmountDueMinor: z.number().int().nonnegative().optional().openapi({
+    description: "The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.",
+  }),
+}).superRefine((order, context) => {
+  if ((order.giftCards?.length ?? 0) > 0 && order.expectedAmountDueMinor === undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["expectedAmountDueMinor"],
+      message: "The reviewed amount due is required with gift cards.",
+    });
+  }
 });
 
 type CreateOrderInput = z.infer<typeof createOrderSchema>;
@@ -244,17 +291,23 @@ function assertGatewayCurrencyReadiness(data: CreateOrderInput, currencyCode: st
   if (issue) throw new ValidationError(issue);
 }
 
+/**
+ * The gateway's first charge must be within its limits. With gift cards the
+ * gateway charges the whole amount due (no deposit plan is made): the plan
+ * is refused while cards are applied (Wave B §4.3).
+ */
 function assertGatewayPrecommitReadiness(
-  data: CreateOrderInput,
+  paymentMethod: string,
   checkoutSettings: CheckoutSettingsSnapshot,
-  totalAmountMinor: number,
+  amountDueMinor: number,
   currencyCode: string,
+  giftCardsApplied: boolean,
 ): void {
   const issue = getCheckoutGatewayPrecommitIssue({
-    paymentMethod: data.paymentMethod,
+    paymentMethod,
     currencyCode,
-    totalAmountMinor,
-    partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
+    totalAmountMinor: amountDueMinor,
+    partialPaymentEnabled: checkoutSettings.partialPaymentEnabled && !giftCardsApplied,
     partialPaymentAmount: checkoutSettings.partialPaymentAmount,
   });
   if (issue) throw new ValidationError(issue);
@@ -276,6 +329,16 @@ const checkoutCreatedPayloadSchema = z.object({
   decimalPlaces: z.number().int(),
   /** Some line ships to the buyer's address (false for pickup, service-only and digital orders). */
   requiresShipping: z.boolean().optional(),
+  /** What is left to pay after gift cards (the total without them). */
+  amountDue: z.number().optional(),
+  amountDueMinor: z.number().int().optional(),
+  /** Paid at commit: the gift cards applied. */
+  paidAmountMinor: z.number().int().optional(),
+  giftCardTenders: z.array(z.object({
+    last4: z.string(),
+    applied: z.number(),
+    appliedMinor: z.number().int(),
+  })).optional(),
   message: z.string(),
 });
 
@@ -422,8 +485,10 @@ app.openapi(createOrderRoute, async (c) => {
         orderCreatedNotificationEnabled:
           checkoutAuthority.sideEffects.orderCreatedNotification,
         metaPurchaseEnabled: checkoutAuthority.sideEffects.metaPurchase,
+        contactFields: checkoutAuthority.contactFields,
       }),
       checkoutAuthority.taxAuthority,
+      { masterSecret: readMasterSecret(c.env) },
     );
 
     assertStorefrontCheckoutQuoteFingerprint(
@@ -434,12 +499,15 @@ app.openapi(createOrderRoute, async (c) => {
         result.linePropertiesHashes,
       ),
     );
+    // Then the gift cards: still usable, and the amount due the buyer reviewed.
+    assertStorefrontGiftCardTenderReviewed(result.giftCardTender, data.expectedAmountDueMinor);
 
     assertGatewayPrecommitReadiness(
-      data,
+      result.paymentMethod,
       checkoutSettings,
-      result.taxQuote.totalMinor,
+      result.giftCardTender.amountDueMinor,
       currency.currencyCode,
+      result.giftCardTender.appliedTotalMinor > 0,
     );
     diagnostics?.mark("prepare");
 
@@ -465,6 +533,15 @@ app.openapi(createOrderRoute, async (c) => {
       currencyCode: result.taxQuote.currencyCode,
       decimalPlaces: result.taxQuote.decimalPlaces,
       requiresShipping: result.requiresShipping,
+      amountDue: fromMinor(result.giftCardTender.amountDueMinor, result.taxQuote.decimalPlaces),
+      amountDueMinor: result.giftCardTender.amountDueMinor,
+      paidAmountMinor: result.giftCardTender.appliedTotalMinor,
+      // last4 and amounts only: never a code or a handle.
+      giftCardTenders: result.giftCardTender.applied.map((card) => ({
+        last4: card.last4,
+        applied: fromMinor(card.appliedMinor, result.taxQuote.decimalPlaces),
+        appliedMinor: card.appliedMinor,
+      })),
       message: "Order created",
     };
 

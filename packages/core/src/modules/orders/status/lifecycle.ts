@@ -1,6 +1,12 @@
 // The order status kernel: validated status changes, inventory reconciliation, COD gates and cancel guards. Fulfilment actions call it.
-import type { Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import { hasOrderEvent, recordOrderEvent } from "../timeline";
+import {
+    GIFT_CARD_PAYMENT_METHOD,
+    buildGiftCardReleaseStatements,
+    listHeldGiftCardTenders,
+    type HeldGiftCardTender,
+} from "../../gift-cards";
 import {
     orders,
     orderItems,
@@ -105,6 +111,125 @@ async function assertGenericCancellationPaymentSafe(
         .get();
     if (unsafePayment) {
         throw new ValidationError(CANCELLATION_REQUIRES_PAYMENT_RECONCILIATION_MESSAGE);
+    }
+}
+
+// ─────────────────────────────────────────
+// Gift-card tender on cancel (Wave B §4.3, G4)
+// ─────────────────────────────────────────
+
+const GIFT_CARD_CANCEL_RELEASE_CONFLICT = "GIFT_CARD_CANCEL_RELEASE_CONFLICT";
+
+/**
+ * The money on the order is gift-card tender only (no gateway or cash was
+ * taken, and nothing else is pending): the held tenders, which cancelling
+ * gives back. Null when the order has no gift-card money, or other money too
+ * (that goes through the refund flow first).
+ */
+export async function giftCardOnlyTenders(
+    db: Database,
+    orderId: string,
+    payment: { paymentStatus: string; paidAmountMinor: number },
+): Promise<HeldGiftCardTender[] | null> {
+    if (payment.paidAmountMinor <= 0) return null;
+    if (payment.paymentStatus !== PaymentStatus.PAID && payment.paymentStatus !== PaymentStatus.PARTIAL) return null;
+    // One read: the succeeded gift-card tender, and any other money in flight or taken.
+    const money = await db
+        .select({
+            giftCardMinor: sql<number>`coalesce(sum(CASE
+                WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_PAYMENT_METHOD}
+                 AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
+                THEN ${orderPayments.amountMinor} ELSE 0 END), 0)`,
+            otherRows: sql<number>`coalesce(sum(CASE
+                WHEN ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
+                 AND ${orderPayments.status} IN (
+                     ${PaymentRecordStatus.PENDING},
+                     ${PaymentRecordStatus.CONFIRMED},
+                     ${PaymentRecordStatus.SUCCEEDED}
+                 )
+                THEN 1 ELSE 0 END), 0)`,
+        })
+        .from(orderPayments)
+        .where(eq(orderPayments.orderId, orderId))
+        .get();
+    if (!money || Number(money.otherRows) > 0 || Number(money.giftCardMinor) !== payment.paidAmountMinor) return null;
+    const tenders = await listHeldGiftCardTenders(db, orderId);
+    const heldMinor = tenders.reduce((total, tender) => total + tender.amountMinor, 0);
+    return heldMinor === payment.paidAmountMinor ? tenders : null;
+}
+
+/** The CAS twin of `giftCardOnlyTenders`: still exactly this gift-card money and nothing else. */
+function giftCardOnlyCancellationPaymentCondition(orderId: string, paidAmountMinor: number): SQL {
+    return sql`
+        ${orders.paymentStatus} IN (${PaymentStatus.PAID}, ${PaymentStatus.PARTIAL})
+        AND ${orders.paidAmountMinor} = ${paidAmountMinor}
+        AND NOT EXISTS (
+            SELECT 1 FROM ${orderPayments}
+            WHERE ${orderPayments.orderId} = ${orderId}
+              AND ${orderPayments.paymentMethod} <> ${GIFT_CARD_PAYMENT_METHOD}
+              AND ${orderPayments.status} IN (
+                  ${PaymentRecordStatus.PENDING},
+                  ${PaymentRecordStatus.CONFIRMED},
+                  ${PaymentRecordStatus.SUCCEEDED}
+              )
+        )
+        AND ${paidAmountMinor} = (
+            SELECT coalesce(sum(${orderPayments.amountMinor}), 0) FROM ${orderPayments}
+            WHERE ${orderPayments.orderId} = ${orderId}
+              AND ${orderPayments.paymentMethod} = ${GIFT_CARD_PAYMENT_METHOD}
+              AND ${orderPayments.status} = ${PaymentRecordStatus.SUCCEEDED}
+        )
+    `;
+}
+
+/**
+ * Gives a cancelled order's gift cards back in one batch: the order row
+ * (nothing paid, nothing owed, refunded) moves first under its version, a
+ * guard aborts the batch when it did not, then each card's `release` (keyed
+ * per order and card, so a replay adds nothing) and its tender row.
+ */
+export async function releaseCancelledOrderGiftCards(
+    db: Database,
+    orderId: string,
+    expected: { version: number; paidAmountMinor: number },
+    tenders: readonly HeldGiftCardTender[],
+    actor: { type: "system" | "admin"; id: string | null } = { type: "admin", id: null },
+): Promise<void> {
+    if (tenders.length === 0) return;
+    const release = buildGiftCardReleaseStatements(db, {
+        orderId,
+        tenders,
+        actor,
+        reason: "Order cancelled: gift card payment returned",
+    });
+    try {
+        await safeBatch(db, [
+            db.update(orders).set({
+                paidAmountMinor: 0,
+                balanceDueMinor: 0,
+                paymentStatus: PaymentStatus.REFUNDED,
+                version: expected.version + 1,
+                updatedAt: sql`unixepoch()`,
+            }).where(and(
+                eq(orders.id, orderId),
+                eq(orders.version, expected.version),
+                eq(orders.status, OrderStatus.CANCELLED),
+                giftCardOnlyCancellationPaymentCondition(orderId, expected.paidAmountMinor),
+            )),
+            buildBatchGuard(db, sql`EXISTS (
+                SELECT 1 FROM ${orders}
+                WHERE ${orders.id} = ${orderId}
+                  AND ${orders.version} = ${expected.version + 1}
+                  AND ${orders.status} = ${OrderStatus.CANCELLED}
+                  AND ${orders.paymentStatus} = ${PaymentStatus.REFUNDED}
+            )`, GIFT_CARD_CANCEL_RELEASE_CONFLICT),
+            ...release.statements,
+        ] as never);
+    } catch (error) {
+        if (isBatchGuardError(error, GIFT_CARD_CANCEL_RELEASE_CONFLICT)) {
+            throw new ConflictError("This order changed. Reload to see the latest.");
+        }
+        throw error;
     }
 }
 
@@ -308,6 +433,16 @@ export async function applyOrderStatusChange(
             orderId,
             nextStatus,
         );
+        if (nextStatus === OrderStatus.CANCELLED) {
+            // Repair: a cancel whose gift-card release did not land gives them back now.
+            const tenders = await giftCardOnlyTenders(db, orderId, existingOrder);
+            if (tenders) {
+                await releaseCancelledOrderGiftCards(db, orderId, {
+                    version: existingOrder.version,
+                    paidAmountMinor: existingOrder.paidAmountMinor,
+                }, tenders);
+            }
+        }
         if (nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED) {
             await markManualDeliveryEvidence(db, orderId);
         }
@@ -320,9 +455,15 @@ export async function applyOrderStatusChange(
     // Validate the status transition before applying any side effects
     validateTransition("order", currentStatus, nextStatus);
 
+    // Paid only by gift cards (no gateway or cash taken): cancelling gives
+    // them back. Any other money goes through the refund flow first.
+    let giftCardTenders: HeldGiftCardTender[] | null = null;
     if (nextStatus === OrderStatus.CANCELLED) {
         await assertNothingHandedOver(db, orderId);
-        await assertGenericCancellationPaymentSafe(db, orderId, existingOrder);
+        giftCardTenders = await giftCardOnlyTenders(db, orderId, existingOrder);
+        if (!giftCardTenders) {
+            await assertGenericCancellationPaymentSafe(db, orderId, existingOrder);
+        }
     }
 
     // Optimistic locking: CAS update FIRST — only proceed with side effects
@@ -339,7 +480,12 @@ export async function applyOrderStatusChange(
         noActiveRefundAttemptForOrderIdCondition(orderId),
         noActivePaymentSessionAttemptForOrderIdCondition(orderId),
         ...(nextStatus === OrderStatus.CANCELLED
-            ? [noUnsafeCancellationPaymentCondition(orderId), nothingSentCondition(orderId)]
+            ? [
+                giftCardTenders
+                    ? giftCardOnlyCancellationPaymentCondition(orderId, existingOrder.paidAmountMinor)
+                    : noUnsafeCancellationPaymentCondition(orderId),
+                nothingSentCondition(orderId),
+            ]
             : []),
     )).returning({ id: orders.id });
 
@@ -369,6 +515,15 @@ export async function applyOrderStatusChange(
     }
     if (nextStatus === OrderStatus.DELIVERED || nextStatus === OrderStatus.COMPLETED) {
         await markManualDeliveryEvidence(db, orderId);
+    }
+    if (giftCardTenders) {
+        // After the stock is back (a failed stock step rolls the status back,
+        // and a gift card given back cannot be taken again). If this fails,
+        // cancelling again repairs it (the unchanged-status path above).
+        await releaseCancelledOrderGiftCards(db, orderId, {
+            version: existingOrder.version + 1,
+            paidAmountMinor: existingOrder.paidAmountMinor,
+        }, giftCardTenders);
     }
 
     // Build notification payload if the new status warrants one

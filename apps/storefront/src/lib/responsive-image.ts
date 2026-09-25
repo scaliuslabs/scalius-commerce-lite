@@ -54,7 +54,8 @@ export function responsiveImageSources(
 
 /** Screens at or above this density are asked for about 2x, not 3x, pixels. */
 const DENSITY_CAP_MEDIA = "(min-resolution: 2.5dppx)";
-const DENSITY_CAP_SCALE = "0.667";
+/** 3 x 0.666 = 1.998: just under 2x, so a slot never rounds past a ladder step. */
+export const DENSITY_CAP_SCALE = "0.666";
 
 function splitTopLevel(list: string): string[] {
   const parts: string[] = [];
@@ -91,6 +92,23 @@ function splitSizesEntry(entry: string): { condition: string | null; length: str
   }
   const condition = entry.slice(0, lengthStart).trim();
   return { condition: condition || null, length: entry.slice(lengthStart) };
+}
+
+/**
+ * `sizes` scaled by `factor`: every entry's length becomes
+ * `calc((length) * factor)`, conditions kept. A card photo drawn inside a
+ * padded box (a contained photo with a margin) is narrower than the slot
+ * the grid gives it; scaling by the share it fills keeps the chosen
+ * rendition at the width actually drawn.
+ */
+export function scaleSizes(sizes: string, factor: number): string {
+  if (!(factor > 0) || factor >= 1) return sizes;
+  const scale = Number(factor.toFixed(3));
+  return splitTopLevel(sizes).map((entry) => {
+    const { condition, length } = splitSizesEntry(entry);
+    const inner = /^calc\((.*)\)$/.exec(length)?.[1] ?? length;
+    return `${condition ? `${condition} ` : ""}calc((${inner}) * ${scale})`;
+  }).join(", ");
 }
 
 /**

@@ -21,7 +21,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { ConflictError } from "@scalius/core/errors";
 import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
 import type { PaymentType, ProcessPaymentParams } from "./types";
-import { isOnlinePaymentMethod } from "./gateways/registry";
+import { GIFT_CARD_TENDER_METHOD, isOnlinePaymentMethod } from "./gateways/registry";
 import { validateTransition } from "../orders/status/state-machine";
 import {
   assertNoActiveShipmentClaim,
@@ -196,6 +196,53 @@ async function validateDepositPaymentState(
   return null;
 }
 
+/**
+ * The paid amount of a plan-less order when all of it is gift-card tender
+ * (Wave B §4.3): every succeeded payment row is a gift card. Null when any
+ * other money succeeded.
+ */
+async function giftCardOnlyPaidMinor(db: Database, orderId: string): Promise<number | null> {
+  const row = await db
+    .select({
+      giftCardMinor: sql<number>`coalesce(sum(CASE WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_TENDER_METHOD} THEN ${orderPayments.amountMinor} ELSE 0 END), 0)`,
+      otherRows: sql<number>`coalesce(sum(CASE WHEN ${orderPayments.paymentMethod} = ${GIFT_CARD_TENDER_METHOD} THEN 0 ELSE 1 END), 0)`,
+    })
+    .from(orderPayments)
+    .where(and(
+      eq(orderPayments.orderId, orderId),
+      eq(orderPayments.status, PaymentRecordStatus.SUCCEEDED),
+    ))
+    .get();
+  return Number(row?.otherRows ?? 0) === 0 ? Number(row?.giftCardMinor ?? 0) : null;
+}
+
+/**
+ * A plan-less balance is the gateway remainder of an order gift cards partly
+ * paid: partial, paid > 0 all in gift-card tender, and the charge is exactly
+ * the balance due (total − paid). Every other plan-less balance is refused.
+ */
+async function validatePlanlessGiftCardBalanceState(
+  db: Database,
+  order: PayableOrderMoney,
+  incomingAmountMinor: number,
+): Promise<string | null> {
+  const giftCardMinor = await giftCardOnlyPaidMinor(db, order.id);
+  if (giftCardMinor === null || giftCardMinor !== order.paidAmountMinor) {
+    return "No partial payment has been recorded for this order";
+  }
+  const balanceDueMinor = order.totalAmountMinor - order.paidAmountMinor;
+  if (balanceDueMinor <= 0) {
+    return "No balance due";
+  }
+  if (order.balanceDueMinor !== balanceDueMinor) {
+    return "The order balance does not match its payments";
+  }
+  if (incomingAmountMinor !== balanceDueMinor) {
+    return "Balance payment amount must match the outstanding balance";
+  }
+  return null;
+}
+
 async function validateBalancePaymentState(
   db: Database,
   order: PayableOrderMoney,
@@ -215,7 +262,7 @@ async function validateBalancePaymentState(
     .get();
 
   if (!plan) {
-    return "No partial payment has been recorded for this order";
+    return validatePlanlessGiftCardBalanceState(db, order, incomingAmountMinor);
   }
   if (plan.status === PaymentPlanStatus.CANCELLED || plan.status === PaymentPlanStatus.COMPLETED) {
     return "No balance due";
@@ -417,6 +464,15 @@ export async function processPaymentConfirmed(
     if (initialPaymentStateError) {
       return { success: false, error: initialPaymentStateError, retryable: false };
     }
+    // A balance with no plan is a gift-card remainder (validated above): it
+    // has no plan to complete, and the CAS re-proves there is still none.
+    const balancePlanExists = paymentType === "balance"
+      ? Boolean(await db
+        .select({ id: paymentPlans.id })
+        .from(paymentPlans)
+        .where(eq(paymentPlans.orderId, params.orderId))
+        .get())
+      : false;
 
     if (!paymentId) {
       paymentId = crypto.randomUUID();
@@ -502,14 +558,24 @@ export async function processPaymentConfirmed(
               AND deposit_amount_minor = ${incomingAmountMinor}
               AND balance_due_minor = ${newBalanceDueMinor}
           )`
-        : paymentType === "balance"
+        : paymentType === "balance" && balancePlanExists
           ? sql`EXISTS (
               SELECT 1 FROM payment_plans
               WHERE order_id = ${params.orderId}
                 AND status = ${PaymentPlanStatus.DEPOSIT_PAID}
                 AND balance_due_minor = ${incomingAmountMinor}
             )`
-          : sql`1 = 1`;
+          : paymentType === "balance"
+            ? sql`NOT EXISTS (
+                SELECT 1 FROM payment_plans WHERE order_id = ${params.orderId}
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM order_payments
+                WHERE order_id = ${params.orderId}
+                  AND status = ${PaymentRecordStatus.SUCCEEDED}
+                  AND payment_method <> ${GIFT_CARD_TENDER_METHOD}
+              )`
+            : sql`1 = 1`;
 
       validateTransition("order", order.status, newStatus);
       validateTransition("payment", order.paymentStatus, newPaymentStatus);
@@ -585,7 +651,7 @@ export async function processPaymentConfirmed(
             ))
             .returning({ id: paymentPlans.id }),
         );
-      } else if (paymentType === "balance" && isFullyPaid) {
+      } else if (paymentType === "balance" && isFullyPaid && balancePlanExists) {
         batchStatements.push(
           db
             .update(paymentPlans)
@@ -643,7 +709,7 @@ export async function processPaymentConfirmed(
         return { success: false, error: "Payment application changed concurrently; retry required" };
       }
       if (
-        (paymentType === "deposit" || (paymentType === "balance" && isFullyPaid)) &&
+        (paymentType === "deposit" || (paymentType === "balance" && isFullyPaid && balancePlanExists)) &&
         (planUpdate?.length ?? 0) === 0
       ) {
         return { success: false, error: "Payment plan changed concurrently; retry required" };

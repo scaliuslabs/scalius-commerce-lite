@@ -59,18 +59,22 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
   parameter); `validateStorefrontCartItems()` reads them beside the product
   rows. Every tier write bumps `checkout_authority` (0090 triggers), so a
   prepared order priced from old tiers fails its commit guard.
-- **Pricing.** `resolveCartBundleSavings()` groups the lines of one product
+- **Pricing.** `bundleLineSavings()` (via `resolveCartBundleSavings()`) groups the lines of one product
   (any SKU, any buyer inputs) and prices them with `bundleGroupPricing`
   (`@scalius/shared/product-bundles`) from the catalog unit price after
   catalog discounts, before surcharges. Each line gets `bundleDiscountMinor`;
   gift cards never bundle. BDT savings are whole taka.
 - **With promotions** (`resolveBundlePromotionInterplay` in
-  `bundle-discounts.ts`, one rule for the tax quote, the order and the agent
-  quote): an order is priced by its promotions or by its bundles, never both.
-  Promotions are evaluated at catalog prices as always; a typed code that
-  applies wins; otherwise the buyer gets whichever saves more in total
-  (promotions on a tie), and a losing automatic promotion steps aside (no
-  snapshot, no discount lines; offers and code feedback stay). Delivery
+  `bundle-discounts.ts`, one rule for the tax quote, the order, the agent
+  quote and the cart's discount preview `POST /discounts/validate`, which
+  prices bundles with `previewStorefrontBundleSavings`): an order is priced
+  by its promotions or by its bundles, never both. Promotions (automatic and
+  typed codes) are evaluated at catalog prices as always; the buyer gets
+  whichever saves more in total (promotions on a tie). Losing promotions step
+  aside (no snapshot, no discount lines; offers and code feedback stay), and
+  each typed code the bundle beat stays listed as `lower_savings` with
+  `bundleSavesMore` ("Bundle saving applied: better than CODE"), never
+  silently dropped and never redeemed. Delivery
   thresholds read the catalog subtotal. Bundle savings land in the lines'
   `discount_amount_minor` with no `order_discount_allocations` rows, so the
   commit check (it refuses a payload that mixes both), refund reconciliation

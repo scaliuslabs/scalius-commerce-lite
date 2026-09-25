@@ -6,6 +6,7 @@ import { productCategoryNameMatch } from "../../search/relevance";
 import type { StorefrontProductFilterInput } from "../products/types";
 import type { Database } from "@scalius/database/client";
 import { publicProductBaseConditions } from "../products/public-eligibility";
+import { reviewsEnabledSql } from "../settings/documents";
 import {
     buyerCatalogHasSkuInPriceRange,
     type BuyerCatalogPricingProjection,
@@ -153,7 +154,7 @@ export function buildStorefrontProductConditions(
 /**
  * Listing conditions over the stored buyer state (`product_buyer_state`
  * joined to `products`): the public set, the request's category, search,
- * id, price, free-delivery and discount filters. `needsProducts` is false
+ * id, price, free-delivery, discount and in-stock filters. `needsProducts` is false
  * when every condition reads the buyer state alone, so a count can skip
  * the `products` join.
  */
@@ -196,6 +197,9 @@ export function buildStorefrontBuyerStateConditions(
     }
     if (params.hasDiscount === "true") conditions.push(sql`${buyerState.hasDiscount} = 1`);
     else if (params.hasDiscount === "false") conditions.push(sql`${buyerState.hasDiscount} = 0`);
+    // "Exclude out of stock": the stored buyer-visible availability, the
+    // same truth the card's sold-out band and the product feed show.
+    if (params.inStock === "true") conditions.push(sql`${buyerState.availableForSale} = 1`);
     return { conditions, needsProducts };
 }
 
@@ -275,6 +279,16 @@ export function productMinRatingCondition(productId: SQL | AnyColumn, stars: num
         WHERE rating_filter.product_id = ${productId}
           AND rating_filter.rating_avg_centi >= ${stars * 100}
     )`;
+}
+
+/**
+ * The review-stats join for a product id: no row while reviews are off, so
+ * cards carry no rating, the rating facet is empty and the `rating` order
+ * falls back to newest (the storefront hides them too, but the API must not
+ * publish them).
+ */
+export function reviewStatsJoin(productId: AnyColumn | SQL): SQL {
+    return sql`${reviewStats.productId} = ${productId} AND ${reviewsEnabledSql()} = 1`;
 }
 
 /** A card's rating: `{average, count}` from the stats row, null without a published review. */

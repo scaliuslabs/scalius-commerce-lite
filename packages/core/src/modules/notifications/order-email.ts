@@ -74,6 +74,8 @@ async function readOrderFacts(db: Database, orderId: string) {
     unitPriceMinor: orderItems.unitPriceMinor,
     lineSubtotalMinor: orderItems.lineSubtotalMinor,
     properties: orderItems.properties,
+    fulfillmentType: orderItems.fulfillmentType,
+    fulfilledQuantity: orderItems.fulfilledQuantity,
   } }).from(orders)
     .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
     .where(eq(orders.id, orderId))
@@ -175,9 +177,17 @@ function discountAndDelivery({ order, discounts }: OrderFacts, money: (minor: nu
 }
 
 /** The refund in this message (major units in the queued facts), in the order's currency. */
-function refundAmount(amount: unknown, currency: string | null): string {
+function refundAmount(amount: unknown, currency: string | null, language: MessageLanguage, data?: Record<string, unknown>): string {
   const value = typeof amount === "number" ? amount : typeof amount === "string" ? Number(amount) : Number.NaN;
-  return currency && Number.isFinite(value) && value > 0 ? formatMoney(value, { code: currency }) : "";
+  const formatted = currency && Number.isFinite(value) && value > 0 ? formatMoney(value, { code: currency }) : "";
+  // A store-credit refund is a new gift card, not money back: say so (last 4 only, never the code).
+  if (formatted && data?.settlement === "store_credit") {
+    const last4 = typeof data.storeCreditLast4 === "string" && /^[0-9A-Z]{4}$/.test(data.storeCreditLast4)
+      ? data.storeCreditLast4
+      : null;
+    return MESSAGE_COPY[language].storeCreditRefund(formatted, last4);
+  }
+  return formatted;
 }
 
 const CLOSED_STATUSES = new Set(["cancelled", "returned", "refunded", "partially_refunded"]);
@@ -207,6 +217,21 @@ async function readShipment(db: Database, orderId: string, trackingId: string) {
 }
 
 const COURIER_NAMES: Record<string, string> = { pathao: "Pathao", steadfast: "Steadfast" };
+
+/**
+ * The downloads still being prepared, by name: a "delivered" message about
+ * an order with such a line says the download is still to come instead of
+ * implying everything arrived. Empty when every download is delivered.
+ */
+export function pendingDownloadNames(
+  items: ReadonlyArray<{ productName: string | null; fulfillmentType: string; quantity: number; fulfilledQuantity: number }>,
+): string {
+  return items
+    .filter((item) => item.fulfillmentType === "digital" && item.fulfilledQuantity < item.quantity)
+    .map((item) => item.productName?.trim())
+    .filter((name): name is string => Boolean(name))
+    .join(", ");
+}
 
 export async function readOrderMessageContext(input: OrderMessageInput, db: Database): Promise<OrderMessageContext> {
   const queuedTrackingId = String(input.data?.trackingId ?? "").trim();
@@ -264,11 +289,12 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
       tracking_id: shipment?.trackingId ?? queuedTrackingId,
       courier_name: shipment?.courierName ?? "",
       tracking_url: shipment?.trackingUrl ?? "",
-      refund_amount: refundAmount(input.data?.amount, currency),
+      refund_amount: refundAmount(input.data?.amount, currency, language, input.data),
       support_request: request,
       support_status: status,
       pickup_address: order.pickupAddress?.trim() ?? "",
       pickup_hours: order.pickupHours?.trim() ?? "",
+      pending_downloads: pendingDownloadNames(items),
     },
     facts: {
       store: { name: store.name, logoUrl: store.logoUrl },

@@ -5,12 +5,13 @@
 //
 // 1. Promotions (automatic ones and codes) are evaluated first, on the catalog
 //    line prices, exactly as without bundles.
-// 2. A code the buyer typed that applies always wins: bundle savings are off
-//    for that order (a typed code is never silently dropped).
-// 3. Otherwise the buyer gets whichever saves more in total: the automatic
-//    promotions, or the bundle savings (cart validation, from the catalog
-//    prices, each capped at its line). A tie keeps the promotions.
-// 4. Delivery thresholds ("free over") read the catalog subtotal either way.
+// 2. The buyer gets whichever saves more in total: the promotions (automatic
+//    ones and typed codes together), or the bundle savings (cart validation,
+//    from the catalog prices, each capped at its line). A tie keeps the
+//    promotions. A typed code that loses is never silently dropped: it stays
+//    on the order's code list as `lower_savings` with `bundleSavesMore`,
+//    so every summary says "Bundle saving applied: better than CODE".
+// 3. Delivery thresholds ("free over") read the catalog subtotal either way.
 //
 // Why not both: an order's line discounts must equal its promotion
 // allocations (the commit check, refund reconciliation and receipt lines all
@@ -20,7 +21,10 @@
 //
 // Amounts are integer minor units; with BDT's whole-taka catalog prices every
 // bundle share is whole taka.
-import type { StorefrontDiscountQuote } from "../promotions/promotions.checkout";
+import type { RejectedDiscountCode, StorefrontDiscountQuote } from "../promotions/promotions.checkout";
+
+/** How a typed code that the bundle saving beat is named to the buyer. */
+export const BUNDLE_SAVING_NAME = "Bundle saving";
 import type { TaxDiscountAllocationInput } from "../tax/types";
 
 export interface BundleDiscountLine {
@@ -57,13 +61,27 @@ export function resolveBundlePromotionInterplay(
     const promotionsWin = { discount, allocation: discount.taxAllocation, bundleLines: [], bundleDiscountMinor: 0 };
     if (bundleDiscountMinor === 0) return promotionsWin;
     const applied = discount.applied;
-    if (applied) {
-        const typedCode = applied.discounts.some((each) => each.promotionCode !== null);
-        if (typedCode || applied.totalDiscountMinor >= bundleDiscountMinor) return promotionsWin;
-    }
+    if (applied && applied.totalDiscountMinor >= bundleDiscountMinor) return promotionsWin;
+    // The promotions step aside; offers and code feedback stay, and each typed
+    // code that applied says the bundle saving beat it.
+    const beatenCodes: RejectedDiscountCode[] = [...new Set(
+        (applied?.discounts ?? []).flatMap((each) => each.promotionCode ? [each.promotionCode] : []),
+    )].map((code) => ({
+        code,
+        reason: "lower_savings",
+        conflictsWith: BUNDLE_SAVING_NAME,
+        bundleSavesMore: true,
+        message: `${BUNDLE_SAVING_NAME} applied: better than ${code}.`,
+    }));
     return {
-        // The automatic promotions step aside; offers and code feedback stay.
-        discount: { ...discount, applied: null, snapshot: null, taxAllocation: undefined, discounts: [] },
+        discount: {
+            ...discount,
+            applied: null,
+            snapshot: null,
+            taxAllocation: undefined,
+            discounts: [],
+            rejectedCodes: [...discount.rejectedCodes, ...beatenCodes],
+        },
         allocation: { lines: bundleLines, shippingMinor: 0 },
         bundleLines,
         bundleDiscountMinor,

@@ -40,7 +40,7 @@ export function RejectReviewsDialog({
           <DialogTitle>{count === 1 ? t("rejectOneTitle") : t("rejectTitle", { count })}</DialogTitle>
           <DialogDescription>{t("rejectBody")}</DialogDescription>
         </DialogHeader>
-        <form
+        <form method="post"
           id={formId}
           className="flex flex-col gap-1"
           onSubmit={(event) => {

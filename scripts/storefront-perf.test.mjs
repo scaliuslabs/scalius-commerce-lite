@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_BUDGETS, discoverPaths, evaluateBudgets, isLocalBase, median } from "./storefront-perf.mjs";
+import { DEFAULT_BUDGETS, bindingCheckTarget, discoverPaths, evaluateBudgets, isLocalBase, median } from "./storefront-perf.mjs";
 
 describe("storefront perf check", () => {
   it("finds a category and a product on the home page", () => {
@@ -53,5 +53,13 @@ describe("storefront perf check", () => {
 
     expect(evaluateBudgets(cart)).toEqual([]);
     expect(evaluateBudgets({ ...cart, ttfbHit: DEFAULT_BUDGETS.ttfbMissMs + 1 })).toHaveLength(1);
+  });
+
+  it("checks a local storefront's binding before measuring, never a remote one", () => {
+    expect(bindingCheckTarget({ base: "http://localhost:4601" })).toEqual({ storefrontUrl: "http://localhost:4601" });
+    expect(bindingCheckTarget({ base: "http://localhost:4601", mediaUrl: "http://localhost:9001/api/v1/media" }))
+      .toEqual({ storefrontUrl: "http://localhost:4601", mediaUrl: "http://localhost:9001/api/v1/media" });
+    expect(bindingCheckTarget({ base: "https://storefront.scalius.com" })).toBeNull();
+    expect(bindingCheckTarget({ base: "http://localhost:4601", bindingCheck: false })).toBeNull();
   });
 });

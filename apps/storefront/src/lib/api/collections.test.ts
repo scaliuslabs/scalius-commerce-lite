@@ -67,6 +67,7 @@ describe("storefront collection API helpers", () => {
         pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
         priceRange: { min: 0, max: 0 },
         facets: [],
+        ratingFacet: [],
       },
     });
     expect(mocks.getApiV1CollectionsById).toHaveBeenLastCalledWith({

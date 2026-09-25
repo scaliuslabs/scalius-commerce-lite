@@ -96,8 +96,50 @@ export interface PaginatedResponse<T> {
   };
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];
+  /** "N★ & up" rows of the listing's scope (empty when nothing in scope has a review). */
+  ratingFacet?: RatingFacetValue[];
   /** Set when the search matched nothing and these results are for this corrected query. */
   correctedQuery?: string | null;
+}
+
+/** One "N★ & up" row of a listing: products averaging at least `min` stars. */
+export interface RatingFacetValue {
+  min: number;
+  count: number;
+}
+
+/** A card's published-review average and count; null without a published review. */
+export interface ProductCardRating {
+  average: number;
+  count: number;
+}
+
+/** Published-review aggregates of one product (5★ first in the histogram). */
+export interface ProductReviewSummary {
+  average: number;
+  count: number;
+  histogram: Array<{ rating: number; count: number }>;
+}
+
+/** One published review, as the product page and the public list send it. */
+export interface PublicProductReview {
+  id: string;
+  rating: number;
+  title: string | null;
+  body: string | null;
+  authorName: string;
+  variantLabel: string | null;
+  verifiedPurchase: true;
+  publishedAt: string;
+  editedAt: string | null;
+  reply: { body: string; repliedAt: string } | null;
+}
+
+/** The product page's `reviews`: the summary and the first page (null when the store's reviews are off). */
+export interface ProductReviews {
+  summary: ProductReviewSummary;
+  items: PublicProductReview[];
+  nextCursor: string | null;
 }
 
 export interface BuyerPriceRange {
@@ -105,8 +147,11 @@ export interface BuyerPriceRange {
   max: number;
 }
 
-/** Where a listing facet comes from: a typed attribute, a merchant option axis, or the brand. */
-export type ProductFacetKind = "attribute" | "option" | "brand";
+/**
+ * Where a listing facet comes from: a typed attribute, a merchant option axis,
+ * the brand, or the category tree (values are category slugs to link to).
+ */
+export type ProductFacetKind = "attribute" | "option" | "brand" | "category";
 /** How a facet renders. Authoritative for attributes (merchant-chosen); options and brand send "checkbox". */
 export type ProductFacetDisplay = "checkbox" | "range" | "swatch" | "search_list";
 
@@ -135,7 +180,7 @@ export interface ProductFacet {
   display: ProductFacetDisplay;
   /** Unit of a number attribute ("in", "GB"). */
   unit: string | null;
-  /** At most 100 values (top by count, selected ones kept), in display order; empty for a range facet. */
+  /** At most 100 values (500 brands; top by count, selected ones kept), in display order; empty for a range facet. */
   values: ProductFacetValue[];
   /** A range facet's bounds over the products matching the other facets' selections; null otherwise. */
   range: { min: number; max: number } | null;
@@ -172,6 +217,27 @@ export interface SelectedProductOption {
   standardMapping: ProductOptionStandardMapping;
 }
 
+/**
+ * What a card can say beyond title, price and photo, all from stored data
+ * (`cardFacts` on listing and homepage products; the API's ProductCardFacts).
+ */
+export interface ProductCardFacts {
+  brand: { name: string; slug: string } | null;
+  /** Up to four "Name: value" lines, in spec-table order. */
+  keySpecs: string[];
+  /** Option axes with two or more values sold on a live SKU. */
+  options: Array<{
+    name: string;
+    kind: "color" | "size" | "other";
+    count: number;
+    swatches: Array<{ label: string; hex: string | null }>;
+  }>;
+  /** Units sold in the last 30 days; null below 10. */
+  soldLast30Days: number | null;
+  packSize: string | null;
+  delivery: { free: true } | { free: false; feeFrom: number } | null;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -205,6 +271,12 @@ export interface Product {
   imageAlt?: string | null;
   /** Listing cards only: the next gallery photo, shown on hover. Never a video. */
   secondaryImageUrl?: string | null;
+  /** Listing and homepage cards only: stored facts a card can show (core catalog/card-facts.ts). */
+  cardFacts?: ProductCardFacts;
+  /** Listing and homepage cards only: the published-review average and count; null without one. */
+  rating?: ProductCardRating | null;
+  /** Product page only: published reviews (null when the store's reviews are off). */
+  reviews?: ProductReviews | null;
   category?: CategorySummary;
   hasVariants: boolean;
   availableForSale?: boolean;
@@ -438,6 +510,8 @@ export interface Collection {
   canonicalPath?: string | null;
   noIndex?: boolean;
   excludeFromSitemap?: boolean;
+  /** Collection detail: a theme listing template id, or null for the theme default. */
+  listingTemplate?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -454,6 +528,7 @@ export interface CollectionWithProducts extends Collection {
   pagination: PaginatedResponse<Product>["pagination"];
   priceRange?: BuyerPriceRange;
   facets?: ProductFacet[];
+  ratingFacet?: RatingFacetValue[];
 }
 
 // ---------------------------------------------------------------------------
@@ -825,7 +900,6 @@ export interface CheckoutLanguageData {
   code: string;
   languageData: CheckoutLanguageStrings;
   fieldVisibility: {
-    showEmailField: boolean;
     showOrderNotesField: boolean;
     showAreaField: boolean;
   };

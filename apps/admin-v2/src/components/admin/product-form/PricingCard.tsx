@@ -15,6 +15,7 @@ import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
+import { useProductKindRules } from "./product-kind-rules";
 import type { ProductFormValues } from "./types";
 import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
 
@@ -28,6 +29,7 @@ export function PricingCard({ form, variantPrices }: {
   variantPrices: VariantPriceRange | null;
 }) {
   const t = useMessages(productMessages);
+  const { showDiscount } = useProductKindRules();
   const { symbol, code, fmt, salePrice } = useCurrency();
   const [discountShown, setDiscountShown] = useState(false);
   const [price, discountType, discountPercentage, discountAmount] = useWatch({
@@ -82,7 +84,8 @@ export function PricingCard({ form, variantPrices }: {
           )}
         />}
 
-        {discountOpen ? (
+        {/* A gift card is worth its price: no discount (the product kind rules). */}
+        {!showDiscount ? null : discountOpen ? (
           <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               control={form.control}

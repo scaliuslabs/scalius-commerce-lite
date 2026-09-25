@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildNavMoreEntries, cloneCompactMenus, fitNavOverflow, installNavDisclosure } from "./nav-disclosure";
+import { fitNavOverflow, installNavDisclosure, placeCompactMenus } from "./nav-disclosure";
 import { ariaCurrent, navigationCurrent, navigationPathname } from "./navigation-state";
 
 const button = (id: string) => document.querySelector<HTMLButtonElement>(`[aria-controls="${id}"]`)!;
@@ -98,32 +98,52 @@ describe("nav disclosures", () => {
 });
 
 describe("menu overflow", () => {
-  it("moves the items that don't fit into More", () => {
+  const width = (element: Element, value: number) =>
+    Object.defineProperty(element, "offsetWidth", { configurable: true, value });
+
+  function row(extras: string) {
     document.body.innerHTML = `
       <ul data-nav-overflow>
-        ${[0, 1, 2, 3].map((index) => `<li data-nav-index="${index}">Item ${index}</li>`).join("")}
-        <li data-nav-more hidden>
-          <ul>${[0, 1, 2, 3].map((index) => `<li data-nav-more-index="${index}" hidden>Item ${index}</li>`).join("")}</ul>
-        </li>
+        ${[0, 1, 2, 3].map((index) => `<li data-nav-index="${index}"><a href="/i${index}">Item ${index}</a></li>`).join("")}
+        <li data-nav-more hidden><ul data-nav-more-list>${extras}</ul></li>
       </ul>`;
     const list = document.querySelector<HTMLElement>("[data-nav-overflow]")!;
-    const width = (element: Element, value: number) =>
-      Object.defineProperty(element, "offsetWidth", { configurable: true, value });
-    Object.defineProperty(list, "clientWidth", { configurable: true, value: 300 });
     list.querySelectorAll(":scope > [data-nav-index]").forEach((item) => width(item, 100));
     width(list.querySelector("[data-nav-more]")!, 80);
+    return list;
+  }
+  const inRow = (list: HTMLElement) =>
+    Array.from(list.querySelectorAll<HTMLElement>(":scope > [data-nav-index]")).map((item) => item.dataset.navIndex);
+  const inMore = (list: HTMLElement) =>
+    Array.from(list.querySelectorAll<HTMLElement>("[data-nav-more-list] > li")).map((item) => item.dataset.navIndex ?? item.textContent);
 
+  it("moves the items that don't fit into More, each link once, and back", () => {
+    const list = row("");
+    Object.defineProperty(list, "clientWidth", { configurable: true, value: 300 });
     fitNavOverflow(list);
-    const shown = (selector: string) =>
-      Array.from(list.querySelectorAll<HTMLElement>(selector)).map((element) => !element.hidden);
-    expect(shown(":scope > [data-nav-index]")).toEqual([true, true, false, false]);
-    expect(shown("[data-nav-more-index]")).toEqual([false, false, true, true]);
+    expect(inRow(list)).toEqual(["0", "1"]);
+    expect(inMore(list)).toEqual(["2", "3"]);
     expect(list.querySelector<HTMLElement>("[data-nav-more]")!.hidden).toBe(false);
+    expect(list.querySelectorAll("a")).toHaveLength(4);
 
     Object.defineProperty(list, "clientWidth", { configurable: true, value: 400 });
     fitNavOverflow(list);
-    expect(shown(":scope > [data-nav-index]")).toEqual([true, true, true, true]);
+    expect(inRow(list)).toEqual(["0", "1", "2", "3"]);
+    expect(inMore(list)).toEqual([]);
     expect(list.querySelector<HTMLElement>("[data-nav-more]")!.hidden).toBe(true);
+  });
+
+  it("keeps More for the server's extras, after the moved items", () => {
+    const list = row('<li><a href="/i4">Item 4</a></li><li><a href="/categories">All categories</a></li>');
+    Object.defineProperty(list, "clientWidth", { configurable: true, value: 500 });
+    fitNavOverflow(list);
+    // Everything fits, but the extras still need "More".
+    expect(inRow(list)).toEqual(["0", "1", "2", "3"]);
+    expect(list.querySelector<HTMLElement>("[data-nav-more]")!.hidden).toBe(false);
+    Object.defineProperty(list, "clientWidth", { configurable: true, value: 450 });
+    fitNavOverflow(list);
+    expect(inRow(list)).toEqual(["0", "1", "2"]);
+    expect(inMore(list)).toEqual(["3", "Item 4", "All categories"]);
   });
 });
 
@@ -150,9 +170,6 @@ describe("menu row keys", () => {
             <div id="desktop-nav-more" hidden><ul data-nav-more-list></ul></div>
           </li>
         </ul>
-        <template data-nav-more-template>
-          <li data-nav-more-index="" hidden><ul class="nav-dropdown-list"><li><a class="nav-dropdown-link nav-dropdown-link--parent" href="#">More</a><ul class="nav-dropdown-list nav-dropdown-sublist"><li><a class="nav-dropdown-link" href="#">More</a></li></ul></li></ul></li>
-        </template>
       </nav>
       <div data-nav-compact-from="desktop-nav"></div>`;
   });
@@ -175,34 +192,37 @@ describe("menu row keys", () => {
     expect(document.activeElement).toBe(button("desktop-nav-panel-0"));
   });
 
-  it("builds More entries from the row, with the menu's own markup", () => {
+  it("answers keys in More for the moved items, never their own popups", () => {
     const list = document.querySelector<HTMLElement>("[data-nav-overflow]")!;
-    buildNavMoreEntries(list);
-    const entries = Array.from(list.querySelectorAll<HTMLElement>("[data-nav-more-index]"));
-    expect(entries.map((entry) => entry.dataset.navMoreIndex)).toEqual(["0", "1", "2"]);
-    expect(entries[0]!.querySelector(".nav-dropdown-link--parent")!.getAttribute("href")).toBe("/women");
-    expect(Array.from(entries[0]!.querySelectorAll(".nav-dropdown-sublist a")).map((link) => link.getAttribute("href"))).toEqual([
-      "/sarees",
-      "/kurtis",
-    ]);
-    // A parent without a link is text; a leaf is a plain row.
-    expect(entries[1]!.querySelector("span.nav-dropdown-link--parent")!.textContent).toBe("Men");
-    expect(entries[2]!.querySelector(".nav-dropdown-sublist")).toBeNull();
-    buildNavMoreEntries(list);
-    expect(list.querySelectorAll("[data-nav-more-index]")).toHaveLength(3);
+    const more = list.querySelector<HTMLElement>("[data-nav-more]")!;
+    more.hidden = false;
+    more.querySelector("[data-nav-more-list]")!.append(list.querySelector('[data-nav-index="2"]')!);
+    button("desktop-nav-more").click();
+    document.querySelector<HTMLElement>('#desktop-nav-more a[href="/sale"]')!.focus();
+    key("ArrowDown");
+    expect(panel("desktop-nav-more").hidden).toBe(false);
+    key("Escape");
+    expect(panel("desktop-nav-more").hidden).toBe(true);
+    expect(document.activeElement).toBe(button("desktop-nav-more"));
   });
 
-  it("copies the row for the condensed header with its own ids", () => {
+  it("moves the menu itself into the condensed bar and back", () => {
+    document.body.insertAdjacentHTML("afterbegin", '<div id="main-header"><div data-nav-compact-home="desktop-nav"></div></div>');
+    const header = document.getElementById("main-header")!;
+    const home = header.querySelector<HTMLElement>("[data-nav-compact-home]")!;
+    const slot = document.querySelector<HTMLElement>("[data-nav-compact-from]")!;
+    header.append(slot);
+    home.append(document.getElementById("desktop-nav")!);
     button("desktop-nav-panel-0").click();
-    cloneCompactMenus(document);
-    const copy = document.getElementById("desktop-nav-compact")!;
-    expect(copy.parentElement!.hasAttribute("data-nav-compact-from")).toBe(true);
-    expect(copy.querySelector('[aria-controls="desktop-nav-compact-panel-0"]')!.getAttribute("aria-expanded")).toBe("false");
-    expect(document.getElementById("desktop-nav-compact-panel-0")!.hidden).toBe(true);
-    const ids = Array.from(document.querySelectorAll("[id]")).map((element) => element.id);
-    expect(new Set(ids).size).toBe(ids.length);
-    cloneCompactMenus(document);
-    expect(document.querySelectorAll("#desktop-nav-compact")).toHaveLength(1);
+    header.classList.add("is-scrolled");
+    placeCompactMenus(document);
+    expect(document.getElementById("desktop-nav")!.parentElement).toBe(slot);
+    // One copy, closed on the move.
+    expect(document.querySelectorAll("#desktop-nav")).toHaveLength(1);
+    expect(panel("desktop-nav-panel-0").hidden).toBe(true);
+    header.classList.remove("is-scrolled");
+    placeCompactMenus(document);
+    expect(document.getElementById("desktop-nav")!.parentElement).toBe(home);
   });
 });
 

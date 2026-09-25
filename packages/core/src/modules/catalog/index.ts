@@ -39,5 +39,6 @@ export * from "./feed-diagnostics";
 export * from "./feed-row-preview";
 export * from "./storefront-sections";
 export * from "./cards";
+export * from "./card-facts";
 export * from "./home-lists";
 export * from "./recommendation-refresh";

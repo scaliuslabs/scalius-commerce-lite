@@ -5,6 +5,7 @@
  * message clears as soon as that field is fixed. Untouched fields are never
  * marked invalid.
  */
+import { toLatinDigits } from "@scalius/shared/phone-input";
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "./shipping-address";
@@ -66,9 +67,15 @@ export function checkoutInformationFields(
     if (!name) return copy.nameRequiredText;
     return name.length < 3 ? copy.nameTooShortText : "";
   });
+  // Customer accounts decides whether email is asked and required (the field's `required`).
   add("customerEmail", "customerEmail-error", () => {
     const email = value(root, "customerEmail");
-    return email && !EMAIL.test(email) ? copy.emailInvalidText : "";
+    if (!email) return root.querySelector("#customerEmail[required]") ? copy.emailRequiredText : "";
+    return EMAIL.test(email) ? "" : copy.emailInvalidText;
+  });
+  add("customerWhatsapp", "customerWhatsapp-error", () => {
+    const digits = toLatinDigits(value(root, "customerWhatsapp")).replace(/\D/g, "");
+    return digits && (digits.length < 10 || digits.length > 15) ? copy.whatsappInvalidText : "";
   });
   add("shippingAddress", "shippingAddressError", () => {
     if (!required("shippingAddress")) return "";

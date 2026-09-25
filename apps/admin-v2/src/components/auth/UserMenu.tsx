@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Languages, LogOut, SunMoon, UserRound } from "lucide-react";
 import { toast } from "sonner";
@@ -19,7 +19,6 @@ import { clearAdminRouteContextCache } from "@/lib/admin-route-context";
 import { withDashboardBasePath } from "@/lib/dashboard-base-path";
 import { LOCALES, setLocale, useLocale, useMessages, type Locale } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
-import { TOP_BAR_BUTTON, useTopBarMenuOffset } from "@/components/admin/layout/top-bar";
 
 export interface UserMenuUser {
   id: string;
@@ -32,10 +31,22 @@ function initials(name: string) {
   return name.split(" ").map((part) => part[0]).join("").toUpperCase().slice(0, 2);
 }
 
-/** Avatar menu: My account, dashboard language, sign out. */
-export function UserMenu({ user }: { user: UserMenuUser }) {
+/** The signed-in user's picture, or their initials. */
+export function UserAvatar({ user }: { user: UserMenuUser }) {
+  return (
+    <Avatar className="size-7">
+      {user.image ? <AvatarImage src={mediaImageUrl(user.image, 160)} alt="" className="object-cover" /> : null}
+      <AvatarFallback><span className="text-caption font-semibold text-foreground">{initials(user.name)}</span></AvatarFallback>
+    </Avatar>
+  );
+}
+
+/**
+ * The account menu (My account, dashboard language, light/dark, sign out),
+ * opened from the top bar's store button or the settings panel's signed-in user row.
+ */
+export function UserMenu({ user, side, children }: { user: UserMenuUser; side: "top" | "bottom"; children: ReactNode }) {
   const t = useMessages(shellMessages);
-  const menuOffset = useTopBarMenuOffset();
   const locale = useLocale();
   const { preference, setPreference } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
@@ -57,16 +68,8 @@ export function UserMenu({ user }: { user: UserMenuUser }) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button type="button" className={TOP_BAR_BUTTON}>
-          <Avatar className="h-7 w-7">
-            {user.image ? <AvatarImage src={mediaImageUrl(user.image, 160)} alt="" className="object-cover" /> : null}
-            <AvatarFallback><span className="text-caption font-semibold text-foreground">{initials(user.name)}</span></AvatarFallback>
-          </Avatar>
-          <span className="hidden max-w-40 truncate text-body font-medium md:inline">{user.name}</span>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={menuOffset} className="w-64">
+      <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+      <DropdownMenuContent side={side} align={side === "top" ? "start" : "end"} sideOffset={8} className="w-64">
         <div className="px-2 py-1.5">
           <p className="truncate text-body font-medium">{user.name}</p>
           <p className="truncate text-body text-muted-foreground">{user.email}</p>

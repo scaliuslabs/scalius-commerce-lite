@@ -77,10 +77,31 @@ interface ManualOrderMoneyItem {
     variantId: string | null;
     quantity: number;
     unitPriceMinor: number;
+    /** Gift-card lines take no share of the order discount (Wave B §4.2). */
+    isGiftCard?: boolean;
+}
+
+/**
+ * The tax-quote lines of a manual order. Gift-card lines agree with
+ * storefront checkout: tax-exempt at sale and outside the order discount.
+ */
+export function manualOrderTaxLines(
+    items: ReadonlyArray<ManualOrderMoneyItem & { variantId: string; taxClassId: string | null }>,
+    allocationLineIds: readonly string[],
+) {
+    return items.map((item, index) => ({
+        lineId: allocationLineIds[index]!,
+        productId: item.productId,
+        variantId: item.variantId,
+        unitPriceMinor: item.unitPriceMinor,
+        quantity: item.quantity,
+        taxClassId: item.taxClassId,
+        ...(item.isGiftCard ? { taxExempt: true, discountExempt: true } : {}),
+    }));
 }
 
 /** Order totals in integer minor units: total = subtotal + shipping − discount. */
-function calculateManualOrderMoney(
+export function calculateManualOrderMoney(
     items: ManualOrderMoneyItem[],
     shippingMinor: number,
     discountMinor: number,
@@ -90,12 +111,17 @@ function calculateManualOrderMoney(
         (sum, item) => sum + item.unitPriceMinor * item.quantity,
         0,
     );
-    if (discountMinor > subtotalAmountMinor) {
+    // A discount never reduces what gift cards cost (they are money, not merchandise).
+    const discountableMinor = items.reduce(
+        (sum, item) => sum + (item.isGiftCard ? 0 : item.unitPriceMinor * item.quantity),
+        0,
+    );
+    if (discountMinor > discountableMinor) {
         throw new ValidationError(
             "Discount amount cannot exceed the manual order subtotal.",
             {
                 reason: "MANUAL_ORDER_DISCOUNT_EXCEEDS_SUBTOTAL",
-                maximumDiscountAmountMinor: subtotalAmountMinor,
+                maximumDiscountAmountMinor: discountableMinor,
                 currencyCode: currency.code,
                 decimalPlaces: currency.decimalPlaces,
             },
@@ -351,14 +377,7 @@ export async function prepareManualOrderQuote(
             area: address?.area ?? null,
             ...locationNames,
         },
-        lines: trackedItems.map((item, index) => ({
-            lineId: allocationLineIds[index]!,
-            productId: item.productId,
-            variantId: item.variantId,
-            unitPriceMinor: item.unitPriceMinor,
-            quantity: item.quantity,
-            taxClassId: item.taxClassId,
-        })),
+        lines: manualOrderTaxLines(trackedItems, allocationLineIds),
         shippingMinor: money.shippingAmountMinor,
         discountMinor: money.discountAmountMinor,
         currency: {

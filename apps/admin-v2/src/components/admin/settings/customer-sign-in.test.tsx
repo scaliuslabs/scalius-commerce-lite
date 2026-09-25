@@ -39,11 +39,11 @@ describe("customer sign-in", () => {
     root = createRoot(container);
     sdk.getApiV1AdminSettingsNotificationChannels.mockImplementation(() =>
       envelope({ email: ready, sms: { status: "incomplete", issues: [] }, whatsapp: { status: "incomplete", issues: [] } }));
-    // The stored policy the tester saw: codes by email only, yet "Don't ask" for email.
     sdk.getApiV1AdminSettingsAuth.mockImplementation(() => envelope({
-      authVerificationMethod: "email",
-      customerAuthPolicy: { otpChannels: ["email"], requiredContactFields: ["phone"], optionalContactFields: [], defaultOtpChannel: "email" },
+      revision: { customerAuth: 3, whatsapp: 0 },
+      customerIdentity: { email: "optional", whatsapp: "off", channels: ["email"] },
     }));
+    sdk.postApiV1AdminSettingsAuth.mockImplementation(() => envelope({ message: "ok", revision: { customerAuth: 4, whatsapp: 0 } }));
   });
 
   afterEach(() => {
@@ -52,7 +52,7 @@ describe("customer sign-in", () => {
     notifyManager.setNotifyFunction((callback) => callback());
   });
 
-  it("asks for email when codes go by email only, and points to SMS setup", async () => {
+  const render = async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     await act(async () => {
       root.render(
@@ -65,20 +65,34 @@ describe("customer sign-in", () => {
         </QueryClientProvider>,
       );
     });
-    await vi.waitFor(() => expect(container.textContent).toContain("Ask for email"));
+    await vi.waitFor(() => expect(container.textContent).toContain("Contact information"));
+  };
+  const control = (label: string, index = 0) =>
+    [...container.querySelectorAll("label")].filter((element) => element.textContent === label)[index]!.querySelector("button")!;
 
-    const radio = (label: string) =>
-      [...container.querySelectorAll("label")].find((element) => element.textContent === label)!.querySelector("button")!;
-    expect(radio("Required").getAttribute("aria-checked")).toBe("true");
-    expect(radio("Don't ask").disabled).toBe(true);
-    expect(radio("Optional").disabled).toBe(true);
-    expect(container.textContent).toContain("Codes go by email only, so email is required.");
+  it("locks phone as required and keeps a chosen channel's contact collected", async () => {
+    await render();
+    expect(container.textContent).toContain("Phone number");
+    expect(container.textContent).toContain("Required (couriers need it)");
+    // Email codes are on: email can't become "Don't ask", and the reason is shown.
+    expect(control("Optional").getAttribute("aria-checked")).toBe("true");
+    expect(control("Don't ask", 0).disabled).toBe(true);
+    expect(container.textContent).toContain("Email codes are on, so checkout asks for email.");
+    expect(container.textContent).toContain("Customers who skip their email can't get codes for their orders.");
+    // The only channel can't be turned off.
+    expect(control("Email code").disabled).toBe(true);
+  });
 
-    // Adding SMS frees the choice again, and its missing setup links to Notifications.
-    const smsBox = [...container.querySelectorAll("label")].find((element) => element.textContent === "SMS")!.querySelector("button")!;
-    await act(async () => smsBox.click());
-    expect(radio("Don't ask").disabled).toBe(false);
-    const hint = [...container.querySelectorAll("a")].find((anchor) => anchor.textContent?.includes("Set up SMS"));
-    expect(hint?.getAttribute("href")).toBe("/admin/settings/notifications#sending");
+  it("fails closed: channels without a provider or a collected contact can't be turned on", async () => {
+    await render();
+    expect(control("SMS code").disabled).toBe(true);
+    const smsHint = [...container.querySelectorAll("a")].find((anchor) => anchor.textContent?.includes("Set up SMS"));
+    expect(smsHint?.getAttribute("href")).toBe("/admin/settings/notifications#sending");
+    // WhatsApp isn't collected yet: that's the first thing to fix.
+    expect(control("WhatsApp code").disabled).toBe(true);
+    expect(container.textContent).toContain("Ask for a WhatsApp number above to use this.");
+    await act(async () => control("Same as phone").click());
+    expect(container.textContent).toContain("Connect a WhatsApp provider to use this.");
+    expect(control("WhatsApp code").disabled).toBe(true);
   });
 });

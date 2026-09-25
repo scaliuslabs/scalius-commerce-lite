@@ -29,6 +29,12 @@ import {
 } from "@scalius/core/auth/admin-setup";
 import { noDeletingMediaReferences } from "@scalius/core/modules/media";
 import {
+    deleteStaffShortcutsStatement,
+    readStaffShortcuts,
+    STAFF_SHORTCUT_PATH_MAX_LENGTH,
+    writeStaffShortcuts,
+} from "@scalius/core/modules/settings";
+import {
     AUTH_PASSWORD_MAX_LENGTH,
     AUTH_PASSWORD_MIN_LENGTH,
     claimAdminSetup,
@@ -721,6 +727,7 @@ app.openapi(deleteUserRoute, async (c) => {
                     eq(adminInvitations.id, userToDelete.invitationId),
                     eq(adminInvitations.status, "pending"),
                 )),
+            deleteStaffShortcutsStatement(db, userId),
             db.delete(user).where(eq(user.id, userId)),
         ]);
 
@@ -1091,6 +1098,61 @@ app.openapi(updateProfileRoute, async (c) => {
         console.error("Error updating profile:", error);
         throw error;
     }
+});
+
+// ── Keyboard shortcuts (per staff member; replaced whole on save) ──
+
+const staffShortcutsPayload = z.object({
+    shortcuts: z.record(z.string().max(STAFF_SHORTCUT_PATH_MAX_LENGTH), z.string().max(3)),
+    revision: z.number().int().min(0),
+});
+
+const getStaffShortcutsRoute = createRoute({
+    method: "get",
+    path: "/shortcuts",
+    operationId: "dashboard.account.shortcuts.get",
+    tags: ["Admin - Auth Management"],
+    summary: "Get your dashboard keyboard shortcuts",
+    description: "Destination path -> \"g <key>\". An empty string turns that destination's default shortcut off. Revision 0 means nothing is saved yet.",
+    responses: {
+        200: { description: "Keyboard shortcuts", content: { "application/json": { schema: successEnvelope(staffShortcutsPayload) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(getStaffShortcutsRoute, async (c) => {
+    return ok(c, await readStaffShortcuts(c.get("db"), c.get("user").id));
+});
+
+const updateStaffShortcutsRoute = createRoute({
+    method: "put",
+    path: "/shortcuts",
+    operationId: "dashboard.account.shortcuts.update",
+    tags: ["Admin - Auth Management"],
+    summary: "Save your dashboard keyboard shortcuts",
+    description: "Replaces the whole map. Paths match /admin plus up to three segments; values are \"g\" then one letter or number, or \"\" to turn a default off, each used once. A stale expectedRevision is a 409.",
+    request: {
+        body: {
+            content: {
+                "application/json": {
+                    schema: z.object({
+                        expectedRevision: z.number().int().min(0),
+                        shortcuts: z.record(z.string().max(STAFF_SHORTCUT_PATH_MAX_LENGTH), z.string().max(3)),
+                    }),
+                },
+            },
+        },
+    },
+    responses: {
+        200: { description: "Keyboard shortcuts saved", content: { "application/json": { schema: successEnvelope(staffShortcutsPayload) } } },
+        ...errorResponses,
+        409: conflictResponse,
+    },
+});
+
+app.openapi(updateStaffShortcutsRoute, async (c) => {
+    const { expectedRevision, shortcuts } = c.req.valid("json");
+    return ok(c, await writeStaffShortcuts(c.get("db"), c.get("user").id, shortcuts, expectedRevision));
 });
 
 const createScannerLinkRoute = createRoute({

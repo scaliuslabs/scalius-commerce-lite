@@ -5,13 +5,13 @@ import { ATTRIBUTE_FACET_DISPLAYS } from "@scalius/shared/catalog-attributes";
 import type { CatalogFacetFilter } from "@scalius/core/modules/products";
 
 export const productFacetSchema = z.object({
-  id: z.string().openapi({ description: "The attribute id, `option.<axis>`, or `brand`." }),
+  id: z.string().openapi({ description: "The attribute id, `option.<axis>`, `brand`, or `category`." }),
   name: z.string(),
   slug: z.string().openapi({
     description:
-      "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).",
+      "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.",
   }),
-  kind: z.enum(["attribute", "option", "brand"]),
+  kind: z.enum(["attribute", "option", "brand", "category"]),
   display: z.enum(ATTRIBUTE_FACET_DISPLAYS).openapi({
     description: "The merchant's filter widget for attribute facets; `checkbox` for options and brands.",
   }),
@@ -21,7 +21,7 @@ export const productFacetSchema = z.object({
     label: z.string(),
     count: z.number().int().min(0).openapi({ description: "Products matching the other facets' selections and this value." }),
     swatch: z.string().nullable().openapi({ description: "`#rrggbb` of an enum value, for swatch facets." }),
-  })).max(100),
+  })).max(500).openapi({ description: "At most 100 values (500 for brands), the most common first and every selected value kept." }),
   range: z.object({ min: z.number(), max: z.number() }).nullable().openapi({
     description: "`display: range` only: the value bounds over products matching the other selections; `values` is empty.",
   }),

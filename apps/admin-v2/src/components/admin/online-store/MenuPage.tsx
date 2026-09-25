@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ListTree, Plus } from "lucide-react";
+import { CircleAlert, ListTree, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   deleteApiV1AdminNavigationMenusByMenuId,
@@ -12,6 +12,7 @@ import {
   postApiV1AdminNavigationMenusByMenuIdRestore,
   postApiV1AdminNavigationMenusByMenuIdRollback,
 } from "@scalius/api-client/sdk";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
@@ -50,6 +51,8 @@ function MenuEditor({ menuId }: { menuId: string }) {
     if (name === savedName) setName(menu.name);
   }
   const [saving, setSaving] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardError, setDiscardError] = useState<string>();
   const [dialog, setDialog] = useState<MenuItemTarget | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletingItem, setDeletingItem] = useState<NavigationMenuItemRow | null>(null);
@@ -65,10 +68,11 @@ function MenuEditor({ menuId }: { menuId: string }) {
     label: menu.name,
     fields: { name: "menu-name" },
     dirty: nameChanged || unpublished,
-    saving,
+    saving: saving || discarding,
     invalid: !name.trim(),
     save: async () => {
       setSaving(true);
+      setDiscardError(undefined);
       try {
         let revision = menu.revision;
         if (nameChanged) {
@@ -88,15 +92,32 @@ function MenuEditor({ menuId }: { menuId: string }) {
         await refresh();
       }
     },
+    // Item edits are kept on the server as an unpublished draft and the admin API
+    // exposes no published item tree to diff against, so "unsaved" is the
+    // server's flag and Discard rolls the draft back to the published revision:
+    // the bar stays busy until that lands, and a failure stays on the page.
     discard: () => {
-      setName(menu.name);
-      if (!unpublished || menu.publishedRevision == null) return;
-      void apiData(postApiV1AdminNavigationMenusByMenuIdRollback({
-        path: { menuId: menu.id },
-        body: { expectedRevision: menu.revision, sourceRevision: menu.publishedRevision },
-      }))
-        .catch((error) => toast.error(t("saveFailed"), { description: actionErrorText(error) }))
-        .finally(() => void refresh());
+      if (!unpublished || menu.publishedRevision == null) {
+        setName(menu.name);
+        return;
+      }
+      const sourceRevision = menu.publishedRevision;
+      setDiscarding(true);
+      setDiscardError(undefined);
+      void (async () => {
+        try {
+          await apiData(postApiV1AdminNavigationMenusByMenuIdRollback({
+            path: { menuId: menu.id },
+            body: { expectedRevision: menu.revision, sourceRevision },
+          }));
+          setName(menu.name);
+        } catch (error) {
+          setDiscardError(actionErrorText(error));
+        } finally {
+          await refresh();
+          setDiscarding(false);
+        }
+      })();
     },
   });
 
@@ -152,6 +173,13 @@ function MenuEditor({ menuId }: { menuId: string }) {
       title={menu.name}
       back={{ to: "/admin/online-store/navigation", label: t("navigationTitle") }}
     >
+      {discardError ? (
+        <Alert variant="destructive">
+          <CircleAlert aria-hidden="true" />
+          <AlertTitle>{t("discardFailed")}</AlertTitle>
+          <AlertDescription>{discardError}</AlertDescription>
+        </Alert>
+      ) : null}
       <Card className="p-4">
         <Field id="menu-name" label={t("menuName")} error={name.trim() ? undefined : t("menuNameRequired")}>
           <Input id="menu-name" value={name} maxLength={100} onChange={(event) => setName(event.target.value)} />

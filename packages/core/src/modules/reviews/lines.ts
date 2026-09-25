@@ -204,6 +204,47 @@ export async function listReviewableLines(db: Database, buyer: ReviewBuyer): Pro
   return lines;
 }
 
+/**
+ * The newest line of this product the buyer can review now (the product
+ * page's "Write a review"), or null. Same rules as the account's list, scoped
+ * to one product so a long order history never hides it.
+ */
+export async function findReviewableLineForProduct(
+  db: Database,
+  buyer: ReviewBuyer,
+  productId: string,
+): Promise<{ orderItemId: string; customerName: string | null } | null> {
+  const row = await db
+    .select({ orderItemId: orderItems.id, customerName: orders.customerName })
+    .from(orderItems)
+    .innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .where(and(
+      buyerOrderCondition(buyer),
+      eq(orderItems.productId, productId),
+      ...reviewableLineConditions(nowSeconds()),
+      unreviewedLineCondition(),
+    ))
+    .orderBy(desc(orders.createdAt), orderItems.id)
+    .limit(1)
+    .get();
+  return row ?? null;
+}
+
+/** Reviews the signed-in customer wrote that still show on the account (not withdrawn). 0 when reviews are off. */
+export async function countWrittenReviewsForCustomer(db: Database, customerId: string): Promise<number> {
+  if (!await readEnabledReviewSettings(db)) return 0;
+  const row = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(productReviews)
+    .innerJoin(orders, eq(orders.id, productReviews.orderId))
+    .where(and(
+      eq(orders.accountOwnerCustomerId, customerId),
+      inArray(productReviews.status, ["pending", "published", "rejected"]),
+    ))
+    .get();
+  return Number(row?.count ?? 0);
+}
+
 /** The line a buyer is reviewing, if it belongs to the buyer (else nothing: 404). */
 export async function readBuyerLine(db: Database, buyer: ReviewBuyer, orderItemId: string) {
   return await db

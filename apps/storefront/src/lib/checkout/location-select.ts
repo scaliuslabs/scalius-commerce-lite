@@ -1,10 +1,12 @@
 /**
- * City → zone → area progressive enhancement for server-rendered native
- * `<select>` elements. The server renders every city option; this module only
- * fetches the next level when the buyer picks a parent and keeps the optional
- * `cityName`/`zoneName`/`areaName` hidden inputs in sync.
+ * City → thana → area pickers. The server renders native `<select>`s (every
+ * city, and the thanas of a known city), which work without JavaScript; this
+ * module turns each into a search-or-scroll combobox
+ * (`location-combobox.ts`), fetches the next level when the buyer picks a
+ * parent, and keeps the optional `cityName`/`zoneName`/`areaName` hidden
+ * inputs in sync.
  */
-import { placeMatches } from "./location-search";
+import { enhanceLocationCombobox, type LocationCombobox } from "./location-combobox";
 
 export interface LocationOption {
   id: string;
@@ -102,7 +104,7 @@ function createOption(select: HTMLSelectElement, text: string, value: string) {
 }
 
 function selectedName(select: HTMLSelectElement | null): string {
-  const option = select?.selectedOptions[0];
+  const option = select ? select.options[select.selectedIndex] : undefined;
   return option?.value ? option.text : "";
 }
 
@@ -116,14 +118,13 @@ export interface LocationSelectsController {
   forget(level: "city" | "zone" | "area"): Promise<void>;
 }
 
-/** Long zone lists (Dhaka has hundreds) get a type-to-filter box above them. */
-const FILTERABLE_ZONE_COUNT = 12;
-
 /**
  * Wires `select[name=city|zone|area]` inside `root`. Retry buttons are
  * `[data-location-retry="zone"|"area"]`; the placeholder option of each child
  * select shows `data-loading-text` from `root` while its level loads. An area
- * level with no areas stays hidden (`[data-location-area]`).
+ * level with no areas stays hidden (`[data-location-area]`). The combobox
+ * copy comes from `root`'s `data-no-match-text` and
+ * `data-close-text`.
  */
 export function enhanceLocationSelects(
   root: ParentNode & { dataset?: DOMStringMap },
@@ -148,8 +149,18 @@ export function enhanceLocationSelects(
   const retryButton = (level: "zone" | "area") =>
     root.querySelector<HTMLElement>(`[data-location-retry="${level}"]`);
   const areaWrapper = root.querySelector<HTMLElement>("[data-location-area]");
-  const zoneFilter = root.querySelector<HTMLInputElement>('input[data-location-filter="zone"]');
-  let allZones: LocationOption[] = [];
+  const comboboxCopy = {
+    noMatchText: root.dataset?.noMatchText || "",
+    closeText: root.dataset?.closeText || "",
+  };
+  const boxes = new Map<HTMLSelectElement, LocationCombobox>();
+  for (const select of [city, zone, area]) {
+    if (select) boxes.set(select, enhanceLocationCombobox(select, comboboxCopy, options.signal));
+  }
+  const sync = (select?: HTMLSelectElement | null) => {
+    if (select) boxes.get(select)?.sync();
+    else for (const box of boxes.values()) box.sync();
+  };
 
   const selection = (): LocationSelection => ({
     cityId: city.value,
@@ -166,18 +177,12 @@ export function enhanceLocationSelects(
       const input = root.querySelector<HTMLInputElement>(`input[name="${field}"]`);
       if (input) input.value = current[field];
     }
+    sync();
     options.onChange?.(current);
   };
 
   const reset = (select: HTMLSelectElement | null, placeholder?: string) => {
     if (!select) return;
-    if (select === zone) {
-      allZones = [];
-      if (zoneFilter) {
-        zoneFilter.value = "";
-        zoneFilter.hidden = true;
-      }
-    }
     if (select === area && areaWrapper) areaWrapper.hidden = true;
     requests.set(select, (requests.get(select) ?? 0) + 1);
     select.replaceChildren(
@@ -187,6 +192,7 @@ export function enhanceLocationSelects(
     select.removeAttribute("aria-busy");
     const retry = retryButton(select === zone ? "zone" : "area");
     if (retry) retry.hidden = true;
+    sync(select);
   };
 
   const load = async (
@@ -197,6 +203,7 @@ export function enhanceLocationSelects(
     reset(select, loadingText || undefined);
     const request = requests.get(select) ?? 0;
     select.setAttribute("aria-busy", "true");
+    sync(select);
     let result: LocationOption[] | null;
     try {
       result = await options.load(level, parentId);
@@ -209,6 +216,7 @@ export function enhanceLocationSelects(
     if (result === null) {
       const retry = retryButton(select === zone ? "zone" : "area");
       if (retry) retry.hidden = false;
+      sync(select);
       return [];
     }
     // People look for a place by name: sort without regard to case, in the page's language.
@@ -216,29 +224,9 @@ export function enhanceLocationSelects(
     result = [...result].sort((left, right) => collator.compare(left.name, right.name));
     select.append(...result.map((item) => createOption(select, item.name, item.id)));
     select.disabled = result.length === 0;
-    if (select === zone) {
-      allZones = result;
-      if (zoneFilter) zoneFilter.hidden = result.length <= FILTERABLE_ZONE_COUNT;
-    }
     if (select === area && areaWrapper) areaWrapper.hidden = result.length === 0;
+    sync(select);
     return result;
-  };
-
-  // Rebuilds the zone options from the typed text; one match is chosen for the buyer.
-  const filterZones = () => {
-    if (!zoneFilter) return;
-    const matches = allZones.filter((item) => placeMatches(item.name, zoneFilter.value));
-    const selected = zone.value;
-    zone.replaceChildren(
-      createOption(zone, placeholders.get(zone) ?? "", ""),
-      ...matches.map((item) => createOption(zone, item.name, item.id)),
-    );
-    if (matches.length === 1 && matches[0]!.id !== selected) {
-      zone.value = matches[0]!.id;
-      onZone();
-    } else if (matches.some((item) => item.id === selected)) {
-      zone.value = selected;
-    }
   };
 
   const onCity = () => {
@@ -257,8 +245,11 @@ export function enhanceLocationSelects(
   };
 
   const listen = { signal: options.signal };
-  zoneFilter?.addEventListener("input", filterZones, listen);
-  city.addEventListener("change", onCity, listen);
+  // The buyer chose a city: the thana is next.
+  city.addEventListener("change", () => {
+    onCity();
+    if (city.value) boxes.get(zone)?.focus();
+  }, listen);
   zone.addEventListener("change", onZone, listen);
   area?.addEventListener("change", notify, listen);
   retryButton("zone")?.addEventListener(

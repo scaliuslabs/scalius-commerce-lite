@@ -387,7 +387,7 @@ describe("the cart shell", () => {
 
 describe("pages that batch their layout read", () => {
   it("covers the storefront pages and none of the discovery or proxy routes", () => {
-    for (const path of ["/", "/products/linen", "/categories/bags/", "/collections/c1", "/search", "/cart", "/checkout", "/blog", "/blog/post", "/about-us"]) {
+    for (const path of ["/", "/products/linen", "/categories/bags/", "/collections/c1", "/search", "/cart", "/checkout", "/blog", "/blog/post", "/about-us", "/categories", "/navigation/panels"]) {
       expect(isLayoutBatchedPagePath(path), path).toBe(true);
     }
     for (const path of ["/sitemap.xml", "/robots.txt", "/blog/feed.xml", "/api/product-feed.xml", "/api/cart/validate", "/account", "/order-success", "/llms.txt", "/.well-known/ucp", "/theme-preview"]) {

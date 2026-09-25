@@ -85,7 +85,7 @@ a refusal that only the trigger sees (a race) is translated to the same
   `getPublicCategoryChildren`, `getPublicCategoryBreadcrumb` (≤ 4 rows, one
   closure read), and `publicCategorySubtreeCondition` (a category plus its
   published descendants, for listings).
-- **`listingTemplate`:** a theme listing template id or null (theme default).
+- **`listingTemplate`:** a theme listing template id or null (theme default). The storefront honours a layout (`grid`, `list`, `shelves`, `quick-grid`) or a filter style (`sidebar-dense`, `sidebar-comfortable`, `bar-dropdowns`, `drawer`) for that listing when the store fits it (shelves need a tree or collections, the quick grid the quick-add card); any other id renders the theme's listing. Collections and brands carry the same field.
 
 ## Features
 

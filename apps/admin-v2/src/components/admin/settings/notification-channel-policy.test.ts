@@ -43,7 +43,7 @@ describe("notification channel policy", () => {
     expect([...staff].sort()).toEqual([...STAFF_NOTIFICATION_TYPES].sort());
     expect(CUSTOMER_EVENT_GROUPS.find((group) => group.key === "groupReviews")?.events).toEqual(["review_request"]);
     expect(CUSTOMER_EVENT_GROUPS.find((group) => group.key === "groupDigitalGiftCards")?.events)
-      .toEqual(["order_digital_delivered", "gift_card_issued"]);
+      .toEqual(["order_digital_delivered", "gift_card_issued", "gift_card_sent"]);
     expect(STAFF_EVENT_GROUPS.find((group) => group.key === "groupReviews")?.events).toEqual(["review_pending"]);
     expect(STAFF_EVENT_GROUPS.find((group) => group.key === "groupDigital")?.events).toEqual(["digital_keys_exhausted"]);
   });

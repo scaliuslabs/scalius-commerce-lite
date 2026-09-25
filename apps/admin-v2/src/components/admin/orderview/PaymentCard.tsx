@@ -30,6 +30,7 @@ import {
   paymentStatusLabel,
 } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
+import { giftCardOrderMessages } from "~/i18n/gift-card-orders";
 import {
   orderCodQueryOptions,
   orderPaymentsQueryOptions,
@@ -58,7 +59,7 @@ import { formatCurrencyAmount, formatOrderTimestamp } from "./formatters";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
 import { isPartSent, type OrderActionRequest } from "./primary-action";
-import { GiftCardTenderRows } from "./GiftCardTenderRows";
+import { GiftCardTenderRows, giftCardTenderLines } from "./GiftCardTenderRows";
 import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
 
@@ -111,6 +112,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
   const r = useMessages(resourceMessages);
+  const g = useMessages(giftCardOrderMessages);
   const { fmt, symbol } = useCurrency();
   const isHydrated = useHydrated();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -168,9 +170,19 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   // paidAmount is net of refunds; the gross is what came in.
   const refundedAmount = Number(order.refundedAmount ?? 0);
   const grossPaid = paid + refundedAmount;
+  // Gift-card tender shows as its own rows: "Paid · <method>" counts only
+  // the money the order's own method took (never the card's share).
+  const paidDecimalPlaces = order.currencyDecimalPlaces ?? 2;
+  const giftCardHeldMinor = giftCardTenderLines(payments)
+    .filter((line) => line.kind === "tender" && line.state !== "released")
+    .reduce((total, line) => total + line.amountMinor, 0);
+  const methodPaidMinor = Math.max(0, Math.round(grossPaid * 10 ** paidDecimalPlaces) - giftCardHeldMinor);
+  const methodPaid = methodPaidMinor / 10 ** paidDecimalPlaces;
 
-  const requiresManualSettlementConfirmation = isCOD || payments.some((payment) =>
+  const hasCashPayment = isCOD || payments.some((payment) =>
     payment.paymentMethod === "cod" && payment.paymentType !== "refund" && payment.status === "succeeded");
+  // Store credit hands over a gift card, not cash: nothing to confirm.
+  const requiresManualSettlementConfirmation = hasCashPayment && refundSettlement === "original";
   const hasCashBalanceDueOnDelivery = plan?.status === "deposit_paid"
     && order.paymentStatus === "partial"
     && Number(order.balanceDue ?? 0) > 0;
@@ -319,9 +331,12 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   }
 
   // Confirm buttons echo the live amount, e.g. "Record ৳500 cash refund", only while it is valid.
-  const refundConfirmLabel = Number.isFinite(refundValue) && refundValue > 0 && refundValue <= paid
-    ? t(requiresManualSettlementConfirmation ? "refund.recordCashAmount" : "refund.issueAmount", { amount: money(refundValue) })
-    : t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue");
+  const refundAmountValid = Number.isFinite(refundValue) && refundValue > 0 && refundValue <= paid;
+  const refundConfirmLabel = refundSettlement === "store_credit"
+    ? refundAmountValid ? g("refundTo.issueAmount", { amount: money(refundValue) }) : g("refundTo.issue")
+    : refundAmountValid
+      ? t(requiresManualSettlementConfirmation ? "refund.recordCashAmount" : "refund.issueAmount", { amount: money(refundValue) })
+      : t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue");
   const collectTitle = t(hasCashBalanceDueOnDelivery ? "cod.recordBalance" : "cod.markCollected");
 
   const refreshButton = (
@@ -348,9 +363,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
 
         <dl className="space-y-1 tabular-nums">
           <Row label={t("summary.total")} value={savedSummary ? formatSavedMinorAmount(savedSummary.totalMinor, savedSummary) : fmt(order.totalAmount)} />
-          {grossPaid > 0 ? (
-            <Row label={t("payment.paidWith", { method: paymentMethodLabel(o, order.paymentMethod ?? "cod") })} value={money(grossPaid)} />
-          ) : (
+          {methodPaidMinor > 0 ? (
+            <Row label={t("payment.paidWith", { method: paymentMethodLabel(o, order.paymentMethod ?? "cod") })} value={money(methodPaid)} />
+          ) : order.paymentMethod === "gift_card" && giftCardHeldMinor > 0 ? null : (
             <Row label={t("payment.method")} value={paymentMethodLabel(o, order.paymentMethod ?? "cod")} />
           )}
           <GiftCardTenderRows order={order} payments={payments} />
@@ -584,7 +599,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
 
         {canRefund && paid > 0 && order.paymentStatus !== "refunded" ? (
           <Button variant="outline" size="sm" disabled={isRefundLocked} onClick={openRefund}>
-            {t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue")}
+            {t(hasCashPayment ? "refund.recordCash" : "refund.issue")}
           </Button>
         ) : null}
       </CardContent>
@@ -681,7 +696,11 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t(requiresManualSettlementConfirmation ? "refund.recordCash" : "refund.issue")}</DialogTitle>
-            <DialogDescription>{t(requiresManualSettlementConfirmation ? "refund.manualHelp" : "refund.help")}</DialogDescription>
+            <DialogDescription>
+              {refundSettlement === "store_credit"
+                ? g("refundTo.description")
+                : t(requiresManualSettlementConfirmation ? "refund.manualHelp" : "refund.help")}
+            </DialogDescription>
           </DialogHeader>
           <form id="order-refund" method="post" className="space-y-4" onSubmit={handleIssueRefund} noValidate>
             {refundMutation.isError ? <Alert variant="destructive"><AlertDescription>{orderErrorMessage(refundMutation.error)}</AlertDescription></Alert> : null}
@@ -714,7 +733,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                 ))}
               </NativeSelect>
             </div>
-            <RefundSettlementField order={order} value={refundSettlement} onChange={setRefundSettlement} />
+            <RefundSettlementField order={order} value={refundSettlement} onChange={setRefundSettlement} disabled={isRefundLocked} />
             {requiresManualSettlementConfirmation ? (
               <div className="flex items-start gap-3">
                 <span className="flex h-lh items-center">

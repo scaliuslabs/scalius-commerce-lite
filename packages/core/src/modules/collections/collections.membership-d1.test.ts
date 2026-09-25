@@ -3,8 +3,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ConflictError, ValidationError } from "@scalius/core/errors";
-import { createCollection, updateCollectionProducts } from "./collections.service";
+import { ValidationError } from "@scalius/core/errors";
+import { CollectionRevisionConflictError, createCollection, updateCollectionProducts } from "./collections.service";
 import { createCollectionSchema, updateCollectionProductsSchema } from "./collections.validation";
 
 describe("manual collection membership on D1", () => {
@@ -84,7 +84,7 @@ describe("manual collection membership on D1", () => {
     await expect(updateCollectionProducts(db, "col_eid", input({ remove: ["prod_a"] })))
       .rejects.toBeInstanceOf(ValidationError);
     await expect(updateCollectionProducts(db, "col_eid", { expectedVersion: 2, add: ["prod_b"], remove: [] }))
-      .rejects.toBeInstanceOf(ConflictError);
+      .rejects.toBeInstanceOf(CollectionRevisionConflictError);
     expect(stored()).toEqual({ productIds: ["prod_a"], version: 3 });
   });
 

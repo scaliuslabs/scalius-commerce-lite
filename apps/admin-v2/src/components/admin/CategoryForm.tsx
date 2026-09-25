@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ExternalLink } from "lucide-react";
@@ -10,12 +11,14 @@ import { RichContent } from "../ui/rich-content";
 import { NativeSelect } from "../ui/native-select";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
+import { SaveConflict } from "@/components/admin/shared/SaveBar";
+import { copyValues, rebaseForm } from "@/components/admin/shared/use-form-save-bar";
 import { FormImageUploadField } from "@/components/admin/shared/FormImageUploadField";
 import { SearchListingCard, autoHandleFor } from "@/components/admin/search-listing/SearchListingCard";
 import { useStorefrontUrl } from "@/hooks/use-storefront-url";
 import { postApiV1AdminCategories, putApiV1AdminCategoriesById } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
-import type { CategoryDetail } from "@/lib/api-query-options/categories";
+import { categoryQueryOptions, type CategoryDetail } from "@/lib/api-query-options/categories";
 import { categoryFormSchema, type CategoryFormInput, type CategoryFormValues } from "@/lib/form-schemas";
 import { getPlainText } from "@/lib/format-utils";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
@@ -58,6 +61,7 @@ function toCategoryInput(values: CategoryFormValues): CategoryInput {
 
 export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }: CategoryFormProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const t = useMessages(categoryFormMessages);
   const { getStorefrontPath } = useStorefrontUrl();
   const { categories: categoryActions } = useCatalogActionPermissions();
@@ -107,13 +111,6 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
     onSuccess: (result) => {
       const mutation = result as ApiResult<typeof putApiV1AdminCategoriesById> &
         Partial<ApiResult<typeof postApiV1AdminCategories>>;
-      const id = mutation.id || defaultValues?.id;
-      form.reset({
-        ...form.getValues(),
-        ...(id ? { id } : {}),
-        revision: mutation.revision,
-        status: mutation.status,
-      });
       if (!isEdit && mutation.id) {
         void navigate({
           to: "/admin/categories/$categoryId/edit",
@@ -123,7 +120,7 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
       }
     },
     onError: (error, message) => {
-      if (readCategoryRevisionConflict(error)) return t("conflict");
+      if (readCategoryRevisionConflict(error)) throw new SaveConflict(t("conflict"));
       const address = message.includes("exists in trash")
         ? t("addressInTrash")
         : message.includes("slug already exists")
@@ -151,6 +148,23 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
       canSave={canSave}
       form={form}
       onSave={submitEntity}
+      savedValues={(result) => {
+        const saved = result as ApiResult<typeof putApiV1AdminCategoriesById> &
+          Partial<ApiResult<typeof postApiV1AdminCategories>>;
+        return { ...(saved.id ? { id: saved.id } : {}), revision: saved.revision, status: saved.status };
+      }}
+      reload={isEdit && defaultValues?.id ? async () => {
+        const latest = await queryClient.fetchQuery({ ...categoryQueryOptions(defaultValues.id!), staleTime: 0 });
+        const saved = form.formState.defaultValues as CategoryFormInput;
+        rebaseForm(form, copyValues(saved), {
+          ...saved,
+          ...latest,
+          // The saved image is shown as it was loaded; only a different image replaces it.
+          image: latest.imageUrl === saved.image?.url ? saved.image : latest.imageUrl
+            ? { id: `temp_${latest.id}`, url: latest.imageUrl, filename: latest.imageUrl.split("/").pop() || "", size: 0, createdAt: new Date() }
+            : null,
+        } as CategoryFormInput);
+      } : undefined}
       unsavedLabel={isEdit ? undefined : t("unsavedCategory")}
       savedMessage={t("saved")}
     >

@@ -6,19 +6,31 @@
 // next to <main>, so every full-bleed section stays within the content column.
 // Phones use the drawer or the tab bar instead. Like every menu rendering it
 // keeps to its share of the link budget (nav-tree.ts).
-import type { NavigationItem } from "@/lib/api";
+import type { CategoryNavigationTree, NavigationItem } from "@/lib/api";
+import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import NavTree from "./NavTree.astro";
-import { navigationLinkShare, pruneNavigation } from "./nav-tree";
+import { HEADER_FIXED_LINKS, navigationIndexMode, planHeaderNavigation, sourceNavigation } from "./nav-tree";
 
 interface Props {
+  /** The header menu; the theme's navigation source decides what renders. */
   navigation: NavigationItem[];
+  categoryTree?: CategoryNavigationTree | null;
 }
 
-const navigation = pruneNavigation(Astro.props.navigation, navigationLinkShare(2));
+const { resolved } = await currentRequestTheme(Astro.locals);
+const source = resolved.blocks.navigation;
+const nodes = Astro.props.categoryTree?.nodes ?? [];
+const tree = sourceNavigation(source.source, Astro.props.navigation, nodes);
+// The column is its own rendering: the budget less the header's fixed links, halved like any surface.
+const plan = planHeaderNavigation(
+  tree,
+  { maxTopItems: source.maxTopItems, linkBudget: source.linkBudget, index: navigationIndexMode(source.source !== "menu", nodes.length > 0) },
+  { desktop: false, desktopRow: false, desktopAllLinks: false, drawerAllLinks: false, desktopWeight: 0, reserved: HEADER_FIXED_LINKS + Math.floor(source.linkBudget / 2) },
+);
 ---
 
 <nav id="sidebar-nav" class="sidebar-nav" aria-label="Main navigation">
-  <NavTree items={navigation} idPrefix="sidebar-nav" variant="sidebar" />
+  <NavTree items={plan.drawer} idPrefix="sidebar-nav" variant="sidebar" allCategories={plan.drawerAllCategories} />
 </nav>
 
 <style is:global>

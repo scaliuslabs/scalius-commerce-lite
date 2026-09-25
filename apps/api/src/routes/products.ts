@@ -35,6 +35,7 @@ import {
   normalizePublicListingSearchParam,
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
+import { optionalProductCardFacts } from "../schemas/product-card-facts";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const PRODUCT_FEED_CURSOR_PATTERN = /^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/;
@@ -85,6 +86,7 @@ const productFilterSchema = z.object({
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Discount filter" }),
+  inStock: z.enum(["true"]).optional().openapi({ description: "Only products a buyer can buy now (exclude sold out)" }),
   ids: z.string().optional().openapi({ description: "Comma-separated product IDs" })
 }).superRefine(validatePriceRange);
 
@@ -132,6 +134,7 @@ const storefrontProductSchema = z.object({
   secondaryImageUrl: z.string().nullable().openapi({
     description: "The next photo in gallery order, for a card's hover swap. Never a video.",
   }),
+  cardFacts: optionalProductCardFacts,
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),

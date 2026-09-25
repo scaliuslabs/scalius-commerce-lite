@@ -1,0 +1,128 @@
+---
+// The one account layout, after Shopify's customer accounts: a top nav
+// (Orders, Profile, Inbox and the sections the account uses) with Sign out at
+// its end, then the page heading and the page. Every account page renders
+// through it at one width, so switching pages never moves the nav. Signed out,
+// it shows only the sign-in prompt; unreachable, a retry. Colours, radius and
+// fonts come from the active theme's tokens.
+//
+// Sign out is a plain POST (works without JavaScript); with it, the browser's
+// cart and checkout state are cleared first (shared devices).
+import { ACCOUNT_CONTAINER, accountUi as ui } from "@/lib/account-ui";
+import { accountNavTabs, type AccountSection, type AccountSummary } from "@/lib/account-tabs";
+
+export interface Props {
+  current: AccountSection;
+  summary: AccountSummary | null;
+  state?: "ok" | "signed_out" | "unavailable";
+  /** The page heading; omit when the page renders its own. */
+  title?: string | null;
+  intro?: string | null;
+  back?: { href: string; label: string } | null;
+  signedOut?: { title: string; body?: string | null; action?: string };
+  unavailable?: { text: string; retryHref: string; retryText?: string };
+}
+
+const {
+  current,
+  summary,
+  state = "ok",
+  title = null,
+  intro = null,
+  back = null,
+  signedOut = { title: "Sign in to your account", body: "Track orders, message the store and save your delivery details." },
+  unavailable = { text: "We couldn't reach the store. Check your connection and try again.", retryHref: "/account" },
+} = Astro.props;
+const tabs = accountNavTabs(current, summary);
+const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full";
+---
+
+<div class={ACCOUNT_CONTAINER} data-account-shell data-account-state={state}>
+  {state !== "signed_out" && (
+    <nav aria-label="Account" class="mb-6 border-b border-border sm:mb-8">
+      <div class="-mx-4 flex items-center overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" data-account-nav>
+        {tabs.map((item) => (
+          <a
+            href={item.href}
+            aria-current={item.key === current ? "page" : undefined}
+            data-astro-prefetch="false"
+            class:list={[tab, item.key === current ? "text-foreground after:bg-primary" : "text-muted-foreground after:bg-transparent hover:text-foreground"]}
+          >
+            {item.label}
+            {item.badge && (
+              <span class="inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold tabular-nums text-primary-foreground">{item.badge}<span class="sr-only"> {item.badgeLabel}</span></span>
+            )}
+          </a>
+        ))}
+        <form method="post" action="/api/auth/logout" class="ml-auto shrink-0 pl-2" data-account-sign-out>
+          <button type="submit" class="inline-flex min-h-12 items-center gap-2 whitespace-nowrap px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            Sign out
+          </button>
+        </form>
+      </div>
+    </nav>
+  )}
+
+  {state === "signed_out" && (
+    <div class="mx-auto max-w-md py-16 text-center">
+      <h1 class="text-2xl font-semibold text-foreground">{signedOut.title}</h1>
+      {signedOut.body && <p class="mt-2 text-muted-foreground">{signedOut.body}</p>}
+      <div class="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+        <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class={`${ui.primaryButton} px-6`}>{signedOut.action ?? "Sign in"}</button>
+        <slot name="signed-out" />
+      </div>
+    </div>
+  )}
+
+  {state === "unavailable" && (
+    <div class="mx-auto max-w-md py-12 text-center" role="alert">
+      {title && <h1 class="text-2xl font-semibold text-foreground">{title}</h1>}
+      <p class="mb-6 mt-2 text-foreground">{unavailable.text}</p>
+      <a href={unavailable.retryHref} data-astro-prefetch="false" class={`${ui.primaryButton} px-6`}>{unavailable.retryText ?? "Retry"}</a>
+    </div>
+  )}
+
+  {state === "ok" && (
+    <>
+      {(title || back) && (
+        <header class="mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+          <div class="min-w-0">
+            {back && (
+              <a href={back.href} data-astro-prefetch="false" class="-ml-1 mb-1 inline-flex min-h-11 items-center gap-1 px-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+                <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                {back.label}
+              </a>
+            )}
+            {title && <h1 id="accountHeading" tabindex="-1" class="break-words text-2xl font-semibold text-foreground focus:outline-none sm:text-3xl">{title}</h1>}
+            {intro && <p class="mt-1 text-sm text-muted-foreground">{intro}</p>}
+          </div>
+          <slot name="actions" />
+        </header>
+      )}
+      <slot />
+    </>
+  )}
+</div>
+
+<script>
+  import { signOutCustomer } from "@/lib/customer-sign-out";
+
+  const shell = document.querySelector<HTMLElement>("[data-account-shell]");
+  // The current tab in view on a phone, without moving the page.
+  const strip = shell?.querySelector<HTMLElement>("[data-account-nav]");
+  const currentTab = strip?.querySelector<HTMLElement>("[aria-current=page]");
+  if (strip && currentTab && currentTab.offsetLeft + currentTab.offsetWidth > strip.clientWidth) {
+    strip.scrollLeft = currentTab.offsetLeft - 16;
+  }
+  shell?.querySelectorAll<HTMLFormElement>("form[data-account-sign-out]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void signOutCustomer().finally(() => window.location.assign("/"));
+    });
+  });
+  // Signing in from the prompt shows the page for the account.
+  window.addEventListener("customer-login", () => {
+    if (shell?.dataset.accountState === "signed_out") window.location.reload();
+  });
+</script>

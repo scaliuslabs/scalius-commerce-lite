@@ -4,6 +4,7 @@
 // ("Display size: 13–15.6 in") that removes both of its bounds.
 import type { ProductFacet } from "@/lib/api";
 import {
+  PRODUCT_LIST_MIN_RATING_PARAM,
   buildProductListHref,
   parseProductListRangeKey,
   productListRangeKey,
@@ -28,11 +29,12 @@ const { facets, currentFilters, pathname, resetPath, defaultSort, currencySymbol
 const money = (amount: string) =>
   formatMoney(Number(amount), { symbol: currencySymbol, code: currencyCode });
 
-const navigationKeys = new Set(["page", "sortBy", "limit"]);
+const navigationKeys = new Set(["page", "sortBy", "limit", "showAll"]);
 const priceKeys = new Set(["minPrice", "maxPrice"]);
 const booleanLabels: Record<string, string> = {
   hasDiscount: "On sale",
   freeDelivery: "Free delivery",
+  inStock: "In stock",
 };
 const facetsBySlug = new Map(facets.map((facet) => [facet.slug, facet]));
 const valueLabel = (key: string, value: string) =>
@@ -96,6 +98,11 @@ for (const [key, rawValue] of Object.entries(currentFilters)) {
   if (range && rangeFacet?.display === "range") {
     if (!rangesShown.has(range.slug)) appliedFilters.push(rangeFilter(rangeFacet));
     rangesShown.add(range.slug);
+    continue;
+  }
+  if (key === PRODUCT_LIST_MIN_RATING_PARAM) {
+    const stars = single(key);
+    if (stars) appliedFilters.push({ key: `${key}:${stars}`, label: `${stars}★ & up`, href: withoutFilterValue(key) });
     continue;
   }
   const values = Array.isArray(rawValue) ? rawValue : [rawValue];

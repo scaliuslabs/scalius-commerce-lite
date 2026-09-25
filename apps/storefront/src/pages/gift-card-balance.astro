@@ -1,0 +1,101 @@
+---
+// Check a gift card balance. A plain POST form that works without JavaScript:
+// the page reads the code from the POST body, asks the API, and renders the
+// answer from that same POST response (no-store). The code is never echoed
+// into the page, never put in a URL and never redirected with. Every miss
+// reads the same, so the page can't be used to learn which codes exist.
+import Layout from "@/layouts/Layout.astro";
+import { getLayoutData } from "@/lib/api";
+import { checkGiftCardBalance, type GiftCardApiResult, type GiftCardBalance } from "@/lib/api/gift-cards";
+import {
+  GIFT_CARD_PAGE_COPY as copy,
+  giftCardBalanceView,
+  giftCardExpiryText,
+  giftCardMoney,
+  giftCardPageStatus,
+  giftCardStatusText,
+  giftCardStatusTone,
+  giftCardTitle,
+  readGiftCardFormFields,
+} from "@/lib/account-gift-cards";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+
+const isPost = Astro.request.method === "POST";
+if (isPost && shouldRejectCrossOriginCookieRequest(Astro.request)) {
+  return new Response(null, { status: 403, headers: { "Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL } });
+}
+
+let result: GiftCardApiResult<GiftCardBalance> | null = null;
+if (isPost) {
+  // The answer belongs to this request only.
+  Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
+  const fields = await readGiftCardFormFields(Astro.request);
+  result = await checkGiftCardBalance(fields.code ?? null, Astro.request);
+  Astro.response.status = giftCardPageStatus(result);
+}
+const layoutData = await getLayoutData();
+const view = giftCardBalanceView(result);
+
+const fieldClass =
+  "min-h-11 w-full rounded-lg border border-input bg-background px-3 font-mono text-base uppercase tracking-wide text-foreground shadow-sm outline-none transition placeholder:normal-case placeholder:tracking-normal placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 aria-[invalid=true]:border-destructive";
+---
+
+<Layout title={copy.balanceTitle} layoutData={layoutData} noindex>
+  <section class="container mx-auto px-4 py-10">
+    <div class="mx-auto w-full max-w-md">
+      <h1 class="text-2xl font-semibold text-foreground">{copy.balanceTitle}</h1>
+      <p class="mt-2 text-sm text-muted-foreground">{copy.balanceIntro}</p>
+
+      <form method="post" action="/gift-card-balance" class="mt-6 space-y-4">
+        <div class="grid gap-2">
+          <label for="giftCardBalanceCode" class="text-sm font-medium text-foreground">{copy.codeLabel}</label>
+          <input
+            id="giftCardBalanceCode"
+            name="code"
+            type="text"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            required
+            maxlength="32"
+            placeholder="XXXX-XXXX-XXXX-XXXX"
+            class={fieldClass}
+            aria-invalid={view.kind === "error" ? "true" : undefined}
+            aria-describedby={view.kind === "error" ? "giftCardBalanceError" : undefined}
+            autofocus={view.kind !== "result"}
+          />
+          {view.kind === "error" && (
+            <p id="giftCardBalanceError" class="text-sm text-destructive" role="alert">{view.message}</p>
+          )}
+        </div>
+        <button
+          type="submit"
+          class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >{copy.checkBalance}</button>
+      </form>
+
+      {view.kind === "result" && (
+        <section class="mt-8 rounded-xl border border-border bg-card p-5" aria-labelledby="giftCardBalanceResult" role="status">
+          <div class="flex items-start justify-between gap-3">
+            <h2 id="giftCardBalanceResult" class="font-mono text-base font-semibold tracking-wide text-foreground">{giftCardTitle(view.card.last4)}</h2>
+            <span class:list={["rounded-md px-2 py-0.5 text-sm font-medium", giftCardStatusTone(view.card.status)]}>{giftCardStatusText(view.card.status)}</span>
+          </div>
+          <dl class="mt-4 space-y-2 text-sm">
+            <div class="flex justify-between gap-4">
+              <dt class="text-muted-foreground">{copy.balanceLabel}</dt>
+              <dd class="text-lg font-semibold tabular-nums text-foreground">{giftCardMoney(view.card.balance, view.card.currencyCode)}</dd>
+            </div>
+            <div class="flex justify-between gap-4">
+              <dt class="text-muted-foreground">{copy.expiresLabel}</dt>
+              <dd class="text-foreground">{giftCardExpiryText(view.card.expiresAt)}</dd>
+            </div>
+          </dl>
+          {view.card.status === "active" && view.card.balanceMinor > 0 && (
+            <p class="mt-4 text-sm text-muted-foreground">{copy.useAtCheckout}</p>
+          )}
+        </section>
+      )}
+    </div>
+  </section>
+</Layout>

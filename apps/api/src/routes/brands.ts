@@ -21,6 +21,7 @@ import {
   normalizePublicListingSearchParam,
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
+import { optionalProductCardFacts } from "../schemas/product-card-facts";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -51,6 +52,7 @@ const brandProductFilterSchema = z.object({
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" }),
+  inStock: z.enum(["true"]).optional().openapi({ description: "Only products a buyer can buy now (exclude sold out)" }),
 }).superRefine((value, ctx) => {
   if (value.minPrice !== undefined && value.maxPrice !== undefined && value.minPrice > value.maxPrice) {
     ctx.addIssue({
@@ -106,6 +108,7 @@ const brandProductSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
+  cardFacts: optionalProductCardFacts,
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
@@ -122,6 +125,7 @@ const appliedFiltersSchema = z.object({
   maxPrice: z.number().min(0).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
+  inStock: z.enum(["true"]).optional(),
 });
 
 const slugParams = z.object({ slug: brandSlugSchema });
@@ -257,6 +261,7 @@ app.openapi(getBrandProductsRoute, async (c) => {
   if (params.maxPrice !== undefined) appliedFilters.maxPrice = params.maxPrice;
   if (params.freeDelivery !== undefined) appliedFilters.freeDelivery = params.freeDelivery;
   if (params.hasDiscount !== undefined) appliedFilters.hasDiscount = params.hasDiscount;
+  if (params.inStock !== undefined) appliedFilters.inStock = params.inStock;
 
   return ok(c, {
     brand,

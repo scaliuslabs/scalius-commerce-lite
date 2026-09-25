@@ -1,4 +1,4 @@
-// PostgreSQL sidecar parity for the Wave B migrations (0093-0096): a pre-0093
+// PostgreSQL sidecar parity for the Wave B migrations (0095-0098): a pre-0095
 // schema upgraded by the sidecars must equal the fresh schema compiled from
 // the canonical SQLite chain (columns, constraints, indexes, triggers, trigger
 // functions and the calendar `unixepoch` compat function), and the upgraded
@@ -17,7 +17,7 @@ import { compileCanonicalPostgresSchema } from "../scripts/postgres-schema";
 // creates and drops its own databases there.
 const postgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
 const migrationsDirectory = join(import.meta.dirname, "../migrations/postgres");
-const WAVE_B_SIDECARS = ["0093_reviews", "0094_digital_goods", "0095_gift_cards", "0096_warranty"] as const;
+const WAVE_B_SIDECARS = ["0095_reviews", "0096_digital_goods", "0097_gift_cards", "0098_warranty"] as const;
 
 const openClients: Array<() => Promise<void>> = [];
 afterAll(async () => {
@@ -109,10 +109,10 @@ async function rejects(client: Client, sql: string, pattern: RegExp): Promise<vo
 }
 
 describe.runIf(postgresUrl)("Wave B PostgreSQL sidecars", () => {
-  it("upgrade a pre-0093 schema to exactly the fresh schema", async () => {
+  it("upgrade a pre-0095 schema to exactly the fresh schema", async () => {
     const [fresh, before] = await Promise.all([
       compileCanonicalPostgresSchema(),
-      compileCanonicalPostgresSchema({ beforeMigration: "0093_" }),
+      compileCanonicalPostgresSchema({ beforeMigration: "0095_" }),
     ]);
     const freshDatabase = await database(fresh.sql);
     const upgraded = await database(before.sql);
@@ -137,7 +137,7 @@ describe.runIf(postgresUrl)("Wave B PostgreSQL sidecars", () => {
   }, 180_000);
 
   it("enforce the review, gift-card and warranty guards and match SQLite's warranty expiry", async () => {
-    const before = await compileCanonicalPostgresSchema({ beforeMigration: "0093_" });
+    const before = await compileCanonicalPostgresSchema({ beforeMigration: "0095_" });
     const client = await database(before.sql);
     await client.query("SET session_replication_role = replica"); // seed without parents
     await client.query(`

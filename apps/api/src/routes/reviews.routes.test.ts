@@ -87,6 +87,30 @@ describe("signed-in buyer review routes", () => {
     expect((await json<WriteBody>(withdrawn)).data.review.status).toBe("withdrawn");
   });
 
+  it("resolves the product page's review state server-side: eligible line, then the buyer's review, never another account's", async () => {
+    const state = async (session: string | undefined, productId: string) => {
+      const response = await harness.request(`/customer-auth/reviews/products/${productId}`, session ? { session } : {});
+      return { status: response.status, cache: response.headers.get("Cache-Control"), body: response.ok ? (await json<{ data: Record<string, unknown> }>(response)).data : null };
+    };
+    const eligible = await state(OWNER_SESSION, "prod_shirt");
+    expect(eligible.cache).toContain("no-store");
+    expect(eligible.body).toMatchObject({ state: "eligible", orderItemId: "item_owned" });
+    expect(typeof eligible.body?.displayName).toBe("string");
+    // Another account's delivered line and a product the buyer never bought.
+    expect((await state(OWNER_SESSION, "prod_mug")).body).toEqual({ state: "ineligible" });
+    expect((await state(OTHER_SESSION, "prod_shirt")).body).toEqual({ state: "ineligible" });
+    expect((await state(undefined, "prod_shirt")).status).toBe(401);
+
+    const submitted = await harness.request("/customer-auth/reviews", {
+      method: "POST", session: OWNER_SESSION, body: JSON.stringify({ orderItemId: "item_owned", rating: 4, title: "Soft" }),
+    });
+    const reviewId = (await json<WriteBody>(submitted)).data.review.id;
+    expect((await state(OWNER_SESSION, "prod_shirt")).body).toMatchObject({
+      state: "reviewed",
+      review: { id: reviewId, rating: 4, title: "Soft", status: "published", canEdit: true },
+    });
+  });
+
   it("refuses another account's line with a 404 and requires a session", async () => {
     const body = JSON.stringify({ orderItemId: "item_owned", rating: 5 });
     expect((await harness.request("/customer-auth/reviews", { method: "POST", session: OTHER_SESSION, body })).status).toBe(404);

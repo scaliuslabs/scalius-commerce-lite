@@ -24,6 +24,11 @@ interface Props {
   results: "grid" | "list" | "quick";
   phoneLayout: ProductGridPhoneLayout;
   context: ProductGridContext;
+  /**
+   * The filter column this page actually renders beside the grid (px; its
+   * listing template can override the theme's filter style), for image sizes.
+   */
+  filterColumnPx?: number;
   /** The grid/list toggle is on: restore the buyer's stored view. */
   restoreView: boolean;
   /** Mark the frame for the paging and toggle scripts (list and quick grids always are). */
@@ -32,7 +37,9 @@ interface Props {
   currencyCode: string;
 }
 
-const { products, results, phoneLayout, context, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
+const { products, results, phoneLayout, context, filterColumnPx = 0, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
+// Only a grid beside the filters loses their column.
+const columnPx = context === "beside-filters" ? filterColumnPx : 0;
 
 let sizes: string | undefined;
 let style: string | undefined;
@@ -42,7 +49,7 @@ if (results === "list") {
   const { theme, layout } = await currentRequestTheme(Astro.locals);
   const grid = quickGridSpec(productGridSpec(layout.grid, theme.tokens.imageRatio));
   const fluid = productGridFluidCss(grid);
-  sizes = productCardImageSizes(grid, buildStorefrontThemeTokens(theme)["theme-container-width"]!, context);
+  sizes = productCardImageSizes(grid, buildStorefrontThemeTokens(theme)["theme-container-width"]!, context, "grid", Infinity, columnPx);
   style = [
     `--theme-card-min-phone:${grid.cardMin.phone}`,
     `--theme-card-min-tablet:${grid.cardMin.tablet}`,
@@ -68,6 +75,7 @@ const restoreScript = `(function(s){try{var v=localStorage.getItem(${JSON.string
       index={index}
       aboveFold
       context={context}
+      filterColumnPx={columnPx}
       phoneLayout={gridPhoneLayout}
       sizes={sizes}
       headingLevel="h2"

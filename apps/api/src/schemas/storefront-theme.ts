@@ -1,7 +1,7 @@
 import { storeShapeSchema, storefrontThemeDocumentSchema } from "@scalius/shared/storefront-theme";
 
 /**
- * The shared, strict storefront theme document (version 4) as one named
+ * The shared, strict storefront theme document (version 5) as one named
  * OpenAPI component. Every theme request body and response uses it.
  */
 export const storefrontThemeDocumentApiSchema = storefrontThemeDocumentSchema.openapi(

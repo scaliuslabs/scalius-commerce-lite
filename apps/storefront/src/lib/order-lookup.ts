@@ -1,24 +1,27 @@
 // Shared by the two "prove it's your order with a code" pages: Track your
-// order (order number + phone) and Finish paying (payment-recovery link).
+// order (order number, then a code for full details) and Finish paying
+// (payment-recovery link).
 // Browser-safe: no transport imports.
 import {
   formatCheckoutLanguageText,
   type CheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
-import { normalizeBdMobile, toLatinDigits } from "@scalius/shared/phone-input";
+import { toLatinDigits } from "@scalius/shared/phone-input";
 
 /** The API's resend wait when a response doesn't say (core OTP cooldown). */
 export const DEFAULT_RESEND_AFTER_SECONDS = 60;
 
-/** The order has no email and the store can't text: say so and show the store's contact. */
+/** No channel the store chose reaches a contact on the order: say so and show the store's contact. */
 export const NO_CODE_CHANNEL = "NO_CODE_CHANNEL";
+/** The store's chosen channel can't send right now (fail closed, never another channel). */
+export const CODE_CHANNEL_UNAVAILABLE = "CODE_CHANNEL_UNAVAILABLE";
 
 /**
  * A failure the buyer can't fix on this page (no code channel, codes
  * unavailable): the page adds the store's contact links, when it has any.
  */
 export function failureNeedsStoreContact(failure: { status: number; errorCode?: string }): boolean {
-  return failure.errorCode === NO_CODE_CHANNEL || failure.status === 503;
+  return failure.errorCode === NO_CODE_CHANNEL || failure.errorCode === CODE_CHANNEL_UNAVAILABLE || failure.status === 503;
 }
 
 /** What a failed send/verify tells the page; never the receipt token. */
@@ -36,31 +39,12 @@ export function normalizeOrderReference(raw: string | null | undefined): string 
   return /^[A-Za-z0-9]{4,32}$/.test(reference) ? reference : null;
 }
 
-export type OrderLookupInput =
-  | { ok: true; reference: string; phone: string }
-  | { ok: false; field: "reference" | "phone" };
-
-/** Checks the lookup form the same way with or without JavaScript. */
-export function readOrderLookupInput(reference: string, phone: string): OrderLookupInput {
-  const normalizedReference = normalizeOrderReference(reference);
-  if (!normalizedReference) return { ok: false, field: "reference" };
-  const normalizedPhone = normalizeBdMobile(phone);
-  if (!normalizedPhone) return { ok: false, field: "phone" };
-  return { ok: true, reference: normalizedReference, phone: normalizedPhone };
-}
-
-export type OrderLookupFieldErrors = Partial<Record<"reference" | "phone", string>>;
-
-/** Each lookup field's own message, so the form shows every problem at once. */
+/** The lookup form's one field, checked the same way with or without JavaScript. */
 export function getOrderLookupFieldErrors(
-  copy: Pick<CheckoutLanguageData, "trackOrderNumberInvalidText" | "trackOrderPhoneInvalidText">,
+  copy: Pick<CheckoutLanguageData, "trackOrderNumberInvalidText">,
   reference: string,
-  phone: string,
-): OrderLookupFieldErrors {
-  return {
-    ...(normalizeOrderReference(reference) ? {} : { reference: copy.trackOrderNumberInvalidText }),
-    ...(normalizeBdMobile(phone) ? {} : { phone: copy.trackOrderPhoneInvalidText }),
-  };
+): Partial<Record<"reference", string>> {
+  return normalizeOrderReference(reference) ? {} : { reference: copy.trackOrderNumberInvalidText };
 }
 
 /** 45 → "0:45", 120 → "2:00". */
@@ -103,4 +87,42 @@ export function getOrderCodeFailureText(
   }
   if (failure.status === 503) return unavailableText;
   return operation === "send" ? copy.paymentRecoverySendFailedText : copy.paymentRecoveryVerificationFailedText;
+}
+
+/** What the page shows after a refused "Send code", with or without JavaScript. */
+export interface OrderCodeSendRefusal {
+  message: string;
+  /** Show the code field: the code already sent still works. */
+  codeSent: boolean;
+  /** The wait before a new code, counted on the resend button. */
+  resendAfterSeconds: number;
+  needsStoreContact: boolean;
+}
+
+/**
+ * A rate-limited send ("A code was just sent", "Enter the latest code we
+ * sent") leaves the last code usable, so the code field opens and the wait
+ * moves to the resend button. Without that, a buyer who reloads the page or
+ * comes back from their inbox is told to wait up to ten minutes with no field
+ * for the code they already have.
+ */
+export function describeOrderCodeSendRefusal(
+  copy: CheckoutLanguageData,
+  failure: Pick<OrderCodeFailure, "status" | "message" | "retryAfterSeconds"> & { errorCode?: string },
+  unavailableText: string,
+): OrderCodeSendRefusal {
+  if (failure.status === 429) {
+    return {
+      message: getOrderCodeFailureText(copy, { ...failure, retryAfterSeconds: undefined }, "send", unavailableText),
+      codeSent: true,
+      resendAfterSeconds: positiveSeconds(failure.retryAfterSeconds) ?? 0,
+      needsStoreContact: false,
+    };
+  }
+  return {
+    message: getOrderCodeFailureText(copy, failure, "send", unavailableText),
+    codeSent: false,
+    resendAfterSeconds: 0,
+    needsStoreContact: failureNeedsStoreContact(failure),
+  };
 }
