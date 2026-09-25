@@ -16,6 +16,7 @@
  * that work and couple the bundle to fts5 internals.
  */
 
+import { readFileSync } from "node:fs";
 import { EXPORTED_TABLES, SEED_SQL_FILENAME } from "./tables.mjs";
 import { formatSchemaRevision } from "./schema-revision.mjs";
 
@@ -86,8 +87,25 @@ function buildHeader({ revision, counts, totalRows }) {
     "-- with PRAGMA foreign_keys = ON. The single transaction makes the load all-or-nothing:",
     "-- loading it over a catalog that already holds these rows aborts and rolls back rather",
     "-- than merging. The products, product_variants and categories FTS indexes are rebuilt",
-    "-- by the schema's own AFTER INSERT triggers as this file loads.",
+    "-- by the schema's own AFTER INSERT triggers as this file loads, and the catalogue",
+    "-- projections are filled at the end by the statements of migration 0091.",
   ].join("\n");
+}
+
+/**
+ * The catalogue projections (product_buyer_state, product_facet_values) are
+ * derived rows, so they are not exported: the seed ends by filling them with
+ * the statements of migration 0091, generated from the same builders every
+ * product write uses (packages/core/scripts/catalog-projection-fill.ts).
+ * Without them a freshly seeded store would list no products.
+ */
+function projectionFillStatements() {
+  const migration = readFileSync(
+    new URL("../../../packages/database/migrations/0091_catalogue_projection_fill.sql", import.meta.url),
+    "utf8",
+  );
+  // Every statement but the last, which records the migration in the ledger.
+  return migration.split("--> statement-breakpoint").slice(0, -1).map((statement) => statement.trim());
 }
 
 export function buildSeedSql({ revision, tables }) {
@@ -107,6 +125,8 @@ export function buildSeedSql({ revision, tables }) {
     "PRAGMA defer_foreign_keys = ON;",
     "",
     ...statements,
+    "",
+    ...projectionFillStatements(),
     "",
     "COMMIT;",
     "",
