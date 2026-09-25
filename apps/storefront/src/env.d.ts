@@ -31,6 +31,10 @@ interface CacheStorage {
   readonly default: Cache;
 }
 
+// `astro dev` only: the local API origin from scripts/dev-ports.mjs, defined
+// by astro.config.mjs. Undefined in tests; never a Worker var.
+declare const __SCALIUS_DEV_API_ORIGIN__: string | undefined;
+
 // Cloudflare Workers environment bindings (global Env interface).
 // Must stay in sync with apps/storefront/wrangler.jsonc (checked by
 // scripts/check-worker-env.mjs). The Worker has no vars: every runtime value

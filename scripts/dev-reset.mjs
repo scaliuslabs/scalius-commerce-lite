@@ -16,6 +16,7 @@ import { execSync } from "child_process";
 import { existsSync, rmSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { devOrigins } from "./dev-ports.mjs";
 import {
   assertPassword,
   getArgValue,
@@ -129,7 +130,7 @@ console.log("\n" + "=".repeat(50));
 console.log("✅ Database reset complete!");
 console.log("   Start fresh with: pnpm dev");
 if (skipAdmin) {
-  console.log("   Then visit http://localhost:4323/admin to create a new admin account.\n");
+  console.log(`   Then visit ${devOrigins().dashboardUrl}/admin to create a new admin account.\n`);
 } else {
   console.log(`   Admin login: ${localAdminEmail} with the configured local admin password.\n`);
 }

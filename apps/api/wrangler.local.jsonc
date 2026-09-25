@@ -115,8 +115,9 @@
     "crons": ["*/15 * * * *"]
   },
   // Runtime configuration lives in the dashboard (Settings -> System ->
-  // Platform, served by GET /api/v1/platform); local development falls back to
-  // localhost:8787/4322/4323 automatically in code. The only installed secrets
+  // Platform, served by GET /api/v1/platform); scripts/dev.sh points the local
+  // document at this stack's ports (scripts/dev-ports.mjs, default
+  // 8787/4322/4323). Ports are never vars here. The only installed secrets
   // are SCALIUS_SECRET and CREDENTIAL_ENCRYPTION_KEY (apps/api/.dev.vars).
   // LOCAL_MAILPIT_URL is the single dev-only var: the local mailbox sink.
   "vars": {

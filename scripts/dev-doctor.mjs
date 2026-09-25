@@ -25,6 +25,7 @@ import {
   resolveLocalStatePath,
   trimTrailingSlash,
 } from "./dev-local-utils.mjs";
+import { DEV_PORT_ENV, devOrigins, readDevPorts } from "./dev-ports.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -44,17 +45,24 @@ export function getServiceIdsForProfile(profile = "all") {
 
 export function getDoctorConfig(rawArgs = process.argv.slice(2), env = process.env) {
   const options = parseOptions(rawArgs);
-  assertStringOptions(options, ["api", "admin", "storefront", "state", "profile"]);
+  assertStringOptions(options, ["api", "admin", "storefront", "state", "profile", "api-port", "storefront-port", "admin-port"]);
   const serviceProfile = normalizeServiceProfile(options.profile);
+  // Same port source as scripts/dev.sh: flags, else SCALIUS_DEV_*_PORT, else defaults.
+  const origins = devOrigins(readDevPorts({
+    ...env,
+    ...(options["api-port"] ? { [DEV_PORT_ENV.api]: options["api-port"] } : {}),
+    ...(options["storefront-port"] ? { [DEV_PORT_ENV.storefront]: options["storefront-port"] } : {}),
+    ...(options["admin-port"] ? { [DEV_PORT_ENV.admin]: options["admin-port"] } : {}),
+  }));
   return {
     help: Boolean(options.help || rawArgs.includes("-h")),
     json: Boolean(options.json),
     requireRunning: Boolean(options["require-running"]),
     strict: Boolean(options.strict),
     serviceProfile,
-    apiBaseUrl: trimTrailingSlash(String(options.api || env.LOCAL_API_BASE_URL || "http://localhost:8787")),
-    adminBaseUrl: trimTrailingSlash(String(options.admin || "http://localhost:4323")),
-    storefrontBaseUrl: trimTrailingSlash(String(options.storefront || "http://localhost:4322")),
+    apiBaseUrl: trimTrailingSlash(String(options.api || env.LOCAL_API_BASE_URL || origins.apiUrl)),
+    adminBaseUrl: trimTrailingSlash(String(options.admin || origins.dashboardUrl)),
+    storefrontBaseUrl: trimTrailingSlash(String(options.storefront || origins.storefrontUrl)),
     wranglerState: resolveLocalStatePath(root, options.state || env.SCALIUS_WRANGLER_STATE),
   };
 }
@@ -68,6 +76,7 @@ export async function runDoctor(config = getDoctorConfig()) {
   checkLocalEnvFiles(checks);
   checkWranglerState(checks, config.wranglerState);
   checkWranglerMigrationHistory(checks, config.wranglerState);
+  checkLocalPlatformOrigins(checks, config);
   await checkServices(checks, config);
 
   return {
@@ -382,6 +391,76 @@ function checkWranglerMigrationHistory(checks, wranglerState) {
   );
 }
 
+const LOOPBACK_ORIGIN = /^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/;
+
+/**
+ * The local Platform document's loopback (or unset) origins against this
+ * stack's origins (scripts/dev-ports.mjs). Origins saved as real URLs are the
+ * developer's own and are not compared.
+ */
+export function findPlatformOriginDrift(document, expected) {
+  return ["storefrontUrl", "apiUrl", "dashboardUrl", "mediaUrl"]
+    .map((field) => ({ field, stored: typeof document?.[field] === "string" ? document[field] : "", expected: expected[field] }))
+    .filter(({ stored, expected: want }) => (stored === "" || LOOPBACK_ORIGIN.test(stored)) && stored !== want);
+}
+
+function readLocalPlatformDocument(wranglerState) {
+  const objectDirectory = join(wranglerState, "v3", "d1", "miniflare-D1DatabaseObject");
+  if (!existsSync(objectDirectory)) return { found: false, document: null };
+  const databasePaths = readdirSync(objectDirectory)
+    .filter((name) => name.endsWith(".sqlite") && name !== "metadata.sqlite")
+    .map((name) => join(objectDirectory, name));
+  let document = null;
+  for (const databasePath of databasePaths) {
+    const database = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const hasSettings = database.prepare(
+        "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'settings'",
+      ).get();
+      if (!hasSettings) continue;
+      const row = database.prepare(
+        "SELECT value FROM settings WHERE key = 'document' AND category = 'platform'",
+      ).get();
+      if (row) document = JSON.parse(String(row.value));
+    } finally {
+      database.close();
+    }
+  }
+  return { found: databasePaths.length > 0, document };
+}
+
+function checkLocalPlatformOrigins(checks, config) {
+  const title = "Local Platform origins";
+  const expected = {
+    apiUrl: config.apiBaseUrl,
+    storefrontUrl: config.storefrontBaseUrl,
+    dashboardUrl: config.adminBaseUrl,
+    mediaUrl: `${config.apiBaseUrl}/api/v1/media`,
+  };
+  let local;
+  try {
+    local = readLocalPlatformDocument(config.wranglerState);
+  } catch (error) {
+    warn(checks, title, `Could not read the local Platform settings: ${error instanceof Error ? error.message : String(error)}.`, "Run node scripts/dev-ports.mjs sync-platform.");
+    return;
+  }
+  if (!local.found) {
+    skip(checks, title, "No local D1 database yet.", "Run pnpm dev:setup.");
+    return;
+  }
+  const drift = findPlatformOriginDrift(local.document ?? {}, expected);
+  if (drift.length === 0) {
+    pass(checks, title, `Local Platform settings point at ${expected.storefrontUrl}, ${expected.apiUrl} and ${expected.dashboardUrl}.`);
+    return;
+  }
+  warn(
+    checks,
+    title,
+    `Local Platform settings differ from this stack's ports: ${drift.map(({ field, stored, expected: want }) => `${field} ${stored || "(unset)"} instead of ${want}`).join("; ")}.`,
+    "scripts/dev.sh syncs them on start; otherwise stop the API and run node scripts/dev-ports.mjs sync-platform with the same SCALIUS_DEV_*_PORT values.",
+  );
+}
+
 function migrationVersion(name) {
   return /^0*(\d+)_/.exec(name)?.[1] ?? null;
 }
@@ -586,9 +665,12 @@ Options:
   --strict               Exit non-zero on warnings as well as failures
   --require-running      Treat selected profile services not running as failures
   --profile <name>       Service profile to check: all, api, admin, storefront
-  --api <url>            API origin (default: http://localhost:8787)
-  --admin <url>          Admin origin (default: http://localhost:4323)
-  --storefront <url>     Storefront origin (default: http://localhost:4322)
+  --api-port <port>      API port (default: SCALIUS_DEV_API_PORT or 8787)
+  --storefront-port <p>  Storefront port (default: SCALIUS_DEV_STOREFRONT_PORT or 4322)
+  --admin-port <port>    Admin port (default: SCALIUS_DEV_ADMIN_PORT or 4323)
+  --api <url>            API origin (overrides the port; also LOCAL_API_BASE_URL)
+  --admin <url>          Admin origin (overrides the port)
+  --storefront <url>     Storefront origin (overrides the port)
   --state <path>         Wrangler local state path; relative paths resolve from repo root
 `);
 }

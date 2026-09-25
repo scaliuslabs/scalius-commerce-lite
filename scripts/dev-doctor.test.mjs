@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatTextReport,
   findRetiredMigrationEntries,
+  findPlatformOriginDrift,
   getDoctorConfig,
   getExitCode,
   getServiceIdsForProfile,
@@ -118,5 +119,41 @@ describe("dev doctor helpers", () => {
     expect(getDoctorConfig([], { LOCAL_API_BASE_URL: "http://127.0.0.1:9999/" }).apiBaseUrl)
       .toBe("http://127.0.0.1:9999");
     expect(getDoctorConfig([], {}).apiBaseUrl).toBe("http://localhost:8787");
+  });
+
+  it("checks the stack on the ports scripts/dev.sh was given", () => {
+    const fromEnv = getDoctorConfig([], {
+      SCALIUS_DEV_API_PORT: "8931",
+      SCALIUS_DEV_STOREFRONT_PORT: "4531",
+      SCALIUS_DEV_ADMIN_PORT: "4532",
+    });
+    expect(fromEnv).toMatchObject({
+      apiBaseUrl: "http://localhost:8931",
+      storefrontBaseUrl: "http://localhost:4531",
+      adminBaseUrl: "http://localhost:4532",
+    });
+    const fromFlags = getDoctorConfig(["--api-port", "8941", "--admin-port=4542"], { SCALIUS_DEV_API_PORT: "8931" });
+    expect(fromFlags).toMatchObject({
+      apiBaseUrl: "http://localhost:8941",
+      storefrontBaseUrl: "http://localhost:4322",
+      adminBaseUrl: "http://localhost:4542",
+    });
+    expect(() => getDoctorConfig(["--api-port", "nope"], {})).toThrow(/must be a TCP port/);
+  });
+
+  it("flags local Platform origins that point at another stack, and ignores real URLs", () => {
+    const expected = {
+      apiUrl: "http://localhost:8931",
+      storefrontUrl: "http://localhost:4531",
+      dashboardUrl: "http://localhost:4532",
+      mediaUrl: "http://localhost:8931/api/v1/media",
+    };
+    expect(findPlatformOriginDrift(expected, expected)).toEqual([]);
+    expect(findPlatformOriginDrift({
+      ...expected,
+      apiUrl: "http://localhost:8787",
+      storefrontUrl: "https://shop.tunnel.example",
+      dashboardUrl: "",
+    }, expected).map(({ field }) => field)).toEqual(["apiUrl", "dashboardUrl"]);
   });
 });
