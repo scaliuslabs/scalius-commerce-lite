@@ -6472,21 +6472,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -6534,7 +6535,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -6690,21 +6692,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -6752,7 +6755,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -6956,21 +6960,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -7018,7 +7023,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -7413,6 +7419,17 @@
             "required": false,
             "name": "hasDiscount",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "required": false,
+            "name": "inStock",
+            "in": "query"
           }
         ],
         "responses": {
@@ -7771,21 +7788,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -7833,7 +7851,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -8692,6 +8711,19 @@
             "description": "Has discount filter",
             "name": "hasDiscount",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ],
+              "description": "Only products a buyer can buy now (exclude sold out)"
+            },
+            "required": false,
+            "description": "Only products a buyer can buy now (exclude sold out)",
+            "name": "inStock",
+            "in": "query"
           }
         ],
         "responses": {
@@ -8968,21 +9000,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -9030,7 +9063,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -9145,6 +9179,12 @@
                               "enum": [
                                 "true",
                                 "false"
+                              ]
+                            },
+                            "inStock": {
+                              "type": "string",
+                              "enum": [
+                                "true"
                               ]
                             }
                           },
@@ -47390,6 +47430,19 @@
           {
             "schema": {
               "type": "string",
+              "enum": [
+                "true"
+              ],
+              "description": "Only products a buyer can buy now (exclude sold out)"
+            },
+            "required": false,
+            "description": "Only products a buyer can buy now (exclude sold out)",
+            "name": "inStock",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Comma-separated product IDs"
             },
             "required": false,
@@ -47581,21 +47634,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -47643,7 +47697,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -53617,6 +53672,19 @@
             "schema": {
               "type": "string",
               "enum": [
+                "true"
+              ],
+              "description": "Only products a buyer can buy now (exclude sold out)"
+            },
+            "required": false,
+            "description": "Only products a buyer can buy now (exclude sold out)",
+            "name": "inStock",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
                 "true",
                 "false"
               ],
@@ -53884,6 +53952,11 @@
                                   "slug"
                                 ]
                               },
+                              "subcategoryId": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself)."
+                              },
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
@@ -53964,21 +54037,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -54026,7 +54100,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -54141,6 +54216,12 @@
                               "enum": [
                                 "true",
                                 "false"
+                              ]
+                            },
+                            "inStock": {
+                              "type": "string",
+                              "enum": [
+                                "true"
                               ]
                             }
                           },
@@ -54433,6 +54514,17 @@
             "required": false,
             "name": "hasDiscount",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "required": false,
+            "name": "inStock",
+            "in": "query"
           }
         ],
         "responses": {
@@ -54583,6 +54675,11 @@
                                   "slug"
                                 ]
                               },
+                              "subcategoryId": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself)."
+                              },
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
@@ -54664,21 +54761,22 @@
                             "properties": {
                               "id": {
                                 "type": "string",
-                                "description": "The attribute id, `option.<axis>`, or `brand`."
+                                "description": "The attribute id, `option.<axis>`, `brand`, or `category`."
                               },
                               "name": {
                                 "type": "string"
                               },
                               "slug": {
                                 "type": "string",
-                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs)."
+                                "description": "Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter."
                               },
                               "kind": {
                                 "type": "string",
                                 "enum": [
                                   "attribute",
                                   "option",
-                                  "brand"
+                                  "brand",
+                                  "category"
                                 ]
                               },
                               "display": {
@@ -54726,7 +54824,8 @@
                                     "swatch"
                                   ]
                                 },
-                                "maxItems": 100
+                                "maxItems": 500,
+                                "description": "At most 100 values (500 for brands), the most common first and every selected value kept."
                               },
                               "range": {
                                 "type": "object",
@@ -54841,6 +54940,12 @@
                               "enum": [
                                 "true",
                                 "false"
+                              ]
+                            },
+                            "inStock": {
+                              "type": "string",
+                              "enum": [
+                                "true"
                               ]
                             }
                           },

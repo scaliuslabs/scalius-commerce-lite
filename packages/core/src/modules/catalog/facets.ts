@@ -40,6 +40,13 @@ export const BRAND_FACET_KEY = "brand";
 export const FACET_ATTRIBUTE_LIMIT = 50;
 /** Values per facet: the most common ones, plus every selected value. */
 export const FACET_VALUE_LIMIT = 100;
+/**
+ * Values of the brand facet: a large category can hold hundreds of brands,
+ * and "See more" with its search must reach every one of them.
+ */
+export const BRAND_FACET_VALUE_LIMIT = 500;
+/** The query key and facet id of the category-tree facet (links, never a filter). */
+export const CATEGORY_FACET_KEY = "category";
 /** Filter values one request may carry. */
 export const MAX_PUBLIC_FACET_FILTER_VALUES = 90;
 
@@ -48,7 +55,11 @@ const FACET_KEY_MAX_LENGTH = 200;
 /** Stand-ins for an open range end; attribute numbers stay below 1e12. */
 const OPEN_RANGE = 1e15;
 
-export type PublicProductFacetKind = CatalogFacetFilter["kind"];
+/**
+ * A facet's source. `category` is the category-tree facet: its values are
+ * sub-listings with their counts (links to category pages), never a filter.
+ */
+export type PublicProductFacetKind = CatalogFacetFilter["kind"] | "category";
 
 export interface PublicProductFacetValue {
     /** The URL value (`?<slug>=<value>`). */
@@ -470,6 +481,14 @@ export interface CatalogFacetCountInput {
     categoryId?: string;
     /** Count the brand facet (not on a brand's own page). */
     brandFacet?: boolean;
+    /**
+     * The category-tree facet: `{ parentId }` counts each published child of
+     * the listing's category over its subtree (Star Tech's sub-category
+     * pills, Daraz's category list); `"product-categories"` counts the
+     * published categories the scoped products sit in (search, collection
+     * and brand listings). Each count applies every facet selection.
+     */
+    categoryFacet?: { parentId: string } | "product-categories";
     /** Defaults: FACET_ATTRIBUTE_LIMIT attribute facets, FACET_VALUE_LIMIT values per facet. */
     attributeLimit?: number;
     valueLimit?: number;
@@ -557,9 +576,41 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
             WHERE facet_scope.brand_id IS NOT NULL
             GROUP BY facet_scope.brand_id`;
 
+    // Sub-listings are counted from the materialized scope too: each scoped
+    // product counts once for the child whose subtree holds its category
+    // (closure rows by descendant), or for its own published category.
+    const everySelection = sql`${attributeMatch()} AND ${optionMatch} AND ${brandMatch}`;
+    const categoryBranch = !input.categoryFacet
+        ? sql``
+        : input.categoryFacet === "product-categories"
+            ? sql`
+            UNION ALL
+            SELECT 'category', ${CATEGORY_FACET_KEY}, facet_scope.category_id,
+                SUM(CASE WHEN ${everySelection} THEN 1 ELSE 0 END),
+                NULL, NULL, NULL, NULL
+            FROM facet_scope
+            WHERE facet_scope.category_id IS NOT NULL
+            GROUP BY facet_scope.category_id`
+            : sql`
+            UNION ALL
+            SELECT 'category', ${CATEGORY_FACET_KEY}, child_link.ancestor_id,
+                SUM(CASE WHEN ${everySelection} THEN 1 ELSE 0 END),
+                NULL, NULL, NULL, NULL
+            FROM facet_scope
+            CROSS JOIN category_closure AS child_link
+            WHERE child_link.descendant_id = facet_scope.category_id
+              AND child_link.ancestor_id IN (
+                  SELECT listing_child.descendant_id FROM category_closure AS listing_child
+                  WHERE listing_child.ancestor_id = ${input.categoryFacet.parentId} AND listing_child.depth = 1
+              )
+            GROUP BY child_link.ancestor_id`;
+    const valueLimit = boundedLimit(input.valueLimit, FACET_VALUE_LIMIT);
+    const brandValueLimit = input.valueLimit === undefined ? BRAND_FACET_VALUE_LIMIT : valueLimit;
+
     return namedRows<CatalogFacetCountRow>(db.all(sql`
         WITH facet_scope AS MATERIALIZED (
             SELECT ${buyerState.productId} AS product_id, ${buyerState.brandId} AS brand_id,
+                ${buyerState.categoryId} AS category_id,
                 ${productAttributeMissSql(scopeProduct, sets.attributes)} AS attribute_miss,
                 CASE WHEN ${truth(productMatchesOptionFilters(scopeProduct, sets.options))} THEN 1 ELSE 0 END AS option_match,
                 CASE WHEN ${truth(brandMatches(sql`${buyerState.brandId}`, sets.brand))} THEN 1 ELSE 0 END AS brand_match
@@ -594,12 +645,14 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
               AND option_row.facet_kind = 'option'
             GROUP BY option_row.facet_key, option_row.value_key
             ${brandBranch}
+            ${categoryBranch}
         ),
         facet_resolved AS (
             SELECT facet_counts.*,
                 CASE facet_counts.facet_kind
                     WHEN 'attribute' THEN facet_attribute.name
                     WHEN 'brand' THEN 'Brand'
+                    WHEN 'category' THEN 'Category'
                     ELSE (
                         SELECT axis.name
                         FROM product_variant_option_values AS axis_assignment
@@ -620,11 +673,13 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
                 END AS facet_order,
                 CASE facet_counts.facet_kind
                     WHEN 'brand' THEN facet_brand.slug
+                    WHEN 'category' THEN facet_category.slug
                     WHEN 'attribute' THEN CASE WHEN facet_attribute.value_type = 'enum' THEN facet_enum.normalized_value ELSE facet_counts.value_key END
                     ELSE facet_counts.value_key
                 END AS url_value,
                 CASE facet_counts.facet_kind
                     WHEN 'brand' THEN facet_brand.name
+                    WHEN 'category' THEN facet_category.name
                     WHEN 'attribute' THEN COALESCE(facet_enum.value, facet_counts.value_label)
                     ELSE facet_counts.value_label
                 END AS display_label,
@@ -650,6 +705,8 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
                AND facet_enum.id = facet_counts.value_key
             LEFT JOIN ${brands} AS facet_brand
                 ON facet_counts.facet_kind = 'brand' AND facet_brand.id = facet_counts.value_key
+            LEFT JOIN "categories" AS facet_category
+                ON facet_counts.facet_kind = 'category' AND facet_category.id = facet_counts.value_key
             LEFT JOIN ${categorySet} AS category_set
                 ON facet_counts.facet_kind = 'attribute' AND category_set.attribute_id = facet_counts.facet_id
             WHERE (facet_counts.facet_kind <> 'attribute' OR (
@@ -661,6 +718,9 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
                 ))
               AND (facet_counts.facet_kind <> 'brand' OR (
                     facet_brand.status = 'published' AND facet_brand.deleted_at IS NULL
+                ))
+              AND (facet_counts.facet_kind <> 'category' OR (
+                    facet_category.status = 'published' AND facet_category.deleted_at IS NULL
                 ))
         ),
         facet_ranked AS (
@@ -681,7 +741,7 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
             url_value AS urlValue, swatch, range_min AS rangeMin, range_max AS rangeMax
         FROM facet_ranked
         WHERE (facet_kind <> 'attribute' OR facet_rank <= ${sql.raw(String(boundedLimit(input.attributeLimit, FACET_ATTRIBUTE_LIMIT)))})
-          AND (value_rank <= ${sql.raw(String(boundedLimit(input.valueLimit, FACET_VALUE_LIMIT)))} OR is_selected = 1)
+          AND (value_rank <= CASE facet_kind WHEN 'brand' THEN ${sql.raw(String(brandValueLimit))} ELSE ${sql.raw(String(valueLimit))} END OR is_selected = 1)
           AND (facet_display <> 'range' OR value_rank = 1)
     `), [
         "facetKind", "facetId", "valueKey", "valueCount", "valueLabel", "valueSort", "valueNumber", "facetName",
@@ -689,7 +749,7 @@ export function buildCatalogFacetCountQuery(db: Database, input: CatalogFacetCou
     ]);
 }
 
-const KIND_ORDER: Record<PublicProductFacetKind, number> = { brand: 0, option: 1, attribute: 2 };
+const KIND_ORDER: Record<PublicProductFacetKind, number> = { category: 0, brand: 1, option: 2, attribute: 3 };
 
 function compareFacetValues(
     left: PublicProductFacetValue & { sort: number; number: number | null },
@@ -773,6 +833,8 @@ export function groupCatalogFacets(
     }
 
     return [...facets.values()]
+        // One category is no choice: the category-tree facet needs two.
+        .filter((facet) => facet.kind !== "category" || facet.valuesSorted.length >= 2)
         .sort((left, right) => KIND_ORDER[left.kind] - KIND_ORDER[right.kind]
             || left.order - right.order
             || left.name.localeCompare(right.name))
