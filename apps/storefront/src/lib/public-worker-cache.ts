@@ -2,7 +2,14 @@ import {
   canonicalizeStorefrontHtmlCachePath,
   hasStorefrontProductVariantSelectionParams,
   isStorefrontTrackingQueryParam,
+  readStorefrontSeenSeq,
 } from "@scalius/shared/storefront-cache-path";
+import {
+  decideCacheFrontierHit,
+  isCacheDepHash,
+  type CacheFrontier,
+  type CacheFrontierEntry,
+} from "@scalius/shared/cache-frontier";
 import {
   CACHE_GENERATION_HEADER,
   PUBLIC_CACHE_MAX_AGE_SECONDS,
@@ -13,6 +20,20 @@ import {
   toPublicCacheRequest,
 } from "@/lib/cache-policy";
 import { applyBrowserCachePolicyForPublicResponse } from "@/lib/public-discovery-cache";
+import {
+  CACHE_FRONTIER_DELTA_MS,
+  cacheFrontierKey,
+  isCacheFrontierFresh,
+  readStoredCacheFrontier,
+  refreshCacheFrontier,
+  storeCacheFrontier,
+  type CacheFrontierClient,
+} from "@/lib/cache-frontier";
+import {
+  collectPageDependencies,
+  createPageDependencies,
+  pageEntryFromDependencies,
+} from "@/lib/page-dependencies";
 
 // Anonymous public pages are cached per data center in the Cache API under
 // a key made of the build, the Worker version, the store's cache generation,
@@ -20,6 +41,31 @@ import { applyBrowserCachePolicyForPublicResponse } from "@/lib/public-discovery
 // deploy (or a `wrangler dev`/`astro dev` start) replaces the Worker version,
 // and old entries age out; nothing is ever purged. The version covers what
 // BUILD_ID's source hash cannot: every bundled package and toolchain input.
+//
+// The dependency-validated mode (`frontier`, CACHE-DESIGN §6.7, phase P3)
+// drops the generation from the key: each entry carries the dependency
+// hashes and clock value (s0) its API parts proved, and a hit is served only
+// when the data center's change frontier, at most Δ old, shows none of them
+// changed after s0.
+
+/**
+ * How storefront pages are cached. One code-level switch, like the API's
+ * `API_PART_CACHE_MODE`: `frontier` needs API parts with proofs, so it ships
+ * only after the API runs `strict` (a page whose parts carry no proof is
+ * never stored in `frontier` mode). The Worker version in both keys keeps
+ * the modes' entries apart.
+ */
+export type StorefrontPageCacheMode = "generation" | "frontier";
+export const STOREFRONT_PAGE_CACHE_MODE: StorefrontPageCacheMode = "generation";
+
+/** Internal headers of a stored dependency-validated entry; never sent to a browser. */
+export const PAGE_DEPENDENCY_HEADERS = {
+  deps: "X-Scalius-Deps",
+  s0: "X-Scalius-Dep-Seq",
+  validUntil: "X-Scalius-Valid-Until",
+  softMaxAge: "X-Scalius-Soft-Max-Age",
+  renderedAt: "X-Scalius-Rendered-At",
+} as const;
 
 const MAX_PUBLIC_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_QUERY_KEY_LENGTH = 64;
@@ -197,6 +243,16 @@ export function publicStorefrontCacheKey(
   return `${url.origin}/__cache/${encodeURIComponent(buildId)}/${encodeURIComponent(workerVersion)}/${generation}${url.pathname}${url.search}`;
 }
 
+/** Cache API key of a dependency-validated entry: no generation, the entry carries its proof. */
+export function publicStorefrontDvcCacheKey(
+  canonicalUrl: string,
+  buildId: string,
+  workerVersion: string,
+): string {
+  const url = new URL(canonicalUrl);
+  return `${url.origin}/__cache/${encodeURIComponent(buildId)}/${encodeURIComponent(workerVersion)}/dvc${url.pathname}${url.search}`;
+}
+
 /** Only the gateway sets the generation a render pins its API reads to. */
 function withGenerationHeader(request: Request, generation: string | null): Request {
   if (!generation && !request.headers.has(CACHE_GENERATION_HEADER)) return request;
@@ -214,19 +270,56 @@ function isStorableResponse(response: Response): boolean {
   );
 }
 
-function toStoredResponse(response: Response): Response {
+function toStoredResponse(
+  response: Response,
+  entry: CacheFrontierEntry | null = null,
+  body: BodyInit | null = response.body,
+): Response {
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", `public, max-age=${PUBLIC_CACHE_MAX_AGE_SECONDS}`);
   headers.delete("Pragma");
   headers.delete("Expires");
-  return new Response(response.body, { status: response.status, headers });
+  for (const name of Object.values(PAGE_DEPENDENCY_HEADERS)) headers.delete(name);
+  if (entry) {
+    headers.set(PAGE_DEPENDENCY_HEADERS.deps, entry.depHashes.join(","));
+    headers.set(PAGE_DEPENDENCY_HEADERS.s0, String(entry.s0));
+    headers.set(PAGE_DEPENDENCY_HEADERS.renderedAt, String(entry.renderedAt));
+    if (entry.validUntil !== null) headers.set(PAGE_DEPENDENCY_HEADERS.validUntil, String(entry.validUntil));
+    if (entry.softMaxAgeSeconds !== null) headers.set(PAGE_DEPENDENCY_HEADERS.softMaxAge, String(entry.softMaxAgeSeconds));
+  }
+  return new Response(body, { status: response.status, headers });
 }
 
 function fromStoredResponse(stored: Response, request: Request, pathname: string): Response {
   const response = new Response(request.method === "HEAD" ? null : stored.body, stored);
+  for (const name of Object.values(PAGE_DEPENDENCY_HEADERS)) response.headers.delete(name);
   applyBrowserCachePolicyForPublicResponse(response, pathname);
   response.headers.set("X-Cache-Status", "HIT");
   return response;
+}
+
+const isClockHeader = (value: string | null): value is string => value !== null && /^\d{1,15}$/.test(value);
+const isSecondsHeader = (value: string | null): value is string => value !== null && /^\d{1,12}(?:\.\d+)?$/.test(value);
+
+/** The proof a stored entry carries, or null when it carries none (never served in frontier mode). */
+export function readStoredPageEntry(headers: Headers): CacheFrontierEntry | null {
+  const s0 = headers.get(PAGE_DEPENDENCY_HEADERS.s0);
+  const renderedAt = headers.get(PAGE_DEPENDENCY_HEADERS.renderedAt);
+  const deps = headers.get(PAGE_DEPENDENCY_HEADERS.deps);
+  const validUntil = headers.get(PAGE_DEPENDENCY_HEADERS.validUntil);
+  const softMaxAge = headers.get(PAGE_DEPENDENCY_HEADERS.softMaxAge);
+  if (!isClockHeader(s0) || !isClockHeader(renderedAt) || deps === null) return null;
+  if (validUntil !== null && !isClockHeader(validUntil)) return null;
+  if (softMaxAge !== null && !isSecondsHeader(softMaxAge)) return null;
+  const depHashes = deps === "" ? [] : deps.split(",");
+  if (!depHashes.every(isCacheDepHash)) return null;
+  return {
+    s0: Number(s0),
+    depHashes,
+    validUntil: validUntil === null ? null : Number(validUntil),
+    softMaxAgeSeconds: softMaxAge === null ? null : Number(softMaxAge),
+    renderedAt: Number(renderedAt),
+  };
 }
 
 export interface PublicStorefrontCacheContext {
@@ -242,6 +335,11 @@ export interface PublicStorefrontCacheContext {
   workerVersion: string | null;
   render(request: Request): Promise<Response>;
   waitUntil(promise: Promise<unknown>): void;
+  /** Default `STOREFRONT_PAGE_CACHE_MODE`. */
+  mode?: StorefrontPageCacheMode;
+  /** The frontier API (frontier mode); without it pages render uncached. */
+  frontier?: CacheFrontierClient | null;
+  now?(): number;
 }
 
 /**
@@ -256,6 +354,11 @@ export async function servePublicStorefrontRequest(
 ): Promise<Response> {
   const policy = getPublicStorefrontCachePolicy(request);
   const workerVersion = policy ? context.workerVersion : null;
+  if ((context.mode ?? STOREFRONT_PAGE_CACHE_MODE) === "frontier") {
+    return policy && workerVersion && context.frontier
+      ? serveFrontierValidated(request, policy, workerVersion, context, context.frontier)
+      : context.render(withGenerationHeader(request, null));
+  }
   const generation = workerVersion ? await context.readGeneration() : null;
   if (!policy || !workerVersion || !generation) {
     return context.render(withGenerationHeader(request, null));
@@ -272,6 +375,92 @@ export async function servePublicStorefrontRequest(
   ));
   if (request.method === "GET" && isStorableResponse(response)) {
     context.waitUntil(context.cache.put(key, toStoredResponse(response.clone())));
+  }
+  return response;
+}
+
+/**
+ * The data center's frontier, fresh enough to validate a hit now: refreshed
+ * (blocking) when missing, older than Δ, or behind the request's `_sv`;
+ * refreshed ahead in the background once it is older than Δ/2. Null when it
+ * cannot be refreshed: the page then renders.
+ */
+async function freshFrontier(
+  context: PublicStorefrontCacheContext,
+  client: CacheFrontierClient,
+  key: string,
+  seenSeq: number | null,
+): Promise<CacheFrontier | null> {
+  const now = context.now ?? Date.now;
+  const stored = await readStoredCacheFrontier(context.cache, key).catch(() => null);
+  const started = now();
+  if (isCacheFrontierFresh(stored, started, seenSeq)) {
+    if (started - stored.sentAt > CACHE_FRONTIER_DELTA_MS / 2) {
+      context.waitUntil(refreshCacheFrontier(stored, client, now)
+        .then((next) => storeCacheFrontier(context.cache, key, next))
+        .catch(() => undefined));
+    }
+    return stored;
+  }
+  try {
+    const next = await refreshCacheFrontier(stored, client, now);
+    context.waitUntil(storeCacheFrontier(context.cache, key, next).catch(() => undefined));
+    // An `_sv` still ahead of a fresh frontier names no commit yet: ignore it.
+    return isCacheFrontierFresh(next, now(), null) ? next : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Frontier mode (CACHE-DESIGN §6.7): a stored page is served only after the
+ * hit rule proves none of its dependencies changed after its s0; the slow
+ * path asks the API for an entry older than the frontier's horizon. A miss
+ * renders inside a dependency collector and is stored, once its body has
+ * streamed to the end, only when every API read of the render carried a proof.
+ */
+async function serveFrontierValidated(
+  request: Request,
+  policy: PublicStorefrontCachePolicy,
+  workerVersion: string,
+  context: PublicStorefrontCacheContext,
+  client: CacheFrontierClient,
+): Promise<Response> {
+  const canonical = new URL(policy.canonicalUrl);
+  const key = publicStorefrontDvcCacheKey(policy.canonicalUrl, context.buildId, workerVersion);
+  const stored = await context.cache.match(key);
+  const entry = stored ? readStoredPageEntry(stored.headers) : null;
+  if (stored && entry) {
+    const frontierKey = cacheFrontierKey(canonical.origin, context.buildId, workerVersion);
+    const frontier = await freshFrontier(context, client, frontierKey, readStorefrontSeenSeq(new URL(request.url)));
+    const now = (context.now ?? Date.now)();
+    const decision = frontier ? decideCacheFrontierHit(entry, frontier, now) : "render";
+    if (decision === "serve") return fromStoredResponse(stored, request, canonical.pathname);
+    if (decision === "slow") {
+      const check = await client.check(entry.s0, entry.depHashes).catch(() => null);
+      if (check && !check.changed && check.S >= check.floor) {
+        const copy = stored.clone();
+        context.waitUntil(context.cache.put(key, toStoredResponse(copy, { ...entry, s0: Math.max(entry.s0, check.S) })).catch(() => undefined));
+        return fromStoredResponse(stored, request, canonical.pathname);
+      }
+    }
+  } else if (stored) {
+    await stored.body?.cancel();
+  }
+
+  const dependencies = createPageDependencies();
+  const response = await collectPageDependencies(dependencies, () => context.render(
+    withGenerationHeader(toPublicCacheRequest(request, policy.canonicalUrl), null),
+  ));
+  if (request.method === "GET" && isStorableResponse(response)) {
+    const copy = response.clone();
+    context.waitUntil((async () => {
+      // The render (and every read its components made while it streamed)
+      // has finished once its body has.
+      const body = await copy.arrayBuffer();
+      const rendered = pageEntryFromDependencies(dependencies);
+      if (rendered) await context.cache.put(key, toStoredResponse(copy, rendered, body));
+    })().catch(() => undefined));
   }
   return response;
 }
