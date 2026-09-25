@@ -87,9 +87,7 @@ const link = (item: NavigationItem) => ({
                 data-disclosure="popup"
               >
                 {item.href ? <span class="sr-only">{item.title} submenu</span> : item.title}
-                <svg class="desktop-nav-chevron" viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="m4 6 4 4 4-4" />
-                </svg>
+                <i class="nav-chevron desktop-nav-chevron" aria-hidden="true"></i>
               </button>
             )}
             {children.length > 0 &&
@@ -113,9 +111,7 @@ const link = (item: NavigationItem) => ({
         data-disclosure="popup"
       >
         More
-        <svg class="desktop-nav-chevron" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="m4 6 4 4 4-4" />
-        </svg>
+        <i class="nav-chevron desktop-nav-chevron" aria-hidden="true"></i>
       </button>
       <div id={moreId} class="desktop-nav-dropdown" hidden>
         {/* Row items that don't fit are moved in here first (nav-disclosure.ts). */}
@@ -143,7 +139,7 @@ const link = (item: NavigationItem) => ({
   </ul>
 </nav>
 
-<style>
+<style is:global>
   .desktop-nav {
     display: none;
     width: 100%;
@@ -341,7 +337,7 @@ const link = (item: NavigationItem) => ({
   }
 
   .nav-more-list > .desktop-nav-item > button.desktop-nav-toggle:not(.desktop-nav-link),
-  .nav-more-list > .desktop-nav-item > :global(.mega-panel),
+  .nav-more-list > .desktop-nav-item > .mega-panel,
   .nav-more-list > .desktop-nav-item:has(> a) > .desktop-nav-dropdown {
     display: none !important;
   }
@@ -396,7 +392,7 @@ const link = (item: NavigationItem) => ({
     border-top: 1px solid var(--border);
   }
 
-  .nav-more-all :global(a) {
+  .nav-more-all a {
     font-weight: 600;
   }
 

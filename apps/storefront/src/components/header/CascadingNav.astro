@@ -61,9 +61,7 @@ const link = (item: NavigationItem) => ({
               <details class="cnav-menu" data-menu="popup" data-menu-hover>
                 <summary class:list={["cnav-toggle", !item.href && "cnav-link"]} data-menu-top-link={item.href ? undefined : ""}>
                   {item.href ? <span class="sr-only">{item.title} submenu</span> : <span>{item.title}</span>}
-                  <svg viewBox="0 0 16 16" aria-hidden="true">
-                    <path d="m4 6 4 4 4-4" />
-                  </svg>
+                  <i class="nav-chevron" aria-hidden="true"></i>
                 </summary>
                 <div class="cnav-panel" data-menu-panel>
                   <FlyoutList items={children} mode={flyouts} parent={item} />
@@ -78,7 +76,7 @@ const link = (item: NavigationItem) => ({
       <details class="cnav-menu" data-menu="popup">
         <summary class="cnav-toggle cnav-link">
           <span>More</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+          <i class="nav-chevron" aria-hidden="true"></i>
         </summary>
         <div class="cnav-panel cnav-panel--end" data-menu-panel>
           {/* Row items that don't fit are moved in here first (nav-disclosure.ts). */}
@@ -100,7 +98,7 @@ const link = (item: NavigationItem) => ({
   </ul>
 </nav>
 
-<style>
+<style is:global>
   .cnav {
     display: none;
     width: 100%;
@@ -205,7 +203,7 @@ const link = (item: NavigationItem) => ({
     pointer-events: auto;
   }
 
-  .cnav[data-cnav-layout="bar"] :global(.fly-link) {
+  .cnav[data-cnav-layout="bar"] .fly-link {
     min-height: 2rem;
     padding-block: 0.25rem;
   }
@@ -248,7 +246,7 @@ const link = (item: NavigationItem) => ({
     display: none;
   }
 
-  .cnav-toggle svg {
+  .cnav-toggle .nav-chevron {
     width: 0.875rem;
     height: 0.875rem;
     fill: none;
@@ -259,7 +257,7 @@ const link = (item: NavigationItem) => ({
     transition: transform 200ms ease;
   }
 
-  .cnav-menu[open] > .cnav-toggle svg {
+  .cnav-menu[open] > .cnav-toggle .nav-chevron {
     transform: rotate(180deg);
   }
 
@@ -412,7 +410,7 @@ const link = (item: NavigationItem) => ({
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .cnav-toggle svg {
+    .cnav-toggle .nav-chevron {
       transition: none;
     }
 
