@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  codDueText,
   createPurchaseTrackingPayload,
   formatOrderSuccessLabel,
   formatOrderSuccessPaymentMethod,
@@ -360,6 +361,23 @@ describe("order success receipt details", () => {
     expect(getOrderSuccessNextSteps(order, "order_placed", ENGLISH_CHECKOUT_LANGUAGE_DATA)).toEqual([
       "We'll call you to confirm your order, then hand it to the courier.",
     ]);
+  });
+
+  it("never promises a courier for a pickup or a service order, and says what the cash is due on", () => {
+    const copy = ENGLISH_CHECKOUT_LANGUAGE_DATA;
+    const pickup = makeOrder({ paymentMethod: "cod", shippingMethodKind: "pickup", requiresShipping: false, shippingMethodDescription: "Same day, 2-3 hours" });
+    const service = makeOrder({ paymentMethod: "cod", shippingMethodKind: null, requiresShipping: false });
+    expect(getOrderSuccessNextSteps(pickup, "order_placed", copy)).toEqual([copy.orderReceiptNextStepsPickupCodText]);
+    expect(getOrderSuccessNextSteps({ ...pickup, paymentMethod: "sslcommerz" }, "order_placed", copy))
+      .toEqual([copy.orderReceiptNextStepsPickupPaidText]);
+    expect(getOrderSuccessNextSteps(service, "order_placed", copy)).toEqual([copy.orderReceiptNextStepsServiceCodText]);
+    for (const order of [pickup, service]) {
+      expect(getOrderSuccessNextSteps(order, "order_placed", copy).join(" ")).not.toMatch(/courier/i);
+    }
+    expect(codDueText(pickup, copy)).toBe("Due at pickup");
+    expect(codDueText(service, copy)).toBe("Due when the service is done");
+    expect(codDueText(makeOrder({ paymentMethod: "cod" }), copy)).toBe("Due on delivery");
+    expect(getOrderSuccessViewState({ ...pickup, paymentStatus: "unpaid" }, copy).paymentStatusLabel).toBe("Due at pickup");
   });
 
   it("tells an online-paid buyer their payment is confirmed, with the method's own estimate", () => {
