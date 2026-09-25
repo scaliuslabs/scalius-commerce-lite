@@ -36,7 +36,8 @@ export const ALL: APIRoute = async ({ request, params }) => {
     return new Response("Bad request", { status: 400 });
   }
 
-  const apiPath = `/api/v1/customer-auth/${subpath}`;
+  // The query goes along too: the order history pages with ?cursor=&limit=.
+  const apiPath = `/api/v1/customer-auth/${subpath}${new URL(request.url).search}`;
 
   if (!ALLOWED_METHODS.has(request.method)) {
     return new Response("Method not allowed", { status: 405 });
