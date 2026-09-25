@@ -7,6 +7,43 @@ export function isPrivateStorefrontPathname(pathname: string): boolean {
   return PRIVATE_STOREFRONT_PATHNAME_RE.test(pathname);
 }
 
+/**
+ * Private pages whose HTML is a buyer-agnostic shell: the cart. Its lines live
+ * in the browser (`cart:v3`) and paint from storage, and everything
+ * buyer-specific (sign-in state, saved details, discounts, validation, the
+ * order itself) comes from no-store APIs or a POST. So the edge caches the
+ * shell like any public page, under the same build, Worker version and cache
+ * generation key, while the browser still gets `no-store` and speculative
+ * prefetch stays off. Checkout, payment, receipts and accounts are never
+ * shells.
+ */
+const BUYER_SHELL_PATHNAME_RE = /^\/cart\/?$/;
+
+export function isBuyerShellPathname(pathname: string): boolean {
+  return BUYER_SHELL_PATHNAME_RE.test(pathname);
+}
+
+/** Private pages that are rendered for every request and never stored. */
+export function isUncachedPrivateStorefrontPathname(pathname: string): boolean {
+  return isPrivateStorefrontPathname(pathname) && !isBuyerShellPathname(pathname);
+}
+
+export const PRIVATE_NO_STORE_CACHE_CONTROL = "private, no-cache, no-store, must-revalidate";
+
+/**
+ * Keeps this render out of the shared page cache. A page calls it when its
+ * HTML was built from a failed read (a fail-closed fallback), so a transient
+ * API error is not served to every buyer until the next generation change.
+ */
+export function markRenderUncacheable(headers: Headers): void {
+  headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
+}
+
+/** Whether the page itself asked for its response never to be stored. */
+export function renderOptedOutOfSharedCache(headers: Headers): boolean {
+  return /(?:^|,)\s*no-store\s*(?:,|$)/i.test(headers.get("Cache-Control") ?? "");
+}
+
 function hasNamedCookie(cookieHeader: string, cookieNames: readonly string[]): boolean {
   const names = new Set(cookieNames);
 

@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import viteReact from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { devOrigins, readDevPorts } from "../../scripts/dev-ports.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -11,10 +12,13 @@ const __dirname = dirname(__filename);
 /**
  * The dashboard is a static single-page app. `vite build` writes `dist/`,
  * which the API Worker serves as its `ASSETS` binding (apps/api/wrangler.jsonc)
- * on the dashboard hostname. Locally, `vite dev` serves it on :4323 and
- * proxies the API Worker's dashboard routes.
+ * on the dashboard hostname. Locally, `vite dev` serves it on the admin port
+ * and proxies the API Worker's dashboard routes to the API port (both from
+ * scripts/dev-ports.mjs: SCALIUS_DEV_ADMIN_PORT and SCALIUS_DEV_API_PORT,
+ * default 4323 and 8787).
  */
-const API_DEV_ORIGIN = "http://localhost:8787";
+const devPorts = readDevPorts();
+const API_DEV_ORIGIN = devOrigins(devPorts).apiUrl;
 
 export default defineConfig({
   build: {
@@ -54,7 +58,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 4323,
+    port: devPorts.admin,
+    strictPort: true,
     proxy: {
       "/api/v1": { target: API_DEV_ORIGIN, changeOrigin: true },
       "/api/auth": { target: API_DEV_ORIGIN, changeOrigin: true },

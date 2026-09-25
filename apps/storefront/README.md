@@ -92,8 +92,22 @@ The Worker entrypoint (`src/worker.ts`) is the only gateway. Allowlisted
 anonymous `GET`/`HEAD` requests are served from the Cache API; everything else
 renders directly. Browser HTML is `no-store`; discovery XML/text is public but
 must revalidate. Requests with authorization, a named private cookie,
-variant-selection parameters, cart, checkout, account, recovery, or other
-buyer state stay private and never reach the shared cache.
+variant-selection parameters, checkout, account, recovery, or other buyer
+state stay private and never reach the shared cache.
+
+`/cart` is the one private page that is a cacheable shell
+(`isBuyerShellPathname` in `src/lib/cache-policy.ts`). Its lines live in
+`localStorage` (`cart:v3`) and paint from there before first paint; sign-in
+state, saved details, discounts, validation and the order come from no-store
+APIs or the POST. So an anonymous `GET /cart` is stored like a public page,
+under one canonical URL (every query is dropped; `?quickBuyStorage=blocked` is
+read in the browser), while the browser copy stays `no-store` and prefetch
+stays off. A signed-in buyer's cart and every `POST /cart` (the cash on
+delivery form, which works without JavaScript) render live. A cart built from
+a failed read calls `markRenderUncacheable`, so the fail-closed "checkout
+unavailable" answer is never shared. `src/lib/cart/cart-shell.render.test.ts`
+renders the real page to prove the shared copy carries nothing from the
+request.
 
 The gateway maps tracking-decorated, default-valued, and permuted query forms
 to one canonical same-host URL, strips the `Cookie` header, and renders that

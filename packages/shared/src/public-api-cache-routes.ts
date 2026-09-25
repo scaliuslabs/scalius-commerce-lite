@@ -38,6 +38,8 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   // One fixed read: a query string is rejected by the route, and never cached or batched.
   { path: "/api/v1/storefront/homepage", exact: true, isEligible: (url) => url.searchParams.size === 0 },
   { path: "/api/v1/checkout/config", exact: true },
+  // The cart and checkout copy; every checkout-language write bumps the generation.
+  { path: "/api/v1/checkout-languages/active", exact: true, isEligible: (url) => url.searchParams.size === 0 },
   { path: "/api/v1/shipping-methods" },
   { path: "/api/v1/locations" },
   { path: "/api/v1/attributes" },

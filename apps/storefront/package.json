@@ -5,7 +5,7 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "dev": "astro dev --host --port 4322",
+    "dev": "astro dev --host",
     "start": "node ./dist/server/entry.mjs",
     "build": "node scripts/generate-build-id.js && astro check && astro build && node ../../scripts/clean-dist-env-files.mjs apps/storefront",
     "preview": "astro preview",
