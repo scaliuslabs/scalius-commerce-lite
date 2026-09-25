@@ -1,0 +1,12 @@
+---
+// The template's `warranty` module below the fold: a mount point only.
+// Warranty presentation (terms, the trust row, the terms dialog and their
+// copy) is owned by the warranty work (Wave B §5); it fills this slot with
+// its terms component. Until then the module renders nothing, so no page
+// shows an empty box.
+import type { Product } from "@/lib/api";
+
+export interface Props {
+  product: Product;
+}
+---

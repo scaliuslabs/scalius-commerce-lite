@@ -61,13 +61,11 @@ function renderedMainWidth(
   const content = Math.min(viewport, 1280) - 64;
   const column = (content - 11 * 40) / 12;
   const xl = viewport >= 1280;
-  const span =
-    layout.gallery === "stacked"
-      ? Math.min(content, 576)
-      : xl
-        ? 6 * column + 5 * 40
-        : 7 * column + 6 * 40;
-  return span - (railBeside ? (xl ? 100 : 80) + 20 : 0);
+  if (layout.gallery === "stacked") return content - 345 - 40;
+  if (layout.gallery === "grid") return (content - 400 - 40 - 8) / 2;
+  const span = xl ? 6 * column + 5 * 40 : 7 * column + 6 * 40;
+  if (!railBeside) return span;
+  return span - (layout.thumbnailSize === null ? (xl ? 100 : 80) + 20 : layout.thumbnailSize + 12);
 }
 
 /** What each gallery variant renders with today's gallery (classic, thumbnails below, stacked). */

@@ -305,9 +305,154 @@ function card(
     look,
   };
 }
+/**
+ * The product page's photos. `beside`: one stage and a thumbnail rail
+ * (beside it or below it), the details in the next column. `stacked`
+ * (Dawn): every photo full width in one column beside a sticky 345px info
+ * column. `grid` (Target): the photos two across beside the info column.
+ * On phones `stacked` and `grid` are one swipeable row with an n/N counter;
+ * `beside` keeps the stage with a strip under it.
+ */
 export interface StorefrontGalleryRenderer {
-  gallery: "beside" | "stacked";
+  gallery: "beside" | "stacked" | "grid";
   thumbnails: "beside" | "below";
+  /** The stage photo box, width / height: 1 square, 0.75 the 3:4 portrait. */
+  stageRatio: number;
+  /** Computer thumbnail edge in px; null keeps classic's 80/100px rail. */
+  thumbnailSize: number | null;
+}
+
+export type StorefrontBuyBoxFacts = "list" | "column" | "tiles" | "rows";
+
+/**
+ * A buy box's reference grammar: type scale (desktop / phone px), the two
+ * buttons, where delivery facts sit and how quantity tiers read. Sources in
+ * the comments on `STOREFRONT_BUY_BOX_LOOKS`.
+ */
+export interface StorefrontBuyBoxLook {
+  title: { size: StorefrontCardTypeSize; weight: StorefrontCardWeight };
+  price: { size: StorefrontCardTypeSize; weight: StorefrontCardWeight; tone: "foreground" | "primary" };
+  /**
+   * Height in px; `pill` or the theme radius; `row` side by side or `stack`
+   * full width up to `maxWidth`; which button comes first.
+   */
+  cta: { height: number; shape: "pill" | "rect"; layout: "row" | "stack"; maxWidth: number | null; first: "add-to-cart" | "buy-now" };
+  /**
+   * Delivery, cash on delivery, returns and warranty: a list under the
+   * buttons, a 284px column at the right (Daraz, Amazon), tiles (Target) or
+   * collapsible rows (Dawn).
+   */
+  facts: StorefrontBuyBoxFacts;
+  /** Price, status, product code and brand as pills over the price (Star Tech). */
+  factPills: boolean;
+  /** Key features under the title (Star Tech), chips (Target) or none. */
+  features: "list" | "chips" | "none";
+  /** Quantity tiers as chips (today) or selectable-looking rows with the saving (Daraz, Dawn). */
+  bundles: "chips" | "rows";
+  /** The buy box sits in a bordered card (Fabrilife). */
+  card: boolean;
+}
+
+/** Each buy box's measured look; `classic` is null and keeps today's CSS. */
+export const STOREFRONT_BUY_BOX_LOOKS = {
+  // Star Tech product page: h1 22/400, price pills, "Key Features" list,
+  // a 200×42 "Buy Now" beside the quantity.
+  spec: {
+    title: { size: { desktop: 22, phone: 18 }, weight: 400 },
+    price: { size: { desktop: 20, phone: 18 }, weight: 700, tone: "primary" },
+    cta: { height: 42, shape: "rect", layout: "row", maxWidth: 420, first: "buy-now" },
+    facts: "list",
+    factPills: true,
+    features: "list",
+    bundles: "rows",
+    card: false,
+  },
+  // Apple Gadgets: h1 28/600, price 24/700, twin 380×48 pills stacked, EMI
+  // and WhatsApp strips.
+  tech: {
+    title: { size: { desktop: 28, phone: 20 }, weight: 600 },
+    price: { size: { desktop: 24, phone: 20 }, weight: 700, tone: "foreground" },
+    cta: { height: 48, shape: "pill", layout: "stack", maxWidth: 380, first: "buy-now" },
+    facts: "list",
+    factPills: false,
+    features: "none",
+    bundles: "rows",
+    card: false,
+  },
+  // Daraz / Amazon: h1 22/400, price 30/400 in the brand colour, Buy Now then
+  // Add to Cart; delivery, cash on delivery, returns and warranty in a 284px
+  // column at the right.
+  "marketplace-3col": {
+    title: { size: { desktop: 22, phone: 16 }, weight: 400 },
+    price: { size: { desktop: 30, phone: 22 }, weight: 400, tone: "primary" },
+    cta: { height: 44, shape: "rect", layout: "row", maxWidth: null, first: "buy-now" },
+    facts: "column",
+    factPills: false,
+    features: "none",
+    bundles: "rows",
+    card: false,
+  },
+  // Target: h1 24/700, price 28/700, one full-width pill, fulfilment tiles,
+  // "at a glance" chips.
+  retail: {
+    title: { size: { desktop: 24, phone: 20 }, weight: 700 },
+    price: { size: { desktop: 28, phone: 24 }, weight: 700, tone: "foreground" },
+    cta: { height: 44, shape: "pill", layout: "stack", maxWidth: null, first: "add-to-cart" },
+    facts: "tiles",
+    factPills: false,
+    features: "chips",
+    bundles: "chips",
+    card: false,
+  },
+  // Dawn: h1 40/400 (30 on phones), price 18/400, a 345×47 outline "Add to
+  // cart" over a solid "Buy it now", collapsible rows.
+  boutique: {
+    title: { size: { desktop: 40, phone: 30 }, weight: 400 },
+    price: { size: { desktop: 18, phone: 16 }, weight: 400, tone: "foreground" },
+    cta: { height: 47, shape: "rect", layout: "stack", maxWidth: 345, first: "add-to-cart" },
+    facts: "rows",
+    factPills: false,
+    features: "none",
+    bundles: "rows",
+    card: false,
+  },
+  // Fabrilife: a bordered card, h1 24/600, price 22/700, size boxes, a
+  // returns card under the buttons.
+  fashion: {
+    title: { size: { desktop: 24, phone: 18 }, weight: 600 },
+    price: { size: { desktop: 22, phone: 20 }, weight: 700, tone: "foreground" },
+    cta: { height: 44, shape: "rect", layout: "row", maxWidth: null, first: "add-to-cart" },
+    facts: "list",
+    factPills: false,
+    features: "none",
+    bundles: "chips",
+    card: true,
+  },
+  // Game Ghor digital codes: h1 24/600, price 24/700, Buy Now first, the
+  // delivery promise bullets.
+  digital: {
+    title: { size: { desktop: 24, phone: 18 }, weight: 600 },
+    price: { size: { desktop: 24, phone: 20 }, weight: 700, tone: "foreground" },
+    cta: { height: 44, shape: "rect", layout: "row", maxWidth: null, first: "buy-now" },
+    facts: "list",
+    factPills: false,
+    features: "none",
+    bundles: "chips",
+    card: false,
+  },
+} as const satisfies Record<string, StorefrontBuyBoxLook>;
+
+export interface StorefrontBuyBoxRenderer {
+  /** null renders today's classic buy box, unchanged. */
+  look: StorefrontBuyBoxLook | null;
+  /** The "EMI from X/month" line under the price (when the product has a quote). */
+  emi: boolean;
+  /** An "Order on WhatsApp" strip under the buttons (when the store has a WhatsApp number). */
+  whatsapp: boolean;
+}
+
+function buyBox(look: StorefrontBuyBoxLook | null, settings: { emi?: boolean; whatsapp?: boolean } = {}): StorefrontBuyBoxRenderer {
+  return { look, emi: settings.emi === true, whatsapp: settings.whatsapp === true };
 }
 
 // ─── Registries ───────────────────────────────────────────────────────────
@@ -711,56 +856,71 @@ export const STOREFRONT_LISTING_PHONE_LAYOUTS = ["grid", "list-row"] as const;
 /** Load more and infinite paging keep crawlable `?page=n` URLs. */
 export const STOREFRONT_LISTING_PAGING = ["numbered", "load-more", "infinite"] as const;
 
+const gallery = (spec: StorefrontGalleryRenderer) => variant({ renders: spec });
+
 export const STOREFRONT_GALLERY_VARIANTS = {
   // Today's product page (owner-protected): thumbnails beside the photo.
-  classic: variant({ renders: { gallery: "beside" as const, thumbnails: "beside" as const } }),
-  "thumbs-below": variant({ renders: { gallery: "beside" as const, thumbnails: "below" as const } }),
-  "thumbs-left": variant({ renders: { gallery: "beside" as const, thumbnails: "beside" as const } }),
-  stacked: variant({ renders: { gallery: "stacked" as const, thumbnails: "below" as const } }),
-  portrait: variant({ renders: { gallery: "beside" as const, thumbnails: "below" as const } }),
-  "image-grid": variant({ renders: { gallery: "stacked" as const, thumbnails: "below" as const } }),
+  classic: gallery({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: null }),
+  // Star Tech / Apple Gadgets: a square stage over an 88px strip.
+  "thumbs-below": gallery({ gallery: "beside", thumbnails: "below", stageRatio: 1, thumbnailSize: 88 }),
+  // Amazon: a narrow 48px strip (40-64 measured) at the left of the stage.
+  "thumbs-left": gallery({ gallery: "beside", thumbnails: "beside", stageRatio: 1, thumbnailSize: 48 }),
+  // Dawn "stacked": every photo full width beside a sticky info column.
+  stacked: gallery({ gallery: "stacked", thumbnails: "below", stageRatio: 1, thumbnailSize: null }),
+  // Aarong: a 3:4 portrait stage over the strip.
+  portrait: gallery({ gallery: "beside", thumbnails: "below", stageRatio: 0.75, thumbnailSize: 88 }),
+  // Target: the photos two across beside the info column.
+  "image-grid": gallery({ gallery: "grid", thumbnails: "below", stageRatio: 1, thumbnailSize: null }),
 };
 
 export const STOREFRONT_BUY_BOX_VARIANTS = {
   // Today's product page (owner-protected).
-  classic: variant({ renders: "classic" }),
-  // Star Tech: fact pills, key features, cash vs EMI radio (hidden without EMI plans).
+  classic: variant({ renders: buyBox(null) }),
+  // Star Tech: fact pills, key features, the EMI line (hidden without EMI plans).
   spec: variant({
     settings: { emi: z.boolean() },
     defaults: { emi: true },
     contrastPairs: [["accent-foreground", "accent"], ["secondary-foreground", "secondary"]],
-    renders: "classic",
+    renders: (settings) => buyBox(STOREFRONT_BUY_BOX_LOOKS.spec, settings),
   }),
   // Apple Gadgets: option panels, twin pill CTAs, EMI and WhatsApp strips.
   tech: variant({
     settings: { emi: z.boolean(), whatsapp: z.boolean() },
     defaults: { emi: true, whatsapp: true },
     contrastPairs: [["foreground", "muted"]],
-    renders: "classic",
+    renders: (settings) => buyBox(STOREFRONT_BUY_BOX_LOOKS.tech, settings),
   }),
   // Daraz/Amazon: delivery, cash on delivery, return and warranty column.
-  "marketplace-3col": variant({ contrastPairs: [["foreground", "muted"]], renders: "classic" }),
-  // Target: fulfilment tiles, payment-offer cards, at-a-glance chips.
-  retail: variant({ contrastPairs: [["accent-foreground", "accent"]], renders: "classic" }),
+  "marketplace-3col": variant({ contrastPairs: [["foreground", "muted"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"]) }),
+  // Target: fulfilment tiles, at-a-glance chips.
+  retail: variant({ contrastPairs: [["accent-foreground", "accent"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.retail) }),
   // Dawn: outline Add to cart plus solid Buy it now, collapsible rows.
-  boutique: variant({ renders: "classic" }),
-  // Fabrilife: bordered card, size boxes, returns card, size chart.
-  fashion: variant({ contrastPairs: [["foreground", "muted"]], renders: "classic" }),
+  boutique: variant({ renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.boutique) }),
+  // Fabrilife: bordered card, size boxes, returns card.
+  fashion: variant({ contrastPairs: [["foreground", "muted"]], renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.fashion) }),
   // Game Ghor: promise bullets (delivery time, where to redeem).
-  digital: variant({ requires: [has("hasDigitalLines")], fallback: "classic", renders: "classic" }),
+  digital: variant({ requires: [has("hasDigitalLines")], fallback: "classic", renders: buyBox(STOREFRONT_BUY_BOX_LOOKS.digital) }),
 };
 
-/** Modules below the product fold, in page order; a module without data is left out. */
+/**
+ * Modules below the product fold, in page order. The fit rule drops a
+ * module the store has no data for; the product page then leaves out a
+ * module this product has no data for, so nothing renders an empty box.
+ * `reviews` needs no published review: its zero state carries "Write a
+ * review", so a store's first review can be written. `spec-table` needs no
+ * key spec: any attribute value is a specification row.
+ */
 export const STOREFRONT_PRODUCT_MODULES = {
   "frequently-bought-together": { requires: [] },
   "key-attributes": { requires: [has("hasKeySpecs")] },
   "about-bullets": { requires: [] },
-  "spec-table": { requires: [has("hasKeySpecs")] },
+  "spec-table": { requires: [] },
   description: { requires: [] },
   "content-blocks": { requires: [has("hasContentBlocks")] },
   "compare-similar": { requires: [has("hasKeySpecs")] },
+  warranty: { requires: [] },
   questions: { requires: [has("hasQuestions")] },
-  reviews: { requires: [has("hasReviews")] },
+  reviews: { requires: [] },
   policies: { requires: [] },
   related: { requires: [] },
   "recently-viewed": { requires: [] },
