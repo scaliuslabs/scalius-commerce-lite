@@ -39,7 +39,6 @@ export { CONVERSATION_LIMITS, isConversationAttachmentId, isConversationId };
 /** English, like the other account pages. One place so a later language pass can swap it. */
 export const CONVERSATION_COPY = {
   inboxTitle: "Inbox",
-  accountTab: "Orders and profile",
   inboxEmpty: "No messages yet. Questions about an order start from the order page.",
   signInTitle: "Sign in to see your messages",
   signInBody: "Your conversations with the store appear here after you sign in.",

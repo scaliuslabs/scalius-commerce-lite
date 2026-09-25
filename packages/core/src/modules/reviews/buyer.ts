@@ -28,7 +28,7 @@ import {
   type NotificationQueue,
 } from "../notifications/notification-outbox";
 import type { ReviewStatus } from "./browser";
-import { readBuyerLine } from "./lines";
+import { findReviewableLineForProduct, readBuyerLine } from "./lines";
 import {
   DAY_SECONDS,
   buyerOrderCondition,
@@ -37,6 +37,7 @@ import {
   newReviewId,
   notFoundReview,
   nowSeconds,
+  readEnabledReviewSettings,
   requireReviewSettings,
   reviewerKeyOf,
   type ReviewBuyer,
@@ -237,6 +238,46 @@ export async function listBuyerReviews(db: Database, buyer: ReviewBuyer): Promis
     .all() as BuyerReviewRow[];
   const now = nowSeconds();
   return rows.map((row) => presentBuyerReview(row, now));
+}
+
+/** The buyer's standing on one product, for the product page's review call to action. */
+export type BuyerProductReviewState =
+  | { state: "eligible"; orderItemId: string; displayName: string }
+  | { state: "reviewed"; review: BuyerReview }
+  | { state: "ineligible" }
+  | { state: "disabled" };
+
+/**
+ * What the product page offers this buyer: edit a live review, write one for
+ * the newest delivered line nobody reviewed yet, show a rejected review, or
+ * nothing ("verified buyers only"). The line is resolved here, never taken
+ * from the page.
+ */
+export async function readBuyerProductReviewState(
+  db: Database,
+  buyer: ReviewBuyer,
+  productId: string,
+): Promise<BuyerProductReviewState> {
+  if (!await readEnabledReviewSettings(db)) return { state: "disabled" };
+  const rows = await db
+    .select(buyerReviewSelect())
+    .from(productReviews)
+    .innerJoin(orders, eq(orders.id, productReviews.orderId))
+    .leftJoin(products, eq(products.id, productReviews.productId))
+    .where(and(
+      buyerOrderCondition(buyer),
+      eq(productReviews.productId, productId),
+      inArray(productReviews.status, ["pending", "published", "rejected"]),
+    ))
+    .orderBy(desc(productReviews.createdAt), desc(productReviews.id))
+    .limit(5)
+    .all() as BuyerReviewRow[];
+  const live = rows.find((row) => row.status === "pending" || row.status === "published");
+  if (live) return { state: "reviewed", review: presentBuyerReview(live) };
+  const line = await findReviewableLineForProduct(db, buyer, productId);
+  if (line) return { state: "eligible", orderItemId: line.orderItemId, displayName: defaultReviewerDisplayName(line.customerName) };
+  const rejected = rows[0];
+  return rejected ? { state: "reviewed", review: presentBuyerReview(rejected) } : { state: "ineligible" };
 }
 
 /** The staff "review waiting for approval" row, in the review's own batch. */
