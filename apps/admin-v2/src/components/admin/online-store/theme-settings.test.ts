@@ -139,11 +139,15 @@ describe("theme colors", () => {
   });
 
   it("moves the card by the template's own card-to-page step instead of flattening it", () => {
-    // Retail: white cards (#ffffff) on warm paper (#fbfaf7), a step of (+4, +5, +8).
+    // Retail: white cards (#ffffff) on a white page, so the card follows the page.
     const retail = setThemeColor(storefrontTemplateTheme("department-mall"), "background", "#f0ebe3");
     expect(retail.tokens.colors.background).toBe("#f0ebe3");
-    expect(retail.tokens.colors.card).toBe("#f4f0eb");
-    expect(retail.tokens.colors.popover).toBe("#f4f0eb");
+    expect(retail.tokens.colors.card).toBe("#f0ebe3");
+    expect(retail.tokens.colors.popover).toBe("#f0ebe3");
+    // Boutique: linen cards on the same linen page stay equal as well; heritage's
+    // raised paper keeps its (+5, +7, +9) step.
+    const heritage = setThemeColor(storefrontTemplateTheme("heritage-editorial"), "background", "#f0ebe3");
+    expect(heritage.tokens.colors.card).not.toBe("#f0ebe3");
     // Midnight: raised panels (#141416) over the page (#0a0a0b) keep their lift.
     const midnight = setThemeColor(storefrontTemplateTheme("rounded-tech"), "background", "#101014");
     expect(midnight.tokens.colors.card).toBe("#1a1a1f");
