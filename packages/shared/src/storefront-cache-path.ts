@@ -1,21 +1,37 @@
+/**
+ * Ad-click and campaign parameters. No storefront page reads them on the
+ * server: they stay in the browser URL for client analytics, but they never
+ * split the page cache, reach a render, or appear in a canonical link.
+ * A fixed allowlist (plus every `utm_*`): an unknown parameter is kept,
+ * because it may be functional.
+ */
 const TRACKING_QUERY_PARAMS = [
   "fbclid",
   "gclid",
   "gbraid",
   "wbraid",
+  "gad_source",
+  "gad_campaignid",
+  "srsltid",
   "msclkid",
   "ttclid",
-  "utm_source",
-  "utm_medium",
-  "utm_campaign",
-  "utm_term",
-  "utm_content",
+  "yclid",
+  "mc_cid",
+  "mc_eid",
+  "igshid",
+  "_ga",
   "ref",
 ] as const;
 
-const PRODUCT_HTML_IGNORED_QUERY_PARAMS = ["size", "color"] as const;
+const TRACKING_QUERY_PARAM_SET = new Set<string>(TRACKING_QUERY_PARAMS);
 
-export const STOREFRONT_HTML_CACHE_IGNORED_QUERY_PARAMS = TRACKING_QUERY_PARAMS;
+/** Whether a query key is an ad-click or campaign parameter (see above). */
+export function isStorefrontTrackingQueryParam(key: string): boolean {
+  const normalized = key.toLowerCase();
+  return TRACKING_QUERY_PARAM_SET.has(normalized) || normalized.startsWith("utm_");
+}
+
+const PRODUCT_HTML_IGNORED_QUERY_PARAMS = ["size", "color"] as const;
 
 export function normalizeStorefrontCacheQueryValue(
   key: string,
@@ -60,12 +76,11 @@ export function hasStorefrontProductVariantSelectionParams(url: URL): boolean {
   );
 }
 
-function getIgnoredParams(pathname: string): Set<string> {
-  const ignored = new Set<string>(TRACKING_QUERY_PARAMS);
-  if (/^\/products\/[^/]+$/.test(pathname)) {
-    PRODUCT_HTML_IGNORED_QUERY_PARAMS.forEach((param) => ignored.add(param));
-  }
-  return ignored;
+function getIgnoredParams(pathname: string): (key: string) => boolean {
+  const productParams = /^\/products\/[^/]+$/.test(pathname)
+    ? new Set<string>(PRODUCT_HTML_IGNORED_QUERY_PARAMS)
+    : null;
+  return (key) => isStorefrontTrackingQueryParam(key) || Boolean(productParams?.has(key));
 }
 
 export function canonicalizeStorefrontHtmlCachePath(
@@ -85,7 +100,7 @@ export function canonicalizeStorefrontHtmlCachePath(
   const entries: Array<[string, string]> = [];
 
   for (const [key, rawValue] of url.searchParams.entries()) {
-    if (ignored.has(key)) continue;
+    if (ignored(key)) continue;
     const value = normalizeStorefrontCacheQueryValue(key, rawValue);
     entries.push([key, value]);
   }

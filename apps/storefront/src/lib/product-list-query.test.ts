@@ -50,6 +50,15 @@ describe("product list query canonicalization", () => {
     expect(state.redirectPath).toBe(null);
   });
 
+  it("never redirects an ad visit away from its tracking tags or reads them as filters", () => {
+    const url = new URL(
+      "https://storefront.example.com/categories/shoes?srsltid=AfmBOo&gad_source=1&gad_campaignid=2&utm_id=9&yclid=3&_ga=2.1&page=2",
+    );
+    const state = resolveProductListQueryState({ url, facets: [...facets, facet("attr_s", "S", "srsltid", [["AfmBOo", 1]])] });
+    expect(state.currentFilters).toEqual({ page: "2" });
+    expect(state.redirectPath).toBe(null);
+  });
+
   it("drops unknown render-affecting params before they fragment HTML or L2 keys", () => {
     const url = new URL("https://storefront.example.com/search?q= fish  curry &foo=1&page=2");
     const state = resolveProductListQueryState({ url, facets });

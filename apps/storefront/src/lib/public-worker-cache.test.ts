@@ -194,6 +194,38 @@ describe("servePublicStorefrontRequest", () => {
     expect(await second.text()).toBe("<html>page</html>");
   });
 
+  it("serves every ad-click and campaign visit from the plain page's entry, without a redirect", async () => {
+    const { context, render, settle } = createContext();
+    await servePublicStorefrontRequest(new Request("https://shop.example/products/fish"), context);
+    await settle();
+    expect(render).toHaveBeenCalledTimes(1);
+
+    const longClickId = "x".repeat(700);
+    for (const query of [
+      `?fbclid=${longClickId}`,
+      "?gclid=g&gad_source=1&gad_campaignid=22&srsltid=AfmBOo",
+      "?utm_source=fb&utm_medium=paid&utm_campaign=eid&utm_id=9&utm_content=a&utm_term=b",
+      "?yclid=1&msclkid=2&ttclid=3&mc_cid=4&mc_eid=5&igshid=6&_ga=2.1.3&wbraid=7&gbraid=8",
+    ]) {
+      const response = await servePublicStorefrontRequest(
+        new Request(`https://shop.example/products/fish${query}`),
+        context,
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("X-Cache-Status")).toBe("HIT");
+    }
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps functional parameters in the key", async () => {
+    const { context, render, settle } = createContext();
+    await servePublicStorefrontRequest(new Request("https://shop.example/categories/drinks?page=2&utm_source=fb"), context);
+    await settle();
+    await servePublicStorefrontRequest(new Request("https://shop.example/categories/drinks"), context);
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(render.mock.calls[0]![0].url).toBe("https://shop.example/categories/drinks?page=2");
+  });
+
   it("stores the edge copy with a bounded lifetime and restores browser headers on a hit", async () => {
     const { context, store, settle } = createContext();
     await servePublicStorefrontRequest(new Request("https://shop.example/sitemap.xml"), context);
