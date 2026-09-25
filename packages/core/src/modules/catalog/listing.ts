@@ -5,7 +5,7 @@
 // availability are indexed columns, so a listing never evaluates the public
 // eligibility predicate or ranks SKUs per request.
 import { products, categories } from "@scalius/database/schema";
-import { and, sql, desc, eq, type SQL } from "drizzle-orm";
+import { and, sql, desc, eq, type SQL, type SQLWrapper } from "drizzle-orm";
 import { suggestSearchCorrection } from "../../search/correct";
 import { productSearchRankJoin, productSearchRelevanceOrder } from "../../search/relevance";
 import { unixToDate } from "@scalius/shared/utils";
@@ -95,14 +95,21 @@ export interface StorefrontCategoryProductCategory {
 /**
  * The listing order over the buyer state. Newest, price and discount orders
  * are the buyer state's own indexed columns; ties break by product id.
+ *
+ * `sortAfterScope`: the scope is a set of categories, read through the
+ * category index and then sorted. SQLite has no statistics on D1, so a
+ * sortable index (newest, price) would otherwise win and walk every public
+ * row filtering by the set; the unary `+` keeps the order from choosing it,
+ * which bounds the read by the scope's own size.
  */
-function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest"): SQL {
-    if (sort === "price-asc") return sql`${buyerState.fromMinor}`;
-    if (sort === "price-desc") return desc(buyerState.fromMinor);
+function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest", sortAfterScope = false): SQL {
+    const column = (value: SQLWrapper) => sortAfterScope ? sql`+${value}` : sql`${value}`;
+    if (sort === "price-asc") return column(buyerState.fromMinor);
+    if (sort === "price-desc") return sql`${column(buyerState.fromMinor)} DESC`;
     if (sort === "name-asc") return sql`${products.name}`;
     if (sort === "name-desc") return desc(products.name);
-    if (sort === "discount") return desc(buyerState.discountDepthBps);
-    return desc(buyerState.productCreatedAt);
+    if (sort === "discount") return sql`${column(buyerState.discountDepthBps)} DESC`;
+    return sql`${column(buyerState.productCreatedAt)} DESC`;
 }
 
 // ─────────────────────────────────────────
@@ -116,6 +123,8 @@ type StorefrontCatalogScope = {
     needsProducts?: boolean;
     /** The scope is a small id set that should drive the read by primary key. */
     drivenByIdSet?: boolean;
+    /** The scope is a category set read through the category index, then sorted. */
+    sortAfterScope?: boolean;
     orderBy?: SQL;
     fixedCategory?: StorefrontCategoryProductCategory;
 };
@@ -185,7 +194,7 @@ async function readStorefrontCatalogResults(
         ? [scope.orderBy]
         : sort === "relevance" && search
             ? [...productSearchRelevanceOrder(db, search), desc(buyerState.productCreatedAt)]
-            : [getStorefrontProductOrderBy(sort)];
+            : [getStorefrontProductOrderBy(sort, scope.sortAfterScope)];
     const offset = (page - 1) * limit;
 
     const cardSku = buyerStateCardSku();
@@ -382,6 +391,7 @@ export async function getStorefrontCategoryProducts(
         condition: options.includeDescendants
             ? publicCategorySubtreeCondition(buyerState.categoryId, category.id)
             : eq(buyerState.categoryId, category.id),
+        sortAfterScope: options.includeDescendants === true,
         fixedCategory: category,
     });
 }

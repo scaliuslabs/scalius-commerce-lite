@@ -24,11 +24,11 @@ const rebuildRoute = createRoute({
     summary: "Rebuild the catalogue listing projections",
     description:
         "Recomputes the stored buyer state and facet rows of the next `limit` products after `afterProductId` "
-        + "(product id order). Call again with the returned cursor until `done`; the public cache generation "
-        + "is bumped once the last product is covered. Stock and checkout are unaffected.",
+        + "(product id order). Send `{}` to start, then call again with the returned cursor until `done`; the "
+        + "public cache generation is bumped once the last product is covered. Stock and checkout are unaffected.",
     request: {
         body: {
-            required: false,
+            required: true,
             content: {
                 "application/json": {
                     schema: z.object({
@@ -59,7 +59,7 @@ const rebuildRoute = createRoute({
 });
 
 app.openapi(rebuildRoute, async (c) => {
-    const body = c.req.valid("json") ?? {};
+    const body = c.req.valid("json");
     const result = await rebuildCatalogProjections(c.get("db"), {
         afterProductId: body.afterProductId ?? null,
         limit: body.limit,

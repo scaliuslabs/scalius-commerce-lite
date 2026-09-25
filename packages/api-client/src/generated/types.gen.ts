@@ -52228,6 +52228,10 @@ export type PostApiV1AdminProductsData = {
         description: string | null;
         price: number;
         categoryId: string | null;
+        /**
+         * A live brand id (brd_…). Omit to keep the current brand; null removes it.
+         */
+        brandId?: string | null;
         isActive: boolean;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
@@ -53211,6 +53215,7 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                 price: number;
                 categoryId: string | null;
                 categoryName: string | null;
+                brandId: string | null;
                 slug: string;
                 canonicalPath: string | null;
                 noIndex: boolean;
@@ -53359,6 +53364,7 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
             name?: string;
             price?: number;
             categoryId?: string | null;
+            brandId?: string | null;
             isActive?: boolean;
             discountType?: 'percentage' | 'flat';
             discountPercentage?: number | null;
@@ -53711,6 +53717,7 @@ export type GetApiV1AdminProductsByIdResponses = {
             description: string | null;
             price: number;
             categoryId: string | null;
+            brandId: string | null;
             metaTitle: string | null;
             metaDescription: string | null;
             canonicalPath: string | null;
@@ -53850,6 +53857,10 @@ export type PutApiV1AdminProductsByIdData = {
         description: string | null;
         price: number;
         categoryId: string | null;
+        /**
+         * A live brand id (brd_…). Omit to keep the current brand; null removes it.
+         */
+        brandId?: string | null;
         isActive: boolean;
         discountType?: 'percentage' | 'flat';
         discountPercentage?: number | null;
@@ -58315,6 +58326,109 @@ export type PutApiV1AdminAttributesByIdValuesResponses = {
 };
 
 export type PutApiV1AdminAttributesByIdValuesResponse = PutApiV1AdminAttributesByIdValuesResponses[keyof PutApiV1AdminAttributesByIdValuesResponses];
+
+export type PostApiV1AdminCatalogProjectionsRebuildData = {
+    body: {
+        /**
+         * Cursor from the previous call; omit or null to start.
+         */
+        afterProductId?: string | null;
+        /**
+         * Products this call recomputes (default 900).
+         */
+        limit?: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/catalog/projections/rebuild';
+};
+
+export type PostApiV1AdminCatalogProjectionsRebuildErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminCatalogProjectionsRebuildError = PostApiV1AdminCatalogProjectionsRebuildErrors[keyof PostApiV1AdminCatalogProjectionsRebuildErrors];
+
+export type PostApiV1AdminCatalogProjectionsRebuildResponses = {
+    /**
+     * One rebuild chunk committed
+     */
+    200: {
+        success: true;
+        data: {
+            processed: number;
+            nextAfterProductId: string | null;
+            done: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminCatalogProjectionsRebuildResponse = PostApiV1AdminCatalogProjectionsRebuildResponses[keyof PostApiV1AdminCatalogProjectionsRebuildResponses];
 
 export type GetApiV1AdminTaxesData = {
     body?: never;

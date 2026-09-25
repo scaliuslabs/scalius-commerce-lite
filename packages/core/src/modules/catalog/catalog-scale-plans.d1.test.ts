@@ -8,6 +8,7 @@ import { search } from "../../search";
 import { getHomepageData } from "../storefront/storefront.service";
 import { getProductsByIds, listProducts } from "../products/admin/read";
 import {
+    getStorefrontBrandProducts,
     getStorefrontCategoryProducts,
     getStorefrontCollectionProducts,
     getStorefrontProducts,
@@ -128,6 +129,42 @@ describe("catalogue-scale query plans", () => {
             expect(plan).toContain("SEARCH collection_member USING COVERING INDEX product_buyer_state_category_newest_idx");
         }
         expect(plans(joinsPricing)).toEqual([]);
+    });
+
+    it("reads a brand page and a category subtree from the buyer state's brand and category indexes", async () => {
+        const { db, queries, plans } = setup();
+        sqlite!.exec(`
+            INSERT INTO brands (id, name, slug, status) VALUES ('brd_asus0001', 'Asus', 'asus', 'published');
+            UPDATE products SET brand_id = 'brd_asus0001' WHERE id IN ('prod_a', 'prod_c');
+            INSERT INTO categories (id, name, slug, status, parent_id) VALUES ('cat_gaming', 'Gaming', 'gaming', 'published', 'cat_laptop');
+            UPDATE products SET category_id = 'cat_gaming' WHERE id = 'prod_b';
+        `);
+        await project(db, queries);
+        const brand = await getStorefrontBrandProducts(db, { id: "brd_asus0001" }, { page: 1, limit: 20 });
+        const brandPlans = plans(readsBuyerState);
+        queries.length = 0;
+        const laptop = {
+            id: "cat_laptop", name: "Laptop", slug: "laptop", description: null, imageUrl: null,
+            metaTitle: null, metaDescription: null, canonicalPath: null, noIndex: false,
+            excludeFromSitemap: false, createdAt: null, updatedAt: null,
+        };
+        const subtree = await getStorefrontCategoryProducts(db, laptop, { page: 1, limit: 20 }, { includeDescendants: true });
+        const subtreePlans = plans(readsBuyerState);
+
+        expect(brand.products.map((product) => product.id)).toEqual(["prod_a", "prod_c"]);
+        expect(subtree.products.map((product) => [product.id, product.category?.id])).toEqual([
+            ["prod_a", "cat_laptop"],
+            ["prod_b", "cat_gaming"],
+        ]);
+        for (const plan of brandPlans) {
+            expect(plan).toContain("product_buyer_state_brand_newest_idx (is_public=? AND brand_id=?)");
+            expectBuyerStateListing(plan);
+        }
+        for (const plan of subtreePlans) {
+            expect(plan).toContain("product_buyer_state_category_newest_idx (is_public=? AND category_id=?)");
+            expect(plan).not.toMatch(/SCAN (subtree|category_closure)\b/);
+            expectBuyerStateListing(plan);
+        }
     });
 
     it("walks the public newest and price indexes for the unscoped shop-all pages", async () => {
