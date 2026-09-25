@@ -69,6 +69,7 @@ const productFilterSchema = z.object({
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Discount filter" }),
+  inStock: z.enum(["true"]).optional().openapi({ description: "Only products a buyer can buy now (exclude sold out)" }),
   ids: z.string().optional().openapi({ description: "Comma-separated product IDs" })
 }).superRefine(validatePriceRange);
 

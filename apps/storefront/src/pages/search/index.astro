@@ -120,6 +120,14 @@ const analyticsProductData = products.map((p) => ({
       "data-search-query": query,
       "data-products-for-analytics": JSON.stringify(analyticsProductData),
     }}
+    hero={{
+      title: query ? "Search results" : "All products",
+      count: pagination.total,
+      // Amazon's results bar: the count and the words searched for.
+      countLabel: products.length === 0
+        ? null
+        : query ? `${resultCountLabel} for “${correctedQuery ?? query}”` : resultCountLabel,
+    }}
     listing={{
       products,
       pagination,
@@ -135,27 +143,13 @@ const analyticsProductData = products.map((p) => ({
       listingName: "all products",
     }}
   >
-      <div slot="intro" class="mb-5 py-3 sm:mb-6 sm:py-4">
-        <h1 class="text-2xl font-bold text-foreground sm:text-3xl">
-          {query ? "Search results" : "All products"}
-        </h1>
-        {query && products.length > 0 && (
-          <p class="mt-1.5 text-sm text-muted-foreground sm:text-base" aria-live="polite">
-            {correctedQuery ? (
-              <Fragment>
-                No results for “{query}”. Showing{" "}
-                <span class="font-semibold text-foreground">{resultCountLabel}</span> for{" "}
-                <span class="font-semibold text-foreground">“{correctedQuery}”</span> instead.
-              </Fragment>
-            ) : (
-              <Fragment>
-                <span class="font-semibold text-foreground">{resultCountLabel}</span> for{" "}
-                <span class="font-medium text-foreground">“{query}”</span>
-              </Fragment>
-            )}
-          </p>
-        )}
-      </div>
+      {correctedQuery && query && products.length > 0 && (
+        <p slot="intro" class="mt-2 text-sm text-muted-foreground" aria-live="polite">
+          No results for “{query}”. Showing{" "}
+          <span class="font-semibold text-foreground">{resultCountLabel}</span> for{" "}
+          <span class="font-semibold text-foreground">“{correctedQuery}”</span> instead.
+        </p>
+      )}
 
         <div slot="empty" data-catalog-empty-state>
           <section class="rounded-xl border border-border bg-background px-5 py-8 sm:px-8">

@@ -23,6 +23,9 @@
  * the same origins.
  *
  *   node scripts/dev-ports.mjs sync-platform [--state <dir>]
+ *   node scripts/dev-ports.mjs api-worker-name       # scalius-api-local[-<api port>]
+ *   node scripts/dev-ports.mjs storefront-config     # built storefront bound to it
+ *   node scripts/dev-ports.mjs verify-binding        # the storefront reached this API
  */
 
 import { pathToFileURL } from "node:url";
@@ -110,16 +113,101 @@ export function platformSyncSql(origins) {
 /** KV mirror of the Platform document (packages/core settings store). */
 export const PLATFORM_KV_KEY = "settings:platform";
 
+/**
+ * Worker name of the local API. Wrangler's dev registry is global to the
+ * machine, so two local APIs with one name compete for it and a built
+ * storefront's service binding can reach the other stack's API. The default
+ * stack keeps `scalius-api-local`; a stack on another API port is
+ * `scalius-api-local-<port>`. apps/api `pnpm dev` passes it as `--name`.
+ */
+export const DEFAULT_API_WORKER_NAME = "scalius-api-local";
+
+export function devApiWorkerName(ports = readDevPorts()) {
+  return ports.api === DEFAULT_DEV_PORTS.api ? DEFAULT_API_WORKER_NAME : `${DEFAULT_API_WORKER_NAME}-${ports.api}`;
+}
+
+/**
+ * A built storefront's `dist/server/wrangler.json` rebound for a local stack:
+ * no production route, BACKEND_API pointed at this stack's API worker name,
+ * and the stack's storefront port. Returns a new object.
+ */
+export function localStorefrontWorkerConfig(builtConfig, { apiWorkerName, port, inspectorPort } = {}) {
+  if (!apiWorkerName) throw new Error("localStorefrontWorkerConfig needs apiWorkerName");
+  const config = structuredClone(builtConfig);
+  delete config.routes;
+  const services = config.services ?? [];
+  if (!services.some((s) => s.binding === "BACKEND_API")) throw new Error("The built storefront config has no BACKEND_API service binding.");
+  config.services = services.map((s) => (s.binding === "BACKEND_API" ? { ...s, service: apiWorkerName } : s));
+  config.dev = {
+    ...(config.dev ?? {}),
+    ...(port ? { port } : {}),
+    ...(inspectorPort ? { inspector_port: inspectorPort } : {}),
+    enable_containers: false,
+  };
+  return config;
+}
+
+const CANONICAL_PATTERNS = [
+  /<link\b[^>]*\brel=["']canonical["'][^>]*\bhref=["']([^"']+)["']/i,
+  /<link\b[^>]*\bhref=["']([^"']+)["'][^>]*\brel=["']canonical["']/i,
+  /<meta\b[^>]*\bproperty=["']og:url["'][^>]*\bcontent=["']([^"']+)["']/i,
+];
+
+function originOf(url) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Problems with a storefront home page rendered through its API: the
+ * canonical URL comes from the Platform document of the API that answered,
+ * and media URLs from its media origin. A storefront bound to another local
+ * stack's API renders that stack's origins. Empty array when it matches.
+ */
+export function storefrontBindingProblems(html, { storefrontUrl, mediaUrl } = {}) {
+  const problems = [];
+  const canonical = CANONICAL_PATTERNS.map((p) => p.exec(html)?.[1]).find(Boolean);
+  const expected = originOf(storefrontUrl);
+  if (!canonical) problems.push("the home page has no canonical URL, so the API it reached cannot be identified");
+  else if (originOf(canonical) !== expected) {
+    problems.push(`the home page's canonical origin is ${originOf(canonical) ?? canonical}, not ${expected}: the storefront reached another stack's API`);
+  }
+  if (mediaUrl) {
+    const base = mediaUrl.replace(/\/+$/, "");
+    const mediaOrigins = new Set([...html.matchAll(/(?:src|srcset|href)=["']([^"' ,]+\/media\/[^"' ,]+)/gi)]
+      .map((m) => originOf(m[1])).filter(Boolean));
+    const expectedMedia = originOf(base);
+    const foreign = [...mediaOrigins].filter((o) => o !== expectedMedia && /^https?:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(o));
+    if (foreign.length) problems.push(`media URLs come from ${foreign.join(", ")}, not ${expectedMedia}: the storefront reached another stack's API`);
+  }
+  return problems;
+}
+
+/** Fetches the storefront home page and throws when it was rendered by another stack's API. */
+export async function verifyStorefrontBinding({ storefrontUrl, mediaUrl, fetchImpl = fetch } = {}) {
+  const response = await fetchImpl(`${storefrontUrl.replace(/\/+$/, "")}/`, { headers: { "User-Agent": "scalius-binding-check" } });
+  const html = await response.text();
+  if (response.status >= 500) throw new Error(`Storefront binding check: ${storefrontUrl}/ answered ${response.status}.`);
+  const problems = storefrontBindingProblems(html, { storefrontUrl, mediaUrl });
+  if (problems.length) throw new Error(`Storefront binding check failed for ${storefrontUrl}: ${problems.join("; ")}.`);
+  return true;
+}
+
 function parseArgs(argv) {
   const [command, ...rest] = argv;
-  const options = { command, state: undefined };
+  const options = { command, state: undefined, out: undefined, mediaUrl: undefined };
+  const valued = { "--state": "state", "--out": "out", "--media-url": "mediaUrl" };
   for (let index = 0; index < rest.length; index += 1) {
     const arg = rest[index];
-    if (arg === "--state") options.state = rest[++index];
-    else if (arg.startsWith("--state=")) options.state = arg.slice("--state=".length);
-    else throw new Error(`Unknown argument ${arg}`);
+    const [flag, inline] = arg.includes("=") ? [arg.slice(0, arg.indexOf("=")), arg.slice(arg.indexOf("=") + 1)] : [arg, undefined];
+    if (!(flag in valued)) throw new Error(`Unknown argument ${arg}`);
+    const value = inline ?? rest[++index];
+    if (!value || value.startsWith("--")) throw new Error(`Option ${flag} requires a value.`);
+    options[valued[flag]] = value;
   }
-  if (options.state === "") throw new Error("Option --state requires a value.");
   return options;
 }
 
@@ -175,10 +263,34 @@ async function main() {
     return;
   }
   if (options.command === "print") {
-    console.log(JSON.stringify({ ports: readDevPorts(), origins: devOrigins() }, null, 2));
+    const ports = readDevPorts();
+    console.log(JSON.stringify({ ports, origins: devOrigins(ports), apiWorkerName: devApiWorkerName(ports) }, null, 2));
     return;
   }
-  console.error("Usage: node scripts/dev-ports.mjs <sync-platform [--state <dir>] | print>");
+  if (options.command === "api-worker-name") {
+    console.log(devApiWorkerName());
+    return;
+  }
+  if (options.command === "storefront-config") {
+    // Rebinds the built storefront (apps/storefront/dist/server) to this stack's API.
+    const { readFileSync, writeFileSync } = await import("node:fs");
+    const { dirname, resolve } = await import("node:path");
+    const { fileURLToPath } = await import("node:url");
+    const serverDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "apps", "storefront", "dist", "server");
+    const ports = readDevPorts();
+    const config = localStorefrontWorkerConfig(JSON.parse(readFileSync(resolve(serverDir, "wrangler.json"), "utf8")), { apiWorkerName: devApiWorkerName(ports), port: ports.storefront });
+    const out = options.out ? resolve(options.out) : resolve(serverDir, "wrangler.local.json");
+    writeFileSync(out, `${JSON.stringify(config, null, 1)}\n`);
+    console.log(`${out}: BACKEND_API -> ${devApiWorkerName(ports)}, port ${ports.storefront}. Serve it with wrangler dev -c <that file> beside the API.`);
+    return;
+  }
+  if (options.command === "verify-binding") {
+    const origins = devOrigins();
+    await verifyStorefrontBinding({ storefrontUrl: origins.storefrontUrl, mediaUrl: options.mediaUrl ?? origins.mediaUrl });
+    console.log(`${origins.storefrontUrl} renders through this stack's API (${devApiWorkerName()}).`);
+    return;
+  }
+  console.error("Usage: node scripts/dev-ports.mjs <sync-platform [--state <dir>] | print | api-worker-name | storefront-config [--out <file>] | verify-binding [--media-url <origin>]>");
   process.exitCode = 1;
 }
 

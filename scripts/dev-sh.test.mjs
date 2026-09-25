@@ -35,6 +35,7 @@ describe("dev.sh startup planning", () => {
     );
     expect(result.stdout).toContain("Applying local D1 migrations...");
     expect(result.stdout).toContain("Starting API worker (port 8787)...");
+    expect(result.stdout).toContain("API worker name: scalius-api-local\n");
     expect(result.stdout).toContain("Waiting for API readiness at http://localhost:8787/api/v1/setup...");
     expect(result.stdout).toContain("API dev server running. Ctrl+C to stop.");
     expect(result.stdout).not.toContain("Starting admin dashboard");
@@ -75,6 +76,7 @@ describe("dev.sh startup planning", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Starting API worker (port 8931)...");
+    expect(result.stdout).toContain("API worker name: scalius-api-local-8931");
     expect(result.stdout).toContain("Waiting for API readiness at http://localhost:8931/api/v1/setup...");
     expect(result.stdout).toContain("Starting admin dashboard (port 4532)...");
     expect(result.stdout).toContain("Starting storefront (port 4531)...");
