@@ -103,6 +103,10 @@ function taxQuote(
     taxAmount: 0,
     totalMinor: 10_000,
     totalAmount: 100,
+    deliveryMethodKind: "delivery",
+    requiresShipping: true,
+    pickup: null,
+    allowedPaymentMethods: ["cod", "stripe", "sslcommerz", "bkash", "custom"],
     shippingMethod: {
       id: "ship_1",
       name: "Standard Delivery",
@@ -118,6 +122,10 @@ function taxQuote(
       unitPrice: 100,
       productName: "Product",
       variantLabel: null,
+      fulfillmentType: "ship",
+      properties: [],
+      propertiesPriceMinor: 0,
+      propertiesHash: "none",
     }],
     ...overrides,
   };
@@ -279,6 +287,10 @@ describe("renderOrderSummaryDetails", () => {
             unitPrice: 150,
             productName: "Product One",
             variantLabel: "Blue",
+            fulfillmentType: "ship",
+            properties: [],
+            propertiesPriceMinor: 0,
+            propertiesHash: "none",
           },
           {
             cartKey: "line_2",
@@ -288,6 +300,10 @@ describe("renderOrderSummaryDetails", () => {
             unitPrice: 200,
             productName: "Product Two",
             variantLabel: null,
+            fulfillmentType: "ship",
+            properties: [],
+            propertiesPriceMinor: 0,
+            propertiesHash: "none",
           },
         ],
       }),
@@ -593,6 +609,10 @@ describe("initCheckoutPage", () => {
         unitPrice: 120,
         productName: "Product",
         variantLabel: null,
+        fulfillmentType: "ship",
+        properties: [],
+        propertiesPriceMinor: 0,
+        propertiesHash: "none",
       }],
     });
     let quoteCalls = 0;
@@ -1018,6 +1038,10 @@ describe("initCheckoutPage", () => {
           unitPrice: 150,
           productName: "Product One",
           variantLabel: null,
+          fulfillmentType: "ship",
+          properties: [],
+          propertiesPriceMinor: 0,
+          propertiesHash: "none",
         },
         {
           cartKey: "line_2",
@@ -1027,6 +1051,10 @@ describe("initCheckoutPage", () => {
           unitPrice: 200,
           productName: "Product Two",
           variantLabel: null,
+          fulfillmentType: "ship",
+          properties: [],
+          propertiesPriceMinor: 0,
+          propertiesHash: "none",
         },
       ],
     })));
@@ -1270,5 +1298,110 @@ describe("initCheckoutPage", () => {
     expect(repair.issues).toEqual([issue]);
     expect(document.querySelector('[data-method="cod"]')).toBeNull();
     expect(window.location.href).toContain("/cart?checkoutIssues=1");
+  });
+});
+
+describe("payment page on the pickup and no-delivery paths (Wave A)", () => {
+  const engravedLine = {
+    cartKey: "line_1",
+    productId: "prod_1",
+    variantId: "var_1",
+    quantity: 1,
+    unitPrice: 100,
+    productName: "Engraved pen",
+    variantLabel: null,
+    fulfillmentType: "pickup" as const,
+    properties: [{ key: "engraving", label: "Engraving", value: "Anika", displayValue: "Anika", priceMinor: 20_000 }],
+    propertiesPriceMinor: 20_000,
+    propertiesHash: "0123456789abcdef",
+  };
+  const pickupQuote = () => taxQuote({
+    deliveryMethodKind: "pickup",
+    requiresShipping: false,
+    pickup: { address: "Shop 12, Dhanmondi", hours: "10am–8pm" },
+    shippingMethod: { id: "pickup_1", name: "Shop pickup", description: null, baseAmountMinor: 0, feeWaived: false },
+    items: [engravedLine],
+  });
+
+  it("reviews where to collect instead of an address, and each line's buyer inputs", () => {
+    const details = document.createElement("div");
+    renderOrderSummaryDetails(
+      details,
+      { customerName: "Buyer", customerPhone: "+8801700000000", shippingAddress: "Stale typed address" },
+      baseConfig,
+      pickupQuote(),
+    );
+    const text = details.textContent ?? "";
+    expect(text).toContain("Engraving: Anika (+৳200)");
+    expect(text).toContain("Pick up at");
+    expect(text).toContain("Shop 12, Dhanmondi");
+    expect(text).toContain("Open 10am–8pm");
+    expect(text).toContain("Shop pickup");
+    expect(text).not.toContain("Ship to");
+    expect(text).not.toContain("Stale typed address");
+  });
+
+  it("shows no delivery line and says no delivery is needed when nothing is physical", () => {
+    const details = document.createElement("div");
+    renderOrderSummaryDetails(
+      details,
+      { customerName: "Buyer", customerPhone: "+8801700000000" },
+      baseConfig,
+      taxQuote({
+        deliveryMethodKind: null,
+        requiresShipping: false,
+        shippingMethod: null,
+        items: [{ ...engravedLine, fulfillmentType: "service", properties: [], propertiesPriceMinor: 0, propertiesHash: "none" }],
+      }),
+    );
+    const text = details.textContent ?? "";
+    expect(text).toContain("No delivery needed");
+    expect(text).not.toContain("Shipping");
+    expect(text).not.toContain("Ship to");
+  });
+
+  it("offers only the payment methods the server allows for the cart, with cash worded for the counter", async () => {
+    document.body.innerHTML = `
+      <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+      <div id="errorMsg" class="hidden"></div>
+      <div id="paymentMethods"></div>
+      <div id="stripeSection" class="hidden"></div>
+      <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      cartItems: JSON.stringify({
+        line_1: { id: "prod_1", variantId: "var_1", price: 300, quantity: 1, name: "Engraved pen",
+          properties: [{ key: "engraving", value: "Anika" }] },
+      }),
+      customerName: "Buyer",
+      customerPhone: "+8801700000000",
+      deliveryMode: "pickup",
+      shippingMethodId: "pickup_1",
+    }));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod: "cod",
+      gateways: [
+        { id: "cod", name: "Cash on Delivery" },
+        { id: "sslcommerz", name: "SSLCommerz", flow: "hosted" },
+      ],
+    };
+
+    const fetchMock = successfulCheckoutFetch({ ...pickupQuote(), allowedPaymentMethods: ["cod", "sslcommerz"] });
+    vi.stubGlobal("fetch", fetchMock);
+    await initCheckoutPage();
+    expect(document.querySelector('[data-method="cod"]')?.textContent).toContain("Pay when you pick up your order");
+    // The pickup quote asks for the rate only, and carries the inputs in the body.
+    const quoteRequest = JSON.parse(String(vi.mocked(fetchMock).mock.calls[0]![1]!.body));
+    expect(quoteRequest).toMatchObject({
+      shippingMethodId: "pickup_1",
+      items: [expect.objectContaining({ properties: [{ key: "engraving", value: "Anika" }] })],
+    });
+    expect(quoteRequest).not.toHaveProperty("city");
+
+    vi.stubGlobal("fetch", successfulCheckoutFetch({ ...pickupQuote(), allowedPaymentMethods: ["sslcommerz"] }));
+    await initCheckoutPage();
+    expect(document.querySelector('[data-method="cod"]')).toBeNull();
+    expect(document.querySelector('[data-method="sslcommerz"]')).not.toBeNull();
   });
 });

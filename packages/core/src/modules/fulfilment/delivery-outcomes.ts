@@ -43,12 +43,14 @@ import {
     reconcileInventoryForStatus,
     markManualDeliveryEvidence,
     applyOrderStatusChange,
+    assertOrderLinesHandedOver,
 } from "../orders/status/lifecycle";
 
 export async function processCodAction(db: Database, orderId: string, body: Record<string, unknown>) {
     const order = await db.select({
         status: orders.status,
         fulfillmentStatus: orders.fulfillmentStatus,
+        requiresShipping: orders.requiresShipping,
         version: orders.version,
         totalAmountMinor: orders.totalAmountMinor,
         paidAmountMinor: orders.paidAmountMinor,
@@ -67,7 +69,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
 
     switch (body.action) {
         case "collected": {
-            assertOrderCodActionAllowed(order.status, "collected");
+            assertOrderCodActionAllowed(order.status, "collected", { requiresShipping: order.requiresShipping });
             const requestedAmount = body.collectedAmount;
             if (typeof requestedAmount !== "number" || !Number.isFinite(requestedAmount) || requestedAmount <= 0) {
                 throw new ValidationError("COD collected amount must be a positive finite number.");
@@ -121,6 +123,9 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             };
             if (currentStatus !== OrderStatus.DELIVERED) {
                 validateTransition("order", currentStatus, OrderStatus.DELIVERED);
+                // Cash at the counter or the service delivers the order only
+                // once every line was handed over (F7).
+                await assertOrderLinesHandedOver(db, orderId, order.requiresShipping);
                 const deliveredVersion = currentVersion + 1;
                 const delResult = await db.update(orders).set({ status: OrderStatus.DELIVERED, version: currentVersion + 1, updatedAt: sql`unixepoch()` }).where(and(
                     eq(orders.id, orderId),
@@ -186,13 +191,20 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
                     && candidate.sourceReferenceId === sourceReferenceId,
             );
             if (!returnRecord) {
-                const sentItems = await db.select({
+                // What was handed over and can come back: the ledger, or the
+                // previous API's sent count until the contract migration.
+                const sentItems = (await db.select({
                     id: orderItems.id,
-                    shippedQuantity: orderItems.shippedQuantity,
+                    fulfilledQuantity: orderItems.fulfilledQuantity,
+                    legacyShippedQuantity: orderItems.shippedQuantity,
                 }).from(orderItems).where(and(
                     eq(orderItems.orderId, orderId),
-                    sql`${orderItems.shippedQuantity} > 0`,
-                )).all();
+                    inArray(orderItems.fulfillmentType, ["ship", "pickup"]),
+                    sql`(${orderItems.fulfilledQuantity} > 0 OR ${orderItems.shippedQuantity} > 0)`,
+                )).all()).map((item) => ({
+                    id: item.id,
+                    shippedQuantity: Math.max(item.fulfilledQuantity, item.legacyShippedQuantity),
+                }));
                 if (sentItems.length === 0) {
                     throw new ValidationError("Nothing from this order was sent, so nothing can come back.");
                 }
@@ -300,8 +312,12 @@ export async function markOrderDelivered(db: Database, orderId: string): Promise
         return { message: "Already delivered", availabilityTransitionVariantIds: [] };
     }
     const left = await db.select({
-        unsent: sql<number>`coalesce(sum(${orderItems.quantity} - ${orderItems.shippedQuantity}), 0)`,
-    }).from(orderItems).where(eq(orderItems.orderId, orderId)).get();
+        unsent: sql<number>`coalesce(sum(${orderItems.quantity} - ${orderItems.fulfilledQuantity}), 0)`,
+    }).from(orderItems).where(and(
+        eq(orderItems.orderId, orderId),
+        eq(orderItems.fulfillmentType, "ship"),
+        sql`${orderItems.fulfillmentStatus} NOT IN ('shipped', 'delivered')`,
+    )).get();
     const unsent = Number(left?.unsent ?? 0);
     if (order.status !== OrderStatus.SHIPPED || unsent > 0) {
         throw new ValidationError(unsent === 1

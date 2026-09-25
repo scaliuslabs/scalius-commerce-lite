@@ -10,9 +10,13 @@ import {
   restoreCart,
   updateCartItemByKey,
   getEffectiveCartShippingFee,
+  cartLinePropertyInputs,
   type CartItem,
   type VariantCartItem,
 } from "@/store/cart";
+import { readCheckoutDeliveryMode } from "../checkout/delivery-mode";
+import { writeCartLineEdit } from "./line-edit";
+import { renderCartLineProperties } from "./line-properties-view";
 import type {
   CartValidationIssue,
   CartValidationResult,
@@ -125,6 +129,11 @@ let discountValidationSequence = 0;
 let pendingDiscountValidation: number | null = null;
 /** The latest server discount facts, for the applied-code list. */
 let latestDiscountFacts: CheckoutDiscountFacts | null = null;
+/**
+ * Payment methods the server allows for this cart (cash on delivery only when
+ * something is shipped, collected or performed); null until it has answered.
+ */
+let latestAllowedPaymentMethods: string[] | null = null;
 let latestCheckoutLocation: {
   cityId: string;
   cityName: string;
@@ -183,6 +192,7 @@ function resetCartRuntimeListeners(): AbortSignal {
   discountValidationSequence += 1;
   pendingDiscountValidation = null;
   latestDiscountFacts = null;
+  latestAllowedPaymentMethods = null;
   latestCheckoutLocation = null;
   cartQuantityLimits = {};
   cartStoreUnsubscribe?.();
@@ -334,7 +344,7 @@ function syncCartPagePresentation(ready: boolean): void {
   checkoutPanel?.classList.toggle("hidden", hideOperationalPanels);
 }
 
-function processQuickBuy() {
+async function processQuickBuy() {
   try {
     const quickBuyJSON = sessionStorage.getItem("quickBuyData");
     if (quickBuyJSON) {
@@ -344,7 +354,9 @@ function processQuickBuy() {
       const data = JSON.parse(quickBuyJSON);
 
       if (data.cartItem) {
-        if (!addToCart(data.cartItem)) return;
+        // Buyer inputs (from the product page's no-JS form) come with the
+        // line; the analytics events below never carry them.
+        if (!(await addToCart(data.cartItem))) return;
 
         const dynamicCurrency = window.__CURRENCY_CODE__ || "BDT";
         if (data.addToCartEvent) {
@@ -412,15 +424,19 @@ function cartItemVariantLabel(item: CartItem): string | null {
 }
 
 function cartValidationPayload(items: Record<string, VariantCartItem>) {
-  return Object.entries(items).map(([cartKey, item]) => ({
-    cartKey,
-    productId: item.id,
-    variantId: item.variantId,
-    quantity: item.quantity,
-    price: item.price,
-    productName: item.name,
-    variantLabel: cartItemVariantLabel(item),
-  }));
+  return Object.entries(items).map(([cartKey, item]) => {
+    const properties = cartLinePropertyInputs(item);
+    return {
+      cartKey,
+      productId: item.id,
+      variantId: item.variantId,
+      quantity: item.quantity,
+      price: item.price,
+      productName: item.name,
+      variantLabel: cartItemVariantLabel(item),
+      ...(properties.length > 0 ? { properties } : {}),
+    };
+  });
 }
 
 function formStringValue(name: string): string | null {
@@ -450,27 +466,39 @@ function formCanonicalPhoneValue(): string | null {
   return legacyValue.length >= 7 ? legacyValue : null;
 }
 
+/**
+ * What the authoritative quote needs on each checkout path: delivery needs
+ * the address and a delivery rate, pickup only the pickup rate, and a cart
+ * with nothing physical nothing at all (no method, no fee, store-wide tax).
+ */
 function cartTaxQuoteInput(): Record<string, unknown> | null {
+  const mode = readCheckoutDeliveryMode();
   const city = latestCheckoutLocation?.cityId || formStringValue("city");
   const zone = latestCheckoutLocation?.zoneId || formStringValue("zone");
-  const shippingMethodId = window.lastShippingEventDetail?.id;
+  const method = window.lastShippingEventDetail;
   const cartItems = (
     document.getElementById("cartItemsInput") as HTMLInputElement | null
   )?.value;
 
-  if (!city || !zone || !shippingMethodId || !cartItems || cartItems === "{}") {
-    return null;
-  }
-
-  return {
+  if (!cartItems || cartItems === "{}") return null;
+  const common = {
     cartItems,
+    deliveryMode: mode,
+    discountCodes: cartStore.get().discountCodes,
+    customerPhone: formCanonicalPhoneValue() || undefined,
+  };
+  if (mode === "none") return common;
+  if (mode === "pickup") {
+    return method?.kind === "pickup" ? { ...common, shippingMethodId: method.id } : null;
+  }
+  if (!city || !zone || !method || method.kind !== "delivery") return null;
+  return {
+    ...common,
     city,
     zone,
     area:
       latestCheckoutLocation?.areaId || formStringValue("area") || undefined,
-    shippingMethodId,
-    discountCodes: cartStore.get().discountCodes,
-    customerPhone: formCanonicalPhoneValue() || undefined,
+    shippingMethodId: method.id,
   };
 }
 
@@ -506,7 +534,7 @@ function renderDiscountFacts(facts: CheckoutDiscountFacts | null): void {
 function addOfferProduct(offer: CheckoutDiscountOffer, productIndex: number): void {
   const product = offer.products[productIndex];
   if (!product?.variantId || product.price === null) return;
-  addToCart({
+  void addToCart({
     id: product.id,
     slug: product.slug,
     name: product.name,
@@ -582,19 +610,25 @@ function renderAuthoritativeCartQuote(
 ): void {
   elements.taxRow?.classList.toggle("hidden", quote.taxMinor === 0);
   elements.subtotal.textContent = formatMoney(quote.subtotalAmount);
-  const quotedFee = quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces;
-  // The merchant changed this rate since the options were read: the options
-  // re-read the rates and say "Delivery fee changed…" now, so the option label
-  // and the summary never disagree.
-  const chosen = window.lastShippingEventDetail;
-  if (chosen && chosen.id === quote.shippingMethod.id && chosen.fee !== quotedFee) {
-    window.dispatchEvent(new CustomEvent("delivery-rate-changed"));
+  latestAllowedPaymentMethods = quote.allowedPaymentMethods;
+  if (quote.shippingMethod) {
+    const quotedFee = quote.shippingMethod.baseAmountMinor / 10 ** quote.decimalPlaces;
+    // The merchant changed this rate since the options were read: the options
+    // re-read the rates and say "Delivery fee changed…" now, so the option label
+    // and the summary never disagree.
+    const chosen = window.lastShippingEventDetail;
+    if (chosen && chosen.id === quote.shippingMethod.id && chosen.fee !== quotedFee) {
+      window.dispatchEvent(new CustomEvent("delivery-rate-changed"));
+    }
+    renderShippingLine(elements.shipping, {
+      baseFee: quotedFee,
+      charged: quote.shippingAmount,
+      discounts: quote.discounts,
+    });
+  } else {
+    // Nothing physical: no delivery line to price (the row is hidden).
+    renderShippingLine(elements.shipping, { baseFee: 0, charged: 0, discounts: [] });
   }
-  renderShippingLine(elements.shipping, {
-    baseFee: quotedFee,
-    charged: quote.shippingAmount,
-    discounts: quote.discounts,
-  });
   renderFreeDeliveryProgress(quote.shippingAmount);
   elements.total.textContent = formatMoney(quote.totalAmount);
   if (elements.totalLabel) {
@@ -629,17 +663,21 @@ function setTaxStatus(elements: TotalsElements, message: string): void {
 }
 
 function cartValidationDeliveryPayload() {
+  const mode = readCheckoutDeliveryMode();
+  const method = window.lastShippingEventDetail;
+  if (mode === "none" || !method) return {};
+  // A pickup rate is checked on its own: it needs no address.
+  if (mode === "pickup") return method.kind === "pickup" ? { shippingMethodId: method.id } : {};
   const city = formStringValue("city");
   const zone = formStringValue("zone");
   // Delivery is checked only against a rate chosen for this address.
-  const shippingMethodId = window.lastShippingEventDetail?.id;
-  if (!city || !zone || !shippingMethodId) return {};
+  if (!city || !zone || method.kind !== "delivery") return {};
 
   return {
     city,
     zone,
     area: formStringValue("area"),
-    shippingMethodId,
+    shippingMethodId: method.id,
   };
 }
 
@@ -703,12 +741,24 @@ function cartIssueCount(): number {
   );
 }
 
+/**
+ * A cash-on-delivery-only store can't take a cart the server allows no cash
+ * payment for (a cart of digital items). The payment page filters the same
+ * list for stores with online methods.
+ */
+function codRefusedForCart(): boolean {
+  if (typeof document === "undefined") return false;
+  const codOnly = document.getElementById("checkout-meta")?.dataset.codOnly === "true";
+  return codOnly && latestAllowedPaymentMethods !== null && !latestAllowedPaymentMethods.includes("cod");
+}
+
 function hasBlockingCartIssues(): boolean {
-  return Boolean(cartValidationGlobalError) || cartIssueCount() > 0;
+  return Boolean(cartValidationGlobalError) || cartIssueCount() > 0 || codRefusedForCart();
 }
 
 function cartBlockedMessage(): string {
   if (cartValidationGlobalError) return cartValidationGlobalError;
+  if (cartIssueCount() === 0 && codRefusedForCart()) return activeCheckoutCopy().noPaymentMethodsText;
   const count = Object.keys(cartValidationIssues).length;
   if (count <= 0) return "";
   if (cartValidationSummaryMessage) return cartValidationSummaryMessage;
@@ -803,6 +853,9 @@ export async function validateCartSnapshot(): Promise<boolean> {
         reconcileValidatedCartSnapshot(json.data);
       } finally {
         isApplyingCartSnapshot = false;
+      }
+      if (Array.isArray(json.data.allowedPaymentMethods)) {
+        latestAllowedPaymentMethods = json.data.allowedPaymentMethods;
       }
       updateCartQuantityLimits(json.data, issues, cartStore.get().items);
     }
@@ -999,7 +1052,12 @@ function renderCartLine(cartKey: string, item: VariantCartItem): string {
   ));
   const variantInfo = options
     .map((option) => `<span class="block">${escapeHtml(option.name)}: ${escapeHtml(option.label)}</span>`)
-    .join("");
+    .join("") + renderCartLineProperties(item, {
+      surchargeText: copy.customizationSurchargeText,
+      editText: copy.editLineText,
+      editLabelText: copy.editLineLabelText,
+      jsCartKey,
+    });
   const stepperButton =
     "flex h-full w-11 items-center justify-center text-sm text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:bg-transparent sm:w-9";
 
@@ -1249,7 +1307,7 @@ export async function initCartFunctionality() {
   reconcileHostedPaymentRecoveryWithCart();
   renderCheckoutRecoveryNotice();
 
-  processQuickBuy();
+  await processQuickBuy();
   syncCheckoutIdInput();
 
   window.handleAbandonedCheckout = handleAbandonedCheckout;
@@ -1278,6 +1336,20 @@ export async function initCartFunctionality() {
     clearCartValidationSummary();
     delete cartQuantityLimits[cartKey];
     removeLineWithUndo(cartKey);
+  };
+  window.editCartLine = (cartKey) => {
+    const item = cartStore.get().items[cartKey];
+    if (item) {
+      // Session storage, not the URL: the inputs are buyer content.
+      writeCartLineEdit({
+        lineKey: cartKey,
+        productId: item.id,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        properties: cartLinePropertyInputs(item),
+      });
+    }
+    return true;
   };
   window.removeCartIssueItem = (cartKey) => {
     rotateCheckoutIdIfCartBlocked();

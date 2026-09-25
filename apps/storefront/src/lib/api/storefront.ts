@@ -18,6 +18,7 @@ import type {
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import type { HeroSlide } from "@scalius/shared/hero-slider";
+import type { ProductPageCopy } from "@scalius/shared/checkout-language";
 import type {
   StorefrontBusinessInfo,
   StorefrontReturnPolicySettings,
@@ -151,23 +152,8 @@ export interface LayoutData {
     title: string;
     path: string;
   }>;
-  /** Product call-to-action copy from the active checkout language. */
-  storefrontCopy?: {
-    languageCode: string;
-    addToCartText: string;
-    buyNowText: string;
-    unavailableText: string;
-    chooseOptionText: string;
-    fromPriceText: string;
-    quantityLabelText: string;
-    quantityLimitText: string;
-    saleOfferText: string;
-    saleOfferSpendText: string;
-    saleOfferGetText: string;
-    saleOfferGetSpendText: string;
-    freeBenefitText: string;
-    percentBenefitText: string;
-  };
+  /** Product-page copy from the active checkout language (buttons, offers, buyer inputs, fulfilment facts). */
+  storefrontCopy?: ProductPageCopy;
 }
 
 export interface ThemePreviewData {

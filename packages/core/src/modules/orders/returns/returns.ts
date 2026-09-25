@@ -293,12 +293,36 @@ const returnReceiptFields = {
   createdAt: orderReturnReceiptLines.createdAt,
 };
 
+/**
+ * Units of a line that physically reached the buyer and can come back
+ * (F12): the ledger's handed-over quantity for ship and pickup lines. A line
+ * the previous API marked shipped counts in full until the contract
+ * migration, exactly as the return triggers bound it.
+ */
+const returnableLineColumns = {
+  fulfilledQuantity: orderItems.fulfilledQuantity,
+  fulfillmentType: orderItems.fulfillmentType,
+  quantity: orderItems.quantity,
+  legacyStatus: orderItems.fulfillmentStatus,
+};
+
+function handedOverQuantity(item: {
+  fulfilledQuantity: number;
+  fulfillmentType: string;
+  quantity: number;
+  legacyStatus: string;
+}): number {
+  if (item.fulfillmentType !== "ship" && item.fulfillmentType !== "pickup") return 0;
+  const legacy = item.legacyStatus === "shipped" || item.legacyStatus === "delivered" ? item.quantity : 0;
+  return Math.max(item.fulfilledQuantity, legacy);
+}
+
 async function loadRemainingReturnableByItem(
   db: Database,
   orderId: string,
 ): Promise<Map<string, number>> {
   const [items, committedRows] = await Promise.all([
-    db.select({ id: orderItems.id, shippedQuantity: orderItems.shippedQuantity })
+    db.select({ id: orderItems.id, ...returnableLineColumns })
       .from(orderItems)
       .where(eq(orderItems.orderId, orderId))
       .all(),
@@ -324,7 +348,7 @@ async function loadRemainingReturnableByItem(
   }
   return new Map(items.map((item) => [
     item.id,
-    Math.max(0, item.shippedQuantity - (committedByItem.get(item.id) ?? 0)),
+    Math.max(0, handedOverQuantity(item) - (committedByItem.get(item.id) ?? 0)),
   ]));
 }
 
@@ -487,7 +511,7 @@ export async function createOrderReturn(
   const itemRows = await db
     .select({
       id: orderItems.id,
-      shippedQuantity: orderItems.shippedQuantity,
+      ...returnableLineColumns,
       variantId: orderItems.variantId,
       inventoryTracked: orderItems.inventoryTracked,
     })
@@ -500,8 +524,10 @@ export async function createOrderReturn(
   const itemById = new Map(itemRows.map((item) => [item.id, item]));
   for (const line of input.lines) {
     const item = itemById.get(line.orderItemId)!;
-    if (item.shippedQuantity <= 0) {
-      throw new ValidationError("Only items that were sent can be returned.", {
+    if (handedOverQuantity(item) <= 0) {
+      throw new ValidationError(item.fulfillmentType === "ship" || item.fulfillmentType === "pickup"
+        ? "Only items that were sent or picked up can be returned."
+        : "Services and digital items can't be returned; refund them instead.", {
         orderItemId: item.id,
       });
     }
@@ -540,10 +566,10 @@ export async function createOrderReturn(
   }
   for (const line of input.lines) {
     const item = itemById.get(line.orderItemId)!;
-    if ((committedByItem.get(line.orderItemId) ?? 0) + line.quantity > item.shippedQuantity) {
+    if ((committedByItem.get(line.orderItemId) ?? 0) + line.quantity > handedOverQuantity(item)) {
       throw new ValidationError("That's more than was sent and not already returned.", {
         orderItemId: line.orderItemId,
-        fulfilledQuantity: item.shippedQuantity,
+        fulfilledQuantity: handedOverQuantity(item),
       });
     }
   }
@@ -828,14 +854,13 @@ async function shouldMarkWholeOrderReturned(
   returnId: string,
   nextReceivedByLineId: ReadonlyMap<string, number>,
 ): Promise<boolean> {
-  const fulfilledItems = await db
-    .select({ id: orderItems.id, shippedQuantity: orderItems.shippedQuantity })
+  const fulfilledItems = (await db
+    .select({ id: orderItems.id, ...returnableLineColumns })
     .from(orderItems)
-    .where(and(
-      eq(orderItems.orderId, orderId),
-      sql`${orderItems.shippedQuantity} > 0`,
-    ))
-    .all();
+    .where(eq(orderItems.orderId, orderId))
+    .all())
+    .map((item) => ({ id: item.id, handedOver: handedOverQuantity(item) }))
+    .filter((item) => item.handedOver > 0);
   if (fulfilledItems.length === 0) return false;
   const receivedRows = await db
     .select({
@@ -860,7 +885,7 @@ async function shouldMarkWholeOrderReturned(
       (receivedByItem.get(row.orderItemId) ?? 0) + received,
     );
   }
-  return fulfilledItems.every((item) => (receivedByItem.get(item.id) ?? 0) === item.shippedQuantity);
+  return fulfilledItems.every((item) => (receivedByItem.get(item.id) ?? 0) === item.handedOver);
 }
 
 export async function receiveOrderReturn(

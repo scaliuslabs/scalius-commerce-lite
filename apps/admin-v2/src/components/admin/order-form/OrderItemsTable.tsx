@@ -6,6 +6,7 @@ import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 import { orderItemVariantLabel } from "./order-item-presentation";
+import { getDecimalPlaces } from "@scalius/shared/currency";
 import { OrderItemQuantityInput } from "./OrderItemQuantityInput";
 import {
   exceededStockMessage,
@@ -26,7 +27,8 @@ interface OrderItemsTableProps {
  */
 export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTableProps) {
   const { form, products, isEdit, manualQuote } = useOrderForm();
-  const { fmt } = useCurrency();
+  const { fmt, code } = useCurrency();
+  const surcharge = (priceMinor: number) => fmt(priceMinor / 10 ** getDecimalPlaces(code));
   const t = useMessages(orderFormMessages);
   const items = form.watch("items") as OrderItem[];
 
@@ -83,6 +85,16 @@ export function OrderItemsTable({ resolvedVariantsById = {} }: OrderItemsTablePr
               <p className="truncate text-body text-muted-foreground">
                 {[variantText, fmt(quotedLine?.unitPrice ?? item.price)].filter(Boolean).join(" · ")}
               </p>
+              {item.propertiesDisplay?.length ? (
+                <ul className="text-body text-muted-foreground" aria-label={t("buyerInputs")}>
+                  {item.propertiesDisplay.map((property) => (
+                    <li key={property.key} className="break-words">
+                      {property.label}: {property.displayValue}
+                      {property.priceMinor > 0 ? <span className="tabular-nums"> (+{surcharge(property.priceMinor)})</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
             <OrderItemQuantityInput
               id={orderLineQuantityId(index)}

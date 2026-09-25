@@ -6,7 +6,7 @@ import ProductShortcode from "./ProductShortcode";
 import type { ProductPageData } from "@/lib/api";
 import { addToCart } from "@/store/cart";
 
-vi.mock("@/store/cart", () => ({ addToCart: vi.fn(() => true) }));
+vi.mock("@/store/cart", () => ({ addToCart: vi.fn(async () => true) }));
 vi.mock("@/lib/analytics", () => ({ trackFbAddToCart: vi.fn() }));
 
 const option = { id: "format", name: "Format", position: 0, standardMapping: "none" as const, values: [
@@ -78,6 +78,30 @@ describe("ProductShortcode normalized options", () => {
     const print = [...host.querySelectorAll("button")].find((button) => button.textContent === "Print");
     await act(async () => print?.click());
     expect(host.querySelector<HTMLImageElement>('img[alt="Guide"]')?.src).toContain("primary.jpg");
+  });
+
+  it("adds the chosen SKU with its fulfilment kind and waits for the cart", async () => {
+    const productData = data();
+    productData.variants[0]!.fulfillmentKind = "service";
+    await act(async () => root.render(<ProductShortcode productData={productData} />));
+    const add = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Add to Cart"));
+    await act(async () => add?.click());
+    expect(addToCart).toHaveBeenCalledWith(expect.objectContaining({
+      variantId: "var_digital",
+      fulfillmentKind: "service",
+    }));
+    expect(addToCart).not.toHaveBeenCalledWith(expect.objectContaining({ properties: expect.anything() }));
+    expect(host.textContent).toContain("Added to cart successfully!");
+  });
+
+  it("sends products with required buyer inputs to their product page instead of adding", async () => {
+    const productData = data();
+    productData.product.requiresCustomization = true;
+    await act(async () => root.render(<ProductShortcode productData={productData} />));
+    const link = host.querySelector<HTMLAnchorElement>('a[href="/products/guide"]');
+    expect(link?.textContent).toBe("View product");
+    expect([...host.querySelectorAll("button")].some((button) => button.textContent?.includes("Add to Cart"))).toBe(false);
+    expect(addToCart).not.toHaveBeenCalled();
   });
 
   it("renders a featured video poster without putting the video URL in an image", async () => {

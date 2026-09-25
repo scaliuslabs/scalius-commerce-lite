@@ -6,6 +6,7 @@ import {
   linkVerifiedContactOrders,
 } from "@scalius/core/modules/customers";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
+import { deliveryMethodKindSchema } from "../../schemas/order-lines";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
@@ -54,7 +55,10 @@ const getCustomerOrdersRoute = createRoute({
               paymentMethod: z.string(),
               fulfillmentStatus: z.string(),
               expectedDelivery: z.string().nullable().optional(),
-              shippingAddress: z.string(),
+              /** Null when nothing ships (pickup, service-only or digital orders). */
+              shippingAddress: z.string().nullable(),
+              requiresShipping: z.boolean(),
+              shippingMethodKind: deliveryMethodKindSchema.nullable(),
               cityName: z.string().nullable(),
               zoneName: z.string().nullable(),
               areaName: z.string().nullable().optional(),

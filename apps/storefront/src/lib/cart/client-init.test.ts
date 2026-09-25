@@ -95,6 +95,10 @@ function taxQuote(totalAmount: number, zone = "zone_banani"): CheckoutTaxQuote {
     taxAmount: totalAmount - 160,
     totalMinor: Math.round(totalAmount * 100),
     totalAmount,
+    deliveryMethodKind: "delivery",
+    requiresShipping: true,
+    pickup: null,
+    allowedPaymentMethods: ["cod"],
     shippingMethod: {
       id: "ship_standard",
       name: "Standard delivery",
@@ -230,7 +234,7 @@ describe("initCartFunctionality", () => {
     sessionStorage.clear();
     renderCartDom();
     window.lastShippingEventDetail = STANDARD_RATE;
-    localStorage.setItem("cart", JSON.stringify(cartState));
+    localStorage.setItem("cart:v3", JSON.stringify(cartState));
     cartStore.set(cartState);
     window.__CHECKOUT_LANGUAGE__ = { languageData: ENGLISH_CHECKOUT_LANGUAGE_DATA };
     vi.stubGlobal(
@@ -347,7 +351,7 @@ describe("initCartFunctionality", () => {
     expect(originalCheckoutId).toBeTruthy();
     expect(cartStore.get().totalItems).toBe(1);
 
-    localStorage.setItem("cart", JSON.stringify({ items: {} }));
+    localStorage.setItem("cart:v3", JSON.stringify({ items: {} }));
     sessionStorage.removeItem("checkoutId");
 
     await resumeCartPageFromHistory();
@@ -661,7 +665,7 @@ describe("initCartFunctionality", () => {
       totalAmount: 0,
       discountCodes: [],
     };
-    localStorage.setItem("cart", JSON.stringify(emptyCart));
+    localStorage.setItem("cart:v3", JSON.stringify(emptyCart));
     cartStore.set(emptyCart);
 
     await initCartFunctionality();
@@ -768,7 +772,7 @@ describe("initCartFunctionality", () => {
       totalAmount: 300,
     };
 
-    localStorage.setItem("cart", JSON.stringify(staleCart));
+    localStorage.setItem("cart:v3", JSON.stringify(staleCart));
     cartStore.set(staleCart);
     sessionStorage.setItem("checkoutId", failedCheckoutId);
     sessionStorage.setItem(
@@ -829,7 +833,7 @@ describe("initCartFunctionality", () => {
 
   it("keeps applied codes through a quantity change and re-checks them", async () => {
     cartStore.setKey("discountCodes", ["WELCOME"]);
-    localStorage.setItem("cart", JSON.stringify(cartStore.get()));
+    localStorage.setItem("cart:v3", JSON.stringify(cartStore.get()));
     await initCartFunctionality();
     apiMocks.previewCartDiscounts.mockClear();
 
@@ -847,7 +851,7 @@ describe("initCartFunctionality", () => {
 
   it("lists one line per discount and says what a code still needs, with a one-tap add", async () => {
     cartStore.setKey("discountCodes", ["SAVE10", "CAPGIFT"]);
-    localStorage.setItem("cart", JSON.stringify(cartStore.get()));
+    localStorage.setItem("cart:v3", JSON.stringify(cartStore.get()));
     apiMocks.previewCartDiscounts.mockResolvedValue({
       ok: true,
       totalDiscount: 70,
@@ -879,6 +883,7 @@ describe("initCartFunctionality", () => {
     expect((document.getElementById("discountCodesInput") as HTMLInputElement).value).toBe('["SAVE10"]');
 
     Array.from(applied.querySelectorAll("button")).find((button) => button.textContent === "Add Cap")!.click();
+    await vi.advanceTimersByTimeAsync(0);
     expect(Object.values(cartStore.get().items).map(({ id }) => id)).toEqual(["prod_1", "prod_cap"]);
     expect(cartStore.get().discountCodes).toEqual(["SAVE10", "CAPGIFT"]);
   });

@@ -156,7 +156,7 @@ describe.each(["d1", "turso"] as const)("storefront checkout commit (%s)", (prov
     expect(rows("order_item_tax_snapshots", `order_id = '${orderId}'`)).toBe(1);
     expect(rows("checkout_attempts", `order_id = '${orderId}' AND status = 'committed'`)).toBe(1);
     expect(rows("order_receipts", `order_id = '${orderId}' AND status = 'active'`)).toBe(1);
-    expect(rows("order_notification_outbox", `order_id = '${orderId}'`)).toBe(1);
+    expect(rows("notification_outbox", `order_id = '${orderId}'`)).toBe(1);
     expect(rows("meta_capi_purchase_outbox")).toBe(0);
     expect(counters()).toEqual({ stock: 3, reserved_stock: 2, stock_version: 2 });
     expect(sqlite!.prepare(`
@@ -252,7 +252,7 @@ describe.each(["d1", "turso"] as const)("storefront checkout commit (%s)", (prov
     await commitStorefrontOrderPayload(db, payload, commit);
     expect(counters()).toMatchObject({ reserved_stock: 1 });
     // An unpaid online checkout never notifies the merchant.
-    expect(rows("order_notification_outbox")).toBe(0);
+    expect(rows("notification_outbox")).toBe(0);
 
     const cutoff = Math.floor(Date.now() / 1000) + 60;
     const first = await archiveStaleIncompleteOrders(db, cutoff);
@@ -318,5 +318,70 @@ describe("orders migrated from checkout lanes", () => {
     const { payload, commit } = prepare("after_fold", { quantity: 9 });
     await commitStorefrontOrderPayload(db, payload, commit);
     expect(counters()).toMatchObject({ stock: 9, reserved_stock: 9 });
+  });
+});
+
+describe.each(["d1", "turso"] as const)("Wave A lines at the storefront commit (%s)", (provider) => {
+  type Payload = StorefrontOrderCommitPayload;
+  const withoutAddress = (payload: Payload, kind: "pickup" | null): void => {
+    Object.assign(payload.orderData, {
+      shippingAddress: null, city: null, zone: null, area: null, cityName: null, zoneName: null,
+      requiresShipping: false,
+      shippingMethodKind: kind,
+      pickupAddress: kind === "pickup" ? "Shop 4, Gulshan 1" : null,
+      pickupHours: kind === "pickup" ? "10am-8pm" : null,
+    });
+  };
+
+  it("commits a pickup order without an address, its line typed pickup", async () => {
+    const db = openStore(provider);
+    const { payload, commit } = prepare("pickup");
+    withoutAddress(payload, "pickup");
+    payload.items[0]!.fulfillmentType = "pickup";
+    await commitStorefrontOrderPayload(db, payload, commit);
+    const orderId = payload.orderData.id;
+    expect(sqlite!.prepare("SELECT requires_shipping, shipping_method_kind, pickup_address, shipping_address FROM orders WHERE id = ?").get(orderId))
+      .toEqual({ requires_shipping: 0, shipping_method_kind: "pickup", pickup_address: "Shop 4, Gulshan 1", shipping_address: null });
+    expect(sqlite!.prepare("SELECT fulfillment_type, fulfilled_quantity FROM order_items WHERE order_id = ?").get(orderId))
+      .toEqual({ fulfillment_type: "pickup", fulfilled_quantity: 0 });
+    expect(counters()).toMatchObject({ reserved_stock: 1 });
+  });
+
+  it("refuses an order that ships without an address, writing nothing", async () => {
+    const db = openStore(provider);
+    const { payload, commit } = prepare("noaddress");
+    Object.assign(payload.orderData, { shippingAddress: null, city: null, zone: null });
+    await expect(commitStorefrontOrderPayload(db, payload, commit)).rejects.toThrow(/shipping address required/);
+    expect(rows("orders")).toBe(0);
+    expect(counters()).toMatchObject({ reserved_stock: 0 });
+  });
+
+  it("commits a service-only order with no delivery method and no fee", async () => {
+    const db = openStore(provider);
+    const { payload, commit } = prepare("service");
+    withoutAddress(payload, null);
+    payload.items[0]!.fulfillmentType = "service";
+    await commitStorefrontOrderPayload(db, payload, commit);
+    expect(sqlite!.prepare("SELECT requires_shipping, shipping_method_kind, shipping_method_id FROM orders WHERE id = ?").get(payload.orderData.id))
+      .toEqual({ requires_shipping: 0, shipping_method_kind: null, shipping_method_id: null });
+    expect(sqlite!.prepare("SELECT fulfillment_type FROM order_items WHERE order_id = ?").get(payload.orderData.id))
+      .toEqual({ fulfillment_type: "service" });
+  });
+
+  it("freezes buyer inputs, their surcharge and the base price on the line", async () => {
+    const db = openStore(provider);
+    const { payload, commit } = prepare("props");
+    const properties = [{ key: "engraving", type: "text", label: "Engraving", value: "Anika", displayValue: "Anika", priceMinor: 2_000 }];
+    Object.assign(payload.items[0]!, {
+      properties: JSON.stringify(properties),
+      propertiesPriceMinor: 2_000,
+      baseUnitPriceMinor: 8_000,
+    });
+    await commitStorefrontOrderPayload(db, payload, commit);
+    const line = sqlite!.prepare(
+      "SELECT properties, properties_price_minor, base_unit_price_minor, unit_price_minor FROM order_items WHERE order_id = ?",
+    ).get(payload.orderData.id) as { properties: string; properties_price_minor: number; base_unit_price_minor: number; unit_price_minor: number };
+    expect(JSON.parse(line.properties)).toEqual(properties);
+    expect(line).toMatchObject({ properties_price_minor: 2_000, base_unit_price_minor: 8_000, unit_price_minor: 10_000 });
   });
 });

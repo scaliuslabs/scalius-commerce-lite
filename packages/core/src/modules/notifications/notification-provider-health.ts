@@ -1,5 +1,5 @@
 import type { Database } from "@scalius/database/client";
-import { orderNotificationDeliveryReceipts, settings } from "@scalius/database/schema";
+import { notificationDeliveryReceipts, settings } from "@scalius/database/schema";
 import { and, desc, eq, inArray, like, sql } from "drizzle-orm";
 
 export type NotificationProviderHealthChannel = "email" | "sms" | "whatsapp" | "push";
@@ -176,20 +176,20 @@ async function recoverProviderBlockFromReceipts(
     const latestSettingsUpdatedAt = await getLatestSettingsUpdateTime(db, settingsCategories);
     const rows = await db
         .select({
-            providerStatus: orderNotificationDeliveryReceipts.providerStatus,
-            rawResponse: orderNotificationDeliveryReceipts.rawResponse,
-            lastError: orderNotificationDeliveryReceipts.lastError,
-            skippedAt: orderNotificationDeliveryReceipts.skippedAt,
-            failedAt: orderNotificationDeliveryReceipts.failedAt,
-            updatedAt: orderNotificationDeliveryReceipts.updatedAt,
+            providerStatus: notificationDeliveryReceipts.providerStatus,
+            rawResponse: notificationDeliveryReceipts.rawResponse,
+            lastError: notificationDeliveryReceipts.lastError,
+            skippedAt: notificationDeliveryReceipts.skippedAt,
+            failedAt: notificationDeliveryReceipts.failedAt,
+            updatedAt: notificationDeliveryReceipts.updatedAt,
         })
-        .from(orderNotificationDeliveryReceipts)
+        .from(notificationDeliveryReceipts)
         .where(and(
-            eq(orderNotificationDeliveryReceipts.channel, options.channel),
-            eq(orderNotificationDeliveryReceipts.provider, provider),
-            inArray(orderNotificationDeliveryReceipts.status, ["skipped", "failed"]),
+            eq(notificationDeliveryReceipts.channel, options.channel),
+            eq(notificationDeliveryReceipts.provider, provider),
+            inArray(notificationDeliveryReceipts.status, ["skipped", "failed"]),
         ))
-        .orderBy(desc(orderNotificationDeliveryReceipts.updatedAt))
+        .orderBy(desc(notificationDeliveryReceipts.updatedAt))
         .limit(RECENT_RECEIPT_SCAN_LIMIT)
         .all();
 

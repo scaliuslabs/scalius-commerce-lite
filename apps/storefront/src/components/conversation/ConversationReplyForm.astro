@@ -1,0 +1,113 @@
+---
+// The message form of a conversation. Without JavaScript it is a plain
+// multipart POST to a same-origin proxy that uploads the images, posts the
+// message and redirects back (Post/Redirect/Get). With JavaScript the same form
+// is sent with fetch and the thread list is replaced in place
+// (conversation-form.ts). The message text only ever travels in the POST body.
+import {
+  CONVERSATION_COPY as copy,
+  CONVERSATION_LIMITS,
+  conversationStatusMessage,
+  newClientMessageKey,
+  type ConversationStatusFlag,
+} from "@/lib/account-inbox";
+
+interface Props {
+  /** Same-origin proxy endpoint under /api/conversations/. */
+  action: string;
+  /** The page to return to after a no-JS post (validated again by the proxy). */
+  returnTo: string;
+  /** Id of the message list the enhanced post re-renders. */
+  messagesTargetId: string;
+  /** Unique prefix for element ids on the page. */
+  idPrefix: string;
+  /** Outcome of the last no-JS post, from the page URL. */
+  status?: ConversationStatusFlag | null;
+  label?: string;
+  placeholder?: string;
+  note?: string | null;
+}
+
+const {
+  action,
+  returnTo,
+  messagesTargetId,
+  idPrefix,
+  status = null,
+  label = copy.messageLabel,
+  placeholder = "Write your message",
+  note = null,
+} = Astro.props;
+const statusMessage = status ? conversationStatusMessage(status) : null;
+const clientMessageKey = newClientMessageKey();
+const accept = "image/jpeg,image/png,image/webp";
+---
+
+<form
+  method="post"
+  action={action}
+  enctype="multipart/form-data"
+  class="mt-4 space-y-3"
+  data-conversation-form
+  data-messages-target={messagesTargetId}
+>
+  <input type="hidden" name="clientMessageKey" value={clientMessageKey} />
+  <input type="hidden" name="returnTo" value={returnTo} />
+  {note && <p class="text-sm text-muted-foreground">{note}</p>}
+  <div>
+    <label for={`${idPrefix}Body`} class="mb-1.5 block text-sm font-medium text-foreground">{label}</label>
+    <textarea
+      id={`${idPrefix}Body`}
+      name="body"
+      required
+      rows="3"
+      maxlength={CONVERSATION_LIMITS.bodyLength}
+      placeholder={placeholder}
+      class="min-h-24 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
+    ></textarea>
+  </div>
+  <div>
+    <label for={`${idPrefix}Images`} class="mb-1.5 block text-sm font-medium text-foreground">{copy.attachLabel}</label>
+    <input
+      id={`${idPrefix}Images`}
+      name="images"
+      type="file"
+      multiple
+      accept={accept}
+      aria-describedby={`${idPrefix}ImagesHint`}
+      class="block w-full text-sm text-muted-foreground file:mr-3 file:min-h-11 file:rounded-lg file:border file:border-border file:bg-background file:px-4 file:text-sm file:font-medium file:text-foreground hover:file:bg-muted"
+    />
+    <p id={`${idPrefix}ImagesHint`} class="mt-1 text-xs text-muted-foreground">{copy.attachHint}</p>
+    <div class="mt-2 flex flex-wrap gap-2 empty:hidden" data-conversation-previews></div>
+  </div>
+  <p
+    role="status"
+    aria-live="polite"
+    data-conversation-status
+    class:list={["text-sm empty:hidden", statusMessage?.tone === "error" ? "text-destructive" : "text-primary"]}
+  >{statusMessage?.text ?? ""}</p>
+  <div class="flex justify-end">
+    <button
+      type="submit"
+      data-idle-label={copy.send}
+      data-busy-label={copy.sending}
+      class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+    >{copy.send}</button>
+  </div>
+</form>
+
+<script>
+  import { bindConversationForms } from "./conversation-form";
+
+  type ConversationWindow = Window & { __scaliusConversationFormsBound?: boolean };
+  const conversationWindow = window as ConversationWindow;
+  if (!conversationWindow.__scaliusConversationFormsBound) {
+    conversationWindow.__scaliusConversationFormsBound = true;
+    document.addEventListener("astro:page-load", bindConversationForms);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindConversationForms, { once: true });
+  } else {
+    bindConversationForms();
+  }
+</script>

@@ -6,6 +6,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getHomepageData, getLayoutData, getPageRenderData } from "@scalius/core/modules/storefront";
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
+import { PRODUCT_PAGE_COPY_KEYS, type ProductPageCopyKey } from "@scalius/shared/checkout-language";
 import { NotFoundError, ValidationError } from "../utils/api-error";
 import {
   HOME_MAX_MEDIA,
@@ -270,21 +271,13 @@ const layoutDataSchema = z.object({
     path: z.string(),
   })),
   /** Product call-to-action copy from the active checkout language. */
+  /** Product-page copy from the active checkout language: buttons, offers, buyer inputs, fulfilment facts. */
   storefrontCopy: z.object({
     languageCode: z.string(),
-    addToCartText: z.string(),
-    buyNowText: z.string(),
-    unavailableText: z.string(),
-    chooseOptionText: z.string(),
-    fromPriceText: z.string(),
-    quantityLabelText: z.string(),
-    quantityLimitText: z.string(),
-    saleOfferText: z.string(),
-    saleOfferSpendText: z.string(),
-    saleOfferGetText: z.string(),
-    saleOfferGetSpendText: z.string(),
-    freeBenefitText: z.string(),
-    percentBenefitText: z.string(),
+    ...(Object.fromEntries(PRODUCT_PAGE_COPY_KEYS.map((key) => [key, z.string()])) as Record<
+      ProductPageCopyKey,
+      z.ZodString
+    >),
   }),
 });
 type LayoutData = z.infer<typeof layoutDataSchema>;

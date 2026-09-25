@@ -46,6 +46,12 @@ vi.mock("../payments/cod", () => ({
   validateCODCollectionDetails: mocks.validateCODCollectionDetails,
 }));
 
+// Courier lines on the ledger are proven in fulfilment/ledger.d1.test.ts.
+vi.mock("./ledger", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./ledger")>()),
+  recordCourierBookingFulfilment: vi.fn(async () => ({ fulfillmentId: null, lines: [], recorded: false })),
+}));
+
 vi.mock("../orders/returns/returns", () => ({
   listOrderReturns: mocks.listOrderReturns,
   createOrderReturn: mocks.createOrderReturn,
@@ -54,7 +60,6 @@ vi.mock("../orders/returns/returns", () => ({
 }));
 
 import { bulkShipOrders } from "./bulk";
-import { createFulfillmentShipment } from "./shipments";
 import { processCodAction } from "./delivery-outcomes";
 import { updateOrderStatus } from "../orders/status/lifecycle";
 
@@ -496,9 +501,9 @@ describe("orders fulfillment side-effect ordering", () => {
     ]);
     expect(mocks.createShipment).not.toHaveBeenCalled();
     expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
-    expect(updates[0]).toMatchObject({ fulfillmentStatus: ItemFulfillmentStatus.SHIPPED });
-    expect(updates[1]).toMatchObject({ inventoryAction: "deducted" });
-    expect(updates[2]).toMatchObject({ shipmentClaimId: null, shipmentClaimExpiresAt: null });
+    // The courier's lines go on the ledger (mocked here), not item columns.
+    expect(updates[0]).toMatchObject({ inventoryAction: "deducted" });
+    expect(updates[1]).toMatchObject({ shipmentClaimId: null, shipmentClaimExpiresAt: null });
   });
 
   it("does not record COD collection when the delivered status CAS fails", async () => {
@@ -868,7 +873,7 @@ describe("orders fulfillment side-effect ordering", () => {
         balanceDueMinor: 10_000,
         inventoryAction: "deducted",
       },
-      selectedRows: [{ id: "item_1", shippedQuantity: 1 }],
+      selectedRows: [{ id: "item_1", fulfilledQuantity: 1, legacyShippedQuantity: 0 }],
       updateResults: [[{ id: "order_1" }]],
     });
 
@@ -892,233 +897,9 @@ describe("orders fulfillment side-effect ordering", () => {
     expect(updates).toContainEqual(expect.objectContaining({ status: OrderStatus.RETURNED, version: 5 }));
   });
 
-  it("does not apply inventory or write shipment rows when manual fulfillment claim fails", async () => {
-    const { db, batches } = createDbMock({
-      selectedOrder: {
-        id: "order_1",
-        status: OrderStatus.CONFIRMED,
-        fulfillmentStatus: "pending",
-        version: 5,
-      },
-      selectedRows: [
-        { id: "item_1", quantity: 1, shippedQuantity: 0 },
-      ],
-      updateResults: [[]],
-    });
-
-    await expect(
-      createFulfillmentShipment(db as never, "order_1", {
-        itemIds: ["item_1"],
-        isFinalShipment: true,
-      }),
-    ).rejects.toThrow("This order changed");
-
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-    expect(batches).toHaveLength(0);
-  });
-
-  it("does not create manual fulfillment while a refund attempt is active", async () => {
-    const { db, batches } = createDbMock({
-      selectedOrder: {
-        id: "order_1",
-        status: OrderStatus.CONFIRMED,
-        fulfillmentStatus: "pending",
-        version: 5,
-      },
-      selectedRefundAttempt: { id: "rfa_1", orderId: "order_1", status: "reconcile_required" },
-      selectedRows: [
-        { id: "item_1", quantity: 1, shippedQuantity: 0 },
-      ],
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    await expect(
-      createFulfillmentShipment(db as never, "order_1", {
-        itemIds: ["item_1"],
-        isFinalShipment: true,
-      }),
-    ).rejects.toThrow("active refund operation");
-
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-    expect(batches).toHaveLength(0);
-  });
-
-  it("rejects manual fulfillment item IDs that do not belong to the order before claiming", async () => {
-    const { db, updates, batches } = createDbMock({
-      selectedOrder: {
-        id: "order_1",
-        status: OrderStatus.CONFIRMED,
-        fulfillmentStatus: "pending",
-        version: 5,
-      },
-      selectedRows: [
-        { id: "item_1", quantity: 1, shippedQuantity: 0 },
-      ],
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    await expect(
-      createFulfillmentShipment(db as never, "order_1", {
-        itemIds: ["foreign_item"],
-        isFinalShipment: true,
-      }),
-    ).rejects.toThrow("not part of the order");
-
-    expect(updates).toHaveLength(0);
-    expect(batches).toHaveLength(0);
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-  });
-
-  it("rejects duplicate manual fulfillment item IDs before claiming", async () => {
-    const { db, updates, batches } = createDbMock({
-      selectedOrder: {
-        id: "order_1",
-        status: OrderStatus.CONFIRMED,
-        fulfillmentStatus: "pending",
-        version: 5,
-      },
-      selectedRows: [
-        { id: "item_1", quantity: 1, shippedQuantity: 0 },
-      ],
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    await expect(
-      createFulfillmentShipment(db as never, "order_1", {
-        itemIds: ["item_1", "item_1"],
-        isFinalShipment: true,
-      }),
-    ).rejects.toThrow("only once");
-
-    expect(updates).toHaveLength(0);
-    expect(batches).toHaveLength(0);
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-  });
-
-  it("rejects manual fulfillment without items before claiming", async () => {
-    const { db, updates, batches } = createDbMock({
-      selectedOrder: {
-        id: "order_1",
-        status: OrderStatus.CONFIRMED,
-        fulfillmentStatus: "pending",
-        version: 5,
-      },
-      selectedRows: [],
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    await expect(
-      createFulfillmentShipment(db as never, "order_1", {
-        isFinalShipment: true,
-      }),
-    ).rejects.toThrow("already been sent");
-
-    expect(updates).toHaveLength(0);
-    expect(batches).toHaveLength(0);
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-  });
-
-  it("keeps manual fulfillment status out of the visible order row until the shipment batch", async () => {
-    const { db, updates, batches } = createDbMock({
-      selectedOrder: {
-        id: "order_1",
-        status: OrderStatus.CONFIRMED,
-        fulfillmentStatus: "pending",
-        version: 5,
-      },
-      selectedRows: [
-        { id: "item_1", quantity: 1, shippedQuantity: 0 },
-      ],
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    const result = await createFulfillmentShipment(db as never, "order_1", {
-      itemIds: ["item_1"],
-      isFinalShipment: true,
-    });
-
-    expect(result.statusChange).toEqual({
-      orderId: "order_1",
-      previousStatus: OrderStatus.CONFIRMED,
-      newStatus: OrderStatus.SHIPPED,
-      version: 7,
-    });
-    expect(updates[0]).toMatchObject({
-      shipmentClaimId: expect.stringMatching(/^shp_/),
-      version: 6,
-    });
-    expect(updates[0]).not.toHaveProperty("status");
-    expect(updates[0]).not.toHaveProperty("fulfillmentStatus");
-    expect(batches).toHaveLength(1);
-    expect(batches[0]?.[0]).toMatchObject({
-      status: ShipmentStatus.IN_TRANSIT,
-      rawStatus: ShipmentStatus.IN_TRANSIT,
-      isFinalShipment: true,
-    });
-    expect(updates.some((entry) =>
-      entry.status === OrderStatus.SHIPPED && entry.fulfillmentStatus === "complete"
-    )).toBe(true);
-  });
-
-  it("clears the private manual fulfillment claim when the shipment batch fails before insert", async () => {
-    const { db, updates, batches } = createDbMock({
-      selectedOrder: {
-        id: "order_1",
-        status: OrderStatus.CONFIRMED,
-        fulfillmentStatus: "pending",
-        version: 5,
-      },
-      selectedRows: [
-        { id: "item_1", quantity: 1, shippedQuantity: 0 },
-      ],
-      selectedShipment: null,
-      updateResults: [[{ id: "order_1" }]],
-      batchError: new Error("shipment batch failed"),
-    });
-
-    await expect(
-      createFulfillmentShipment(db as never, "order_1", {
-        itemIds: ["item_1"],
-        isFinalShipment: true,
-      }),
-    ).rejects.toThrow("shipment batch failed");
-
-    expect(batches).toHaveLength(1);
-    expect(mocks.applyInventoryForStatusChange).not.toHaveBeenCalled();
-    expect(updates[0]).toMatchObject({
-      shipmentClaimId: expect.stringMatching(/^shp_/),
-    });
-    expect(updates.filter((entry) => entry.shipmentClaimId === null)).toHaveLength(2);
-  });
-
-  it("reconciles inventory when a final fulfillment shipment is retried after the order was already marked shipped", async () => {
-    const { db, updates, batches } = createDbMock({
-      selectedOrder: {
-        id: "order_1",
-        status: OrderStatus.SHIPPED,
-        fulfillmentStatus: "complete",
-        version: 6,
-      },
-      selectedRows: [
-        { id: "item_1", quantity: 1, shippedQuantity: 0 },
-      ],
-      updateResults: [[{ id: "order_1" }]],
-    });
-
-    const result = await createFulfillmentShipment(db as never, "order_1", {
-      itemIds: ["item_1"],
-      isFinalShipment: true,
-    });
-
-    expect(result).toMatchObject({
-      isFinalShipment: true,
-      fulfillmentStatus: "complete",
-    });
-    expect(result.statusChange).toBeUndefined();
-    expect(batches).toHaveLength(1);
-    expect(mocks.applyInventoryForStatusChange).toHaveBeenCalledWith(db, "order_1", OrderStatus.SHIPPED);
-    expect(updates.at(-1)).toMatchObject({ inventoryAction: "deducted" });
-  });
+  // Own-rider parcels ("Mark as sent") are ledger fulfilments now; their
+  // claim, bounds, replay and stock rules are proven on the real schema in
+  // fulfilment/ledger.d1.test.ts.
 
   it("reconciles inventory when an admin retries the same status update", async () => {
     const { db, updates } = createDbMock({

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createOrdersCsvArtifactBuilder,
   createPaymentRecoveryCsvArtifactBuilder,
+  formatOrderCsvLineProperties,
   ORDER_CSV_ARTIFACT_MAX_BYTES,
   spreadsheetSafeCsvCell,
   type OrderCsvRow,
@@ -64,8 +65,48 @@ describe("order CSV artifacts", () => {
     const rows = builder.finish().chunks.join("").split("\n");
     expect(rows).toHaveLength(3);
     // Paid is what the rider collected; the refund is its own column.
-    expect(rows[1]).toContain('"Kurta","M","2","800","1600","80","0","2480","2480","500","0"');
-    expect(rows[2]).toContain('"Panjabi","","1","800","800","","","","","",""');
+    expect(rows[1]).toContain('"Kurta","M","","2","800","1600","80","0","2480","2480","500","0"');
+    expect(rows[2]).toContain('"Panjabi","","","1","800","800","","","","","",""');
+  });
+
+  it("formats the frozen buyer inputs with their surcharge in the store currency", () => {
+    const stored = JSON.stringify([
+      { key: "engraving", type: "text", label: "Engraving", value: "Anika", displayValue: "Anika", priceMinor: 20_000 },
+      { key: "wrap", type: "checkbox", label: "Gift wrap", value: "true", displayValue: "Yes", priceMinor: 0 },
+    ]);
+    expect(formatOrderCsvLineProperties(stored, "BDT", 2)).toEqual(["Engraving: Anika (+৳200)", "Gift wrap: Yes"]);
+    expect(formatOrderCsvLineProperties(null, "BDT", 2)).toEqual([]);
+    expect(formatOrderCsvLineProperties("not json", "BDT", 2)).toEqual([]);
+  });
+
+  it("shows buyer inputs in a Customisation column and after each summary item", () => {
+    const customised: OrderCsvRow = {
+      ...order,
+      lines: [{ ...order.lines[0]!, properties: ["Engraving: Anika (+৳200)", "=Fit: Slim"] }, order.lines[1]!],
+    };
+    const items = createOrdersCsvArtifactBuilder("items");
+    items.append(customised);
+    const rows = items.finish().chunks.join("").split("\n");
+    expect(rows[1]).toContain('"Kurta","M","Engraving: Anika (+৳200); =Fit: Slim","2"');
+    expect(rows[2]).toContain('"Panjabi","","","1"');
+
+    const summary = createOrdersCsvArtifactBuilder("summary");
+    summary.append(customised);
+    expect(summary.finish().chunks.join(""))
+      .toContain('"2 × Kurta (M) — Engraving: Anika (+৳200), =Fit: Slim; 1 × Panjabi"');
+  });
+
+  it.each([
+    ["a delivery", { requiresShipping: true, shippingMethodKind: "delivery" }, "Delivery", '"House 1, Road 2","","Gulshan","Dhaka"'],
+    ["an older row", {}, "Delivery", '"House 1, Road 2","","Gulshan","Dhaka"'],
+    ["a pickup", { requiresShipping: false, shippingMethodKind: "pickup" }, "Pickup", '"","","",""'],
+    ["a service-only", { requiresShipping: false, shippingMethodKind: null }, "No delivery", '"","","",""'],
+  ] as const)("names the delivery method of %s order and blanks the address when nothing ships", (_case, facts, method, address) => {
+    const builder = createOrdersCsvArtifactBuilder("summary");
+    builder.append({ ...order, ...facts });
+    const csv = builder.finish().chunks.join("");
+    expect(csv.split("\n")[0]).toContain('"City","Delivery method","Status"');
+    expect(csv).toContain(`${address},"${method}","Shipped"`);
   });
 
   it("says nothing is due on a returned order that was never paid", () => {

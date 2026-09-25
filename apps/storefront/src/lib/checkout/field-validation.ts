@@ -8,6 +8,11 @@
 import type { CheckoutLanguageData } from "@scalius/shared/checkout-language";
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "./shipping-address";
+import {
+  isCheckoutFieldRequired,
+  type CheckoutDeliveryMode,
+  type CheckoutRequiredField,
+} from "./delivery-mode";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -37,10 +42,17 @@ export function setFieldError(field: Pick<CheckoutField, "control" | "error">, m
   }
 }
 
-/** The name, email, address, location and delivery fields of the cart form. */
+/**
+ * The name, email, address, location and delivery fields of the cart form.
+ * Which of them apply follows the checkout path (`CHECKOUT_REQUIRED_FIELDS`):
+ * delivery asks for everything, pickup for a pickup location, and a cart
+ * with nothing to deliver for contact details only. The phone field checks
+ * itself (it is required on every path).
+ */
 export function checkoutInformationFields(
   root: ParentNode,
   copy: CheckoutLanguageData,
+  readMode: () => CheckoutDeliveryMode = () => "delivery",
 ): CheckoutField[] {
   const fields: CheckoutField[] = [];
   const add = (controlId: string, errorId: string, check: () => string) => {
@@ -48,6 +60,7 @@ export function checkoutInformationFields(
     const error = root.querySelector<HTMLElement>(`#${errorId}`);
     if (control && error) fields.push({ control, error, check });
   };
+  const required = (field: CheckoutRequiredField) => isCheckoutFieldRequired(readMode(), field);
   add("customerName", "customerName-error", () => {
     const name = value(root, "customerName");
     if (!name) return copy.nameRequiredText;
@@ -58,6 +71,7 @@ export function checkoutInformationFields(
     return email && !EMAIL.test(email) ? copy.emailInvalidText : "";
   });
   add("shippingAddress", "shippingAddressError", () => {
+    if (!required("shippingAddress")) return "";
     const address = value(root, "shippingAddress");
     if (!address) return copy.addressRequiredText;
     return address.length < MIN_SHIPPING_ADDRESS_LENGTH
@@ -65,8 +79,10 @@ export function checkoutInformationFields(
       : "";
   });
   // City and zone share one message; the zone is marked only once a city is chosen.
-  add("checkout-city", "shippingLocationError", () => value(root, "city") ? "" : copy.cityZoneRequiredText);
+  add("checkout-city", "shippingLocationError", () =>
+    !required("city") || value(root, "city") ? "" : copy.cityZoneRequiredText);
   add("checkout-zone", "shippingLocationError", () => {
+    if (!required("zone")) return "";
     if (!value(root, "city")) return copy.cityZoneRequiredText;
     return value(root, "zone") ? "" : copy.zoneRequiredText;
   });
@@ -77,12 +93,14 @@ export function checkoutInformationFields(
     fields.push({
       control: methods,
       error: methodError,
-      // Without a city and thana the location message already says what to do.
-      check: () =>
-        !value(root, "city") || !value(root, "zone")
-          || root.querySelector<HTMLInputElement>('[name="shippingLocation"]:checked')?.value
-          ? ""
-          : copy.deliveryRequiredText,
+      check: () => {
+        const mode = readMode();
+        if (!required("shippingMethod")) return "";
+        if (root.querySelector<HTMLInputElement>('[name="shippingLocation"]:checked')?.value) return "";
+        if (mode === "pickup") return copy.pickupLocationRequiredText;
+        // Without a city and thana the location message already says what to do.
+        return !value(root, "city") || !value(root, "zone") ? "" : copy.deliveryRequiredText;
+      },
     });
   }
   return fields;

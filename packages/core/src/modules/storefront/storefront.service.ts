@@ -17,7 +17,7 @@ import {
 } from "@scalius/database/schema";
 import { eq, isNull, isNotNull, inArray, and, or, sql } from "drizzle-orm";
 import {
-  checkoutLanguageBaseCode,
+  pickProductPageCopy,
   resolveCheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
 import { nanoid } from "nanoid";
@@ -732,29 +732,14 @@ export async function getLayoutData(
 }
 
 /**
- * Product-page call-to-action copy from the same active checkout language
- * (English preset when none exists), so Bangla stores translate the buttons.
+ * Product-page copy (buy buttons, offers, buyer inputs and fulfilment facts)
+ * from the same active checkout language (English preset when none exists),
+ * so merchant edits and Bangla stores reach the product page with the layout.
  */
 function resolveStorefrontCopy(
   rows: { code: string; languageData: string; isActive: boolean }[],
 ) {
   const row = rows.find((candidate) => candidate.isActive) ?? rows[0];
   const code = row?.code ?? "en";
-  const copy = resolveCheckoutLanguageData(code, row?.languageData);
-  return {
-    languageCode: checkoutLanguageBaseCode(code),
-    addToCartText: copy.addToCartText,
-    buyNowText: copy.buyNowText,
-    unavailableText: copy.unavailableText,
-    chooseOptionText: copy.chooseOptionText,
-    fromPriceText: copy.fromPriceText,
-    quantityLabelText: copy.quantityLabelText,
-    quantityLimitText: copy.quantityLimitText,
-    saleOfferText: copy.saleOfferText,
-    saleOfferSpendText: copy.saleOfferSpendText,
-    saleOfferGetText: copy.saleOfferGetText,
-    saleOfferGetSpendText: copy.saleOfferGetSpendText,
-    freeBenefitText: copy.freeBenefitText,
-    percentBenefitText: copy.percentBenefitText,
-  };
+  return pickProductPageCopy(code, resolveCheckoutLanguageData(code, row?.languageData));
 }

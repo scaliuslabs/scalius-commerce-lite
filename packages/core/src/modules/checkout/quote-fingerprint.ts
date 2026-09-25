@@ -18,7 +18,13 @@ function encodeBase64Url(bytes: Uint8Array): string {
  */
 export async function buildStorefrontCheckoutQuoteFingerprint(
   quote: TaxQuote,
-  shippingMethod: StorefrontOrderShippingMethodSnapshot,
+  shippingMethod: StorefrontOrderShippingMethodSnapshot | null,
+  /**
+   * `propertiesHash` per quote line (same order). Lines without buyer inputs
+   * ("none") keep the pre-Wave A tuple, so a quote reviewed before the
+   * deploy still matches an order without properties.
+   */
+  linePropertiesHashes: readonly string[] = [],
 ): Promise<string> {
   const identity = {
     calculationVersion: quote.calculationVersion,
@@ -31,19 +37,26 @@ export async function buildStorefrontCheckoutQuoteFingerprint(
     discountMinor: quote.discountMinor,
     taxMinor: quote.taxMinor,
     totalMinor: quote.totalMinor,
-    shippingMethod: [
-      shippingMethod.id,
-      shippingMethod.name,
-      shippingMethod.description,
-      shippingMethod.baseAmountMinor,
-      shippingMethod.feeWaived,
-    ],
-    lines: quote.lines.map((line) => [
-      line.productId,
-      line.variantId,
-      line.quantity,
-      line.unitPriceMinor,
-    ]),
+    shippingMethod: shippingMethod
+      ? [
+        shippingMethod.id,
+        shippingMethod.name,
+        shippingMethod.description,
+        shippingMethod.baseAmountMinor,
+        shippingMethod.feeWaived,
+      ]
+      : null,
+    lines: quote.lines.map((line, index) => {
+      const tuple: Array<string | number | null> = [
+        line.productId,
+        line.variantId,
+        line.quantity,
+        line.unitPriceMinor,
+      ];
+      const propertiesHash = linePropertiesHashes[index];
+      if (propertiesHash && propertiesHash !== "none") tuple.push(propertiesHash);
+      return tuple;
+    }),
   };
   const digest = await crypto.subtle.digest(
     "SHA-256",

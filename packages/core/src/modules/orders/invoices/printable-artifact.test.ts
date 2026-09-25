@@ -64,6 +64,22 @@ describe("printable invoice artifact", () => {
     expect(artifact).not.toContain("Delivery —");
   });
 
+  it("prints each line's buyer inputs, escaped, with their surcharge", () => {
+    const document = invoice();
+    document.order.items[0]!.properties = [
+      { label: "Engraving", displayValue: "<b>Anika</b> & co", priceMinor: 20_000 },
+      { label: "Fit", displayValue: "Slim", priceMinor: 0 },
+      { label: "Note", displayValue: "y".repeat(500), priceMinor: 0 },
+    ];
+
+    const artifact = renderPrintableInvoice(document);
+
+    expect(artifact).toContain("<small>Engraving: &lt;b&gt;Anika&lt;/b&gt; &amp; co (+BDT 200.00)</small>");
+    expect(artifact).toContain("<small>Fit: Slim</small>");
+    expect(artifact).toContain(`<small>Note: ${"y".repeat(199)}…</small>`);
+    expect(artifact).not.toContain("<b>Anika</b>");
+  });
+
   it("fails closed when the artifact cannot fit the operation result bound", () => {
     const document = invoice();
     document.order.items = Array.from({ length: 1_000 }, (_, index) => ({

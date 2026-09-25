@@ -55,6 +55,7 @@ import { executeManualOrderCreateWithRecovery } from "./order-form/manual-order-
 import { takeOrderPrefill } from "./order-form/order-prefill";
 import { describeAmendment } from "./order-form/amendment-summary";
 import { orderItemVariantLabel } from "./order-form/order-item-presentation";
+import { orderNeedsAddress } from "./order-form/order-line-properties";
 import { useDebounce } from "@/hooks/use-debounce";
 import { queryKeys } from "@/lib/query-keys";
 import { getServerFnError } from "@/lib/api-mutations/shared";
@@ -91,11 +92,12 @@ const FIELD_ORDER = [
   "notes",
 ] as const;
 
-function toOrderBaseContentInput(values: OrderFormValues) {
+/** No address is sent for a pickup order or one with nothing physical (the server stores none). */
+function toOrderAddressInput(values: OrderFormValues) {
+  if (!orderNeedsAddress(values)) {
+    return { shippingAddress: null, city: null, zone: null, area: null, areaName: null };
+  }
   return {
-    customerName: values.customerName,
-    customerPhone: values.customerPhone,
-    customerEmail: values.customerEmail,
     shippingAddress: values.shippingAddress,
     city: values.city,
     zone: values.zone,
@@ -103,10 +105,27 @@ function toOrderBaseContentInput(values: OrderFormValues) {
     cityName: values.cityName ?? undefined,
     zoneName: values.zoneName ?? undefined,
     areaName: values.areaName ?? null,
+  };
+}
+
+function toOrderBaseContentInput(values: OrderFormValues) {
+  return {
+    customerName: values.customerName,
+    customerPhone: values.customerPhone,
+    customerEmail: values.customerEmail,
+    ...toOrderAddressInput(values),
     notes: values.notes,
     discountAmount: values.discountAmount,
     shippingCharge: values.shippingCharge,
   };
+}
+
+/**
+ * A line's buyer inputs, only on lines added here: a kept line (with its
+ * order line id) keeps the inputs frozen when it was placed.
+ */
+function lineProperties(item: Pick<OrderItem, "orderItemId" | "properties">) {
+  return !item.orderItemId && item.properties?.length ? { properties: item.properties } : {};
 }
 
 function toCreateOrderInput(values: OrderFormValues, requestKey: string): CreateOrderInput {
@@ -115,10 +134,11 @@ function toCreateOrderInput(values: OrderFormValues, requestKey: string): Create
     ...toOrderBaseContentInput(values),
     // The order keeps the method's name; a custom charge has none.
     ...(values.shippingMethodId ? { shippingMethodId: values.shippingMethodId } : {}),
-    items: values.items.map(({ productId, variantId, quantity }) => ({
-      productId,
-      variantId,
-      quantity,
+    items: values.items.map((item) => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      quantity: item.quantity,
+      ...lineProperties(item),
     })),
   };
 }
@@ -129,11 +149,12 @@ function toManualOrderAmendmentInput(values: OrderFormValues, id: string): Manua
     id,
     expectedVersion: values.version,
     ...toOrderBaseContentInput(values),
-    items: values.items.map(({ orderItemId, productId, variantId, quantity }) => ({
-      orderItemId,
-      productId,
-      variantId,
-      quantity,
+    items: values.items.map((item) => ({
+      orderItemId: item.orderItemId,
+      productId: item.productId,
+      variantId: item.variantId,
+      quantity: item.quantity,
+      ...lineProperties(item),
     })),
   };
 }
@@ -145,6 +166,7 @@ export function OrderForm({
   orderLabel,
   cashToCollect = null,
   savedShippingMethod = null,
+  amendShipsNothing = false,
 }: OrderFormProps) {
   const isEdit = mode === "amend";
   const t = useMessages(orderFormMessages);
@@ -192,6 +214,7 @@ export function OrderForm({
       discountAmount: null,
       shippingCharge: 0,
       shippingMethodId: null,
+      shippingMethodKind: null,
       ...defaultValues,
     },
   });
@@ -206,6 +229,8 @@ export function OrderForm({
     quoteItems,
     quoteShipping,
     quoteDiscount,
+    quoteMethodId,
+    quoteMethodKind,
   ] = useWatch({
     control: form.control,
     name: [
@@ -215,8 +240,11 @@ export function OrderForm({
       "items",
       "shippingCharge",
       "discountAmount",
+      "shippingMethodId",
+      "shippingMethodKind",
     ],
   });
+  const needsAddress = orderNeedsAddress({ items: quoteItems, shippingMethodKind: quoteMethodKind });
   const localTotals = React.useMemo(() => {
     const subtotal = quoteItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const shipping = Number(quoteShipping) || 0;
@@ -225,20 +253,23 @@ export function OrderForm({
   }, [quoteDiscount, quoteItems, quoteShipping]);
   const quoteInput = React.useMemo(
     () => ({
-      city: quoteCity,
-      zone: quoteZone,
-      area: quoteArea,
+      // A pickup or no-delivery order is taxed without a destination (store-wide rates only).
+      city: needsAddress ? quoteCity : null,
+      zone: needsAddress ? quoteZone : null,
+      area: needsAddress ? quoteArea : null,
       // Kept lines carry their order line id so they keep their original price.
-      items: quoteItems.map(({ orderItemId, productId, variantId, quantity }) => ({
-        orderItemId,
-        productId,
-        variantId,
-        quantity,
+      items: quoteItems.map((item) => ({
+        orderItemId: item.orderItemId,
+        productId: item.productId,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        ...lineProperties(item),
       })),
       shippingCharge: Number(quoteShipping) || 0,
       discountAmount: quoteDiscount == null ? null : Number(quoteDiscount),
+      ...(quoteMethodId ? { shippingMethodId: quoteMethodId } : {}),
     }),
-    [quoteArea, quoteCity, quoteDiscount, quoteItems, quoteShipping, quoteZone],
+    [needsAddress, quoteArea, quoteCity, quoteDiscount, quoteItems, quoteMethodId, quoteShipping, quoteZone],
   );
   const currencyDecimalPlaces = getDecimalPlaces(currencyCode);
   const localDiscountLimit = React.useMemo(
@@ -248,7 +279,7 @@ export function OrderForm({
   const debouncedQuoteInput = useDebounce(quoteInput, 350);
   const quoteInputIsCurrent =
     JSON.stringify(quoteInput) === JSON.stringify(debouncedQuoteInput);
-  const hasQuotePrerequisites = Boolean(quoteInput.city && quoteInput.zone)
+  const hasQuotePrerequisites = (!needsAddress || Boolean(quoteInput.city && quoteInput.zone))
     && quoteInput.items.length > 0
     && quoteInput.items.every((item) => Boolean(item.variantId) && item.quantity >= 1 && item.quantity <= 99)
     && quoteInput.shippingCharge >= 0
@@ -267,6 +298,8 @@ export function OrderForm({
       // The total depends only on lines, destination, delivery and discount; the
       // saved contact details keep the preview valid while the merchant types.
       const saved = defaultValues ?? {};
+      // An amendment keeps the order's delivery method; only the charge is edited.
+      const { shippingMethodId: _method, ...previewInput } = debouncedQuoteInput as typeof debouncedQuoteInput & { shippingMethodId?: string };
       return apiData(postApiV1AdminOrdersByIdAmendmentsPreview({
         path: { id: String(orderId ?? "") },
         body: {
@@ -274,9 +307,9 @@ export function OrderForm({
           customerName: saved.customerName ?? "",
           customerPhone: saved.customerPhone ?? "",
           customerEmail: saved.customerEmail ?? null,
-          shippingAddress: saved.shippingAddress ?? "",
+          shippingAddress: needsAddress ? saved.shippingAddress ?? "" : null,
           notes: saved.notes ?? null,
-          ...debouncedQuoteInput,
+          ...previewInput,
         },
       }));
     },
@@ -503,6 +536,7 @@ export function OrderForm({
             products={products}
             isEdit={isEdit}
             savedShippingMethod={savedShippingMethod}
+            amendShipsNothing={isEdit && amendShipsNothing}
             localTotals={localTotals}
             manualQuote={manualQuote}
           >

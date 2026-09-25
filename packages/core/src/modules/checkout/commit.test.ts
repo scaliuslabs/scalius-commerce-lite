@@ -618,12 +618,14 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
     }));
 
     const insertedArrays = db.insertValues.filter(Array.isArray) as Array<Array<Record<string, unknown>>>;
-    const itemChunks = insertedArrays.filter((rows) => rows[0]?.fulfillmentStatus === "pending");
+    const itemChunks = insertedArrays.filter((rows) => "fulfillmentType" in (rows[0] ?? {}));
     const taxChunks = insertedArrays.filter((rows) => "rateSnapshot" in (rows[0] ?? {}));
     expect(itemChunks.flat()).toHaveLength(12);
     expect(taxChunks.flat()).toHaveLength(12);
+    // 18 bound values a line row, 6 a tax row (the real-schema budget test
+    // counts the statements of a 99-line commit).
     expect(Math.max(...itemChunks.map((rows) => rows.length))).toBeLessThanOrEqual(5);
-    expect(Math.max(...taxChunks.map((rows) => rows.length))).toBeLessThanOrEqual(7);
+    expect(Math.max(...taxChunks.map((rows) => rows.length))).toBeLessThanOrEqual(16);
   });
 
   it("rejects unbounded checkout line counts before database work", async () => {

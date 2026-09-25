@@ -11,7 +11,7 @@ vi.mock("../payments/refund-attempt-visibility", () => ({
   summarizeActiveRefundOperation: vi.fn(() => null),
 }));
 
-import { createCustomerOrderSupportRequest } from "./order-support-requests";
+import { createCustomerOrderSupportRequest } from "./order-cases";
 
 function createReadQuery(rowsForTable: (table: unknown) => unknown[]) {
   let source: unknown;

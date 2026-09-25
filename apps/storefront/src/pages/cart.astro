@@ -47,11 +47,17 @@ const [
   getCheckoutConfig(),
 ]);
 const shippingMethods: ShippingMethod[] = shippingMethodsResponse || [];
+// Delivery or pickup, like Shopify's checkout: the switch shows only when the
+// store offers both; a pickup-only store never asks for an address.
+const hasPickupRates = shippingMethods.some((method) => method.kind === "pickup");
+const hasDeliveryRates = shippingMethods.some((method) => method.kind !== "pickup");
+const deliveryModeSwitch = hasPickupRates && hasDeliveryRates;
+const pickupOnly = hasPickupRates && !hasDeliveryRates;
 const checkoutUnavailable =
   checkoutConfig.unavailable === true ||
   checkoutConfig.gateways.length === 0 ||
   shippingMethods.length === 0 ||
-  cities.length === 0;
+  (cities.length === 0 && !hasPickupRates);
 const checkoutUnavailableMessage =
   checkoutConfig.unavailableMessage ||
   checkoutLanguageResponse?.languageData.checkoutUnavailableMessage ||
@@ -282,19 +288,36 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     data-cart-ready="false"
     data-cart-has-items="false"
     data-cart-state="loading"
+    data-delivery-need="method"
+    data-delivery-mode={pickupOnly ? "pickup" : "delivery"}
+    data-mode-switch={deliveryModeSwitch ? "true" : "false"}
     class="group container mx-auto max-w-6xl px-4 pb-6 pt-5 sm:px-6 sm:pt-7"
   >
     {/* Before first paint: with nothing saved, the server-rendered empty state
         shows at once instead of after the page scripts load (PERF-01). */}
+    {/* Also before first paint: a cart with nothing physical hides the
+        delivery section, and a buyer who chose pickup sees no address fields,
+        so neither moves the form once the scripts load. */}
     <script is:inline>
       (function () {
         try {
-          var cart = JSON.parse(localStorage.getItem("cart") || "null");
-          var items = cart && cart.items && typeof cart.items === "object" ? Object.keys(cart.items) : [];
+          var root = document.getElementById("cartPageRoot");
+          var cart = JSON.parse(localStorage.getItem("cart:v3") || "null");
+          var lines = cart && cart.items && typeof cart.items === "object" ? cart.items : {};
+          var items = Object.keys(lines);
           var recovery = "scalius_hosted_payment_recovery";
           if (items.length === 0 && !sessionStorage.getItem("quickBuyData")
             && !localStorage.getItem(recovery) && !sessionStorage.getItem(recovery)) {
-            document.getElementById("cartPageRoot").dataset.cartState = "empty";
+            root.dataset.cartState = "empty";
+          }
+          var physical = items.length === 0 || !!sessionStorage.getItem("quickBuyData") || items.some(function (key) {
+            var kind = lines[key] && lines[key].fulfillmentKind;
+            return !kind || kind === "physical";
+          });
+          if (!physical) root.dataset.deliveryNeed = "none";
+          if (root.dataset.modeSwitch === "true") {
+            var draft = JSON.parse(sessionStorage.getItem("scalius_checkout_form_draft") || "null");
+            if (draft && draft.values && draft.values.deliveryMode === "pickup") root.dataset.deliveryMode = "pickup";
           }
         } catch (error) {}
       })();
@@ -467,8 +490,53 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               </div>
             </section>
 
-            <section aria-labelledby="deliveryHeading" class="space-y-3">
+            {/* Nothing physical in the cart (services): no delivery section. */}
+            <p
+              class="hidden rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm text-foreground group-data-[delivery-need=none]:block"
+              data-no-delivery-note
+              role="status"
+            >
+              {copy.noDeliveryNeededText}
+            </p>
+
+            <section aria-labelledby="deliveryHeading" class="space-y-3 group-data-[delivery-need=none]:hidden" data-delivery-section>
               <h2 id="deliveryHeading" class="text-base font-semibold text-foreground">{copy.deliveryHeadingText}</h2>
+              {
+                deliveryModeSwitch && (
+                  <fieldset class="grid grid-cols-2 gap-2" data-delivery-mode-switch>
+                    <legend class="sr-only">{copy.deliveryMethodLegendText}</legend>
+                    {([
+                      ["delivery", copy.deliveryModeShipText],
+                      ["pickup", copy.deliveryModePickupText],
+                    ] as const).map(([mode, label]) => (
+                      <label class="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring">
+                        <input
+                          type="radio"
+                          name="deliveryMode"
+                          value={mode}
+                          checked={mode === "delivery"}
+                          class="h-4 w-4 shrink-0 accent-primary"
+                          onchange="document.getElementById('cartPageRoot').dataset.deliveryMode=this.value"
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </fieldset>
+                )
+              }
+              {pickupOnly && <input type="hidden" name="deliveryMode" value="pickup" />}
+              {
+                deliveryModeSwitch && (
+                  <script is:inline>
+                    (function () {
+                      var root = document.getElementById("cartPageRoot");
+                      var pickup = document.querySelector('input[name="deliveryMode"][value="pickup"]');
+                      if (root && pickup && root.dataset.deliveryMode === "pickup") pickup.checked = true;
+                    })();
+                  </script>
+                )
+              }
+              <fieldset class="m-0 min-w-0 space-y-3 border-0 p-0 group-data-[delivery-mode=pickup]:hidden" data-address-fields>
               <div>
                 <label for="shippingAddress" class={labelClass}>
                   {copy.shippingAddressLabel}
@@ -506,14 +574,18 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 />
                 <p id="shippingLocationError" class={errorClass} role="alert"></p>
               </div>
+              </fieldset>
 
               <CheckoutShippingMethods
                 shippingMethods={shippingMethods}
                 shippingMethodLabel={copy.shippingMethodLabel}
+                pickupLocationLabel={copy.pickupLocationLabel}
+                modeSwitch={deliveryModeSwitch}
                 freeText={copy.freeText}
                 freeOverText={copy.freeOverText}
                 waivedShippingFeeText={copy.waivedShippingFeeText}
                 pickupFromText={copy.pickupFromText}
+                pickupHoursText={copy.pickupHoursText}
                 chooseAddressText={copy.chooseAddressForDeliveryText}
                 noDeliveryText={copy.noDeliveryToAddressText}
                 failedText={copy.deliveryOptionsFailedText}
@@ -524,25 +596,25 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 replacedSameFeeText={copy.deliveryOptionReplacedSameFeeText}
                 goneText={copy.deliveryOptionGoneText}
               />
-
-              {
-                lang.fieldVisibility.showOrderNotesField && (
-                  <div>
-                    <label for="notes" class={labelClass}>
-                      {copy.orderNotesLabel}
-                    </label>
-                    <textarea
-                      id="notes"
-                      name="notes"
-                      maxlength="500"
-                      placeholder={copy.orderNotesPlaceholder}
-                      rows={2}
-                      class={`${fieldClass} h-auto min-h-16 resize-none py-2`}
-                    ></textarea>
-                  </div>
-                )
-              }
             </section>
+
+            {
+              lang.fieldVisibility.showOrderNotesField && (
+                <div>
+                  <label for="notes" class={labelClass}>
+                    {copy.orderNotesLabel}
+                  </label>
+                  <textarea
+                    id="notes"
+                    name="notes"
+                    maxlength="500"
+                    placeholder={copy.orderNotesPlaceholder}
+                    rows={2}
+                    class={`${fieldClass} h-auto min-h-16 resize-none py-2`}
+                  ></textarea>
+                </div>
+              )
+            }
 
             <div>
               <p
@@ -653,7 +725,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
               <span>{copy.subtotalText}</span>
               <span id="subtotal" class="font-medium tabular-nums text-foreground">—</span>
             </div>
-            <div class="flex justify-between gap-3 text-sm text-muted-foreground">
+            <div class="flex justify-between gap-3 text-sm text-muted-foreground group-data-[delivery-need=none]:hidden" id="shippingRow">
               <span>{copy.shippingText}</span>
               <span id="shippingCost" class="text-right font-medium tabular-nums text-foreground">—</span>
             </div>
@@ -735,10 +807,16 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   import {
     cartHasFreeDeliveryItem,
     cartItemsSubtotal,
+    cartNeedsDeliveryMethod,
     cartStore,
     getEffectiveCartShippingFee,
   } from "@/store/cart";
   import { enhanceShippingMethods, fetchDeliveryRates } from "@/lib/checkout/shipping-methods";
+  import {
+    applyCheckoutDeliveryMode,
+    checkoutAddressForMode,
+    readCheckoutDeliveryMode,
+  } from "@/lib/checkout/delivery-mode";
   import { formatMoney } from "@/lib/currency";
   import { browserApiUrl } from "@/lib/api/browser-url";
   import {
@@ -839,8 +917,29 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     readSubtotal: () => cartItemsSubtotal(cartStore.get().items),
     isFeeWaived: () => cartHasFreeDeliveryItem(cartStore.get().items),
     formatMoney,
+    readMode: () => readCheckoutDeliveryMode(),
     signal: cartPageSignal,
   });
+
+  // The checkout path follows the cart (nothing physical: no delivery
+  // section) and the buyer's Delivery/Pickup choice; the address fields are
+  // left out of the form unless delivering.
+  const syncDeliveryPath = () => {
+    const root = document.getElementById("cartPageRoot");
+    const { items } = cartStore.get();
+    const need = Object.keys(items).length === 0 || cartNeedsDeliveryMethod(items) ? "method" : "none";
+    if (root && root.dataset.deliveryNeed !== need) root.dataset.deliveryNeed = need;
+    void shippingMethods?.setMode(applyCheckoutDeliveryMode(document));
+  };
+  syncDeliveryPath();
+  document.addEventListener("cart-updated", syncDeliveryPath, { signal: cartPageSignal });
+  document.getElementById("checkoutForm")?.addEventListener(
+    "change",
+    (event) => {
+      if ((event.target as HTMLInputElement | null)?.name === "deliveryMode") syncDeliveryPath();
+    },
+    { signal: cartPageSignal },
+  );
   window.addEventListener(
     "delivery-rate-changed",
     () => void shippingMethods?.recheck(),
@@ -936,6 +1035,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     "customerName",
     "customerPhone",
     "customerEmail",
+    "deliveryMode",
     "shippingAddress",
     "city",
     "cityName",
@@ -1319,7 +1419,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
     );
 
     const fields = enhanceCheckoutFields(
-      checkoutInformationFields(form, checkoutCopy),
+      checkoutInformationFields(form, checkoutCopy, () => readCheckoutDeliveryMode()),
       cartPageSignal,
     );
     // A restored draft never blurred: say now if a typed value (an email) is wrong.
@@ -1536,23 +1636,42 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
           });
           checkoutData.customerPhone = phoneValidation.value;
 
-          // Location hidden fields that may not be in formData.
-          for (const f of ["city", "zone", "area", "shippingLocation", "cityName", "zoneName", "areaName"]) {
-            const el = findNamedCheckoutControl(document, f);
-            if (el) checkoutData[f] = el.value;
+          // The address travels only when something ships: a pickup or
+          // service order carries none (the disabled address fieldset is not
+          // in the form data; the location controls are read here).
+          const deliveryMode = readCheckoutDeliveryMode();
+          checkoutData.deliveryMode = deliveryMode;
+          const locationValue = (name: string) => findNamedCheckoutControl(document, name)?.value;
+          Object.assign(checkoutData, checkoutAddressForMode(deliveryMode, {
+            shippingAddress: locationValue("shippingAddress"),
+            city: locationValue("city"),
+            zone: locationValue("zone"),
+            area: locationValue("area"),
+            cityName: locationValue("cityName"),
+            zoneName: locationValue("zoneName"),
+            areaName: locationValue("areaName"),
+          }));
+          for (const field of Object.keys(checkoutData)) {
+            if (checkoutData[field] === null || checkoutData[field] === undefined) delete checkoutData[field];
           }
 
-          // The delivery option chosen for this address (validation required one).
-          const shippingMethodId = window.lastShippingEventDetail?.id;
-          const shippingMethodName = window.lastShippingEventDetail?.name;
+          // The delivery or pickup option chosen (validation required one); none without physical items.
+          const chosenMethod = deliveryMode === "none" ? undefined : window.lastShippingEventDetail;
+          const shippingLocation = locationValue("shippingLocation");
+          if (chosenMethod && shippingLocation) checkoutData.shippingLocation = shippingLocation;
+          else delete checkoutData.shippingLocation;
 
-          checkoutData["shippingCharge"] = String(getEffectiveCartShippingFee(
-            JSON.parse(submittedCart),
-            window.lastShippingEventDetail?.fee ?? 0,
-            window.lastShippingEventDetail?.freeOver ?? null,
-          ));
-          if (shippingMethodId) checkoutData["shippingMethodId"] = shippingMethodId;
-          if (shippingMethodName) checkoutData["shippingMethodName"] = shippingMethodName;
+          checkoutData["shippingCharge"] = String(chosenMethod
+            ? getEffectiveCartShippingFee(JSON.parse(submittedCart), chosenMethod.fee, chosenMethod.freeOver)
+            : 0);
+          if (chosenMethod) {
+            checkoutData["shippingMethodId"] = chosenMethod.id;
+            checkoutData["shippingMethodName"] = chosenMethod.name;
+            if (chosenMethod.kind === "pickup") {
+              if (chosenMethod.pickupAddress) checkoutData.pickupAddress = chosenMethod.pickupAddress;
+              if (chosenMethod.pickupHours) checkoutData.pickupHours = chosenMethod.pickupHours;
+            }
+          }
 
           const transferWrite = writeCheckoutTransferSession(
             checkoutData,

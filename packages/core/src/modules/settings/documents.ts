@@ -34,7 +34,14 @@ import {
   sanitizeHomepagePresentationConfig,
   type HomepagePresentationConfig,
 } from "@scalius/shared/homepage-presentation";
-import { ORDER_NOTIFICATION_TYPES } from "../notifications/notification-types";
+import {
+  NOTIFICATION_TYPES,
+  ORDER_NOTIFICATION_TYPES,
+  adminChannelsForType,
+  customerChannelsForType,
+  isNotificationType,
+  type NotificationType,
+} from "../notifications/notification-types";
 import {
   TEMPLATE_LIMITS,
   type NotificationTemplateOverrides,
@@ -424,40 +431,60 @@ export const seoDocument = defineSettingsDocument<SeoSettings>({
 // Notifications: customer/staff order rules and provider credentials.
 // ─────────────────────────────────────────
 
-const CUSTOMER_NOTIFICATION_CHANNELS = ["email", "sms", "whatsapp"] as const;
-const ADMIN_NOTIFICATION_CHANNELS = ["push"] as const;
-
 export type NotificationChannelRules = Record<string, string[]>;
 
+/** Buyer defaults: email for every buyer message; ready-for-pickup also texts (§10). */
+function defaultCustomerChannels(type: NotificationType): string[] {
+  if (type === "conversation_message") return [];
+  if (type === "order_ready_for_pickup") return ["email", "sms"];
+  return ["email"];
+}
+
+/** Staff defaults: push for new and cancelled orders, support requests and buyer messages. */
+function defaultAdminChannels(type: NotificationType): string[] {
+  return type === "order_created"
+    || type === "order_cancelled"
+    || type === "support_request_submitted"
+    || type === "conversation_message"
+    ? ["push"]
+    : [];
+}
+
 export const DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS: NotificationChannelRules = Object.fromEntries(
-  ORDER_NOTIFICATION_TYPES.map((type) => [type, ["email"]]),
+  NOTIFICATION_TYPES.map((type) => [type, defaultCustomerChannels(type)]),
 );
 
 export const DEFAULT_ADMIN_NOTIFICATION_CHANNELS: NotificationChannelRules = Object.fromEntries(
-  ORDER_NOTIFICATION_TYPES.map((type) => [
-    type,
-    type === "order_created" || type === "order_cancelled" || type === "support_request_submitted"
-      ? ["push"]
-      : [],
-  ]),
+  NOTIFICATION_TYPES.map((type) => [type, defaultAdminChannels(type)]),
 );
+
+/** The channels an event may keep: a fixed list, a per-event rule, or anything (null). */
+export type NotificationChannelAllowance =
+  | readonly string[]
+  | ((event: NotificationType) => readonly string[])
+  | null;
+
+/** Buyer channels per event (thread replies never use the order WhatsApp template). */
+export const CUSTOMER_CHANNEL_ALLOWANCE: NotificationChannelAllowance = customerChannelsForType;
+/** Staff channels per event (staff email only for buyer messages). */
+export const ADMIN_CHANNEL_ALLOWANCE: NotificationChannelAllowance = adminChannelsForType;
 
 /**
  * Accepts the dashboard's boolean maps (optionally wrapped in `{ channels }`)
  * or canonical string arrays; unknown events and, unless `allowed` is null,
- * unknown channels are dropped.
+ * channels the event may not use are dropped.
  */
 export function normalizeNotificationChannelRules(
   value: unknown,
   defaults: NotificationChannelRules,
-  allowed: readonly string[] | null,
+  allowed: NotificationChannelAllowance,
 ): NotificationChannelRules {
   if (!value || typeof value !== "object") return { ...defaults };
   const root = value as JsonRecord;
   const record = root.channels ? asRecord(root.channels) : root;
   const result: NotificationChannelRules = { ...defaults };
   for (const [event, entry] of Object.entries(record)) {
-    if (!(ORDER_NOTIFICATION_TYPES as readonly string[]).includes(event)) continue;
+    if (!isNotificationType(event)) continue;
     const channels = Array.isArray(entry)
       ? entry.filter((channel): channel is string => typeof channel === "string")
       : entry && typeof entry === "object"
@@ -465,7 +492,9 @@ export function normalizeNotificationChannelRules(
           .filter(([, enabled]) => enabled)
           .map(([channel]) => channel)
         : null;
-    if (channels) result[event] = allowed ? channels.filter((channel) => allowed.includes(channel)) : channels;
+    if (!channels) continue;
+    const permitted = typeof allowed === "function" ? allowed(event) : allowed;
+    result[event] = permitted ? channels.filter((channel) => permitted.includes(channel)) : channels;
   }
   return result;
 }
@@ -487,12 +516,12 @@ export const notificationsDocument = defineSettingsDocument<NotificationSettings
     orderChannels: z.unknown().transform((value) => normalizeNotificationChannelRules(
       value,
       DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS,
-      CUSTOMER_NOTIFICATION_CHANNELS,
+      CUSTOMER_CHANNEL_ALLOWANCE,
     )),
     adminChannels: z.unknown().transform((value) => normalizeNotificationChannelRules(
       value,
       DEFAULT_ADMIN_NOTIFICATION_CHANNELS,
-      ADMIN_NOTIFICATION_CHANNELS,
+      ADMIN_CHANNEL_ALLOWANCE,
     )),
     staffEmailRecipients: z.array(z.string().max(254)).max(STAFF_EMAIL_RECIPIENTS_MAX),
     whatsappOrderTemplateName: z.string(),

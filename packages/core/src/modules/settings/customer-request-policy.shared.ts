@@ -83,6 +83,45 @@ export const CUSTOMER_REQUEST_STATE_REASONS = {
   refundUnavailable: "Refund requests are available for paid orders after fulfillment starts.",
 } as const;
 
+/**
+ * How the order reaches the buyer, for request wording: shipped to an
+ * address, collected at the store, or nothing to hand over (a service).
+ * Orders without the Wave A facts shipped.
+ */
+export type CustomerRequestDeliveryMode = "ship" | "pickup" | "none";
+
+export function customerRequestDeliveryMode(order: {
+  shippingMethodKind?: string | null;
+  requiresShipping?: boolean | number | null;
+}): CustomerRequestDeliveryMode {
+  if (order.shippingMethodKind === "pickup") return "pickup";
+  return order.requiresShipping === false || order.requiresShipping === 0 ? "none" : "ship";
+}
+
+/** Cancellation wording that names the real deadline: shipping, collection or the service. */
+const CANCELLATION_COPY: Record<CustomerRequestDeliveryMode, { description: string; unavailable: string }> = {
+  ship: {
+    description: CUSTOMER_REQUEST_ACTION_COPY.cancel_pre_shipment.description,
+    unavailable: CUSTOMER_REQUEST_STATE_REASONS.cancellationUnavailable,
+  },
+  pickup: {
+    description: "Ask the store to review this order before it's collected.",
+    unavailable: "Cancellation requests are available until the order is collected.",
+  },
+  none: {
+    description: "Ask the store to review this order before the service is done.",
+    unavailable: "Cancellation requests are available until the service is done.",
+  },
+};
+
+export function cancellationRequestDescription(mode: CustomerRequestDeliveryMode = "ship"): string {
+  return CANCELLATION_COPY[mode].description;
+}
+
+export function cancellationUnavailableReason(mode: CustomerRequestDeliveryMode = "ship"): string {
+  return CANCELLATION_COPY[mode].unavailable;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -142,6 +181,7 @@ export function isCustomerRequestTypeEnabled(
 export function projectCustomerRequestAction(
   policy: CustomerRequestPolicy,
   action: CustomerRequestActionInput,
+  deliveryMode: CustomerRequestDeliveryMode = "ship",
 ): CustomerRequestActionView {
   const copy = CUSTOMER_REQUEST_ACTION_COPY[action.type];
   const enabled = isCustomerRequestTypeEnabled(policy, action.type);
@@ -149,7 +189,9 @@ export function projectCustomerRequestAction(
   return {
     ...action,
     label: copy.requestLabel,
-    description: copy.description,
+    description: action.type === "cancel_pre_shipment"
+      ? cancellationRequestDescription(deliveryMode)
+      : copy.description,
     eligible,
     disabledReason: enabled ? action.disabledReason : copy.disabledByMerchantReason,
     visible: policy.visibility === "show_unavailable" || eligible,
@@ -159,9 +201,9 @@ export function projectCustomerRequestAction(
 export function projectCustomerRequestActions(
   policy: CustomerRequestPolicy,
   actions: readonly CustomerRequestActionInput[],
-  options: { includeHidden?: boolean } = {},
+  options: { includeHidden?: boolean; deliveryMode?: CustomerRequestDeliveryMode } = {},
 ): CustomerRequestActionView[] {
-  const projected = actions.map((action) => projectCustomerRequestAction(policy, action));
+  const projected = actions.map((action) => projectCustomerRequestAction(policy, action, options.deliveryMode));
   return options.includeHidden ? projected : projected.filter((action) => action.visible);
 }
 

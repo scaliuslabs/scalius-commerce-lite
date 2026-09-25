@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   preview: vi.fn(),
+  quote: vi.fn(),
+  create: vi.fn(),
   confirm: vi.fn(),
   navigate: vi.fn(),
 }));
@@ -14,12 +16,12 @@ const state = vi.hoisted(() => ({
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => state.navigate }));
 vi.mock("@/lib/api", () => ({ apiData: (value: unknown) => value }));
 vi.mock("@scalius/api-client/sdk", () => ({
-  postApiV1AdminOrdersQuote: vi.fn(),
+  postApiV1AdminOrdersQuote: state.quote,
   postApiV1AdminOrdersByIdAmendmentsPreview: state.preview,
 }));
 vi.mock("@/lib/api-mutations/orders", () => ({
   orderErrorMessage: () => "Couldn't reach the server.",
-  useCreateOrder: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateOrder: () => ({ mutateAsync: state.create, isPending: false }),
   // isPending never flips here: only the form's own guard can stop a second click.
   useConfirmManualOrderAmendment: () => ({
     mutateAsync: state.confirm,
@@ -120,5 +122,102 @@ describe("edit order review", () => {
     }));
     // The dialog never asks for a fresh preview.
     expect(state.preview).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("create order without an address", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  const quote = {
+    subtotalAmount: 1350, shippingAmount: 0, discountAmount: 0, taxAmount: 0, totalAmount: 1350,
+    balanceDue: 1350, lines: [],
+  };
+  /** A pickup order for an engraved lighter: typed by staff at the counter. */
+  const pickup = {
+    customerName: "Karim Ahmed",
+    customerPhone: "01712345678",
+    customerEmail: null,
+    shippingAddress: "",
+    city: "",
+    zone: "",
+    area: null,
+    notes: null,
+    discountAmount: null,
+    shippingCharge: 0,
+    shippingMethodId: "rate_counter",
+    shippingMethodKind: "pickup" as const,
+    items: [{
+      productId: "p_lighter", variantId: "v_lighter", quantity: 1, price: 1350, fulfillmentKind: "physical" as const,
+      properties: [{ key: "engraving", value: "Rahim" }],
+      propertiesDisplay: [{ key: "engraving", type: "text" as const, label: "Engraving", value: "Rahim", displayValue: "Rahim", priceMinor: 20000 }],
+    }],
+  };
+
+  async function renderCreate(defaultValues: Record<string, unknown>) {
+    await act(async () => root.render(
+      <QueryClientProvider client={new QueryClient()}>
+        <OrderForm mode="create" defaultValues={defaultValues} />
+      </QueryClientProvider>,
+    ));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    await act(async () => {});
+  }
+
+  beforeEach(() => {
+    state.quote.mockReset().mockResolvedValue(quote);
+    state.create.mockReset().mockResolvedValue({ id: "ord_new" });
+    state.navigate.mockReset();
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it("quotes and creates a pickup order with the line's buyer inputs and no address", async () => {
+    await renderCreate(pickup);
+    // No city or zone: the pickup method is enough to price it.
+    expect(state.quote).toHaveBeenCalledWith({ body: expect.objectContaining({
+      city: null, zone: null, shippingMethodId: "rate_counter",
+      items: [expect.objectContaining({ properties: [{ key: "engraving", value: "Rahim" }] })],
+    }) });
+
+    await act(async () => buttonNamed("Create order")!.click());
+    await act(async () => {});
+    expect(state.create).toHaveBeenCalledTimes(1);
+    const [body] = state.create.mock.calls[0]!;
+    expect(body).toMatchObject({
+      shippingAddress: null, city: null, zone: null, area: null, shippingMethodId: "rate_counter",
+      items: [{ productId: "p_lighter", variantId: "v_lighter", quantity: 1, properties: [{ key: "engraving", value: "Rahim" }] }],
+    });
+    // Display-only fields never leave the form.
+    expect(body.items[0]).not.toHaveProperty("propertiesDisplay");
+    expect(body.items[0]).not.toHaveProperty("fulfillmentKind");
+  });
+
+  it("still asks an address for a delivered order", async () => {
+    await renderCreate({ ...pickup, shippingMethodId: null, shippingMethodKind: null });
+    expect(state.quote).not.toHaveBeenCalled();
+    await act(async () => buttonNamed("Create order")!.click());
+    await act(async () => {});
+    expect(state.create).not.toHaveBeenCalled();
+  });
+
+  it("creates an order of services with no delivery method and no address", async () => {
+    await renderCreate({
+      ...pickup,
+      shippingMethodId: null,
+      shippingMethodKind: null,
+      items: [{ productId: "p_setup", variantId: "v_setup", quantity: 1, price: 1500, fulfillmentKind: "service" as const }],
+    });
+    expect(state.quote).toHaveBeenCalledWith({ body: expect.objectContaining({ city: null, zone: null }) });
+    await act(async () => buttonNamed("Create order")!.click());
+    await act(async () => {});
+    expect(state.create.mock.calls[0]![0]).toMatchObject({ shippingAddress: null, city: null, zone: null });
+    expect(state.create.mock.calls[0]![0]).not.toHaveProperty("shippingMethodId");
   });
 });

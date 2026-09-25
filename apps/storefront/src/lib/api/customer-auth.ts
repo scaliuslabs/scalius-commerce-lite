@@ -11,7 +11,13 @@ import {
   unwrapPaymentSessionPayload,
   type PaymentSessionRetryOptions,
 } from "../checkout/payment-session-retry";
-import type { OrderReceiptDiscount } from "./types";
+import type {
+  BuyerOrderFulfilment,
+  OrderFulfilmentFacts,
+  OrderLineFulfilmentFacts,
+  OrderReceiptDiscount,
+} from "./types";
+import type { DeliveryMethodKind } from "@scalius/shared/fulfilment";
 
 // ---------------------------------------------------------------------------
 // Response shapes for customer auth API endpoints
@@ -428,7 +434,10 @@ export interface CustomerOrder {
   paymentStatus: string;
   paymentMethod: string;
   fulfillmentStatus: string;
-  shippingAddress: string;
+  /** Null when nothing ships (pickup, service-only or digital orders). */
+  shippingAddress: string | null;
+  requiresShipping?: boolean;
+  shippingMethodKind?: DeliveryMethodKind | null;
   cityName: string | null;
   zoneName: string | null;
   areaName: string | null;
@@ -621,9 +630,10 @@ export interface CustomerOrderDetailOrder {
   paymentMethod: string;
   fulfillmentStatus: string;
   expectedDelivery: string | null;
-  shippingAddress: string;
-  city: string;
-  zone: string;
+  /** Null when nothing ships (pickup, service-only or digital orders). */
+  shippingAddress: string | null;
+  city: string | null;
+  zone: string | null;
   area: string | null;
   cityName: string | null;
   zoneName: string | null;
@@ -631,11 +641,15 @@ export interface CustomerOrderDetailOrder {
   notes: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  /** The order thread, once the buyer or the store has written on it. */
+  conversationId?: string | null;
 }
 
 export interface CustomerOrderDetail {
-  order: CustomerOrderDetailOrder;
-  items: Array<CustomerOrderItem & {
+  order: CustomerOrderDetailOrder & OrderFulfilmentFacts;
+  /** Each handed-over action: a parcel sent, a pickup, a performed service. */
+  fulfillments?: BuyerOrderFulfilment[];
+  items: Array<CustomerOrderItem & OrderLineFulfilmentFacts & {
     id: string;
     productSlug: string | null;
     unitPrice: number;

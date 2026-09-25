@@ -1,15 +1,17 @@
 import { defineMessages } from "./index";
 
-/** Order events, keyed by `OrderNotificationType` (also the message tab titles). */
+/** Notification events, keyed by `NotificationType` (also the message tab titles). */
 export const notificationEventMessages = defineMessages({
   en: {
     groupOrders: "Orders",
     groupPayments: "Payments and returns",
     groupSupport: "Support",
+    groupConversations: "Conversations",
     order_created: "Order placed",
     order_confirmed: "Order confirmed",
     order_processing: "Order processing",
     order_shipped: "Order shipped",
+    order_ready_for_pickup: "Ready for pickup",
     order_delivered: "Order delivered",
     order_completed: "Order completed",
     order_cancelled: "Order cancelled",
@@ -21,15 +23,19 @@ export const notificationEventMessages = defineMessages({
     payment_balance_paid: "Balance paid",
     support_request_submitted: "Support request received",
     support_request_status_updated: "Support request updated",
+    conversation_reply: "New reply",
+    conversation_message: "New customer message",
   },
   bn: {
     groupOrders: "অর্ডার",
     groupPayments: "পেমেন্ট ও রিটার্ন",
     groupSupport: "সাপোর্ট",
+    groupConversations: "কথোপকথন",
     order_created: "অর্ডার দেওয়া হয়েছে",
     order_confirmed: "অর্ডার কনফার্ম",
     order_processing: "অর্ডার প্রসেসিং",
     order_shipped: "অর্ডার পাঠানো হয়েছে",
+    order_ready_for_pickup: "পিকআপের জন্য প্রস্তুত",
     order_delivered: "অর্ডার ডেলিভারি হয়েছে",
     order_completed: "অর্ডার সম্পন্ন",
     order_cancelled: "অর্ডার বাতিল",
@@ -41,5 +47,7 @@ export const notificationEventMessages = defineMessages({
     payment_balance_paid: "বাকি টাকা পরিশোধ",
     support_request_submitted: "সাপোর্ট রিকোয়েস্ট এসেছে",
     support_request_status_updated: "সাপোর্ট রিকোয়েস্ট আপডেট",
+    conversation_reply: "নতুন উত্তর",
+    conversation_message: "ক্রেতার নতুন মেসেজ",
   },
 });

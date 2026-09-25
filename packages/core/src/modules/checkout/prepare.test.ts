@@ -1068,7 +1068,7 @@ describe("createStorefrontOrder shipping verification", () => {
         zone: "zone_1",
         shippingMethodId: "ship_standard",
       },
-      { hasFreeDeliveryProduct: false, subtotalMinor: 0 },
+      { hasFreeDeliveryProduct: false, subtotalMinor: 0, items: [{ fulfillmentKind: "physical", isGiftCard: false }] },
     );
 
     expect(result.shippingMinor).toBe(1_235);
@@ -1304,6 +1304,12 @@ describe("createStorefrontOrder prevalidated input trust", () => {
               variantId: "var_standard",
               quantity: 1,
               unitPriceMinor: 100,
+              baseUnitPriceMinor: 100,
+              propertiesPriceMinor: 0,
+              properties: [],
+              canonicalProperties: [],
+              fulfillmentKind: "physical",
+              isGiftCard: false,
               productName: "Forged Product",
               variantLabel: null,
               freeDelivery: true,
@@ -1336,6 +1342,15 @@ describe("createStorefrontOrder prevalidated input trust", () => {
         undefined,
         {
           kind: "delivery",
+          address: { city: "city_1", zone: "zone_1", area: null },
+          pickup: null,
+          fulfilment: {
+            lineTypes: ["ship"],
+            requiresDeliveryMethod: true,
+            deliveryMethodKind: "delivery",
+            requiresShipping: true,
+            allowsCashOnDelivery: true,
+          },
           shippingMinor: 0,
           shippingMethod: {
             id: "forged_shipping",

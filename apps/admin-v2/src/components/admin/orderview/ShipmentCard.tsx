@@ -1,16 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -46,7 +36,6 @@ import {
   useCreateOrderShipment,
   useLookupUnknownShipment,
   useMarkOrderDelivered,
-  useMarkParcelReturned,
   useReconcileShipment,
   useResolveUnknownShipment,
 } from "~/lib/api-mutations/orders";
@@ -54,16 +43,13 @@ import { orderCodQueryOptions } from "~/lib/api-query-options/orders";
 import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
 import { queryKeys } from "~/lib/query-keys";
-import { canTransitionTo } from "@scalius/shared/order-state";
 import { cn } from "@scalius/shared/utils";
-import { canSendWithOwnCourier, ManualFulfillmentDialog } from "./ManualFulfillmentDialog";
-import { useCancelRequestGuard } from "./CancelRequestGuard";
 import { getOrderItemName } from "./order-returns/shared";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
 import { statusBadgeVariant } from "./status-badges";
 import type { Order, OrderItem, OrderShipment } from "./types";
-import { canMarkDelivered, isPartSent, type OrderActionRequest } from "./primary-action";
+import { canMarkDelivered, isPartSent } from "./primary-action";
 
 type Outcome = "confirmed_existing" | "confirmed_not_created" | "confirmed_cancelled";
 type EvidenceSource = "courier_portal" | "courier_support";
@@ -315,7 +301,6 @@ function ShipmentRow({
   failureNote,
   money,
   onUpdated,
-  onCameBack,
 }: {
   shipment: OrderShipment;
   items: readonly OrderItem[];
@@ -327,8 +312,6 @@ function ShipmentRow({
   failureNote?: string | null;
   money: (amount: number) => string;
   onUpdated: () => void;
-  /** Own-courier parcel of a part-sent order: record that it came back undelivered. */
-  onCameBack?: () => void;
 }) {
   const t = useMessages(orderDetailMessages);
   const [expanded, setExpanded] = useState(false);
@@ -388,14 +371,12 @@ function ShipmentRow({
           {expanded ? <ShipmentMetadataDisplay metadata={shipment.metadata} /> : null}
         </>
       ) : null}
-      {onCameBack ? (
-        <Button type="button" variant="outline" size="sm" onClick={onCameBack}>{t("shipments.cameBack")}</Button>
-      ) : null}
     </li>
   );
 }
 
-function BookCourier({ order, focusRequest, guard }: {
+/** Book one of the connected couriers for every ship line (the Unfulfilled · Ship card). */
+export function BookCourier({ order, focusRequest, guard }: {
   order: Order;
   focusRequest?: number;
   guard: (run: () => void) => void;
@@ -482,34 +463,32 @@ function BookCourier({ order, focusRequest, guard }: {
 const CLOSED_ORDER_STATUSES = new Set(["cancelled", "returned", "refunded", "incomplete"]);
 const SETTLED_SHIPMENT_STATUSES = new Set(["delivered", "returned", "cancelled", "failed"]);
 
-export function ShipmentCard({ order, request }: { order: Order; request?: OrderActionRequest | null }) {
+/** Whether the order has courier parcels to follow: it ships, or parcels exist from before. */
+export function hasDeliveryCard(order: Pick<Order, "requiresShipping" | "shipments" | "shipmentRecovery">): boolean {
+  return order.requiresShipping !== false
+    || (order.shipments ?? []).length > 0
+    || (order.shipmentRecovery?.state ?? "none") !== "none";
+}
+
+/**
+ * The courier side of an order that ships: each parcel's live status and
+ * tracking, a courier booking that needs checking, and Mark delivered. What
+ * is sent and what is left live on the fulfilment cards above it.
+ */
+export function ShipmentCard({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
-  const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const hydrated = useHydrated();
-  const cardRef = useRef<HTMLDivElement>(null);
   const [courierCheckOpen, setCourierCheckOpen] = useState(false);
-  const [sending, setSending] = useState(false);
-  const cancelRequest = useCancelRequestGuard(order);
-  const guardSend = (run: () => void) => cancelRequest.guard("send", run);
   const permissions = useOrderActionPermissions();
   const canManage = permissions.canManageOrderShipments;
   const deliveredMutation = useMarkOrderDelivered();
-  const cameBackMutation = useMarkParcelReturned();
-  const [cameBack, setCameBack] = useState<OrderShipment | null>(null);
   const read = order.operationalReads?.shipments ?? { status: "ready" as const, refreshing: false };
   const shipments = order.shipments ?? [];
   const status = order.status.toLowerCase();
   const saved = resolveSavedOrderMoneySummary(order);
   const money = (amount: number) => (saved ? formatSavedMajorAmount(amount, saved) : formatCurrencyAmount(amount, order.currencyCode ?? "BDT"));
-  const canBook = canManage
-    && !order.archivedAt
-    && status === "confirmed"
-    && order.items.length > 0
-    && order.fulfillmentStatus !== "complete"
-    && canTransitionTo("order", order.status, "shipped");
-  const canSend = canManage && canSendWithOwnCourier(order);
   const refreshBlockedReason = order.activeRefundOperation?.active
     ? t("locked.refund")
     : order.shipmentRecovery?.activeLock ? t("locked.shipment") : undefined;
@@ -534,22 +513,13 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
         reason: orderDetailLabel(t, "cod.reason.", failure.failureReason ?? "other"),
       })
       : undefined;
-  const cameBackUnits = cameBack ? shipmentLines(cameBack, order.items).reduce((sum, line) => sum + line.quantity, 0) : 0;
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(order.id) });
   };
 
-  useEffect(() => {
-    if (request?.action !== "bookCourier" && request?.action !== "sendOwnCourier") return;
-    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (request.action === "sendOwnCourier" && canSend) setSending(true);
-    // Only a new request should act.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [request?.id]);
-
   return (
-    <Card ref={cardRef} id="order-shipments" className="scroll-mt-4">
+    <Card id="order-shipments" className="scroll-mt-4">
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>{t("shipments.title")}</CardTitle>
         {order.fulfillmentStatus && !CLOSED_ORDER_STATUSES.has(status) ? (
@@ -577,10 +547,6 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
                   failureNote={shipment.id === openShipmentId ? failure?.failureNote : null}
                   money={money}
                   onUpdated={refresh}
-                  onCameBack={canManage && partSent && shipment.providerType === "manual"
-                    && !SETTLED_SHIPMENT_STATUSES.has(shipment.status.toLowerCase())
-                    ? () => setCameBack(shipment)
-                    : undefined}
                 />
               ))}
             </ul>
@@ -593,42 +559,7 @@ export function ShipmentCard({ order, request }: { order: Order; request?: Order
             {t("primary.markDelivered")}
           </Button>
         ) : null}
-        {canBook || canSend ? (
-          <section className="space-y-2 border-t pt-4">
-            {canBook ? <BookCourier order={order} guard={guardSend} focusRequest={request?.action === "bookCourier" ? request.id : undefined} /> : null}
-            {canSend ? (
-              <Button type="button" variant="outline" className="w-full" onClick={() => guardSend(() => setSending(true))}>
-                {t("fulfill.open")}
-              </Button>
-            ) : null}
-          </section>
-        ) : null}
       </CardContent>
-      <ManualFulfillmentDialog order={order} open={sending} onOpenChange={setSending} />
-      <AlertDialog open={cameBack !== null} onOpenChange={(open) => !open && !cameBackMutation.isPending && setCameBack(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("shipments.cameBackTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {cameBackUnits === 1 ? t("shipments.cameBackOne") : t("shipments.cameBackMany", { count: cameBackUnits })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={cameBackMutation.isPending}>{r("cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={cameBackMutation.isPending}
-              onClick={(event) => {
-                event.preventDefault();
-                if (!cameBack) return;
-                cameBackMutation.mutate({ orderId: order.id, shipmentId: cameBack.id }, { onSettled: () => setCameBack(null) });
-              }}
-            >
-              {t("shipments.cameBack")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      {cancelRequest.dialog}
       <CourierCheckDialog
         order={order}
         shipmentId={order.shipmentRecovery?.shipmentId ?? ""}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { orderFormMessages } from "~/i18n/order-form";
 import { editLockMessageKey, orderEditState, savedDeliveryMethod } from "./-order-form-route-state";
+import { formItems } from "~/components/admin/order-form/order-form-data";
 
 const allowed = { allowed: true, reason: null };
 const locked = (reason: string | null) => ({ allowed: false, reason });
@@ -39,12 +40,30 @@ describe("edit order delivery method", () => {
   it("preselects the method the order was placed with", () => {
     expect(savedDeliveryMethod({ shippingMethodId: "rate_ops006", shippingMethodName: "OPS006 Standard Delivery" })).toEqual({
       shippingMethodId: "rate_ops006",
-      savedShippingMethod: { id: "rate_ops006", name: "OPS006 Standard Delivery" },
+      shippingMethodKind: null,
+      savedShippingMethod: { id: "rate_ops006", name: "OPS006 Standard Delivery", kind: null },
     });
+  });
+
+  it("keeps a pickup order a pickup order, so no address is asked", () => {
+    expect(savedDeliveryMethod({ shippingMethodId: "rate_counter", shippingMethodName: "Gulshan counter", shippingMethodKind: "pickup" }))
+      .toMatchObject({ shippingMethodKind: "pickup", savedShippingMethod: { kind: "pickup" } });
+  });
+
+  it("carries what each saved SKU is and shows its frozen buyer inputs without sending them again", () => {
+    const [line] = formItems(
+      [{
+        orderItemId: "oi_1", productId: "p1", variantId: "v1", quantity: 1, price: 1200,
+        properties: [{ key: "engraving", label: "Engraving", displayValue: "Rahim", priceMinor: 20000 }],
+      }],
+      [{ id: "p1", variants: [{ id: "v1", fulfillmentKind: "service" }] }],
+    );
+    expect(line).toMatchObject({ fulfillmentKind: "service", propertiesDisplay: [{ label: "Engraving", displayValue: "Rahim" }] });
+    expect(line).not.toHaveProperty("properties");
   });
 
   it("keeps a custom charge custom", () => {
     expect(savedDeliveryMethod({ shippingMethodId: null, shippingMethodName: null }))
-      .toEqual({ shippingMethodId: null, savedShippingMethod: null });
+      .toEqual({ shippingMethodId: null, shippingMethodKind: null, savedShippingMethod: null });
   });
 });

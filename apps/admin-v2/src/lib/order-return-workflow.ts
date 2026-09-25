@@ -65,7 +65,9 @@ export function getRemainingReturnableQuantities(
   // Only what reached the customer can come back; part of a line may still be unsent.
   return new Map(
     items.map((item) => {
-      const sent = item.shippedQuantity ?? (isReturnItemEligible(item) ? item.quantity : 0);
+      // Services never reach the buyer as goods, so nothing of them comes back (F12).
+      if (item.fulfillmentType && item.fulfillmentType !== "ship" && item.fulfillmentType !== "pickup") return [item.id, 0];
+      const sent = item.fulfilledQuantity ?? item.shippedQuantity ?? (isReturnItemEligible(item) ? item.quantity : 0);
       return [item.id, Math.max(0, sent - (committedByItem.get(item.id) ?? 0))];
     }),
   );

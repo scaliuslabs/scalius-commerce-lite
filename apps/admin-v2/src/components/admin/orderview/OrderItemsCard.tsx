@@ -1,23 +1,16 @@
-import { useMemo, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { Package } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useCurrency } from "~/hooks/use-currency";
-import { useHydrated } from "~/hooks/use-hydrated";
-import { orderReturnsQueryOptions } from "~/lib/api-query-options/orders";
-import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import type { OrderReturnDto } from "~/lib/order-return-workflow";
-import { formatNumber, useMessages } from "~/i18n";
+import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import {
   formatSavedMinorAmount,
-  resolveSavedOrderLineMoney,
   resolveSavedOrderMoneySummary,
 } from "~/lib/order-tax-presentation";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
 import { summarizeOrderDiscounts } from "~/lib/order-discount-summary";
-import { mediaImageUrl } from "@scalius/shared/media-variants";
 import type { Order } from "./types";
 
 /** The store's default tax label is ours to translate; a merchant's own label is shown as typed. */
@@ -39,16 +32,13 @@ export function returnedQuantities(returns: readonly Pick<OrderReturnDto, "lines
 }
 
 /**
- * Lines at their full price (they add up to the subtotal); every discount,
- * delivery and tax is in the summary below, as in Shopify.
+ * The order's money, as in Shopify: the lines (on the fulfilment cards) at
+ * their full price add up to the subtotal; every discount, the delivery and
+ * the tax are here.
  */
-export function OrderItemsCard({ order }: { order: Order }) {
+export function OrderSummaryCard({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const { fmt } = useCurrency();
-  const hydrated = useHydrated();
-  // The Returns card reads the same query; this only reuses it.
-  const returnsQuery = useQuery({ ...orderReturnsQueryOptions(order.id), enabled: hydrated, staleTime: ORDER_DETAIL_PREFETCH_STALE_MS });
-  const returned = useMemo(() => returnedQuantities(returnsQuery.data?.returns ?? []), [returnsQuery.data]);
   const saved = resolveSavedOrderMoneySummary(order);
   const decimals = saved?.decimalPlaces ?? 2;
   const minor = (amount: number) => (saved ? formatSavedMinorAmount(amount, saved) : fmt(amount / 10 ** decimals));
@@ -88,9 +78,12 @@ export function OrderItemsCard({ order }: { order: Order }) {
       : []),
   ];
 
+  const noDelivery = order.requiresShipping === false && order.shippingMethodKind == null
+    && discountSummary.deliveryChargedMinor === 0;
   const summary: SummaryRow[] = [
     { label: t("summary.subtotal"), value: saved ? minor(saved.subtotalMinor) : fmt(legacySubtotal) },
-    {
+    // Nothing physical was bought (a service): no delivery line at all.
+    ...(noDelivery ? [] : [{
       label: delivery.label,
       value: (
         <>
@@ -101,7 +94,7 @@ export function OrderItemsCard({ order }: { order: Order }) {
         </>
       ),
       detail: delivery.details,
-    },
+    }]),
     ...discounts,
     ...(saved && saved.taxMinor > 0
       ? [{
@@ -116,49 +109,10 @@ export function OrderItemsCard({ order }: { order: Order }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t("items.title", { count: order.items.length })}</CardTitle>
+        <CardTitle>{t("summary.title")}</CardTitle>
       </CardHeader>
-      <CardContent className="p-0">
-        <ul className="divide-y">
-          {order.items.map((item) => {
-            const line = resolveSavedOrderLineMoney(item, saved);
-            return (
-              <li key={item.id} className="flex items-start gap-3 px-6 py-3 text-body">
-                <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted">
-                  {item.productImage ? (
-                    <img
-                      src={mediaImageUrl(item.productImage, 128)}
-                      alt=""
-                      className="size-full object-contain"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <Package className="size-5 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 break-words">
-                  <Link
-                    to="/admin/products/$productId/edit"
-                    params={{ productId: item.productId }}
-                    className="font-medium hover:underline"
-                  >
-                    {item.productName || t("items.unnamed")}
-                  </Link>
-                  {item.variantLabel ? <p className="text-muted-foreground">{item.variantLabel}</p> : null}
-                  <p className="text-muted-foreground tabular-nums">
-                    {line ? minor(line.unitPriceMinor) : fmt(item.price)} × {formatNumber(item.quantity)}
-                  </p>
-                  {returned.get(item.id) ? <p className="text-muted-foreground">{t("items.returned", { count: returned.get(item.id)! })}</p> : null}
-                </div>
-                <p className="shrink-0 font-medium tabular-nums">
-                  {line ? minor(line.grossSubtotalMinor) : fmt(item.price * item.quantity)}
-                </p>
-              </li>
-            );
-          })}
-        </ul>
-        <dl className="space-y-1.5 border-t px-6 py-4 text-body tabular-nums">
+      <CardContent>
+        <dl className="space-y-1.5 text-body tabular-nums">
           {summary.map((row, index) => (
             <div key={index} className="flex justify-between gap-4">
               <dt className="min-w-0 text-muted-foreground">

@@ -19,6 +19,7 @@ import type {
 } from "../../../../lib/api-query-options/products";
 import { formatNumber, translate } from "../../../../i18n";
 import { productMessages, type ProductMessageKey } from "../../../../i18n/products";
+import type { ProductFulfilmentMode } from "../fulfilment-mode";
 
 /** Merchant-facing reason the draft can't be saved yet; limits read in the dashboard's digits. */
 const issue = (key: ProductMessageKey, vars?: Record<string, string | number>) =>
@@ -33,6 +34,8 @@ export type DraftOption = {
 
 /** Editor rows always carry a quantity; the save payload omits it for untouched rows. */
 export type DraftVariant = Omit<ProductOptionMatrixInput["variants"][number], "stock"> & { stock: number };
+
+export { fulfilmentModeOf, type ProductFulfilmentMode } from "../fulfilment-mode";
 
 /** The lowest and highest variant price while the product has options. */
 export type VariantPriceRange = { min: number; max: number };
@@ -201,6 +204,10 @@ export function initialVariants(variants: ProductVariant[]): DraftVariant[] {
       discountType: variant.discountType === "flat" ? "flat" : "percentage",
       discountPercentage: variant.discountPercentage ?? null,
       discountAmount: variant.discountAmount ?? null,
+      // Only kinds the editor offers; a digital SKU (Wave B) keeps its kind (omitted).
+      ...(variant.fulfillmentKind === "physical" || variant.fulfillmentKind === "service"
+        ? { fulfillmentKind: variant.fulfillmentKind }
+        : {}),
     }));
 }
 
@@ -212,13 +219,24 @@ export function initialVariants(variants: ProductVariant[]): DraftVariant[] {
 export function matrixSaveVariants(
   variants: DraftVariant[],
   savedVariants: ProductVariant[],
+  mode: ProductFulfilmentMode = "mixed",
 ): ProductOptionMatrixInput["variants"] {
   const savedById = new Map(savedVariants.map((variant) => [variant.id, variant]));
-  return variants.map(({ stock, ...variant }) => {
+  return withFulfilmentMode(variants, mode).map(({ stock, ...variant }) => {
     const saved = savedById.get(variant.id);
     if (!saved) return { ...variant, stock };
     return saved.stock === stock ? variant : { ...variant, stock, expectedStockVersion: saved.stockVersion };
   });
+}
+
+/**
+ * Rows as the save sends them: with one kind for the product, every row
+ * carries it (new rows included), so a variant save after the product save
+ * can never put an old kind back; set per variant, each row keeps its own.
+ */
+export function withFulfilmentMode<T extends Pick<DraftVariant, "fulfillmentKind">>(rows: T[], mode: ProductFulfilmentMode): T[] {
+  if (mode === "mixed") return rows;
+  return rows.map((row) => (row.fulfillmentKind === mode ? row : { ...row, fulfillmentKind: mode }));
 }
 
 export function initialOptions(options: ProductOptionDefinition[]): DraftOption[] {
@@ -278,6 +296,7 @@ export function materializeVariants(
       discountType: shared("discountType") ?? "percentage",
       discountPercentage: shared("discountPercentage") ?? null,
       discountAmount: shared("discountAmount") ?? null,
+      ...(shared("fulfillmentKind") ? { fulfillmentKind: shared("fulfillmentKind") } : {}),
     };
   });
 }

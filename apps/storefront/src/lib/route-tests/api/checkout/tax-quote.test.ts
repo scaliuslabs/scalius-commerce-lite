@@ -59,6 +59,10 @@ function quoteEnvelope(): Record<string, unknown> {
       taxAmount: 49.5,
       totalMinor: 37_950,
       totalAmount: 379.5,
+      deliveryMethodKind: "delivery",
+      requiresShipping: true,
+      pickup: null,
+      allowedPaymentMethods: ["cod"],
       shippingMethod: {
         id: "ship_1",
         name: "Standard delivery",

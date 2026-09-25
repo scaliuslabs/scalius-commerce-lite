@@ -2,30 +2,10 @@
 import type { Database } from "@scalius/database/client";
 import {
     orders,
-    orderItems,
     deliveryShipments,
     OrderStatus,
-    ItemFulfillmentStatus,
 } from "@scalius/database/schema";
-import { sql, eq, and, inArray } from "drizzle-orm";
-
-/**
- * A courier booking sends the whole order: every line is handed over, so
- * returns and return-to-sender can count what was sent. Idempotent.
- */
-export async function markAllOrderItemsSent(db: Database, orderId: string): Promise<void> {
-    await db.update(orderItems).set({
-        shippedQuantity: sql`${orderItems.quantity}`,
-        fulfillmentStatus: ItemFulfillmentStatus.SHIPPED,
-    }).where(and(
-        eq(orderItems.orderId, orderId),
-        inArray(orderItems.fulfillmentStatus, [
-            ItemFulfillmentStatus.PENDING,
-            ItemFulfillmentStatus.PICKED,
-            ItemFulfillmentStatus.PACKED,
-        ]),
-    ));
-}
+import { sql, eq, and } from "drizzle-orm";
 
 export function parseShipmentMetadata(metadata: unknown): Record<string, unknown> {
     if (!metadata) return {};

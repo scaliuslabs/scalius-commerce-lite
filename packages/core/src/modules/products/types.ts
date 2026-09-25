@@ -16,6 +16,8 @@ import {
     MAX_SKU_STOCK,
     MAX_SKU_WEIGHT_GRAMS,
 } from "@scalius/shared/product-options";
+import { editableFulfillmentKindSchema } from "./customization-schema";
+import type { CustomizationView } from "./customization";
 
 // ─────────────────────────────────────────
 // Variant Validation Schemas
@@ -63,6 +65,8 @@ const variantMutationSchema = z.object({
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullable().optional(),
     discountAmount: catalogMoneySchema.nullable().optional(),
+    /** Omit to keep (a new SKU is physical). */
+    fulfillmentKind: editableFulfillmentKindSchema.optional(),
 });
 
 export const createVariantSchema = variantMutationSchema.extend({
@@ -101,7 +105,11 @@ export type CatalogMoneyView<T> = Omit<T, "priceMinor" | "discountBps" | "discou
     discountAmount: number;
 };
 
-export interface ProductWithDetails extends CatalogMoneyView<Product> {
+export interface ProductWithDetails extends Omit<CatalogMoneyView<Product>, "customizationSchema"> {
+    /** Buyer inputs in the decimal HTTP contract; null when none (or unreadable). */
+    customizationSchema: CustomizationView | null;
+    /** The stored schema does not validate: a readiness issue, checkout refuses the product. */
+    customizationSchemaInvalid: boolean;
     category: { name: string };
     variants: Array<CatalogMoneyView<ProductVariant> & { selectedOptions: SelectedProductOption[] }>;
     options: ProductOptionDefinitionRecord[];
@@ -226,6 +234,8 @@ export interface StorefrontFeedProduct {
     freeDelivery: boolean;
     categoryId: string | null;
     excludeFromProductFeed: boolean;
+    /** A buyer input is required: agent carts (variant + quantity only) can't buy it. */
+    requiresCustomization: boolean;
     productCondition: ProductCondition | null;
     hasVariants: boolean;
     availableForSale: boolean;

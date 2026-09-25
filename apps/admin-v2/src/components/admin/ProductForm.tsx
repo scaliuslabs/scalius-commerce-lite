@@ -43,6 +43,8 @@ import { ProductImagesSection } from "./product-form/ProductImagesSection";
 import { PricingCard } from "./product-form/PricingCard";
 import { AttributesSection } from "./product-form/AttributesSection";
 import { ProductSearchListing } from "./product-form/ProductSearchListing";
+import { FulfilmentCard } from "./product-form/FulfilmentCard";
+import { BuyerInputsCard } from "./product-form/BuyerInputsCard";
 import { StatusCard } from "./product-form/StatusCard";
 import { OrganizationCard } from "./product-form/OrganizationCard";
 import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
@@ -65,6 +67,7 @@ import type { ProductRevisionConflict } from "@/lib/admin-api-error";
 import type {
   OptionMatrixEditorHandle,
   ProductCreateComposition,
+  ProductFulfilmentMode,
   VariantPriceRange,
 } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
@@ -86,6 +89,8 @@ interface ProductFormProps {
     isActive: boolean;
     /** The variant editor reports its price range here; with options, variants carry the prices. */
     onPricesChange: (range: VariantPriceRange | null) => void;
+    /** The Fulfilment select: one kind for every SKU, or per variant (a column in the table). */
+    fulfilmentMode: ProductFulfilmentMode;
   }) => React.ReactNode;
   /** The variant editor rendered by `optionManager`. */
   matrixRef: React.RefObject<OptionMatrixEditorHandle | null>;
@@ -101,6 +106,8 @@ interface ProductFormProps {
   initialEdits?: Partial<ProductFormValues> | null;
   /** Throws away the product and variant drafts (the route remounts them from the last save). */
   onDiscard: () => void;
+  /** The saved buyer inputs couldn't be read (a product error, never "no inputs"). */
+  customizationSchemaInvalid?: boolean;
 }
 
 /** Reads the unsaved product draft: its values and the fields the merchant changed. */
@@ -152,6 +159,7 @@ function ProductEditor({
   draftRef,
   initialEdits,
   onDiscard,
+  customizationSchemaInvalid = false,
 }: ProductFormProps) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
@@ -190,6 +198,8 @@ function ProductEditor({
       variantPriced: false,
       attributes: [],
       additionalInfo: [],
+      fulfillmentKind: "physical",
+      customizationSchema: [],
       ...defaultValues,
     },
   });
@@ -379,6 +389,15 @@ function ProductEditor({
                   <ProductVariants form={form} optionManager={optionManager} onPricesChange={setVariantPrices} />
                 </CardContent>
               </Card>
+              <FulfilmentCard form={form} hasOptions={variantPrices !== null} />
+              <BuyerInputsCard
+                form={form}
+                readOnly={readOnly}
+                savedInvalid={customizationSchemaInvalid}
+                conflict={revisionConflict && dirtyFields.customizationSchema && onOpenRevisionConflict
+                  ? { onReview: onOpenRevisionConflict }
+                  : null}
+              />
               <AdditionalSectionsCard form={form} readOnly={readOnly} />
               <AttributesSection form={form} defaultOpen={readOnly} />
               <ProductSearchListing form={form} disabled={readOnly} />
@@ -478,7 +497,10 @@ function ProductVariants({ form, optionManager, onPricesChange }: {
   optionManager: ProductFormProps["optionManager"];
   onPricesChange: (range: VariantPriceRange | null) => void;
 }) {
-  const [media, name, price, isActive] = useWatch({ control: form.control, name: ["media", "name", "price", "isActive"] });
+  const [media, name, price, isActive, fulfilmentMode] = useWatch({
+    control: form.control,
+    name: ["media", "name", "price", "isActive", "fulfillmentKind"],
+  });
   const skuImages = React.useMemo(() => (media ?? [])
     .filter((item) => item.kind === "image")
     .map((item) => ({
@@ -493,8 +515,9 @@ function ProductVariants({ form, optionManager, onPricesChange }: {
   // variant table catches up after the keystroke has painted.
   const productName = React.useDeferredValue(name ?? "");
   const productPrice = React.useDeferredValue(Number.isFinite(price) ? price ?? 0 : 0);
+  const mode = fulfilmentMode ?? "physical";
   return React.useMemo(
-    () => optionManager({ skuImages, productName, productPrice, isActive: Boolean(isActive), onPricesChange }),
-    [optionManager, skuImages, productName, productPrice, isActive, onPricesChange],
+    () => optionManager({ skuImages, productName, productPrice, isActive: Boolean(isActive), onPricesChange, fulfilmentMode: mode }),
+    [optionManager, skuImages, productName, productPrice, isActive, onPricesChange, mode],
   );
 }

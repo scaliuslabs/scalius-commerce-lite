@@ -80,6 +80,11 @@
       "bucket_name": "scalius-media"
     }
   ],
+  // Local image re-encoding (sharp in Miniflare), as in production: media
+  // renditions and conversation attachments (re-encoded to WebP) need it.
+  "images": {
+    "binding": "IMAGES"
+  },
   // One jobs queue; the consumer routes each message by payload.type. The
   // 2 s batch timeout bounds OTP latency; `jobs-dlq` archives exhausted
   // messages into their durable D1 rows.

@@ -8,6 +8,7 @@ import { ENGLISH_CHECKOUT_LANGUAGE_DATA, formatCheckoutLanguageText } from "@sca
 import {
   cartHasFreeDeliveryItem,
   cartItemsSubtotal,
+  cartNeedsDeliveryMethod,
   cartStore,
   createCartItemKey,
   getEffectiveCartShippingFee,
@@ -33,6 +34,11 @@ import {
 import { rememberSubmittedCart } from "../checkout/receipt-finalization";
 import { findNamedCheckoutControl } from "../checkout/form-controls";
 import { checkoutInformationFields, enhanceCheckoutFields, setFieldError } from "../checkout/field-validation";
+import {
+  applyCheckoutDeliveryMode,
+  checkoutAddressForMode,
+  readCheckoutDeliveryMode,
+} from "../checkout/delivery-mode";
 import { storefrontSourcePath } from "../test-source-paths";
 import {
   initCartFunctionality,
@@ -207,6 +213,10 @@ function taxQuote(): CheckoutTaxQuote {
     taxAmount: 0,
     totalMinor: totalAmount * 100,
     totalAmount,
+    deliveryMethodKind: "delivery",
+    requiresShipping: true,
+    pickup: null,
+    allowedPaymentMethods: ["cod"],
     shippingMethod: { id: "standard", name: "Standard", description: null, baseAmountMinor: 6_000, feeWaived: false },
     items: [],
   };
@@ -229,8 +239,12 @@ async function startCartPage(): Promise<void> {
     discardCheckoutFormDraftOfOtherOwner,
     rememberSubmittedCart,
     cartHasFreeDeliveryItem,
+    cartNeedsDeliveryMethod,
     cartStore,
     enhanceShippingMethods,
+    applyCheckoutDeliveryMode,
+    checkoutAddressForMode,
+    readCheckoutDeliveryMode,
     fetchDeliveryRates: deliveryRates,
     cartItemsSubtotal,
     formatMoney,
@@ -277,7 +291,7 @@ describe("cart discount checkout handoff", () => {
     vi.clearAllMocks();
     vi.spyOn(document, "readyState", "get").mockReturnValue("complete");
     installStorageMocks();
-    localStorage.setItem("cart", JSON.stringify(CART_STATE));
+    localStorage.setItem("cart:v3", JSON.stringify(CART_STATE));
     cartStore.set(CART_STATE);
     renderCartDom();
     vi.stubGlobal("fetch", vi.fn().mockImplementation(() => new Response(JSON.stringify({

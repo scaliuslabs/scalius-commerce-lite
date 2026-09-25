@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  ADMIN_TITLE_SUFFIX,
+  adminPageTitle,
   buildAdminRoutePlan,
   classifyAdminRouteState,
   getAdminReadCheckConfig,
+  readCatalogEnglish,
   runAdminReadCheck,
 } from "./admin-read-check.mjs";
+import { pageTitleMessages, titleHead } from "../apps/admin-v2/src/i18n/page-titles.ts";
+import { settingsNavMessages } from "../apps/admin-v2/src/i18n/settings.ts";
+import { readFileSync } from "node:fs";
 
 const config = {
   dashboardBaseUrl: "https://dashboard.example.test",
@@ -497,31 +503,42 @@ describe("authenticated admin read check", () => {
       customerId: "customer-secret",
     });
     expect(complete.routes.map((route) => route.label)).toEqual(expect.arrayContaining([
+      "dashboard",
       "orders_new",
       "order_view",
       "order_edit",
-      "product_view",
       "product_edit",
       "customer_edit",
-      "customer_history",
       "media",
-      "settings_seo",
-      "settings_security",
-      "settings_theme",
+      "inbox",
+      "settings",
       "settings_notifications",
     ]));
-    expect(complete.routes.find((route) => route.label === "settings_seo"))
-      .toMatchObject({ titleIncludes: "General settings | Scalius Admin" });
+    expect(complete.routes.find((route) => route.label === "dashboard")).toMatchObject({ titleIncludes: "Home · Scalius" });
     expect(complete.routes.find((route) => route.label === "settings_notifications"))
-      .toMatchObject({ titleIncludes: "Notifications | Scalius Admin" });
+      .toMatchObject({ titleIncludes: "Notifications · Scalius" });
+    // A title with a runtime value is checked up to it: "Edit order #1001 · Scalius".
+    expect(complete.routes.find((route) => route.label === "order_edit")).toMatchObject({ titleIncludes: "Edit order " });
     expect(complete.skipped).toEqual([]);
 
     const empty = buildAdminRoutePlan();
     expect(empty.skipped).toEqual(expect.arrayContaining([
       { label: "order_edit", reason: "empty_orders" },
       { label: "product_edit", reason: "empty_products" },
-      { label: "customer_history", reason: "empty_customers" },
+      { label: "customer_edit", reason: "empty_customers" },
     ]));
+  });
+
+  it("expects exactly the titles the dashboard's own catalogs and titleHead produce", () => {
+    const source = (file) => readFileSync(new URL(`../apps/admin-v2/src/i18n/${file}`, import.meta.url), "utf8");
+    expect(readCatalogEnglish(source("page-titles.ts"), "pageTitleMessages")).toEqual(pageTitleMessages.en);
+    expect(readCatalogEnglish(source("settings.ts"), "settingsNavMessages")).toEqual(settingsNavMessages.en);
+    for (const key of ["home", "orders", "product", "settings"]) {
+      expect(adminPageTitle(pageTitleMessages.en, key)).toBe(titleHead(pageTitleMessages.en[key]).meta[0].title);
+    }
+    expect(titleHead("Orders").meta[0].title.endsWith(ADMIN_TITLE_SUFFIX)).toBe(true);
+    const editOrder = titleHead(pageTitleMessages.en.editOrder.replace("{number}", "#1001")).meta[0].title;
+    expect(editOrder.startsWith(adminPageTitle(pageTitleMessages.en, "editOrder"))).toBe(true);
   });
 
   it("classifies redirects, route fallbacks, and browser runtime errors without exposing payloads", () => {

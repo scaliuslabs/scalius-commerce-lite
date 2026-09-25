@@ -11,7 +11,7 @@ import { queryKeys } from "~/lib/query-keys";
 
 const en = orderDetailMessages.en;
 
-const mocks = vi.hoisted(() => ({ canManage: true, repair: vi.fn(), delivered: vi.fn(), cameBack: vi.fn() }));
+const mocks = vi.hoisted(() => ({ canManage: true, repair: vi.fn(), delivered: vi.fn() }));
 vi.mock("~/hooks/use-order-action-permissions", () => ({
   useOrderActionPermissions: () => ({ canManageOrderShipments: mocks.canManage, canChangeOrderStatus: mocks.canManage }),
 }));
@@ -19,7 +19,6 @@ vi.mock("~/lib/api-mutations/orders", () => ({
   orderErrorMessage: (error: Error) => error.message,
   useCreateOrderShipment: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
   useMarkOrderDelivered: () => ({ mutate: mocks.delivered, isPending: false }),
-  useMarkParcelReturned: () => ({ mutate: mocks.cameBack, isPending: false }),
   useReconcileShipment: () => ({ mutate: mocks.repair, reset: vi.fn(), isPending: false }),
   useLookupUnknownShipment: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
   useResolveUnknownShipment: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false }),
@@ -28,10 +27,6 @@ vi.mock("~/lib/api-query-options/orders", async () => {
   const { queryKeys: keys } = await import("~/lib/query-keys");
   return { orderCodQueryOptions: (id: string) => ({ queryKey: keys.orders.cod(id), queryFn: () => new Promise(() => undefined) }) };
 });
-vi.mock("./ManualFulfillmentDialog", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./ManualFulfillmentDialog")>()),
-  ManualFulfillmentDialog: () => null,
-}));
 vi.mock("~/components/admin/ShipmentStatusIndicator", () => ({
   default: ({ label }: { label?: string }) => (label ? <p data-testid="shipment-status">{label}</p> : null),
 }));
@@ -136,19 +131,7 @@ describe("ShipmentCard recovery authority", () => {
 
     expect(host.textContent).toContain(en["shipments.empty"]);
     expect(host.textContent).not.toContain(en["shipments.book"]);
-    expect(host.textContent).not.toContain(en["fulfill.open"]);
-  });
-
-  it("offers your own rider for what is left to send", async () => {
-    await render({
-      shipmentRecovery: undefined,
-      items: [{
-        id: "item_shipment", productId: "product_shipment", variantId: null, quantity: 3, shippedQuantity: 1,
-        price: 600, productName: "Kurta", productImage: null, variantLabel: null,
-      }],
-      shipments: [],
-    });
-    expect(host.textContent).toContain(en["fulfill.open"]);
+    expect(host.textContent).not.toContain(en["fulfill.submit"]);
   });
 
   it("lists what each parcel holds", async () => {
@@ -196,18 +179,6 @@ describe("ShipmentCard recovery authority", () => {
     expect(host.textContent).not.toContain(en["shipmentRecovery.failed"]);
   });
 
-  it("records an own-rider parcel of a part-sent order as came back, after confirming", async () => {
-    await render({ shipmentRecovery: undefined, status: "confirmed", fulfillmentStatus: "partial", items: [kurta(3, 1)], shipments: [riderParcel(1)] });
-    const button = [...host.querySelectorAll("button")].find((element) => element.textContent === en["shipments.cameBack"]);
-    await act(async () => button!.click());
-    const dialog = document.querySelector('[role="alertdialog"]');
-    expect(dialog?.textContent).toContain(en["shipments.cameBackOne"]);
-    expect(mocks.cameBack).not.toHaveBeenCalled();
-    const confirm = [...dialog!.querySelectorAll("button")].find((element) => element.textContent === en["shipments.cameBack"]);
-    await act(async () => confirm!.click());
-    expect(mocks.cameBack).toHaveBeenCalledWith({ orderId: order.id, shipmentId: "s1" }, expect.anything());
-  });
-
   it("offers Mark delivered for a shipped, fully sent order paid online", async () => {
     await render({
       shipmentRecovery: undefined, status: "shipped", paymentMethod: "stripe", paymentStatus: "paid", paidAmount: 1200, balanceDue: 0,
@@ -216,7 +187,6 @@ describe("ShipmentCard recovery authority", () => {
     const button = [...host.querySelectorAll("button")].find((element) => element.textContent === en["primary.markDelivered"]);
     await act(async () => button!.click());
     expect(mocks.delivered).toHaveBeenCalledWith({ orderId: order.id });
-    expect([...host.querySelectorAll("button")].some((element) => element.textContent === en["shipments.cameBack"])).toBe(false);
   });
 
   it("offers no Mark delivered for a cash order: collecting the cash delivers it", async () => {
