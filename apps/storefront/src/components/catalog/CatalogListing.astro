@@ -164,6 +164,8 @@ const aspectChips = piece("aspect-chips") && showFilters
 const popularFilters = piece("popular-filter-chips") && products.length > 0
   ? catalogPopularFilters({ facets: filterFacets, currentFilters, pathname, defaultSort, total: pagination.total })
   : [];
+// Aspect chips share the phone bar's line when there is one.
+const phoneChips = aspectChips.length > 0 && showFilters;
 const quickFilters = drawer && showFilters ? catalogQuickFilters({ currentFilters, pathname, defaultSort }) : [];
 
 // Shelves are a browse landing: the plain first page, never a filtered,
@@ -236,9 +238,14 @@ const breadcrumbVisible = piece("breadcrumb");
 {showPhoneBar && (
   <div
     class:list={[
-      "sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 -mx-1 mb-3 grid gap-2 rounded-xl bg-background/95 p-1 backdrop-blur lg:hidden",
-      showFilters && showSort ? "grid-cols-2" : "grid-cols-1",
+      "sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30 mb-3 bg-background/95 backdrop-blur lg:hidden",
+      // eBay's phone row: Filters, sort and one chip per facet on one
+      // scrolling line, so the results start one row higher.
+      phoneChips
+        ? "catalog-chip-row -mx-4 flex items-center gap-2 overflow-x-auto px-4 py-1"
+        : ["-mx-1 grid gap-2 rounded-xl p-1", showFilters && showSort ? "grid-cols-2" : "grid-cols-1"],
     ]}
+    data-catalog-phone-bar
   >
     {showFilters && (
       <button
@@ -246,7 +253,10 @@ const breadcrumbVisible = piece("breadcrumb");
         id="mobile-filter-toggle"
         aria-controls="filter-section"
         aria-expanded="false"
-        class="relative flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm"
+        class:list={[
+          "relative flex min-h-11 shrink-0 items-center justify-center gap-2 border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm",
+          phoneChips ? "rounded-full" : "rounded-lg",
+        ]}
       >
         <SlidersHorizontal className="h-4 w-4" />
         <span>Filters</span>
@@ -260,11 +270,12 @@ const breadcrumbVisible = piece("breadcrumb");
     {showSort && (
       <CatalogViewSelect id="sortByMobile" name="sortBy" variant="compact" options={sortOptions} selected={sortBy} {...viewSelect} />
     )}
+    {phoneChips && <CatalogAspectChips chips={aspectChips} inline />}
   </div>
 )}
 
 <CatalogChipLinks label={pills.length > 0 ? "Categories" : "Sub-categories"} links={pillLinks} class="mb-3 pb-1" />
-<CatalogAspectChips chips={aspectChips} />
+{!phoneChips && <CatalogAspectChips chips={aspectChips} />}
 <CatalogChipLinks label="Popular filters" links={popularFilters} class="mb-3 pb-1" />
 
 <div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement}>

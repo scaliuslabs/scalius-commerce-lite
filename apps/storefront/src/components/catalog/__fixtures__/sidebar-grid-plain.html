@@ -30,8 +30,8 @@
           "Name: Z to A"
         <option value="discount">
           "Biggest discount"
-<div class="-mx-1 backdrop-blur bg-background/95 gap-2 grid grid-cols-2 lg:hidden mb-3 p-1 rounded-xl sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30">
-  <button aria-controls="filter-section" aria-expanded="false" class="bg-background border border-border flex font-semibold gap-2 items-center justify-center min-h-11 px-3 py-2 relative rounded-lg shadow-sm text-foreground text-sm" id="mobile-filter-toggle" type="button">
+<div class="-mx-1 backdrop-blur bg-background/95 gap-2 grid grid-cols-2 lg:hidden mb-3 p-1 rounded-xl sticky top-[calc(var(--header-height,3.5rem)+0.5rem)] z-30" data-catalog-phone-bar="">
+  <button aria-controls="filter-section" aria-expanded="false" class="bg-background border border-border flex font-semibold gap-2 items-center justify-center min-h-11 px-3 py-2 relative rounded-lg shadow-sm shrink-0 text-foreground text-sm" id="mobile-filter-toggle" type="button">
     <svg aria-hidden="true" class="h-4 lucide lucide-sliders-horizontal w-4" fill="none" height="24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" stroke="currentColor" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg">
       <path d="M10 5H3">
       <path d="M12 19H3">
@@ -211,13 +211,13 @@
                     "Min price"
                   <span aria-hidden="true" class="-translate-y-1/2 absolute left-2.5 pointer-events-none text-muted-foreground text-sm top-1/2">
                     "৳"
-                  <input class="catalog-filter-input pl-6" id="catalog-minPrice" inputmode="decimal" name="minPrice" placeholder="500" type="text" value="">
+                  <input class="catalog-filter-input catalog-filter-input--lead" id="catalog-minPrice" inputmode="decimal" name="minPrice" placeholder="500" type="text" value="">
                 <div class="min-w-0 relative">
                   <label class="sr-only" for="catalog-maxPrice">
                     "Max price"
                   <span aria-hidden="true" class="-translate-y-1/2 absolute left-2.5 pointer-events-none text-muted-foreground text-sm top-1/2">
                     "৳"
-                  <input class="catalog-filter-input pl-6" id="catalog-maxPrice" inputmode="decimal" name="maxPrice" placeholder="4500" type="text" value="">
+                  <input class="catalog-filter-input catalog-filter-input--lead" id="catalog-maxPrice" inputmode="decimal" name="maxPrice" placeholder="4500" type="text" value="">
                 <button class="catalog-filter-go" type="submit">
                   "Go"
                   <span class="sr-only">
