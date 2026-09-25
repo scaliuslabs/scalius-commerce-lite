@@ -8975,10 +8975,6 @@
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
-                              },
-                              "updatedAt": {
-                                "type": "string",
-                                "nullable": true
                               }
                             },
                             "required": [
@@ -9000,8 +8996,7 @@
                               "imageAlt",
                               "secondaryImageUrl",
                               "category",
-                              "createdAt",
-                              "updatedAt"
+                              "createdAt"
                             ]
                           }
                         },

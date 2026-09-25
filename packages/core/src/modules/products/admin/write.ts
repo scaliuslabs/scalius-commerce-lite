@@ -48,7 +48,10 @@ import {
 } from "../variants";
 import { buildStockMovementClaim } from "../../inventory/stock-movement-claims";
 import { catalogProjectionRefreshStatements } from "../catalog-projections";
-import { prepareProductAttributeValueRows } from "../../attributes/product-attribute-values";
+import {
+    prepareProductAttributeValueRows,
+    type PlannedProductAttributeValue,
+} from "../../attributes/product-attribute-values";
 import { insertWithDerivedHandle } from "../../../utils/derived-handle";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS, PRODUCT_MEDIA_REORDER_OFFSET } from "../media";
 import { getProductDetails } from "./read";
@@ -625,6 +628,149 @@ export async function createProduct(
     return { id: productId, aggregateRevision: 1 };
 }
 
+type ProductSavePlan = {
+    priceMinor: number;
+    productPrice: ReturnType<typeof catalogPriceColumns>;
+    customizationSchema: string | null | undefined;
+    attributes: readonly PlannedProductAttributeValue[];
+    content: ReadonlyArray<{ id: string; title: string; content: string; sortOrder: number }>;
+    activeVariants: ReadonlyArray<{
+        isDefault: boolean;
+        optionCombinationKey: string | null;
+        priceMinor: number;
+        discountType: string | null;
+        discountBps: number;
+        discountAmountMinor: number;
+        fulfillmentKind: string;
+    }>;
+    mediaPlan: ProductMediaPlan;
+    clearSkuImageIds: readonly string[];
+};
+
+/**
+ * The product's current aggregate revision when saving `data` would change
+ * nothing it writes (product columns, the default SKU, SKU fulfilment kinds,
+ * media, attribute values, rich content), else null. A stale revision or a
+ * trashed product is null too, so the guarded batch reports the conflict.
+ */
+async function unchangedProductSaveRevision(
+    db: Database,
+    id: string,
+    data: UpdateProductInput,
+    plan: ProductSavePlan,
+): Promise<number | null> {
+    if (plan.clearSkuImageIds.length > 0 || plan.mediaPlan.newRows.length > 0) return null;
+    if (data.isActive && plan.activeVariants.length === 0) return null;
+    if (data.fulfillmentKind !== undefined
+        && plan.activeVariants.some((variant) => variant.fulfillmentKind !== data.fulfillmentKind)) return null;
+    if (isSimpleDefaultSkuSet([...plan.activeVariants])) {
+        const sku = plan.activeVariants[0]!;
+        if (sku.priceMinor !== plan.priceMinor || sku.discountType !== "percentage"
+            || sku.discountBps !== 0 || sku.discountAmountMinor !== 0) return null;
+    }
+    const [productRows, mediaRows, attributeRows, contentRows] = await db.batch([
+        db.select({
+            aggregateRevision: products.aggregateRevision,
+            deletedAt: products.deletedAt,
+            name: products.name,
+            description: products.description,
+            priceMinor: products.priceMinor,
+            categoryId: products.categoryId,
+            brandId: products.brandId,
+            slug: products.slug,
+            metaTitle: products.metaTitle,
+            metaDescription: products.metaDescription,
+            canonicalPath: products.canonicalPath,
+            noIndex: products.noIndex,
+            excludeFromSitemap: products.excludeFromSitemap,
+            excludeFromProductFeed: products.excludeFromProductFeed,
+            productCondition: products.productCondition,
+            isActive: products.isActive,
+            discountType: products.discountType,
+            discountBps: products.discountBps,
+            discountAmountMinor: products.discountAmountMinor,
+            freeDelivery: products.freeDelivery,
+            customizationSchema: products.customizationSchema,
+        }).from(products).where(eq(products.id, id)),
+        db.select({
+            id: productMedia.id,
+            altText: productMedia.altText,
+            isPrimary: productMedia.isPrimary,
+            sortOrder: productMedia.sortOrder,
+        }).from(productMedia).where(eq(productMedia.productId, id)),
+        db.select({
+            attributeId: productAttributeValues.attributeId,
+            value: productAttributeValues.value,
+            valueNumber: productAttributeValues.valueNumber,
+            valueId: productAttributeValues.valueId,
+        }).from(productAttributeValues).where(eq(productAttributeValues.productId, id)),
+        db.select({
+            id: productRichContent.id,
+            title: productRichContent.title,
+            content: productRichContent.content,
+            sortOrder: productRichContent.sortOrder,
+        }).from(productRichContent).where(eq(productRichContent.productId, id)),
+    ]);
+    const current = productRows[0];
+    if (!current || current.deletedAt !== null || current.aggregateRevision !== data.expectedAggregateRevision) return null;
+
+    // Product columns: `undefined` is a column the save leaves alone.
+    const discountType = data.discountType || "percentage";
+    const optionPrices = plan.activeVariants
+        .filter((variant) => !variant.isDefault && (variant.optionCombinationKey ?? "").trim() !== "")
+        .map((variant) => variant.priceMinor);
+    const expected: Record<string, unknown> = {
+        name: data.name,
+        description: data.description,
+        priceMinor: optionPrices.length > 0 ? Math.min(...optionPrices) : plan.priceMinor,
+        categoryId: data.categoryId,
+        brandId: data.brandId,
+        slug: data.slug,
+        metaTitle: data.metaTitle,
+        metaDescription: data.metaDescription,
+        canonicalPath: data.canonicalPath ?? null,
+        noIndex: data.noIndex ?? false,
+        excludeFromSitemap: data.excludeFromSitemap ?? false,
+        excludeFromProductFeed: data.excludeFromProductFeed ?? false,
+        productCondition: data.productCondition,
+        isActive: data.isActive,
+        discountType,
+        discountBps: discountType === "percentage" ? (plan.productPrice.discountBps ?? 0) : 0,
+        discountAmountMinor: discountType === "flat" ? (plan.productPrice.discountAmountMinor ?? 0) : 0,
+        freeDelivery: data.freeDelivery,
+        customizationSchema: plan.customizationSchema,
+    };
+    const stored = current as unknown as Record<string, unknown>;
+    for (const [column, value] of Object.entries(expected)) {
+        if (value !== undefined && (stored[column] ?? null) !== (value ?? null)) return null;
+    }
+
+    // Media: the same associations, each with the same alt text, flag and place.
+    const submitted = plan.mediaPlan.rows;
+    if (submitted.length !== mediaRows.length) return null;
+    const storedMedia = new Map(mediaRows.map((row) => [row.id, row]));
+    for (const row of submitted) {
+        const was = storedMedia.get(row.id);
+        if (!was || (was.altText ?? null) !== (row.altText ?? null)
+            || Boolean(was.isPrimary) !== Boolean(row.isPrimary) || was.sortOrder !== row.sortOrder) return null;
+    }
+
+    // Attribute values: the same typed rows (a new enum value is a change).
+    const valueKey = (row: { attributeId: string; value: string; valueNumber: number | null; valueId: string | null }) =>
+        JSON.stringify([row.attributeId, row.value, row.valueNumber === null ? null : Number(row.valueNumber), row.valueId ?? null]);
+    if (plan.attributes.some((row) => row.kind === "enum" && row.valueId === null)) return null;
+    const plannedValues = plan.attributes.map(valueKey).sort();
+    const storedValues = attributeRows.map(valueKey).sort();
+    if (JSON.stringify(plannedValues) !== JSON.stringify(storedValues)) return null;
+
+    // Rich content: the same items.
+    const contentKey = (row: { id: string; title: string; content: string; sortOrder: number }) =>
+        JSON.stringify([row.id, row.title, row.content, row.sortOrder]);
+    if (JSON.stringify(plan.content.map(contentKey).sort()) !== JSON.stringify(contentRows.map(contentKey).sort())) return null;
+
+    return current.aggregateRevision;
+}
+
 /**
  * Updates an existing product, replacing ordered media, rich content, and attributes.
  * Validates that the product exists and the slug is not taken by another product.
@@ -686,6 +832,11 @@ export async function updateProduct(
             id: productVariants.id,
             isDefault: productVariants.isDefault,
             optionCombinationKey: productVariants.optionCombinationKey,
+            priceMinor: productVariants.priceMinor,
+            discountType: productVariants.discountType,
+            discountBps: productVariants.discountBps,
+            discountAmountMinor: productVariants.discountAmountMinor,
+            fulfillmentKind: productVariants.fulfillmentKind,
         })
         .from(productVariants)
         .where(and(eq(productVariants.productId, id), isNull(productVariants.deletedAt)));
@@ -700,6 +851,24 @@ export async function updateProduct(
         removedAssociationIds,
         data.acknowledgedSkuImageRemovalIds ?? [],
     );
+
+    if (!(data.isActive && activeVariants.length === 0) && hasInvalidSkuTopology(activeVariants)) {
+        throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
+    }
+
+    // A save that changes nothing writes nothing: no revision bump, no
+    // updated_at, no row rewritten (so no cache dependency advances).
+    const unchangedRevision = await unchangedProductSaveRevision(db, id, data, {
+        priceMinor,
+        productPrice,
+        customizationSchema,
+        attributes: attributeRows.planned,
+        content: contentToInsert,
+        activeVariants,
+        mediaPlan,
+        clearSkuImageIds,
+    });
+    if (unchangedRevision !== null) return { aggregateRevision: unchangedRevision };
 
     // Drizzle D1 batch() requires specific tuple types
     const batchOps: unknown[] = [

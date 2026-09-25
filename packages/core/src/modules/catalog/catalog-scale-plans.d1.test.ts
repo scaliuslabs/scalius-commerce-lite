@@ -101,7 +101,7 @@ describe("catalogue-scale query plans", () => {
         const result = await getStorefrontCategoryProducts(db, {
             id: "cat_laptop", name: "Laptop", slug: "laptop", description: null, imageUrl: null,
             metaTitle: null, metaDescription: null, canonicalPath: null, noIndex: false,
-            excludeFromSitemap: false, createdAt: null, updatedAt: null,
+            excludeFromSitemap: false, createdAt: null,
         }, { page: 1, limit: 20 });
 
         expect(result.products.map((product) => product.id)).toEqual(["prod_a", "prod_b"]);
@@ -388,7 +388,7 @@ describe("catalogue-scale query plans", () => {
         const result = await getStorefrontCategoryProducts(db, {
             id: "cat_laptop", name: "Laptop", slug: "laptop", description: null, imageUrl: null,
             metaTitle: null, metaDescription: null, canonicalPath: null, noIndex: false,
-            excludeFromSitemap: false, createdAt: null, updatedAt: null,
+            excludeFromSitemap: false, createdAt: null,
         }, { page: 1, limit: 20, attributeFilters: filters });
 
         expect(result.products.map((product) => product.id)).toEqual(["prod_a"]);
