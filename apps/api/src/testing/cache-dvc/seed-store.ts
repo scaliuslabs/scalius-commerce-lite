@@ -5,7 +5,8 @@
  * products with media, attributes, facets, rich content, bundles, manual and
  * dynamic collections, CMS pages and articles, a published navigation, hero
  * slides, settings documents, a theme using every section type, shipping,
- * locations, tax, scheduled promotions, checkout languages and analytics.
+ * locations, tax, scheduled promotions, checkout languages, analytics,
+ * reviews of a delivered order's lines and warranty policies.
  *
  * Deterministic: fixed ids and a fixed epoch (`DVC_SEED_EPOCH`).
  */
@@ -247,8 +248,27 @@ function seedSql(): string {
   INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, created_at, updated_at, customer_id) VALUES
     ('o_1', 'A', '01700000001', 'Road', 'city', 'zone', 'delivered', ${T - DAY}, ${T - DAY}, 'cus_1'),
     ('o_2', 'B', '01700000002', 'Road', 'city', 'zone', 'pending', ${T - DAY}, ${T - DAY}, NULL);
-  INSERT INTO order_items (id, order_id, product_id, quantity) VALUES
-    ('oi_1', 'o_1', 'p_linen', 1), ('oi_2', 'o_2', 'p_linen', 1), ('oi_3', 'o_1', 'p_cotton', 2);
+  INSERT INTO order_items (id, order_id, product_id, quantity, fulfilled_quantity) VALUES
+    ('oi_1', 'o_1', 'p_linen', 1, 1), ('oi_2', 'o_2', 'p_linen', 1, 0), ('oi_3', 'o_1', 'p_cotton', 2, 2),
+    -- Delivered lines nobody reviewed yet: a new review (insert) has a line to attach to.
+    ('oi_4', 'o_1', 'p_linen', 1, 1), ('oi_5', 'o_1', 'p_cotton', 1, 1), ('oi_6', 'o_1', 'p_cotton', 1, 1);
+
+  -- Reviews of the delivered order's lines (the stats rows come from the review triggers).
+  INSERT INTO product_reviews (id, product_id, variant_id, order_id, order_item_id, reviewer_key, customer_id, author_type, author_display_name, rating, title, body, status, published_at, created_at, updated_at) VALUES
+    ('rev_linen_0001', 'p_linen', NULL, 'o_1', 'oi_1', 'rk_cus_1', 'cus_1', 'customer', 'Rahim', 5, 'Lovely', 'Soft linen.', 'published', ${T - DAY / 2}, ${T}, ${T}),
+    ('rev_cotton_001', 'p_cotton', NULL, 'o_1', 'oi_3', 'rk_cus_1', 'cus_1', 'customer', 'Rahim', 4, NULL, 'Good fit.', 'published', ${T - DAY / 2}, ${T}, ${T});
+  -- Held by the automatic check: pending, never public until published.
+  INSERT INTO product_reviews (id, product_id, variant_id, order_id, order_item_id, reviewer_key, customer_id, author_type, author_display_name, rating, title, body, status, check_flags, created_at, updated_at) VALUES
+    ('rev_cotton_002', 'p_cotton', NULL, 'o_1', 'oi_6', 'rk_guest_1', NULL, 'guest_receipt', 'Guest', 2, NULL, 'See my site.', 'pending', '["url"]', ${T}, ${T});
+
+  INSERT INTO warranty_policies (id, name, provider, duration_value, duration_unit, replacement_days, terms, current_revision_id, created_at, updated_at) VALUES
+    ('wrp_brand_0001', 'Brand warranty', 'brand', 1, 'years', 7, 'Covers manufacturing defects.', 'wrr_brand_0001', ${T}, ${T}),
+    ('wrp_store_0001', 'Store warranty', 'store', 30, 'days', NULL, NULL, 'wrr_store_0001', ${T}, ${T});
+  INSERT INTO warranty_policy_revisions (id, policy_id, revision, name, provider, duration_value, duration_unit, replacement_days, terms, created_at) VALUES
+    ('wrr_brand_0001', 'wrp_brand_0001', 1, 'Brand warranty', 'brand', 1, 'years', 7, 'Covers manufacturing defects.', ${T}),
+    ('wrr_store_0001', 'wrp_store_0001', 1, 'Store warranty', 'store', 30, 'days', NULL, NULL, ${T});
+  UPDATE products SET warranty_policy_id = 'wrp_brand_0001' WHERE id IN ('p_shoe', 'p_watch');
+  UPDATE products SET warranty_policy_id = 'wrp_store_0001' WHERE id = 'p_bag';
 
   INSERT INTO promotions (id, name, title, method, status, priority, starts_at, ends_at, max_redemptions) VALUES
     ('promo_bxgy', 'Eid: buy 2 linen get a tote', 'Eid offer', 'automatic', 'active', 10, ${promoStart}, ${promoEnd}, NULL),

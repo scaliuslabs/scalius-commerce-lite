@@ -103,7 +103,13 @@ export const STRUCTURAL_OP_GAPS: Readonly<Record<string, string>> = {
  * they change only through parent_id writes, category inserts and deletes.
  */
 export const TRIGGER_OWNED_TABLES: ReadonlySet<string> = new Set(["category_closure"]);
-export const TRIGGER_OWNED_COLUMNS: ReadonlySet<string> = new Set(["categories.depth", "categories.path"]);
+export const TRIGGER_OWNED_COLUMNS: ReadonlySet<string> = new Set([
+  "categories.depth",
+  "categories.path",
+  // Identity: a trigger refuses every update (product_reviews_identity_immutable);
+  // a review with another key is a new row, which inserts cover.
+  "product_reviews.reviewer_key",
+]);
 
 function writableByGenerator(table: string): boolean {
   return !MACHINERY_TABLES.has(table) && !TRIGGER_OWNED_TABLES.has(table);
