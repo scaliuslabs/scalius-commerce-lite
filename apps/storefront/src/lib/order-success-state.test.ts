@@ -5,11 +5,13 @@ import {
   createPurchaseTrackingPayload,
   formatOrderSuccessLabel,
   formatOrderSuccessPaymentMethod,
+  getOrderPaymentPresentation,
   getOrderSuccessNextSteps,
   getOrderSuccessStateKind,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
   isOrderStatusView,
+  receiptGiftCardTenderLabel,
   shouldClearCheckoutCartForOrder,
 } from "./order-success-state";
 import type { OrderReceipt } from "./api/types";
@@ -414,5 +416,64 @@ describe("order success receipt details", () => {
     expect(isOrderStatusView("order_updated", fresh)).toBe(false);
     expect(isOrderStatusView("order_placed", later)).toBe(false);
     expect(isOrderStatusView("payment_issue", { requestedView: "other", freshCheckout: false })).toBe(false);
+  });
+});
+
+describe("gift-card orders on the receipt (Wave B §4.3)", () => {
+  const copy = ENGLISH_CHECKOUT_LANGUAGE_DATA;
+  // The receipt API's shape: succeeded tenders in commit order (a malformed one is skipped).
+  const tenders = {
+    giftCardTenders: [
+      { last4: "7K2Q", amount: 400, amountMinor: 40_000 },
+      { last4: "bad!", amount: 1, amountMinor: 100 },
+    ],
+  };
+
+  it("reads a fully gift-card-paid order as paid and placed, with no payment to finish or retry", () => {
+    const order = makeOrder({ paymentMethod: "gift_card", paymentStatus: "paid", paidAmount: 1200, balanceDue: 0 });
+    const kind = getOrderSuccessStateKind(order);
+    expect(kind).toBe("order_placed");
+    const view = getOrderSuccessViewState(order, copy);
+    expect(view.paymentStatusLabel).toBe("Paid");
+    expect(view.title).toBe(copy.orderReceiptPlacedTitleText);
+    expect(formatOrderSuccessPaymentMethod("gift_card", copy)).toBe("Gift card");
+    expect(formatOrderSuccessPaymentMethod("gift_card", BANGLA_CHECKOUT_LANGUAGE_DATA)).toBe("গিফট কার্ড");
+    expect(canRetryOrderSuccessPayment(order, kind, "failed")).toBe(false);
+    expect(shouldClearCheckoutCartForOrder(order)).toBe(true);
+    // Paid up front: the next steps speak of a paid order, not cash at the door.
+    expect(getOrderSuccessNextSteps(order, kind, copy)[0]).toBe(copy.orderReceiptNextStepsPaidText);
+  });
+
+  it("shows a gift card plus cash on delivery as both tenders with the rest due at the door", () => {
+    const order = { ...makeOrder({ paymentMethod: "cod", paymentStatus: "partial", paidAmount: 400, balanceDue: 800 }), ...tenders };
+    const payment = getOrderPaymentPresentation(order, copy);
+    expect(payment.giftCardTenders).toEqual([{ last4: "7K2Q", amount: 400 }]);
+    expect(receiptGiftCardTenderLabel(payment.giftCardTenders[0]!, copy)).toBe("Gift card •••• 7K2Q");
+    expect(payment.methodLabel).toBe("Gift card + Cash on delivery");
+    expect(payment.statusLabel).toBe(copy.dueOnDeliveryText);
+    expect(payment.balanceLabel).toBe(copy.dueOnDeliveryText);
+    expect(payment.balanceDue).toBe(800);
+    expect(getOrderSuccessStateKind(order)).toBe("order_placed");
+    expect(getOrderSuccessNextSteps(order, "order_placed", copy)[0]).toBe(copy.orderReceiptNextStepsCodText);
+  });
+
+  it("still offers the gateway for the amount due when a card paid part and the gateway did not", () => {
+    const order = {
+      ...makeOrder({ status: "incomplete", paymentMethod: "sslcommerz", paymentStatus: "partial", paidAmount: 400, balanceDue: 800 }),
+      ...tenders,
+    };
+    const kind = getOrderSuccessStateKind(order);
+    expect(kind).toBe("payment_pending");
+    expect(canRetryOrderSuccessPayment(order, kind, null)).toBe(true);
+    const payment = getOrderPaymentPresentation(order, copy);
+    expect(payment.methodLabel).toBe("Gift card + Online payment (SSLCommerz)");
+    expect(payment.balanceLabel).toBe("Amount due");
+    expect(payment.balanceDue).toBe(800);
+  });
+
+  it("reads no tenders from a receipt without the field", () => {
+    const payment = getOrderPaymentPresentation(makeOrder(), copy);
+    expect(payment.giftCardTenders).toEqual([]);
+    expect(payment.methodLabel).toBe("Cash on delivery");
   });
 });

@@ -5,6 +5,7 @@ import {
   type FulfillmentType,
 } from "@scalius/shared/fulfilment";
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
+import { GIFT_CARD_HANDLE_PATTERN, MAX_GIFT_CARDS_PER_ORDER } from "./gift-cards";
 
 export const TAX_QUOTE_MAX_ITEMS = 99;
 export const TAX_QUOTE_MAX_REQUEST_BYTES = 256 * 1024;
@@ -51,6 +52,8 @@ export interface TaxQuoteRequest {
   shippingMethodId?: string;
   discountCodes: string[];
   customerPhone?: string;
+  /** Applied gift cards by apply handle (never a code); absent without cards. */
+  giftCards?: Array<{ handle: string }>;
 }
 
 /** A buyer input as the order will keep it. */
@@ -156,7 +159,34 @@ export interface CheckoutDiscountFacts {
   rejectedCodes: CheckoutRejectedCode[];
 }
 
-export interface CheckoutTaxQuote extends CheckoutDiscountFacts {
+/** What one applied gift card pays on this quote. */
+export interface TaxQuoteGiftCardTender {
+  handle: string;
+  last4: string;
+  applied: number;
+  appliedMinor: number;
+  /** The card's balance as the quote read it. */
+  balance: number;
+  balanceMinor: number;
+}
+
+/** A card the quote could not use (`handle` null for a problem with the cards as a whole). */
+export interface TaxQuoteGiftCardIssue {
+  handle: string | null;
+  code: string;
+  message: string;
+}
+
+/** The gift-card tender on a quote; present whenever the API reports it. */
+export interface CheckoutGiftCardQuoteFacts {
+  giftCardTenders?: TaxQuoteGiftCardTender[];
+  giftCardIssues?: TaxQuoteGiftCardIssue[];
+  /** Total minus gift cards: what cash on delivery or a gateway collects. */
+  amountDue?: number;
+  amountDueMinor?: number;
+}
+
+export interface CheckoutTaxQuote extends CheckoutDiscountFacts, CheckoutGiftCardQuoteFacts {
   valid: true;
   quoteFingerprint: string;
   displayLabel: string;
@@ -349,6 +379,7 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
   const discountCodes = codes.map((code) => requiredString(code, MAX_CODE_LENGTH).toUpperCase());
   const customerPhone = optionalString(value.customerPhone, MAX_PHONE_LENGTH);
   if (customerPhone && customerPhone.length < 7) fail();
+  const giftCards = parseRequestGiftCards(value.giftCards);
 
   return {
     items: value.items.map(parseRequestItem),
@@ -358,7 +389,20 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
     ...(shippingMethodId ? { shippingMethodId } : {}),
     discountCodes: [...new Set(discountCodes)],
     ...(customerPhone ? { customerPhone } : {}),
+    ...(giftCards ? { giftCards } : {}),
   };
+}
+
+/** `giftCards: [{handle}]`, at most five distinct handles; undefined when none. */
+export function parseRequestGiftCards(value: unknown): Array<{ handle: string }> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value) || value.length > MAX_GIFT_CARDS_PER_ORDER) fail();
+  const handles = value.map((entry) => {
+    if (!isRecord(entry) || typeof entry.handle !== "string" || !GIFT_CARD_HANDLE_PATTERN.test(entry.handle)) fail();
+    return entry.handle;
+  });
+  if (new Set(handles).size !== handles.length) fail();
+  return handles.length > 0 ? handles.map((handle) => ({ handle })) : undefined;
 }
 
 function parseQuoteItem(value: unknown): TaxQuoteItem {
@@ -498,6 +542,7 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
   }
 
   const discountFacts = parseDiscountFacts(data);
+  const giftCardFacts = parseGiftCardQuoteFacts(data, totalMinor, decimalPlaces);
 
   if (!Array.isArray(data.items) || data.items.length === 0) fail();
   if (data.items.length > TAX_QUOTE_MAX_ITEMS) fail();
@@ -538,8 +583,90 @@ export function parseTaxQuoteEnvelope(value: unknown): CheckoutTaxQuote {
     pickup,
     allowedPaymentMethods,
     ...discountFacts,
+    ...giftCardFacts,
     items,
   };
+}
+
+const MAX_GIFT_CARD_ISSUES = 10;
+
+/**
+ * The gift-card tender, when the API reports it (an API without gift cards
+ * sends none and the quote is exactly the old one). Applied amounts plus the
+ * amount due must add up to the total, or the quote is refused.
+ */
+export function parseGiftCardQuoteFacts(
+  data: Record<string, unknown>,
+  totalMinor: number,
+  decimalPlaces: number,
+): CheckoutGiftCardQuoteFacts {
+  const { giftCardTenders, giftCardIssues, amountDue, amountDueMinor } = data;
+  if (
+    giftCardTenders === undefined &&
+    giftCardIssues === undefined &&
+    amountDue === undefined &&
+    amountDueMinor === undefined
+  ) {
+    return {};
+  }
+  const tenders = giftCardTenders ?? [];
+  const issues = giftCardIssues ?? [];
+  if (!Array.isArray(tenders) || tenders.length > MAX_GIFT_CARDS_PER_ORDER) fail();
+  if (!Array.isArray(issues) || issues.length > MAX_GIFT_CARD_ISSUES) fail();
+
+  const parsedTenders = tenders.map((tender): TaxQuoteGiftCardTender => {
+    if (!isRecord(tender)) fail();
+    const handle = requiredString(tender.handle, 200);
+    if (!GIFT_CARD_HANDLE_PATTERN.test(handle)) fail();
+    const last4 = requiredString(tender.last4, 4);
+    if (!/^[0-9A-Z]{4}$/.test(last4)) fail();
+    const appliedMinor = nonNegativeSafeInteger(tender.appliedMinor);
+    const applied = nonNegativeAmount(tender.applied);
+    const balanceMinor = nonNegativeSafeInteger(tender.balanceMinor);
+    const balance = nonNegativeAmount(tender.balance);
+    assertAmountMatchesMinor(applied, appliedMinor, decimalPlaces);
+    assertAmountMatchesMinor(balance, balanceMinor, decimalPlaces);
+    if (appliedMinor === 0) fail();
+    return { handle, last4, applied, appliedMinor, balance, balanceMinor };
+  });
+  if (new Set(parsedTenders.map(({ handle }) => handle)).size !== parsedTenders.length) fail();
+
+  const parsedIssues = issues.map((issue): TaxQuoteGiftCardIssue => {
+    if (!isRecord(issue)) fail();
+    return {
+      handle: issue.handle === null || issue.handle === undefined
+        ? null
+        : requiredString(issue.handle, 200),
+      code: requiredString(issue.code, 64),
+      message: requiredString(issue.message, 300),
+    };
+  });
+
+  const dueMinor = amountDueMinor === undefined
+    ? totalMinor
+    : nonNegativeSafeInteger(amountDueMinor);
+  const due = amountDue === undefined
+    ? dueMinor / 10 ** decimalPlaces
+    : nonNegativeAmount(amountDue);
+  assertAmountMatchesMinor(due, dueMinor, decimalPlaces);
+  const appliedTotalMinor = parsedTenders.reduce((sum, tender) => sum + tender.appliedMinor, 0);
+  if (appliedTotalMinor + dueMinor !== totalMinor) fail();
+
+  return {
+    giftCardTenders: parsedTenders,
+    giftCardIssues: parsedIssues,
+    amountDue: due,
+    amountDueMinor: dueMinor,
+  };
+}
+
+/** What is left to pay after gift cards: the total when the quote carries no tender. */
+export function quoteAmountDue(
+  quote: Pick<CheckoutTaxQuote, "totalAmount" | "totalMinor" | "amountDue" | "amountDueMinor">,
+): { amountDue: number; amountDueMinor: number } {
+  return typeof quote.amountDueMinor === "number" && typeof quote.amountDue === "number"
+    ? { amountDue: quote.amountDue, amountDueMinor: quote.amountDueMinor }
+    : { amountDue: quote.totalAmount, amountDueMinor: quote.totalMinor };
 }
 
 function parseOffer(value: unknown): CheckoutDiscountOffer {
