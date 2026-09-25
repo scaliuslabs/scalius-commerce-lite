@@ -704,7 +704,10 @@ function showError(title: string, message: string, retry = true): void {
   const messageEl = byId("orderErrorMessage");
   if (titleEl) titleEl.textContent = title;
   if (messageEl) messageEl.textContent = message;
-  byId("orderRetry")?.classList.toggle("hidden", !retry);
+  // The hidden attribute, not the class: the button's `inline-flex` utility
+  // sorts after `hidden` and would keep it on screen.
+  const retryButton = byId("orderRetry");
+  if (retryButton) retryButton.hidden = !retry;
   showOnly("error");
 }
 
