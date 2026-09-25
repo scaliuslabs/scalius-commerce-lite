@@ -12,7 +12,7 @@ import {
   type CheckoutLanguageData,
   type LayoutData,
 } from "@/lib/api";
-import { failureNeedsStoreContact, formatCountdown, getOrderCodeFailureText } from "@/lib/order-lookup";
+import { describeOrderCodeSendRefusal, failureNeedsStoreContact, formatCountdown, getOrderCodeFailureText } from "@/lib/order-lookup";
 import {
   accountOwnerReceiptRedirect,
   readOrderCodeFields,
@@ -81,8 +81,7 @@ if (isPost && orderId) {
       orderNumber = result.data.orderNumber;
       resendAfterSeconds = result.data.resendAfterSeconds;
     } else {
-      needsStoreContact = failureNeedsStoreContact(result.failure);
-      message = getOrderCodeFailureText(copy, result.failure, "send", copy.paymentRecoveryCodesUnavailableText);
+      ({ message, codeSent, resendAfterSeconds, needsStoreContact } = describeOrderCodeSendRefusal(copy, result.failure, copy.paymentRecoveryCodesUnavailableText));
     }
   }
 }

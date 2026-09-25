@@ -70,9 +70,6 @@ interface Props {
   ogPrice?: string;
   ogCurrency?: string;
   noindex?: boolean;
-  /** Build-generated phone shell CSS used when the complete shared sheet is non-blocking. */
-  criticalCss?: string;
-  criticalCssMedia?: string;
   documentLanguage?: string;
 }
 
@@ -90,8 +87,6 @@ const {
   ogPrice,
   ogCurrency,
   noindex,
-  criticalCss,
-  criticalCssMedia,
   documentLanguage = "en",
 } = Astro.props;
 
@@ -359,16 +354,10 @@ if (!window.$RefreshReg$) {
         fallback, so text never shifts. */}
     <ThemeFonts pairing={storefrontTheme.tokens.typography} />
 
-    {
-      criticalCss && (
-        <style
-          is:inline
-          media={criticalCssMedia}
-          data-product-critical
-          set:html={criticalCss}
-        />
-      )
-    }
+    {/* Without JavaScript the phone menu and search buttons open nothing; each
+        header renders a <noscript> link in their place (the drawer's :target,
+        /search), so the dead buttons are hidden instead of shown twice. */}
+    <noscript><style is:inline>#mobile-menu-toggle,#mobile-search-toggle{display:none!important}</style></noscript>
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (the per-request platform context is not available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />

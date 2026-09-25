@@ -33,7 +33,6 @@ import {
   isLayoutBatchedPagePath,
 } from "@/lib/public-worker-cache";
 import { BUILD_ID } from "@/config/build-id";
-import { deferProductGlobalStylesheet } from "@/lib/product-style-delivery";
 import {
   isBrowserContinuationRelayPathname,
 } from "@/lib/browser-continuation-relay";
@@ -111,7 +110,7 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
     }
   }
 
-  const securedResponse = isBrowserContinuationRelayPathname(url.pathname)
+  return isBrowserContinuationRelayPathname(url.pathname)
     ? response
     : setPageCspHeader(
         response,
@@ -123,7 +122,6 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
         },
         getRuntimeCspAllowedDomains(),
       );
-  return deferProductGlobalStylesheet(securedResponse, url.pathname);
 });
 
 // Seeds the request-scoped runtime: derived secrets from SCALIUS_SECRET, then
