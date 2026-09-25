@@ -52,6 +52,7 @@ export const buyerConversationThreadSchema = buyerConversationSummarySchema.exte
 export const staffConversationSummarySchema = z.object({
   id: z.string(),
   subjectType: subjectTypeSchema,
+  subjectId: z.string().nullable(),
   subject: z.string().nullable(),
   status: conversationStatusSchema,
   orderId: z.string().nullable(),

@@ -36,7 +36,7 @@ export const REVIEW_LIMITS = {
   reviewWindowDays: 365,
 } as const;
 
-/** `pending` → `published` | `rejected`; `published` → `rejected` (staff) | `withdrawn` (buyer); `rejected` → `published` (staff restore). */
+/** `pending` → `published` | `rejected` (staff) | `withdrawn` (buyer); `published` → `rejected` (staff) | `withdrawn` (buyer); `rejected` → `published` (staff restore). */
 export const REVIEW_STATUSES = ["pending", "published", "rejected", "withdrawn"] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
@@ -50,6 +50,8 @@ const REVIEW_TRANSITIONS: Readonly<Record<ReviewStatus, readonly { to: ReviewSta
     { to: "published", by: "staff" },
     { to: "published", by: "system" },
     { to: "rejected", by: "staff" },
+    // A buyer may take back a review still waiting for moderation.
+    { to: "withdrawn", by: "buyer" },
   ],
   published: [
     { to: "rejected", by: "staff" },

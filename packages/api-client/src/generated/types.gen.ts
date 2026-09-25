@@ -658,6 +658,71 @@ export type CustomerAccountSummary = {
     activeWarranties: number;
 };
 
+export type BuyerReviews = {
+    toReview: Array<ReviewableLine>;
+    reviews: Array<BuyerReview>;
+};
+
+export type ReviewableLine = {
+    orderId: string;
+    orderNumber: string;
+    orderItemId: string;
+    productId: string;
+    productName: string;
+    productSlug: string | null;
+    variantLabel: string | null;
+    imageUrl: string | null;
+    fulfilledAt: string | null;
+};
+
+export type BuyerReview = {
+    id: string;
+    orderId: string;
+    orderItemId: string;
+    productId: string;
+    productName: string;
+    productSlug: string | null;
+    variantLabel: string | null;
+    rating: number;
+    title: string | null;
+    body: string | null;
+    displayName: string;
+    status: 'pending' | 'published' | 'rejected' | 'withdrawn';
+    reply: {
+        body: string;
+        repliedAt: string;
+    } | null;
+    createdAt: string;
+    publishedAt: string | null;
+    editedAt: string | null;
+    version: number;
+    canEdit: boolean;
+};
+
+export type ReviewWriteResult = {
+    review: BuyerReview;
+    created: boolean;
+    published: boolean;
+};
+
+export type SubmitReviewBody = {
+    orderItemId: string;
+    rating: number;
+    title?: string | null;
+    body?: string | null;
+    displayName?: string | null;
+    clientKey?: string;
+};
+
+export type EditReviewBody = {
+    version: number;
+    withdraw?: true;
+    rating?: number;
+    title?: string | null;
+    body?: string | null;
+    displayName?: string | null;
+};
+
 export type ProductPageContentBlock = {
     type: 'rich-text';
     version: 1;
@@ -829,6 +894,150 @@ export type ProductBundleTier = {
     price: number | null;
     label: string | null;
     isActive: boolean;
+};
+
+/**
+ * Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state.
+ */
+export type ProductReviews = {
+    summary: PublicReviewSummary;
+    items: Array<PublicReview>;
+    nextCursor: string | null;
+} | null;
+
+export type PublicReviewSummary = {
+    /**
+     * Average of published reviews, truncated to two decimals; 0 with none.
+     */
+    average: number;
+    count: number;
+    /**
+     * Published reviews per star, 5★ first.
+     */
+    histogram: Array<{
+        rating: number;
+        count: number;
+    }>;
+};
+
+export type PublicReview = {
+    id: string;
+    rating: number;
+    title: string | null;
+    body: string | null;
+    authorName: string;
+    variantLabel: string | null;
+    verifiedPurchase: true;
+    publishedAt: string;
+    editedAt: string | null;
+    /**
+     * The merchant's public reply ("Response from <store>").
+     */
+    reply: {
+        body: string;
+        repliedAt: string;
+    } | null;
+};
+
+export type AdminReviewPage = {
+    items: Array<AdminReview>;
+    nextCursor: string | null;
+};
+
+export type AdminReview = {
+    id: string;
+    status: 'pending' | 'published' | 'rejected' | 'withdrawn';
+    rating: number;
+    title: string | null;
+    body: string | null;
+    authorName: string;
+    authorType: 'customer' | 'guest_receipt';
+    variantLabel: string | null;
+    product: {
+        id: string;
+        name: string;
+        slug: string | null;
+        imageUrl: string | null;
+    };
+    order: {
+        id: string;
+        orderNumber: string;
+    };
+    /**
+     * Why the automatic check held it: url, email, phone, repeated_characters, block_word.
+     */
+    checkFlags: Array<string>;
+    moderationReason: 'spam' | 'abusive' | 'personal_info' | 'off_topic' | 'not_about_product' | null;
+    reply: {
+        body: string;
+        repliedAt: string;
+        authorName: string | null;
+    } | null;
+    conversationId: string | null;
+    createdAt: string;
+    publishedAt: string | null;
+    editedAt: string | null;
+    updatedAt: string;
+    version: number;
+};
+
+export type AdminReviewSummary = {
+    pending: number;
+    published: number;
+    rejected: number;
+    product: ProductReviewStatsSummary;
+};
+
+export type ProductReviewStatsSummary = {
+    productId: string;
+    productName: string;
+    count: number;
+    average: number;
+    histogram: Array<{
+        rating: number;
+        count: number;
+    }>;
+} | null;
+
+export type ReviewSettings = {
+    enabled: boolean;
+    moderation: 'auto' | 'hold';
+    requestsEnabled: boolean;
+    requestDelayDays: number;
+    blockWords: Array<string>;
+    revision: number;
+};
+
+export type ReviewSettingsBody = {
+    enabled?: boolean;
+    moderation?: 'auto' | 'hold';
+    requestsEnabled?: boolean;
+    requestDelayDays?: number;
+    blockWords?: Array<string>;
+    expectedRevision: number;
+};
+
+export type ModerateReviewsResult = {
+    updated: Array<{
+        id: string;
+        previousStatus: 'pending' | 'published' | 'rejected' | 'withdrawn';
+    }>;
+    skipped: Array<string>;
+};
+
+export type ModerateReviewsBody = {
+    ids: Array<string>;
+    action: 'publish' | 'reject' | 'restore';
+    /**
+     * Required to reject. A content reason; a low rating is never one.
+     */
+    reason?: 'spam' | 'abusive' | 'personal_info' | 'off_topic' | 'not_about_product';
+    requestKey: string;
+};
+
+export type ReviewReplyBody = {
+    body: string | null;
+    version: number;
 };
 
 export type GetApiV1AuthTokenData = {
@@ -1759,7 +1968,11 @@ export type GetApiV1CollectionsByIdData = {
     query?: {
         page?: number;
         limit?: number;
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+        /**
+         * Only products whose published-review average is at least this many whole stars (1-4).
+         */
+        minRating?: number;
         search?: string;
         minPrice?: number | null;
         maxPrice?: number | null;
@@ -1848,6 +2061,19 @@ export type GetApiV1CollectionsByIdResponses = {
                 freeDelivery: boolean;
                 categoryId: string | null;
                 hasVariants: boolean;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
             featuredProduct?: {
                 id: string;
@@ -1867,6 +2093,19 @@ export type GetApiV1CollectionsByIdResponses = {
                 freeDelivery: boolean;
                 categoryId: string | null;
                 hasVariants: boolean;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             };
             pagination: {
                 page: number;
@@ -1919,6 +2158,19 @@ export type GetApiV1CollectionsByIdResponses = {
                     min: number;
                     max: number;
                 } | null;
+            }>;
+            /**
+             * "N★ & up" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.
+             */
+            ratingFacet: Array<{
+                /**
+                 * Whole stars: products averaging at least this (`minRating`).
+                 */
+                min: number;
+                /**
+                 * Products matching the other selections and this threshold.
+                 */
+                count: number;
             }>;
         };
     };
@@ -2110,9 +2362,13 @@ export type GetApiV1BrandsBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Sort order
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last.
          */
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+        /**
+         * Only products whose published-review average is at least this many whole stars (1-4).
+         */
+        minRating?: number;
         /**
          * Search within the brand
          */
@@ -2228,6 +2484,19 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 } | null;
                 createdAt: string | null;
                 updatedAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
             pagination: {
                 page: number;
@@ -2281,6 +2550,19 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                     max: number;
                 } | null;
             }>;
+            /**
+             * "N★ & up" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.
+             */
+            ratingFacet: Array<{
+                /**
+                 * Whole stars: products averaging at least this (`minRating`).
+                 */
+                min: number;
+                /**
+                 * Products matching the other selections and this threshold.
+                 */
+                count: number;
+            }>;
             appliedFilters: {
                 attributes: Array<{
                     id: string;
@@ -2292,7 +2574,8 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+                minRating?: number;
                 search?: string;
                 minPrice?: number;
                 maxPrice?: number;
@@ -12157,6 +12440,329 @@ export type GetApiV1CustomerAuthAccountSummaryResponses = {
 
 export type GetApiV1CustomerAuthAccountSummaryResponse = GetApiV1CustomerAuthAccountSummaryResponses[keyof GetApiV1CustomerAuthAccountSummaryResponses];
 
+export type GetApiV1CustomerAuthReviewsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/reviews';
+};
+
+export type GetApiV1CustomerAuthReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthReviewsError = GetApiV1CustomerAuthReviewsErrors[keyof GetApiV1CustomerAuthReviewsErrors];
+
+export type GetApiV1CustomerAuthReviewsResponses = {
+    /**
+     * Reviews
+     */
+    200: {
+        success: true;
+        data: BuyerReviews;
+    };
+};
+
+export type GetApiV1CustomerAuthReviewsResponse = GetApiV1CustomerAuthReviewsResponses[keyof GetApiV1CustomerAuthReviewsResponses];
+
+export type PostApiV1CustomerAuthReviewsData = {
+    body: SubmitReviewBody;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/reviews';
+};
+
+export type PostApiV1CustomerAuthReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthReviewsError = PostApiV1CustomerAuthReviewsErrors[keyof PostApiV1CustomerAuthReviewsErrors];
+
+export type PostApiV1CustomerAuthReviewsResponses = {
+    /**
+     * This line already had its review (idempotent retry)
+     */
+    200: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+    /**
+     * Review submitted
+     */
+    201: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+};
+
+export type PostApiV1CustomerAuthReviewsResponse = PostApiV1CustomerAuthReviewsResponses[keyof PostApiV1CustomerAuthReviewsResponses];
+
+export type PatchApiV1CustomerAuthReviewsByIdData = {
+    body: EditReviewBody;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/reviews/{id}';
+};
+
+export type PatchApiV1CustomerAuthReviewsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1CustomerAuthReviewsByIdError = PatchApiV1CustomerAuthReviewsByIdErrors[keyof PatchApiV1CustomerAuthReviewsByIdErrors];
+
+export type PatchApiV1CustomerAuthReviewsByIdResponses = {
+    /**
+     * The review
+     */
+    200: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+};
+
+export type PatchApiV1CustomerAuthReviewsByIdResponse = PatchApiV1CustomerAuthReviewsByIdResponses[keyof PatchApiV1CustomerAuthReviewsByIdResponses];
+
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
     path?: never;
@@ -13001,9 +13607,13 @@ export type GetApiV1ProductsData = {
          */
         limit?: number;
         /**
-         * Sort order. Defaults to relevance when `search` is set, otherwise newest.
+         * Sort order. Defaults to relevance when `search` is set, otherwise newest. `rating`: the Bayesian review rank, unreviewed products last.
          */
-        sort?: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+        /**
+         * Only products whose published-review average is at least this many whole stars (1-4).
+         */
+        minRating?: number;
         /**
          * Minimum effective buyer-SKU price
          */
@@ -13090,6 +13700,19 @@ export type GetApiV1ProductsResponses = {
                 updatedAt: string | null;
                 discountedPrice: number;
                 priceVaries: boolean;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
                 [key: string]: unknown;
             }>;
             pagination: {
@@ -13143,6 +13766,19 @@ export type GetApiV1ProductsResponses = {
                     min: number;
                     max: number;
                 } | null;
+            }>;
+            /**
+             * "N★ & up" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.
+             */
+            ratingFacet: Array<{
+                /**
+                 * Whole stars: products averaging at least this (`minRating`).
+                 */
+                min: number;
+                /**
+                 * Products matching the other selections and this threshold.
+                 */
+                count: number;
             }>;
             /**
              * Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).
@@ -14057,6 +14693,20 @@ export type GetApiV1ProductsBySlugResponses = {
                     monthly: number;
                     monthlyMinor: number;
                 } | null;
+                reviews: ProductReviews;
+                /**
+                 * The product's warranty policy (its current terms); null without one.
+                 */
+                warranty: {
+                    name: string;
+                    provider: 'brand' | 'store';
+                    duration: {
+                        value: number;
+                        unit: 'days' | 'months' | 'years';
+                    };
+                    replacementDays: number | null;
+                    terms: string | null;
+                } | null;
                 /**
                  * Active automatic Buy X get Y discounts this product counts toward or is given by.
                  */
@@ -14181,6 +14831,106 @@ export type GetApiV1ProductsBySlugResponses = {
 };
 
 export type GetApiV1ProductsBySlugResponse = GetApiV1ProductsBySlugResponses[keyof GetApiV1ProductsBySlugResponses];
+
+export type GetApiV1ProductsByIdReviewsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        sort?: 'recent' | 'highest' | 'lowest';
+        /**
+         * Only reviews with this many stars.
+         */
+        rating?: number;
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/products/{id}/reviews';
+};
+
+export type GetApiV1ProductsByIdReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1ProductsByIdReviewsError = GetApiV1ProductsByIdReviewsErrors[keyof GetApiV1ProductsByIdReviewsErrors];
+
+export type GetApiV1ProductsByIdReviewsResponses = {
+    /**
+     * Reviews
+     */
+    200: {
+        success: true;
+        data: ProductReviews;
+    };
+};
+
+export type GetApiV1ProductsByIdReviewsResponse = GetApiV1ProductsByIdReviewsResponses[keyof GetApiV1ProductsByIdReviewsResponses];
 
 export type GetApiV1CategoriesData = {
     body?: never;
@@ -14627,9 +15377,13 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Sort order
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last.
          */
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+        /**
+         * Only products whose published-review average is at least this many whole stars (1-4).
+         */
+        minRating?: number;
         /**
          * Search within category
          */
@@ -14766,6 +15520,19 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 } | null;
                 createdAt: string | null;
                 updatedAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
             pagination: {
                 page: number;
@@ -14819,6 +15586,19 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                     max: number;
                 } | null;
             }>;
+            /**
+             * "N★ & up" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.
+             */
+            ratingFacet: Array<{
+                /**
+                 * Whole stars: products averaging at least this (`minRating`).
+                 */
+                min: number;
+                /**
+                 * Products matching the other selections and this threshold.
+                 */
+                count: number;
+            }>;
             appliedFilters: {
                 attributes: Array<{
                     id: string;
@@ -14830,7 +15610,8 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+                minRating?: number;
                 search?: string;
                 minPrice?: number;
                 maxPrice?: number;
@@ -14855,7 +15636,11 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         includeSubcategories?: 'true' | 'false';
         page?: number;
         limit?: number;
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+        /**
+         * Only products whose published-review average is at least this many whole stars (1-4).
+         */
+        minRating?: number;
         search?: string;
         minPrice?: number | null;
         maxPrice?: number | null;
@@ -14946,6 +15731,19 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 } | null;
                 createdAt: string | null;
                 updatedAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
             pagination: {
                 page: number;
@@ -14999,6 +15797,19 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                     max: number;
                 } | null;
             }>;
+            /**
+             * "N★ & up" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.
+             */
+            ratingFacet: Array<{
+                /**
+                 * Whole stars: products averaging at least this (`minRating`).
+                 */
+                min: number;
+                /**
+                 * Products matching the other selections and this threshold.
+                 */
+                count: number;
+            }>;
             appliedFilters: {
                 attributes: Array<{
                     id: string;
@@ -15010,7 +15821,8 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+                minRating?: number;
                 search?: string;
                 minPrice?: number;
                 maxPrice?: number;
@@ -17228,6 +18040,343 @@ export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdRespon
 };
 
 export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponse = GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses[keyof GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses];
+
+export type GetApiV1OrdersReceiptByIdReviewsData = {
+    body?: never;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/reviews';
+};
+
+export type GetApiV1OrdersReceiptByIdReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdReviewsError = GetApiV1OrdersReceiptByIdReviewsErrors[keyof GetApiV1OrdersReceiptByIdReviewsErrors];
+
+export type GetApiV1OrdersReceiptByIdReviewsResponses = {
+    /**
+     * Reviews
+     */
+    200: {
+        success: true;
+        data: BuyerReviews;
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdReviewsResponse = GetApiV1OrdersReceiptByIdReviewsResponses[keyof GetApiV1OrdersReceiptByIdReviewsResponses];
+
+export type PostApiV1OrdersReceiptByIdReviewsData = {
+    body: SubmitReviewBody;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/reviews';
+};
+
+export type PostApiV1OrdersReceiptByIdReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdReviewsError = PostApiV1OrdersReceiptByIdReviewsErrors[keyof PostApiV1OrdersReceiptByIdReviewsErrors];
+
+export type PostApiV1OrdersReceiptByIdReviewsResponses = {
+    /**
+     * This line already had its review (idempotent retry)
+     */
+    200: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+    /**
+     * Review submitted
+     */
+    201: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdReviewsResponse = PostApiV1OrdersReceiptByIdReviewsResponses[keyof PostApiV1OrdersReceiptByIdReviewsResponses];
+
+export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdData = {
+    body: EditReviewBody;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        reviewId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/reviews/{reviewId}';
+};
+
+export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdError = PatchApiV1OrdersReceiptByIdReviewsByReviewIdErrors[keyof PatchApiV1OrdersReceiptByIdReviewsByReviewIdErrors];
+
+export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdResponses = {
+    /**
+     * The review
+     */
+    200: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+};
+
+export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdResponse = PatchApiV1OrdersReceiptByIdReviewsByReviewIdResponses[keyof PatchApiV1OrdersReceiptByIdReviewsByReviewIdResponses];
 
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;
@@ -43452,6 +44601,18 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    order_digital_delivered: {
+                        subject: string;
+                        body: string;
+                    };
+                    gift_card_issued: {
+                        subject: string;
+                        body: string;
+                    };
+                    review_request: {
+                        subject: string;
+                        body: string;
+                    };
                 };
                 sms: {
                     order_created: {
@@ -43502,6 +44663,15 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     support_request_status_updated: {
                         body: string;
                     };
+                    order_digital_delivered: {
+                        body: string;
+                    };
+                    gift_card_issued: {
+                        body: string;
+                    };
+                    review_request: {
+                        body: string;
+                    };
                 };
             };
             revision: number;
@@ -43520,7 +44690,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponse = GetApiV
 
 export type PutApiV1AdminSettingsNotificationChannelsTemplatesData = {
     body: {
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'review_request';
         email?: {
             subject: string;
             body: string;
@@ -43690,6 +44860,18 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    order_digital_delivered: {
+                        subject: string;
+                        body: string;
+                    };
+                    gift_card_issued: {
+                        subject: string;
+                        body: string;
+                    };
+                    review_request: {
+                        subject: string;
+                        body: string;
+                    };
                 };
                 sms: {
                     order_created: {
@@ -43740,6 +44922,15 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     support_request_status_updated: {
                         body: string;
                     };
+                    order_digital_delivered: {
+                        body: string;
+                    };
+                    gift_card_issued: {
+                        body: string;
+                    };
+                    review_request: {
+                        body: string;
+                    };
                 };
             };
             revision: number;
@@ -43753,12 +44944,12 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponse = PutApiV
 export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestData = {
     body: {
         channel: 'email';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'review_request';
         subject: string;
         body: string;
     } | {
         channel: 'sms';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'review_request';
         body: string;
         phone: string;
     };
@@ -44007,6 +45198,9 @@ export type PutApiV1AdminSettingsNotificationChannelsData = {
             support_request_submitted: Array<'email' | 'sms' | 'whatsapp'>;
             support_request_status_updated: Array<'email' | 'sms' | 'whatsapp'>;
             conversation_reply?: Array<'email' | 'sms'>;
+            order_digital_delivered?: Array<'email' | 'sms'>;
+            gift_card_issued?: Array<'email' | 'sms'>;
+            review_request?: Array<'email' | 'sms'>;
         };
         whatsappTemplate?: {
             templateName: string;
@@ -44178,6 +45372,8 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
             support_request_submitted: Array<'push'>;
             support_request_status_updated: Array<'push'>;
             conversation_message?: Array<'push' | 'email'>;
+            review_pending?: Array<'push' | 'email'>;
+            digital_keys_exhausted?: Array<'push' | 'email'>;
         };
         emailRecipients: Array<string>;
         expectedRevision: number;
@@ -51524,7 +52720,10 @@ export type GetApiV1AdminConversationsData = {
          * `me`, `none` or a staff user id
          */
         assignee?: string;
-        subjectType?: 'order' | 'store';
+        /**
+         * What the conversation is about: an order, a store question, a review or a warranty claim
+         */
+        subjectType?: 'order' | 'store' | 'warranty_claim' | 'review';
         /**
          * Subject, customer name or order number
          */
@@ -51615,6 +52814,7 @@ export type GetApiV1AdminConversationsResponses = {
             items: Array<{
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -51945,6 +53145,7 @@ export type GetApiV1AdminConversationsOrderByOrderIdResponses = {
             conversation: {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -52114,6 +53315,7 @@ export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponses = {
             conversation: {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -52269,6 +53471,7 @@ export type GetApiV1AdminConversationsByIdResponses = {
             conversation: {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -52437,6 +53640,7 @@ export type PatchApiV1AdminConversationsByIdResponses = {
             conversation: {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -52606,6 +53810,7 @@ export type PostApiV1AdminConversationsByIdMessagesResponses = {
             conversation: {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -64148,6 +65353,786 @@ export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses = {
 };
 
 export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponse = PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses[keyof PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses];
+
+export type GetApiV1AdminReviewsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: 'pending' | 'published' | 'rejected' | 'withdrawn';
+        rating?: number;
+        productId?: string;
+        q?: string;
+        cursor?: string;
+    };
+    url: '/api/v1/admin/reviews';
+};
+
+export type GetApiV1AdminReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReviewsError = GetApiV1AdminReviewsErrors[keyof GetApiV1AdminReviewsErrors];
+
+export type GetApiV1AdminReviewsResponses = {
+    /**
+     * Reviews
+     */
+    200: {
+        success: true;
+        data: AdminReviewPage;
+    };
+};
+
+export type GetApiV1AdminReviewsResponse = GetApiV1AdminReviewsResponses[keyof GetApiV1AdminReviewsResponses];
+
+export type GetApiV1AdminReviewsSummaryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        productId?: string;
+    };
+    url: '/api/v1/admin/reviews/summary';
+};
+
+export type GetApiV1AdminReviewsSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReviewsSummaryError = GetApiV1AdminReviewsSummaryErrors[keyof GetApiV1AdminReviewsSummaryErrors];
+
+export type GetApiV1AdminReviewsSummaryResponses = {
+    /**
+     * Counts
+     */
+    200: {
+        success: true;
+        data: AdminReviewSummary;
+    };
+};
+
+export type GetApiV1AdminReviewsSummaryResponse = GetApiV1AdminReviewsSummaryResponses[keyof GetApiV1AdminReviewsSummaryResponses];
+
+export type GetApiV1AdminReviewsSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/reviews/settings';
+};
+
+export type GetApiV1AdminReviewsSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReviewsSettingsError = GetApiV1AdminReviewsSettingsErrors[keyof GetApiV1AdminReviewsSettingsErrors];
+
+export type GetApiV1AdminReviewsSettingsResponses = {
+    /**
+     * Settings
+     */
+    200: {
+        success: true;
+        data: ReviewSettings;
+    };
+};
+
+export type GetApiV1AdminReviewsSettingsResponse = GetApiV1AdminReviewsSettingsResponses[keyof GetApiV1AdminReviewsSettingsResponses];
+
+export type PutApiV1AdminReviewsSettingsData = {
+    body: ReviewSettingsBody;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/reviews/settings';
+};
+
+export type PutApiV1AdminReviewsSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminReviewsSettingsError = PutApiV1AdminReviewsSettingsErrors[keyof PutApiV1AdminReviewsSettingsErrors];
+
+export type PutApiV1AdminReviewsSettingsResponses = {
+    /**
+     * Saved settings
+     */
+    200: {
+        success: true;
+        data: ReviewSettings;
+    };
+};
+
+export type PutApiV1AdminReviewsSettingsResponse = PutApiV1AdminReviewsSettingsResponses[keyof PutApiV1AdminReviewsSettingsResponses];
+
+export type PostApiV1AdminReviewsModerateData = {
+    body: ModerateReviewsBody;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/reviews/moderate';
+};
+
+export type PostApiV1AdminReviewsModerateErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminReviewsModerateError = PostApiV1AdminReviewsModerateErrors[keyof PostApiV1AdminReviewsModerateErrors];
+
+export type PostApiV1AdminReviewsModerateResponses = {
+    /**
+     * Moderated
+     */
+    200: {
+        success: true;
+        data: ModerateReviewsResult;
+    };
+};
+
+export type PostApiV1AdminReviewsModerateResponse = PostApiV1AdminReviewsModerateResponses[keyof PostApiV1AdminReviewsModerateResponses];
+
+export type GetApiV1AdminReviewsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/reviews/{id}';
+};
+
+export type GetApiV1AdminReviewsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReviewsByIdError = GetApiV1AdminReviewsByIdErrors[keyof GetApiV1AdminReviewsByIdErrors];
+
+export type GetApiV1AdminReviewsByIdResponses = {
+    /**
+     * Review
+     */
+    200: {
+        success: true;
+        data: AdminReview;
+    };
+};
+
+export type GetApiV1AdminReviewsByIdResponse = GetApiV1AdminReviewsByIdResponses[keyof GetApiV1AdminReviewsByIdResponses];
+
+export type PutApiV1AdminReviewsByIdReplyData = {
+    body: ReviewReplyBody;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/reviews/{id}/reply';
+};
+
+export type PutApiV1AdminReviewsByIdReplyErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminReviewsByIdReplyError = PutApiV1AdminReviewsByIdReplyErrors[keyof PutApiV1AdminReviewsByIdReplyErrors];
+
+export type PutApiV1AdminReviewsByIdReplyResponses = {
+    /**
+     * The review
+     */
+    200: {
+        success: true;
+        data: AdminReview;
+    };
+};
+
+export type PutApiV1AdminReviewsByIdReplyResponse = PutApiV1AdminReviewsByIdReplyResponses[keyof PutApiV1AdminReviewsByIdReplyResponses];
+
+export type PostApiV1AdminReviewsByIdConversationData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/reviews/{id}/conversation';
+};
+
+export type PostApiV1AdminReviewsByIdConversationErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminReviewsByIdConversationError = PostApiV1AdminReviewsByIdConversationErrors[keyof PostApiV1AdminReviewsByIdConversationErrors];
+
+export type PostApiV1AdminReviewsByIdConversationResponses = {
+    /**
+     * The review's thread
+     */
+    201: {
+        success: true;
+        data: {
+            conversationId: string;
+        };
+    };
+};
+
+export type PostApiV1AdminReviewsByIdConversationResponse = PostApiV1AdminReviewsByIdConversationResponses[keyof PostApiV1AdminReviewsByIdConversationResponses];
 
 export type DeleteApiV1AdminAbandonedCheckoutsData = {
     body: {

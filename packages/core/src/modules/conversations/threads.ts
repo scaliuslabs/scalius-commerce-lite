@@ -924,6 +924,7 @@ async function staffSummaries(db: Database, rows: Array<{
   return rows.map(({ thread, orderNumber, orderCustomerName, customerName, assigneeName }) => ({
     id: thread.id,
     subjectType: thread.subjectType,
+    subjectId: thread.subjectId,
     subject: thread.subject,
     status: thread.status,
     orderId: thread.orderId,
