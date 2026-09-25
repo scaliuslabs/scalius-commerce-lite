@@ -18,6 +18,7 @@ import { AppError, ConflictError, NotFoundError } from "@scalius/core/errors";
 import type { MoveCategoryInput } from "./categories.validation";
 import { assertCategoryClaimsCurrent } from "./categories.revision";
 import { publicCategoryConditions } from "./categories.publication";
+import { deps } from "../../cache-deps";
 import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 
 /** Links the storefront tree read serves at most (the header's link budget). */
@@ -372,6 +373,7 @@ export async function getPublicCategoryTree(db: Database): Promise<{
     nodes: PublicCategoryTreeNode[];
     truncated: boolean;
 }> {
+    deps.anyCategory();
     const rows = await db
         .select({
             id: categories.id,
@@ -428,6 +430,7 @@ export async function getPublicCategoryChildren(
     options: { limit?: number } = {},
 ): Promise<PublicCategoryChild[]> {
     const limit = Math.min(Math.max(Math.trunc(options.limit ?? CATEGORY_CHILDREN_LIMIT), 1), CATEGORY_CHILDREN_LIMIT);
+    deps.anyCategory();
     return publicChildrenQuery(db, publishedIdBySlug(slug), limit).all() as Promise<PublicCategoryChild[]>;
 }
 
@@ -436,6 +439,7 @@ export async function getPublicCategoryChildren(
  * ancestors root first, ending with the category. One closure read, ≤ 4 rows.
  */
 export async function getPublicCategoryBreadcrumb(db: Database, slug: string): Promise<CategoryBreadcrumbItem[]> {
+    deps.anyCategory();
     const rows = await ancestorsQuery(db, publishedIdBySlug(slug), true).all() as CategoryBreadcrumbItem[];
     return rows.map((row) => ({ ...row, depth: Number(row.depth) }));
 }

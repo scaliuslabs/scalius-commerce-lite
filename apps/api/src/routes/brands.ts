@@ -92,7 +92,6 @@ const brandProductSchema = z.object({
   secondaryImageUrl: z.string().nullable(),
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
-  updatedAt: z.string().nullable(),
 });
 
 

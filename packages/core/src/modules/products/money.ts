@@ -15,6 +15,7 @@ import { currencyDocument } from "../settings/documents";
 import { getCurrencyConfig } from "../settings/settings.service";
 import { toStoreMinor, type StoreCurrency } from "../settings/store-money";
 import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
+import { deps } from "../../cache-deps";
 import type { BuyerCatalogPricingProjection } from "./buyer-projection";
 
 export interface CatalogPriceMinor {
@@ -33,6 +34,8 @@ export async function readStoreDecimalPlaces(db: Database): Promise<number> {
  * carry its own precision without an extra statement.
  */
 export function storeCurrencyCodeSql() {
+    // A statement carrying this subquery reads the currency document.
+    deps.settings(currencyDocument.key, SETTINGS_DOCUMENT_ROW_KEY);
     return sql<string | null>`(
         SELECT CASE WHEN json_valid(${settings.value}) THEN json_extract(${settings.value}, '$.currencyCode') END
         FROM ${settings}
@@ -100,6 +103,7 @@ const DEFAULT_CASH_ROUNDING = cashRoundingMinor(DEFAULT_CURRENCY.code);
  * the price expression and D1 allows at most 100 bound parameters.
  */
 function storeCashRoundingSql(): SQL<number> {
+    deps.settings(currencyDocument.key, SETTINGS_DOCUMENT_ROW_KEY);
     const code = sql`upper(trim(coalesce(CASE WHEN json_valid(${settings.value}) THEN json_extract(${settings.value}, '$.currencyCode') END, '')))`;
     return sql<number>`coalesce((
         SELECT CASE WHEN ${code} IN (${sql.raw(NON_CASH_ROUNDED_CODES)}) THEN 1 ELSE ${sql.raw(String(DEFAULT_CASH_ROUNDING))} END

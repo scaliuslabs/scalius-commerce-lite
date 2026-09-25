@@ -30,6 +30,7 @@ import {
     buyerStatePricingSelection,
     publicBuyerStateCondition,
 } from "./buyer-state";
+import { declareProductCards, declareRequestedProducts, deps } from "./declare-deps";
 
 /** Products one comparison shows (the compare tray's size). */
 export const MAX_COMPARE_PRODUCTS = 4;
@@ -211,6 +212,7 @@ export async function getStorefrontProductComparison(
                 hasCustomerOptions: buyerState.hasCustomerOptions,
                 availableForSale: buyerState.availableForSale,
                 availabilityBand: buyerState.availabilityBand,
+                productBrandId: buyerState.brandId,
                 brandId: brands.id,
                 brandName: brands.name,
                 brandSlug: brands.slug,
@@ -235,11 +237,21 @@ export async function getStorefrontProductComparison(
     const decimalPlaces = storeDecimalPlacesFromCode(cards[0]?.storeCurrencyCode);
     const byId = new Map(cards.map((card) => [card.id, card]));
     const shown = ids.filter((id) => byId.has(id));
+    // Every requested id (a hidden one shows once public), the cards' images
+    // and brands, the stored band, and the spec definitions and groups.
+    declareRequestedProducts(ids);
+    declareProductCards(shown, mediaMap);
+    const brandIds = cards.map((card) => card.productBrandId).filter((id): id is string => Boolean(id));
+    if (brandIds.length > 0) deps.brands(brandIds);
+    else deps.anyBrand();
+    deps.inventoryBands();
+    deps.anyAttribute();
     const comparedProducts = shown.map((id): StorefrontCompareProduct => {
         const {
             hasCustomerOptions,
             availableForSale,
             availabilityBand,
+            productBrandId: _productBrandId,
             brandId,
             brandName,
             brandSlug,

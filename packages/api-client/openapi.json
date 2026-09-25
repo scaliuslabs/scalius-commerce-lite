@@ -7270,6 +7270,133 @@
         "security": []
       }
     },
+    "/api/v1/collections/sitemap": {
+      "get": {
+        "operationId": "storefront.collections.sitemap",
+        "tags": [
+          "Collections"
+        ],
+        "summary": "List collection pages for the XML sitemap",
+        "description": "Active collections without noIndex or a sitemap exclusion, filtered before the limit, with each page's last change.",
+        "responses": {
+          "200": {
+            "description": "Collection sitemap entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "collections": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "canonicalPath",
+                              "updatedAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "collections"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "XML discovery source of up to 5,000 collection URLs for the storefront sitemap; use storefront.collections.list."
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
     "/api/v1/collections/{id}": {
       "get": {
         "operationId": "storefront.collections.get",
@@ -7451,10 +7578,6 @@
                               "type": "string",
                               "nullable": true
                             },
-                            "updatedAt": {
-                              "type": "string",
-                              "nullable": true
-                            },
                             "listingTemplate": {
                               "type": "string",
                               "nullable": true
@@ -7487,7 +7610,6 @@
                             "noIndex",
                             "excludeFromSitemap",
                             "createdAt",
-                            "updatedAt",
                             "listingTemplate",
                             "description",
                             "content",
@@ -8853,10 +8975,6 @@
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
-                              },
-                              "updatedAt": {
-                                "type": "string",
-                                "nullable": true
                               }
                             },
                             "required": [
@@ -8878,8 +8996,7 @@
                               "imageAlt",
                               "secondaryImageUrl",
                               "category",
-                              "createdAt",
-                              "updatedAt"
+                              "createdAt"
                             ]
                           }
                         },
@@ -47372,10 +47489,6 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "updatedAt": {
-                                "type": "string",
-                                "nullable": true
-                              },
                               "discountedPrice": {
                                 "type": "number"
                               },
@@ -47401,7 +47514,6 @@
                               "secondaryImageUrl",
                               "category",
                               "createdAt",
-                              "updatedAt",
                               "discountedPrice",
                               "priceVaries"
                             ],
@@ -49676,10 +49788,6 @@
                                   "type": "string",
                                   "nullable": true
                                 },
-                                "updatedAt": {
-                                  "type": "string",
-                                  "nullable": true
-                                },
                                 "category": {
                                   "type": "object",
                                   "nullable": true,
@@ -49779,7 +49887,6 @@
                                 "imageMediaId",
                                 "imageAlt",
                                 "createdAt",
-                                "updatedAt",
                                 "category",
                                 "textLengths",
                                 "counts"
@@ -50371,10 +50478,6 @@
                                   "createdAt": {
                                     "type": "string",
                                     "nullable": true
-                                  },
-                                  "updatedAt": {
-                                    "type": "string",
-                                    "nullable": true
                                   }
                                 },
                                 "required": [
@@ -50396,8 +50499,7 @@
                                   "discountPercentage",
                                   "discountAmount",
                                   "fulfillmentKind",
-                                  "createdAt",
-                                  "updatedAt"
+                                  "createdAt"
                                 ]
                               },
                               "maxItems": 10
@@ -50816,10 +50918,6 @@
                               "nullable": true
                             },
                             "createdAt": {
-                              "type": "string",
-                              "nullable": true
-                            },
-                            "updatedAt": {
                               "type": "string",
                               "nullable": true
                             },
@@ -51263,7 +51361,6 @@
                             "isActive",
                             "deletedAt",
                             "createdAt",
-                            "updatedAt",
                             "hasVariants",
                             "imageUrl",
                             "imageMediaId",
@@ -51565,10 +51662,6 @@
                                 "type": "string",
                                 "nullable": true
                               },
-                              "updatedAt": {
-                                "type": "string",
-                                "nullable": true
-                              },
                               "deletedAt": {
                                 "type": "string",
                                 "nullable": true
@@ -51598,7 +51691,6 @@
                               "discountAmount",
                               "fulfillmentKind",
                               "createdAt",
-                              "updatedAt",
                               "deletedAt"
                             ]
                           }
@@ -52088,10 +52180,6 @@
                               "contentCharacters": {
                                 "type": "integer",
                                 "minimum": 0
-                              },
-                              "updatedAt": {
-                                "type": "string",
-                                "nullable": true
                               }
                             },
                             "required": [
@@ -52100,8 +52188,7 @@
                               "slug",
                               "imageUrl",
                               "descriptionCharacters",
-                              "contentCharacters",
-                              "updatedAt"
+                              "contentCharacters"
                             ]
                           },
                           "maxItems": 50
@@ -52200,6 +52287,133 @@
           "maxRequestBytes": 16384,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/categories/sitemap": {
+      "get": {
+        "operationId": "storefront.categories.sitemap",
+        "tags": [
+          "Categories"
+        ],
+        "summary": "List category pages for the XML sitemap",
+        "description": "Published categories without noIndex or a sitemap exclusion, filtered before the limit, with each page's last change.",
+        "responses": {
+          "200": {
+            "description": "Category sitemap entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "categories": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "slug": {
+                                "type": "string"
+                              },
+                              "canonicalPath": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "updatedAt": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "slug",
+                              "canonicalPath",
+                              "updatedAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "categories"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "excluded",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "XML discovery source of up to 5,000 category URLs for the storefront sitemap; use storefront.categories.list_summaries."
         },
         "x-scalius-rbac": {
           "type": "public"
@@ -53544,10 +53758,6 @@
                               "type": "string",
                               "nullable": true
                             },
-                            "updatedAt": {
-                              "type": "string",
-                              "nullable": true
-                            },
                             "metaTitle": {
                               "type": "string",
                               "nullable": true
@@ -53660,7 +53870,6 @@
                             "description",
                             "imageUrl",
                             "createdAt",
-                            "updatedAt",
                             "metaTitle",
                             "metaDescription",
                             "canonicalPath",
@@ -53761,10 +53970,6 @@
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
-                              },
-                              "updatedAt": {
-                                "type": "string",
-                                "nullable": true
                               }
                             },
                             "required": [
@@ -53786,8 +53991,7 @@
                               "imageAlt",
                               "secondaryImageUrl",
                               "category",
-                              "createdAt",
-                              "updatedAt"
+                              "createdAt"
                             ]
                           }
                         },
@@ -54460,10 +54664,6 @@
                               "createdAt": {
                                 "type": "string",
                                 "nullable": true
-                              },
-                              "updatedAt": {
-                                "type": "string",
-                                "nullable": true
                               }
                             },
                             "required": [
@@ -54485,8 +54685,7 @@
                               "imageAlt",
                               "secondaryImageUrl",
                               "category",
-                              "createdAt",
-                              "updatedAt"
+                              "createdAt"
                             ]
                           },
                           "maxItems": 20

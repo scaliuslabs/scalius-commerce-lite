@@ -13,7 +13,38 @@ import { unwrapData } from "./unwrap";
 import {
   getApiV1Collections,
   getApiV1CollectionsById,
+  getApiV1CollectionsSitemap,
 } from "@scalius/api-client/sdk";
+
+export interface SitemapCollection {
+  id: string;
+  canonicalPath: string | null;
+  updatedAt: string | null;
+}
+
+/**
+ * Collection pages for the sitemap (the API leaves out noIndex and
+ * excludeFromSitemap collections before its limit), or null on failure.
+ */
+export async function getSitemapCollections(): Promise<SitemapCollection[] | null> {
+  return withEdgeCache(
+    "sitemap_collections",
+    async () => {
+      try {
+        const { data, error } = await getApiV1CollectionsSitemap({ client: getConfiguredSdkClient() });
+        if (error) {
+          console.error("Error fetching sitemap collections:", error);
+          return null;
+        }
+        return unwrapData<{ collections: SitemapCollection[] }>(data)?.collections ?? null;
+      } catch (error: unknown) {
+        console.error("Error fetching sitemap collections:", error);
+        return null;
+      }
+    },
+    { ttlSeconds: CACHE_TTL.LONG },
+  );
+}
 import { buildCanonicalQueryString } from "@/lib/canonical-query";
 
 export type CollectionByIdResult =

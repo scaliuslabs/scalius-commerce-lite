@@ -23,6 +23,7 @@ import { loadProductMediaProjections, resolveProductCardImages } from "../produc
 import {
     buildCatalogFacetCountQuery,
     catalogFacetFilterConditions,
+    declareFacetReadWithoutProducts,
     groupCatalogFacets,
     type CatalogFacetCountRow,
 } from "./facets";
@@ -39,6 +40,15 @@ import {
     buyerStatePricingSelection,
     publicBuyerStateCondition,
 } from "./buyer-state";
+import {
+    brandScopes,
+    categoryScope,
+    categoryScopes,
+    declareListing,
+    declareProductCards,
+    deps,
+    type ListingDependencySet,
+} from "./declare-deps";
 
 type StorefrontProductSort = NonNullable<StorefrontProductFilterInput["sort"]>;
 
@@ -66,7 +76,6 @@ type StorefrontProductListRow = {
     freeDelivery: boolean;
     categoryId: string | null;
     createdAt: number;
-    updatedAt: number;
 };
 
 type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
@@ -86,7 +95,6 @@ export interface StorefrontCategoryProductCategory {
     noIndex: boolean;
     excludeFromSitemap: boolean;
     createdAt: string | null;
-    updatedAt: string | null;
 }
 
 /**
@@ -126,6 +134,8 @@ type StorefrontCatalogScope = {
     fixedCategory?: StorefrontCategoryProductCategory;
     /** The brand's own page: no brand facet. */
     withoutBrandFacet?: boolean;
+    /** The cache keys of the scope's set; the whole public catalogue when left out. */
+    dependencies?: ListingDependencySet;
 };
 
 /**
@@ -206,7 +216,6 @@ async function readStorefrontCatalogResults(
             freeDelivery: products.freeDelivery,
             categoryId: products.categoryId,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
-            updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             hasCustomerOptions: buyerState.hasCustomerOptions,
             availableForSale: buyerState.availableForSale,
         })
@@ -296,14 +305,30 @@ async function readStorefrontCatalogResults(
             : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
         shopAllFacetsLive ? facetReads() : Promise.resolve(scopedFacets),
     ]);
+    declareListing(scope.dependencies ?? { scopes: ["all"] }, params, {
+        facets: !unscoped || shopAllFacetsLive,
+    });
+    declareProductCards(productIds, mediaMap);
+    if (productIds.length === 0) {
+        // An empty page shows no product, yet its statements name the card
+        // SKU (and the facet axis lookup): only coarse keys cover those reads.
+        const facetsRead = !unscoped || shopAllFacetsLive;
+        if (facetsRead) declareFacetReadWithoutProducts(facetRows);
+        if (!facetRows.some((row) => row.facetKind === "option")) deps.table("product_variants");
+    }
+    // The category of each card (published state, name, slug).
+    deps.categories(categoryIds);
+    deps.category(scope.fixedCategory?.id);
     const categoryMap = new Map(categoriesData.map((category) => [category.id, category]));
     const productsWithImages = productsList.map(({
         hasCustomerOptions,
         availableForSale,
         ...product
     }) => {
+        // A card names its category (id, name, slug), never the page's whole
+        // category record.
         const category = scope.fixedCategory && product.categoryId === scope.fixedCategory.id
-            ? scope.fixedCategory
+            ? { id: scope.fixedCategory.id, name: scope.fixedCategory.name, slug: scope.fixedCategory.slug }
             : product.categoryId ? categoryMap.get(product.categoryId) ?? null : null;
         return {
             ...presentBuyerPricing(product, decimalPlaces),
@@ -313,7 +338,6 @@ async function readStorefrontCatalogResults(
             ...resolveProductCardImages(mediaMap.get(product.id) ?? []),
             category,
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
-            updatedAt: unixToDate(product.updatedAt)?.toISOString() ?? null,
         };
     });
 
@@ -347,7 +371,11 @@ export async function getStorefrontCategoryProducts(
     params: StorefrontProductFilterInput,
     options: StorefrontCategoryListingOptions = {},
 ) {
+    // `lm:cat:<id>` covers the category and every descendant; a subtree also
+    // depends on which descendants are published.
+    if (options.includeDescendants) deps.anyCategory();
     return readStorefrontCatalogPage(db, params, {
+        dependencies: { scopes: [categoryScope(category.id)] },
         // The buyer state's category index: (is_public, category_id, newest).
         condition: options.includeDescendants
             ? publicCategorySubtreeCondition(buyerState.categoryId, category.id)
@@ -375,7 +403,9 @@ export async function getStorefrontBrandProducts(
     brand: { id: string },
     params: StorefrontProductFilterInput,
 ) {
+    deps.brand(brand.id);
     return readStorefrontCatalogPage(db, params, {
+        dependencies: { scopes: brandScopes(brand.id) },
         // The buyer state's brand index: (is_public, brand_id, newest).
         condition: eq(buyerState.brandId, brand.id),
         withoutBrandFacet: true,
@@ -422,7 +452,7 @@ function storefrontCollectionMembership(membership: StorefrontCollectionMembersh
     const condition = branches.length > 0
         ? sql`${buyerState.productId} IN (${sql.join(branches, sql` UNION `)})`
         : sql`0 = 1`;
-    return { productIds, membershipJson, condition };
+    return { productIds, categoryIds, membershipJson, condition };
 }
 
 /**
@@ -442,9 +472,12 @@ export async function getStorefrontCollectionProducts(
     membership: StorefrontCollectionMembership,
     params: StorefrontProductFilterInput,
 ) {
-    const { productIds, membershipJson, condition } = storefrontCollectionMembership(membership);
-
+    const { productIds, categoryIds, membershipJson, condition } = storefrontCollectionMembership(membership);
+    // A dynamic collection lists its categories' public products (each
+    // category's published state included); a manual one its picked ids.
+    deps.categories(categoryIds);
     return readStorefrontCatalogPage(db, params, {
+        dependencies: { scopes: categoryScopes(categoryIds), members: productIds },
         condition,
         drivenByIdSet: true,
         orderBy: productIds.length > 0 && (!params.sort || params.sort === "newest")

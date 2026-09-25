@@ -144,7 +144,7 @@ See [catalog](../catalog/README.md#api-endpoints).
 
 ## Known Gaps
 
-1. **Update is delete-and-reinsert for images/attributes/richContent**: `updateProduct()` deletes ALL images, attributes, and rich content then re-inserts. This means image IDs change on every save (unless the admin passes the original ID and it doesn't start with `temp_`).
+1. **Update is delete-and-reinsert for images/attributes/richContent**: `updateProduct()` deletes ALL images, attributes, and rich content then re-inserts. This means image IDs change on every save (unless the admin passes the original ID and it doesn't start with `temp_`). A save whose aggregate equals the stored one (product columns, default SKU, SKU fulfilment kinds, media, attribute values, rich content) writes nothing and returns the current revision: no revision bump, no `updated_at`, no cache dependency key (`admin/no-op-save.d1.test.ts`).
 
 2. **Admin attributes route has inline logic**: Unlike products where logic lives in `@scalius/core`, the attributes admin routes (`apps/api/src/routes/admin/attributes.ts`) contain business logic inline rather than delegating to a core service module.
 
