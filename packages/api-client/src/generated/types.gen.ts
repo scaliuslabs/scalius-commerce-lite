@@ -1691,6 +1691,47 @@ export type GetApiV1CollectionsResponses = {
 
 export type GetApiV1CollectionsResponse = GetApiV1CollectionsResponses[keyof GetApiV1CollectionsResponses];
 
+export type GetApiV1CollectionsSitemapData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/collections/sitemap';
+};
+
+export type GetApiV1CollectionsSitemapErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CollectionsSitemapError = GetApiV1CollectionsSitemapErrors[keyof GetApiV1CollectionsSitemapErrors];
+
+export type GetApiV1CollectionsSitemapResponses = {
+    /**
+     * Collection sitemap entries
+     */
+    200: {
+        success: true;
+        data: {
+            collections: Array<{
+                id: string;
+                canonicalPath: string | null;
+                updatedAt: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CollectionsSitemapResponse = GetApiV1CollectionsSitemapResponses[keyof GetApiV1CollectionsSitemapResponses];
+
 export type GetApiV1CollectionsByIdData = {
     body?: never;
     path: {
@@ -1758,7 +1799,6 @@ export type GetApiV1CollectionsByIdResponses = {
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
                 createdAt: string | null;
-                updatedAt: string | null;
                 listingTemplate: string | null;
                 description: string | null;
                 content: string | null;
@@ -12936,7 +12976,6 @@ export type GetApiV1ProductsResponses = {
                     slug: string;
                 } | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 discountedPrice: number;
                 priceVaries: boolean;
                 [key: string]: unknown;
@@ -13587,7 +13626,6 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 category: {
                     id: string;
                     name: string;
@@ -13718,7 +13756,6 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
                 createdAt: string | null;
-                updatedAt: string | null;
             }>;
             total: number;
             offset: number;
@@ -13819,7 +13856,6 @@ export type GetApiV1ProductsBySlugResponses = {
                 isActive: boolean;
                 deletedAt: string | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 hasVariants: boolean;
                 imageUrl: string | null;
                 imageMediaId: string | null;
@@ -13996,7 +14032,6 @@ export type GetApiV1ProductsBySlugResponses = {
                  */
                 fulfillmentKind: 'physical' | 'digital' | 'service';
                 createdAt: string | null;
-                updatedAt: string | null;
                 deletedAt: string | null;
             }>;
             recommendations: {
@@ -14123,7 +14158,6 @@ export type GetApiV1CategoriesSummariesResponses = {
                 imageUrl: string | null;
                 descriptionCharacters: number;
                 contentCharacters: number;
-                updatedAt: string | null;
             }>;
             pagination: {
                 page: number;
@@ -14136,6 +14170,47 @@ export type GetApiV1CategoriesSummariesResponses = {
 };
 
 export type GetApiV1CategoriesSummariesResponse = GetApiV1CategoriesSummariesResponses[keyof GetApiV1CategoriesSummariesResponses];
+
+export type GetApiV1CategoriesSitemapData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/categories/sitemap';
+};
+
+export type GetApiV1CategoriesSitemapErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CategoriesSitemapError = GetApiV1CategoriesSitemapErrors[keyof GetApiV1CategoriesSitemapErrors];
+
+export type GetApiV1CategoriesSitemapResponses = {
+    /**
+     * Category sitemap entries
+     */
+    200: {
+        success: true;
+        data: {
+            categories: Array<{
+                slug: string;
+                canonicalPath: string | null;
+                updatedAt: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CategoriesSitemapResponse = GetApiV1CategoriesSitemapResponses[keyof GetApiV1CategoriesSitemapResponses];
 
 export type GetApiV1CategoriesTreeData = {
     body?: never;
@@ -14559,7 +14634,6 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 description: string | null;
                 imageUrl: string | null;
                 createdAt: string | null;
-                updatedAt: string | null;
                 metaTitle: string | null;
                 metaDescription: string | null;
                 canonicalPath: string | null;
@@ -14614,7 +14688,6 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                     slug: string;
                 } | null;
                 createdAt: string | null;
-                updatedAt: string | null;
             }>;
             pagination: {
                 page: number;
@@ -14794,7 +14867,6 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                     slug: string;
                 } | null;
                 createdAt: string | null;
-                updatedAt: string | null;
             }>;
             pagination: {
                 page: number;

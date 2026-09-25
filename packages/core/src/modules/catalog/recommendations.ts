@@ -47,6 +47,7 @@ import {
     buyerStatePricingSelection,
     publicBuyerStateCondition,
 } from "./buyer-state";
+import { declareProductCards, declareRequestedProducts, deps } from "./declare-deps";
 
 export const MAX_RECOMMENDATION_SOURCE_IDS = 20;
 export const MAX_RECOMMENDATION_LIMIT = 12;
@@ -251,6 +252,17 @@ export async function rankRecommendationRows(
     sourceIds: readonly string[],
     limit: number,
 ): Promise<RankedRecommendationRow[]> {
+    // The live ranking scores every public product (membership is hard) by
+    // soft signals: co-purchase, popularity, and similarity through the
+    // sources' category, collections, attributes and price band. Those
+    // signal tables have no per-row key; their "any row" keys advance only
+    // on merchant edits, and the order itself may lag (owner decision 4).
+    deps.softOrdering();
+    deps.listMembership("all");
+    declareRequestedProducts(sourceIds);
+    deps.anyCategory();
+    deps.anyCollection();
+    deps.anyAttribute();
     const sourceJson = JSON.stringify(sourceIds);
     const sourceSet = sql`(SELECT CAST(value AS TEXT) FROM json_each(${sourceJson}))`;
 
@@ -491,6 +503,9 @@ async function readStoredRecommendations(
         .orderBy(asc(productRecommendations.position))
         .all() as StoredRecommendationRow[];
     if (stored.length === 0) return null;
+    // A stored product hidden now (not public, sold out) shows again when its
+    // own buyer state changes; the stored order itself is soft.
+    deps.products(stored.map((row) => row.id));
     const shown = stored
         .filter((row) => Boolean(row.isPublic) && Boolean(row.availableForSale) && row.id !== null)
         .slice(0, limit);
@@ -535,6 +550,7 @@ export async function getStorefrontProductRecommendations(
         mediaMap = media;
     }
     if (rows.length === 0) return { reason, products: [] };
+    declareProductCards(rows.map((row) => row.id), mediaMap);
     const decimalPlaces = storeDecimalPlacesFromCode(rows[0]?.storeCurrencyCode);
     return {
         reason,
