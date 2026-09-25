@@ -142,26 +142,43 @@ describe(`DVC differential property (${MODE}, ${PROVIDER})`, () => {
     it(`never serves a stale entry as valid: ${seed}`, async () => {
       const harness = await DvcHarness.create(harnessConfig(seed));
       const started = performance.now();
+      let nonOk: string[] = [];
+      let failure: unknown = null;
+      let completed = 0;
       try {
         await harness.warm();
-        const nonOk = harness.nonOkParts();
+        nonOk = harness.nonOkParts();
         expect.soft(harness.stats.nondeterministicRoutes, "routes whose output is not a function of the database and time").toEqual([]);
         if (MODE === "quick" && !process.env.DVC_SEED) await harness.sweep();
-        for (let step = 0; step < STEPS; step += 1) await harness.runStep();
-        const summary = harness.summary();
-        console.info(`[DVC] findings:\n${[...harness.findings.values()].map((finding) => `- (${finding.count}x) ${finding.signature}`).join("\n") || "none"}`);
-        reports.push({ seed, mode: MODE, provider: PROVIDER, stats: harness.stats, coverage: harness.coverage.gaps(harness.model), nonOk, refusals: Object.fromEntries(harness.coverage.refusals) });
+        for (let step = 0; step < STEPS; step += 1) {
+          await harness.runStep();
+          completed = step + 1;
+          if (MODE === "long" && completed % 1000 === 0) {
+            console.error(`[DVC progress] ${seed} ${completed}/${STEPS} steps, ${harness.stats.writes} writes, ${harness.stats.partChecks} part checks, ${harness.findings.size} findings, rss ${Math.round(process.memoryUsage().rss / 1e6)}MB`);
+          }
+        }
+      } catch (error) {
+        failure = error;
+      } finally {
         const gaps = harness.coverage.gaps(harness.model);
+        reports.push({
+          seed, mode: MODE, provider: PROVIDER, steps: completed, wallSeconds: (performance.now() - started) / 1000,
+          stats: harness.stats, coverage: gaps, nonOk, refusals: Object.fromEntries(harness.coverage.refusals),
+          findings: [...harness.findings.values()].map(({ signature, count, firstReport }) => ({ signature, count, firstReport })),
+          error: failure ? String(failure instanceof Error ? failure.message : failure) : null,
+        });
+        if (process.env.DVC_REPORT) writeFileSync(process.env.DVC_REPORT, JSON.stringify(reports, null, 2));
+        console.info(`[DVC] findings:\n${[...harness.findings.values()].map((finding) => `- (${finding.count}x) ${finding.signature}`).join("\n") || "none"}`);
         console.info(`[DVC] coverage gaps:\n  ops: ${gaps.ops.join(" ")}\n  columns: ${gaps.columns.join(" ")}\n[DVC] refusals:\n${[...harness.coverage.refusals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([key, count]) => `  ${count}x ${key}`).join("\n")}`);
-        console.info(`[DVC] ${summary}\nnon-200 parts: ${nonOk.join(" ") || "none"}\nwall ${((performance.now() - started) / 1000).toFixed(1)}s`);
+        console.info(`[DVC] ${harness.summary()}\nnon-200 parts: ${nonOk.join(" ") || "none"}\nwall ${((performance.now() - started) / 1000).toFixed(1)}s`);
         if (RECORDER === "scope") {
           const top = (map: Map<string, number>) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([key, count]) => `  ${count}x ${key}`).join("\n") || "  none";
           console.info(`[DVC] coarse fallbacks (route table):\n${top(scopeStats.coarse)}\n[DVC] tables the harness saw but S2 did not report:\n${top(scopeStats.unobserved)}`);
         }
-        harness.assertNoFindings();
-      } finally {
         harness.close();
       }
+      if (failure) throw failure;
+      harness.assertNoFindings();
     }, TIMEOUT);
   }
 });
