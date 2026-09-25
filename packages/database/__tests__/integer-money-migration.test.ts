@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { compiledMigrationSql, createMigratedSqlite } from "../src/testing/sqlite-d1";
 
 describe.each(["d1", "turso"] as const)("0069 integer money (%s)", (provider) => {
-  it("leaves no floating-point column besides physical weight", () => {
+  it("leaves no floating-point column besides physical weight and spec numbers", () => {
     const sqlite = createMigratedSqlite({ provider });
     const tables = sqlite.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
       .all() as Array<{ name: string }>;
@@ -15,7 +15,12 @@ describe.each(["d1", "turso"] as const)("0069 integer money (%s)", (provider) =>
       (sqlite.prepare(`PRAGMA table_info("${name}")`).all() as Array<{ name: string; type: string }>)
         .filter((column) => /real|double|float|numeric|decimal/i.test(column.type))
         .map((column) => `${name}.${column.name}`));
-    expect(floating).toEqual(["product_variants.weight"]);
+    // Numeric spec values (15.6 inch, 2.4 GHz) are measurements, never money (0088).
+    expect(floating.sort()).toEqual([
+      "product_attribute_values.value_number",
+      "product_facet_values.value_number",
+      "product_variants.weight",
+    ]);
     sqlite.close();
   });
 

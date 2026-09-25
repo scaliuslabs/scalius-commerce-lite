@@ -17,7 +17,7 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(119);
+      expect(d1Tables).toHaveLength(129);
       expect(d1Tables).toContain("scalius_schema_migrations");
       expect(d1Tables).toContain("cache_generation");
       expect(d1Tables).toContain("agent_grants");
@@ -38,6 +38,12 @@ describe("canonical schema hygiene", () => {
       for (const dropped of ["order_notification_outbox", "order_notification_delivery_receipts", "order_support_request_events"]) {
         expect(d1Tables).not.toContain(dropped);
       }
+      expect(d1Tables).toContain("brands");
+      expect(d1Tables).toContain("category_closure");
+      expect(d1Tables).toContain("product_facet_values");
+      expect(d1Tables).toContain("product_buyer_state");
+      expect(d1Tables).toContain("product_content_blocks");
+      expect(d1Tables).not.toContain("page_templates");
       expect(retired).toEqual([]);
     } finally {
       d1.close();

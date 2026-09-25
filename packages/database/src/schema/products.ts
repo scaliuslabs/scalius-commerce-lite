@@ -2,7 +2,7 @@
 // Product domain tables: products, media associations, variants, categories, collections,
 // attributes, attribute values, and rich content.
 
-import { sqliteTable, text, integer, real, unique, index, uniqueIndex, check, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, unique, index, uniqueIndex, check, primaryKey, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
@@ -18,6 +18,17 @@ import { media } from "./media";
 export const ON_SALE_DISCOUNT_SQL = "((discount_type = 'flat' AND discount_amount_minor > 0) OR (discount_type = 'percentage' AND discount_bps > 0))";
 /** A live SKU with its own discount (product_variants_on_sale_newest_idx). */
 export const ON_SALE_SKU_ROW_SQL = `deleted_at IS NULL AND ${ON_SALE_DISCOUNT_SQL}`;
+
+/**
+ * A template id (`[a-z0-9-]`, 1-40 characters) or NULL, written with the GLOB
+ * shapes the PostgreSQL DDL compiler translates.
+ */
+function templateIdCheck(column: string): string {
+    return `"${column}" IS NULL OR (length("${column}") BETWEEN 1 AND 40 AND "${column}" = lower("${column}") AND "${column}" NOT GLOB '*[^A-Za-z0-9_-]*' AND instr("${column}", '_') = 0)`;
+}
+
+/** Deepest category depth (0-based): trees have at most four levels. */
+export const CATEGORY_TREE_MAX_DEPTH = 3;
 
 export const products = sqliteTable(
     "products",
@@ -62,6 +73,12 @@ export const products = sqliteTable(
          * checkout authority fence.
          */
         customizationSchema: text("customization_schema"),
+        /** The product's brand (migration 0088); brand pages, facets, feeds and JSON-LD read it. */
+        brandId: text("brand_id").references(() => brands.id, { onDelete: "set null" }),
+        /** A product page configuration named in the theme document; NULL = the theme's default. */
+        pageTemplate: text("page_template"),
+        /** Shows EMI plans on the product page when the store has them (informational only). */
+        emiEligible: integer("emi_eligible", { mode: "boolean" }).notNull().default(true),
     },
     (table) => [
         check("products_is_gift_card_check", sql`${table.isGiftCard} IN (0, 1)`),
@@ -80,6 +97,14 @@ export const products = sqliteTable(
             sql`${table.createdAt} DESC`,
         ),
         index("products_deleted_at_idx").on(table.deletedAt),
+        index("products_public_brand_newest_idx").on(
+            table.brandId,
+            table.isActive,
+            table.deletedAt,
+            sql`${table.createdAt} DESC`,
+        ),
+        check("products_page_template_shape", sql.raw(templateIdCheck("page_template"))),
+        check("products_emi_eligible_check", sql`${table.emiEligible} IN (0, 1)`),
         // The homepage "on sale" list (core catalog/home-lists.ts) walks only
         // discounted public products, newest first. It has the public-newest
         // index's equality columns plus the id tiebreak, so SQLite prefers it
@@ -302,6 +327,16 @@ export const categories = sqliteTable(
             .notNull()
             .default("draft"),
         revision: integer("revision").notNull().default(1),
+        /**
+         * Tree (migration 0088). Write only `parentId`: triggers keep `depth`
+         * (0-3), the id `path` ('/root/child/') and `category_closure` exact,
+         * and refuse cycles, trashed parents and a fifth level.
+         */
+        parentId: text("parent_id").references((): AnySQLiteColumn => categories.id, { onDelete: "restrict" }),
+        depth: integer("depth").notNull().default(0),
+        path: text("path").notNull().default(""),
+        /** A listing configuration named in the theme document; NULL = the theme's default. */
+        listingTemplate: text("listing_template"),
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),
@@ -316,6 +351,9 @@ export const categories = sqliteTable(
         index("categories_public_idx").on(table.status, table.deletedAt),
         check("categories_status_valid", sql.raw(`"status" IN ('draft', 'published', 'internal')`)),
         check("categories_revision_positive", sql.raw(`"revision" >= 1`)),
+        index("categories_parent_idx").on(table.parentId, table.deletedAt),
+        check("categories_depth_range", sql.raw(`"depth" BETWEEN 0 AND ${CATEGORY_TREE_MAX_DEPTH}`)),
+        check("categories_listing_template_shape", sql.raw(templateIdCheck("listing_template"))),
     ],
 );
 
@@ -335,6 +373,8 @@ export const collections = sqliteTable("collections", {
     canonicalPath: text("canonical_path"),
     noIndex: integer("no_index", { mode: "boolean" }).notNull().default(false),
     excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
+    /** A listing configuration named in the theme document; NULL = the theme's default. */
+    listingTemplate: text("listing_template"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
@@ -345,6 +385,67 @@ export const collections = sqliteTable("collections", {
 }, (table) => [
     index("collections_deleted_at_idx").on(table.deletedAt),
     check("collections_version_positive", sql`${table.version} >= 1`),
+    check("collections_listing_template_shape", sql.raw(templateIdCheck("listing_template"))),
+]);
+
+/**
+ * Brands (migration 0088): a first-class entity with its own page, logo and
+ * SEO fields. `products.brand_id` points here.
+ */
+export const brands = sqliteTable("brands", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    description: text("description"),
+    logoMediaId: text("logo_media_id").references(() => media.id, { onDelete: "restrict" }),
+    status: text("status", { enum: ["draft", "published"] }).notNull().default("draft"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    metaTitle: text("meta_title"),
+    metaDescription: text("meta_description"),
+    canonicalPath: text("canonical_path"),
+    noIndex: integer("no_index", { mode: "boolean" }).notNull().default(false),
+    excludeFromSitemap: integer("exclude_from_sitemap", { mode: "boolean" }).notNull().default(false),
+    listingTemplate: text("listing_template"),
+    revision: integer("revision").notNull().default(1),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
+}, (table) => [
+    check("brands_id_shape", sql`substr(${table.id}, 1, 4) = 'brd_' AND length(${table.id}) BETWEEN 10 AND 68 AND ${table.id} NOT GLOB '*[^A-Za-z0-9_-]*'`),
+    check("brands_name_valid", sql`${table.name} = trim(${table.name}) AND length(${table.name}) BETWEEN 1 AND 120`),
+    check("brands_slug_valid", sql`length(${table.slug}) BETWEEN 1 AND 100 AND ${table.slug} = lower(${table.slug}) AND ${table.slug} NOT GLOB '*[^A-Za-z0-9_-]*' AND instr(${table.slug}, '_') = 0`),
+    check("brands_description_length", sql`${table.description} IS NULL OR length(${table.description}) <= 20000`),
+    check("brands_status_valid", sql`${table.status} IN ('draft', 'published')`),
+    check("brands_flags_valid", sql`${table.noIndex} IN (0, 1) AND ${table.excludeFromSitemap} IN (0, 1)`),
+    check("brands_listing_template_shape", sql.raw(templateIdCheck("listing_template"))),
+    check("brands_revision_positive", sql`${table.revision} >= 1`),
+    uniqueIndex("brands_slug_unique").on(table.slug),
+    index("brands_public_idx").on(table.status, table.deletedAt, table.sortOrder),
+    index("brands_logo_media_idx").on(table.logoMediaId).where(sql`${table.logoMediaId} IS NOT NULL`),
+]);
+
+/** Spec-table groups ("Display", "Processor"), migration 0088. */
+export const attributeGroups = sqliteTable("attribute_groups", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
+}, (table) => [
+    check("attribute_groups_id_shape", sql`substr(${table.id}, 1, 4) = 'atg_' AND length(${table.id}) BETWEEN 10 AND 68 AND ${table.id} NOT GLOB '*[^A-Za-z0-9_-]*'`),
+    check("attribute_groups_name_valid", sql`${table.name} = trim(${table.name}) AND length(${table.name}) BETWEEN 1 AND 80`),
+    uniqueIndex("attribute_groups_live_name_unique")
+        .on(sql`lower(${table.name})`)
+        .where(sql`${table.deletedAt} IS NULL`),
 ]);
 
 export const productAttributes = sqliteTable("product_attributes", {
@@ -360,8 +461,60 @@ export const productAttributes = sqliteTable("product_attributes", {
         .notNull()
         .default(UNIX_NOW),
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
+    // Typed spec attributes (migration 0088; vocabulary in @scalius/shared/catalog-attributes).
+    groupId: text("group_id").references(() => attributeGroups.id, { onDelete: "set null" }),
+    valueType: text("value_type", { enum: ["text", "number", "boolean", "enum"] }).notNull().default("text"),
+    unit: text("unit"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** Shown on spec cards and in the buy box. */
+    keySpec: integer("key_spec", { mode: "boolean" }).notNull().default(false),
+    /** An "at a glance" chip near the price. */
+    highlight: integer("highlight", { mode: "boolean" }).notNull().default(false),
+    facetDisplay: text("facet_display", { enum: ["checkbox", "range", "swatch", "search_list"] })
+        .notNull()
+        .default("checkbox"),
 }, (table) => [
     index("product_attributes_slug_idx").on(table.slug),
+    index("product_attributes_group_idx").on(table.groupId, table.sortOrder),
+    check("product_attributes_value_type_check", sql`${table.valueType} IN ('text', 'number', 'boolean', 'enum')`),
+    check("product_attributes_unit_check", sql`${table.unit} IS NULL OR (${table.unit} = trim(${table.unit}) AND length(${table.unit}) BETWEEN 1 AND 16)`),
+    check("product_attributes_key_spec_check", sql`${table.keySpec} IN (0, 1)`),
+    check("product_attributes_highlight_check", sql`${table.highlight} IN (0, 1)`),
+    check(
+        "product_attributes_facet_display_check",
+        sql`${table.facetDisplay} IN ('checkbox', 'range', 'swatch', 'search_list') AND (${table.facetDisplay} <> 'range' OR ${table.valueType} = 'number') AND (${table.facetDisplay} <> 'swatch' OR ${table.valueType} = 'enum')`,
+    ),
+]);
+
+/**
+ * Normalised values of an attribute (migration 0088). Enum attributes pick
+ * from these; `normalized_value` is the identity, `value` the display text.
+ */
+export const attributeValues = sqliteTable("attribute_values", {
+    id: text("id").primaryKey(),
+    attributeId: text("attribute_id")
+        .notNull()
+        .references(() => productAttributes.id, { onDelete: "cascade" }),
+    value: text("value").notNull(),
+    normalizedValue: text("normalized_value").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    swatchHex: text("swatch_hex"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    deletedAt: integer("deleted_at", { mode: "timestamp" }),
+}, (table) => [
+    check("attribute_values_id_shape", sql`substr(${table.id}, 1, 4) = 'atv_' AND length(${table.id}) BETWEEN 10 AND 68 AND ${table.id} NOT GLOB '*[^A-Za-z0-9_-]*'`),
+    check("attribute_values_value_valid", sql`${table.value} = trim(${table.value}) AND length(${table.value}) BETWEEN 1 AND 200`),
+    check("attribute_values_normalized_value_valid", sql`${table.normalizedValue} = lower(trim(${table.value}))`),
+    check("attribute_values_swatch_hex_valid", sql`${table.swatchHex} IS NULL OR (length(${table.swatchHex}) = 7 AND ${table.swatchHex} GLOB '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]')`),
+    uniqueIndex("attribute_values_live_value_unique")
+        .on(table.attributeId, table.normalizedValue)
+        .where(sql`${table.deletedAt} IS NULL`),
+    index("attribute_values_attribute_order_idx").on(table.attributeId, table.deletedAt, table.sortOrder),
 ]);
 
 export const productAttributeValues = sqliteTable(
@@ -378,9 +531,19 @@ export const productAttributeValues = sqliteTable(
         createdAt: integer("created_at", { mode: "timestamp" })
             .notNull()
             .default(UNIX_NOW),
+        /**
+         * Typed value (migration 0088): enums name their normalised value,
+         * numbers and booleans (0/1) carry `valueNumber`; `value` stays the
+         * display text. Triggers refuse a value that does not match the type.
+         */
+        valueId: text("value_id").references(() => attributeValues.id, { onDelete: "restrict" }),
+        valueNumber: real("value_number"),
     },
     (table) => [
         unique().on(table.productId, table.attributeId),
+        index("product_attribute_values_value_id_idx")
+            .on(table.valueId)
+            .where(sql`${table.valueId} IS NOT NULL`),
         index("product_attribute_values_product_id_idx").on(table.productId),
         index("product_attribute_values_attribute_id_idx").on(table.attributeId),
         index("product_attribute_values_attr_value_product_idx").on(
@@ -391,6 +554,11 @@ export const productAttributeValues = sqliteTable(
     ],
 );
 
+/**
+ * Legacy product tabs. Migration 0088 mirrors every write into
+ * `product_content_blocks` (`rich-text` blocks in the `tabs` placement); the
+ * table is dropped once its readers and writers use the blocks.
+ */
 export const productRichContent = sqliteTable("product_rich_content", {
     id: text("id").primaryKey(),
     productId: text("product_id")
@@ -420,3 +588,6 @@ export type Collection = InferSelectModel<typeof collections>;
 export type ProductAttribute = InferSelectModel<typeof productAttributes>;
 export type ProductAttributeValue = InferSelectModel<typeof productAttributeValues>;
 export type ProductRichContent = InferSelectModel<typeof productRichContent>;
+export type Brand = InferSelectModel<typeof brands>;
+export type AttributeGroup = InferSelectModel<typeof attributeGroups>;
+export type AttributeValue = InferSelectModel<typeof attributeValues>;
