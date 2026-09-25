@@ -100,6 +100,15 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/orders/*/shipments/*/returned": {
     POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
   },
+  "/api/v1/admin/orders/*/fulfillments": {
+    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
+  },
+  "/api/v1/admin/orders/*/fulfillments/*/void": {
+    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
+  },
+  "/api/v1/admin/orders/*/pickup-ready": {
+    POST: { permission: PERMISSIONS.ORDERS_MANAGE_SHIPMENTS },
+  },
   "/api/v1/admin/orders/*/items": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
   },

@@ -30,12 +30,19 @@ import type {
 } from "../orders/types";
 import {
     isTrustedStorefrontCartValidationResult,
+    summarizeStorefrontCartFulfilment,
     validateStorefrontCartItems,
+    type StorefrontCartFulfilmentLine,
+    type StorefrontCartFulfilmentSummary,
+    type StorefrontCartItemIssue,
     type StorefrontCartValidationResult,
 } from "./cart-validation";
+import { linePropertiesHash, serializeOrderLineProperties } from "@scalius/shared/line-properties";
+import type { FulfillmentType } from "@scalius/shared/fulfilment";
+import { hasFulfiller } from "../fulfilment/registry";
 import {
     resolveActiveDeliveryLocationNamesFromRows,
-    selectActiveDeliveryLocationRows,
+    selectActiveDeliveryLocationRowsByIds,
     type ActiveDeliveryLocationRow,
 } from "../delivery/location-validation";
 import { MAX_ORDER_LINE_ITEMS } from "../orders/validation";
@@ -48,20 +55,33 @@ import {
 } from "../delivery/zones";
 
 export interface StorefrontDeliveryPreflightInput {
-    city: string;
-    zone: string;
+    /** Needed only for a `delivery` rate; pickup and no-method carts omit it. */
+    city?: string | null;
+    zone?: string | null;
     area?: string | null;
     shippingMethodId?: string | null;
 }
 
+/** `details.reason` when a delivery rate is chosen but the address is missing. */
+export const DELIVERY_ADDRESS_REQUIRED_REASON = "delivery_address_required";
+
 export interface StorefrontDeliveryPreflightResult {
-    /** "pickup": the buyer collects the order, so no delivery address is needed. */
-    kind: DeliveryRateKind;
+    /**
+     * "delivery" ships to the address; "pickup" is collected at the store (no
+     * address); null when the cart has nothing physical (no method, no fee).
+     */
+    kind: DeliveryRateKind | null;
     shippingMinor: number;
-    shippingMethod: StorefrontOrderShippingMethodSnapshot;
-    cityName: string;
-    zoneName: string;
+    shippingMethod: StorefrontOrderShippingMethodSnapshot | null;
+    cityName: string | null;
+    zoneName: string | null;
     areaName: string | null;
+    /** The address the order ships to; set only for a `delivery` rate. */
+    address: { city: string; zone: string; area: string | null } | null;
+    /** Where and when to collect; set only for a `pickup` rate. */
+    pickup: { address: string | null; hours: string | null } | null;
+    /** Every line's fulfilment type and the order-level consequences. */
+    fulfilment: StorefrontCartFulfilmentSummary;
 }
 
 export interface StorefrontCheckoutPolicySnapshot {
@@ -107,16 +127,81 @@ export function isTrustedStorefrontCheckoutPolicySnapshot(
     return Boolean(snapshot && Reflect.get(snapshot, STOREFRONT_CHECKOUT_POLICY_SNAPSHOT_PROOF) === true);
 }
 
+type DeliveryPreflightCart = Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct" | "subtotalMinor"> & {
+    items: readonly StorefrontCartFulfilmentLine[];
+};
+
+/**
+ * The delivery facts of a cart (Wave A §2.7). A cart with a physical line
+ * needs exactly one method: a `delivery` rate needs the address, a `pickup`
+ * rate needs none. A cart with nothing physical has no method, no fee and no
+ * address, whatever the buyer sent.
+ */
 export function resolveStorefrontDeliveryPreflightFromRows(
     data: StorefrontDeliveryPreflightInput,
-    cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct" | "subtotalMinor">,
+    cartValidation: DeliveryPreflightCart,
     locationRows: readonly ActiveDeliveryLocationRow[],
     shippingMethodRows: readonly DeliveryRateRow[],
 ): StorefrontDeliveryPreflightResult {
-    const locationNames = resolveActiveDeliveryLocationNamesFromRows(data, [...locationRows]);
+    if (!summarizeStorefrontCartFulfilment(cartValidation, null).requiresDeliveryMethod) {
+        return markTrustedStorefrontDeliveryPreflightResult({
+            kind: null,
+            shippingMinor: 0,
+            shippingMethod: null,
+            cityName: null,
+            zoneName: null,
+            areaName: null,
+            address: null,
+            pickup: null,
+            fulfilment: summarizeStorefrontCartFulfilment(cartValidation, null),
+        });
+    }
+
+    const rateRow = data.shippingMethodId
+        ? shippingMethodRows.find((row) => row.id === data.shippingMethodId)
+        : undefined;
+    if ((rateRow?.kind ?? "delivery") === "pickup") {
+        const rate = resolveDeliveryRate({
+            rate: rateRow,
+            addressZoneId: null,
+            subtotalMinor: cartValidation.subtotalMinor,
+        });
+        const shippingFeeWaived = cartValidation.hasFreeDeliveryProduct || rate.freeOverApplied;
+        return markTrustedStorefrontDeliveryPreflightResult({
+            kind: "pickup",
+            shippingMinor: shippingFeeWaived ? 0 : rate.baseFeeMinor,
+            shippingMethod: {
+                id: rate.id,
+                name: rate.name,
+                description: rate.description,
+                baseAmountMinor: rate.baseFeeMinor,
+                feeWaived: shippingFeeWaived,
+            },
+            cityName: null,
+            zoneName: null,
+            areaName: null,
+            address: null,
+            pickup: {
+                address: rateRow?.pickupAddress?.trim() || null,
+                hours: rateRow?.pickupHours?.trim() || null,
+            },
+            fulfilment: summarizeStorefrontCartFulfilment(cartValidation, "pickup"),
+        });
+    }
+
+    const city = data.city?.trim();
+    const zone = data.zone?.trim();
+    if (!city || !zone) {
+        throw new ValidationError(
+            "Enter the delivery address, city and thana, or choose pickup.",
+            { reason: DELIVERY_ADDRESS_REQUIRED_REASON },
+        );
+    }
+    const address = { city, zone, area: data.area?.trim() || null };
+    const locationNames = resolveActiveDeliveryLocationNamesFromRows(address, [...locationRows]);
     const rate = resolveDeliveryRate({
-        rate: shippingMethodRows.find((row) => row.id === data.shippingMethodId),
-        addressZoneId: resolveAddressZoneId(data, locationRows),
+        rate: rateRow,
+        addressZoneId: resolveAddressZoneId(address, locationRows),
         subtotalMinor: cartValidation.subtotalMinor,
     });
     const shippingFeeWaived = cartValidation.hasFreeDeliveryProduct || rate.freeOverApplied;
@@ -134,16 +219,23 @@ export function resolveStorefrontDeliveryPreflightFromRows(
         cityName: locationNames.cityName,
         zoneName: locationNames.zoneName,
         areaName: locationNames.areaName,
+        address,
+        pickup: null,
+        fulfilment: summarizeStorefrontCartFulfilment(cartValidation, "delivery"),
     });
 }
 
 export async function validateStorefrontDeliveryPreflight(
     storefrontDb: Database,
     data: StorefrontDeliveryPreflightInput,
-    cartValidation: Pick<StorefrontCartValidationResult, "hasFreeDeliveryProduct" | "subtotalMinor">,
+    cartValidation: DeliveryPreflightCart,
 ): Promise<StorefrontDeliveryPreflightResult> {
+    if (!summarizeStorefrontCartFulfilment(cartValidation, null).requiresDeliveryMethod) {
+        return resolveStorefrontDeliveryPreflightFromRows(data, cartValidation, [], []);
+    }
     const readBatch = [
-        selectActiveDeliveryLocationRows(storefrontDb, data),
+        selectActiveDeliveryLocationRowsByIds(storefrontDb, [data.city, data.zone, data.area]
+            .filter((id): id is string => typeof id === "string" && id.trim().length > 0)),
         selectDeliveryRateRowsByIds(storefrontDb, data.shippingMethodId ? [data.shippingMethodId] : []),
     ];
 
@@ -156,6 +248,41 @@ export async function validateStorefrontDeliveryPreflight(
         Array.isArray(locationRows) ? locationRows as ActiveDeliveryLocationRow[] : [],
         Array.isArray(shippingMethodRows) ? shippingMethodRows as DeliveryRateRow[] : [],
     );
+}
+
+/**
+ * Every line of a prepared order has a type with a registered fulfiller
+ * (F13). Types come from the delivery preflight, so physical lines are
+ * already `ship` or `pickup` here.
+ */
+export function assertStorefrontLineFulfilment(
+    cartValidation: Pick<StorefrontCartValidationResult, "items">,
+    delivery: Pick<StorefrontDeliveryPreflightResult, "fulfilment">,
+): FulfillmentType[] {
+    const issues: StorefrontCartItemIssue[] = [];
+    const types = cartValidation.items.map((item, position): FulfillmentType => {
+        const type = delivery.fulfilment.lineTypes[position] ?? null;
+        if (type === null || !hasFulfiller(type)) {
+            issues.push({
+                index: item.index,
+                cartKey: item.cartKey ?? null,
+                productId: item.productId,
+                variantId: item.variantId,
+                code: "FULFILMENT_UNAVAILABLE",
+                action: "remove",
+                message: `${item.productName}${item.variantLabel ? ` (${item.variantLabel})` : ""} can't be ordered online right now.`,
+                productName: item.productName,
+                variantLabel: item.variantLabel,
+                requestedQuantity: item.quantity,
+            });
+            return "ship";
+        }
+        return type;
+    });
+    if (issues.length > 0) {
+        throw new ValidationError("Some items in your cart need attention.", { itemIssues: issues });
+    }
+    return types;
 }
 
 /**
@@ -202,6 +329,7 @@ export async function createStorefrontOrder(
             price: item.price,
             productName: item.productName,
             variantLabel: item.variantLabel,
+            properties: item.properties,
         })),
         { inventoryPool: data.inventoryPool },
     );
@@ -236,6 +364,20 @@ export async function createStorefrontOrder(
         cartValidation,
     );
 
+    const lineTypes = assertStorefrontLineFulfilment(cartValidation, deliveryPreflight);
+    const { requiresShipping, allowsCashOnDelivery } = deliveryPreflight.fulfilment;
+    if (data.paymentMethod === PaymentMethod.COD && !allowsCashOnDelivery) {
+        throw new ValidationError("Cash on delivery isn't available for this order. Choose an online payment method.");
+    }
+    const shippingAddress = requiresShipping ? data.shippingAddress?.trim() ?? "" : null;
+    if (requiresShipping && !shippingAddress) {
+        throw new ValidationError(
+            "Enter the delivery address, city and thana, or choose pickup.",
+            { reason: DELIVERY_ADDRESS_REQUIRED_REASON },
+        );
+    }
+    const shippingDestination = requiresShipping ? deliveryPreflight.address : null;
+
     if (
         checkoutPolicySnapshot
         && !isTrustedStorefrontCheckoutPolicySnapshot(checkoutPolicySnapshot)
@@ -256,6 +398,7 @@ export async function createStorefrontOrder(
 
     // Stable allocation identities are established before either promotion or
     // tax evaluation. Commit-time re-evaluation uses these same ids.
+    const lineTypeByIndex = new Map(cartValidation.items.map((item, position) => [item.index, lineTypes[position]!]));
     const preparedItems = data.items.map((item, idx) => {
         const validatedItem = validatedItemByIndex.get(idx)!;
         return {
@@ -266,6 +409,10 @@ export async function createStorefrontOrder(
             variantId: validatedItem.variantId,
             quantity: validatedItem.quantity,
             unitPriceMinor: validatedItem.unitPriceMinor,
+            baseUnitPriceMinor: validatedItem.baseUnitPriceMinor,
+            propertiesPriceMinor: validatedItem.propertiesPriceMinor,
+            properties: serializeOrderLineProperties(validatedItem.properties),
+            fulfillmentType: lineTypeByIndex.get(idx)!,
             productName: validatedItem.productName,
             variantLabel: validatedItem.variantLabel,
             inventoryTracked: validatedItem.inventoryTracked,
@@ -295,10 +442,11 @@ export async function createStorefrontOrder(
     });
     assertDiscountCodesApplied(discount);
     const taxQuoteInput = {
+        // No address (pickup, service, digital): only store-wide rates apply.
         destination: {
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
+            city: shippingDestination?.city ?? null,
+            zone: shippingDestination?.zone ?? null,
+            area: shippingDestination?.area ?? null,
             cityName: deliveryPreflight.cityName,
             zoneName: deliveryPreflight.zoneName,
             areaName: deliveryPreflight.areaName,
@@ -349,19 +497,23 @@ export async function createStorefrontOrder(
             customerName: data.customerName,
             customerPhone: data.customerPhone,
             customerEmail: data.customerEmail,
-            shippingAddress: data.shippingAddress,
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
+            shippingAddress,
+            city: shippingDestination?.city ?? null,
+            zone: shippingDestination?.zone ?? null,
+            area: shippingDestination?.area ?? null,
             cityName: deliveryPreflight.cityName,
             zoneName: deliveryPreflight.zoneName,
             areaName: deliveryPreflight.areaName,
             notes: data.notes,
-            shippingMethodId: deliveryPreflight.shippingMethod.id,
-            shippingMethodName: deliveryPreflight.shippingMethod.name,
-            shippingMethodDescription: deliveryPreflight.shippingMethod.description,
-            shippingMethodBaseAmountMinor: deliveryPreflight.shippingMethod.baseAmountMinor,
-            shippingFeeWaived: deliveryPreflight.shippingMethod.feeWaived,
+            shippingMethodId: deliveryPreflight.shippingMethod?.id ?? null,
+            shippingMethodName: deliveryPreflight.shippingMethod?.name ?? null,
+            shippingMethodDescription: deliveryPreflight.shippingMethod?.description ?? null,
+            shippingMethodBaseAmountMinor: deliveryPreflight.shippingMethod?.baseAmountMinor ?? null,
+            shippingFeeWaived: deliveryPreflight.shippingMethod?.feeWaived ?? null,
+            requiresShipping,
+            shippingMethodKind: deliveryPreflight.kind,
+            pickupAddress: deliveryPreflight.pickup?.address ?? null,
+            pickupHours: deliveryPreflight.pickup?.hours ?? null,
             currencyCode: taxQuote.currencyCode,
             currencyDecimalPlaces: taxQuote.decimalPlaces,
             subtotalAmountMinor: taxQuote.subtotalMinor,
@@ -398,6 +550,10 @@ export async function createStorefrontOrder(
                 variantLabel: item.variantLabel,
                 inventoryTracked: item.inventoryTracked,
                 productImageMediaId: item.productImageMediaId,
+                fulfillmentType: item.fulfillmentType,
+                properties: item.properties,
+                propertiesPriceMinor: item.propertiesPriceMinor,
+                baseUnitPriceMinor: item.baseUnitPriceMinor,
                 unitPriceMinor: lineTax.unitPriceMinor,
                 lineSubtotalMinor: lineTax.grossAmountMinor,
                 discountAmountMinor: lineTax.discountMinor,
@@ -416,7 +572,16 @@ export async function createStorefrontOrder(
         paymentMethod: data.paymentMethod,
         taxQuote,
         commitPayload,
+        requiresShipping,
+        linePropertiesHashes: await storefrontLinePropertiesHashes(cartValidation),
     };
+}
+
+/** `propertiesHash` per validated line, in cart order (for the quote fingerprint). */
+export async function storefrontLinePropertiesHashes(
+    cartValidation: Pick<StorefrontCartValidationResult, "items">,
+): Promise<string[]> {
+    return Promise.all(cartValidation.items.map((item) => linePropertiesHash(item.canonicalProperties)));
 }
 
 /** Delivery preflight in the decimal HTTP contract. */
@@ -424,6 +589,6 @@ export function presentStorefrontDeliveryPreflight(
     delivery: StorefrontDeliveryPreflightResult,
     decimalPlaces: number,
 ) {
-    const { shippingMinor, ...rest } = delivery;
+    const { shippingMinor, address: _address, fulfilment: _fulfilment, ...rest } = delivery;
     return { ...rest, shippingCharge: fromMinor(shippingMinor, decimalPlaces) };
 }

@@ -11,6 +11,7 @@ import {
     PRODUCT_CONDITION_VALUES,
 } from "@scalius/shared/product-condition";
 import { catalogMoneySchema, skuStockSchema, skuWeightSchema } from "./types";
+import { customizationSchemaInputSchema, editableFulfillmentKindSchema } from "./customization-schema";
 import { createProductOptionMatrixSchema } from "./option-matrix";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./media";
 
@@ -134,6 +135,10 @@ const productBaseSchema = z.object({
     media: productMediaInputSchema,
     attributes: productAttributeSchema,
     additionalInfo: productAdditionalInfoSchema,
+    /** Buyer inputs (engraving, gift wrap, a fit choice). Omit to keep; null to remove all. */
+    customizationSchema: customizationSchemaInputSchema.nullable().optional(),
+    /** Sets every live SKU's fulfilment kind at once (the Shipping card's select). Omit to keep. */
+    fulfillmentKind: editableFulfillmentKindSchema.optional(),
 });
 
 function requireCanonicalProductHandle(
@@ -175,6 +180,7 @@ const defaultSkuInputSchema = z.object({
         .describe("Scanned or printed barcode. Omit or null to generate an internal Code 128 barcode."),
     barcodeType: z.enum(["ean13", "upc", "isbn", "gtin", "code128", "custom"]).nullable().optional(),
     weight: skuWeightSchema.nullable().optional(),
+    fulfillmentKind: editableFulfillmentKindSchema.optional(),
 }).refine((value) => value.trackInventory || value.stock === 0, {
     message: "Turn on quantity tracking before setting a quantity.",
     path: ["stock"],

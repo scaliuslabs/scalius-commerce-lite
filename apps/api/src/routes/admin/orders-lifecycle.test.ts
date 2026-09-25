@@ -76,7 +76,7 @@ describe("admin order lifecycle routes", () => {
         expect(events[1]).toMatchObject({ data: { from: "pending", to: "cancelled", reason: "customer_request" }, actorName: "Nadia" });
 
         // One message to the buyer: the cancellation, not also a request update (R2-ORD-08).
-        expect(sqlite.prepare("SELECT notification_type FROM order_notification_outbox WHERE order_id = 'order_a'").all())
+        expect(sqlite.prepare("SELECT notification_type FROM notification_outbox WHERE order_id = 'order_a'").all())
             .toEqual([{ notification_type: "order_cancelled" }]);
     });
 
@@ -168,7 +168,7 @@ describe("admin order lifecycle routes", () => {
             expect(body.data.results).toEqual([{ orderId: "order_b", success: true }]);
         }
         expect(sqlite.prepare("SELECT count(*) AS n FROM order_events WHERE kind = 'status_changed'").get()).toEqual({ n: 1 });
-        expect(sqlite.prepare("SELECT count(*) AS n FROM order_notification_outbox WHERE order_id = 'order_b'").get()).toEqual({ n: 1 });
+        expect(sqlite.prepare("SELECT count(*) AS n FROM notification_outbox WHERE order_id = 'order_b'").get()).toEqual({ n: 1 });
     });
 
     it("refuses Shipped as a status change, for any client (R3-ORD-01)", async () => {

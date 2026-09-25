@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => {
     cleanupStaleAbandonedCheckouts: vi.fn(),
     cleanupExpiredOrderPaymentRecoveryChallenges: vi.fn(),
     archiveStaleIncompleteOrders: vi.fn(),
-    flushPendingOrderNotificationOutbox: vi.fn(),
+    flushPendingNotificationOutbox: vi.fn(),
     flushPendingMetaPurchaseOutbox: vi.fn(),
     cleanupExpiredCustomerAuthOtpChallenges: vi.fn(),
     cleanupExpiredCustomerAuthOtpRateLimits: vi.fn(),
@@ -46,7 +46,7 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
 }));
 
 vi.mock("@scalius/core/modules/notifications", () => ({
-  flushPendingOrderNotificationOutbox: mocks.flushPendingOrderNotificationOutbox,
+  flushPendingNotificationOutbox: mocks.flushPendingNotificationOutbox,
 }));
 
 vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
@@ -159,7 +159,7 @@ describe("runScheduledMaintenance", () => {
       limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
       hasMore: false,
     });
-    mocks.flushPendingOrderNotificationOutbox.mockResolvedValue({
+    mocks.flushPendingNotificationOutbox.mockResolvedValue({
       scanned: 0,
       enqueued: 0,
       failed: 0,
@@ -280,7 +280,7 @@ describe("runScheduledMaintenance", () => {
       limit: ABANDONED_CHECKOUT_SWEEP_LIMIT,
       hasMore: false,
     });
-    mocks.flushPendingOrderNotificationOutbox.mockResolvedValue({
+    mocks.flushPendingNotificationOutbox.mockResolvedValue({
       scanned: 1,
       enqueued: 1,
       failed: 0,
@@ -387,7 +387,7 @@ describe("runScheduledMaintenance", () => {
       },
     );
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith({ env, executionCtx });
-    expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalledWith({
+    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalledWith({
       db: mocks.db,
       queue: env.JOBS_QUEUE,
       limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
@@ -530,7 +530,7 @@ describe("runScheduledMaintenance", () => {
 
     expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
     expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalled();
-    expect(mocks.flushPendingOrderNotificationOutbox).toHaveBeenCalled();
+    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalled();
     expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalled();
     expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
     expect(mocks.failStaleQueuedPaymentWebhookEvents).toHaveBeenCalled();
@@ -578,7 +578,7 @@ describe("runScheduledMaintenance", () => {
     const backfillOrder = mocks.backfillMissingMediaVariants.mock.invocationCallOrder[0]!;
     for (const sweep of [
       mocks.releaseExpiredReservations,
-      mocks.flushPendingOrderNotificationOutbox,
+      mocks.flushPendingNotificationOutbox,
       mocks.reconcileDueRefundAttempts,
       mocks.cleanupExpiredCustomerSessions,
       mocks.pruneExpiredIdentityHandoffEvents,

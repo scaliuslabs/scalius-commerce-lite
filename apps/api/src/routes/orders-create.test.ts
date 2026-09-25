@@ -88,10 +88,52 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
     },
     commitStorefrontOrderPayload: mocks.commitStorefrontOrderPayload,
     runStorefrontOrderPostCommitSideEffects: mocks.runStorefrontOrderPostCommitSideEffects,
-    validateStorefrontCartItems: mocks.validateStorefrontCartItems,
-    validateStorefrontDeliveryPreflight: mocks.validateStorefrontDeliveryPreflight,
+    // Fixtures describe pre-Wave A physical lines; the wrappers add the line
+    // kinds and the delivery plan the real services always return.
+    validateStorefrontCartItems: async (...args: unknown[]) =>
+      withWaveALineDefaults(await mocks.validateStorefrontCartItems(...args)),
+    validateStorefrontDeliveryPreflight: async (db: unknown, input: Record<string, unknown>, cart: { items?: unknown[] }) =>
+      withWaveAPreflightDefaults(await mocks.validateStorefrontDeliveryPreflight(db, input, cart), input, cart),
   };
 });
+
+function withWaveALineDefaults<T>(result: T): T {
+  if (!result || typeof result !== "object" || !Array.isArray((result as { items?: unknown }).items)) return result;
+  const cart = result as unknown as { items: Array<Record<string, unknown>> };
+  return {
+    ...result,
+    items: cart.items.map((item) => ({
+      fulfillmentKind: "physical",
+      isGiftCard: false,
+      properties: [],
+      canonicalProperties: [],
+      propertiesPriceMinor: 0,
+      baseUnitPriceMinor: item.unitPriceMinor,
+      ...item,
+    })),
+  };
+}
+
+function withWaveAPreflightDefaults<T>(
+  result: T,
+  input: Record<string, unknown>,
+  cart: { items?: unknown[] },
+): T {
+  if (!result || typeof result !== "object") return result;
+  return {
+    kind: "delivery",
+    address: { city: input.city, zone: input.zone, area: input.area ?? null },
+    pickup: null,
+    fulfilment: {
+      lineTypes: (cart.items ?? []).map(() => "ship"),
+      requiresDeliveryMethod: true,
+      deliveryMethodKind: "delivery",
+      requiresShipping: true,
+      allowsCashOnDelivery: true,
+    },
+    ...result,
+  };
+}
 
 vi.mock("../utils/cache-generation", () => ({
   bumpCacheGeneration: mocks.bumpCacheGeneration,
@@ -569,6 +611,28 @@ describe("cart validation preflight", () => {
   });
 
   it("preflights selected delivery data when cart validation receives city and zone", async () => {
+    mocks.validateStorefrontCartItems.mockResolvedValue({
+      valid: true,
+      issues: [],
+      items: [{
+        index: 0,
+        cartKey: "line_1",
+        productId: "product_1",
+        variantId: "variant_1",
+        quantity: 1,
+        unitPriceMinor: 10_000,
+        productName: "Queue Product",
+        variantLabel: null,
+        freeDelivery: false,
+        inventoryTracked: true,
+        availableQuantity: null,
+        taxClassId: null,
+        productImageMediaId: null,
+        productImage: null,
+      }],
+      subtotalMinor: 10_000,
+      hasFreeDeliveryProduct: false,
+    });
     const { app, kv } = createTestApp();
 
     const response = await app.request(
@@ -623,6 +687,28 @@ describe("cart validation preflight", () => {
   });
 
   it("surfaces stale delivery choices from cart validation without creating checkout side effects", async () => {
+    mocks.validateStorefrontCartItems.mockResolvedValue({
+      valid: true,
+      issues: [],
+      items: [{
+        index: 0,
+        cartKey: "line_1",
+        productId: "product_1",
+        variantId: "variant_1",
+        quantity: 1,
+        unitPriceMinor: 10_000,
+        productName: "Queue Product",
+        variantLabel: null,
+        freeDelivery: false,
+        inventoryTracked: true,
+        availableQuantity: null,
+        taxClassId: null,
+        productImageMediaId: null,
+        productImage: null,
+      }],
+      subtotalMinor: 10_000,
+      hasFreeDeliveryProduct: false,
+    });
     mocks.validateStorefrontDeliveryPreflight.mockRejectedValue(
       new ValidationError("A valid active shipping method is required for this order."),
     );
@@ -769,6 +855,7 @@ describe("authoritative tax quote", () => {
     expect(mocks.buildStorefrontCheckoutQuoteFingerprint).toHaveBeenCalledWith(
       expect.objectContaining({ totalMinor: 16_800 }),
       DEFAULT_SHIPPING_METHOD_SNAPSHOT,
+      ["none"],
     );
     const validatedRequestItem = mocks.validateStorefrontCartItems.mock.calls[0]?.[1]?.[0];
     expect(validatedRequestItem).not.toHaveProperty("price");
@@ -2849,5 +2936,106 @@ describe("create order commit/KV ordering", () => {
     expect(kv.put).not.toHaveBeenCalled();
     expect(mocks.commitStorefrontOrderPayload).not.toHaveBeenCalled();
     expect(mocks.runStorefrontOrderPostCommitSideEffects).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Wave A is additive for the storefront: the storefront deployed before the
+ * API keeps sending the pre-Wave A payloads (always an address, no buyer
+ * inputs) to the new API between the two deploys. These are those payloads
+ * verbatim (lib/checkout/create-order.ts, tax-quote-client.ts).
+ */
+describe("old-storefront payloads against the Wave A API", () => {
+  const oldCheckoutBody = {
+    checkoutRequestId: "checkout_req_123456",
+    expectedQuoteFingerprint: DEFAULT_QUOTE_FINGERPRINT,
+    customerName: "Old Storefront",
+    customerPhone: "+8801712345678",
+    customerEmail: null,
+    shippingAddress: "123 Queue Street, Mirpur",
+    city: "city_1",
+    zone: "zone_1",
+    area: null,
+    cityName: "Dhaka",
+    zoneName: "Mirpur",
+    areaName: null,
+    notes: null,
+    items: [{
+      cartKey: "line:v2:product_1:variant:variant_1",
+      productId: "product_1",
+      variantId: "variant_1",
+      quantity: 1,
+      price: 100,
+      productName: "Queue Product",
+      variantLabel: null,
+    }],
+    shippingCharge: 60,
+    shippingMethodId: "shipping_1",
+    discountCodes: [],
+    paymentMethod: "cod",
+  };
+
+  it("creates an order from the old checkout body and answers with every old field", async () => {
+    const { app, kv } = createTestApp();
+    const response = await app.request("/api/v1/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(oldCheckoutBody),
+    }, { CACHE: kv } as never);
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    const body = await response.json() as { data: Record<string, unknown> };
+    for (const field of ["checkoutToken", "receiptToken", "statusToken", "orderId", "paymentMethod", "totalAmount", "message"]) {
+      expect(body.data).toHaveProperty(field);
+    }
+    const [, input] = mocks.createStorefrontOrder.mock.calls[0]!;
+    expect(input).toMatchObject({ shippingAddress: "123 Queue Street, Mirpur", city: "city_1", zone: "zone_1" });
+    expect((input as { items: Array<Record<string, unknown>> }).items[0]!.properties).toBeUndefined();
+  });
+
+  it("quotes the old tax-quote body (address, method, no buyer inputs)", async () => {
+    const { app, kv } = createTestApp();
+    const response = await app.request("/api/v1/orders/tax-quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ cartKey: "line_1", productId: "product_1", variantId: "variant_1", quantity: 1, productName: "Queue Product", variantLabel: null }],
+        inventoryPool: "regular",
+        city: "city_1",
+        zone: "zone_1",
+        area: null,
+        shippingMethodId: "shipping_1",
+        discountCodes: [],
+        customerPhone: "+8801712345678",
+      }),
+    }, { CACHE: kv } as never);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const body = await response.json() as { data: Record<string, unknown> };
+    expect(body.data).toMatchObject({
+      valid: true,
+      quoteFingerprint: expect.any(String),
+      shippingMethod: DEFAULT_SHIPPING_METHOD_SNAPSHOT,
+      requiresShipping: true,
+    });
+  });
+
+  it("accepts the new shapes too: buyer inputs, and pickup without an address", async () => {
+    const { app, kv } = createTestApp();
+    const response = await app.request("/api/v1/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...oldCheckoutBody,
+        shippingAddress: undefined,
+        city: undefined,
+        zone: undefined,
+        items: [{ ...oldCheckoutBody.items[0], properties: [{ key: "engraving", value: "Anika" }] }],
+      }),
+    }, { CACHE: kv } as never);
+    expect(response.status, await response.clone().text()).toBe(201);
+    const [, input] = mocks.createStorefrontOrder.mock.calls[0]!;
+    expect((input as { items: Array<Record<string, unknown>> }).items[0]).toMatchObject({
+      properties: [{ key: "engraving", value: "Anika" }],
+    });
   });
 });

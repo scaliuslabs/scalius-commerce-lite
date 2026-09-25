@@ -71,6 +71,17 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     batch: "forbidden",
   },
   "dashboard.orders.fulfillment_get": {},
+  "dashboard.orders.fulfillment_create": {
+    idempotency: "required",
+    batch: "forbidden",
+  },
+  "dashboard.orders.fulfillment_void": {
+    batch: "forbidden",
+  },
+  "dashboard.orders.pickup_ready": {
+    idempotency: "required",
+    batch: "forbidden",
+  },
   "dashboard.orders.get": {},
   "dashboard.orders.invoice_get": {},
   "dashboard.orders.invoice_issue": {

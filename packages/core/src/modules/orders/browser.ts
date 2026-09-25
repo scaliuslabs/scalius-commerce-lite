@@ -6,3 +6,4 @@ export * from "./archive-policy";
 export * from "./money";
 export * from "./search";
 export * from "./csv-export";
+export * from "./line-presentation";

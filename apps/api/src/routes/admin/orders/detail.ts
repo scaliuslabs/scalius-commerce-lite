@@ -20,8 +20,10 @@ import {
     loadVariantSelectedOptions,
     presentCatalogPrice,
     readStoreDecimalPlaces,
+    readStoredCustomization,
 } from "@scalius/core/modules/products";
 import { fromMinor } from "@scalius/shared/money";
+import { presentOrderLineFulfilment } from "@scalius/core/modules/orders/browser";
 import {
     orderPayments,
     paymentPlans,
@@ -53,6 +55,12 @@ import {
     selectedProductOptionSchema,
 } from "../../../schemas/entities";
 import { nullableTimestampSchema, timestampSchema } from "../../../schemas/timestamps";
+import {
+    customizationViewSchema,
+    deliveryMethodKindSchema,
+    fulfillmentTypeSchema,
+    orderLinePropertySchema,
+} from "../../../schemas/order-lines";
 import {
     listOrderPaymentSessionAttempts,
     listOrderRefundAttempts,
@@ -194,10 +202,15 @@ const orderFormDataSchema = z.object({
     customerName: z.string(),
     customerPhone: z.string(),
     customerEmail: z.string().nullable(),
-    shippingAddress: z.string(),
-    city: z.string(),
-    zone: z.string(),
+    /** Null when nothing ships (pickup or service-only orders). */
+    shippingAddress: z.string().nullable(),
+    city: z.string().nullable(),
+    zone: z.string().nullable(),
     area: z.string().nullable(),
+    /** An amendment keeps the order's delivery method; new physical lines take its kind. */
+    requiresShipping: z.boolean(),
+    shippingMethodId: z.string().nullable(),
+    shippingMethodKind: deliveryMethodKindSchema.nullable(),
     /** The place names saved with the order, to label the pickers before they load. */
     cityName: z.string().nullable(),
     zoneName: z.string().nullable(),
@@ -216,6 +229,13 @@ const formDataItemSchema = z.object({
     variantId: z.string().nullable(),
     quantity: z.number(),
     price: z.number(),
+    fulfillmentType: fulfillmentTypeSchema,
+    /**
+     * The line's frozen buyer inputs. An amendment line sent with its
+     * `orderItemId` keeps them (and its agreed price) whatever it sends;
+     * only new lines resolve `properties` against today's schema.
+     */
+    properties: z.array(orderLinePropertySchema),
 });
 
 const formDataProductSchema = z.object({
@@ -227,6 +247,9 @@ const formDataProductSchema = z.object({
     discountPercentage: z.number().nullable(),
     discountType: z.string().nullable(),
     discountAmount: z.number().nullable(),
+    /** Buyer inputs the product asks for; null when none. */
+    customizationSchema: customizationViewSchema.nullable(),
+    requiresCustomization: z.boolean(),
     variants: z.array(productVariantSchema.extend({
         selectedOptions: z.array(selectedProductOptionSchema),
     })),
@@ -512,6 +535,11 @@ app.openapi(getItemsRoute, async (c) => {
             discountAmountMinor: orderItems.discountAmountMinor,
             taxableAmountMinor: orderItems.taxableAmountMinor,
             taxAmountMinor: orderItems.taxAmountMinor,
+            fulfillmentType: orderItems.fulfillmentType,
+            fulfilledQuantity: orderItems.fulfilledQuantity,
+            properties: orderItems.properties,
+            propertiesPriceMinor: orderItems.propertiesPriceMinor,
+            baseUnitPriceMinor: orderItems.baseUnitPriceMinor,
         })
         .from(orderItems)
         .innerJoin(orders, eq(orders.id, orderItems.orderId))
@@ -520,6 +548,7 @@ app.openapi(getItemsRoute, async (c) => {
 
     return ok(c, items.map(({ productImageObjectKey, productImageStatus, currencyDecimalPlaces, ...item }) => ({
         ...item,
+        ...presentOrderLineFulfilment(item, currencyDecimalPlaces),
         price: fromMinor(item.unitPriceMinor, currencyDecimalPlaces),
         productImage:
             productImageObjectKey &&
@@ -828,6 +857,9 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
             cityName: orders.cityName,
             zoneName: orders.zoneName,
             areaName: orders.areaName,
+            requiresShipping: orders.requiresShipping,
+            shippingMethodId: orders.shippingMethodId,
+            shippingMethodKind: orders.shippingMethodKind,
             notes: orders.notes,
             currencyDecimalPlaces: orders.currencyDecimalPlaces,
             discountAmountMinor: orders.discountAmountMinor,
@@ -860,6 +892,11 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
             unitPriceMinor: orderItems.unitPriceMinor,
             productName: orderItems.productName,
             variantLabel: orderItems.variantLabel,
+            fulfillmentType: orderItems.fulfillmentType,
+            properties: orderItems.properties,
+            propertiesPriceMinor: orderItems.propertiesPriceMinor,
+            fulfilledQuantity: orderItems.fulfilledQuantity,
+            baseUnitPriceMinor: orderItems.baseUnitPriceMinor,
         })
         .from(orderItems)
         .where(eq(orderItems.orderId, orderId));
@@ -881,6 +918,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
                 discountBps: products.discountBps,
                 discountType: products.discountType,
                 discountAmountMinor: products.discountAmountMinor,
+                customizationSchema: products.customizationSchema,
             })
             .from(products)
             .where(sql`${products.id} IN (
@@ -932,10 +970,15 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
         }
     }
 
-    const productsWithVariants = allProducts.map((product) => ({
-        ...presentCatalogPrice(product, storeDecimalPlaces),
-        variants: variantsByProductId.get(product.id) ?? [],
-    }));
+    const productsWithVariants = allProducts.map(({ customizationSchema, ...product }) => {
+        const customization = readStoredCustomization(customizationSchema, storeDecimalPlaces);
+        return {
+            ...presentCatalogPrice(product, storeDecimalPlaces),
+            customizationSchema: customization.customization,
+            requiresCustomization: customization.requiresCustomization,
+            variants: variantsByProductId.get(product.id) ?? [],
+        };
+    });
 
     return ok(c, {
         order,
@@ -944,13 +987,18 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
         defaultValues: {
             ...order,
             discountAmount: order.discountAmount || null,
-            items: items.map((item) => ({
-                orderItemId: item.id,
-                productId: item.productId,
-                variantId: item.variantId,
-                quantity: item.quantity,
-                price: orderAmount(item.unitPriceMinor),
-            })),
+            items: items.map((item) => {
+                const line = presentOrderLineFulfilment(item, currencyDecimalPlaces);
+                return {
+                    orderItemId: item.id,
+                    productId: item.productId,
+                    variantId: item.variantId,
+                    quantity: item.quantity,
+                    price: orderAmount(item.unitPriceMinor),
+                    fulfillmentType: line.fulfillmentType,
+                    properties: line.properties,
+                };
+            }),
         },
     });
 }) as unknown as AdminRouteHandler<typeof getFormDataRoute>);

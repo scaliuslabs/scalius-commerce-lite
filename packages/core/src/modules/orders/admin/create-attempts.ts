@@ -371,9 +371,9 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone.trim(),
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
-    shippingAddress: input.shippingAddress.trim(),
-    city: input.city,
-    zone: input.zone,
+    shippingAddress: input.shippingAddress?.trim() || null,
+    city: input.city ?? null,
+    zone: input.zone ?? null,
     area: input.area ?? null,
     cityName: input.cityName ?? null,
     zoneName: input.zoneName ?? null,
@@ -383,7 +383,11 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
       productId: item.productId,
       variantId: item.variantId,
       quantity: item.quantity,
+      ...(item.properties && item.properties.length > 0
+        ? { properties: item.properties.map((property) => [property.key, property.value]) }
+        : {}),
     })),
+    ...(input.shippingMethodId ? { shippingMethodId: input.shippingMethodId } : {}),
     discountAmount: input.discountAmount == null ? null : normalizeAmount(input.discountAmount),
     shippingCharge: normalizeAmount(input.shippingCharge),
   };

@@ -17,6 +17,8 @@ import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getEmailProviderReadiness } from "../../integrations/email";
 import {
     currencyDocument,
+    ADMIN_CHANNEL_ALLOWANCE,
+    CUSTOMER_CHANNEL_ALLOWANCE,
     DEFAULT_ADMIN_NOTIFICATION_CHANNELS,
     DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS,
     normalizeNotificationChannelRules,
@@ -90,7 +92,7 @@ export async function updateNotificationChannels(
     if (Object.values(requested).some((channels) => channels.includes("push"))) {
         throw new ValidationError("Customer push notifications are not implemented yet. Use Email, SMS, or WhatsApp for customer order notifications.");
     }
-    const channels = normalizeNotificationChannelRules(input, DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS, CUSTOMER_CHANNELS);
+    const channels = normalizeNotificationChannelRules(input, DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS, CUSTOMER_CHANNEL_ALLOWANCE);
     const template = options.whatsappTemplate ? normalizeWhatsAppTemplate(options.whatsappTemplate) : null;
 
     if (channelWasEnabled(channels, currentChannels, "email")) {
@@ -198,7 +200,7 @@ export async function updateAdminNotificationChannels(
     input: { channels: Record<string, unknown>; emailRecipients: readonly string[] },
     options: { expectedRevision?: number } = {},
 ): Promise<Pick<NotificationSettings, "adminChannels" | "staffEmailRecipients">> {
-    const adminChannels = normalizeNotificationChannelRules(input.channels, DEFAULT_ADMIN_NOTIFICATION_CHANNELS, ["push"]);
+    const adminChannels = normalizeNotificationChannelRules(input.channels, DEFAULT_ADMIN_NOTIFICATION_CHANNELS, ADMIN_CHANNEL_ALLOWANCE);
     const staffEmailRecipients: string[] = [];
     const issues: Array<{ path: Array<string | number>; message: string }> = [];
     input.emailRecipients.forEach((raw, index) => {

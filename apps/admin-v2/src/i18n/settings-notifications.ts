@@ -224,6 +224,8 @@ export const notificationTemplateMessages = defineMessages({
     refund_amount: "Refund amount",
     support_request: "Request type",
     support_status: "Request status",
+    pickup_address: "Pickup address",
+    pickup_hours: "Pickup hours",
   },
   bn: {
     notFound: "এই মেসেজটি নেই।",
@@ -272,5 +274,7 @@ export const notificationTemplateMessages = defineMessages({
     refund_amount: "রিফান্ডের পরিমাণ",
     support_request: "রিকোয়েস্টের ধরন",
     support_status: "রিকোয়েস্টের অবস্থা",
+    pickup_address: "পিকআপের ঠিকানা",
+    pickup_hours: "পিকআপের সময়",
   },
 });

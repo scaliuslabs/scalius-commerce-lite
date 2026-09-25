@@ -77,16 +77,19 @@ function normalizeAmendmentRequest(
         customerName: data.customerName.trim(),
         customerPhone: data.customerPhone.trim(),
         customerEmail: data.customerEmail?.trim().toLowerCase() ?? null,
-        shippingAddress: data.shippingAddress.trim(),
-        city: data.city,
-        zone: data.zone,
-        area: data.area,
+        shippingAddress: data.shippingAddress?.trim() || null,
+        city: data.city ?? null,
+        zone: data.zone ?? null,
+        area: data.area ?? null,
         notes: data.notes,
         items: data.items.map((item) => ({
             orderItemId: item.orderItemId ?? null,
             productId: item.productId,
             variantId: item.variantId,
             quantity: item.quantity,
+            ...(item.properties && item.properties.length > 0
+                ? { properties: item.properties.map((property) => [property.key, property.value]) }
+                : {}),
         })),
         shippingCharge: data.shippingCharge,
         discountAmount: data.discountAmount,
@@ -139,16 +142,43 @@ async function requireAmendableOrder(
 }
 
 /**
- * Lines the merchant keeps on an amended order keep the price the customer
- * agreed to; only newly added lines take today's catalog price.
+ * Lines the merchant keeps on an amended order keep the price and buyer
+ * inputs the customer agreed to; only newly added lines take today's catalog
+ * price and resolve their inputs against today's schema.
  */
 async function loadRetainedUnitPrices(db: Database, orderId: string) {
     const rows = await db.select({
         id: orderItems.id,
         variantId: orderItems.variantId,
         unitPriceMinor: orderItems.unitPriceMinor,
+        fulfillmentType: orderItems.fulfillmentType,
+        properties: orderItems.properties,
+        propertiesPriceMinor: orderItems.propertiesPriceMinor,
+        baseUnitPriceMinor: orderItems.baseUnitPriceMinor,
     }).from(orderItems).where(eq(orderItems.orderId, orderId)).all();
     return new Map(rows.map((row) => [row.id, row]));
+}
+
+/** An amendment keeps the order's one delivery method (Wave A §2.7). */
+function amendmentDeliveryMethodKind(order: {
+    shippingMethodKind: string | null;
+    requiresShipping: boolean;
+}): "delivery" | "pickup" | null {
+    if (order.shippingMethodKind === "delivery" || order.shippingMethodKind === "pickup") {
+        return order.shippingMethodKind;
+    }
+    // Orders placed before Wave A shipped everything.
+    return order.requiresShipping ? "delivery" : null;
+}
+
+function requireAmendmentAddress(
+    data: PreviewManualOrderAmendmentInput,
+    prepared: { requiresShipping: boolean },
+): string | null {
+    if (!prepared.requiresShipping) return null;
+    const address = data.shippingAddress?.trim();
+    if (!address) throw new ValidationError("Enter the delivery address.");
+    return address;
 }
 
 export async function previewManualOrderAmendment(
@@ -165,7 +195,9 @@ export async function previewManualOrderAmendment(
         data,
         resolveOrderCurrencySnapshot(order),
         await loadRetainedUnitPrices(db, orderId),
+        { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order) },
     );
+    requireAmendmentAddress(data, prepared);
     const quoteFingerprint = await buildManualOrderAmendmentQuoteFingerprint(prepared.taxQuote);
     return {
         ...prepared.quote,
@@ -213,7 +245,8 @@ function amendmentCommitGuard(orderId: string, expectedVersion: number) {
           AND NOT EXISTS (
             SELECT 1 FROM ${orderItems}
             WHERE ${orderItems.orderId} = ${orderId}
-              AND ${orderItems.fulfillmentStatus} <> ${ItemFulfillmentStatus.PENDING}
+              AND (${orderItems.fulfillmentStatus} <> ${ItemFulfillmentStatus.PENDING}
+                OR ${orderItems.fulfilledQuantity} > 0)
           )
     )`;
 }
@@ -265,8 +298,11 @@ export async function confirmManualOrderAmendment(
         data,
         resolveOrderCurrencySnapshot(order),
         await loadRetainedUnitPrices(db, orderId),
+        { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order) },
     );
-    const currentQuoteFingerprint =await buildManualOrderAmendmentQuoteFingerprint(prepared.taxQuote);
+    const shippingAddress = requireAmendmentAddress(data, prepared);
+    const destination = prepared.address;
+    const currentQuoteFingerprint = await buildManualOrderAmendmentQuoteFingerprint(prepared.taxQuote);
     if (currentQuoteFingerprint !== data.quoteFingerprint) {
         throw new ConflictError(
             "Prices or taxes changed after preview. Refresh the quote and review the updated COD total.",
@@ -398,10 +434,10 @@ export async function confirmManualOrderAmendment(
             name: data.customerName,
             email: data.customerEmail,
             phone: data.customerPhone,
-            address: data.shippingAddress,
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
+            address: shippingAddress,
+            city: destination?.city ?? null,
+            zone: destination?.zone ?? null,
+            area: destination?.area ?? null,
             cityName: prepared.locationNames.cityName,
             zoneName: prepared.locationNames.zoneName,
             areaName: prepared.locationNames.areaName,
@@ -416,10 +452,10 @@ export async function confirmManualOrderAmendment(
             name: data.customerName,
             email: data.customerEmail,
             phone: data.customerPhone,
-            address: data.shippingAddress,
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
+            address: shippingAddress,
+            city: destination?.city ?? null,
+            zone: destination?.zone ?? null,
+            area: destination?.area ?? null,
             cityName: prepared.locationNames.cityName,
             zoneName: prepared.locationNames.zoneName,
             areaName: prepared.locationNames.areaName,
@@ -446,13 +482,14 @@ export async function confirmManualOrderAmendment(
             customerName: data.customerName,
             customerPhone: data.customerPhone,
             customerEmail: data.customerEmail,
-            shippingAddress: data.shippingAddress,
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
+            shippingAddress,
+            city: destination?.city ?? null,
+            zone: destination?.zone ?? null,
+            area: destination?.area ?? null,
             cityName: prepared.locationNames.cityName,
             zoneName: prepared.locationNames.zoneName,
             areaName: prepared.locationNames.areaName,
+            requiresShipping: prepared.requiresShipping,
             notes: data.notes,
             currencyCode: prepared.taxQuote.currencyCode,
             currencyDecimalPlaces: prepared.taxQuote.decimalPlaces,
@@ -516,6 +553,10 @@ export async function confirmManualOrderAmendment(
                     id: preparedItem.id,
                     orderId,
                     ...itemValues,
+                    fulfillmentType: preparedItem.item.fulfillmentType,
+                    properties: preparedItem.item.properties,
+                    propertiesPriceMinor: preparedItem.item.propertiesPriceMinor,
+                    baseUnitPriceMinor: preparedItem.item.baseUnitPriceMinor,
                     createdAt: sql`unixepoch()`,
                 }),
                 db.insert(orderItemTaxSnapshots).values({

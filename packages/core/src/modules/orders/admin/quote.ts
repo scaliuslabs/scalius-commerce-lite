@@ -1,8 +1,21 @@
 // Manual order quotes: SKU resolution, inventory facts and money for staff-created orders.
 import type { Database } from "@scalius/database/client";
-import { products, productVariants } from "@scalius/database/schema";
+import { products, productVariants, shippingMethods } from "@scalius/database/schema";
 import { toStoreMinor } from "../../settings/store-money";
-import { sql, eq, inArray } from "drizzle-orm";
+import { and, sql, eq, inArray, isNull } from "drizzle-orm";
+import {
+    isAutoFulfillmentType,
+    isFulfillmentKind,
+    resolveCheckoutFulfilment,
+    type DeliveryMethodKind,
+    type FulfillmentKind,
+    type FulfillmentType,
+} from "@scalius/shared/fulfilment";
+import {
+    parseStoredCustomizationSchema,
+    resolveLineProperties,
+    serializeOrderLineProperties,
+} from "@scalius/shared/line-properties";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
 import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../../products/money";
 import type { QuoteManualOrderInput } from "../validation";
@@ -24,12 +37,40 @@ type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
     productImageMediaId: string | null;
     taxClassId: string | null;
     catalogUnitPriceMinor: number;
+    fulfillmentKind: FulfillmentKind;
+    isGiftCard: boolean;
+    /** Raw `products.customization_schema`, resolved per line by the quote. */
+    customizationSchema: string | null;
 };
 type AdminOrderSkuIssueCode =
     | "SKU_REQUIRED"
     | "VARIANT_UNAVAILABLE"
     | "VARIANT_MISMATCH"
-    | "PRODUCT_UNAVAILABLE";
+    | "PRODUCT_UNAVAILABLE"
+    | "PROPERTIES_REQUIRED"
+    | "PROPERTIES_INVALID"
+    | "FULFILMENT_UNAVAILABLE";
+
+/** The delivery method a manual order uses, as snapshotted on the order. */
+export interface ManualOrderDeliveryMethod {
+    id: string;
+    name: string;
+    description: string | null;
+    feeMinor: number;
+    kind: DeliveryMethodKind;
+    pickupAddress: string | null;
+    pickupHours: string | null;
+}
+
+/** A line the amendment keeps: its agreed price and frozen buyer inputs. */
+export interface RetainedManualOrderLine {
+    variantId: string | null;
+    unitPriceMinor: number;
+    fulfillmentType?: string | null;
+    properties?: string | null;
+    propertiesPriceMinor?: number | null;
+    baseUnitPriceMinor?: number | null;
+}
 
 interface ManualOrderMoneyItem {
     productId: string;
@@ -90,17 +131,105 @@ export interface ManualOrderQuote {
     }>;
 }
 
+interface PreparedManualOrderLine extends AdminOrderItemWithInventory<ManualOrderMoneyItem> {
+    fulfillmentType: FulfillmentType;
+    /** Serialized snapshot for `order_items.properties`; null without inputs. */
+    properties: string | null;
+    propertiesPriceMinor: number;
+    baseUnitPriceMinor: number;
+}
+
 interface PreparedManualOrderQuote {
     currency: OrderCurrencySnapshot;
     locationNames: {
-        cityName: string;
-        zoneName: string;
+        cityName: string | null;
+        zoneName: string | null;
         areaName: string | null;
     };
-    trackedItems: Array<AdminOrderItemWithInventory<ManualOrderMoneyItem>>;
+    /** The destination stored and taxed; null when nothing ships. */
+    address: { city: string; zone: string; area: string | null } | null;
+    trackedItems: PreparedManualOrderLine[];
     allocationLineIds: string[];
     taxQuote: TaxQuote;
     quote: ManualOrderQuote;
+    requiresShipping: boolean;
+    deliveryMethodKind: DeliveryMethodKind | null;
+    deliveryMethod: ManualOrderDeliveryMethod | null;
+}
+
+export interface ManualOrderQuoteOptions {
+    /**
+     * An amendment keeps the order's delivery method: its kind decides the
+     * type of new physical lines. `undefined` means "use shippingMethodId".
+     */
+    fixedDeliveryMethodKind?: DeliveryMethodKind | null;
+}
+
+async function loadManualOrderDeliveryMethod(
+    db: Database,
+    shippingMethodId: string | null | undefined,
+): Promise<ManualOrderDeliveryMethod | null> {
+    if (!shippingMethodId) return null;
+    const row = await db.select({
+        id: shippingMethods.id,
+        name: shippingMethods.name,
+        description: shippingMethods.description,
+        feeMinor: shippingMethods.feeMinor,
+        kind: shippingMethods.kind,
+        pickupAddress: shippingMethods.pickupAddress,
+        pickupHours: shippingMethods.pickupHours,
+    }).from(shippingMethods).where(and(
+        eq(shippingMethods.id, shippingMethodId),
+        isNull(shippingMethods.deletedAt),
+    )).get();
+    if (!row) throw new ValidationError("That delivery method no longer exists. Choose another.");
+    return {
+        ...row,
+        kind: row.kind === "pickup" ? "pickup" : "delivery",
+        pickupAddress: row.pickupAddress?.trim() || null,
+        pickupHours: row.pickupHours?.trim() || null,
+    };
+}
+
+function resolveManualOrderLineProperties(
+    items: ReadonlyArray<AdminOrderItemWithInventory<ManualOrderMoneyItem & { properties?: unknown; orderItemId?: string | null }>>,
+    retainedLines: ReadonlyMap<string, RetainedManualOrderLine> | undefined,
+) {
+    const issues: AdminOrderSkuIssue[] = [];
+    const lines = items.map((item, index) => {
+        const retained = item.orderItemId ? retainedLines?.get(item.orderItemId) : undefined;
+        if (retained && retained.variantId === item.variantId) {
+            // A kept line keeps the price and buyer inputs the customer agreed to.
+            const propertiesPriceMinor = retained.propertiesPriceMinor ?? 0;
+            return {
+                unitPriceMinor: retained.unitPriceMinor,
+                baseUnitPriceMinor: retained.baseUnitPriceMinor ?? retained.unitPriceMinor - propertiesPriceMinor,
+                propertiesPriceMinor,
+                properties: retained.properties ?? null,
+            };
+        }
+        const schema = parseStoredCustomizationSchema(item.customizationSchema);
+        if (!schema.ok) {
+            addAdminOrderSkuIssue(issues, item, index, "PRODUCT_UNAVAILABLE",
+                "This product's buyer inputs are misconfigured. Fix them on the product first.");
+            return null;
+        }
+        const resolved = resolveLineProperties(schema.schema, item.properties);
+        if (!resolved.ok) {
+            addAdminOrderSkuIssue(issues, item, index, resolved.code, resolved.code === "PROPERTIES_REQUIRED"
+                ? "Fill in the buyer inputs this product requires."
+                : "Check the buyer inputs for this item.");
+            return null;
+        }
+        return {
+            unitPriceMinor: item.catalogUnitPriceMinor + resolved.propertiesPriceMinor,
+            baseUnitPriceMinor: item.catalogUnitPriceMinor,
+            propertiesPriceMinor: resolved.propertiesPriceMinor,
+            properties: serializeOrderLineProperties(resolved.properties),
+        };
+    });
+    if (issues.length > 0) throwAdminOrderSkuIssues(issues);
+    return lines.map((line) => line!);
 }
 
 function projectManualOrderQuote(
@@ -135,25 +264,76 @@ export async function prepareManualOrderQuote(
     db: Database,
     data: QuoteManualOrderInput,
     currencyOverride?: OrderCurrencySnapshot,
-    retainedLines?: ReadonlyMap<string, { variantId: string | null; unitPriceMinor: number }>,
+    retainedLines?: ReadonlyMap<string, RetainedManualOrderLine>,
+    options: ManualOrderQuoteOptions = {},
 ): Promise<PreparedManualOrderQuote> {
     const currency = currencyOverride ?? createOrderCurrencySnapshot(
         (await getCurrencySettings(db)).currencyCode,
     );
     // Keep location validation first so a stale/cross-parent destination fails
-    // before catalog or tax reads do unnecessary work.
-    const locationNames = await resolveActiveDeliveryLocationNames(db, data);
+    // before catalog or tax reads do unnecessary work. A pickup or
+    // service-only order sends no address and skips it.
+    const submittedCity = data.city?.trim();
+    const submittedZone = data.zone?.trim();
+    const submittedAddress = submittedCity && submittedZone
+        ? { city: submittedCity, zone: submittedZone, area: data.area?.trim() || null }
+        : null;
+    const submittedLocationNames = submittedAddress
+        ? await resolveActiveDeliveryLocationNames(db, submittedAddress)
+        : null;
     const resolvedItems = await resolveAdminOrderItemInventory(db, data.items);
-    const trackedItems = resolvedItems.map((item, index) => {
-        const orderItemId = (data.items[index] as { orderItemId?: string | null } | undefined)?.orderItemId;
-        const retained = orderItemId ? retainedLines?.get(orderItemId) : undefined;
-        return {
-            ...item,
-            unitPriceMinor: retained && retained.variantId === item.variantId
-                ? retained.unitPriceMinor
-                : item.catalogUnitPriceMinor,
-        };
+    const deliveryMethod = options.fixedDeliveryMethodKind === undefined
+        ? await loadManualOrderDeliveryMethod(db, data.shippingMethodId)
+        : null;
+
+    // One delivery method per order (Wave A §2.7). A staff order with a
+    // physical line and no method picked ships to the address, as before.
+    const chosenKind: DeliveryMethodKind | null = options.fixedDeliveryMethodKind !== undefined
+        ? options.fixedDeliveryMethodKind
+        : deliveryMethod?.kind ?? "delivery";
+    const plan = resolveCheckoutFulfilment(resolvedItems.map((item) => ({
+        fulfillmentKind: item.fulfillmentKind,
+        isGiftCard: item.isGiftCard,
+    })), chosenKind);
+    if (!plan.ok) {
+        throw new ValidationError(plan.issue === "DELIVERY_METHOD_REQUIRED"
+            ? "This order has no delivery method, so it can't take items that ship. Create a new order for them."
+            : "Add at least one sellable item.");
+    }
+    // Staff orders are cash on delivery; digital and gift-card lines fulfil
+    // automatically and have no fulfiller until Wave B, so they fail closed.
+    const unavailable: AdminOrderSkuIssue[] = [];
+    plan.lineTypes.forEach((type, index) => {
+        if (isAutoFulfillmentType(type)) {
+            addAdminOrderSkuIssue(unavailable, resolvedItems[index]!, index, "FULFILMENT_UNAVAILABLE",
+                "Digital items and gift cards can't be added to an order yet.");
+        }
     });
+    if (unavailable.length > 0) throwAdminOrderSkuIssues(unavailable);
+
+    let address: PreparedManualOrderQuote["address"] = null;
+    let locationNames: PreparedManualOrderQuote["locationNames"] = { cityName: null, zoneName: null, areaName: null };
+    if (plan.requiresShipping) {
+        if (!submittedAddress || !submittedLocationNames) {
+            throw new ValidationError("Choose the delivery city and thana, or a pickup method.");
+        }
+        address = submittedAddress;
+        locationNames = submittedLocationNames;
+    }
+
+    const lineProperties = resolveManualOrderLineProperties(
+        resolvedItems.map((item, index) => ({
+            ...item,
+            orderItemId: (data.items[index] as { orderItemId?: string | null } | undefined)?.orderItemId ?? null,
+            unitPriceMinor: item.catalogUnitPriceMinor,
+        })),
+        retainedLines,
+    );
+    const trackedItems: PreparedManualOrderLine[] = resolvedItems.map((item, index) => ({
+        ...item,
+        ...lineProperties[index]!,
+        fulfillmentType: plan.lineTypes[index]!,
+    }));
     const money = calculateManualOrderMoney(
         trackedItems,
         toStoreMinor(data.shippingCharge, currency),
@@ -164,10 +344,11 @@ export async function prepareManualOrderQuote(
         buildStorefrontTaxAllocationLineId(index, item.variantId),
     );
     const taxQuote = await calculateStorefrontTaxQuote(db, {
+        // No address (pickup, service): only store-wide rates apply.
         destination: {
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
+            city: address?.city ?? null,
+            zone: address?.zone ?? null,
+            area: address?.area ?? null,
             ...locationNames,
         },
         lines: trackedItems.map((item, index) => ({
@@ -189,10 +370,14 @@ export async function prepareManualOrderQuote(
     return {
         currency,
         locationNames,
+        address,
         trackedItems,
         allocationLineIds,
         taxQuote,
         quote: projectManualOrderQuote(taxQuote, trackedItems),
+        requiresShipping: plan.requiresShipping,
+        deliveryMethodKind: plan.deliveryMethodKind,
+        deliveryMethod,
     };
 }
 
@@ -279,6 +464,9 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             variantDeletedAt: productVariants.deletedAt,
             productActive: products.isActive,
             productDeletedAt: products.deletedAt,
+            fulfillmentKind: productVariants.fulfillmentKind,
+            isGiftCard: products.isGiftCard,
+            customizationSchema: products.customizationSchema,
         })
         .from(productVariants)
         .innerJoin(products, eq(products.id, productVariants.productId))
@@ -367,6 +555,9 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             )?.mediaId ?? null,
             taxClassId: sku.taxClassId,
             catalogUnitPriceMinor,
+            fulfillmentKind: isFulfillmentKind(sku.fulfillmentKind) ? sku.fulfillmentKind : "physical",
+            isGiftCard: sku.isGiftCard === true,
+            customizationSchema: sku.customizationSchema,
         });
     });
 
