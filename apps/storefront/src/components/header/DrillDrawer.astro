@@ -141,9 +141,10 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     cursor: pointer;
   }
 
-  .drill-list[data-depth="0"] > .drill-row > .drill-link,
+  /* Amazon and Target list departments in regular weight (the "All" rows and the back bar stand out). */
+  .drill-list[data-depth="0"] > .drill-row > .drill-link:not(.drill-link--all),
   .drill-list[data-depth="0"] > .drill-row > .drill-node:not([open]) > .drill-next {
-    font-weight: 600;
+    font-weight: 400;
   }
 
   .drill-link--all {
