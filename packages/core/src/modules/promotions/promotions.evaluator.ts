@@ -36,6 +36,11 @@ const cartLineSchema = z.object({
     quantity: z.number().int().min(1).max(10_000),
     /** Active collections containing the product, resolved by the caller. */
     collectionIds: scopeIdsSchema.default([]),
+    /**
+     * A gift-card line (Wave B §4.2): never a target, never counted toward a
+     * threshold, never given a share of an order discount.
+     */
+    giftCard: z.boolean().optional(),
 });
 
 const cartSchema = z.object({
@@ -696,7 +701,10 @@ export function evaluatePromotionCandidates(input: unknown): PromotionEvaluation
     }
     const cart: PromotionEvaluationCart = {
         ...parsedInput.data.cart,
-        lines: [...parsedInput.data.cart.lines].sort((left, right) => left.id.localeCompare(right.id)),
+        // Gift-card lines are outside every promotion (§4.2): drop them first.
+        lines: parsedInput.data.cart.lines
+            .filter((line) => line.giftCard !== true)
+            .sort((left, right) => left.id.localeCompare(right.id)),
         submittedCodes: Array.from(new Set(
             parsedInput.data.cart.submittedCodes.map((code) => code.trim().toUpperCase()),
         )).sort((left, right) => left.localeCompare(right)),

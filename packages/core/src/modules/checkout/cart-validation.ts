@@ -18,6 +18,7 @@ import {
 } from "@scalius/shared/line-properties";
 import { variantOptionLabelSql } from "../products/option-model";
 import { hasFulfiller } from "../fulfilment/registry";
+import { giftCardLineRecipientIssue } from "../gift-cards";
 import { digitalDeliverableSql } from "../digital/deliverable";
 import {
     loadProductMediaProjections,
@@ -30,6 +31,12 @@ import {
     type ProductBundleRow,
 } from "../products/bundles";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
+import {
+    GIFT_CARD_MAX_QUANTITY_PER_LINE,
+    GIFT_CARD_MAX_UNITS_PER_ORDER,
+    isGiftCardLineQuantityAllowed,
+    isGiftCardOrderUnitsAllowed,
+} from "@scalius/shared/gift-card-tender";
 
 export type StorefrontCartIssueCode =
     | "PRODUCT_UNAVAILABLE"
@@ -432,6 +439,8 @@ export function resolveStorefrontCartValidationFromRows(
     for (const item of items) {
         requestedByVariant.set(item.variantId, (requestedByVariant.get(item.variantId) ?? 0) + item.quantity);
     }
+    // Gift-card units requested by the lines before this one (the per-order cap).
+    let giftCardUnitsBefore = 0;
 
     items.forEach((item, index) => {
         const product = productMap.get(item.productId);
@@ -524,6 +533,28 @@ export function resolveStorefrontCartValidationFromRows(
             return;
         }
 
+        if (isGiftCard) {
+            // One card per unit is issued in one batch: 20 a line, 50 an order (§11.3).
+            const unitsBefore = giftCardUnitsBefore;
+            giftCardUnitsBefore += item.quantity;
+            const orderRoom = Math.max(0, GIFT_CARD_MAX_UNITS_PER_ORDER - unitsBefore);
+            const lineAllowed = isGiftCardLineQuantityAllowed(item.quantity);
+            if (!lineAllowed || !isGiftCardOrderUnitsAllowed(unitsBefore + item.quantity)) {
+                const allowed = Math.min(GIFT_CARD_MAX_QUANTITY_PER_LINE, orderRoom);
+                addIssue(issues, item, index, {
+                    code: "QUANTITY_UNAVAILABLE",
+                    action: allowed > 0 ? "reduce_quantity" : "remove",
+                    message: lineAllowed
+                        ? `One order can hold at most ${GIFT_CARD_MAX_UNITS_PER_ORDER} gift cards.`
+                        : `You can buy at most ${GIFT_CARD_MAX_QUANTITY_PER_LINE} of ${displayName} at a time.`,
+                    productName: product.name,
+                    variantLabel: requestedVariantLabel,
+                    availableQuantity: allowed,
+                });
+                return;
+            }
+        }
+
         const availableQuantity = availableForVariant(variant, pool);
         const requestedForVariant = requestedByVariant.get(variant.id) ?? item.quantity;
         if (availableQuantity < requestedForVariant) {
@@ -567,6 +598,23 @@ export function resolveStorefrontCartValidationFromRows(
                 propertyKey: resolvedProperties.key,
             });
             return;
+        }
+
+        if (isGiftCard) {
+            // The recipient is where the card is sent: refuse a bad one now,
+            // never drop it silently at issue.
+            const recipientIssue = giftCardLineRecipientIssue(resolvedProperties.properties);
+            if (recipientIssue) {
+                addIssue(issues, item, index, {
+                    code: "PROPERTIES_INVALID",
+                    action: "edit_properties",
+                    message: `${displayName}: ${recipientIssue.message}`,
+                    productName: product.name,
+                    variantLabel: requestedVariantLabel,
+                    propertyKey: recipientIssue.propertyKey,
+                });
+                return;
+            }
         }
 
         const baseUnitPriceMinor = calculateUnitPriceMinor(product, variant, currencyCode);

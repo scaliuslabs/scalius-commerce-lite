@@ -13,6 +13,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { eq, inArray } from "drizzle-orm";
 import { orderItems, orders } from "@scalius/database/schema";
 import {
+    GIFT_CARD_LINE_PROPERTY_KEYS,
     buildGiftCardIssueStatements,
     deriveGiftCardKeys,
     giftCardExpiryFromMonths,
@@ -25,13 +26,8 @@ import { readGiftCardSettings } from "../../settings/documents";
 import { ServiceUnavailableError } from "../../../errors";
 import type { AutoFulfiller } from "../registry";
 
-/** Reserved line-property keys (the `_gc_` prefix, `@scalius/shared/line-properties`). */
-export const GIFT_CARD_LINE_PROPERTY_KEYS = {
-    recipientName: "_gc_recipient_name",
-    recipientEmail: "_gc_recipient_email",
-    recipientPhone: "_gc_recipient_phone",
-    message: "_gc_message",
-} as const;
+/** Reserved line-property keys, owned by the gift-cards domain (checkout validates them too). */
+export { GIFT_CARD_LINE_PROPERTY_KEYS };
 
 /** Recipient and message from a frozen `order_items.properties` snapshot. */
 export function giftCardDeliveryFromProperties(properties: string | null): {

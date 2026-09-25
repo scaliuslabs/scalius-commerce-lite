@@ -67,6 +67,7 @@
     "notifications -> settings",
     "orders -> customers",
     "orders -> delivery",
+    "orders -> gift-cards",
     "orders -> inventory",
     "orders -> media",
     "orders -> notifications",
