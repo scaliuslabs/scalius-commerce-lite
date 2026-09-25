@@ -19,8 +19,12 @@ type Statement = BatchItem<"sqlite">;
 /** `order_payments.payment_method` of a gift-card tender. */
 export const GIFT_CARD_PAYMENT_METHOD = "gift_card";
 
+/**
+ * `gct_` + the millisecond time (base 36, fixed width) + random: ids sort in
+ * the order they were made, so a timeline stays in order within one second.
+ */
 export function newGiftCardTransactionId(): string {
-    return `gct_${nanoid(20)}`;
+    return `gct_${Date.now().toString(36).padStart(9, "0")}${nanoid(14)}`;
 }
 
 export interface GiftCardTransactionInput {
