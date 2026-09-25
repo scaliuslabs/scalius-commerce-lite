@@ -118,6 +118,8 @@ const heading = "mb-4 text-base font-semibold text-foreground";
                 <button type="button" id="orderSupportSubmit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60">Submit request</button>
               </div>
             </div>
+            <!-- Order-thread mount point: S4's panel (components/conversation/**) mounts here with the order's conversationId. -->
+            <div data-order-thread-slot hidden class="mt-4"></div>
             <StoreContact layoutData={layoutData} class="mt-4 text-sm text-muted-foreground" />
           </section>
         </div>
