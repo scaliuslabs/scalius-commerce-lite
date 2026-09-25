@@ -61,7 +61,7 @@ export async function loadNextCatalogPage(parts: PagingParts, fetcher: typeof fe
     progress.textContent = catalogProgressLabel(Number(progress.dataset.from), next.to, Number(progress.dataset.total));
   }
   history.replaceState(history.state, "", href);
-  if (next.next) link.href = new URL(next.next, href).href;
+  if (next.next) link.setAttribute("href", next.next);
   else link.remove();
   return firstNew;
 }
@@ -116,9 +116,11 @@ export function setupCatalogPaging(): void {
     block.querySelector<HTMLElement>("nav[aria-label='Pagination']")?.setAttribute("hidden", "");
     loader.hidden = false;
     if ("IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      // Well ahead of the reader, so the next cards land below the screen
+      // and nothing the buyer sees moves (CLS).
       observer = new IntersectionObserver((entries) => {
         if (entries.some((entry) => entry.isIntersecting)) void load(true);
-      }, { rootMargin: "600px 0px" });
+      }, { rootMargin: "1600px 0px" });
       observer.observe(loader);
     }
   }
@@ -146,5 +148,4 @@ export function setupCatalogViewToggle(): void {
     sync();
   }));
   sync();
-  toggle.hidden = false;
 }

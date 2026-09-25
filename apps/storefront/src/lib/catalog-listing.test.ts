@@ -8,7 +8,6 @@ import {
 } from "@scalius/shared/storefront-theme";
 import {
   CATALOG_FACET_SEARCH_MIN_VALUES,
-  CATALOG_SHELF_ITEMS,
   catalogAspectChips,
   catalogChildLinks,
   catalogFacetAnchor,
@@ -130,20 +129,24 @@ describe("shelves and sub-listings", () => {
   const item = (id: string, categoryId: string | null) => ({ id, categoryId });
 
   it("groups the page's products by sub-listing, keeping every product", () => {
-    const items = [item("1", "silk"), item("2", "cotton"), item("3", null), item("4", "silk"), item("5", "other")];
+    const items = [item("1", "silk"), item("2", "cotton"), item("3", null), item("4", "silk"), item("5", "other"), item("6", "cotton")];
     const shelves = catalogShelves({ groups, items, maxShelves: 8, restTitle: "More" });
     expect(shelves.map((shelf) => [shelf.title, shelf.href, shelf.items.map(({ id }) => id)])).toEqual([
-      ["Cotton", "/categories/cotton", ["2"]],
+      ["Cotton", "/categories/cotton", ["2", "6"]],
       ["Silk", "/categories/silk", ["1", "4"]],
       ["More", null, ["3", "5"]],
     ]);
+    // A lone product joins the last shelf instead of a one-card shelf.
+    const lone = catalogShelves({ groups, items: [...items, item("7", "linen")], maxShelves: 8, restTitle: "More" });
+    expect(lone.map(({ title, items: shelfItems }) => [title, shelfItems.length])).toEqual([["Cotton", 2], ["Silk", 2], ["More", 3]]);
   });
 
-  it("caps shelves and items, and needs at least two shelves", () => {
+  it("caps shelves without dropping products, and needs at least two shelves", () => {
     const items = Array.from({ length: 30 }, (_, index) => item(String(index), groups[index % 3]!.id));
     const capped = catalogShelves({ groups, items, maxShelves: 2, restTitle: "More" });
     expect(capped.map(({ title }) => title)).toEqual(["Cotton", "More"]);
-    expect(capped.every((shelf) => shelf.items.length <= CATALOG_SHELF_ITEMS)).toBe(true);
+    // The next page starts after this one, so every product stays on a shelf.
+    expect(capped.reduce((sum, shelf) => sum + shelf.items.length, 0)).toBe(30);
     expect(catalogShelves({ groups, items: [item("1", "silk"), item("2", "silk")], maxShelves: 8, restTitle: "More" })).toEqual([]);
     expect(catalogShelves({ groups: [], items, maxShelves: 8, restTitle: "More" })).toEqual([]);
   });

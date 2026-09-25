@@ -53,6 +53,12 @@
   padding-inline: 0.75rem;
 }
 
+/* A row reads top to bottom (title, price, action) instead of pinning the
+   price to the bottom of a tall photo. */
+.site-root .product-grid-frame[data-catalog-results="list"] .product-card-body > .mt-auto {
+  margin-top: 0.5rem;
+}
+
 /* Shelves (Aarong): one horizontal row per sub-listing, CSS scroll-snap
    only. 2.1 cards show on phones (the next card peeks), 3 on tablets and 4
    on computers. */

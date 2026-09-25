@@ -290,14 +290,16 @@ export interface CatalogShelf<Item> {
   items: Item[];
 }
 
-/** Aarong shows about ten products per shelf and at most eight shelves. */
-export const CATALOG_SHELF_ITEMS = 10;
+/** A shelf needs two products; a lone product joins the last shelf. */
+export const CATALOG_SHELF_MIN_ITEMS = 2;
 
 /**
  * Shelves from the listing's groups (a category's sub-categories once the
  * tree exists; a dynamic collection's categories today) over the products
  * already read for the page: no extra read. Products outside every group
- * share a last shelf. Fewer than two shelves is no shelf layout at all.
+ * (or alone in theirs) share a last shelf, and every product of the page
+ * stays on a shelf, since the next page starts after them. Fewer than two
+ * shelves is no shelf layout at all.
  */
 export function catalogShelves<Item extends { categoryId?: string | null }>({
   groups,
@@ -316,15 +318,17 @@ export function catalogShelves<Item extends { categoryId?: string | null }>({
     const shelf = item.categoryId ? byGroup.get(item.categoryId) : undefined;
     (shelf ?? rest).push(item);
   }
-  const shelves: CatalogShelf<Item>[] = groups
-    .filter((group) => byGroup.get(group.id)!.length > 0)
-    .map((group) => ({ id: group.id, title: group.label, href: group.href, items: byGroup.get(group.id)! }));
+  const shelves: CatalogShelf<Item>[] = [];
+  for (const group of groups) {
+    const grouped = byGroup.get(group.id)!;
+    if (grouped.length >= CATALOG_SHELF_MIN_ITEMS) shelves.push({ id: group.id, title: group.label, href: group.href, items: grouped });
+    else rest.push(...grouped);
+  }
   // Shelves past the cap join the catch-all shelf, so no product is dropped.
   const kept = rest.length > 0 || shelves.length > maxShelves ? maxShelves - 1 : maxShelves;
   for (const extra of shelves.splice(Math.max(1, kept))) rest.push(...extra.items);
   if (rest.length > 0) shelves.push({ id: "more", title: restTitle, href: null, items: rest });
-  if (shelves.length < 2) return [];
-  return shelves.map((shelf) => ({ ...shelf, items: shelf.items.slice(0, CATALOG_SHELF_ITEMS) }));
+  return shelves.length < 2 ? [] : shelves;
 }
 
 /** Category summaries (a collection's categories) as sub-listing links. */

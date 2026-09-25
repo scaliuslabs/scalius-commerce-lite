@@ -425,7 +425,9 @@ describe("listing controls", () => {
     const html = await render(LISTING, themeWith({ toolbar: ["sort", "grid-list-toggle"] }), plain(), EMPTY_SLOT);
     const document = parse(html);
     const toggle = document.querySelector("[data-catalog-view-toggle]")!;
-    expect(toggle.hasAttribute("hidden")).toBe(true);
+    // Painted from the start (no shift when its script runs); removed without JavaScript.
+    expect(toggle.hasAttribute("hidden")).toBe(false);
+    expect(html).toContain("<noscript><style>[data-catalog-view-toggle] { display: none !important; }</style></noscript>");
     expect(toggle.querySelector("button[data-view='grid']")!.getAttribute("aria-pressed")).toBe("true");
     expect(document.querySelector(".product-grid-frame")!.getAttribute("data-catalog-results")).toBe("grid");
     // The restore script sits right before the grid it marks.
