@@ -443,7 +443,7 @@ export class DvcHarness {
   /** Render one part as the API part cache would on a miss. */
   async render(path: string, allowRace = false): Promise<RenderResult> {
     this.config.setSystemTime(this.now);
-    if (process.env.DVC_DEBUG) this.config.log?.(`[render] ${path}`) ?? console.error(`[render] ${path}`);
+    if (process.env.DVC_DEBUG) (this.config.log ?? console.error)(`[render] ${path}`);
     const logPos = this.rowLog.position();
     const s0 = await this.clock.current();
     const observed = new Set<string>();
