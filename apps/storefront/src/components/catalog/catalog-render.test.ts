@@ -23,6 +23,7 @@ import { productCardImageSizes, productGridSpec } from "@/lib/product-card-layou
 import { LIST_ROW_IMAGE_SIZES } from "@/lib/catalog-listing";
 import { requestThemeFor } from "@/lib/storefront-theme-context";
 import { resolveProductListQueryState } from "@/lib/product-list-query";
+import type { ProductFacet } from "@/lib/api";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
 const fixtures = fileURLToPath(new URL("./__fixtures__/", import.meta.url));
@@ -188,33 +189,46 @@ function product(id: string, overrides: Record<string, unknown> = {}) {
 
 const PRODUCTS = Array.from({ length: 20 }, (_, index) =>
   product(`p${index + 1}`, index % 5 === 0 ? { discountedPrice: 960, discountType: "percentage", discountPercentage: 20 } : {}));
-const FACETS = [
-  {
-    id: "attr-size",
-    name: "Size",
-    slug: "size",
-    values: [
-      { value: "S", count: 12 },
-      { value: "M", count: 20 },
-      { value: "L", count: 0 },
-    ],
-  },
-  {
-    id: "attr-fabric",
-    name: "Fabric",
-    slug: "fabric",
-    // Eleven values: ten shown and one folded, below the search-list threshold.
-    values: Array.from({ length: 11 }, (_, index) => ({ value: `Fabric ${index + 1}`, count: index + 1 })),
-  },
-  { id: "attr-single", name: "Origin", slug: "origin", values: [{ value: "Bangladesh", count: 50 }] },
+/** A facet as the API sends it; each value's label is its URL value unless given. */
+function facet(
+  slug: string,
+  name: string,
+  values: Array<[value: string, count: number, label?: string, swatch?: string]>,
+  overrides: Partial<ProductFacet> = {},
+): ProductFacet {
+  return {
+    id: slug.startsWith("option.") || slug === "brand" ? slug : `attr-${slug}`,
+    name,
+    slug,
+    kind: slug === "brand" ? "brand" : slug.startsWith("option.") ? "option" : "attribute",
+    display: "checkbox",
+    unit: null,
+    values: values.map(([value, count, label, swatch]) => ({ value, label: label ?? value, count, swatch: swatch ?? null })),
+    range: null,
+    ...overrides,
+  };
+}
+
+const FACETS: ProductFacet[] = [
+  facet("size", "Size", [["S", 12], ["M", 20], ["L", 0]]),
+  // Eleven values: ten shown and one folded, below the search-list threshold.
+  facet("fabric", "Fabric", Array.from({ length: 11 }, (_, index): [string, number] => [`Fabric ${index + 1}`, index + 1])),
+  facet("origin", "Origin", [["Bangladesh", 50]]),
 ];
 
-function listingProps(url: string, overrides: Record<string, unknown> = {}) {
-  const queryState = resolveProductListQueryState({ url: new URL(url), facets: FACETS });
+/** A number attribute the merchant shows as a range. */
+const DISPLAY_SIZE = facet("display-size", "Display size", [], {
+  display: "range",
+  unit: "in",
+  range: { min: 11.6, max: 17.3 },
+});
+
+function listingProps(url: string, overrides: Record<string, unknown> = {}, facets: ProductFacet[] = FACETS) {
+  const queryState = resolveProductListQueryState({ url: new URL(url), facets });
   return {
     products: PRODUCTS,
     pagination: { page: queryState.page, totalPages: 3, total: 50 },
-    facets: FACETS,
+    facets,
     priceRange: { min: 500, max: 4500 },
     queryState,
     pathname: new URL(url).pathname,
@@ -476,13 +490,17 @@ describe("listing controls", () => {
 
 describe("facet display types", () => {
   it("paints colour facets as swatches and gives long lists a search field", async () => {
-    const colours = { id: "attr-colour", name: "Colour", slug: "colour", values: ["Black", "Navy", "Off-white"].map((value, index) => ({ value, count: index + 1 })) };
-    const brands = { id: "attr-brand", name: "Brand", slug: "brand", values: Array.from({ length: 14 }, (_, index) => ({ value: `Brand ${index + 1}`, count: 1 })) };
-    const mixed = { id: "attr-shade", name: "Shade", slug: "shade", values: [{ value: "Black", count: 1 }, { value: "Rose Gold", count: 1 }] };
+    // Option axes and the brand: the values decide the display.
+    const colours = facet("option.colour", "Colour", [["black", 1, "Black"], ["navy", 2, "Navy"], ["off-white", 3, "Off-white"]]);
+    const brands = facet("brand", "Brand", Array.from({ length: 14 }, (_, index): [string, number, string] => [`brand-${index + 1}`, 1, `Brand ${index + 1}`]));
+    const mixed = facet("option.shade", "Shade", [["black", 1, "Black"], ["rose gold", 1, "Rose Gold"]]);
     const facets = [colours, brands, mixed];
     const document = await renderListing(DEFAULT_STOREFRONT_THEME, { ...plain(), facets });
     const swatches = document.querySelector("fieldset[data-catalog-facet-display='swatch']")!;
+    // The label shows; the URL value submits.
     expect(Array.from(swatches.querySelectorAll("input[data-catalog-facet]")).map((input) => input.getAttribute("value")))
+      .toEqual(["black", "navy", "off-white"]);
+    expect(Array.from(swatches.querySelectorAll("label")).map((label) => label.querySelector("span:not([aria-hidden]):not([data-catalog-facet-count])")!.textContent))
       .toEqual(["Black", "Navy", "Off-white"]);
     expect(swatches.querySelector("span[style]")!.getAttribute("style")).toBe("background:#111111");
     // Each swatch keeps its count, which the live count updates.
@@ -492,8 +510,92 @@ describe("facet display types", () => {
     expect(search.hasAttribute("hidden")).toBe(true);
     expect(search.querySelector("input")!.hasAttribute("name")).toBe(false);
     expect(search.closest("details")!.querySelector("summary")!.textContent).toContain("Brand");
+    const brandInput = search.closest("fieldset")!.querySelector("input[data-catalog-facet]")!;
+    expect([brandInput.getAttribute("name"), brandInput.getAttribute("value")]).toEqual(["brand", "brand-1"]);
+    expect(brandInput.closest("label")!.textContent).toContain("Brand 1");
     // One unknown colour keeps the checkbox list.
     expect(document.querySelectorAll("fieldset[data-catalog-facet-display='swatch']")).toHaveLength(1);
+  });
+
+  it("follows the merchant's display for typed attributes, painting swatches from the API", async () => {
+    const finish = facet("finish", "Finish", [["rose gold", 4, "Rose Gold", "#b76e79"], ["black", 3, "Black"], ["sunset", 2, "Sunset"]], { display: "swatch" });
+    // Colour words, but the merchant chose checkboxes; two values, but a searchable list.
+    const tone = facet("tone", "Tone", [["black", 1, "Black"], ["navy", 1, "Navy"]]);
+    const maker = facet("maker", "Maker", [["a", 1, "A"], ["b", 1, "B"]], { display: "search_list" });
+    const document = await renderListing(DEFAULT_STOREFRONT_THEME, { ...plain(), facets: [finish, tone, maker] });
+    const swatches = Array.from(document.querySelectorAll("fieldset[data-catalog-facet-display='swatch']"));
+    expect(swatches).toHaveLength(1);
+    const paints = Array.from(swatches[0]!.querySelectorAll("label > span[aria-hidden]"))
+      .map((span) => [span.getAttribute("style"), span.classList.contains("bg-muted")]);
+    // The merchant's colour, then the colour word; a value with neither is an empty swatch.
+    expect(paints).toEqual([["background:#b76e79", false], ["background:#111111", false], [null, true]]);
+    expect(document.querySelectorAll("[data-catalog-facet-search]")).toHaveLength(1);
+    expect(document.querySelector("[data-catalog-facet-search]")!.closest("details")!.querySelector("summary")!.textContent).toContain("Maker");
+  });
+
+  it("renders a range as From/To number fields in the plain GET form", async () => {
+    const document = await renderListing(DEFAULT_STOREFRONT_THEME, { ...plain(), facets: [...FACETS, DISPLAY_SIZE] });
+    const form = document.querySelector("form[data-catalog-filters]")!;
+    expect(form.getAttribute("method")).toBe("get");
+    const range = form.querySelector("fieldset[data-catalog-facet-display='range']")!;
+    expect(range.closest("details")!.querySelector("summary")!.textContent).toContain("Display size");
+    expect(range.querySelector("legend")!.textContent).toBe("Display size (in)");
+    const inputs = Array.from(range.querySelectorAll("input"));
+    expect(inputs.map((input) => [
+      input.getAttribute("name"),
+      input.getAttribute("inputmode"),
+      input.getAttribute("placeholder"),
+      input.getAttribute("value"),
+    ])).toEqual([
+      ["display-size.min", "decimal", "11.6", ""],
+      ["display-size.max", "decimal", "17.3", ""],
+    ]);
+    // Each field has a visible label, and the unit sits beside it.
+    for (const input of inputs) expect(range.querySelector(`label[for='${input.id}']`)).not.toBeNull();
+    expect(Array.from(range.querySelectorAll("label")).map((label) => label.textContent!.trim())).toEqual(["From", "To"]);
+    expect(Array.from(range.querySelectorAll("span[aria-hidden]")).map((span) => span.textContent)).toEqual(["in", "in"]);
+    // Not a count-driven value: the live count never disables it.
+    expect(range.querySelector("[data-catalog-facet]")).toBeNull();
+    // The desktop sidebar applies it with its own button (a submit of the whole form).
+    expect(range.querySelector("button[type='submit']")!.textContent).toContain("Apply");
+  });
+
+  it("keeps an applied range filled, shown as one removable chip, even when its products no longer differ", async () => {
+    const narrowed = { ...DISPLAY_SIZE, range: { min: 13.3, max: 13.3 } };
+    const url = "https://shop.test/categories/sarees?display-size.min=13&display-size.max=15.6&size=M";
+    const document = await renderListing(
+      themeWith({ toolbar: ["sort", "aspect-chips"] }),
+      listingProps(url, {}, [...FACETS, narrowed]),
+    );
+    const range = document.querySelector("fieldset[data-catalog-facet-display='range']")!;
+    expect(Array.from(range.querySelectorAll("input")).map((input) => input.getAttribute("value"))).toEqual(["13", "15.6"]);
+    expect(range.closest("details")!.hasAttribute("open")).toBe(true);
+    const chips = Array.from(document.querySelectorAll("nav[aria-label='Applied filters'] a[aria-label]"))
+      .map((chip) => [chip.textContent!.trim(), chip.getAttribute("href")]);
+    expect(chips).toEqual([
+      ["Size: M", "/categories/sarees?display-size.max=15.6&display-size.min=13"],
+      ["Display size: 13–15.6 in", "/categories/sarees?size=M"],
+    ]);
+    // The phone aspect chip opens the form at the range.
+    expect(document.querySelector("a[data-catalog-aspect][href='#catalog-facet-display-size']")!.textContent).toContain("(1)");
+    expect(document.querySelector("#catalog-facet-display-size")!.tagName).toBe("DETAILS");
+  });
+
+  it("names applied values and popular filters by their labels", async () => {
+    const brand = facet("brand", "Brand", [["samsung", 20, "Samsung"], ["xiaomi", 12, "Xiaomi"], ["apple", 3, "Apple"]]);
+    const theme = themeWith({ toolbar: ["popular-filter-chips", "sort"] });
+    const document = await renderListing(
+      theme,
+      listingProps("https://shop.test/categories/sarees?brand=samsung", {}, [brand, DISPLAY_SIZE]),
+      TREE_STORE_SHAPE,
+    );
+    const chip = document.querySelector("nav[aria-label='Applied filters'] a")!;
+    expect([chip.textContent!.trim(), chip.getAttribute("href")]).toEqual(["Brand: Samsung", "/categories/sarees"]);
+    const popular = Array.from(document.querySelectorAll("nav[aria-label='Popular filters'] a"));
+    expect(popular.map((link) => [link.textContent!.trim(), link.getAttribute("href")])).toEqual([
+      ["Xiaomi", "/categories/sarees?brand=samsung&brand=xiaomi"],
+      ["Apple", "/categories/sarees?brand=apple&brand=samsung"],
+    ]);
   });
 });
 
