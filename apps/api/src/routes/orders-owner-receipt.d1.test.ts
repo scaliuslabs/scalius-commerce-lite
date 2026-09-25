@@ -120,8 +120,8 @@ describe("account owner receipt access", () => {
   it("tells a tracked order where it is: dated steps, and each parcel's courier and tracking link (R2-SJ-04)", async () => {
     sqlite.exec(`
       UPDATE orders SET status = 'shipped', created_at = 1790000000 WHERE id = 'ORDEROWNED000001';
-      INSERT INTO order_notification_outbox (id, dedupe_key, order_id, notification_type, source, payload, created_at, updated_at)
-        VALUES ('outbox_confirmed', 'dedupe_confirmed', 'ORDEROWNED000001', 'order_confirmed', 'test', '{}', 1790000600, 1790000600);
+      INSERT INTO notification_outbox (id, dedupe_key, subject_type, subject_id, order_id, audience, notification_type, source, payload, created_at, updated_at)
+        VALUES ('outbox_confirmed', 'dedupe_confirmed', 'order', 'ORDEROWNED000001', 'ORDEROWNED000001', 'customer', 'order_confirmed', 'test', '{}', 1790000600, 1790000600);
       INSERT INTO delivery_shipments (id, order_id, provider_type, tracking_id, tracking_url, courier_name, status, created_at, updated_at)
         VALUES ('ship_1', 'ORDEROWNED000001', 'manual', ' PX-1001 ', 'https://track.example.test/PX-1001', 'Pathao', 'in_transit', 1790001200, 1790001200),
                ('ship_2', 'ORDEROWNED000001', 'manual', NULL, 'javascript:alert(1)', NULL, 'pending', 1790001300, 1790001300);

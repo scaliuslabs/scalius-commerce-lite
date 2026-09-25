@@ -20,6 +20,10 @@ import {
     describeNotificationProviderBlock,
     getNotificationProviderBlock,
 } from "@scalius/core/modules/notifications";
+import {
+    ORDER_NOTIFICATION_TYPES,
+    type OrderNotificationType,
+} from "@scalius/core/modules/notifications/browser";
 import type { Database } from "@scalius/database/client";
 import {
     isReady,
@@ -35,22 +39,10 @@ import { ValidationError } from "../../../utils/api-error";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const notificationEventsSchema = <T extends z.ZodTypeAny>(channel: T) => z.object({
-    order_created: z.array(channel),
-    order_confirmed: z.array(channel),
-    order_processing: z.array(channel),
-    order_shipped: z.array(channel),
-    order_delivered: z.array(channel),
-    order_completed: z.array(channel),
-    order_cancelled: z.array(channel),
-    order_returned: z.array(channel),
-    refund_processing: z.array(channel),
-    refund_failed: z.array(channel),
-    order_refunded: z.array(channel),
-    order_partially_refunded: z.array(channel),
-    payment_balance_paid: z.array(channel),
-    support_request_submitted: z.array(channel),
-    support_request_status_updated: z.array(channel),
+/** One entry per order event, plus the thread events each audience can use (§10). */
+const notificationEventsSchema = <T extends z.ZodTypeAny, C extends z.ZodTypeAny>(channel: T, conversation: Record<string, C>) => z.object({
+    ...Object.fromEntries(ORDER_NOTIFICATION_TYPES.map((event) => [event, z.array(channel)])) as Record<OrderNotificationType, z.ZodArray<T>>,
+    ...Object.fromEntries(Object.entries(conversation).map(([event, schema]) => [event, z.array(schema).optional()])),
 }).strict();
 
 const channelsSchema = z.record(z.string(), z.array(z.string()));
@@ -85,13 +77,17 @@ const notificationSettingsSchema = z.object({
 });
 
 const updateCustomerNotificationSettingsSchema = z.object({
-    channels: notificationEventsSchema(z.enum(["email", "sms", "whatsapp"])),
+    channels: notificationEventsSchema(z.enum(["email", "sms", "whatsapp"]), {
+        conversation_reply: z.enum(["email", "sms"]),
+    }),
     whatsappTemplate: whatsappTemplateSchema.optional(),
     expectedRevision: expectedRevisionSchema,
 }).strict();
 
 const updateStaffNotificationSettingsSchema = z.object({
-    channels: notificationEventsSchema(z.literal("push")),
+    channels: notificationEventsSchema(z.literal("push"), {
+        conversation_message: z.enum(["push", "email"]),
+    }),
     emailRecipients: z.array(z.string().max(254)).max(STAFF_EMAIL_RECIPIENTS_MAX),
     expectedRevision: expectedRevisionSchema,
 }).strict();

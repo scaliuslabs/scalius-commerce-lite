@@ -139566,6 +139566,23 @@
                                     "body"
                                   ]
                                 },
+                                "order_ready_for_pickup": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
                                 "order_delivered": {
                                   "type": "object",
                                   "properties": {
@@ -139759,6 +139776,7 @@
                                 "order_confirmed",
                                 "order_processing",
                                 "order_shipped",
+                                "order_ready_for_pickup",
                                 "order_delivered",
                                 "order_completed",
                                 "order_cancelled",
@@ -139823,6 +139841,18 @@
                                     "body"
                                   ]
                                 },
+                                "order_ready_for_pickup": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
                                 "order_delivered": {
                                   "type": "object",
                                   "properties": {
@@ -139961,6 +139991,7 @@
                                 "order_confirmed",
                                 "order_processing",
                                 "order_shipped",
+                                "order_ready_for_pickup",
                                 "order_delivered",
                                 "order_completed",
                                 "order_cancelled",
@@ -140313,6 +140344,7 @@
                       "order_confirmed",
                       "order_processing",
                       "order_shipped",
+                      "order_ready_for_pickup",
                       "order_delivered",
                       "order_completed",
                       "order_cancelled",
@@ -140460,6 +140492,23 @@
                                     "body"
                                   ]
                                 },
+                                "order_ready_for_pickup": {
+                                  "type": "object",
+                                  "properties": {
+                                    "subject": {
+                                      "type": "string",
+                                      "maxLength": 200
+                                    },
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 10000
+                                    }
+                                  },
+                                  "required": [
+                                    "subject",
+                                    "body"
+                                  ]
+                                },
                                 "order_delivered": {
                                   "type": "object",
                                   "properties": {
@@ -140653,6 +140702,7 @@
                                 "order_confirmed",
                                 "order_processing",
                                 "order_shipped",
+                                "order_ready_for_pickup",
                                 "order_delivered",
                                 "order_completed",
                                 "order_cancelled",
@@ -140717,6 +140767,18 @@
                                     "body"
                                   ]
                                 },
+                                "order_ready_for_pickup": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string",
+                                      "maxLength": 1000
+                                    }
+                                  },
+                                  "required": [
+                                    "body"
+                                  ]
+                                },
                                 "order_delivered": {
                                   "type": "object",
                                   "properties": {
@@ -140855,6 +140917,7 @@
                                 "order_confirmed",
                                 "order_processing",
                                 "order_shipped",
+                                "order_ready_for_pickup",
                                 "order_delivered",
                                 "order_completed",
                                 "order_cancelled",
@@ -141228,6 +141291,7 @@
                           "order_confirmed",
                           "order_processing",
                           "order_shipped",
+                          "order_ready_for_pickup",
                           "order_delivered",
                           "order_completed",
                           "order_cancelled",
@@ -141274,6 +141338,7 @@
                           "order_confirmed",
                           "order_processing",
                           "order_shipped",
+                          "order_ready_for_pickup",
                           "order_delivered",
                           "order_completed",
                           "order_cancelled",
@@ -142169,6 +142234,17 @@
                           ]
                         }
                       },
+                      "order_ready_for_pickup": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms",
+                            "whatsapp"
+                          ]
+                        }
+                      },
                       "order_delivered": {
                         "type": "array",
                         "items": {
@@ -142289,6 +142365,16 @@
                             "whatsapp"
                           ]
                         }
+                      },
+                      "conversation_reply": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "email",
+                            "sms"
+                          ]
+                        }
                       }
                     },
                     "required": [
@@ -142296,6 +142382,7 @@
                       "order_confirmed",
                       "order_processing",
                       "order_shipped",
+                      "order_ready_for_pickup",
                       "order_delivered",
                       "order_completed",
                       "order_cancelled",
@@ -142936,6 +143023,15 @@
                           ]
                         }
                       },
+                      "order_ready_for_pickup": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push"
+                          ]
+                        }
+                      },
                       "order_delivered": {
                         "type": "array",
                         "items": {
@@ -143034,6 +143130,16 @@
                             "push"
                           ]
                         }
+                      },
+                      "conversation_message": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "push",
+                            "email"
+                          ]
+                        }
                       }
                     },
                     "required": [
@@ -143041,6 +143147,7 @@
                       "order_confirmed",
                       "order_processing",
                       "order_shipped",
+                      "order_ready_for_pickup",
                       "order_delivered",
                       "order_completed",
                       "order_cancelled",

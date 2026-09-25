@@ -10,7 +10,7 @@ import {
     deliveryProviders,
     deliveryShipments,
     orderItems,
-    orderNotificationOutbox,
+    notificationOutbox,
     orderPayments,
     orderSupportRequests,
     orders,
@@ -1315,11 +1315,11 @@ export async function getBuyerOrderTracking(
             .where(eq(orderPayments.orderId, order.id)),
         db
             .select({
-                notificationType: orderNotificationOutbox.notificationType,
-                createdAt: orderNotificationOutbox.createdAt,
+                notificationType: notificationOutbox.notificationType,
+                createdAt: notificationOutbox.createdAt,
             })
-            .from(orderNotificationOutbox)
-            .where(eq(orderNotificationOutbox.orderId, order.id)),
+            .from(notificationOutbox)
+            .where(eq(notificationOutbox.orderId, order.id)),
         listOrderRefundAttempts(db, order.id, { audience: "customer" }),
         listOrderSupportRequests(db, order.id),
     ]);
@@ -1439,11 +1439,11 @@ export async function getCustomerOrderDetailForOrder(
             .limit(1),
         db
             .select({
-                notificationType: orderNotificationOutbox.notificationType,
-                createdAt: orderNotificationOutbox.createdAt,
+                notificationType: notificationOutbox.notificationType,
+                createdAt: notificationOutbox.createdAt,
             })
-            .from(orderNotificationOutbox)
-            .where(eq(orderNotificationOutbox.orderId, orderId)),
+            .from(notificationOutbox)
+            .where(eq(notificationOutbox.orderId, orderId)),
         ] as Parameters<Database["batch"]>[0]),
         listOrderRefundAttempts(db, orderId, { audience: "customer" }),
         listOrderSupportRequests(db, orderId),

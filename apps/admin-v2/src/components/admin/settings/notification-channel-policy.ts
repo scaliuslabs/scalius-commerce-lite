@@ -14,6 +14,7 @@ export const NOTIFICATION_EVENT_GROUPS = [
       "order_confirmed",
       "order_processing",
       "order_shipped",
+      "order_ready_for_pickup",
       "order_delivered",
       "order_completed",
       "order_cancelled",

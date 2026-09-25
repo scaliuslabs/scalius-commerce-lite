@@ -22,6 +22,8 @@ export const NOTIFICATION_VARIABLES = [
   "refund_amount",
   "support_request",
   "support_status",
+  "pickup_address",
+  "pickup_hours",
 ] as const;
 
 export type NotificationVariable = (typeof NOTIFICATION_VARIABLES)[number];
@@ -38,6 +40,7 @@ const ORDER_VARIABLES: readonly NotificationVariable[] = [
 /** Only what the sender knows for this event. */
 export function variablesForEvent(event: OrderNotificationType): readonly NotificationVariable[] {
   if (event === "order_shipped") return [...ORDER_VARIABLES, "tracking_id", "courier_name", "tracking_url"];
+  if (event === "order_ready_for_pickup") return [...ORDER_VARIABLES, "pickup_address", "pickup_hours"];
   if (event === "order_refunded" || event === "order_partially_refunded" || event === "refund_processing" || event === "refund_failed") {
     return [...ORDER_VARIABLES, "refund_amount"];
   }
@@ -95,6 +98,11 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
         subject: "Order {{order_number}} is on its way",
         message: "Your order is on its way.\nCourier: {{courier_name}}\nTracking ID: {{tracking_id}}\nTrack your parcel: {{tracking_url}}",
         sms: "your order {{order_number}} is on its way!\nTracking: {{tracking_id}} ({{courier_name}})",
+      },
+      order_ready_for_pickup: {
+        subject: "Order {{order_number}} is ready for pickup",
+        message: "Your order is ready for pickup.\nPickup at: {{pickup_address}}\nHours: {{pickup_hours}}",
+        sms: "your order {{order_number}} is ready for pickup.\nPickup at: {{pickup_address}}\nHours: {{pickup_hours}}",
       },
       order_delivered: {
         subject: "Order {{order_number}} delivered",
@@ -175,6 +183,11 @@ const DEFAULT_COPY: Record<MessageLanguage, { greeting: string; events: DefaultC
         subject: "অর্ডার {{order_number}} পাঠানো হয়েছে",
         message: "আপনার অর্ডার পাঠানো হয়েছে।\nকুরিয়ার: {{courier_name}}\nট্র্যাকিং আইডি: {{tracking_id}}\nপার্সেল ট্র্যাক করুন: {{tracking_url}}",
         sms: "আপনার অর্ডার {{order_number}} পাঠানো হয়েছে!\nট্র্যাকিং: {{tracking_id}} ({{courier_name}})",
+      },
+      order_ready_for_pickup: {
+        subject: "অর্ডার {{order_number}} পিকআপের জন্য প্রস্তুত",
+        message: "আপনার অর্ডার পিকআপের জন্য প্রস্তুত।\nপিকআপের ঠিকানা: {{pickup_address}}\nসময়: {{pickup_hours}}",
+        sms: "আপনার অর্ডার {{order_number}} পিকআপের জন্য প্রস্তুত।\nঠিকানা: {{pickup_address}}\nসময়: {{pickup_hours}}",
       },
       order_delivered: {
         subject: "অর্ডার {{order_number}} ডেলিভারি হয়েছে",

@@ -5,7 +5,7 @@ import {
   cleanupExpiredOrderPaymentRecoveryChallenges,
   archiveStaleIncompleteOrders,
 } from "@scalius/core/modules/orders";
-import { flushPendingOrderNotificationOutbox } from "@scalius/core/modules/notifications";
+import { flushPendingNotificationOutbox } from "@scalius/core/modules/notifications";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
@@ -240,7 +240,7 @@ async function runScheduledMaintenanceInner(
   }
 
   const notificationOutbox = await timed("notification_outbox_flush", () =>
-    flushPendingOrderNotificationOutbox({
+    flushPendingNotificationOutbox({
       db,
       queue: env.JOBS_QUEUE,
       limit: ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,

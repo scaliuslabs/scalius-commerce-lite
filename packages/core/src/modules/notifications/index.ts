@@ -1,10 +1,29 @@
 export * from "./browser";
 export { sendOrderNotification, sendOrderNotificationEmail } from "./notifications.service";
 export {
-  ORDER_NOTIFICATION_LABELS,
-  ORDER_NOTIFICATION_TYPES,
-  isOrderNotificationType,
-} from "./notification-types";
+  buildNotificationOutboxInsert,
+  claimNotificationOutboxForProcessing,
+  createNotificationOutboxInsertValues,
+  enqueueNotificationOutboxById,
+  flushPendingNotificationOutbox,
+  markNotificationOutboxDeadLettered,
+  markNotificationOutboxProcessingFailed,
+  markNotificationOutboxSent,
+  parseNotificationPayload,
+  recordAndEnqueueNotification,
+  sanitizeNotificationData,
+  serializeNotificationPayload,
+} from "./notification-outbox";
+export type {
+  ClaimedNotificationOutbox,
+  NotificationData,
+  NotificationInput,
+  NotificationOutboxStatus,
+  NotificationPayload,
+  NotificationQueue,
+  NotificationQueueMessage,
+  RecordAndEnqueueNotificationResult,
+} from "./notification-outbox";
 export {
   buildClearNotificationProviderBlocksStatement,
   clearNotificationProviderBlocks,
@@ -28,6 +47,7 @@ export {
 export {
   buildOrderBalancePaidNotificationDedupeKey,
   buildOrderCreatedNotificationDedupeKey,
+  buildOrderReadyForPickupNotificationDedupeKey,
   buildManualOrderNotificationResendDedupeKey,
   buildOrderStatusNotificationDedupeKey,
   buildSupportRequestStatusUpdatedNotificationDedupeKey,
@@ -44,7 +64,6 @@ export {
   resendTerminalOrderNotificationOutboxById,
   retryFailedOrderNotificationOutboxById,
 } from "./order-notification-outbox";
-export type { OrderNotificationType } from "./notification-types";
 export type {
   OrderNotificationDeliveryChannel,
   OrderNotificationDeliveryReceiptClaim,
