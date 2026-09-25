@@ -21,7 +21,7 @@ Typed product attributes (migration 0090): definitions, spec groups, the value v
 - This domain imports no other domain. Every write that changes `product_attribute_values` rows, or their facet key or label, takes a `CatalogProjectionRefresh`. The API passes `catalogProjectionRefreshStatements`. Each batch covers at most 90 products and holds the row writes, the aggregate revision bump and then the refresh.
 - Every statement binds at most 90 parameters. Id and value lists go in as one `json_each` JSON parameter.
 - `normalized_value` is always computed in SQL (`lower(trim(value))`), because the column CHECK requires it.
-- Code does not read or write `product_attributes.options`. The list responses' `options` field comes from `attribute_values`.
+- Code does not read or write `product_attributes.options`. The list responses' `options` field comes from `attribute_values`. Migration `0092_attribute_option_presets` copied the old presets into `attribute_values` (idempotent; the column drop in the next release re-runs it first).
 - `valueType` changes only through conversion. Unit is allowed only on number attributes. `range` is allowed only on number, `swatch` only on enum.
 - A conversion first drops the attribute's facet rows (they carry old-type keys). Each chunk then writes its products' rows back. Running the same conversion again continues with the rows that are still in the wrong shape.
 - A number row is in shape only when its display text equals the canonical number plus the unit, so a unit change through conversion rewrites the display text.
