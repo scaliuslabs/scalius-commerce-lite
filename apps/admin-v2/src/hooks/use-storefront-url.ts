@@ -1,15 +1,19 @@
-import { useCallback } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { withStorefrontSeenSeq } from "@scalius/shared/storefront-cache-path";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
+import { readStoreCommitSeq, subscribeStoreCommitSeq } from "~/lib/store-commit-seq";
 
 /**
- * Constructs a full storefront URL by combining the base URL with a path.
+ * Constructs a full storefront URL by combining the base URL with a path,
+ * carrying the newest change clock this tab saw on a save (`_sv`) so the
+ * store shows the merchant's own change at once.
  */
-function buildUrl(path: string, baseUrl: string): string {
+function buildUrl(path: string, baseUrl: string, seenSeq: number | null): string {
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  if (baseUrl === "/") return cleanPath;
+  if (baseUrl === "/") return withStorefrontSeenSeq(cleanPath, seenSeq);
   const cleanBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
-  return `${cleanBase}${cleanPath}`;
+  return withStorefrontSeenSeq(`${cleanBase}${cleanPath}`, seenSeq);
 }
 
 /**
@@ -22,6 +26,7 @@ function buildUrl(path: string, baseUrl: string): string {
  */
 export function useStorefrontUrl() {
   const { data, isLoading, error } = useQuery(storefrontUrlQueryOptions());
+  const seenSeq = useSyncExternalStore(subscribeStoreCommitSeq, readStoreCommitSeq, readStoreCommitSeq);
 
   const storefrontUrl =
     (data as Record<string, unknown> | undefined)?.storefrontUrl as string ??
@@ -30,17 +35,17 @@ export function useStorefrontUrl() {
   const buildStorefrontPath = useCallback(
     (path: string): string | null => {
       if (!storefrontUrl) return null;
-      return buildUrl(path, storefrontUrl);
+      return buildUrl(path, storefrontUrl, seenSeq);
     },
-    [storefrontUrl],
+    [storefrontUrl, seenSeq],
   );
 
   const getStorefrontPath = useCallback(
     (path: string, fallback?: string): string => {
       if (!storefrontUrl) return fallback || path;
-      return buildUrl(path, storefrontUrl);
+      return buildUrl(path, storefrontUrl, seenSeq);
     },
-    [storefrontUrl],
+    [storefrontUrl, seenSeq],
   );
 
   return {

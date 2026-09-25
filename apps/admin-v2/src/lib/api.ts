@@ -16,6 +16,7 @@ import { AdminApiResponseError } from "./admin-api-error";
 import { adminApiReadSignal } from "./admin-api-timeout";
 import { noticeAdminUnauthorized } from "./admin-session-lost";
 import { withDashboardBasePath } from "./dashboard-base-path";
+import { noteStoreCommitSeq } from "./store-commit-seq";
 
 async function fetchAdminApi(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -32,6 +33,7 @@ async function fetchAdminApi(request: Request): Promise<Response> {
   });
   // Signed out while the shell was open: leave it rather than show "Couldn't load" everywhere.
   if (response.status === 401) void noticeAdminUnauthorized();
+  noteStoreCommitSeq(response.headers);
   return response;
 }
 
