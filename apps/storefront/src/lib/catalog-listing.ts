@@ -50,8 +50,10 @@ export interface CatalogFilterPresentation {
   openByDefault: boolean;
   /** Facet dropdowns in the bar before "More filters" (bar only). */
   barFacets: number;
-  /** The style's measured numbers as CSS custom properties (column, row pitch, label size). */
+  /** The measured numbers as CSS custom properties (column, row pitch, label size). */
   styleVars: string;
+  /** The desktop column width in px beside the results (0 without a column): card image sizes subtract it. */
+  columnPx: number;
 }
 
 export interface CatalogListingPresentation {
@@ -79,6 +81,9 @@ const isLayout = (value: string): value is CatalogListingLayout => Object.hasOwn
 const isFilterStyle = (value: string): value is StorefrontListingFilterStyle =>
   (STOREFRONT_LISTING_FILTER_STYLES as readonly string[]).includes(value);
 
+/** The column width catalog-listing.css gives a sidebar whose spec names none. */
+const SIDEBAR_FALLBACK_COLUMN_PX = 270;
+
 /** The measured numbers of a filter style as CSS custom properties; a null keeps the density token. */
 function filterStyleVars(spec: StorefrontListingFilterSpec): string {
   return [
@@ -88,8 +93,11 @@ function filterStyleVars(spec: StorefrontListingFilterSpec): string {
   ].filter(Boolean).join(";");
 }
 
-function filterPresentation(style: StorefrontListingFilterStyle, openByDefault: boolean): CatalogFilterPresentation {
-  const spec = STOREFRONT_LISTING_FILTER_SPECS[style];
+function filterPresentation(
+  style: StorefrontListingFilterStyle,
+  openByDefault: boolean,
+  spec: StorefrontListingFilterSpec = STOREFRONT_LISTING_FILTER_SPECS[style],
+): CatalogFilterPresentation {
   return {
     style,
     placement: spec.placement,
@@ -97,6 +105,7 @@ function filterPresentation(style: StorefrontListingFilterStyle, openByDefault: 
     openByDefault: spec.placement === "bar" ? false : openByDefault,
     barFacets: spec.barFacets ?? 0,
     styleVars: filterStyleVars(spec),
+    columnPx: spec.placement === "sidebar" ? spec.column ?? SIDEBAR_FALLBACK_COLUMN_PX : 0,
   };
 }
 
@@ -118,7 +127,8 @@ export function catalogListingPresentation(
   const listing = resolved.blocks.listing;
   let layout: CatalogListingLayout = isLayout(listing.layout.variant) ? listing.layout.variant : "grid";
   let settings = listing.layout.settings;
-  let filters = filterPresentation(listing.filters.style, listing.filters.openByDefault);
+  // The theme's style with the template's own numbers (Daraz's 190px column, 18px rows).
+  let filters = filterPresentation(listing.filters.style, listing.filters.openByDefault, listing.filters.spec);
   const own = listingTemplate?.trim() ?? "";
   if (isLayout(own) && own !== layout) {
     const fits = failedFitConditions(STOREFRONT_LISTING_VARIANTS[own].requires, {

@@ -377,7 +377,8 @@ const breadcrumbVisible = piece("breadcrumb");
       #filter-section.hidden { display: block; position: static; background: transparent; margin-bottom: 1rem; }
       #filter-section .filter-sheet { max-height: none; }
       #filterForm > div:last-child { position: static; }
-      #mobile-filter-toggle, [data-catalog-filter-toggle], #mobile-filter-close { display: none; }
+      #mobile-filter-toggle, [data-catalog-filter-toggle], #mobile-filter-close, [data-catalog-bar-more] { display: none !important; }
+      .catalog-filter-form[data-placement="bar"] [data-bar-overflow] { display: block !important; }
     </style>
   </noscript>
 )}

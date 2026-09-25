@@ -7,7 +7,7 @@
 import {
   STOREFRONT_BLOCK_SLOTS,
   STOREFRONT_FILTER_MIN_RESULTS,
-  STOREFRONT_LISTING_FILTER_SPECS,
+  storefrontListingFilterSpec,
   STOREFRONT_LISTING_TOOLBAR,
   STOREFRONT_PRODUCT_MODULES,
   storefrontBlockDefault,
@@ -82,7 +82,7 @@ export interface ResolvedStorefrontNavigation extends StorefrontNavigation {
 export interface ResolvedStorefrontListingFilters {
   style: StorefrontListingFilterStyle;
   openByDefault: boolean;
-  /** The measured facet UI of the style. */
+  /** The measured facet UI: the style's, with the template's own column, row pitch and label. */
   spec: StorefrontListingFilterSpec;
   /**
    * False when the whole store has fewer products than the small-catalogue
@@ -227,7 +227,7 @@ function resolveFilters(
 ): ResolvedStorefrontListingFilters {
   const failed = failedFitConditions(STOREFRONT_FILTERS_REQUIRE, context);
   if (failed.length > 0) fallbacks.push({ kind: "filters", key: "listing", requested: filters.style, resolved: null, failed });
-  return { ...filters, spec: STOREFRONT_LISTING_FILTER_SPECS[filters.style], shown: failed.length === 0 };
+  return { style: filters.style, openByDefault: filters.openByDefault, spec: storefrontListingFilterSpec(filters), shown: failed.length === 0 };
 }
 
 function keepFitting<Item extends string>(
