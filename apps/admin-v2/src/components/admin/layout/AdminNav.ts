@@ -1,18 +1,21 @@
 // The dashboard sidebar: one list of sections, filtered by the same page
 // permission map that guards the routes, so a link is shown exactly when its
 // page would open.
+import type { ComponentType } from "react";
 import {
   BadgePercent,
   FileText,
   House,
   Inbox,
   Settings,
+  ShoppingBag,
   Store,
   Tag,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
 import type { shellMessages } from "~/i18n/shell";
+import { InboxNavBadge } from "~/components/admin/inbox/InboxNavBadge";
 
 type ShellKey = keyof (typeof shellMessages)["en"];
 
@@ -29,11 +32,14 @@ export interface NavItem {
   children?: NavLink[];
   /** Sits under a small group label (Shopify's "Sales channels ›"). */
   group?: ShellKey;
+  /** A live count beside the label (the inbox's open conversations). */
+  badge?: ComponentType;
 }
 
 export const ADMIN_NAV: readonly NavItem[] = [
   { key: "home", to: "/admin", icon: House },
-  { key: "orders", to: "/admin/orders", icon: Inbox },
+  { key: "orders", to: "/admin/orders", icon: ShoppingBag },
+  { key: "inbox", to: "/admin/inbox", icon: Inbox, badge: InboxNavBadge },
   {
     key: "products",
     to: "/admin/products",
@@ -77,12 +83,14 @@ export interface VisibleNavItem {
   icon: LucideIcon;
   children: NavLink[];
   group?: ShellKey;
+  badge?: ComponentType;
 }
 
 /** Shopify-style sequences: G then the letter, within a second. */
 export const GO_SHORTCUTS: Readonly<Record<string, string>> = {
   h: "/admin",
   o: "/admin/orders",
+  i: "/admin/inbox",
   p: "/admin/products",
   c: "/admin/customers",
   d: "/admin/discounts",
@@ -95,7 +103,7 @@ export function visibleNav(canOpen: (path: string) => boolean): VisibleNavItem[]
   return ADMIN_NAV.flatMap((item) => {
     const children = (item.children ?? []).filter((child) => canOpen(child.to));
     const to = item.to && canOpen(item.to) ? item.to : children[0]?.to;
-    return to ? [{ key: item.key, to, icon: item.icon, children, group: item.group }] : [];
+    return to ? [{ key: item.key, to, icon: item.icon, children, group: item.group, badge: item.badge }] : [];
   });
 }
 

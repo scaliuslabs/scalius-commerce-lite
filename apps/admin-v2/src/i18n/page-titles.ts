@@ -9,6 +9,7 @@ export const pageTitleMessages = defineMessages({
   en: {
     home: "Home",
     orders: "Orders",
+    inbox: "Inbox",
     createOrder: "Create order",
     editOrder: "Edit order {number}",
     abandonedCheckouts: "Abandoned checkouts",
@@ -57,6 +58,7 @@ export const pageTitleMessages = defineMessages({
   bn: {
     home: "হোম",
     orders: "অর্ডার",
+    inbox: "ইনবক্স",
     createOrder: "অর্ডার তৈরি করুন",
     editOrder: "অর্ডার {number} এডিট করুন",
     abandonedCheckouts: "অসমাপ্ত চেকআউট",

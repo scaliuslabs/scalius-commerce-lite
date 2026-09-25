@@ -90,6 +90,8 @@ export const policies = [
       `${storefront}/components/AuthModal.tsx`,
       `${storefront}/pages/cart.astro`,
       `${storefront}/pages/payment-recovery.astro`,
+      `${storefront}/components/conversation/ConversationReplyForm.astro`,
+      `${storefront}/pages/account/inbox/index.astro`,
     ],
     forbid: [/<form\b(?![^>]*\bmethod=["']post["'])/i],
     require: [/<form\b[^>]*\bmethod=["']post["']/i],
