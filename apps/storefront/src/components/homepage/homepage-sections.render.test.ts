@@ -16,6 +16,7 @@ import type { ViteDevServer } from "vite";
 import {
   DEFAULT_STOREFRONT_THEME,
   STOREFRONT_DENSITIES,
+  buildStorefrontThemeTokens,
   STOREFRONT_SECTION_RENDERERS,
   STOREFRONT_SECTION_TYPES,
   storefrontSectionDefault,
@@ -31,7 +32,7 @@ import {
   homepageSectionRenders,
   type HomepageContent,
 } from "@/lib/homepage-sections";
-import { SHELF_CARD_SIZES } from "@/lib/product-card-layout";
+import { SHELF_CARD_SIZES, productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
 
 // ─── Harness ──────────────────────────────────────────────────────────────
 
@@ -344,6 +345,13 @@ describe("homepage section library", () => {
     const page = await render([section("product-grid", "grid", { title: "", source: { kind: "category", categoryId: "cat-sarees" }, columns: 5, rows: 2 })], store("large"));
     expect(page.querySelectorAll(".product-grid > *")).toHaveLength(10);
     expect(page.querySelector(".home-grid-capped")!.getAttribute("style")).toContain("--home-grid-columns: 5");
+    // Card photos are sized for the capped columns (wider than the density's own).
+    const { layout, theme } = requestThemeFor(DEFAULT_STOREFRONT_THEME);
+    const grid = productGridSpec(layout.grid, theme.tokens.imageRatio);
+    const container = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
+    const capped = productCardImageSizes(grid, container, "grid", "grid", 5);
+    expect(capped).not.toBe(productCardImageSizes(grid, container));
+    expect(page.querySelector(".product-grid img[sizes]")!.getAttribute("sizes")).toBe(capped);
     expect(text(page.querySelector("h2"))).toBe("Sarees");
     expect(page.querySelector('a[href="/categories/sarees"]')).not.toBeNull();
   });

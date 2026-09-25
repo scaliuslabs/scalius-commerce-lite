@@ -40,6 +40,8 @@ interface Props {
    */
   containerWidth?: string;
   headingLevel?: "h2" | "h3";
+  /** The grid's column cap (a homepage grid section's `columns`), for image `sizes`. */
+  maxColumns?: number;
 }
 
 const {
@@ -52,6 +54,7 @@ const {
   phoneLayout = "grid",
   containerWidth: containerWidthOverride,
   headingLevel = "h3",
+  maxColumns,
 } = Astro.props;
 
 // The card variant and its anatomy come from the resolved theme; the photo
@@ -65,10 +68,10 @@ const grid = productGridSpec(layout.grid, ratio);
 const containerWidth =
   containerWidthOverride ?? buildStorefrontThemeTokens(theme)["theme-container-width"]!;
 const loading = productCardImageLoading(
-  productGridFirstRow(grid, containerWidth),
+  productGridFirstRow(grid, containerWidth, maxColumns),
   { index, aboveFold },
 );
-const sizes = productCardImageSizes(grid, containerWidth, context, phoneLayout);
+const sizes = productCardImageSizes(grid, containerWidth, context, phoneLayout, maxColumns);
 const model = productCardModel(product, {
   currencySymbol,
   currencyCode,

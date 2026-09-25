@@ -123,7 +123,7 @@ const {
         <div class="home-grid-capped" style={`--home-grid-columns: ${maxColumns};`}>
           <ProductGrid>
             {products.map((product, index) => (
-              <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} index={index} aboveFold={aboveFold} />
+              <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} index={index} aboveFold={aboveFold} maxColumns={maxColumns} />
             ))}
           </ProductGrid>
         </div>
