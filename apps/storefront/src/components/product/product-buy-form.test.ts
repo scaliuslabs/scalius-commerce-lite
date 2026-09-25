@@ -48,4 +48,11 @@ describe("product page metadata price", () => {
     expect(summary).toMatch(/\} = initialVariantPresentation\(options, variants, initialVariant, initialUnavailableVariant\);/);
   });
 });
+
+describe("quantity tiers beside the price", () => {
+  it("are listed right after the price", () => {
+    expect(summary).toMatch(/<ul class="mt-2 flex flex-wrap gap-1\.5" data-product-bundles aria-label=\{bundleListLabel\}>[\s\S]*<\/ul>\s*\) : null\}\s*<slot name="after-price" \/>/);
+    expect(summary).toContain("const bundleTiers = describeBundleTiers(product.bundles ?? [], pageCopy, formatPrice);");
+  });
+});
 });
