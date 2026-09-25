@@ -2,10 +2,11 @@
 // send-time content of the delivery message (§10). Staff see keys by last 4
 // only; plaintext keys are decrypted here only for the buyer's own message.
 import type { Database } from "@scalius/database/client";
-import { digitalAssets, digitalEntitlements, digitalLicenceKeys } from "@scalius/database/schema";
+import { digitalAssets, digitalEntitlements, digitalLicenceKeys, orders } from "@scalius/database/schema";
 import { NotFoundError } from "@scalius/core/errors";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { licenceKeyCrypto } from "./secrets";
+import { DIGITAL_ACCESS_ENDED_ORDER_STATUSES } from "./downloads";
 
 async function requireEntitlement(db: Database, entitlementId: string) {
     const row = await db.select({ id: digitalEntitlements.id, orderId: digitalEntitlements.orderId })
@@ -55,6 +56,8 @@ export async function resolveDigitalDeliveryContent(
     credentialKey: string | undefined,
     input: { orderId: string; fulfillmentId?: string | null },
 ): Promise<DigitalDeliveryContent | null> {
+    const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, input.orderId)).get();
+    if (!order || (DIGITAL_ACCESS_ENDED_ORDER_STATUSES as readonly string[]).includes(order.status)) return null;
     const entitlements = await db.select({
         id: digitalEntitlements.id,
         kind: digitalEntitlements.kind,

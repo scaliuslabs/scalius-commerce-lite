@@ -16,7 +16,7 @@ import { planDigitalDelivery } from "./fulfiller";
 import { importLicenceKeys, listLicenceKeys, revokeLicenceKeys } from "./licence-keys";
 import { listBuyerDownloads, mintDownloadTicket, openDownloadTicket, revealLicenceKey } from "./downloads";
 import { resetDigitalEntitlement, resolveDigitalDeliveryContent, revokeDigitalEntitlement } from "./entitlements";
-import { listLineDeliveries } from "./extras";
+import { countBuyerDownloads, listLineDeliveries } from "./extras";
 import { updateDigitalAsset } from "./assets";
 
 const CREDENTIAL_KEY = btoa(String.fromCharCode(...Array.from({ length: 32 }, (_, index) => index + 7)));
@@ -244,6 +244,36 @@ describe("digital goods", () => {
         await expect(open(PROOF)).rejects.toMatchObject({ status: 404 });
         await expect(mintDownloadTicket(db, ENV, { entitlementId, access: { kind: "customer", customerId: "cus_1" }, proof: PROOF }))
             .rejects.toMatchObject({ code: "DOWNLOAD_REVOKED" });
+    });
+
+    it("a cancelled or refunded order ends access to its downloads and keys", async () => {
+        await importKeys(["ENDS-KEY-0001"]);
+        order("o_end", [
+            { item: "i_end_file", product: "p_book", variant: "v_book", quantity: 1 },
+            { item: "i_end_key", product: "p_app", variant: "v_app", quantity: 1 },
+        ]);
+        await autoFulfilOrder(db, "o_end");
+        const entitlementId = one<{ id: string }>("SELECT id FROM digital_entitlements WHERE kind = 'file'").id;
+        const keyId = one<{ id: string }>("SELECT id FROM digital_licence_keys").id;
+        const now = 1_900_000_000;
+        const ticket = await mintDownloadTicket(db, ENV, { entitlementId, access: { kind: "receipt", orderId: "o_end" }, proof: PROOF }, now);
+        const [, exp, sig] = ticket.path.split("/");
+        expect(await countBuyerDownloads(db, "cus_1")).toBe(2);
+
+        sqlite.exec("UPDATE orders SET status = 'refunded' WHERE id = 'o_end'");
+        await expect(openDownloadTicket(db, ENV, { entitlementId, expiresAt: Number(exp), signature: sig!, proof: PROOF }, now + 5))
+            .rejects.toMatchObject({ status: 404 });
+        await expect(mintDownloadTicket(db, ENV, { entitlementId, access: { kind: "receipt", orderId: "o_end" }, proof: PROOF }))
+            .rejects.toMatchObject({ code: "DOWNLOAD_REVOKED" });
+        await expect(revealLicenceKey(db, CREDENTIAL_KEY, { keyId, access: { kind: "receipt", orderId: "o_end" } }))
+            .rejects.toMatchObject({ status: 404 });
+        expect(await countBuyerDownloads(db, "cus_1")).toBe(0);
+        const [line] = (await listBuyerDownloads(db, { kind: "receipt", orderId: "o_end" })).filter((entry) => entry.orderItemId === "i_end_file");
+        expect(line?.files[0]).toMatchObject({ revoked: true, available: false });
+        const extras = await listLineDeliveries(db, { orderId: "o_end", orderItemIds: ["i_end_file", "i_end_key"], audience: "buyer" });
+        expect(extras.get("i_end_file")?.downloads[0]?.revoked).toBe(true);
+        expect(extras.get("i_end_key")?.licenceKeys ?? []).toEqual([]);
+        expect(await resolveDigitalDeliveryContent(db, CREDENTIAL_KEY, { orderId: "o_end" })).toBeNull();
     });
 
     it("reveals a key only to the buyer of its line, and lists the account's downloads", async () => {

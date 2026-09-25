@@ -1,16 +1,17 @@
 import type { Database } from "@scalius/database/client";
-import { digitalAssets, digitalEntitlements, digitalLicenceKeys } from "@scalius/database/schema";
+import { digitalAssets, digitalEntitlements, digitalLicenceKeys, orders } from "@scalius/database/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { LineExtrasInput } from "../../utils/line-extras";
 import type { LineDigitalExtra, LineDownloadExtra, LineLicenceKeyExtra } from "./browser";
-import { countBuyerDigitalEntitlements } from "./downloads";
+import { countBuyerDigitalEntitlements, DIGITAL_ACCESS_ENDED_ORDER_STATUSES } from "./downloads";
 
 const ID_CHUNK = 90;
 
 /**
  * Downloads and licence keys per order line, keyed by order item id
  * (`extras.downloads`, `extras.licenceKeys`). Buyers do not see the keys of an
- * entitlement the store revoked; staff see every key by its last 4.
+ * entitlement the store revoked or of a cancelled, refunded or returned order
+ * (shown as revoked); staff see every key by its last 4.
  */
 export async function listLineDeliveries(
     db: Database,
@@ -19,6 +20,8 @@ export async function listLineDeliveries(
     const result = new Map<string, { downloads: LineDownloadExtra[]; licenceKeys: LineLicenceKeyExtra[] }>();
     if (input.orderItemIds.length === 0) return result;
     const itemIds = [...input.orderItemIds];
+    // Read only for orders that delivered something digital.
+    let accessEnded: boolean | undefined;
     for (let offset = 0; offset < itemIds.length; offset += ID_CHUNK) {
         const chunk = itemIds.slice(offset, offset + ID_CHUNK);
         const rows = await db.select({
@@ -35,8 +38,13 @@ export async function listLineDeliveries(
             .where(and(eq(digitalEntitlements.orderId, input.orderId), inArray(digitalEntitlements.orderItemId, chunk)))
             .orderBy(asc(digitalEntitlements.createdAt), asc(digitalEntitlements.id))
             .all();
+        if (rows.length === 0) continue;
+        if (accessEnded === undefined) {
+            const order = await db.select({ status: orders.status }).from(orders).where(eq(orders.id, input.orderId)).get();
+            accessEnded = (DIGITAL_ACCESS_ENDED_ORDER_STATUSES as readonly string[]).includes(order?.status ?? "");
+        }
         const keyEntitlements = rows
-            .filter((row) => row.kind === "licence_keys" && (input.audience === "staff" || row.revokedAt === null))
+            .filter((row) => row.kind === "licence_keys" && (input.audience === "staff" || (row.revokedAt === null && !accessEnded)))
             .map((row) => row.id);
         const keys = keyEntitlements.length === 0 ? [] : await db.select({
             id: digitalLicenceKeys.id,
@@ -62,7 +70,7 @@ export async function listLineDeliveries(
                 downloadCount: row.downloadCount,
                 downloadLimit: row.downloadLimit,
                 expiresAt: row.expiresAt,
-                revoked: row.revokedAt !== null,
+                revoked: row.revokedAt !== null || accessEnded,
             });
         }
         for (const key of keys) {
