@@ -15,6 +15,18 @@ export const PERMISSIONS = {
   PRODUCTS_BULK_OPERATIONS: "products.bulk_operations",
 
   // =============================================
+  // Reviews (2 permissions): buyer reviews of delivered order lines
+  // =============================================
+  REVIEWS_VIEW: "reviews.view",
+  REVIEWS_MODERATE: "reviews.moderate",
+
+  // =============================================
+  // Gift cards (2 permissions) - SENSITIVE: issuing and adjusting moves money
+  // =============================================
+  GIFT_CARDS_VIEW: "gift_cards.view",
+  GIFT_CARDS_MANAGE: "gift_cards.manage",
+
+  // =============================================
   // Categories (6 permissions)
   // =============================================
   CATEGORIES_VIEW: "categories.view",
@@ -247,6 +259,46 @@ export const PERMISSION_METADATA: Record<
     action: "bulk_operations",
     category: "Products",
     isSensitive: false,
+  },
+
+  // Reviews
+  [PERMISSIONS.REVIEWS_VIEW]: {
+    name: PERMISSIONS.REVIEWS_VIEW,
+    displayName: "View Reviews",
+    description: "Read product reviews, including ones waiting for approval",
+    resource: "reviews",
+    action: "view",
+    category: "Products",
+    isSensitive: false,
+  },
+  [PERMISSIONS.REVIEWS_MODERATE]: {
+    name: PERMISSIONS.REVIEWS_MODERATE,
+    displayName: "Moderate Reviews",
+    description: "Publish, reject or restore reviews and reply to reviewers",
+    resource: "reviews",
+    action: "moderate",
+    category: "Products",
+    isSensitive: false,
+  },
+
+  // Gift cards
+  [PERMISSIONS.GIFT_CARDS_VIEW]: {
+    name: PERMISSIONS.GIFT_CARDS_VIEW,
+    displayName: "View Gift Cards",
+    description: "View gift cards, balances and transactions (codes stay masked)",
+    resource: "gift_cards",
+    action: "view",
+    category: "Products",
+    isSensitive: true,
+  },
+  [PERMISSIONS.GIFT_CARDS_MANAGE]: {
+    name: PERMISSIONS.GIFT_CARDS_MANAGE,
+    displayName: "Manage Gift Cards",
+    description: "Issue gift cards, adjust balances, disable cards and change expiry",
+    resource: "gift_cards",
+    action: "manage",
+    category: "Products",
+    isSensitive: true,
   },
 
   // Categories
