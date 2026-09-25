@@ -78,33 +78,36 @@ function AdminLayout() {
         >
           {t("skipToContent")}
         </a>
-        <AdminNavigationProgress />
         <GlobalSearch nav={nav} canOpen={canOpen} />
-        {/* Shopify's frame: the near-black navigation, and the page on a
-            rounded canvas inset from it (edge to edge on phones). The frame
-            never scrolls: `main` is the only scroller and the containing block
-            for anything absolutely positioned inside the page, so focus,
-            dialogs and hidden inputs can't grow the document (clip, unlike
-            hidden, can't be scrolled by focus either). */}
-        <div className="flex h-svh overflow-clip bg-sidebar">
+        {/* Shopify's frame: the near-black navigation and top bar, and the
+            page on a rounded canvas inset from them (square-cornered edge to
+            edge on phones). The frame never scrolls: `main` is the only
+            scroller and the containing block for anything absolutely
+            positioned inside the page, so focus, dialogs and hidden inputs
+            can't grow the document (clip, unlike hidden, can't be scrolled by
+            focus either). */}
+        <div className="flex h-svh overflow-clip bg-sidebar text-sidebar-foreground print:h-auto print:overflow-visible print:bg-transparent">
           <AppSidebar nav={nav} user={user} showSettings={canOpen(SETTINGS_ITEM.to)} />
-          <div className="flex min-w-0 flex-1 flex-col overflow-clip bg-background md:my-1.5 md:mr-1.5 md:rounded-xl">
-            <AdminHeader nav={nav} />
-            <main
-              id="admin-main-scroll"
-              tabIndex={-1}
-              data-scroll-restoration-id="admin-main-scroll"
-              className="relative min-h-0 min-w-0 flex-1 overflow-y-auto outline-none lg:[scrollbar-gutter:stable]"
-            >
-              {/* Padding sits inside the scroller so sticky table headers meet the top bar. */}
-              <div className="px-3 py-4 sm:px-4 md:px-6">
-                <div className="mx-auto max-w-7xl">
-                  <Outlet />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <AdminHeader user={user} />
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-clip rounded-t-xl bg-background text-foreground md:mb-2 md:mr-2 md:rounded-xl print:m-0 print:overflow-visible">
+              <AdminNavigationProgress />
+              <main
+                id="admin-main-scroll"
+                tabIndex={-1}
+                data-scroll-restoration-id="admin-main-scroll"
+                className="relative min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain outline-none lg:[scrollbar-gutter:stable] print:overflow-visible"
+              >
+                {/* Padding sits inside the scroller so sticky table headers meet the canvas' top edge. */}
+                <div className="px-3 py-4 sm:px-4 md:px-6">
+                  <div className="mx-auto max-w-7xl">
+                    <Outlet />
+                  </div>
                 </div>
-              </div>
-            </main>
-            {/* Portal target for form action bars — sits outside the scroll area. */}
-            <div id="form-action-bar-slot" className="bg-background" />
+              </main>
+              {/* Portal target for form action bars — sits outside the scroll area. */}
+              <div id="form-action-bar-slot" className="bg-background" />
+            </div>
           </div>
         </div>
       </ShellProvider>

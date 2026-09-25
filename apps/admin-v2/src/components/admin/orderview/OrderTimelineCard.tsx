@@ -27,6 +27,7 @@ import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/ord
 import { describeTimelineEvent } from "~/lib/order-timeline-display";
 import { formatOrderTimestamp } from "./formatters";
 import type { Order } from "./types";
+import { matchesShortcut } from "../layout/shortcuts";
 
 const COMMENT_MAX_LENGTH = 2000;
 
@@ -66,7 +67,7 @@ export function OrderTimelineCard({ order }: { order: Order }) {
     post();
   };
   const postOnShortcut = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+    if (!matchesShortcut("submit", event)) return;
     event.preventDefault();
     post();
   };

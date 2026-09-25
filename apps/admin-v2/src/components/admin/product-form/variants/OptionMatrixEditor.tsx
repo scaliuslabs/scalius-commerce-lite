@@ -32,9 +32,11 @@ import type {
 import {
   ADVANCED_FIELDS,
   draftId,
+  draftSignature,
   getOptionMatrixIssue,
   getSimpleSkuIssue,
   initialOptions,
+  initialSimpleSku,
   initialVariants,
   combinationKey,
   materializeCombination,
@@ -126,20 +128,16 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   const t = useMessages(productMessages);
   const queryClient = useQueryClient();
   const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
-  const [simpleSku, setSimpleSku] = React.useState<SimpleSkuDraft>(() => ({
-    sku: defaultSku?.sku ?? "",
-    // New products track quantity by default; saved SKUs keep their setting.
-    trackInventory: defaultSku ? defaultSku.trackInventory ?? false : true,
-    stock: defaultSku?.stock ?? 0,
-    barcode: defaultSku?.barcode ?? null,
-    barcodeType: (defaultSku?.barcodeType as SimpleSkuDraft["barcodeType"]) ?? null,
-    weight: defaultSku?.weight ?? null,
-  }));
+  const [simpleSku, setSimpleSku] = React.useState<SimpleSkuDraft>(() => initialSimpleSku(defaultSku));
   const [simpleStockEdited, setSimpleStockEdited] = React.useState(false);
   const [options, setOptions] = React.useState<DraftOption[]>(() => initialOptions(savedOptions));
   const [variants, setVariants] = React.useState<DraftVariant[]>(() => initialVariants(savedVariants));
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
-  const [dirty, setDirty] = React.useState(false);
+  // Dirty is the draft against the last saved one: an edit changed back is no change.
+  const draft = React.useMemo(() => draftSignature(simpleSku, options, variants), [simpleSku, options, variants]);
+  const [savedDraft, setSavedDraft] = React.useState(draft);
+  const sentDraft = React.useRef(draft);
+  const dirty = draft !== savedDraft;
   const [revealed, setRevealed] = React.useState(false);
   const [revealNonce, setRevealNonce] = React.useState(0);
   const [serverIssue, setServerIssue] = React.useState<DraftIssue | null>(null);
@@ -269,7 +267,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   const stageOptions = React.useCallback((nextOptions: DraftOption[]) => {
     setOptions(nextOptions);
     setCombinationsPending(true);
-    setDirty(true);
   }, []);
 
   const applyOptions = React.useCallback(() => {
@@ -286,7 +283,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     setExcludedCombinationKeys(new Set(missingOptionCombinations(options, next).map(combinationKey)));
     setTopologyChanged(optionTopologySignature(options) !== savedTopology);
     setCombinationsPending(false);
-    setDirty(true);
   }, [combinationCount, defaultSku, excludedCombinationKeys, options, productName, productPrice, savedTopology, simpleConversion, validShape, variants]);
 
   // Variants follow the options as soon as every option has a name and a value.
@@ -315,7 +311,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       ? { ...variant, ...(typeof patch === "function" ? patch(variant) : patch) }
       : variant));
     setServerIssue((current) => (current?.variantId && ids.has(current.variantId) ? null : current));
-    setDirty(true);
   }, []);
   // The page rebuilds the photo list on every render; keep one identity while it is the same.
   const imagesKey = images.map((image) => `${image.id}:${image.url}:${image.status}:${image.altText}`).join("|");
@@ -325,7 +320,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   const updateSimple = (patch: Partial<SimpleSkuDraft>) => {
     setSimpleSku((current) => ({ ...current, ...patch }));
     setServerIssue(null);
-    setDirty(true);
   };
 
   const removeVariants = React.useCallback((ids: ReadonlySet<string>) => {
@@ -342,7 +336,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       ...removed.map((variant) => combinationKey(variant.selectedOptionValueIds)),
     ]));
     setExpandedId((current) => current && ids.has(current) ? null : current);
-    setDirty(true);
   }, [variants]);
 
   const restoreCombination = React.useCallback((selectedOptionValueIds: string[]) => {
@@ -366,7 +359,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       next.delete(key);
       return next;
     });
-    setDirty(true);
   }, [omittedVariantsByKey, options, productName, productPrice, variants]);
 
   const restoreAllCombinations = React.useCallback(() => {
@@ -377,7 +369,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     setVariants(materializeVariants(options, [...variants, ...restorableOriginals], productName, productPrice, 0));
     setExcludedCombinationKeys(new Set());
     setOmittedVariantsByKey(new Map());
-    setDirty(true);
   }, [omittedVariantsByKey, options, productName, productPrice, variants]);
 
   const missingCombinations = React.useMemo(
@@ -418,7 +409,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         })),
     onSuccess: async (result) => {
       onAggregateRevisionChange?.(result.aggregateRevision);
-      setDirty(false);
+      // Edits made while the save was on its way stay unsaved.
+      setSavedDraft(sentDraft.current);
       setRevealed(false);
       setCombinationsPending(false);
       setTopologyChanged(false);
@@ -471,6 +463,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         throw new SaveNotCompleted(lineFor(draftIssue));
       }
       try {
+        sentDraft.current = draft;
         await mutation.mutateAsync(revisionOverride);
       } catch (error) {
         const conflict = readProductRevisionConflict(error);
@@ -486,7 +479,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     reveal,
     showServerIssue,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [dirty, draftIssue, mutation, productId, reveal, showServerIssue]);
+  }), [dirty, draft, draftIssue, mutation, productId, reveal, showServerIssue]);
 
   return (
     <section data-option-matrix data-variant-editor tabIndex={-1} className="space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">

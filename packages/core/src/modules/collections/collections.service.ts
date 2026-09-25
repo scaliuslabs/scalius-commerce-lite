@@ -6,7 +6,20 @@ import { sql, and, isNull, isNotNull, eq, inArray, like, asc, desc, max, type SQ
 import { nanoid } from "nanoid";
 import type { CreateCollectionInput, UpdateCollectionInput, UpdateCollectionProductsInput } from "./collections.validation";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+
+/** A save made at a version that is no longer current: the editor reloads the latest and keeps its edits. */
+export class CollectionRevisionConflictError extends AppError {
+    constructor(collectionId: string, expectedVersion: number, currentVersion: number | null) {
+        super(
+            409,
+            "COLLECTION_REVISION_CONFLICT",
+            "Collection changed while you were editing it. Reload and try again.",
+            { collectionId, expectedVersion, currentVersion },
+        );
+        this.name = "CollectionRevisionConflictError";
+    }
+}
 import { getResourceCanonicalPathSegment } from "@scalius/shared/seo-canonical";
 import {
     publicCollectionProductConditions,
@@ -560,7 +573,7 @@ export async function updateCollection(
         .get();
     if (!existing) throw new NotFoundError("Collection not found");
     if (existing.version !== data.expectedVersion) {
-        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+        throw new CollectionRevisionConflictError(id, data.expectedVersion, existing.version);
     }
 
     if (
@@ -610,7 +623,7 @@ export async function updateCollection(
         .returning()
         .get();
     if (!updated) {
-        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+        throw new CollectionRevisionConflictError(id, data.expectedVersion, null);
     }
     return updated;
 }
@@ -632,7 +645,7 @@ export async function updateCollectionProducts(
         .get();
     if (!existing) throw new NotFoundError("Collection not found");
     if (existing.version !== data.expectedVersion) {
-        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+        throw new CollectionRevisionConflictError(id, data.expectedVersion, existing.version);
     }
     const config = normalizeCollectionConfig(existing.config);
     if (config.source !== "manual") {
@@ -681,7 +694,7 @@ export async function updateCollectionProducts(
         .returning({ id: collections.id, version: collections.version })
         .get();
     if (!updated) {
-        throw new ConflictError("Collection changed while you were editing it. Reload and try again.");
+        throw new CollectionRevisionConflictError(id, data.expectedVersion, null);
     }
     return updated;
 }

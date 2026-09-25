@@ -60791,6 +60791,212 @@ export type PostApiV1AdminAuthUpdateProfileResponses = {
 
 export type PostApiV1AdminAuthUpdateProfileResponse = PostApiV1AdminAuthUpdateProfileResponses[keyof PostApiV1AdminAuthUpdateProfileResponses];
 
+export type GetApiV1AdminAuthShortcutsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/shortcuts';
+};
+
+export type GetApiV1AdminAuthShortcutsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAuthShortcutsError = GetApiV1AdminAuthShortcutsErrors[keyof GetApiV1AdminAuthShortcutsErrors];
+
+export type GetApiV1AdminAuthShortcutsResponses = {
+    /**
+     * Keyboard shortcuts
+     */
+    200: {
+        success: true;
+        data: {
+            shortcuts: {
+                [key: string]: string;
+            };
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminAuthShortcutsResponse = GetApiV1AdminAuthShortcutsResponses[keyof GetApiV1AdminAuthShortcutsResponses];
+
+export type PutApiV1AdminAuthShortcutsData = {
+    body: {
+        expectedRevision: number;
+        shortcuts: {
+            [key: string]: string;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/shortcuts';
+};
+
+export type PutApiV1AdminAuthShortcutsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminAuthShortcutsError = PutApiV1AdminAuthShortcutsErrors[keyof PutApiV1AdminAuthShortcutsErrors];
+
+export type PutApiV1AdminAuthShortcutsResponses = {
+    /**
+     * Keyboard shortcuts saved
+     */
+    200: {
+        success: true;
+        data: {
+            shortcuts: {
+                [key: string]: string;
+            };
+            revision: number;
+        };
+    };
+};
+
+export type PutApiV1AdminAuthShortcutsResponse = PutApiV1AdminAuthShortcutsResponses[keyof PutApiV1AdminAuthShortcutsResponses];
+
 export type PostApiV1AdminAuthScannerLinkData = {
     body?: never;
     path?: never;

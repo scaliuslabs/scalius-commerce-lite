@@ -4,6 +4,7 @@ import { Search, X } from "lucide-react";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { useColumnMenu } from "./DataTableColumnMenu";
+import { matchesShortcut, typingIn } from "../layout/shortcuts";
 
 interface DataTableToolbarProps {
   searchValue: string;
@@ -67,16 +68,11 @@ export function DataTableToolbar({
   // Keyboard shortcut: / to focus search, Escape to clear
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (
-        e.key === "/" &&
-        !["INPUT", "TEXTAREA", "SELECT"].includes(
-          (e.target as HTMLElement).tagName,
-        )
-      ) {
+      if (matchesShortcut("tableSearch", e) && !typingIn(e.target)) {
         e.preventDefault();
         searchInputRef.current?.focus();
       }
-      if (e.key === "Escape" && document.activeElement === searchInputRef.current) {
+      if (matchesShortcut("cancel", e) && document.activeElement === searchInputRef.current) {
         clearSearchRef.current();
         searchInputRef.current?.blur();
       }

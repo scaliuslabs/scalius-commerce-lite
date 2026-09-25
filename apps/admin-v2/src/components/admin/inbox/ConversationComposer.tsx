@@ -16,6 +16,7 @@ import {
   usePostMessage,
   type UploadedImage,
 } from "./inbox-api";
+import { matchesShortcut } from "../layout/shortcuts";
 
 interface StagedImage extends UploadedImage {
   name: string;
@@ -108,7 +109,7 @@ export function ConversationComposer({
         value={body}
         onChange={(event) => setBody(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+          if (matchesShortcut("submit", event)) {
             event.preventDefault();
             send();
           }

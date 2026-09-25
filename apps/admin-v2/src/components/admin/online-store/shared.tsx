@@ -115,12 +115,21 @@ export function useDocumentDraft<T>({
   /** Refetches `saved` after a revision conflict ("Reload and keep my edits"). */
   reload?: () => Promise<unknown>;
 }) {
-  const [state, setState] = useState({ saved, draft: saved });
+  // `sent` is the draft a save sent; once that save succeeded, the next saved
+  // version is its result and the draft is rebased from what was sent, so a
+  // value the server normalised (trimmed, a URL) comes back clean while edits
+  // typed during the save stay.
+  const [state, setState] = useState<{ saved: T; draft: T; sent?: { draft: T; from: T; done: boolean } }>({
+    saved,
+    draft: saved,
+  });
   let current = state;
   if (state.saved !== saved) {
+    const sent = state.sent?.done ? state.sent : undefined;
     current = {
       saved,
-      draft: rebaseDraft(state.draft, state.saved, saved),
+      draft: rebaseDraft(state.draft, sent ? sent.draft : state.saved, saved),
+      sent: sent ? undefined : state.sent,
     };
     setState(current);
   }
@@ -133,9 +142,22 @@ export function useDocumentDraft<T>({
     saving,
     invalid: invalid?.(current.draft) ?? false,
     save: async () => {
+      const draft = current.draft;
+      setState((value) => ({ ...value, sent: { draft, from: value.saved, done: false } }));
       setSaving(true);
       try {
-        await save(current.draft);
+        await save(draft);
+        setState((value) => {
+          if (value.sent?.draft !== draft) return value;
+          // The result already arrived while saving: rebase from what was sent now.
+          if (value.saved !== value.sent.from) {
+            return { saved: value.saved, draft: rebaseDraft(value.draft, draft, value.saved) };
+          }
+          return { ...value, sent: { ...value.sent, done: true } };
+        });
+      } catch (error) {
+        setState((value) => (value.sent?.draft === draft ? { saved: value.saved, draft: value.draft } : value));
+        throw error;
       } finally {
         setSaving(false);
       }

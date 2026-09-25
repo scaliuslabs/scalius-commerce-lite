@@ -271,6 +271,8 @@ export function CustomerInfoSection() {
                     aria-label={t("notes")}
                     {...field}
                     value={field.value || ""}
+                    // Cleared notes are "none" again, so undoing a note clears the save bar.
+                    onChange={(e) => field.onChange(e.target.value || null)}
                     ref={(el) => {
                       field.ref(el);
                       refs.notesRef.current = el;
