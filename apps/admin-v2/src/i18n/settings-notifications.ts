@@ -240,6 +240,7 @@ export const notificationTemplateMessages = defineMessages({
     gift_card_message: "Gift message",
     gift_card_sender: "Sender name",
     gift_card_link: "Gift card link",
+    gift_card_recipient: "Recipient (masked)",
   },
   bn: {
     notFound: "এই মেসেজটি নেই।",
@@ -302,5 +303,6 @@ export const notificationTemplateMessages = defineMessages({
     gift_card_message: "উপহারের বার্তা",
     gift_card_sender: "প্রেরকের নাম",
     gift_card_link: "গিফট কার্ড লিংক",
+    gift_card_recipient: "প্রাপক (আংশিক লুকানো)",
   },
 });

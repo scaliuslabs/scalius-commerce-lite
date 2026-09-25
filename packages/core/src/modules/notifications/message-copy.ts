@@ -31,6 +31,8 @@ interface MessageCopy {
   payment: string;
   refunded: string;
   partiallyRefunded: string;
+  /** A refund issued as store credit: the amount and the new gift card's last 4. */
+  storeCreditRefund: (amount: string, last4: string | null) => string;
   nothingDue: string;
   paid: string;
   partiallyPaid: string;
@@ -113,6 +115,7 @@ const EN: MessageCopy = {
   payment: "Payment",
   refunded: "Refunded. No payment is due.",
   partiallyRefunded: "Partially refunded. No payment is due.",
+  storeCreditRefund: (amount, last4) => `${amount} as store credit on a gift card${last4 ? ` ending ${last4}` : ""}. Use it at checkout.`,
   nothingDue: "No payment is due for this order.",
   paid: "Paid",
   partiallyPaid: "Partially paid",
@@ -201,6 +204,7 @@ const BN: MessageCopy = {
   payment: "পেমেন্ট",
   refunded: "রিফান্ড দেওয়া হয়েছে। কোনো টাকা বাকি নেই।",
   partiallyRefunded: "আংশিক রিফান্ড দেওয়া হয়েছে। কোনো টাকা বাকি নেই।",
+  storeCreditRefund: (amount, last4) => `${amount} স্টোর ক্রেডিট হিসেবে একটি গিফট কার্ডে${last4 ? ` (শেষ চার অক্ষর ${last4})` : ""} দেওয়া হয়েছে। চেকআউটে ব্যবহার করুন।`,
   nothingDue: "এই অর্ডারের জন্য কোনো টাকা দিতে হবে না।",
   paid: "পরিশোধিত",
   partiallyPaid: "আংশিক পরিশোধিত",

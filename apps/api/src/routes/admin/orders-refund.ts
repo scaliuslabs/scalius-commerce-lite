@@ -98,6 +98,7 @@ async function enqueueRefundNotification(options: {
             amount: number;
             refundId?: string;
         };
+        storeCredit?: { last4: string };
     };
     source: string;
 }) {
@@ -109,6 +110,7 @@ async function enqueueRefundNotification(options: {
         orderId: options.orderId,
         gateway: options.result.gateway,
         notification,
+        storeCreditLast4: options.result.storeCredit?.last4,
         source: options.source,
     });
 }
@@ -124,6 +126,8 @@ async function enqueueRefundNotificationFact(options: {
         amount: number;
         refundId?: string;
     };
+    /** Store credit: the message says so, with the new card's last 4 (never its code). */
+    storeCreditLast4?: string;
     source: string;
 }) {
     await enqueueOrderRefundNotificationForOrder({
@@ -137,6 +141,7 @@ async function enqueueRefundNotificationFact(options: {
             amount: options.notification.amount,
             ...(options.gateway ? { gateway: options.gateway } : {}),
             ...(options.notification.refundId ? { refundId: options.notification.refundId } : {}),
+            ...(options.storeCreditLast4 ? { settlement: "store_credit", storeCreditLast4: options.storeCreditLast4 } : {}),
         },
     });
 }

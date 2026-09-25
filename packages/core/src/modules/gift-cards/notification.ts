@@ -11,6 +11,7 @@ import type { Database } from "@scalius/database/client";
 import { customers, giftCards, orders } from "@scalius/database/schema";
 import { formatGiftCardCode } from "@scalius/shared/gift-card-code";
 import { decryptGiftCardCode, deriveGiftCardKeys } from "./crypto";
+import { maskGiftCardRecipient } from "./mask";
 
 export interface GiftCardIssuedMessage {
     giftCardId: string;
@@ -95,5 +96,55 @@ export async function resolveGiftCardIssuedMessage(
         recipient,
         orderId: card.sourceOrderId,
         orderNumber: order?.orderNumber ?? null,
+    };
+}
+
+export interface GiftCardSentMessage {
+    giftCardId: string;
+    amountMinor: number;
+    currencyCode: string;
+    /** "s•••@example.com" / "01•••••678": the buyer sees where it went, never the full contact. */
+    recipientMasked: string;
+    buyer: { name: string | null; email: string | null; phone: string | null };
+    orderId: string;
+    orderNumber: number | null;
+}
+
+/**
+ * The buyer's confirmation that a card they bought went to someone else
+ * (`gift_card_sent`, no code). Null when the card has no recipient, did not
+ * come from an order, or the buyer can't be reached.
+ */
+export async function resolveGiftCardSentMessage(
+    db: Database,
+    input: { giftCardId: string },
+): Promise<GiftCardSentMessage | null> {
+    const card = await db.select({
+        id: giftCards.id,
+        initialAmountMinor: giftCards.initialAmountMinor,
+        currencyCode: giftCards.currencyCode,
+        recipientEmail: giftCards.recipientEmail,
+        recipientPhone: giftCards.recipientPhone,
+        sourceOrderId: giftCards.sourceOrderId,
+        source: giftCards.source,
+    }).from(giftCards).where(eq(giftCards.id, input.giftCardId)).get();
+    if (!card || card.source !== "purchase" || !card.sourceOrderId) return null;
+    const recipientMasked = maskGiftCardRecipient({ email: card.recipientEmail, phone: card.recipientPhone });
+    if (!recipientMasked) return null;
+    const order = await db.select({
+        orderNumber: orders.orderNumber,
+        customerName: orders.customerName,
+        customerEmail: orders.customerEmail,
+        customerPhone: orders.customerPhone,
+    }).from(orders).where(eq(orders.id, card.sourceOrderId)).get();
+    if (!order || (!order.customerEmail && !order.customerPhone)) return null;
+    return {
+        giftCardId: card.id,
+        amountMinor: card.initialAmountMinor,
+        currencyCode: card.currencyCode,
+        recipientMasked,
+        buyer: { name: order.customerName, email: order.customerEmail, phone: order.customerPhone },
+        orderId: card.sourceOrderId,
+        orderNumber: order.orderNumber ?? null,
     };
 }

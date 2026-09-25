@@ -175,9 +175,17 @@ function discountAndDelivery({ order, discounts }: OrderFacts, money: (minor: nu
 }
 
 /** The refund in this message (major units in the queued facts), in the order's currency. */
-function refundAmount(amount: unknown, currency: string | null): string {
+function refundAmount(amount: unknown, currency: string | null, language: MessageLanguage, data?: Record<string, unknown>): string {
   const value = typeof amount === "number" ? amount : typeof amount === "string" ? Number(amount) : Number.NaN;
-  return currency && Number.isFinite(value) && value > 0 ? formatMoney(value, { code: currency }) : "";
+  const formatted = currency && Number.isFinite(value) && value > 0 ? formatMoney(value, { code: currency }) : "";
+  // A store-credit refund is a new gift card, not money back: say so (last 4 only, never the code).
+  if (formatted && data?.settlement === "store_credit") {
+    const last4 = typeof data.storeCreditLast4 === "string" && /^[0-9A-Z]{4}$/.test(data.storeCreditLast4)
+      ? data.storeCreditLast4
+      : null;
+    return MESSAGE_COPY[language].storeCreditRefund(formatted, last4);
+  }
+  return formatted;
 }
 
 const CLOSED_STATUSES = new Set(["cancelled", "returned", "refunded", "partially_refunded"]);
@@ -264,7 +272,7 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
       tracking_id: shipment?.trackingId ?? queuedTrackingId,
       courier_name: shipment?.courierName ?? "",
       tracking_url: shipment?.trackingUrl ?? "",
-      refund_amount: refundAmount(input.data?.amount, currency),
+      refund_amount: refundAmount(input.data?.amount, currency, language, input.data),
       support_request: request,
       support_status: status,
       pickup_address: order.pickupAddress?.trim() ?? "",
