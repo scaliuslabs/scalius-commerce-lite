@@ -236,7 +236,7 @@ describe("Wave A checkout", () => {
         expect(batches).toHaveLength(1);
         const [batch] = batches;
         const count = (prefix: string) => batch!.filter((statement) => statement.query.startsWith(prefix)).length;
-        // order_items: 18 bound values a row → 5 rows a statement → 20;
+        // order_items: 19 bound values a row → 5 rows a statement → 20;
         // order_item_tax_snapshots: 6 a row → 16 rows a statement → 7;
         // the rest: 3 guards, customer + history, order, COD, one SKU hold
         // (movement + counter), the SKU's product buyer-state refresh, tax

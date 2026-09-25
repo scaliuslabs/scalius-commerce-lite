@@ -473,6 +473,7 @@ export async function getProductDetails(
             taxClassId: products.taxClassId,
             taxClassificationVersion: products.taxClassificationVersion,
             isGiftCard: products.isGiftCard,
+            warrantyPolicyId: products.warrantyPolicyId,
             customizationSchema: products.customizationSchema,
             category: {
                 name: categories.name,

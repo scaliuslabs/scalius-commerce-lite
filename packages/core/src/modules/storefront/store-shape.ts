@@ -12,6 +12,7 @@ import {
   type StoreShapeMenuItem,
 } from "@scalius/shared/storefront-theme";
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
+import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
 
 const cap = STORE_SHAPE_COUNT_CAP;
 
@@ -49,6 +50,22 @@ export function selectStoreShapeCounts(db: Database) {
         WHERE m."deleted_at" IS NULL AND m."is_active" = 1
         LIMIT 1
       ) AS capped_shipping_methods)`,
+      // Reviews show only when the reviews document is enabled (a missing or
+      // malformed document reads as disabled) and one review is published.
+      publishedReviewCount: sql<number>`(SELECT count(*) FROM (
+        SELECT 1 FROM "settings" s
+        WHERE s."key" = ${SETTINGS_DOCUMENT_ROW_KEY} AND s."category" = 'reviews'
+          AND (CASE WHEN json_valid(s."value") THEN json_type(s."value", '$.enabled') END) = 'true'
+          AND EXISTS (SELECT 1 FROM "product_reviews" r WHERE r."status" = 'published')
+        LIMIT 1
+      ) AS capped_reviews)`,
+      digitalSkuCount: sql<number>`(SELECT count(*) FROM (
+        SELECT 1 FROM "product_variants" v
+        INNER JOIN "products" p ON p."id" = v."product_id"
+        WHERE v."fulfillment_kind" = 'digital' AND v."deleted_at" IS NULL
+          AND p."deleted_at" IS NULL AND p."is_active" = 1
+        LIMIT 1
+      ) AS capped_digital_skus)`,
     })
     .from(sql`(SELECT 1 AS one) AS store_shape_row`);
 }
@@ -59,6 +76,8 @@ export interface StoreShapeCountsRow {
   topCategoryCount: number | string | bigint;
   collectionCount: number | string | bigint;
   deliveryMethodCount: number | string | bigint;
+  publishedReviewCount?: number | string | bigint;
+  digitalSkuCount?: number | string | bigint;
 }
 
 /** The shape from the counts row and the header menu tree. */
@@ -77,6 +96,8 @@ export function storeShapeFromCounts(
     menu,
     hasCollections: number(row?.collectionCount) > 0,
     hasDeliveryMethods: number(row?.deliveryMethodCount) > 0,
+    hasReviews: number(row?.publishedReviewCount) > 0,
+    hasDigitalLines: number(row?.digitalSkuCount) > 0,
   });
 }
 

@@ -9,6 +9,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { AppError, ConflictError } from "@scalius/core/errors";
 import { catalogProjectionRefreshStatements } from "./catalog-projections";
+import { buildGiftCardProductRulesGuard, rethrowGiftCardProductRuleViolation } from "./gift-card-rules";
 
 export const PRODUCT_AGGREGATE_REVISION_CONFLICT =
     "PRODUCT_AGGREGATE_REVISION_CONFLICT";
@@ -176,6 +177,8 @@ export async function executeProductAggregateMutationBatch(
             ),
             ...mutationStatements,
             buildProductAggregateRevisionBump(db, productId),
+            // Every aggregate write path keeps a gift card digital, untracked and undiscounted.
+            buildGiftCardProductRulesGuard(db, productId),
             // The catalogue projections read this batch's own writes.
             ...catalogProjectionRefreshStatements(db, [productId]),
         ] as never) as unknown[];
@@ -185,6 +188,7 @@ export async function executeProductAggregateMutationBatch(
             aggregateRevision: revision.aggregateRevision,
         };
     } catch (error) {
+        rethrowGiftCardProductRuleViolation(error);
         return rethrowProductAggregateRevisionConflictIfStale(
             db,
             productId,
