@@ -2,7 +2,7 @@
 // writes (create, edit, status, trash, restore, permanent delete). Every write
 // is buyer-visible; the API route bumps the cache generation after it commits.
 
-import { brands, media, products } from "@scalius/database/schema";
+import { brands, media, productBuyerState, products } from "@scalius/database/schema";
 import {
     buildBatchGuard,
     isBatchGuardError,
@@ -491,7 +491,8 @@ export async function restoreBrands(db: Database, revisionClaims: readonly Brand
 /**
  * Deletes brands already in trash (all or none). Their products lose the
  * brand (`brand_id` ON DELETE SET NULL) and advance their editor revision in
- * the same batch, so an open product form cannot save the deleted brand back.
+ * the same batch, so an open product form cannot save the deleted brand back;
+ * their stored buyer state loses it in the same batch too.
  */
 export async function permanentlyDeleteBrands(
     db: Database,
@@ -505,6 +506,11 @@ export async function permanentlyDeleteBrands(
         db.update(products)
             .set({ aggregateRevision: sql`${products.aggregateRevision} + 1`, updatedAt: sql`unixepoch()` })
             .where(sql`${products.brandId} IN ${claimIds(claimsJson)}`),
+        // The stored buyer state copies brand_id without a foreign key: clear
+        // it with the products' (brand pages and brand facets read it).
+        db.update(productBuyerState)
+            .set({ brandId: null })
+            .where(sql`${productBuyerState.brandId} IN ${claimIds(claimsJson)}`),
         db.delete(brands)
             .where(and(sql`${brands.id} IN ${claimIds(claimsJson)}`, isNotNull(brands.deletedAt)))
             .returning({ id: brands.id }),
