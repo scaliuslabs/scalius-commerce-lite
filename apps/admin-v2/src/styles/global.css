@@ -79,13 +79,18 @@
   --scrollbar-thumb: #8a8a8a;
   --scrollbar-thumb-hover: #616161;
 
-  --sidebar: #ebebeb;
-  --sidebar-foreground: #303030;
-  --sidebar-hover: #f1f1f1;
-  --sidebar-accent: #fafafa;
-  --sidebar-accent-foreground: #303030;
-  --sidebar-border: #e3e3e3;
-  --sidebar-ring: #005bd3;
+  /* Shopify's navigation frame: near-black in both themes, the page canvas inset on it. */
+  --sidebar: #1a1a1a;
+  --sidebar-foreground: #e3e3e3;
+  --sidebar-muted-foreground: #a3a3a3;
+  --sidebar-hover: #262626;
+  --sidebar-accent: #303030;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #303030;
+  --sidebar-ring: #4b9bff;
+  /* The store's avatar badge (Shopify's per-store colour square). */
+  --store-badge: #d4367f;
+  --store-badge-foreground: #ffffff;
 
   --chart-1: #005bd3;
   --chart-2: #047b5d;
@@ -166,13 +171,11 @@
   --scrollbar-thumb: #8a8a8a;
   --scrollbar-thumb-hover: #b5b5b5;
 
-  --sidebar: #151515;
-  --sidebar-foreground: #e3e3e3;
-  --sidebar-hover: #242424;
-  --sidebar-accent: #303030;
-  --sidebar-accent-foreground: #f3f3f3;
+  /* The frame goes a step darker than the dark canvas, so the canvas still reads as a sheet. */
+  --sidebar: #0d0d0d;
+  --sidebar-hover: #1f1f1f;
+  --sidebar-accent: #2a2a2a;
   --sidebar-border: #2a2a2a;
-  --sidebar-ring: #4b9bff;
 
   --chart-1: #4b9bff;
   --chart-2: #36b37e;
@@ -222,6 +225,9 @@
   --color-topbar-progress: var(--topbar-progress);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
+  --color-store-badge: var(--store-badge);
+  --color-store-badge-foreground: var(--store-badge-foreground);
   --color-sidebar-hover: var(--sidebar-hover);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -306,6 +312,7 @@
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
   --animate-nav-grow: nav-grow 0.15s ease-out;
+  --animate-panel-in: panel-in 0.18s ease-out;
 
   @keyframes fade-in-up {
     from {
@@ -315,6 +322,14 @@
   }
 
   /* Polaris "snappy grow" for navigation sub-items. */
+  /* A navigation panel (main or settings) sliding in beside the rail. */
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      transform: translateX(-0.5rem);
+    }
+  }
+
   @keyframes nav-grow {
     from {
       opacity: 0;
@@ -435,66 +450,97 @@ html:lang(bn) {
   }
 }
 
-/* The contextual save bar takes the top bar's search slot while it shows. */
-body:has([data-save-bar]) [data-topbar-search] {
+/*
+ * The contextual save bar takes the canvas' top bar while it shows: the page
+ * title steps aside and, from md, the bar centres on the canvas rather than
+ * the window (half the navigation's width to the right).
+ */
+body:has([data-save-bar]) [data-slot="topbar"] > p {
   visibility: hidden;
 }
 
-/*
- * Shopify's navigation tree: a 1px line runs from the parent's icon down the
- * sub-items and turns into the active child with an 8px rounded elbow.
- * Applied automatically to SidebarMenuSub; nothing to add in feature code.
- */
-[data-sidebar="menu-sub"] > li {
-  position: relative;
-}
-
-[data-sidebar="menu-sub"] > li:is(:has(~ li [data-active="true"]), :has([data-active="true"]))::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: calc(1.125rem - 0.5px);
-  width: 0.75rem;
-  border-left: 1px solid var(--muted-foreground);
-  pointer-events: none;
-}
-
-[data-sidebar="menu-sub"] > li:has(~ li [data-active="true"])::before {
-  bottom: 0;
-}
-
-[data-sidebar="menu-sub"] > li:has([data-active="true"])::before {
-  height: 50%;
-  border-bottom: 1px solid var(--muted-foreground);
-  /* A soft curve into the active child, as in Shopify's navigation. */
-  border-bottom-left-radius: 0.5rem;
-}
-
-/* Start at the parent's 20px icon (rows are 44px on phones, 28px from md). */
-[data-sidebar="menu-sub"] > li:first-child::before {
-  top: -0.75rem;
-}
-
 @media (min-width: 768px) {
-  [data-sidebar="menu-sub"] > li:first-child::before {
-    top: -0.25rem;
+  body:has([data-nav-state="panel"]) [data-save-bar] {
+    margin-left: 7.5rem;
+  }
+
+  body:has([data-nav-state="rail"]) [data-save-bar] {
+    margin-left: 1.75rem;
+  }
+
+  body:has([data-nav-state="settings"]) [data-save-bar] {
+    margin-left: 9.25rem;
   }
 }
 
 /*
- * Polaris nav icons are filled at rest and outlined on the current/open
- * section. Lucide has only outline glyphs, so the resting icon gets a heavier
- * stroke and a quarter-tone body, and the open one the plain thin outline.
+ * Shopify's navigation tree: a 1px line drops from under the parent's icon
+ * past the siblings above the active child, curves right at that row's centre
+ * and ends in a small arrowhead pointing at its label. Drawn with borders, so
+ * it stays crisp at any zoom. Rows are 44px on phones and 32px from md; the
+ * parent's 20px icon is centred at 18px, labels start at 36px.
  */
-[data-sidebar="menu-button"] > svg {
-  fill: currentColor;
-  fill-opacity: 0.25;
-  stroke-width: 2.25;
+[data-nav-sub] > li {
+  position: relative;
 }
 
-[data-sidebar="menu-button"][data-open="true"] > svg {
-  fill: none;
-  stroke-width: 1.5;
+[data-nav-sub] > li:is(:has(~ li [aria-current="page"]), :has([aria-current="page"]))::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(1.125rem - 0.5px);
+  width: calc(0.6875rem + 0.5px);
+  border-left: 1px solid var(--nav-tree);
+  pointer-events: none;
+}
+
+[data-nav-sub] > li:has(~ li [aria-current="page"])::before {
+  bottom: 0;
+}
+
+[data-nav-sub] > li:has([aria-current="page"])::before {
+  bottom: 50%;
+  border-bottom: 1px solid var(--nav-tree);
+  border-bottom-left-radius: 0.375rem;
+}
+
+/* The arrowhead: two borders of a 6px square turned 45°, its point at 29px. */
+[data-nav-sub] > li:has([aria-current="page"])::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 0.5px);
+  left: calc(1.8125rem - 7.25px);
+  width: 6px;
+  height: 6px;
+  border-top: 1px solid var(--nav-tree);
+  border-right: 1px solid var(--nav-tree);
+  transform: translateY(-50%) rotate(45deg);
+  pointer-events: none;
+}
+
+/* Start 3px under the parent's icon (it ends 12px above a 44px row, 6px above a 32px one). */
+[data-nav-sub] > li:first-child:is(:has(~ li [aria-current="page"]), :has([aria-current="page"]))::before {
+  top: -0.5625rem;
+}
+
+@media (min-width: 768px) {
+  [data-nav-sub] > li:first-child:is(:has(~ li [aria-current="page"]), :has([aria-current="page"]))::before {
+    top: -0.1875rem;
+  }
+}
+
+[data-nav-sub] {
+  --nav-tree: color-mix(in srgb, var(--sidebar-muted-foreground) 70%, transparent);
+}
+
+/* Shopify's navigation glyphs are thin outlines; its scrollbars stay dark. */
+[data-nav] svg {
+  stroke-width: 1.75;
+}
+
+[data-nav] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sidebar-accent) transparent;
 }
 
 /* The rich-text editor's fullscreen mode covers the app shell and stacks dialogs above itself. */
@@ -561,37 +607,32 @@ body.editor-fullscreen-active [data-slot="dialog-content"] {
 
 /*
  * The page's own scrollbar (Shopify's): thin and always visible, a dark grey
- * thumb with a hover state, inset from the frame's rounded top corner.
+ * thumb with a hover state, inset from the canvas' rounded corners.
  * Firefox takes the standard properties; Chromium and Safari drop to their
  * scrollbar pseudo-elements, which alone allow the hover and the inset.
  */
-#admin-main-scroll,
-[data-settings-scroll] {
+#admin-main-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 @supports selector(::-webkit-scrollbar) {
-  #admin-main-scroll,
-  [data-settings-scroll] {
+  #admin-main-scroll {
     scrollbar-width: auto;
     scrollbar-color: auto;
   }
 
-  #admin-main-scroll::-webkit-scrollbar,
-  [data-settings-scroll]::-webkit-scrollbar {
+  #admin-main-scroll::-webkit-scrollbar {
     width: 12px;
   }
 
-  #admin-main-scroll::-webkit-scrollbar-track,
-  [data-settings-scroll]::-webkit-scrollbar-track {
+  #admin-main-scroll::-webkit-scrollbar-track {
     background: transparent;
-    /* Clear of the frame's 12px corner. */
+    /* Clear of the canvas' 12px corners. */
     margin-block: 12px;
   }
 
-  #admin-main-scroll::-webkit-scrollbar-thumb,
-  [data-settings-scroll]::-webkit-scrollbar-thumb {
+  #admin-main-scroll::-webkit-scrollbar-thumb {
     min-height: 40px;
     border: 3px solid transparent;
     border-radius: 9999px;
@@ -600,9 +641,7 @@ body.editor-fullscreen-active [data-slot="dialog-content"] {
   }
 
   #admin-main-scroll::-webkit-scrollbar-thumb:hover,
-  #admin-main-scroll::-webkit-scrollbar-thumb:active,
-  [data-settings-scroll]::-webkit-scrollbar-thumb:hover,
-  [data-settings-scroll]::-webkit-scrollbar-thumb:active {
+  #admin-main-scroll::-webkit-scrollbar-thumb:active {
     background-color: var(--scrollbar-thumb-hover);
   }
 }
