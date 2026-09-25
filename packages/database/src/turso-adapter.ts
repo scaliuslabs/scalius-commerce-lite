@@ -8,6 +8,7 @@ import {
   type AsyncBatchRemoteCallback,
   type AsyncRemoteCallback,
 } from "drizzle-orm/sqlite-proxy";
+import { observeStatement } from "./read-observer";
 import * as schema from "./schema";
 import type { Database } from "./types";
 
@@ -235,6 +236,7 @@ export function createTursoDatabase(
   }
 
   const executeOne: AsyncRemoteCallback = async (sql, params, method) => {
+    observeStatement(sql);
     const result = requireSingleResult(
       await retryTursoConflicts(
         () => executeRemoteBatch(
@@ -261,10 +263,10 @@ export function createTursoDatabase(
   };
 
   const executeBatch: AsyncBatchRemoteCallback = async (statements) => {
-    const batchStatements = statements.map(({ sql, params }) => ({
-      sql,
-      args: params,
-    }));
+    const batchStatements = statements.map(({ sql, params }) => {
+      observeStatement(sql);
+      return { sql, args: params };
+    });
     const batchMode = statements.every(({ sql }) => isReadOnlyBatchStatement(sql))
       ? "read"
       : writeBatchMode;
