@@ -99,3 +99,4 @@ export {
 } from "./buyer";
 export { resolveGiftCardIssuedMessage, type GiftCardIssuedMessage } from "./notification";
 export { maskGiftCardContact, maskGiftCardRecipient } from "./mask";
+export { GIFT_CARD_LINE_PROPERTY_KEYS, giftCardLineRecipientIssue } from "./line-recipient";
