@@ -49,6 +49,7 @@ export function AppSidebar({ nav, showSettings }: { nav: VisibleNavItem[]; showS
           <ShellLink to={item.to} preload="intent" current={open && !activeChild} onClick={close}>
             <item.icon aria-hidden />
             <span>{t(item.key)}</span>
+            {item.badge ? <item.badge /> : null}
           </ShellLink>
         </SidebarMenuButton>
         {open && item.children.length > 0 ? (

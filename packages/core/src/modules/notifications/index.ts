@@ -85,3 +85,14 @@ export { sendStaffOrderEmails } from "./notifications.service";
 export { composeAuthOtpMessage, readStoreIdentity, readStoreName, storeDisplayName } from "./store-messages";
 export { describeNotificationProviderBlock } from "./notification-provider-health";
 export { getNotificationTemplates, saveNotificationTemplate } from "./notification-templates.service";
+export {
+  CONVERSATION_SMS_COALESCE_SECONDS,
+  CONVERSATION_SMS_COALESCED,
+  renderConversationEmail,
+  sendConversationNotification,
+} from "./conversation-notifications";
+export type {
+  ConversationNotificationClaim,
+  ConversationNotificationResult,
+} from "./conversation-notifications";
+export { sendAdminPush, type AdminPushSpec } from "./notifications.service";

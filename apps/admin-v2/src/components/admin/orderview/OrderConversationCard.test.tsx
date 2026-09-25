@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { Order, OrderSupportRequest } from "./types";
-import { OrderSupportRequestsCard, resolutionsFor } from "./OrderSupportRequestsCard";
+import { OrderConversationCard, resolutionsFor } from "./OrderConversationCard";
 
 const mocks = vi.hoisted(() => ({ mutate: vi.fn(), canChangeOrderStatus: true }));
 vi.mock("~/hooks/use-order-action-permissions", () => ({
@@ -56,7 +56,7 @@ describe("customer requests", () => {
   it("pre-selects no answer and says that accepting cancels the order", async () => {
     await act(async () => root.render(
       <QueryClientProvider client={new QueryClient()}>
-        <OrderSupportRequestsCard order={order} />
+        <OrderConversationCard order={order} />
       </QueryClientProvider>,
     ));
     const review = [...host.querySelectorAll("button")].find((button) => button.textContent === en["requests.review"])!;
@@ -84,7 +84,7 @@ describe("customer requests", () => {
   it("opens the cancellation request when the header asks to review it", async () => {
     await act(async () => root.render(
       <QueryClientProvider client={new QueryClient()}>
-        <OrderSupportRequestsCard order={order} request={{ action: "reviewCancellation", id: 1 }} />
+        <OrderConversationCard order={order} request={{ action: "reviewCancellation", id: 1 }} />
       </QueryClientProvider>,
     ));
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(request.reason);
@@ -94,7 +94,7 @@ describe("customer requests", () => {
     const partlySent = { ...order, status: "confirmed", items: [{ id: "i1", quantity: 2, inventoryTracked: true, shippedQuantity: 1 }] } as unknown as Order;
     await act(async () => root.render(
       <QueryClientProvider client={new QueryClient()}>
-        <OrderSupportRequestsCard order={partlySent} request={{ action: "reviewCancellation", id: 1 }} />
+        <OrderConversationCard order={partlySent} request={{ action: "reviewCancellation", id: 1 }} />
       </QueryClientProvider>,
     ));
     const dialog = document.querySelector('[role="dialog"]')!;

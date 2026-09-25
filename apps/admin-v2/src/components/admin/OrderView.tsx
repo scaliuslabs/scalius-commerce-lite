@@ -37,7 +37,7 @@ import { OrderNotesCard } from "./orderview/OrderNotesCard";
 import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
 import { OrderReturnsCard } from "./orderview/OrderReturnsCard";
 import { OrderStatusCard } from "./orderview/OrderStatusCard";
-import { OrderSupportRequestsCard } from "./orderview/OrderSupportRequestsCard";
+import { OrderConversationCard } from "./orderview/OrderConversationCard";
 import { OrderTimelineCard } from "./orderview/OrderTimelineCard";
 import { PaymentCard } from "./orderview/PaymentCard";
 import { hasDeliveryCard, ShipmentCard } from "./orderview/ShipmentCard";
@@ -225,7 +225,7 @@ export function OrderView({ order }: { order: Order }) {
           <div className="grid gap-4 lg:grid-cols-3 lg:items-start">
             <div className="contents lg:col-span-2 lg:block lg:space-y-4">
               {(order.supportRequests?.length ?? 0) > 0 ? (
-                <div className="order-2 lg:order-none"><OrderSupportRequestsCard order={order} request={request} /></div>
+                <div className="order-2 lg:order-none"><OrderConversationCard order={order} request={request} /></div>
               ) : null}
               {/*
                 Messages slot (S4): OrderConversationCard mounts here and replaces

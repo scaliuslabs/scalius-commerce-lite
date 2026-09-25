@@ -19,13 +19,19 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@scalius/core/modules/orders")>();
   return {
     ...actual,
-    createReceiptOrderSupportRequest: orderSupportMocks.createReceiptOrderSupportRequest,
     getReceiptOrderSupportRequestStateForOrder: orderSupportMocks.getReceiptOrderSupportRequestStateForOrder,
     // The ledger and thread reads are covered on the real schema by orders-owner-receipt.d1.test.ts.
     listBuyerOrderFulfilments: vi.fn(async () => []),
     findOrderConversationId: vi.fn(async () => null),
   };
 });
+
+vi.mock("@scalius/core/modules/conversations", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/conversations")>(),
+  createReceiptOrderSupportRequest: orderSupportMocks.createReceiptOrderSupportRequest,
+}));
+
+const allowLimiter = { limit: vi.fn(async () => ({ success: true })) };
 
 vi.mock("../utils/order-notification-queue", () => notificationMocks);
 
@@ -490,7 +496,7 @@ describe("order receipt route", () => {
           reason: "Please cancel before shipment",
         }),
       },
-      { CACHE: kv, JOBS_QUEUE: { send: vi.fn() } } as never,
+      { CACHE: kv, JOBS_QUEUE: { send: vi.fn() }, RL_STRICT: allowLimiter, RL_STANDARD: allowLimiter } as never,
     );
 
     expect(response.status).toBe(404);
@@ -517,7 +523,7 @@ describe("order receipt route", () => {
           message: "Ordered by mistake.",
         }),
       },
-      { CACHE: kv, JOBS_QUEUE: queue } as never,
+      { CACHE: kv, JOBS_QUEUE: queue, RL_STRICT: allowLimiter, RL_STANDARD: allowLimiter } as never,
     );
     const body = await response.json() as {
       data?: {

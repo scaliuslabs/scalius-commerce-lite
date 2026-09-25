@@ -49,6 +49,20 @@ interface MessageCopy {
     body: (customer: string, order: string, total: string) => string;
     action: string;
   };
+  /** Thread notifications: a reply to the buyer, a new buyer message to staff. `order` is "#1057" or null. */
+  conversation: {
+    replySubject: (store: string | null, order: string | null) => string;
+    replyIntro: (store: string | null, order: string | null) => string;
+    replyAction: string;
+    replyNoReply: string;
+    /** No message text in SMS. */
+    replySms: (store: string | null, order: string | null) => string;
+    staffTitle: (order: string | null) => string;
+    staffBody: string;
+    staffEmailSubject: (store: string | null, order: string | null, customer: string) => string;
+    staffEmailBody: (customer: string, order: string | null) => string;
+    staffAction: string;
+  };
   otp: {
     subject: (code: string, store: string | null) => string;
     /** `order` is the formatted order number ("#1057") for order codes. */
@@ -108,6 +122,18 @@ const EN: MessageCopy = {
     subject: (store, order, customer) => `${store ? `[${store}] ` : ""}Order ${order} placed by ${customer}`,
     body: (customer, order, total) => `${customer} placed order ${order}${total ? ` for ${total}` : ""}.`,
     action: "View order",
+  },
+  conversation: {
+    replySubject: (store, order) => `${store ?? "The store"} replied${order ? ` about order ${order}` : ""}`,
+    replyIntro: (store, order) => `${store ?? "The store"} sent you a message${order ? ` about order ${order}` : ""}:`,
+    replyAction: "Reply",
+    replyNoReply: "Please reply from the store's website, not to this email.",
+    replySms: (store, order) => `${store ?? "The store"} replied to your message${order ? ` about order ${order}` : ""}. Check your email or your account to read it.`,
+    staffTitle: (order) => (order ? `New message about ${order}` : "New customer message"),
+    staffBody: "Open the inbox to read and reply.",
+    staffEmailSubject: (store, order, customer) => `${store ? `[${store}] ` : ""}New message from ${customer}${order ? ` about ${order}` : ""}`,
+    staffEmailBody: (customer, order) => `${customer} sent a message${order ? ` about order ${order}` : ""}. Open the inbox to read and reply.`,
+    staffAction: "Open inbox",
   },
   otp: {
     subject: (code, store) => (store ? `${code} is your ${store} code` : `${code} is your verification code`),
@@ -172,6 +198,18 @@ const BN: MessageCopy = {
     subject: (store, order, customer) => `${store ? `[${store}] ` : ""}${customer} অর্ডার ${order} করেছেন`,
     body: (customer, order, total) => `${customer} অর্ডার ${order} করেছেন${total ? `, মোট ${total}` : ""}।`,
     action: "অর্ডার দেখুন",
+  },
+  conversation: {
+    replySubject: (store, order) => `${store ?? "স্টোর"} উত্তর দিয়েছে${order ? ` (অর্ডার ${order})` : ""}`,
+    replyIntro: (store, order) => `${store ?? "স্টোর"} আপনাকে একটি মেসেজ পাঠিয়েছে${order ? ` (অর্ডার ${order})` : ""}:`,
+    replyAction: "উত্তর দিন",
+    replyNoReply: "এই ইমেইলে উত্তর দেবেন না, স্টোরের ওয়েবসাইট থেকে উত্তর দিন।",
+    replySms: (store, order) => `${store ?? "স্টোর"} আপনার মেসেজের উত্তর দিয়েছে${order ? ` (অর্ডার ${order})` : ""}। পড়তে ইমেইল বা অ্যাকাউন্ট দেখুন।`,
+    staffTitle: (order) => (order ? `${order} নিয়ে নতুন মেসেজ` : "ক্রেতার নতুন মেসেজ"),
+    staffBody: "পড়তে ও উত্তর দিতে ইনবক্স খুলুন।",
+    staffEmailSubject: (store, order, customer) => `${store ? `[${store}] ` : ""}${customer}-এর নতুন মেসেজ${order ? ` (${order})` : ""}`,
+    staffEmailBody: (customer, order) => `${customer} একটি মেসেজ পাঠিয়েছেন${order ? ` (অর্ডার ${order})` : ""}। পড়তে ও উত্তর দিতে ইনবক্স খুলুন।`,
+    staffAction: "ইনবক্স খুলুন",
   },
   otp: {
     subject: (code, store) => (store ? `${store}-এর কোড ${code}` : `আপনার যাচাই কোড ${code}`),

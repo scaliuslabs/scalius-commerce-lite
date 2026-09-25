@@ -7,6 +7,7 @@ import {
 } from "@scalius/core/modules/orders";
 import { flushPendingNotificationOutbox } from "@scalius/core/modules/notifications";
 import { sweepAutoFulfilment } from "@scalius/core/modules/fulfilment";
+import { sweepOrphanConversationAttachments } from "@scalius/core/modules/conversations";
 import { flushPendingMetaPurchaseOutbox } from "@scalius/core/integrations/meta/purchase-outbox";
 import {
   cleanupExpiredCustomerAuthOtpChallenges,
@@ -267,6 +268,16 @@ async function runScheduledMaintenanceInner(
     console.log(
       `[scheduled] Auto-fulfil sweep: scanned=${autoFulfil.scanned}, ` +
         `fulfilled=${autoFulfil.fulfilled}, failed=${autoFulfil.failed}`,
+    );
+  }
+
+  // Conversation images uploaded but never attached within an hour.
+  const orphanAttachments = await timed("conversation_attachment_sweep", () =>
+    sweepOrphanConversationAttachments(db, env.BUCKET),
+  );
+  if (orphanAttachments.scanned > 0) {
+    console.log(
+      `[scheduled] Conversation attachment sweep: scanned=${orphanAttachments.scanned}, deleted=${orphanAttachments.deleted}`,
     );
   }
 

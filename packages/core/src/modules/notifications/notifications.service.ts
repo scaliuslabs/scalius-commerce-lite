@@ -32,10 +32,22 @@ import {
     isNotificationProviderBreakerFailure,
     markNotificationProviderBlocked,
 } from "./notification-provider-health";
-import { ORDER_NOTIFICATION_LABELS, type OrderNotificationType } from "./notification-types";
+import {
+    ORDER_NOTIFICATION_LABELS,
+    type NotificationSubjectType,
+    type NotificationType,
+    type OrderNotificationType,
+} from "./notification-types";
 import { composeOrderEmail, composeOrderSms, composeStaffOrderEmail, readOrderMessageContext } from "./order-email";
 import { notificationsDocument } from "../settings/documents";
 import { getNotificationTemplates } from "./notification-templates.service";
+
+/** An order notification passes `orderId`; other subjects pass their type and id. */
+export interface DeliveryReceiptSubject {
+    orderId?: string | null;
+    subjectType?: NotificationSubjectType;
+    subjectId?: string;
+}
 
 interface OrderNotificationData {
     id: string;
@@ -75,7 +87,7 @@ export interface OrderNotificationDispatchResult {
     hasRetryableFailure: boolean;
 }
 
-interface DeliverySendResult {
+export interface DeliverySendResult {
     success: boolean;
     provider: string;
     providerMessageId?: string | null;
@@ -122,7 +134,7 @@ const NON_RETRYABLE_DISPATCH_ERROR_PATTERNS = [
 ];
 
 /** The dashboard order page (BETTER_AUTH_URL is the dashboard origin from Platform settings). */
-function resolveDashboardOrderLink(env: object | undefined, orderId: string): string | null {
+export function resolveDashboardOrderLink(env: object | undefined, orderId: string): string | null {
     const origin = (env as { BETTER_AUTH_URL?: unknown } | undefined)?.BETTER_AUTH_URL;
     const dashboardUrl = typeof origin === "string" ? origin.trim() : "";
     if (!dashboardUrl) return null;
@@ -216,19 +228,67 @@ export async function sendOrderNotification(
     _requestUrl: string,
     options: AdminPushOptions = {},
 ): Promise<OrderNotificationDispatchResult> {
-    const outcomes: OrderNotificationChannelOutcome[] = [];
     const notificationType = order.notificationType ?? "order_created";
+    // The notification opens the dashboard order page, so the link must be
+    // the dashboard origin (BETTER_AUTH_URL from Platform settings), never
+    // the API origin or the current request origin. FCM requires an
+    // absolute HTTPS link; when the dashboard origin is not configured the
+    // link is omitted and the service worker falls back to the order list.
+    const orderViewLink = resolveDashboardOrderLink(env, order.id);
+    const safeName = escapeHtml(order.customerName || "Unknown Customer");
+    const label = ORDER_NOTIFICATION_LABELS[notificationType] ?? "Order Update";
+    return sendAdminPush(db, env, {
+        outboxId: options.outboxId,
+        receipt: { orderId: order.id, notificationType },
+        setupRecipient: `firebase-setup:${order.id}:${notificationType}`,
+        logLabel: `order ${order.id}`,
+        title: notificationType === "order_created" ? "New Order Created!" : label,
+        body: `${label}: Order ${order.id} from ${safeName}. Click to view.`,
+        link: orderViewLink,
+        data: {
+            orderId: order.id,
+            customerName: safeName,
+            notificationType,
+        },
+    });
+}
+
+/** Where a staff push lands and what its delivery receipts are keyed by. */
+export interface AdminPushSpec {
+    outboxId?: string;
+    receipt: DeliveryReceiptSubject & { notificationType: NotificationType };
+    /** Receipt recipient for a setup failure (one per outbox row). */
+    setupRecipient: string;
+    /** Ids only, for logs. */
+    logLabel: string;
+    title: string;
+    body: string;
+    /** Absolute dashboard link, or null to let the service worker open the dashboard. */
+    link: string | null;
+    data: Record<string, string>;
+}
+
+/**
+ * Sends one push to every active admin device. When an outbox id is
+ * provided, each FCM token is guarded by a durable delivery receipt so
+ * retries skip tokens already accepted by FCM.
+ */
+export async function sendAdminPush(
+    db: Database,
+    env: Env,
+    spec: AdminPushSpec,
+): Promise<OrderNotificationDispatchResult> {
+    const outcomes: OrderNotificationChannelOutcome[] = [];
+    const options = { outboxId: spec.outboxId };
+    const receiptFields = { ...spec.receipt, channel: "push" as const, provider: "fcm" };
 
     try {
         if (options.outboxId) {
             const blocked = await recordProviderBlockedDeliveryIfNeeded({
                 db,
                 outboxId: options.outboxId,
-                orderId: order.id,
-                notificationType,
-                channel: "push",
-                provider: "fcm",
-                recipient: `firebase-setup:${order.id}:${notificationType}`,
+                ...receiptFields,
+                recipient: spec.setupRecipient,
                 recipientMasked: "admin-fcm",
             });
             if (blocked) {
@@ -236,7 +296,6 @@ export async function sendOrderNotification(
                 return buildDispatchResult(outcomes);
             }
         }
-
         let serviceAccountJson: string | undefined;
         try {
             serviceAccountJson = await readFirebaseServiceAccountJson(
@@ -261,29 +320,15 @@ export async function sendOrderNotification(
         }
 
         const tokens = tokensSnapshot.map((t) => t.token);
-        // The notification opens the dashboard order page, so the link must be
-        // the dashboard origin (BETTER_AUTH_URL from Platform settings), never
-        // the API origin or the current request origin. FCM requires an
-        // absolute HTTPS link; when the dashboard origin is not configured the
-        // link is omitted and the service worker falls back to the order list.
-        const orderViewLink = resolveDashboardOrderLink(env, order.id);
-
-        const safeName = escapeHtml(order.customerName || "Unknown Customer");
-        const label = ORDER_NOTIFICATION_LABELS[notificationType] ?? "Order Update";
-        const title = notificationType === "order_created"
-            ? "New Order Created!"
-            : label;
         const messagePayload = {
             notification: {
-                title,
-                body: `${label}: Order ${order.id} from ${safeName}. Click to view.`,
+                title: spec.title,
+                body: spec.body,
             },
-            ...(orderViewLink ? { webpush: { fcmOptions: { link: orderViewLink } } } : {}),
+            ...(spec.link ? { webpush: { fcmOptions: { link: spec.link } } } : {}),
             data: {
-                orderId: order.id,
-                customerName: safeName,
-                notificationType,
-                ...(orderViewLink ? { link: orderViewLink } : {}),
+                ...spec.data,
+                ...(spec.link ? { link: spec.link } : {}),
                 ...(options.outboxId ? { deliveryKey: `${options.outboxId}:push` } : {}),
             },
             tokens,
@@ -304,10 +349,7 @@ export async function sendOrderNotification(
         for (const token of tokens) {
             const target = await createOrderNotificationDeliveryTarget({
                 outboxId: options.outboxId,
-                orderId: order.id,
-                notificationType,
-                channel: "push",
-                provider: "fcm",
+                ...receiptFields,
                 recipient: token,
                 recipientMasked: maskPushToken(token),
             });
@@ -457,9 +499,7 @@ export async function sendOrderNotification(
         return buildDispatchResult(outcomes);
     } catch (error: unknown) {
         console.error(
-            "[Notifications] Push notification failed for order",
-            order.id,
-            ":",
+            `[Notifications] Push notification failed for ${spec.logLabel}:`,
             error instanceof Error ? error.message : error,
         );
         const nonRetryable = isNonRetryableDispatchError(error);
@@ -475,20 +515,15 @@ export async function sendOrderNotification(
                 outcomes.push(await recordSkippedDelivery({
                     db,
                     outboxId: options.outboxId,
-                    orderId: order.id,
-                    notificationType,
-                    channel: "push",
-                    provider: "fcm",
-                    recipient: `firebase-setup:${order.id}:${notificationType}`,
+                    ...receiptFields,
+                    recipient: spec.setupRecipient,
                     recipientMasked: "admin-fcm",
                     reason: normalizeError(error),
                 }));
                 return buildDispatchResult(outcomes);
             } catch (receiptError: unknown) {
                 console.error(
-                    "[Notifications] Failed to record push setup receipt for order",
-                    order.id,
-                    ":",
+                    `[Notifications] Failed to record push setup receipt for ${spec.logLabel}:`,
                     receiptError instanceof Error ? receiptError.message : receiptError,
                 );
             }
@@ -1084,11 +1119,10 @@ function templateText(value: unknown, fallback: string, maxLength: number): stri
     return resolved.length > maxLength ? resolved.slice(0, maxLength) : resolved;
 }
 
-async function dispatchWithReceipt(options: {
+export async function dispatchWithReceipt(options: DeliveryReceiptSubject & {
     db: Database;
     outboxId: string;
-    orderId: string;
-    notificationType: OrderNotificationType;
+    notificationType: NotificationType;
     channel: OrderNotificationDeliveryChannel;
     provider: string;
     recipient: string;
@@ -1145,11 +1179,10 @@ async function dispatchWithReceipt(options: {
     }
 }
 
-async function recordProviderBlockedDeliveryIfNeeded(options: {
+export async function recordProviderBlockedDeliveryIfNeeded(options: DeliveryReceiptSubject & {
     db: Database;
     outboxId: string;
-    orderId: string;
-    notificationType: OrderNotificationType;
+    notificationType: NotificationType;
     channel: OrderNotificationDeliveryChannel;
     provider: string;
     recipient: string;
@@ -1178,6 +1211,8 @@ async function recordProviderBlockedDeliveryIfNeeded(options: {
         db: options.db,
         outboxId: options.outboxId,
         orderId: options.orderId,
+        subjectType: options.subjectType,
+        subjectId: options.subjectId,
         notificationType: options.notificationType,
         channel: options.channel,
         provider: options.provider,
@@ -1187,7 +1222,7 @@ async function recordProviderBlockedDeliveryIfNeeded(options: {
     });
 }
 
-async function blockProviderForMerchantActionableFailure(
+export async function blockProviderForMerchantActionableFailure(
     db: Database,
     options: {
         channel: OrderNotificationDeliveryChannel;
@@ -1209,11 +1244,10 @@ async function blockProviderForMerchantActionableFailure(
     });
 }
 
-async function recordSkippedDelivery(options: {
+export async function recordSkippedDelivery(options: DeliveryReceiptSubject & {
     db: Database;
     outboxId: string;
-    orderId: string;
-    notificationType: OrderNotificationType;
+    notificationType: NotificationType;
     channel: OrderNotificationDeliveryChannel;
     provider: string;
     recipient: string;
@@ -1355,7 +1389,7 @@ async function markFailedOutcome(
     };
 }
 
-function emailResultToDeliveryResult(result: SendEmailResult): DeliverySendResult {
+export function emailResultToDeliveryResult(result: SendEmailResult): DeliverySendResult {
     return {
         success: result.success,
         provider: result.provider,
@@ -1382,7 +1416,7 @@ function isNonRetryableDispatchError(error: unknown): boolean {
     return isNonRetryableDispatchStatus(normalizeError(error));
 }
 
-function isNonRetryableDispatchStatus(value: string | null | undefined): boolean {
+export function isNonRetryableDispatchStatus(value: string | null | undefined): boolean {
     const status = value?.trim();
     if (!status) return false;
     return NON_RETRYABLE_DISPATCH_ERROR_PATTERNS.some((pattern) => pattern.test(status));
@@ -1413,7 +1447,7 @@ function outcomeFromUnclaimedReceipt(
     };
 }
 
-function buildDispatchResult(outcomes: OrderNotificationChannelOutcome[]): OrderNotificationDispatchResult {
+export function buildDispatchResult(outcomes: OrderNotificationChannelOutcome[]): OrderNotificationDispatchResult {
     return {
         outcomes,
         hasRetryableFailure: outcomes.some((outcome) => outcome.retryable),
@@ -1464,12 +1498,12 @@ async function deactivateFcmTokens(db: Database, invalidTokens: string[]): Promi
         .where(inArray(adminFcmTokens.token, invalidTokens));
 }
 
-function maskEmail(email: string): string {
+export function maskEmail(email: string): string {
     const [local = "", domain = ""] = email.split("@");
     return `${local.slice(0, 1) || "*"}***@${domain}`;
 }
 
-function maskPhone(phone: string): string {
+export function maskPhone(phone: string): string {
     return phone.length > 4 ? `***${phone.slice(-4)}` : "****";
 }
 
@@ -1477,11 +1511,11 @@ function maskPushToken(token: string): string {
     return `token:${token.slice(0, 6)}...${token.slice(-4)}`;
 }
 
-function normalizeError(error: unknown): string {
+export function normalizeError(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-function compactProviderLogDetail(error: unknown): string {
+export function compactProviderLogDetail(error: unknown): string {
     return normalizeError(error)
         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
         .replace(/\+?\d[\d\s().-]{8,}\d/g, "[phone]")

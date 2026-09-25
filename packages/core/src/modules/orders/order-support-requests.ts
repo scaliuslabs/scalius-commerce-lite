@@ -1,12 +1,14 @@
+// Support-request cases, read side: the case view, the buyer's eligible
+// actions and the admin status rules. Case writes (submit, resolve) live in
+// the conversations domain (`conversations/order-cases.ts`), which records
+// them on the order thread. Reads only: never mutates payments, stock,
+// delivery or order status.
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
-import { recordOrderEvent } from "./timeline";
 import type { Database } from "@scalius/database/client";
 import {
   deliveryShipments,
   FulfillmentStatus,
   OrderStatus,
-  orderSupportRequestEvents,
   orderSupportRequests,
   orders,
   PaymentStatus,
@@ -84,7 +86,7 @@ export interface AdminOrderSupportRequestTransition {
   terminal: boolean;
 }
 
-interface SupportRequestRow {
+export interface SupportRequestRow {
   id: string;
   orderId: string;
   customerId: string | null;
@@ -137,7 +139,7 @@ const ADMIN_SUPPORT_REQUEST_TRANSITIONS: Record<string, readonly AdminOrderSuppo
   approved: ["completed"],
 };
 
-const supportRequestSelectFields = {
+export const supportRequestSelectFields = {
   id: orderSupportRequests.id,
   orderId: orderSupportRequests.orderId,
   customerId: orderSupportRequests.customerId,
@@ -196,21 +198,17 @@ function normalizeSupportRequestType(type: string): CustomerOrderSupportRequestT
   return "refund";
 }
 
-function isSupportRequestType(type: string): type is CustomerOrderSupportRequestType {
+export function isSupportRequestType(type: string): type is CustomerOrderSupportRequestType {
   return SUPPORT_REQUEST_TYPE_SET.has(type);
 }
 
-function normalizeAdminSupportRequestStatus(
+export function normalizeAdminSupportRequestStatus(
   status: string,
 ): AdminOrderSupportRequestStatus {
   if (ADMIN_ORDER_SUPPORT_REQUEST_STATUS_SET.has(status)) {
     return status as AdminOrderSupportRequestStatus;
   }
   throw new ValidationError("Unsupported support request status.");
-}
-
-function isConstraintError(error: unknown): boolean {
-  return error instanceof Error && /constraint|unique|SQLITE_CONSTRAINT/i.test(error.message);
 }
 
 export function getOrderSupportRequestTypeLabel(type: string): string {
@@ -384,146 +382,6 @@ export async function listOrderSupportRequests(
   return rows.map(formatOrderSupportRequest);
 }
 
-export async function updateAdminOrderSupportRequestStatus(
-  db: Database,
-  orderId: string,
-  requestId: string,
-  input: UpdateAdminOrderSupportRequestStatusInput,
-): Promise<{
-  request: OrderSupportRequestView;
-  supportRequests: OrderSupportRequestView[];
-  statusChanged: boolean;
-  previousStatus: string | null;
-  newStatus: string;
-}> {
-  const targetStatus = normalizeAdminSupportRequestStatus(input.status);
-  const note = input.note?.trim() || null;
-  if (note && note.length > 1000) {
-    throw new ValidationError("Resolution note must be 1000 characters or less.");
-  }
-
-  const current = await db
-    .select(supportRequestSelectFields)
-    .from(orderSupportRequests)
-    .where(and(
-      eq(orderSupportRequests.id, requestId),
-      eq(orderSupportRequests.orderId, orderId),
-    ))
-    .get();
-
-  if (!current) {
-    throw new NotFoundError("Support request not found");
-  }
-
-  const transition = getAdminOrderSupportRequestTransition(current.status, targetStatus);
-  if (!transition.changed) {
-    if (input.returnId && current.returnId !== input.returnId) {
-      const linked = await db.update(orderSupportRequests).set({
-        returnId: input.returnId,
-        updatedAt: sql`unixepoch()`,
-      }).where(and(
-        eq(orderSupportRequests.id, requestId),
-        eq(orderSupportRequests.orderId, orderId),
-        isNull(orderSupportRequests.returnId),
-      )).returning(supportRequestSelectFields);
-      if (linked[0]) current.returnId = linked[0].returnId;
-    }
-    return {
-      request: formatOrderSupportRequest(current),
-      supportRequests: await listOrderSupportRequests(db, orderId),
-      statusChanged: false,
-      previousStatus: current.status,
-      newStatus: current.status,
-    };
-  }
-
-  const activeKey = transition.active ? `order:${orderId}` : null;
-  let updatedRows: SupportRequestRow[];
-  try {
-    updatedRows = await db
-      .update(orderSupportRequests)
-      .set({
-        status: targetStatus,
-        returnId: input.returnId ?? current.returnId,
-        activeKey,
-        resolvedAt: transition.terminal ? sql`unixepoch()` : null,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(and(
-        eq(orderSupportRequests.id, requestId),
-        eq(orderSupportRequests.orderId, orderId),
-        eq(orderSupportRequests.status, current.status),
-      ))
-      .returning(supportRequestSelectFields);
-  } catch (error) {
-    if (isConstraintError(error)) {
-      throw new ConflictError("Another support request is already open for this order.");
-    }
-    throw error;
-  }
-
-  const updated = updatedRows[0];
-  if (!updated) {
-    throw new ConflictError("Support request changed while you were resolving it. Please refresh.");
-  }
-
-  await db.insert(orderSupportRequestEvents).values({
-    id: `osre_${nanoid(16)}`,
-    requestId,
-    orderId,
-    customerId: current.customerId,
-    actorType: "admin",
-    actorId: input.actorId ?? null,
-    eventType: "status_updated",
-    fromStatus: current.status,
-    toStatus: targetStatus,
-    note,
-    createdAt: sql`unixepoch()`,
-  });
-
-  return {
-    request: formatOrderSupportRequest(updated),
-    supportRequests: await listOrderSupportRequests(db, orderId),
-    statusChanged: true,
-    previousStatus: current.status,
-    newStatus: targetStatus,
-  };
-}
-
-export async function createCustomerOrderSupportRequest(
-  db: Database,
-  customerId: string,
-  orderId: string,
-  input: CreateCustomerOrderSupportRequestInput,
-): Promise<{
-  request: OrderSupportRequestView;
-  supportRequests: OrderSupportRequestView[];
-  supportRequestActions: CustomerOrderSupportRequestAction[];
-  supportRequestIntro: string;
-}> {
-  return createVerifiedOrderSupportRequest(db, orderId, input, {
-    actorType: "customer",
-    actorId: customerId,
-    expectedCustomerId: customerId,
-  });
-}
-
-export async function createReceiptOrderSupportRequest(
-  db: Database,
-  orderId: string,
-  input: CreateCustomerOrderSupportRequestInput,
-): Promise<{
-  request: OrderSupportRequestView;
-  supportRequests: OrderSupportRequestView[];
-  supportRequestActions: CustomerOrderSupportRequestAction[];
-  supportRequestIntro: string;
-}> {
-  return createVerifiedOrderSupportRequest(db, orderId, input, {
-    actorType: "guest_receipt",
-    actorId: null,
-  });
-}
-
 export async function getReceiptOrderSupportRequestState(
   db: Database,
   orderId: string,
@@ -555,131 +413,12 @@ export async function getReceiptOrderSupportRequestStateForOrder(
   };
 }
 
-type SupportRequestActorContext = {
-  actorType: "customer" | "guest_receipt";
-  actorId: string | null;
-  expectedCustomerId?: string;
-};
-
 export function customerAccountOwnershipCondition(customerId: string) {
   return eq(orders.accountOwnerCustomerId, customerId);
 }
 
-async function createVerifiedOrderSupportRequest(
-  db: Database,
-  orderId: string,
-  input: CreateCustomerOrderSupportRequestInput,
-  actor: SupportRequestActorContext,
-): Promise<{
-  request: OrderSupportRequestView;
-  supportRequests: OrderSupportRequestView[];
-  supportRequestActions: CustomerOrderSupportRequestAction[];
-  supportRequestIntro: string;
-}> {
-  if (!isSupportRequestType(input.type)) {
-    throw new ValidationError("Unsupported support request type.");
-  }
-
-  const reason = input.reason.trim();
-  const message = input.message?.trim() || null;
-  if (reason.length < 3 || reason.length > 500) {
-    throw new ValidationError("Please enter a reason between 3 and 500 characters.");
-  }
-  if (message && message.length > 1000) {
-    throw new ValidationError("Request details must be 1000 characters or less.");
-  }
-
-  const order = await selectSupportRequestOrderState(db, orderId, actor.expectedCustomerId);
-
-  if (!order) {
-    throw new NotFoundError("Order not found");
-  }
-
-  const state = await buildOrderSupportRequestState(db, order);
-  const activeRequestTypes = getActiveSupportRequestTypes(state.supportRequests);
-  const actions = state.allSupportRequestActions;
-  const selectedAction = actions.find((action) => action.type === input.type);
-  if (!selectedAction?.eligible) {
-    const reasonText = selectedAction?.disabledReason ?? "This request is not available for the current order state.";
-    if (activeRequestTypes.size > 0 || state.hasActiveRefundOperation) {
-      throw new ConflictError(reasonText);
-    }
-    throw new ValidationError(reasonText);
-  }
-
-  const requestId = `osr_${nanoid(16)}`;
-  const activeKey = `order:${orderId}`;
-  const requestCustomerId = actor.actorType === "customer"
-    ? actor.expectedCustomerId ?? null
-    : order.customerId ?? null;
-
-  try {
-    await db.batch([
-      db.insert(orderSupportRequests).values({
-        id: requestId,
-        orderId,
-        customerId: requestCustomerId,
-        type: input.type,
-        status: "submitted",
-        reason,
-        message,
-        activeKey,
-        submittedAt: sql`unixepoch()`,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      }),
-      db.insert(orderSupportRequestEvents).values({
-        id: `osre_${nanoid(16)}`,
-        requestId,
-        orderId,
-        customerId: requestCustomerId,
-        actorType: actor.actorType,
-        actorId: actor.actorId,
-        eventType: "submitted",
-        fromStatus: null,
-        toStatus: "submitted",
-        note: reason,
-        createdAt: sql`unixepoch()`,
-      }),
-    ] as Parameters<Database["batch"]>[0]);
-  } catch (error) {
-    if (isConstraintError(error)) {
-      throw new ConflictError("A support request is already open for this order.");
-    }
-    throw error;
-  }
-
-  // Staff see the buyer's own words on the order timeline (R2-ORD-15).
-  await recordOrderEvent(db, {
-    orderId,
-    kind: "request_submitted",
-    requestKey: requestId,
-    body: reason,
-    data: { type: input.type, reason },
-  });
-
-  const updatedSupportRequests = await listOrderSupportRequests(db, orderId);
-  const request = updatedSupportRequests.find((item) => item.id === requestId);
-  if (!request) {
-    throw new ConflictError("Support request was recorded, but could not be read back. Please refresh.");
-  }
-
-  return {
-    request,
-    supportRequests: updatedSupportRequests,
-    supportRequestActions: applyCustomerRequestPolicyToSupportActions(
-      state.policy,
-      getCustomerOrderSupportRequestActions(order, {
-        hasShipment: state.hasShipment,
-        hasActiveRefundOperation: state.hasActiveRefundOperation,
-        activeRequestTypes: getActiveSupportRequestTypes(updatedSupportRequests),
-      }),
-    ),
-    supportRequestIntro: state.supportRequestIntro,
-  };
-}
-
-async function selectSupportRequestOrderState(
+/** The order facts a case decision needs; account callers must own the order. */
+export async function selectSupportRequestOrderState(
   db: Database,
   orderId: string,
   expectedCustomerId?: string,
@@ -707,7 +446,8 @@ async function selectSupportRequestOrderState(
     .get();
 }
 
-async function buildOrderSupportRequestState(
+/** Cases, eligible actions and policy for one order (reads only). */
+export async function buildOrderSupportRequestState(
   db: Database,
   order: SupportRequestActionOrderState,
 ): Promise<{
