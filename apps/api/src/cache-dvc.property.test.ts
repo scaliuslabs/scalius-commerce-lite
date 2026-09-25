@@ -28,6 +28,7 @@ import { createSqliteTursoDatabase } from "@scalius/database/testing/sqlite-d1";
 import { CACHE_DEP_TABLES } from "@scalius/shared/cache-deps";
 import { DvcHarness, type DvcHarnessConfig } from "./testing/cache-dvc/harness";
 import { scopeRecorder, type ScopeRecorderStats } from "./testing/cache-dvc/harness-adapters";
+import { referencePartValidator } from "./testing/cache-dvc/validators";
 import { registryColumnsMissingFromSchema, registryTablesMissingFromSchema } from "./testing/cache-dvc/schema-model";
 
 vi.mock("@scalius/database/client", async (importOriginal) => {
@@ -107,6 +108,33 @@ describe("DVC registry", () => {
       harness.close();
     }
   }, 60_000);
+});
+
+describe("DVC property harness has teeth", () => {
+  it("catches a validator that ignores the product keys", async () => {
+    const harness = await DvcHarness.create({
+      ...harnessConfig("teeth"),
+      collect: true,
+      raceRate: 0,
+      partValidator: (clock) => {
+        const inner = referencePartValidator(clock);
+        return {
+          name: "blind-to-products",
+          validate: (entries, now) => inner.validate(entries.map((entry) => ({
+            ...entry,
+            deps: entry.deps.filter((dep) => !/^(?:p:|t:products$|t:product_variants$|t:product_buyer_state$)/.test(dep)),
+          })), now),
+        };
+      },
+    });
+    try {
+      await harness.warm();
+      for (let step = 0; step < 60 && harness.findings.size === 0; step += 1) await harness.runStep();
+      expect(harness.findings.size, "a blind validator went unnoticed").toBeGreaterThan(0);
+    } finally {
+      harness.close();
+    }
+  }, 120_000);
 });
 
 describe(`DVC differential property (${MODE}, ${PROVIDER})`, () => {
