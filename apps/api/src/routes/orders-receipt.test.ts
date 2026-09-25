@@ -35,6 +35,12 @@ const allowLimiter = { limit: vi.fn(async () => ({ success: true })) };
 
 vi.mock("../utils/order-notification-queue", () => notificationMocks);
 
+// Per-line digital extras read D1; they are covered by storefront-orders/downloads.test.ts.
+vi.mock("@scalius/core/modules/digital", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@scalius/core/modules/digital")>(),
+  listLineDeliveries: vi.fn(async () => new Map()),
+}));
+
 // The discount lines are covered on the real schema by orders-owner-receipt.d1.test.ts.
 vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
   ...await importOriginal<typeof import("@scalius/core/modules/promotions")>(),
