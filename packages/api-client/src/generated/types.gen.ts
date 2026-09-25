@@ -641,13 +641,26 @@ export type OrderLineGiftCardExtra = {
 export type OrderLineWarrantyExtra = {
     warrantyId: string;
     policyName: string;
-    provider: string;
+    provider: 'brand' | 'store';
+    durationValue: number;
+    durationUnit: 'days' | 'months' | 'years';
+    replacementDays: number | null;
+    terms: string | null;
     quantity: number;
     startsAt: string;
     expiresAt: string;
     replacementUntil: string | null;
     voided: boolean;
     openClaimId: string | null;
+    /**
+     * The latest claim on this warranty (an open one first)
+     */
+    claim: {
+        id: string;
+        conversationId: string;
+        status: 'open' | 'in_progress' | 'resolved' | 'rejected';
+        resolution: 'repair' | 'replacement' | 'refund' | 'other' | null;
+    } | null;
 };
 
 export type CustomerAccountSummary = {
@@ -777,6 +790,48 @@ export type RevealedLicenceKey = {
     keyId: string;
     key: string;
     last4: string;
+};
+
+export type BuyerWarranty = {
+    warrantyId: string;
+    orderId: string;
+    orderNumber: string;
+    orderItemId: string;
+    productId: string | null;
+    productName: string | null;
+    variantLabel: string | null;
+    imageUrl: string | null;
+    policyName: string;
+    provider: 'brand' | 'store';
+    durationValue: number;
+    durationUnit: 'days' | 'months' | 'years';
+    replacementDays: number | null;
+    terms: string | null;
+    quantity: number;
+    startsAt: string;
+    expiresAt: string;
+    replacementUntil: string | null;
+    state: 'active' | 'expired' | 'voided';
+    /**
+     * The latest claim (an open one first)
+     */
+    claim: {
+        id: string;
+        conversationId: string;
+        status: 'open' | 'in_progress' | 'resolved' | 'rejected';
+        resolution: 'repair' | 'replacement' | 'refund' | 'other' | null;
+    } | null;
+};
+
+export type OpenedWarrantyClaim = {
+    claimId: string;
+    conversationId: string;
+    orderId: string;
+    status: 'open' | 'in_progress' | 'resolved' | 'rejected';
+    /**
+     * False when the client key replayed an earlier submit
+     */
+    created: boolean;
 };
 
 export type ProductPageContentBlock = {
@@ -992,6 +1047,63 @@ export type ProductReviews = {
     nextCursor: string | null;
 };
 
+export type BuyerWarrantyClaim = {
+    id: string;
+    warrantyId: string;
+    orderId: string;
+    orderItemId: string;
+    productName: string | null;
+    variantLabel: string | null;
+    status: 'open' | 'in_progress' | 'resolved' | 'rejected';
+    resolution: 'repair' | 'replacement' | 'refund' | 'other' | null;
+    createdAt: string;
+    closedAt: string | null;
+};
+
+export type WarrantyClaim = {
+    id: string;
+    status: 'open' | 'in_progress' | 'resolved' | 'rejected';
+    resolution: 'repair' | 'replacement' | 'refund' | 'other' | null;
+    quantity: number;
+    openedBy: 'customer' | 'guest_receipt' | 'staff';
+    version: number;
+    createdAt: string;
+    updatedAt: string;
+    closedAt: string | null;
+    conversationId: string;
+    order: {
+        id: string;
+        orderNumber: string;
+    };
+    item: {
+        id: string;
+        productId: string | null;
+        productName: string | null;
+        variantLabel: string | null;
+        productSlug: string | null;
+    };
+    warranty: {
+        id: string;
+        quantity: number;
+        startsAt: string;
+        expiresAt: string;
+        replacementUntil: string | null;
+        voidedAt: string | null;
+        active: boolean;
+    };
+    policy: {
+        policyId: string;
+        revisionId: string;
+        revision: number;
+        name: string;
+        provider: 'brand' | 'store';
+        durationValue: number;
+        durationUnit: 'days' | 'months' | 'years';
+        replacementDays: number | null;
+        terms: string | null;
+    };
+};
+
 export type DigitalAsset = {
     id: string;
     productId: string;
@@ -1147,6 +1259,29 @@ export type LicenceKeyAdmin = {
     assignedAt: number | null;
     revokedAt: number | null;
     createdAt: number;
+};
+
+export type WarrantyPolicy = {
+    id: string;
+    name: string;
+    provider: 'brand' | 'store';
+    durationValue: number;
+    durationUnit: 'days' | 'months' | 'years';
+    replacementDays: number | null;
+    terms: string | null;
+    currentRevisionId: string;
+    /**
+     * Current revision number; each edit makes the next one
+     */
+    revision: number;
+    archivedAt: string | null;
+    version: number;
+    /**
+     * Live products using this policy
+     */
+    productCount: number;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type GetApiV1AuthTokenData = {
@@ -13209,6 +13344,353 @@ export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses = {
 
 export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponse = PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses[keyof PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses];
 
+export type GetApiV1CustomerAuthWarrantiesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/warranties';
+};
+
+export type GetApiV1CustomerAuthWarrantiesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthWarrantiesError = GetApiV1CustomerAuthWarrantiesErrors[keyof GetApiV1CustomerAuthWarrantiesErrors];
+
+export type GetApiV1CustomerAuthWarrantiesResponses = {
+    /**
+     * Warranties
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<BuyerWarranty>;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthWarrantiesResponse = GetApiV1CustomerAuthWarrantiesResponses[keyof GetApiV1CustomerAuthWarrantiesResponses];
+
+export type PostApiV1CustomerAuthWarrantiesByIdClaimAttachmentsData = {
+    body: {
+        /**
+         * JPEG, PNG or WebP, 5 MB or less
+         */
+        file?: Blob | File;
+        /**
+         * One key per claim form (a UUID); a replay returns the claim it opened
+         */
+        clientKey: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/warranties/{id}/claim-attachments';
+};
+
+export type PostApiV1CustomerAuthWarrantiesByIdClaimAttachmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthWarrantiesByIdClaimAttachmentsError = PostApiV1CustomerAuthWarrantiesByIdClaimAttachmentsErrors[keyof PostApiV1CustomerAuthWarrantiesByIdClaimAttachmentsErrors];
+
+export type PostApiV1CustomerAuthWarrantiesByIdClaimAttachmentsResponses = {
+    /**
+     * Staged photo
+     */
+    201: {
+        success: true;
+        data: {
+            attachmentId: string;
+            conversationId: string;
+            mediaType: string;
+            sizeBytes: number;
+            width: number | null;
+            height: number | null;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthWarrantiesByIdClaimAttachmentsResponse = PostApiV1CustomerAuthWarrantiesByIdClaimAttachmentsResponses[keyof PostApiV1CustomerAuthWarrantiesByIdClaimAttachmentsResponses];
+
+export type PostApiV1CustomerAuthWarrantiesByIdClaimsData = {
+    body: {
+        description: string;
+        /**
+         * One key per claim form (a UUID); a replay returns the claim it opened
+         */
+        clientKey: string;
+        /**
+         * Photos staged for this claim form with claim-attachments
+         */
+        attachmentIds?: Array<string>;
+        quantity?: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/warranties/{id}/claims';
+};
+
+export type PostApiV1CustomerAuthWarrantiesByIdClaimsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthWarrantiesByIdClaimsError = PostApiV1CustomerAuthWarrantiesByIdClaimsErrors[keyof PostApiV1CustomerAuthWarrantiesByIdClaimsErrors];
+
+export type PostApiV1CustomerAuthWarrantiesByIdClaimsResponses = {
+    /**
+     * The claim and its conversation
+     */
+    201: {
+        success: true;
+        data: OpenedWarrantyClaim;
+    };
+};
+
+export type PostApiV1CustomerAuthWarrantiesByIdClaimsResponse = PostApiV1CustomerAuthWarrantiesByIdClaimsResponses[keyof PostApiV1CustomerAuthWarrantiesByIdClaimsResponses];
+
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
     path?: never;
@@ -19237,6 +19719,880 @@ export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponses = {
 };
 
 export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponse = GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponses[keyof GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponses];
+
+export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimAttachmentsData = {
+    body: {
+        /**
+         * JPEG, PNG or WebP, 5 MB or less
+         */
+        file?: Blob | File;
+        /**
+         * One key per claim form (a UUID); a replay returns the claim it opened
+         */
+        clientKey: string;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        warrantyId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/warranties/{warrantyId}/claim-attachments';
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimAttachmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimAttachmentsError = PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimAttachmentsErrors[keyof PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimAttachmentsErrors];
+
+export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimAttachmentsResponses = {
+    /**
+     * Staged photo
+     */
+    201: {
+        success: true;
+        data: {
+            attachmentId: string;
+            conversationId: string;
+            mediaType: string;
+            sizeBytes: number;
+            width: number | null;
+            height: number | null;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimAttachmentsResponse = PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimAttachmentsResponses[keyof PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimAttachmentsResponses];
+
+export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimsData = {
+    body: {
+        description: string;
+        /**
+         * One key per claim form (a UUID); a replay returns the claim it opened
+         */
+        clientKey: string;
+        /**
+         * Photos staged for this claim form with claim-attachments
+         */
+        attachmentIds?: Array<string>;
+        quantity?: number;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        warrantyId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/warranties/{warrantyId}/claims';
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimsError = PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimsErrors[keyof PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimsErrors];
+
+export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimsResponses = {
+    /**
+     * The claim and its conversation
+     */
+    201: {
+        success: true;
+        data: OpenedWarrantyClaim;
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimsResponse = PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimsResponses[keyof PostApiV1OrdersReceiptByIdWarrantiesByWarrantyIdClaimsResponses];
+
+export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdData = {
+    body?: never;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        claimId: string;
+    };
+    query?: {
+        beforeSeq?: number;
+    };
+    url: '/api/v1/orders/receipt/{id}/warranty-claims/{claimId}';
+};
+
+export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdError = GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdErrors[keyof GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdErrors];
+
+export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdResponses = {
+    /**
+     * The claim
+     */
+    200: {
+        success: true;
+        data: {
+            claim: BuyerWarrantyClaim;
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                orderId: string | null;
+                orderNumber: string | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+                lastSeq: number;
+                readSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    from: 'buyer' | 'store' | 'system';
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+            };
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdResponse = GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdResponses[keyof GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdResponses];
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesData = {
+    body: {
+        body: string;
+        clientMessageKey: string;
+        attachmentIds?: Array<string>;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        claimId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/warranty-claims/{claimId}/messages';
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesError = PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesErrors[keyof PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesErrors];
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesResponses = {
+    /**
+     * Posted; the claim after the post
+     */
+    201: {
+        success: true;
+        data: {
+            claim: BuyerWarrantyClaim;
+            conversation: {
+                id: string;
+                subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subject: string | null;
+                orderId: string | null;
+                orderNumber: string | null;
+                status: 'open' | 'pending' | 'closed';
+                lastMessageAt: number | null;
+                unread: number;
+                lastSeq: number;
+                readSeq: number;
+                messages: Array<{
+                    id: string;
+                    seq: number;
+                    kind: 'message' | 'event';
+                    from: 'buyer' | 'store' | 'system';
+                    body: string | null;
+                    eventKind: string | null;
+                    eventData: {
+                        [key: string]: unknown;
+                    } | null;
+                    createdAt: number;
+                    attachments: Array<{
+                        id: string;
+                        mediaType: string;
+                        sizeBytes: number;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                }>;
+                hasMore: boolean;
+            };
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesResponse = PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesResponses[keyof PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdMessagesResponses];
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdReadData = {
+    body: {
+        seq: number;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        claimId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/warranty-claims/{claimId}/read';
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdReadErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdReadError = PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdReadErrors[keyof PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdReadErrors];
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdReadResponses = {
+    /**
+     * Read marker
+     */
+    200: {
+        success: true;
+        data: {
+            readSeq: number;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdReadResponse = PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdReadResponses[keyof PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdReadResponses];
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsData = {
+    body: {
+        file?: Blob | File;
+        conversationId?: string;
+        orderId?: string;
+    };
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        claimId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/warranty-claims/{claimId}/attachments';
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsError = PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsErrors[keyof PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsErrors];
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsResponses = {
+    /**
+     * Staged photo
+     */
+    201: {
+        success: true;
+        data: {
+            attachmentId: string;
+            conversationId: string;
+            mediaType: string;
+            sizeBytes: number;
+            width: number | null;
+            height: number | null;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsResponse = PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsResponses[keyof PostApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsResponses];
+
+export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdData = {
+    body?: never;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        claimId: string;
+        attachmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/warranty-claims/{claimId}/attachments/{attachmentId}';
+};
+
+export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdError = GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdErrors[keyof GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdErrors];
+
+export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdResponses = {
+    /**
+     * The re-encoded image
+     */
+    200: Blob | File;
+};
+
+export type GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdResponse = GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdResponses[keyof GetApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttachmentIdResponses];
 
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;
@@ -53679,6 +55035,119 @@ export type PostApiV1AdminOrdersByIdDigitalResendResponses = {
 
 export type PostApiV1AdminOrdersByIdDigitalResendResponse = PostApiV1AdminOrdersByIdDigitalResendResponses[keyof PostApiV1AdminOrdersByIdDigitalResendResponses];
 
+export type PostApiV1AdminOrdersByIdWarrantyClaimsData = {
+    body: {
+        warrantyId: string;
+        /**
+         * What the buyer reported; posted as a public message from the store
+         */
+        description: string;
+        quantity?: number;
+        requestKey: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/warranty-claims';
+};
+
+export type PostApiV1AdminOrdersByIdWarrantyClaimsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdWarrantyClaimsError = PostApiV1AdminOrdersByIdWarrantyClaimsErrors[keyof PostApiV1AdminOrdersByIdWarrantyClaimsErrors];
+
+export type PostApiV1AdminOrdersByIdWarrantyClaimsResponses = {
+    /**
+     * The claim
+     */
+    201: {
+        success: true;
+        data: {
+            claim: WarrantyClaim;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdWarrantyClaimsResponse = PostApiV1AdminOrdersByIdWarrantyClaimsResponses[keyof PostApiV1AdminOrdersByIdWarrantyClaimsResponses];
+
 export type GetApiV1AdminConversationsData = {
     body?: never;
     path?: never;
@@ -68576,6 +70045,965 @@ export type PostApiV1AdminDigitalEntitlementsByIdRevokeResponses = {
 };
 
 export type PostApiV1AdminDigitalEntitlementsByIdRevokeResponse = PostApiV1AdminDigitalEntitlementsByIdRevokeResponses[keyof PostApiV1AdminDigitalEntitlementsByIdRevokeResponses];
+
+export type GetApiV1AdminWarrantyPoliciesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * `include` lists archived policies too (after the live ones)
+         */
+        archived?: 'include';
+    };
+    url: '/api/v1/admin/warranty-policies';
+};
+
+export type GetApiV1AdminWarrantyPoliciesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminWarrantyPoliciesError = GetApiV1AdminWarrantyPoliciesErrors[keyof GetApiV1AdminWarrantyPoliciesErrors];
+
+export type GetApiV1AdminWarrantyPoliciesResponses = {
+    /**
+     * Policies
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<WarrantyPolicy>;
+        };
+    };
+};
+
+export type GetApiV1AdminWarrantyPoliciesResponse = GetApiV1AdminWarrantyPoliciesResponses[keyof GetApiV1AdminWarrantyPoliciesResponses];
+
+export type PostApiV1AdminWarrantyPoliciesData = {
+    body: {
+        /**
+         * Buyer-facing name, like “1 year official warranty”
+         */
+        name: string;
+        /**
+         * Who honours it: the brand (official) or the store
+         */
+        provider: 'brand' | 'store';
+        durationValue: number;
+        durationUnit: 'days' | 'months' | 'years';
+        /**
+         * Free replacement window in days from handover; null (or 0) for none
+         */
+        replacementDays: number | null;
+        /**
+         * Plain-text terms shown to buyers
+         */
+        terms: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/warranty-policies';
+};
+
+export type PostApiV1AdminWarrantyPoliciesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminWarrantyPoliciesError = PostApiV1AdminWarrantyPoliciesErrors[keyof PostApiV1AdminWarrantyPoliciesErrors];
+
+export type PostApiV1AdminWarrantyPoliciesResponses = {
+    /**
+     * The new policy
+     */
+    201: {
+        success: true;
+        data: {
+            policy: WarrantyPolicy;
+        };
+    };
+};
+
+export type PostApiV1AdminWarrantyPoliciesResponse = PostApiV1AdminWarrantyPoliciesResponses[keyof PostApiV1AdminWarrantyPoliciesResponses];
+
+export type DeleteApiV1AdminWarrantyPoliciesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/warranty-policies/{id}';
+};
+
+export type DeleteApiV1AdminWarrantyPoliciesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminWarrantyPoliciesByIdError = DeleteApiV1AdminWarrantyPoliciesByIdErrors[keyof DeleteApiV1AdminWarrantyPoliciesByIdErrors];
+
+export type DeleteApiV1AdminWarrantyPoliciesByIdResponses = {
+    /**
+     * The archived policy
+     */
+    200: {
+        success: true;
+        data: {
+            policy: WarrantyPolicy;
+        };
+    };
+};
+
+export type DeleteApiV1AdminWarrantyPoliciesByIdResponse = DeleteApiV1AdminWarrantyPoliciesByIdResponses[keyof DeleteApiV1AdminWarrantyPoliciesByIdResponses];
+
+export type GetApiV1AdminWarrantyPoliciesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/warranty-policies/{id}';
+};
+
+export type GetApiV1AdminWarrantyPoliciesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminWarrantyPoliciesByIdError = GetApiV1AdminWarrantyPoliciesByIdErrors[keyof GetApiV1AdminWarrantyPoliciesByIdErrors];
+
+export type GetApiV1AdminWarrantyPoliciesByIdResponses = {
+    /**
+     * The policy
+     */
+    200: {
+        success: true;
+        data: {
+            policy: WarrantyPolicy;
+        };
+    };
+};
+
+export type GetApiV1AdminWarrantyPoliciesByIdResponse = GetApiV1AdminWarrantyPoliciesByIdResponses[keyof GetApiV1AdminWarrantyPoliciesByIdResponses];
+
+export type PutApiV1AdminWarrantyPoliciesByIdData = {
+    body: {
+        /**
+         * Buyer-facing name, like “1 year official warranty”
+         */
+        name: string;
+        /**
+         * Who honours it: the brand (official) or the store
+         */
+        provider: 'brand' | 'store';
+        durationValue: number;
+        durationUnit: 'days' | 'months' | 'years';
+        /**
+         * Free replacement window in days from handover; null (or 0) for none
+         */
+        replacementDays: number | null;
+        /**
+         * Plain-text terms shown to buyers
+         */
+        terms: string | null;
+        /**
+         * The version the editor loaded
+         */
+        version: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/warranty-policies/{id}';
+};
+
+export type PutApiV1AdminWarrantyPoliciesByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminWarrantyPoliciesByIdError = PutApiV1AdminWarrantyPoliciesByIdErrors[keyof PutApiV1AdminWarrantyPoliciesByIdErrors];
+
+export type PutApiV1AdminWarrantyPoliciesByIdResponses = {
+    /**
+     * The policy
+     */
+    200: {
+        success: true;
+        data: {
+            policy: WarrantyPolicy;
+        };
+    };
+};
+
+export type PutApiV1AdminWarrantyPoliciesByIdResponse = PutApiV1AdminWarrantyPoliciesByIdResponses[keyof PutApiV1AdminWarrantyPoliciesByIdResponses];
+
+export type PostApiV1AdminWarrantyPoliciesByIdRestoreData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/warranty-policies/{id}/restore';
+};
+
+export type PostApiV1AdminWarrantyPoliciesByIdRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminWarrantyPoliciesByIdRestoreError = PostApiV1AdminWarrantyPoliciesByIdRestoreErrors[keyof PostApiV1AdminWarrantyPoliciesByIdRestoreErrors];
+
+export type PostApiV1AdminWarrantyPoliciesByIdRestoreResponses = {
+    /**
+     * The restored policy
+     */
+    200: {
+        success: true;
+        data: {
+            policy: WarrantyPolicy;
+        };
+    };
+};
+
+export type PostApiV1AdminWarrantyPoliciesByIdRestoreResponse = PostApiV1AdminWarrantyPoliciesByIdRestoreResponses[keyof PostApiV1AdminWarrantyPoliciesByIdRestoreResponses];
+
+export type GetApiV1AdminWarrantyClaimsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: 'open' | 'in_progress' | 'resolved' | 'rejected';
+        orderId?: string;
+        cursor?: string;
+    };
+    url: '/api/v1/admin/warranty-claims';
+};
+
+export type GetApiV1AdminWarrantyClaimsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminWarrantyClaimsError = GetApiV1AdminWarrantyClaimsErrors[keyof GetApiV1AdminWarrantyClaimsErrors];
+
+export type GetApiV1AdminWarrantyClaimsResponses = {
+    /**
+     * Claims
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<WarrantyClaim>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminWarrantyClaimsResponse = GetApiV1AdminWarrantyClaimsResponses[keyof GetApiV1AdminWarrantyClaimsResponses];
+
+export type GetApiV1AdminWarrantyClaimsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/warranty-claims/{id}';
+};
+
+export type GetApiV1AdminWarrantyClaimsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminWarrantyClaimsByIdError = GetApiV1AdminWarrantyClaimsByIdErrors[keyof GetApiV1AdminWarrantyClaimsByIdErrors];
+
+export type GetApiV1AdminWarrantyClaimsByIdResponses = {
+    /**
+     * The claim
+     */
+    200: {
+        success: true;
+        data: {
+            claim: WarrantyClaim;
+        };
+    };
+};
+
+export type GetApiV1AdminWarrantyClaimsByIdResponse = GetApiV1AdminWarrantyClaimsByIdResponses[keyof GetApiV1AdminWarrantyClaimsByIdResponses];
+
+export type PatchApiV1AdminWarrantyClaimsByIdData = {
+    body: {
+        version: number;
+        status: 'open' | 'in_progress' | 'resolved' | 'rejected';
+        /**
+         * Required to resolve
+         */
+        resolution?: 'repair' | 'replacement' | 'refund' | 'other' | null;
+        /**
+         * Optional public reply to the buyer, posted with the status change (notifies them)
+         */
+        message?: string | null;
+        requestKey?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/warranty-claims/{id}';
+};
+
+export type PatchApiV1AdminWarrantyClaimsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminWarrantyClaimsByIdError = PatchApiV1AdminWarrantyClaimsByIdErrors[keyof PatchApiV1AdminWarrantyClaimsByIdErrors];
+
+export type PatchApiV1AdminWarrantyClaimsByIdResponses = {
+    /**
+     * The claim
+     */
+    200: {
+        success: true;
+        data: {
+            claim: WarrantyClaim;
+        };
+    };
+};
+
+export type PatchApiV1AdminWarrantyClaimsByIdResponse = PatchApiV1AdminWarrantyClaimsByIdResponses[keyof PatchApiV1AdminWarrantyClaimsByIdResponses];
 
 export type DeleteApiV1AdminAbandonedCheckoutsData = {
     body: {
