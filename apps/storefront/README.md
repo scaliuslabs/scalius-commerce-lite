@@ -243,7 +243,6 @@ Consolidated accessors, all delegating to `apiContext.getStore()`. There is no m
 | `navigation.ts` | Navigation menus |
 | `pages.ts` | CMS pages |
 | `discounts.ts` | Discount validation |
-| `attributes.ts` | Filterable attributes |
 | `shipping.ts` | Shipping methods, locations |
 | `settings.ts` | Site settings, SEO |
 | `storefront.ts` | Homepage data bundle |

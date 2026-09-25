@@ -1,7 +1,12 @@
 import type { BuyerPriceRange, ProductFacet } from "@/lib/api";
 import { createApiUrl } from "@/lib/api/transport";
 import { navigateToCatalogFilterSearch } from "./catalog-filter-dialog";
-import type { ProductListFilterState } from "./product-list-query";
+import {
+  parseProductListRangeKey,
+  productListRangeKey,
+  type ProductListFilterState,
+  type ProductListRangeBound,
+} from "./product-list-query";
 
 const FACET_VALUE_PREVIEW = 10;
 
@@ -10,12 +15,19 @@ function selectedValues(currentFilters: ProductListFilterState, key: string): st
   return value === undefined ? [] : Array.isArray(value) ? value : [value];
 }
 
+/** A range facet's applied bounds, as the URL holds them. */
+export interface CatalogRangeSelection {
+  min: string | null;
+  max: string | null;
+}
+
 /**
  * Facets worth showing: at least two values, one of which still matches
- * products (a single-value facet filters nothing), or any facet the buyer
- * already uses so the selection can be undone. Values the other selections
- * rule out stay listed with a zero count (rendered disabled) so the list does
- * not jump. Values beyond the first ten are folded.
+ * products (a single-value facet filters nothing), a range whose products
+ * differ, or any facet the buyer already uses so the selection can be
+ * undone. Values the other selections rule out stay listed with a zero count
+ * (rendered disabled) so the list does not jump. Values beyond the first ten
+ * are folded. A value is selected by its URL value, not its label.
  */
 export function visibleCatalogFacets(
   facets: readonly ProductFacet[],
@@ -23,10 +35,24 @@ export function visibleCatalogFacets(
 ) {
   return facets
     .map((facet) => {
+      if (facet.display === "range") {
+        const bound = (name: ProductListRangeBound) =>
+          selectedValues(currentFilters, productListRangeKey(facet.slug, name)).at(-1) ?? null;
+        const applied: CatalogRangeSelection = { min: bound("min"), max: bound("max") };
+        return {
+          ...facet,
+          values: [],
+          applied,
+          selectedCount: applied.min !== null || applied.max !== null ? 1 : 0,
+          preview: [],
+          more: [],
+        };
+      }
       const selected = new Set(selectedValues(currentFilters, facet.slug));
       const values = facet.values.map((value) => ({ ...value, selected: selected.has(value.value) }));
       return {
         ...facet,
+        applied: null,
         selectedCount: selected.size,
         preview: values.slice(0, FACET_VALUE_PREVIEW),
         more: values.slice(FACET_VALUE_PREVIEW),
@@ -34,7 +60,9 @@ export function visibleCatalogFacets(
     })
     .filter((facet) =>
       facet.selectedCount > 0 ||
-      (facet.values.length >= 2 && facet.values.some(({ count }) => count > 0)),
+      (facet.display === "range"
+        ? Boolean(facet.range && facet.range.max > facet.range.min)
+        : facet.values.length >= 2 && facet.values.some(({ count }) => count > 0)),
     );
 }
 
@@ -57,9 +85,9 @@ export function catalogApplyButton(total: number): { label: string; disabled: bo
 /**
  * Shows the counts for the pending selection: every facet value's count (the
  * API counts each facet against the other facets' selections), unticked
- * zero-count values disabled so no combination leads to an empty list, and
- * the apply button. Values missing from the facets match nothing; without
- * facets only the button changes.
+ * zero-count values disabled so no combination leads to an empty list, each
+ * range's bounds as its placeholders, and the apply button. Values missing
+ * from the facets match nothing; without facets only the button changes.
  */
 export function applyCatalogFilterCounts(
   form: HTMLFormElement,
@@ -68,7 +96,7 @@ export function applyCatalogFilterCounts(
 ): void {
   const counts = new Map(facets?.map((facet) => [
     facet.slug,
-    new Map(facet.values.map(({ value, count }) => [value, count])),
+    new Map((Array.isArray(facet.values) ? facet.values : []).map(({ value, count }) => [value, count])),
   ]));
   const inputs = facets ? form.querySelectorAll<HTMLInputElement>("input[data-catalog-facet]") : [];
   for (const input of inputs) {
@@ -76,6 +104,13 @@ export function applyCatalogFilterCounts(
     input.disabled = count === 0 && !input.checked;
     const countLabel = input.closest("label")?.querySelector("[data-catalog-facet-count]");
     if (countLabel) countLabel.textContent = String(count);
+  }
+  const ranges = new Map(facets?.map((facet) => [facet.slug, facet.range]));
+  const rangeInputs = facets ? form.querySelectorAll<HTMLInputElement>("input[data-catalog-range]") : [];
+  for (const input of rangeInputs) {
+    const key = parseProductListRangeKey(input.name);
+    const bound = key ? ranges.get(key.slug)?.[key.bound] : undefined;
+    if (typeof bound === "number" && Number.isFinite(bound)) input.placeholder = String(bound);
   }
   const apply = form.querySelector<HTMLButtonElement>("[data-catalog-filter-apply]");
   if (apply) {
@@ -106,8 +141,11 @@ export function catalogCountQuery(params: URLSearchParams): URLSearchParams {
   return query;
 }
 
+/** What the buyer reads for a value (its label, not the submitted value or its count). */
 const facetValueText = (label: HTMLLabelElement) =>
-  label.querySelector("input[data-catalog-facet]")?.getAttribute("value") ?? "";
+  label.querySelector("span:not([data-catalog-facet-count]):not([aria-hidden])")?.textContent ??
+  label.textContent ??
+  "";
 
 /**
  * A search field over a long facet list (Apple Gadgets): typing hides the
