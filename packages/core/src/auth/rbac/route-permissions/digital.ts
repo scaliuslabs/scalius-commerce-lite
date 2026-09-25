@@ -6,6 +6,7 @@ import type { RoutePermissionMap } from "./shared";
 
 export const DIGITAL_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/products/*/digital-assets": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   "/api/v1/admin/digital-assets/*": {
@@ -14,6 +15,9 @@ export const DIGITAL_ROUTE_PERMISSIONS: RoutePermissionMap = {
   },
   "/api/v1/admin/digital-assets/*/uploads": {
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/digital-assets/*/uploads/*": {
+    GET: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
   "/api/v1/admin/digital-assets/*/uploads/*/parts/*": {
     PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },

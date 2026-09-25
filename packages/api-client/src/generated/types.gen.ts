@@ -658,6 +658,62 @@ export type CustomerAccountSummary = {
     activeWarranties: number;
 };
 
+export type BuyerDigitalLine = {
+    orderId: string;
+    orderNumber: number | null;
+    orderItemId: string;
+    productName: string | null;
+    variantLabel: string | null;
+    deliveredAt: string;
+    files: Array<BuyerDownloadFile>;
+    licenceKeys: Array<BuyerLicenceKey>;
+};
+
+export type BuyerDownloadFile = {
+    entitlementId: string;
+    displayName: string;
+    filename: string | null;
+    sizeBytes: number | null;
+    downloadCount: number;
+    /**
+     * Null: unlimited.
+     */
+    downloadLimit: number | null;
+    /**
+     * When access ends; null: never.
+     */
+    expiresAt: string | null;
+    revoked: boolean;
+    /**
+     * Downloadable right now (not revoked, expired or used up).
+     */
+    available: boolean;
+};
+
+export type BuyerLicenceKey = {
+    keyId: string;
+    /**
+     * The key's last characters; reveal the key with a POST.
+     */
+    last4: string;
+};
+
+export type DownloadTicket = {
+    /**
+     * Storefront path of the 10-minute download, bound to this browser's cookie.
+     */
+    href: string;
+    expiresAt: string;
+    downloadCount: number;
+    downloadLimit: number | null;
+};
+
+export type RevealedLicenceKey = {
+    keyId: string;
+    key: string;
+    last4: string;
+};
+
 export type ProductPageContentBlock = {
     type: 'rich-text';
     version: 1;
@@ -829,6 +885,64 @@ export type ProductBundleTier = {
     price: number | null;
     label: string | null;
     isActive: boolean;
+};
+
+export type DigitalAsset = {
+    id: string;
+    productId: string;
+    /**
+     * Null: every digital variant of the product receives this file.
+     */
+    variantId: string | null;
+    kind: 'file' | 'licence_keys';
+    /**
+     * `draft` until the file is uploaded; `archived` items are not delivered to new orders.
+     */
+    status: 'draft' | 'ready' | 'archived';
+    displayName: string;
+    filename: string | null;
+    mediaType: string | null;
+    sizeBytes: number | null;
+    hasFile: boolean;
+    downloadLimit: number | null;
+    accessDays: number | null;
+    version: number;
+    /**
+     * Licence-key pools: keys by status (available = the variant's unsold keys).
+     */
+    keys: {
+        available: number;
+        assigned: number;
+        revoked: number;
+    };
+    deliveredCount: number;
+    createdAt: number;
+    updatedAt: number;
+};
+
+export type DigitalUploadSession = {
+    id: string;
+    assetId: string;
+    /**
+     * Every part but the last is exactly this many bytes (50 MiB).
+     */
+    partSize: number;
+    partCount: number;
+    sizeBytes: number;
+    uploadedParts: Array<number>;
+} | null;
+
+export type LicenceKeyAdmin = {
+    id: string;
+    /**
+     * The key's last characters; the full key is never shown to staff after import.
+     */
+    last4: string;
+    status: 'available' | 'assigned' | 'revoked';
+    orderItemId: string | null;
+    assignedAt: number | null;
+    revokedAt: number | null;
+    createdAt: number;
 };
 
 export type GetApiV1AuthTokenData = {
@@ -12157,6 +12271,326 @@ export type GetApiV1CustomerAuthAccountSummaryResponses = {
 
 export type GetApiV1CustomerAuthAccountSummaryResponse = GetApiV1CustomerAuthAccountSummaryResponses[keyof GetApiV1CustomerAuthAccountSummaryResponses];
 
+export type GetApiV1CustomerAuthDownloadsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/downloads';
+};
+
+export type GetApiV1CustomerAuthDownloadsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthDownloadsError = GetApiV1CustomerAuthDownloadsErrors[keyof GetApiV1CustomerAuthDownloadsErrors];
+
+export type GetApiV1CustomerAuthDownloadsResponses = {
+    /**
+     * Delivered items
+     */
+    200: {
+        success: true;
+        data: {
+            lines: Array<BuyerDigitalLine>;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthDownloadsResponse = GetApiV1CustomerAuthDownloadsResponses[keyof GetApiV1CustomerAuthDownloadsResponses];
+
+export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketData = {
+    body?: never;
+    path: {
+        entitlementId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/downloads/{entitlementId}/ticket';
+};
+
+export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Download limit reached (DOWNLOAD_LIMIT_REACHED)
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Access revoked or ended (DOWNLOAD_REVOKED, DOWNLOAD_EXPIRED)
+     */
+    410: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketError = PostApiV1CustomerAuthDownloadsByEntitlementIdTicketErrors[keyof PostApiV1CustomerAuthDownloadsByEntitlementIdTicketErrors];
+
+export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketResponses = {
+    /**
+     * Ticket minted
+     */
+    200: {
+        success: true;
+        data: DownloadTicket;
+    };
+};
+
+export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketResponse = PostApiV1CustomerAuthDownloadsByEntitlementIdTicketResponses[keyof PostApiV1CustomerAuthDownloadsByEntitlementIdTicketResponses];
+
+export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealData = {
+    body?: never;
+    path: {
+        keyId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/licence-keys/{keyId}/reveal';
+};
+
+export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealError = PostApiV1CustomerAuthLicenceKeysByKeyIdRevealErrors[keyof PostApiV1CustomerAuthLicenceKeysByKeyIdRevealErrors];
+
+export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses = {
+    /**
+     * The licence key
+     */
+    200: {
+        success: true;
+        data: RevealedLicenceKey;
+    };
+};
+
+export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponse = PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses[keyof PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses];
+
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
     path?: never;
@@ -17228,6 +17662,385 @@ export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdRespon
 };
 
 export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponse = GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses[keyof GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses];
+
+export type GetApiV1OrdersReceiptByIdDownloadsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/downloads';
+};
+
+export type GetApiV1OrdersReceiptByIdDownloadsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdDownloadsError = GetApiV1OrdersReceiptByIdDownloadsErrors[keyof GetApiV1OrdersReceiptByIdDownloadsErrors];
+
+export type GetApiV1OrdersReceiptByIdDownloadsResponses = {
+    /**
+     * Delivered items
+     */
+    200: {
+        success: true;
+        data: {
+            lines: Array<BuyerDigitalLine>;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdDownloadsResponse = GetApiV1OrdersReceiptByIdDownloadsResponses[keyof GetApiV1OrdersReceiptByIdDownloadsResponses];
+
+export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketData = {
+    body?: never;
+    path: {
+        id: string;
+        entitlementId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/downloads/{entitlementId}/ticket';
+};
+
+export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Download limit reached (DOWNLOAD_LIMIT_REACHED)
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Access revoked or ended (DOWNLOAD_REVOKED, DOWNLOAD_EXPIRED)
+     */
+    410: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketError = PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketErrors[keyof PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketErrors];
+
+export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketResponses = {
+    /**
+     * Ticket minted
+     */
+    200: {
+        success: true;
+        data: DownloadTicket;
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketResponse = PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketResponses[keyof PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketResponses];
+
+export type PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealData = {
+    body?: never;
+    path: {
+        id: string;
+        keyId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/licence-keys/{keyId}/reveal';
+};
+
+export type PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealError = PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealErrors[keyof PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealErrors];
+
+export type PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealResponses = {
+    /**
+     * The licence key
+     */
+    200: {
+        success: true;
+        data: RevealedLicenceKey;
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealResponse = PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealResponses[keyof PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealResponses];
+
+export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigData = {
+    body?: never;
+    path: {
+        entitlementId: string;
+        exp?: number | null;
+        sig: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/downloads/{entitlementId}/{exp}/{sig}';
+};
+
+export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Range not satisfiable
+     */
+    416: unknown;
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigError = GetApiV1OrdersDownloadsByEntitlementIdByExpBySigErrors[keyof GetApiV1OrdersDownloadsByEntitlementIdByExpBySigErrors];
+
+export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponses = {
+    /**
+     * The file
+     */
+    200: Blob | File;
+    /**
+     * Part of the file
+     */
+    206: Blob | File;
+};
+
+export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponse = GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponses[keyof GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponses];
 
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;
@@ -51515,6 +52328,114 @@ export type PostApiV1AdminOrdersByIdPickupReadyResponses = {
 
 export type PostApiV1AdminOrdersByIdPickupReadyResponse = PostApiV1AdminOrdersByIdPickupReadyResponses[keyof PostApiV1AdminOrdersByIdPickupReadyResponses];
 
+export type PostApiV1AdminOrdersByIdDigitalResendData = {
+    body: {
+        requestKey: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/digital/resend';
+};
+
+export type PostApiV1AdminOrdersByIdDigitalResendErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdDigitalResendError = PostApiV1AdminOrdersByIdDigitalResendErrors[keyof PostApiV1AdminOrdersByIdDigitalResendErrors];
+
+export type PostApiV1AdminOrdersByIdDigitalResendResponses = {
+    /**
+     * Message queued
+     */
+    200: {
+        success: true;
+        data: {
+            outboxId: string;
+            queued: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdDigitalResendResponse = PostApiV1AdminOrdersByIdDigitalResendResponses[keyof PostApiV1AdminOrdersByIdDigitalResendResponses];
+
 export type GetApiV1AdminConversationsData = {
     body?: never;
     path?: never;
@@ -56304,6 +57225,239 @@ export type PutApiV1AdminProductsByIdOptionsMatrixResponses = {
 };
 
 export type PutApiV1AdminProductsByIdOptionsMatrixResponse = PutApiV1AdminProductsByIdOptionsMatrixResponses[keyof PutApiV1AdminProductsByIdOptionsMatrixResponses];
+
+export type GetApiV1AdminProductsByIdDigitalAssetsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/products/{id}/digital-assets';
+};
+
+export type GetApiV1AdminProductsByIdDigitalAssetsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsByIdDigitalAssetsError = GetApiV1AdminProductsByIdDigitalAssetsErrors[keyof GetApiV1AdminProductsByIdDigitalAssetsErrors];
+
+export type GetApiV1AdminProductsByIdDigitalAssetsResponses = {
+    /**
+     * Digital items
+     */
+    200: {
+        success: true;
+        data: {
+            assets: Array<DigitalAsset>;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsByIdDigitalAssetsResponse = GetApiV1AdminProductsByIdDigitalAssetsResponses[keyof GetApiV1AdminProductsByIdDigitalAssetsResponses];
+
+export type PostApiV1AdminProductsByIdDigitalAssetsData = {
+    body: {
+        filename: string;
+        mediaType?: string;
+        /**
+         * Exact file size; at most 40 parts of 52428800 bytes.
+         */
+        sizeBytes: number;
+        kind: 'file';
+        variantId?: string | null;
+        displayName?: string;
+        /**
+         * Downloads per purchase (1–100), or null for unlimited. Default 5.
+         */
+        downloadLimit?: number | null;
+        /**
+         * Days of access after delivery (1–3650), or null for forever (the default).
+         */
+        accessDays?: number | null;
+    } | {
+        kind: 'licence_keys';
+        variantId: string;
+        displayName?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/products/{id}/digital-assets';
+};
+
+export type PostApiV1AdminProductsByIdDigitalAssetsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsByIdDigitalAssetsError = PostApiV1AdminProductsByIdDigitalAssetsErrors[keyof PostApiV1AdminProductsByIdDigitalAssetsErrors];
+
+export type PostApiV1AdminProductsByIdDigitalAssetsResponses = {
+    /**
+     * Digital item added
+     */
+    201: {
+        success: true;
+        data: {
+            asset: DigitalAsset;
+            upload: DigitalUploadSession;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsByIdDigitalAssetsResponse = PostApiV1AdminProductsByIdDigitalAssetsResponses[keyof PostApiV1AdminProductsByIdDigitalAssetsResponses];
 
 export type GetApiV1AdminAuthUsersData = {
     body?: never;
@@ -64148,6 +65302,1248 @@ export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses = {
 };
 
 export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponse = PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses[keyof PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses];
+
+export type DeleteApiV1AdminDigitalAssetsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}';
+};
+
+export type DeleteApiV1AdminDigitalAssetsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminDigitalAssetsByIdError = DeleteApiV1AdminDigitalAssetsByIdErrors[keyof DeleteApiV1AdminDigitalAssetsByIdErrors];
+
+export type DeleteApiV1AdminDigitalAssetsByIdResponses = {
+    /**
+     * Deleted
+     */
+    200: {
+        success: true;
+        data: {
+            deleted: true;
+        };
+    };
+};
+
+export type DeleteApiV1AdminDigitalAssetsByIdResponse = DeleteApiV1AdminDigitalAssetsByIdResponses[keyof DeleteApiV1AdminDigitalAssetsByIdResponses];
+
+export type PatchApiV1AdminDigitalAssetsByIdData = {
+    body: {
+        version: number;
+        displayName?: string;
+        /**
+         * Downloads per purchase (1–100), or null for unlimited. Default 5.
+         */
+        downloadLimit?: number | null;
+        /**
+         * Days of access after delivery (1–3650), or null for forever (the default).
+         */
+        accessDays?: number | null;
+        status?: 'ready' | 'archived';
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}';
+};
+
+export type PatchApiV1AdminDigitalAssetsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminDigitalAssetsByIdError = PatchApiV1AdminDigitalAssetsByIdErrors[keyof PatchApiV1AdminDigitalAssetsByIdErrors];
+
+export type PatchApiV1AdminDigitalAssetsByIdResponses = {
+    /**
+     * Digital item saved
+     */
+    200: {
+        success: true;
+        data: {
+            asset: DigitalAsset;
+        };
+    };
+};
+
+export type PatchApiV1AdminDigitalAssetsByIdResponse = PatchApiV1AdminDigitalAssetsByIdResponses[keyof PatchApiV1AdminDigitalAssetsByIdResponses];
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsData = {
+    body: {
+        filename: string;
+        mediaType?: string;
+        /**
+         * Exact file size; at most 40 parts of 52428800 bytes.
+         */
+        sizeBytes: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/uploads';
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsError = PostApiV1AdminDigitalAssetsByIdUploadsErrors[keyof PostApiV1AdminDigitalAssetsByIdUploadsErrors];
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsResponses = {
+    /**
+     * Upload started
+     */
+    201: {
+        success: true;
+        data: {
+            upload: DigitalUploadSession;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsResponse = PostApiV1AdminDigitalAssetsByIdUploadsResponses[keyof PostApiV1AdminDigitalAssetsByIdUploadsResponses];
+
+export type GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdData = {
+    body?: never;
+    path: {
+        id: string;
+        uploadId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}';
+};
+
+export type GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdError = GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdErrors[keyof GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdErrors];
+
+export type GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponses = {
+    /**
+     * Upload session
+     */
+    200: {
+        success: true;
+        data: {
+            upload: DigitalUploadSession & {
+                status: string;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponse = GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponses[keyof GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponses];
+
+export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberData = {
+    body: Blob | File;
+    path: {
+        id: string;
+        uploadId: string;
+        partNumber: number;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}/parts/{partNumber}';
+};
+
+export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberError = PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberErrors[keyof PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberErrors];
+
+export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberResponses = {
+    /**
+     * Part stored
+     */
+    200: {
+        success: true;
+        data: {
+            partNumber: number;
+            size: number;
+        };
+    };
+};
+
+export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberResponse = PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberResponses[keyof PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberResponses];
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteData = {
+    body?: never;
+    path: {
+        id: string;
+        uploadId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}/complete';
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteError = PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteErrors[keyof PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteErrors];
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponses = {
+    /**
+     * Upload complete
+     */
+    200: {
+        success: true;
+        data: {
+            asset: DigitalAsset;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponse = PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponses[keyof PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponses];
+
+export type GetApiV1AdminDigitalAssetsByIdLicenceKeysData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        status?: 'available' | 'assigned' | 'revoked';
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/digital-assets/{id}/licence-keys';
+};
+
+export type GetApiV1AdminDigitalAssetsByIdLicenceKeysErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminDigitalAssetsByIdLicenceKeysError = GetApiV1AdminDigitalAssetsByIdLicenceKeysErrors[keyof GetApiV1AdminDigitalAssetsByIdLicenceKeysErrors];
+
+export type GetApiV1AdminDigitalAssetsByIdLicenceKeysResponses = {
+    /**
+     * Licence keys
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<LicenceKeyAdmin>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminDigitalAssetsByIdLicenceKeysResponse = GetApiV1AdminDigitalAssetsByIdLicenceKeysResponses[keyof GetApiV1AdminDigitalAssetsByIdLicenceKeysResponses];
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysData = {
+    body: {
+        /**
+         * Retry key: repeating the request returns the first result instead of acting twice.
+         */
+        requestKey: string;
+        keys: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/licence-keys';
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysError = PostApiV1AdminDigitalAssetsByIdLicenceKeysErrors[keyof PostApiV1AdminDigitalAssetsByIdLicenceKeysErrors];
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysResponses = {
+    /**
+     * Keys imported
+     */
+    200: {
+        success: true;
+        data: {
+            imported: number;
+            alreadyInPool: number;
+            rejected: Array<{
+                line: number;
+                reason: 'too_long' | 'invalid_characters' | 'duplicate';
+            }>;
+            replayed: boolean;
+            stock: number;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysResponse = PostApiV1AdminDigitalAssetsByIdLicenceKeysResponses[keyof PostApiV1AdminDigitalAssetsByIdLicenceKeysResponses];
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeData = {
+    body: {
+        /**
+         * Retry key: repeating the request returns the first result instead of acting twice.
+         */
+        requestKey: string;
+        keyIds: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/licence-keys/revoke';
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeError = PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeErrors[keyof PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeErrors];
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeResponses = {
+    /**
+     * Keys removed
+     */
+    200: {
+        success: true;
+        data: {
+            revoked: number;
+            stock: number;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeResponse = PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeResponses[keyof PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeResponses];
+
+export type PostApiV1AdminDigitalEntitlementsByIdResetData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-entitlements/{id}/reset';
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdResetErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdResetError = PostApiV1AdminDigitalEntitlementsByIdResetErrors[keyof PostApiV1AdminDigitalEntitlementsByIdResetErrors];
+
+export type PostApiV1AdminDigitalEntitlementsByIdResetResponses = {
+    /**
+     * Saved
+     */
+    200: {
+        success: true;
+        data: {
+            entitlementId: string;
+            orderId: string;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdResetResponse = PostApiV1AdminDigitalEntitlementsByIdResetResponses[keyof PostApiV1AdminDigitalEntitlementsByIdResetResponses];
+
+export type PostApiV1AdminDigitalEntitlementsByIdRevokeData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-entitlements/{id}/revoke';
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdRevokeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdRevokeError = PostApiV1AdminDigitalEntitlementsByIdRevokeErrors[keyof PostApiV1AdminDigitalEntitlementsByIdRevokeErrors];
+
+export type PostApiV1AdminDigitalEntitlementsByIdRevokeResponses = {
+    /**
+     * Saved
+     */
+    200: {
+        success: true;
+        data: {
+            entitlementId: string;
+            orderId: string;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdRevokeResponse = PostApiV1AdminDigitalEntitlementsByIdRevokeResponses[keyof PostApiV1AdminDigitalEntitlementsByIdRevokeResponses];
 
 export type DeleteApiV1AdminAbandonedCheckoutsData = {
     body: {
