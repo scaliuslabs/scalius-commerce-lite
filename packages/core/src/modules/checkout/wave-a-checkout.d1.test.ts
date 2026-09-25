@@ -239,10 +239,12 @@ describe("Wave A checkout", () => {
         // order_items: 18 bound values a row → 5 rows a statement → 20;
         // order_item_tax_snapshots: 6 a row → 16 rows a statement → 7;
         // the rest: 3 guards, customer + history, order, COD, one SKU hold
-        // (movement + counter), tax snapshot, attempt and receipt = 12.
+        // (movement + counter), the SKU's product buyer-state refresh, tax
+        // snapshot, attempt and receipt = 13.
         expect(count('insert into "order_items"')).toBe(20);
         expect(count('insert into "order_item_tax_snapshots"')).toBe(7);
-        expect(batch!.length).toBe(39);
+        expect(count('insert into "product_buyer_state"')).toBe(1);
+        expect(batch!.length).toBe(40);
         expect(batch!.length).toBeLessThanOrEqual(40);
         for (const statement of batch!) expect(statement.values.length).toBeLessThanOrEqual(100);
         expect(one("SELECT count(*) AS n FROM order_items WHERE order_id = ?", result.orderId)).toEqual({ n: 99 });

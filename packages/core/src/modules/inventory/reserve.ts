@@ -16,6 +16,7 @@ import {
 import type { BatchItem } from "drizzle-orm/batch";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import { recordMovement } from "./movements";
+import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
 import {
@@ -175,18 +176,21 @@ export async function reserveStock(
             )`
         : sql`${productVariants.stock} - ${productVariants.reservedStock} >= ${quantity}`;
 
-    const result = await db
-      .update(productVariants)
-      .set(updateSet)
-      .where(
-          and(
-            eq(productVariants.id, variantId),
-            isNull(productVariants.deletedAt),
-            eq(productVariants.stockVersion, variant.stockVersion),
-            mutationAvailability,
+    const [result] = await safeBatch(db, [
+      db
+        .update(productVariants)
+        .set(updateSet)
+        .where(
+            and(
+              eq(productVariants.id, variantId),
+              isNull(productVariants.deletedAt),
+              eq(productVariants.stockVersion, variant.stockVersion),
+              mutationAvailability,
+            )
           )
-        )
-      .returning({ id: productVariants.id });
+        .returning({ id: productVariants.id }),
+      ...catalogBuyerStateRefreshStatementsForSkus(db, [variantId]),
+    ] as never) as [Array<{ id: string }>];
 
     if (result.length > 0) {
       // Success — log movement
@@ -476,6 +480,8 @@ export async function prepareStockReservationBatch(
         ...movementQueries,
         ...updateQueries,
         ...finalGuards,
+        // Buyer state reads the counters this batch just wrote.
+        ...catalogBuyerStateRefreshStatementsForSkus(db, trackedEntries.map((entry) => entry.variantId)),
       ] as SQLiteBatchItem[],
       resolveIdempotentReplay: (error) => resolveDuplicateReservationBatch(
         db,
@@ -529,7 +535,13 @@ export async function prepareStockReservationBatch(
   return {
     success: true,
     results,
-    statements: [...guardQueries, ...movementQueries, ...updateQueries] as SQLiteBatchItem[],
+    statements: [
+      ...guardQueries,
+      ...movementQueries,
+      ...updateQueries,
+      // Buyer state reads the counters this batch just wrote.
+      ...catalogBuyerStateRefreshStatementsForSkus(db, trackedEntries.map((entry) => entry.variantId)),
+    ] as SQLiteBatchItem[],
     resolveIdempotentReplay: (error) => resolveDuplicateReservationBatch(
       db,
       movementClaims,
@@ -1333,17 +1345,20 @@ async function releaseReservationInternal(
   orderId?: string,
   pool: "regular" | "preorder" | "backorder" = "regular"
 ): Promise<void> {
-  await db
-    .update(productVariants)
-    .set({
-      reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
-      ...(pool === "preorder"
-        ? { preorderStock: sql`${productVariants.preorderStock} + ${quantity}` }
-        : {}),
-      stockVersion: sql`${productVariants.stockVersion} + 1`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(eq(productVariants.id, variantId));
+  await safeBatch(db, [
+    db
+      .update(productVariants)
+      .set({
+        reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
+        ...(pool === "preorder"
+          ? { preorderStock: sql`${productVariants.preorderStock} + ${quantity}` }
+          : {}),
+        stockVersion: sql`${productVariants.stockVersion} + 1`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(eq(productVariants.id, variantId)),
+    ...catalogBuyerStateRefreshStatementsForSkus(db, [variantId]),
+  ] as never);
 
   // Log the rollback
   await recordMovement(db, {

@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ValidationError } from "@scalius/core/errors";
 import { createProduct, updateProduct } from "./write";
 import { restoreProduct } from "./lifecycle";
+
+// These fakes carry no projection SQL; catalog-projections.d1.test.ts covers it.
+vi.mock("../catalog-projections", () => ({ catalogProjectionRefreshStatements: () => [] }));
 
 const productUpdate = {
     id: "prod_1",

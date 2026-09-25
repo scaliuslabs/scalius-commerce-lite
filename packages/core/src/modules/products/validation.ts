@@ -10,6 +10,7 @@ import {
 import {
     PRODUCT_CONDITION_VALUES,
 } from "@scalius/shared/product-condition";
+import { isBrandId } from "@scalius/shared/catalog-brand";
 import { catalogMoneySchema, skuStockSchema, skuWeightSchema } from "./types";
 import { customizationSchemaInputSchema, editableFulfillmentKindSchema } from "./customization-schema";
 import { createProductOptionMatrixSchema } from "./option-matrix";
@@ -25,6 +26,13 @@ const canonicalPathSchema = z
     });
 
 const productConditionSchema = z.enum(PRODUCT_CONDITION_VALUES);
+
+/** A live brand's id; null clears the product's brand. */
+export const productBrandIdSchema = z
+    .string()
+    .trim()
+    .refine(isBrandId, "Choose a brand from the list.")
+    .nullable();
 
 export const productMediaAssociationIdSchema = z.string()
     .trim()
@@ -112,6 +120,9 @@ const productBaseSchema = z.object({
     description: z.string().min(10).nullable(),
     price: catalogMoneySchema,
     categoryId: z.string().min(1).nullable(),
+    /** Omit to keep the product's brand; null removes it. */
+    brandId: productBrandIdSchema.optional()
+        .describe("A live brand id (brd_…). Omit to keep the current brand; null removes it."),
     isActive: z.boolean(),
     discountType: z.enum(["percentage", "flat"]).optional(),
     discountPercentage: z.number().min(0).max(100).nullish(),

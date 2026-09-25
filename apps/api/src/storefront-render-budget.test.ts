@@ -3,6 +3,8 @@ import "@hono/zod-openapi";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
+import { rebuildCatalogProjections } from "@scalius/core/modules/products";
+import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
 import {
   STOREFRONT_SECTION_TYPES,
   storefrontSectionDefault,
@@ -154,13 +156,19 @@ function meteredBinding(inner: D1Database): Meter {
 }
 
 async function renderPage(page: keyof typeof PAGE_PARTS) {
-  const { sqlite, binding } = createSqliteD1Database();
+  const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
   if (page === "home") {
     sqlite.exec(HOME_SEED);
     sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
       .run(JSON.stringify(everySectionTheme()));
   }
+  // The steady state of a live store (unmetered): the catalogue projections
+  // and sales stats a release rebuild and the nightly run keep, and every
+  // product's stored recommendations.
+  await rebuildCatalogProjections(db);
+  await refreshProductSalesStats(db);
+  await refreshProductRecommendations(db, ["p_linen", "p_cotton"]);
   const meter = meteredBinding(binding);
   const env = {
     DB: meter.binding,

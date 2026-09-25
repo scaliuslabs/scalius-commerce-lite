@@ -8,15 +8,17 @@ Public entry: `index.ts`.
 
 | Path | Exports | Purpose |
 |------|---------|---------|
-| `listing.ts` | `getStorefrontProducts()`, `getStorefrontCategoryProducts()`, `getStorefrontCollectionProducts()`, `storefrontCollectionVisibleCountQuery()` | Shop, category and collection listings |
+| `listing.ts` | `getStorefrontProducts()`, `getStorefrontCategoryProducts()`, `getStorefrontBrandProducts()`, `getStorefrontCollectionProducts()`, `storefrontCollectionVisibleCountQuery()`, `SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT` | Shop, category, brand and collection listings over the stored buyer state (`product_buyer_state` indexes: newest, price, category, brand). Shop-all facet counts run live only up to 2,000 public products |
+| `buyer-state.ts` | -- | The public buyer set and card pricing columns read from `product_buyer_state` (kept by `products/catalog-projections.ts`); not exported |
 | `facets.ts` | `OPTION_FACET_PREFIX`, `PublicProductFacet` | Attribute and option-axis filters and result-scoped facet counts (typed attributes extend this file) |
 | `product-page.ts` | `getStorefrontProductBySlug()` | The product page read |
 | `search.ts` | `searchStorefrontProducts()` | Storefront product search |
 | `feed.ts` | `getStorefrontFeedProducts()`, `getEligibleStorefrontFeedProductById()`, `getFeedProjectionDiagnosticById()` | Google/Base and Meta catalogue feed rows |
-| `sitemap.ts` | `getStorefrontSitemapProducts()` | Product sitemap rows (noIndex and sitemap exclusions filtered before paging) |
-| `recommendations.ts` | `getStorefrontProductRecommendations()` | Ranked recommendations |
+| `sitemap.ts` | `getStorefrontSitemapProducts()` | Product sitemap rows from the buyer state's newest index (noIndex and sitemap exclusions filtered before paging) |
+| `recommendations.ts` | `getStorefrontProductRecommendations()`, `rankRecommendationRows()` | One product's stored top 24, filtered by the current buyer state; the live ranking (buyer state only) for carts, pages without a source and products never computed |
+| `recommendation-refresh.ts` | `refreshProductRecommendations()`, `recommendationRefreshTargets()`, `nightlyRecommendationRefreshCandidates()`, `refreshProductSalesStats()` | Off-request refresh of `product_recommendations` (queue `catalog.recommendations.refresh`, 20 products a message) and `product_sales_stats` (nightly) |
 | `storefront-sections.ts` | homepage/section product resolution | Storefront sections |
-| `home-lists.ts` | `planHomeProductLists()` | Homepage section product lists (newest, on sale, popular, a category) planned into the homepage's second D1 batch, each scoped to its own products and paired with the media statement of exactly those rows. On sale reads its window from two partial indexes of discounted rows (migration 0087; the queries repeat the index predicates word for word); popular aggregates the 30-day order window once per statement and checks eligibility on its top candidates only. At 30k products: on sale 7k rows (1.8k with ten old sales), popular 71k rows (grows with 30-day orders, not the catalogue) |
+| `home-lists.ts` | `planHomeProductLists()` | Homepage section product lists (newest, on sale, popular, a category) planned into the homepage's second D1 batch, each scoped to its own products and paired with the media statement of exactly those rows. On sale reads its window from two partial indexes of discounted rows (migration 0087; the queries repeat the index predicates word for word); popular walks `product_sales_stats` (units sold in 30 days, refreshed nightly) by its popularity index, public products only. At 30k products: on sale 7k rows (1.8k with ten old sales) |
 | `cards.ts` | `buildCollectionProductSelect()`, `resolveProductCards()` | Buyer cards for curated lists (homepage collections and section lists) |
 | `feed-diagnostics.ts`, `feed-row-preview.ts` | bounded read-only feed diagnostics and row preview | Dashboard feed tools, same policy as the XML feed |
 | `shared.ts` | -- | Helpers shared by the reads (not exported) |

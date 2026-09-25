@@ -12,6 +12,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { reserveStockBatch, type ReservationBatchItem } from "./reserve";
 import { checkAndAlertLowStock } from "./alerts";
+import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
 import {
@@ -525,7 +526,12 @@ async function applyStrictInventoryTransitionMovements(
 
         let batchResults: { id: string }[][];
         try {
-            batchResults = await safeBatch(db, [...movementQueries, ...updateQueries] as never) as { id: string }[][];
+            batchResults = await safeBatch(db, [
+                ...movementQueries,
+                ...updateQueries,
+                // Buyer state reads the counters this batch just wrote.
+                ...catalogBuyerStateRefreshStatementsForSkus(db, mergedEntries.map((entry) => entry.variantId)),
+            ] as never) as { id: string }[][];
         } catch (err: unknown) {
             const duplicateResolved = await resolveDuplicateTransitionMovements(
                 db,
@@ -613,9 +619,14 @@ async function applyStrictInventoryTransitionMovements(
                 try {
                     const rollbackResults = await safeBatch(
                         db,
-                        rollbackQueries.map((entry) => entry.query) as never,
+                        [
+                            ...rollbackQueries.map((entry) => entry.query),
+                            ...catalogBuyerStateRefreshStatementsForSkus(db, mergedEntries.map((entry) => entry.variantId)),
+                        ] as never,
                     ) as { id: string }[][];
-                    const missedRollback = rollbackResults.findIndex((result) => !result || result.length === 0);
+                    const missedRollback = rollbackResults
+                        .slice(0, rollbackQueries.length)
+                        .findIndex((result) => !result || result.length === 0);
                     if (missedRollback >= 0) {
                         throw new Error(`Unproven ${rollbackQueries[missedRollback]!.description}`);
                     }

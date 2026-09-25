@@ -8,7 +8,8 @@
 
 import { eq, and, sql } from "drizzle-orm";
 import { productVariants } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
+import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import { recordMovement } from "./movements";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
@@ -82,16 +83,19 @@ export async function deductStock(
           updatedAt: sql`unixepoch()`,
         };
 
-    const result = await db
-      .update(productVariants)
-      .set(updateSet)
-      .where(
-        and(
-          eq(productVariants.id, variantId),
-          eq(productVariants.stockVersion, variant.stockVersion)
+    const [result] = await safeBatch(db, [
+      db
+        .update(productVariants)
+        .set(updateSet)
+        .where(
+          and(
+            eq(productVariants.id, variantId),
+            eq(productVariants.stockVersion, variant.stockVersion)
+          )
         )
-      )
-      .returning({ id: productVariants.id });
+        .returning({ id: productVariants.id }),
+      ...catalogBuyerStateRefreshStatementsForSkus(db, [variantId]),
+    ] as never) as [Array<{ id: string }>];
 
     if (result.length > 0) {
       const newStock =
@@ -180,17 +184,20 @@ async function restoreDeductedStock(
   orderId?: string,
   pool: "regular" | "preorder" | "backorder" = "regular"
 ): Promise<void> {
-  await db
-    .update(productVariants)
-    .set({
-      ...(pool === "regular"
-        ? { stock: sql`${productVariants.stock} + ${quantity}` }
-        : {}),
-      reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
-      stockVersion: sql`${productVariants.stockVersion} + 1`,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(eq(productVariants.id, variantId));
+  await safeBatch(db, [
+    db
+      .update(productVariants)
+      .set({
+        ...(pool === "regular"
+          ? { stock: sql`${productVariants.stock} + ${quantity}` }
+          : {}),
+        reservedStock: sql`${productVariants.reservedStock} + ${quantity}`,
+        stockVersion: sql`${productVariants.stockVersion} + 1`,
+        updatedAt: sql`unixepoch()`,
+      })
+      .where(eq(productVariants.id, variantId)),
+    ...catalogBuyerStateRefreshStatementsForSkus(db, [variantId]),
+  ] as never);
 
   await recordMovement(db, {
     variantId,

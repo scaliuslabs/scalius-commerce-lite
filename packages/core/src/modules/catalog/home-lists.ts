@@ -9,13 +9,13 @@ import {
     ON_SALE_DISCOUNT_SQL,
     ON_SALE_SKU_ROW_SQL,
     categories,
-    orderItems,
-    orders,
+    productBuyerState,
+    productSalesStats,
     products,
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { safeBatch } from "@scalius/database/client";
-import { and, asc, countDistinct, desc, eq, exists, gte, inArray, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { HomeProductListRequest } from "@scalius/shared/storefront-theme";
 import { buildBuyerCatalogPricingProjection } from "../products/buyer-projection";
 import {
@@ -42,12 +42,8 @@ type BatchStatement = Parameters<typeof safeBatch>[1][number];
 const ON_SALE_CANDIDATES_PER_CARD = 3;
 /** Discounted SKUs read per candidate: an optioned product often has several on sale. */
 const ON_SALE_SKUS_PER_CANDIDATE = 4;
-/** Popular: distinct buyers of a product in real orders of the last 30 days (as recommendations). */
-const POPULAR_WINDOW_SECONDS = 30 * 86_400;
-const MIN_POPULAR_BUYERS = 2;
-/** Popular candidates read per card before the eligibility check. */
-const POPULAR_CANDIDATES_PER_CARD = 3;
-const REAL_ORDER_STATUSES = ["pending", "processing", "confirmed", "shipped", "delivered", "completed"] as const;
+/** Popular: at least this many units sold in the last 30 days (product_sales_stats). */
+const MIN_POPULAR_UNITS = 2;
 
 export interface HomeProductList {
     key: string;
@@ -143,42 +139,26 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
                 .innerJoin(pricing, eq(products.id, pricing.productId))
                 .where(onSale).orderBy(...newestFirst()).limit(limit), ids);
         } else if (source.kind === "popular") {
-            // Distinct buyers per product in the window, as the
-            // recommendations' popularity signal; nothing is invented when
-            // the store has no such orders yet (the list is empty).
-            const buyers = countDistinct(orders.customerPhone);
-            // The most-bought candidates (a bounded window, like on sale);
-            // buyer eligibility is then checked on those few only, never on
-            // every product anyone bought (345 of them at 30k products).
-            const mostBought = () => db.select({ productId: orderItems.productId, buyers: buyers.as("home_popular_buyers") })
-                .from(orderItems)
-                .innerJoin(orders, eq(orders.id, orderItems.orderId))
+            // Units sold in the last 30 days from real order lines
+            // (product_sales_stats, refreshed nightly): the popularity index
+            // walk stops after `limit` public products; nothing is invented
+            // when the store has no such sales yet (the list is empty).
+            const ids = db.select({ id: productSalesStats.productId })
+                .from(productSalesStats)
+                .innerJoin(productBuyerState, eq(productBuyerState.productId, productSalesStats.productId))
                 .where(and(
-                    inArray(orders.status, REAL_ORDER_STATUSES),
-                    isNull(orders.deletedAt),
-                    gte(orders.createdAt, sql`unixepoch() - ${POPULAR_WINDOW_SECONDS}`),
+                    gte(productSalesStats.sold30d, MIN_POPULAR_UNITS),
+                    // A filter, not an index: the popularity index drives (no D1 statistics).
+                    sql`+${productBuyerState.isPublic} = 1`,
                 ))
-                .groupBy(orderItems.productId)
-                .having(gte(buyers, MIN_POPULAR_BUYERS))
-                .orderBy(desc(buyers), asc(orderItems.productId))
-                .limit(limit * POPULAR_CANDIDATES_PER_CARD);
-            type Candidates = ReturnType<ReturnType<typeof mostBought>["as"]>;
-            const shown = (top: Candidates) => db.select({ id: top.productId }).from(top)
-                .where(exists(db.select({ one: sql`1` }).from(products)
-                    .where(and(eq(products.id, top.productId), ...publicProduct()))))
-                .orderBy(desc(top.buyers), asc(top.productId)).limit(limit);
-            // The card statement aggregates the window once (a CTE its pricing
-            // scope, id filter and order all read); the candidates are a
-            // superset of the shown products, so they are a safe pricing scope.
-            const top = db.$with("home_popular_top").as(mostBought());
-            const pricing = buildBuyerCatalogPricingProjection(db, {
-                productScope: inArray(products.id, db.select({ id: top.productId }).from(top)),
-            });
-            add(list.key, db.with(top).select(buildCollectionProductSelect(pricing)).from(products)
+                .orderBy(desc(productSalesStats.sold30d), asc(productSalesStats.productId))
+                .limit(limit);
+            const pricing = buildBuyerCatalogPricingProjection(db, { productScope: inArray(products.id, ids) });
+            add(list.key, db.select(buildCollectionProductSelect(pricing)).from(products)
                 .innerJoin(pricing, eq(products.id, pricing.productId))
-                .innerJoin(top, eq(top.productId, products.id))
-                .where(inArray(products.id, shown(top as unknown as Candidates)))
-                .orderBy(desc(top.buyers), asc(products.id)), shown(mostBought().as("home_popular_top")));
+                .innerJoin(productSalesStats, eq(productSalesStats.productId, products.id))
+                .where(inArray(products.id, ids))
+                .orderBy(desc(productSalesStats.sold30d), asc(products.id)), ids);
         }
     }
 

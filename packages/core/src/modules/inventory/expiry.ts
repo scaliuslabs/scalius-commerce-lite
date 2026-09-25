@@ -11,6 +11,7 @@ import {
 } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { buildInventoryLedgerV2Edge, type InventoryLedgerPool } from "./ledger-v2";
+import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 
 export const DEFAULT_EXPIRY_SWEEP_LIMIT = 50;
@@ -384,7 +385,12 @@ export async function releaseExpiredReservations(
 
       const [movementRows, counterRows] = await safeBatch(
         db,
-        [releaseMovement, releaseCounterUpdate] as never,
+        [
+          releaseMovement,
+          releaseCounterUpdate,
+          // Buyer state reads the counters this batch just wrote.
+          ...catalogBuyerStateRefreshStatementsForSkus(db, [variantId]),
+        ] as never,
       ) as { id: string }[][];
       if (!movementRows?.length || !counterRows?.length) {
         throw new Error("Expired reservation changed concurrently; retry on the next sweep");
