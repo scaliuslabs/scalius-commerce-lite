@@ -1,154 +1,186 @@
 ---
+// Account → an order, after Shopify's order page: the status and its
+// timeline, the items and totals, and the address, payment and order help
+// in side cards. The shell and the tab counts render on the server; the order
+// itself renders in the browser (lib/account-order-detail.ts: payment retry,
+// cancel/return requests, Buy again, the order's conversation).
 import Layout from "@/layouts/Layout.astro";
+import AccountShell from "@/components/account/AccountShell.astro";
 import StoreContact from "@/components/StoreContact.astro";
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
 import { getLayoutData } from "@/lib/api";
-import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { sessionCookieOf } from "@/lib/account-inbox-server";
+import { readAccountSummaryForRequest } from "@/lib/account-server";
+import { accountUi as ui } from "@/lib/account-ui";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 
-const layoutData = await getLayoutData();
+export const prerender = false;
+
 const orderId = Astro.params.id ?? "";
-const accountPrefetch = getStorefrontPrefetchAttribute("/account", Astro.url);
-const card = "rounded-xl border border-border bg-card p-5";
-const heading = "mb-4 text-base font-semibold text-foreground";
+const signedIn = Boolean(sessionCookieOf(Astro.request));
+const [layoutData, summary] = await Promise.all([
+  getLayoutData(),
+  signedIn ? readAccountSummaryForRequest(Astro.request) : Promise.resolve(null),
+]);
+Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
+const trackHref = `/track-order?${new URLSearchParams({ order: orderId })}`;
+const card = `${ui.card} ${ui.cardBody}`;
+const heading = `${ui.cardTitle} mb-3`;
+const skeleton = "theme-skeleton block";
 ---
 
 <Layout title="Order" layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <section class="container mx-auto max-w-5xl px-4 py-8" data-order-detail-page data-order-id={orderId}>
-    <div id="orderLoading" class="flex min-h-[360px] items-center justify-center">
-      <p class="text-sm text-muted-foreground">Loading your order…</p>
-    </div>
+  <AccountShell
+    current="orders"
+    summary={summary}
+    state={signedIn ? "ok" : "signed_out"}
+    back={{ href: "/account", label: "Orders" }}
+    signedOut={{ title: "Sign in to see this order" }}
+  >
+    <a slot="signed-out" href={trackHref} data-astro-prefetch="false" class={ui.secondaryButton}>Track this order instead</a>
 
-    <div id="orderUnauthenticated" class="hidden">
-      <div class="mx-auto max-w-md py-16 text-center">
-        <h1 class="mb-6 text-2xl font-semibold text-foreground">Sign in to see this order</h1>
-        <div class="flex flex-col justify-center gap-3 sm:flex-row">
-          <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Sign in</button>
-          <a href={`/track-order?${new URLSearchParams({ order: orderId })}`} data-astro-prefetch="false" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 text-sm font-medium text-foreground hover:bg-muted">Track this order instead</a>
+    <div data-order-detail-page data-order-id={orderId}>
+      <noscript>
+        <style>#orderLoading { display: none; }</style>
+        <div class={ui.empty}>
+          <p class={ui.emptyBody}>This order page needs JavaScript. You can still follow the order without it.</p>
+          <a href={trackHref} class={`${ui.secondaryButton} mt-6`}>Track this order</a>
+        </div>
+      </noscript>
+      <div id="orderLoading" aria-busy="true" aria-label="Loading your order">
+        <span class={`${skeleton} h-9 w-56`}></span>
+        <span class={`${skeleton} mt-2 h-4 w-40`}></span>
+        <div class="mt-6 grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6">
+          <div class="grid gap-4 lg:gap-6"><span class={`${skeleton} h-48`}></span><span class={`${skeleton} h-64`}></span></div>
+          <div class="grid gap-4 lg:gap-6"><span class={`${skeleton} h-36`}></span><span class={`${skeleton} h-32`}></span></div>
         </div>
       </div>
-    </div>
 
-    <div id="orderError" class="hidden">
-      <div class="mx-auto max-w-md py-16 text-center" role="alert">
-        <h1 id="orderErrorTitle" class="mb-2 text-2xl font-semibold text-foreground"></h1>
-        <p id="orderErrorMessage" class="mb-6 text-muted-foreground"></p>
-        <div class="flex flex-col justify-center gap-3 sm:flex-row">
-          <button type="button" id="orderRetry" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Retry</button>
-          <a href="/account" data-astro-prefetch={accountPrefetch} class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-5 text-sm font-medium text-foreground hover:bg-muted">Back to your orders</a>
-        </div>
-      </div>
-    </div>
-
-    <div id="orderContent" class="hidden space-y-6">
-      <div>
-        <a href="/account" data-astro-prefetch={accountPrefetch} class="mb-3 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
-          <svg aria-hidden="true" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-          Account
-        </a>
-        <div class="flex flex-wrap items-center gap-3">
-          <h1 id="orderTitle" class="break-all text-2xl font-semibold text-foreground sm:text-3xl"></h1>
-          <span id="orderStatus" class="rounded-md bg-muted px-2 py-0.5 text-sm font-medium text-foreground"></span>
-        </div>
-        <p id="orderSubtitle" class="mt-1 text-sm text-muted-foreground"></p>
-      </div>
-
-      <div id="orderPaymentReturnNotice" role="status" class="hidden rounded-xl border border-border bg-muted/30 p-4 text-sm text-foreground"></div>
-      <div id="orderRefundNotice" role="status" class="hidden rounded-xl border border-border bg-muted/30 p-4 text-sm text-foreground"></div>
-
-      <section class={card} aria-label="Order status">
-        <div id="orderProgress"></div>
-        <p id="orderExpectedDelivery" class="mt-3 hidden text-sm text-muted-foreground"></p>
-        <h2 class="mb-3 mt-6 text-sm font-semibold text-foreground">Updates</h2>
-        <ol id="orderTimeline" class="space-y-3 border-l border-border pl-4"></ol>
-      </section>
-
-      <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <section class={card} aria-labelledby="summaryHeading">
-          <div class="mb-4 flex items-center justify-between gap-3">
-            <h2 id="summaryHeading" class="text-base font-semibold text-foreground">Order summary</h2>
-            <button type="button" id="orderBuyAgain" class="min-h-11 whitespace-nowrap text-sm font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">Buy again</button>
+      <div id="orderUnauthenticated" class="hidden">
+        <div class="mx-auto max-w-md py-12 text-center">
+          <h1 class="mb-6 text-2xl font-semibold text-foreground">Sign in to see this order</h1>
+          <div class="flex flex-col justify-center gap-3 sm:flex-row">
+            <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class={ui.primaryButton}>Sign in</button>
+            <a href={trackHref} data-astro-prefetch="false" class={ui.secondaryButton}>Track this order instead</a>
           </div>
-          <p id="orderBuyAgainMessage" role="status" class="mb-4 text-sm text-muted-foreground empty:hidden"></p>
-          <ul id="orderItems" class="divide-y divide-border"></ul>
-          <dl id="orderSummary" class="mt-4 space-y-2 border-t border-border pt-4 text-sm"></dl>
-        </section>
-
-        <div class="space-y-6">
-          <section class={card} aria-labelledby="deliveryHeading">
-            <h2 id="deliveryHeading" class={heading}>Shipping address</h2>
-            <div id="orderAddress" class="space-y-0.5 break-words text-sm text-muted-foreground"></div>
-            <div id="orderNote" class="mt-3 hidden border-t border-border pt-3 text-sm"></div>
-            <div id="orderShipments" class="mt-4 space-y-3"></div>
-          </section>
-
-          <section class={card} aria-labelledby="paymentHeading">
-            <h2 id="paymentHeading" class={heading}>Payment</h2>
-            <div id="orderPayment" class="space-y-1 text-sm"></div>
-            <div id="orderPaymentRecovery" class="mt-4 hidden space-y-3 rounded-lg border border-border p-4">
-              <div>
-                <h3 id="orderPaymentRecoveryTitle" class="text-sm font-semibold text-foreground"></h3>
-                <p id="orderPaymentRecoveryDescription" class="mt-1 text-sm text-muted-foreground"></p>
-              </div>
-              <div id="orderPaymentRecoveryMethods" class="grid gap-2" role="radiogroup" aria-label="Payment method"></div>
-              <div id="accountStripeSection" class="hidden space-y-2">
-                <div id="accountStripeCardElement" class="rounded-lg border border-input bg-background p-3"></div>
-                <p id="accountStripeError" class="hidden text-sm text-destructive"></p>
-              </div>
-              <p id="orderPaymentRecoveryMessage" role="status" class="hidden text-sm"></p>
-              <button type="button" id="orderPaymentRecoveryButton" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"></button>
-            </div>
-          </section>
-
-          <section class={card} aria-labelledby="helpHeading">
-            <h2 id="helpHeading" class="text-base font-semibold text-foreground">Order help</h2>
-            <p id="orderSupportIntro" class="mt-1 text-sm text-muted-foreground"></p>
-            <div id="orderSupportActions" class="mt-4 grid gap-2"></div>
-            <div id="orderSupportRequests" class="mt-4 space-y-3 empty:hidden"></div>
-            <div id="orderSupportForm" class="mt-4 hidden rounded-lg border border-border p-4">
-              <h3 id="orderSupportFormTitle" class="text-sm font-semibold text-foreground"></h3>
-              <fieldset class="mt-3">
-                <legend class="text-sm font-medium text-foreground">Reason</legend>
-                <div id="orderSupportReasons" class="mt-1"></div>
-              </fieldset>
-              <label class="mt-3 block text-sm font-medium text-foreground" for="orderSupportMessage">Note (required for Other)</label>
-              <textarea id="orderSupportMessage" class="mt-1.5 min-h-20 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" maxlength="1000"></textarea>
-              <p id="orderSupportFormError" role="alert" class="mt-2 hidden text-sm text-destructive"></p>
-              <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                <button type="button" id="orderSupportCancel" class="inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-4 text-sm font-medium text-foreground hover:bg-muted">Cancel</button>
-                <button type="button" id="orderSupportSubmit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60">Submit request</button>
-              </div>
-            </div>
-            <!-- The order's conversation with the store (renders nothing without access). -->
-            <OrderConversationPanel orderId={orderId} access="account" class="mt-4 rounded-xl border border-border bg-card p-5" />
-            <StoreContact layoutData={layoutData} class="mt-4 text-sm text-muted-foreground" />
-          </section>
         </div>
       </div>
+
+      <div id="orderError" class="hidden">
+        <div class="mx-auto max-w-md py-12 text-center" role="alert">
+          <h1 id="orderErrorTitle" class="mb-2 text-2xl font-semibold text-foreground"></h1>
+          <p id="orderErrorMessage" class="mb-6 text-muted-foreground"></p>
+          <div class="flex flex-col justify-center gap-3 sm:flex-row">
+            <button type="button" id="orderRetry" class={ui.primaryButton}>Retry</button>
+            <a href="/account" data-astro-prefetch="false" class={ui.secondaryButton}>Back to your orders</a>
+          </div>
+        </div>
+      </div>
+
+      <div id="orderContent" class="hidden">
+        <header class="mb-6">
+          <div class="flex flex-wrap items-center gap-3">
+            <h1 id="orderTitle" tabindex="-1" class="break-all text-2xl font-semibold text-foreground focus:outline-none sm:text-3xl"></h1>
+            <span id="orderStatus"></span>
+          </div>
+          <p id="orderSubtitle" class="mt-1 text-sm text-muted-foreground"></p>
+        </header>
+
+        <div id="orderPaymentReturnNotice" role="status" class={`${ui.notice} mb-4 hidden`}></div>
+        <div id="orderRefundNotice" role="status" class={`${ui.notice} mb-4 hidden`}></div>
+
+        <div class="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-6">
+          <div class="grid gap-4 lg:gap-6">
+            <section class={card} aria-labelledby="statusHeading">
+              <h2 id="statusHeading" class={heading}>Status</h2>
+              <div id="orderProgress"></div>
+              <p id="orderExpectedDelivery" class="mt-3 hidden text-sm text-muted-foreground"></p>
+              <details class="group mt-4 border-t border-border pt-2" open>
+                <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-semibold text-foreground">
+                  Updates
+                  <svg aria-hidden="true" class="h-4 w-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </summary>
+                <ol id="orderTimeline" class="mt-2 space-y-3 border-l border-border pl-4"></ol>
+              </details>
+            </section>
+
+            <section class={card} aria-labelledby="summaryHeading">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <h2 id="summaryHeading" class={ui.cardTitle}>Items</h2>
+                <button type="button" id="orderBuyAgain" class={`${ui.secondaryButton} min-h-10`}>Buy again</button>
+              </div>
+              <p id="orderBuyAgainMessage" role="status" class="mb-3 text-sm text-muted-foreground empty:hidden"></p>
+              <ul id="orderItems" class="divide-y divide-border"></ul>
+              <dl id="orderSummary" class="mt-4 space-y-2 border-t border-border pt-4 text-sm"></dl>
+            </section>
+          </div>
+
+          <div class="grid gap-4 lg:gap-6">
+            <section class={card} aria-labelledby="deliveryHeading">
+              <h2 id="deliveryHeading" class={heading}>Shipping address</h2>
+              <div id="orderAddress" class="space-y-0.5 break-words text-sm text-muted-foreground"></div>
+              <div id="orderNote" class="mt-3 hidden border-t border-border pt-3 text-sm"></div>
+              <div id="orderShipments" class="mt-4 space-y-3 empty:hidden"></div>
+            </section>
+
+            <section class={card} aria-labelledby="paymentHeading">
+              <h2 id="paymentHeading" class={heading}>Payment</h2>
+              <div id="orderPayment" class="space-y-1 text-sm"></div>
+              <div id="orderPaymentRecovery" class="mt-4 hidden space-y-3 rounded-lg border border-border p-4">
+                <div>
+                  <h3 id="orderPaymentRecoveryTitle" class="text-sm font-semibold text-foreground"></h3>
+                  <p id="orderPaymentRecoveryDescription" class="mt-1 text-sm text-muted-foreground"></p>
+                </div>
+                <div id="orderPaymentRecoveryMethods" class="grid gap-2" role="radiogroup" aria-label="Payment method"></div>
+                <div id="accountStripeSection" class="hidden space-y-2">
+                  <div id="accountStripeCardElement" class="rounded-lg border border-input bg-background p-3"></div>
+                  <p id="accountStripeError" class="hidden text-sm text-destructive"></p>
+                </div>
+                <p id="orderPaymentRecoveryMessage" role="status" class="hidden text-sm"></p>
+                <button type="button" id="orderPaymentRecoveryButton" class={`${ui.primaryButton} w-full`}></button>
+              </div>
+            </section>
+
+            <section class={card} aria-labelledby="helpHeading">
+              <h2 id="helpHeading" class={ui.cardTitle}>Order help</h2>
+              <p id="orderSupportIntro" class="mt-1 text-sm text-muted-foreground"></p>
+              <div id="orderSupportActions" class="mt-4 grid gap-2 empty:hidden"></div>
+              <div id="orderSupportRequests" class="mt-4 space-y-3 empty:hidden"></div>
+              <div id="orderSupportForm" class="mt-4 hidden rounded-lg border border-border p-4">
+                <h3 id="orderSupportFormTitle" class="text-sm font-semibold text-foreground"></h3>
+                <fieldset class="mt-3">
+                  <legend class="text-sm font-medium text-foreground">Reason</legend>
+                  <div id="orderSupportReasons" class="mt-1"></div>
+                </fieldset>
+                <label class="mt-3 block text-sm font-medium text-foreground" for="orderSupportMessage">Note (required for Other)</label>
+                <textarea id="orderSupportMessage" class={`${ui.field} mt-1.5 min-h-20`} maxlength="1000"></textarea>
+                <p id="orderSupportFormError" role="alert" class="mt-2 hidden text-sm text-destructive"></p>
+                <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <button type="button" id="orderSupportCancel" class={ui.secondaryButton}>Cancel</button>
+                  <button type="button" id="orderSupportSubmit" class={ui.primaryButton}>Submit request</button>
+                </div>
+              </div>
+              <StoreContact layoutData={layoutData} class="mt-4 text-sm text-muted-foreground" />
+            </section>
+          </div>
+        </div>
+
+        <!-- The order's conversation with the store (renders nothing without access). -->
+        <OrderConversationPanel orderId={orderId} access="account" class={`${card} mt-4 lg:mt-6`} />
+      </div>
     </div>
-  </section>
+  </AccountShell>
+</Layout>
 
 <script>
   import { bindOrderDetailPage, loadOrderDetail } from "@/lib/account-order-detail";
+  import { focusMainHeadingIfLost } from "@/lib/focus-main-heading";
 
-  type DetailWindow = Window & { __scaliusOrderDetailBound?: boolean };
-  const detailWindow = window as DetailWindow;
-  const start = () => {
+  if (document.querySelector("[data-order-detail-page]")) {
     bindOrderDetailPage();
     void loadOrderDetail();
-  };
-
-  if (!detailWindow.__scaliusOrderDetailBound) {
-    detailWindow.__scaliusOrderDetailBound = true;
-    document.addEventListener("astro:page-load", start);
-    // Signing in from this page shows the order right here.
-    window.addEventListener("customer-login", () => void loadOrderDetail());
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
-  } else {
-    start();
+    // Signing in from this page shows the order right here; focus lands on its heading.
+    window.addEventListener("customer-login", () => void loadOrderDetail().then(focusMainHeadingIfLost));
   }
 </script>
-</Layout>

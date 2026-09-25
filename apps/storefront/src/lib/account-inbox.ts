@@ -39,7 +39,6 @@ export { CONVERSATION_LIMITS, isConversationAttachmentId, isConversationId };
 /** English, like the other account pages. One place so a later language pass can swap it. */
 export const CONVERSATION_COPY = {
   inboxTitle: "Inbox",
-  accountTab: "Orders and profile",
   inboxEmpty: "No messages yet. Questions about an order start from the order page.",
   signInTitle: "Sign in to see your messages",
   signInBody: "Your conversations with the store appear here after you sign in.",
@@ -148,7 +147,10 @@ export function safeConversationReturnPath(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const raw = value.trim();
   if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\") || raw.length > 512) return null;
-  if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
+  for (let i = 0; i < raw.length; i += 1) {
+    const code = raw.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return null;
+  }
   let url: URL;
   try {
     url = new URL(raw, "https://storefront.invalid");
@@ -397,25 +399,4 @@ export function unreadLabel(count: number): string {
 export function inboxBadgeText(unread: number): string {
   if (!Number.isFinite(unread) || unread <= 0) return "";
   return unread > 99 ? "99+" : String(Math.floor(unread));
-}
-
-// ---------------------------------------------------------------------------
-// Browser: unread count for the account page
-// ---------------------------------------------------------------------------
-
-/** Unread replies across the account's conversations; 0 when unknown. Same-origin proxy, session cookie. */
-export async function fetchInboxUnread(fetcher: typeof fetch = fetch): Promise<number> {
-  try {
-    const response = await fetcher("/api/customer-auth/conversations/unread", {
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-      cache: "no-store",
-    });
-    if (!response.ok) return 0;
-    const payload = await response.json() as { success?: boolean; data?: { unread?: unknown } };
-    const unread = payload?.data?.unread;
-    return payload?.success && typeof unread === "number" && unread > 0 ? Math.floor(unread) : 0;
-  } catch {
-    return 0;
-  }
 }

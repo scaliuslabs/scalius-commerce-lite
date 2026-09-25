@@ -4,7 +4,11 @@ import { eq, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, errorResponses, paginationSchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
-import { getPublicCollectionCatalog, getPublicCollectionSitemapEntries } from "@scalius/core/modules/collections";
+import {
+  getPublicCollectionCatalog,
+  getPublicCollectionSitemapEntries,
+  listPublicCollectionDirectory,
+} from "@scalius/core/modules/collections";
 import { deps } from "@scalius/core/cache-deps";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";
@@ -14,6 +18,7 @@ import {
   normalizePublicListingSearchParam,
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
+import { optionalProductCardFacts } from "../schemas/product-card-facts";
 
 // Create an OpenAPIHono app for collection routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -61,6 +66,12 @@ const storefrontCollectionDetailSchema = storefrontCollectionSchema.omit({ updat
   metaDescription: z.string().nullable(),
 });
 
+// Review ratings on listing cards and the "N★ & up" facet (Wave B §2.4).
+const cardRatingSchema = z.object({
+  average: z.number().min(1).max(5).openapi({ description: "Average of the published reviews, two decimals truncated (4.66)." }),
+  count: z.number().int().min(1).openapi({ description: "Published reviews." }),
+}).nullable().openapi({ description: "Published-review rating; null when the product has no published review." });
+
 const collectionProductSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -73,14 +84,25 @@ const collectionProductSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
+  cardFacts: optionalProductCardFacts,
   discountedPrice: z.number(),
   priceVaries: z.boolean(),
   availableForSale: z.boolean(),
   freeDelivery: z.boolean(),
   categoryId: z.string().nullable(),
   hasVariants: z.boolean(),
+  rating: cardRatingSchema,
 });
 
+const ratingFacetSchema = z.array(z.object({
+  min: z.number().int().min(1).max(4).openapi({ description: "Whole stars: products averaging at least this (`minRating`)." }),
+  count: z.number().int().min(0).openapi({ description: "Products matching the other selections and this threshold." }),
+})).max(4).openapi({
+  description: "\"N★ & up\" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.",
+});
+const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().openapi({
+  description: "Only products whose published-review average is at least this many whole stars (1-4).",
+});
 
 const collectionCatalogQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1),
@@ -92,12 +114,15 @@ const collectionCatalogQuerySchema = z.object({
     "name-asc",
     "name-desc",
     "discount",
+    "rating",
   ]).optional(),
+  minRating: minRatingQuerySchema,
   search: z.string().optional(),
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
+  inStock: z.enum(["true"]).optional(),
 }).superRefine((value, ctx) => {
   if (
     value.minPrice !== undefined &&
@@ -170,6 +195,34 @@ app.openapi(listCollectionsRoute, async (c) => {
   return ok(c, { collections: formattedCollections });
 });
 
+// GET /collections/directory — the /collections page (before /:id)
+const collectionDirectoryRoute = createRoute({
+  method: "get",
+  path: "/directory",
+  operationId: "storefront.collections.directory",
+  tags: ["Collections"],
+  summary: "Active collections a buyer can shop, with their product count and a photo",
+  responses: {
+    200: {
+      description: "Collection directory",
+      content: { "application/json": { schema: successEnvelope(z.object({
+        collections: z.array(z.object({
+          id: z.string(),
+          name: z.string(),
+          canonicalPath: z.string().nullable(),
+          productCount: z.number().int(),
+          imageUrl: z.string().nullable(),
+          imageAlt: z.string().nullable(),
+        })),
+      })) } },
+    },
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(collectionDirectoryRoute, async (c) =>
+  ok(c, { collections: await listPublicCollectionDirectory(c.get("db")) }));
+
 // GET /collections/:id — get collection by ID
 // GET /collections/sitemap — collection pages for XML discovery (registered before /{id})
 const collectionSitemapRoute = createRoute({
@@ -221,6 +274,7 @@ const getCollectionByIdRoute = createRoute({
         pagination: paginationSchema,
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
         facets: z.array(productFacetSchema),
+        ratingFacet: ratingFacetSchema,
       })) } },
     },
     404: errorResponses[404],
@@ -247,7 +301,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     throw new NotFoundError("Collection not found");
   }
 
-  const { collection, categories, products, featuredProduct, pagination, priceRange, facets } = result;
+  const { collection, categories, products, featuredProduct, pagination, priceRange, facets, ratingFacet } = result;
   const { version: _version, updatedAt: _updatedAt, deletedAt: _deletedAt, ...publicCollection } = collection;
 
   return ok(c, {
@@ -266,6 +320,7 @@ app.openapi(getCollectionByIdRoute, async (c) => {
     pagination,
     priceRange,
     facets,
+    ratingFacet,
   });
 });
 

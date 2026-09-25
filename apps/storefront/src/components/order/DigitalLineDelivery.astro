@@ -1,0 +1,22 @@
+---
+// B3 (digital goods): the line's downloads and licence keys on the receipt,
+// server-rendered with the same markup as the account order page
+// (digital-line-delivery.ts), so both work without JavaScript. A refused
+// Download returns here with `?download=<flag>#download-<id>`; the file row the
+// page scrolls to shows the message (`:target`). Nothing without downloads or keys.
+import type { LineExtrasContext, OrderLine } from "@/lib/order-line-extras";
+import { downloadReturnPathOf, readDownloadNotice } from "@/lib/account-downloads";
+import { digitalLineDeliveryMarkup } from "./digital-line-delivery";
+
+export interface Props {
+  line: OrderLine;
+  context: LineExtrasContext;
+}
+
+const { line, context } = Astro.props;
+const markup = digitalLineDeliveryMarkup(line, context, {
+  returnTo: downloadReturnPathOf(Astro.url),
+  notice: readDownloadNotice(Astro.url.search),
+});
+---
+{markup && <Fragment set:html={markup} />}

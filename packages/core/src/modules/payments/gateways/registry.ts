@@ -45,7 +45,16 @@ export function isPaymentMethodId(id: unknown): id is string {
   return id === COD_PAYMENT_METHOD || isOnlinePaymentMethod(id);
 }
 
+/**
+ * A gift-card tender (`orders.payment_method` of an order the buyer's gift
+ * cards cover, and the `order_payments` rows they paid). Not a gateway and
+ * not a checkout setting: the gift-cards domain records it with no provider.
+ */
+export const GIFT_CARD_TENDER_METHOD = "gift_card";
+export const GIFT_CARD_TENDER_LABEL = "Gift card";
+
 export function paymentMethodLabel(id: string): string {
+  if (id === GIFT_CARD_TENDER_METHOD) return GIFT_CARD_TENDER_LABEL;
   return id === COD_PAYMENT_METHOD ? COD_LABEL : getPaymentGateway(id)?.label ?? id;
 }
 

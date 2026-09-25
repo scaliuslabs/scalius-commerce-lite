@@ -12,8 +12,10 @@ import { adminOrdersSupportRequestRoutes } from "../orders-support-requests";
 import { adminOrderBulkRoutes } from "./bulk";
 import { adminOrderCreateRoutes } from "./create";
 import { adminOrderDetailRoutes } from "./detail";
+import { adminOrderDigitalRoutes } from "./digital";
 import { adminOrderFulfilmentRoutes } from "./fulfilments";
 import { adminOrderListRoutes } from "./list";
+import { adminOrderWarrantyClaimRoutes } from "./warranty-claims";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -27,5 +29,7 @@ app.route("/", adminOrderCreateRoutes);
 app.route("/", adminOrderBulkRoutes);
 app.route("/", adminOrderDetailRoutes);
 app.route("/", adminOrderFulfilmentRoutes);
+app.route("/", adminOrderDigitalRoutes);
+app.route("/", adminOrderWarrantyClaimRoutes);
 
 export { app as adminOrdersRoutes };

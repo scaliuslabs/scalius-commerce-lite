@@ -1,5 +1,6 @@
 import type { Database } from "@scalius/database/client";
-import { safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
+import type { BatchItem } from "drizzle-orm/batch";
 import {
   inventoryOperations,
   productVariants,
@@ -26,7 +27,30 @@ const OPERATION_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/;
 export type InventoryOperationType =
   | "manual_adjustment"
   | "scanner_adjustment"
-  | "stocktake";
+  | "stocktake"
+  /** Licence keys imported into (+n) or revoked from (-n) a key pool: the pool is the variant's stock. */
+  | "licence_keys";
+
+const INVENTORY_OPERATION_TYPES: readonly InventoryOperationType[] = [
+  "manual_adjustment",
+  "scanner_adjustment",
+  "stocktake",
+  "licence_keys",
+];
+
+/** The companion guard: the counter edge of this batch committed, or nothing does. */
+const COMPANION_CAS_MARKER = "INVENTORY_COMPANION_CAS";
+
+export interface InventoryOperationOptions {
+  /**
+   * Statements that must commit in the same batch as the stock edge (the
+   * licence keys an import adds or a revoke retires). They run after the
+   * counter update, behind a guard that aborts the whole batch when the
+   * compare-and-set lost, so they never commit without the edge. Only for
+   * operations that change the counter (delta ≠ 0).
+   */
+  companionStatements?: readonly BatchItem<"sqlite">[];
+}
 
 export type InventoryOperationPool = "stock" | "preorderStock";
 
@@ -89,7 +113,9 @@ export async function executeInventoryOperation(
   db: Database,
   input: InventoryOperationInput,
   adminUserId?: string,
+  options: InventoryOperationOptions = {},
 ): Promise<InventoryOperationResult> {
+  const companionStatements = options.companionStatements ?? [];
   const normalized = normalizeInventoryOperationRequest(input);
   const requestHash = await hashNormalizedRequest(normalized);
   const existing = await selectInventoryOperation(db, normalized.operationKey);
@@ -124,6 +150,9 @@ export async function executeInventoryOperation(
       );
     }
     const delta = newStock - previousStock;
+    if (companionStatements.length > 0 && delta === 0) {
+      throw new ValidationError("An inventory operation with companion statements must change the stock.");
+    }
     const result: InventoryOperationResult = {
       variantId: normalized.variantId,
       previousStock,
@@ -149,6 +178,7 @@ export async function executeInventoryOperation(
           variant,
           movementId,
           adminUserId,
+          companionStatements,
         );
 
       if (committed) {
@@ -169,7 +199,10 @@ export async function executeInventoryOperation(
         }
         return replay;
       }
-      throw error;
+      // A lost compare-and-set rolled the companions back: read and retry.
+      if (!(companionStatements.length > 0 && isBatchGuardError(error, COMPANION_CAS_MARKER))) {
+        throw error;
+      }
     }
 
     const racedOperation = await selectInventoryOperation(
@@ -206,6 +239,7 @@ async function commitCounterOperation(
   variant: InventoryVariantState,
   movementId: string,
   adminUserId?: string,
+  companionStatements: readonly BatchItem<"sqlite">[] = [],
 ): Promise<boolean> {
   const nextVersion = variant.stockVersion + 1;
   const movementInsert = buildStockMovementClaim(db, {
@@ -265,6 +299,21 @@ async function commitCounterOperation(
       stockUpdate,
       // Buyer state reads the counter this batch just wrote.
       ...catalogBuyerStateRefreshStatementsForSkus(db, [input.variantId]),
+      ...(companionStatements.length > 0
+        ? [
+          buildBatchGuard(db, sql`EXISTS (
+            SELECT 1 FROM ${inventoryOperations}
+            WHERE ${inventoryOperations.operationKey} = ${input.operationKey}
+              AND ${inventoryOperations.movementId} = ${movementId}
+          ) AND EXISTS (
+            SELECT 1 FROM ${productVariants}
+            WHERE ${productVariants.id} = ${input.variantId}
+              AND ${productVariants.stockVersion} = ${nextVersion}
+              AND ${input.pool === "preorderStock" ? productVariants.preorderStock : productVariants.stock} = ${result.newStock}
+          )`, COMPANION_CAS_MARKER),
+          ...companionStatements,
+        ]
+        : []),
     ] as never,
   ) as Array<Array<{ id?: string; operationKey?: string }>>;
 
@@ -407,7 +456,7 @@ function normalizeInventoryOperationRequest(input: InventoryOperationInput) {
   const variantId = input.variantId.trim();
   const reason = input.reason.trim();
   const notes = input.notes?.trim() || null;
-  if (!(["manual_adjustment", "scanner_adjustment", "stocktake"] as const).includes(input.operationType)) {
+  if (!INVENTORY_OPERATION_TYPES.includes(input.operationType)) {
     throw new ValidationError("Unsupported inventory operation type");
   }
   if (input.pool !== "stock" && input.pool !== "preorderStock") {
@@ -465,6 +514,9 @@ function formatMovementNotes(
   }
   if (input.operationType === "scanner_adjustment") {
     return `Scanner adjustment (${input.reason})${suffix}`;
+  }
+  if (input.operationType === "licence_keys") {
+    return `Licence keys (${input.reason})${suffix}`;
   }
   return `Stocktake (${input.reason}): set from ${result.previousStock} to ${result.newStock}${suffix}`;
 }

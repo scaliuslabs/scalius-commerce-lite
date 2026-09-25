@@ -192,12 +192,14 @@ export function useCreateOrder() {
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.list() });
       invalidateDashboardQueries(queryClient);
       invalidateOrderInventoryQueries(queryClient);
-      toast.success(msg("toast.orderCreated"));
     },
   });
 }
 
-/** The edit page shows a failure inside its review dialog (`mutation.error`). */
+/**
+ * The edit page shows a failure inside its review dialog (`mutation.error`).
+ * Success is announced by the order editor's save bar, like `useCreateOrder`.
+ */
 export function useConfirmManualOrderAmendment() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -206,7 +208,6 @@ export function useConfirmManualOrderAmendment() {
     onSuccess: (_result, variables) => {
       invalidateOrder(queryClient, variables.id);
       invalidateOrderInventoryQueries(queryClient);
-      toast.success(msg("toast.orderUpdated"));
     },
     onError: () => invalidateOrderInventoryQueries(queryClient),
   });

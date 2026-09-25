@@ -21,20 +21,38 @@ import {
   normalizePublicListingSearchParam,
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
+import { optionalProductCardFacts } from "../schemas/product-card-facts";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const sortSchema = z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount"]);
+// Review ratings on listing cards and the "N★ & up" facet (Wave B §2.4).
+const cardRatingSchema = z.object({
+  average: z.number().min(1).max(5).openapi({ description: "Average of the published reviews, two decimals truncated (4.66)." }),
+  count: z.number().int().min(1).openapi({ description: "Published reviews." }),
+}).nullable().openapi({ description: "Published-review rating; null when the product has no published review." });
+const ratingFacetSchema = z.array(z.object({
+  min: z.number().int().min(1).max(4).openapi({ description: "Whole stars: products averaging at least this (`minRating`)." }),
+  count: z.number().int().min(0).openapi({ description: "Products matching the other selections and this threshold." }),
+})).max(4).openapi({
+  description: "\"N★ & up\" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.",
+});
+const minRatingQuerySchema = z.coerce.number().int().min(1).max(4).optional().openapi({
+  description: "Only products whose published-review average is at least this many whole stars (1-4).",
+});
+
+const sortSchema = z.enum(["newest", "price-asc", "price-desc", "name-asc", "name-desc", "discount", "rating"]);
 
 const brandProductFilterSchema = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional().default(1).openapi({ description: "Page number" }),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20).openapi({ description: "Items per page" }),
-  sort: sortSchema.optional().default("newest").openapi({ description: "Sort order" }),
+  sort: sortSchema.optional().default("newest").openapi({ description: "Sort order. `rating`: the Bayesian review rank, unreviewed products last." }),
+  minRating: minRatingQuerySchema,
   search: z.string().trim().max(100).optional().openapi({ description: "Search within the brand" }),
   minPrice: z.coerce.number().min(0).optional().openapi({ description: "Minimum effective buyer-SKU price" }),
   maxPrice: z.coerce.number().min(0).optional().openapi({ description: "Maximum effective buyer-SKU price" }),
   freeDelivery: z.enum(["true", "false"]).optional().openapi({ description: "Free delivery filter" }),
   hasDiscount: z.enum(["true", "false"]).optional().openapi({ description: "Has discount filter" }),
+  inStock: z.enum(["true"]).optional().openapi({ description: "Only products a buyer can buy now (exclude sold out)" }),
 }).superRefine((value, ctx) => {
   if (value.minPrice !== undefined && value.maxPrice !== undefined && value.minPrice > value.maxPrice) {
     ctx.addIssue({
@@ -90,19 +108,23 @@ const brandProductSchema = z.object({
   imageMediaId: z.string().nullable(),
   imageAlt: z.string().nullable(),
   secondaryImageUrl: z.string().nullable(),
+  cardFacts: optionalProductCardFacts,
   category: z.object({ id: z.string(), name: z.string(), slug: z.string() }).nullable(),
   createdAt: z.string().nullable(),
+  rating: cardRatingSchema,
 });
 
 
 const appliedFiltersSchema = z.object({
   attributes: z.array(appliedFacetFilterSchema),
   sort: sortSchema,
+  minRating: z.number().int().min(1).max(4).optional(),
   search: z.string().optional(),
   minPrice: z.number().min(0).optional(),
   maxPrice: z.number().min(0).optional(),
   freeDelivery: z.enum(["true", "false"]).optional(),
   hasDiscount: z.enum(["true", "false"]).optional(),
+  inStock: z.enum(["true"]).optional(),
 });
 
 const slugParams = z.object({ slug: brandSlugSchema });
@@ -204,6 +226,7 @@ const getBrandProductsRoute = createRoute({
         pagination: paginationSchema,
         priceRange: z.object({ min: z.number().min(0), max: z.number().min(0) }),
         facets: z.array(productFacetSchema),
+        ratingFacet: ratingFacetSchema,
         appliedFilters: appliedFiltersSchema,
       })) } },
     },
@@ -232,10 +255,12 @@ app.openapi(getBrandProductsRoute, async (c) => {
   const appliedFilters: z.infer<typeof appliedFiltersSchema> = { attributes: appliedFacetFilters(attributeFilters), sort: params.sort };
   const normalizedSearch = normalizePublicFtsSearchQuery(params.search);
   if (normalizedSearch) appliedFilters.search = normalizedSearch;
+  if (params.minRating !== undefined) appliedFilters.minRating = params.minRating;
   if (params.minPrice !== undefined) appliedFilters.minPrice = params.minPrice;
   if (params.maxPrice !== undefined) appliedFilters.maxPrice = params.maxPrice;
   if (params.freeDelivery !== undefined) appliedFilters.freeDelivery = params.freeDelivery;
   if (params.hasDiscount !== undefined) appliedFilters.hasDiscount = params.hasDiscount;
+  if (params.inStock !== undefined) appliedFilters.inStock = params.inStock;
 
   return ok(c, {
     brand,
@@ -243,6 +268,7 @@ app.openapi(getBrandProductsRoute, async (c) => {
     pagination: result.pagination,
     priceRange: result.priceRange,
     facets: result.facets,
+    ratingFacet: result.ratingFacet,
     appliedFilters,
   });
 });

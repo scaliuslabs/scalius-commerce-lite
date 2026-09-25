@@ -1,5 +1,6 @@
 ---
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
+import LineExtras from "@/components/order/LineExtras.astro";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import OrderSuccessButtons from "../components/OrderSuccessButtons";
@@ -23,8 +24,10 @@ import { getCheckoutConfig, isCodOnly, type CheckoutConfig } from "@/lib/api/che
 import {
   createPurchaseTrackingPayload,
   formatOrderSuccessPaymentMethod,
-  codDueText,
+  getOrderPaymentPresentation,
+  receiptGiftCardTenderLabel,
   getOrderSuccessNextSteps,
+  isDigitalLinePreparing,
   getOrderSuccessViewState,
   getOrderSuccessVisibleBalanceDue,
   isOrderStatusView,
@@ -67,6 +70,9 @@ import {
   formatCheckoutLanguageText,
 } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
+import { receiptLinkRecoveryState } from "@/lib/order-success-recovery";
+import { orderDeliveryRow } from "@/lib/order-delivery-row";
+import { orderShowsLineDiscounts, presentedLineTotalMinor } from "@/lib/order-line-discounts";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -126,6 +132,7 @@ const hostedRecoveryPayment = requestedPayment
   && /^[a-z][a-z0-9_-]{0,63}$/.test(requestedPayment)
   && requestedPayment !== "stripe"
   && requestedPayment !== "cod"
+  && requestedPayment !== "gift_card"
   ? requestedPayment
   : null;
 
@@ -152,7 +159,6 @@ const checkoutLanguage: CheckoutLanguageData = checkoutLanguageResponse ?? {
   code: "en",
   languageData: { ...ENGLISH_CHECKOUT_LANGUAGE_DATA },
   fieldVisibility: {
-    showEmailField: true,
     showOrderNotesField: true,
     showAreaField: true,
   },
@@ -176,12 +182,7 @@ if (!orderId || !receiptToken) {
         return `${url.pathname}${url.search}`;
       })()
     : undefined;
-  recoveryState = {
-    title: requestedOrderId ? copy.orderReceiptMissingTitleText : copy.orderReceiptIncompleteTitleText,
-    message: recoveryUrl ? copy.orderReceiptBrowserRecoveryMessageText : copy.orderReceiptTrackOrderHelpText,
-    status: 400,
-    action: recoveryUrl ? { href: recoveryUrl, label: copy.orderReceiptVerifyRecoveryText } : trackOrderAction,
-  };
+  recoveryState = receiptLinkRecoveryState({ requestedOrderId, recoveryUrl }, copy);
 } else {
   try {
     order = await getOrderReceipt(orderId, receiptToken);
@@ -226,6 +227,9 @@ const orderLineGroups = order ? groupOrderLines(orderItemsFromApi, order, copy) 
 const showOrderLineGroupHeadings = showsOrderLineGroupHeadings(orderLineGroups);
 const deliveryBlock = order ? resolveOrderDeliveryBlock(order, copy) : null;
 const visibleBalanceDue = order ? getOrderSuccessVisibleBalanceDue(order) : 0;
+// Gift cards that paid part of the order, and the words for what is left.
+const receiptPayment = order ? getOrderPaymentPresentation(order, copy) : null;
+const receiptGiftCardTenders = receiptPayment?.giftCardTenders ?? [];
 const savedMoneySummary = order ? resolveSavedOrderMoneySummary(order) : null;
 const configuredCurrencyCode = checkoutConfig.currency?.code
   ?? layoutData?.currency?.code
@@ -325,13 +329,15 @@ const receiptDiscounts = receiptMoney
       discountText: copy.discountText,
     })
   : null;
-const receiptDeliveryLabel = order?.shippingMethodName
-  ? deliveryBlock?.mode === "pickup"
-    ? `${copy.orderPickupHeadingText} · ${order.shippingMethodName}`
-    : formatCheckoutLanguageText(copy.orderReceiptDeliveryWithMethodText, { method: order.shippingMethodName })
-  : deliveryBlock?.mode === "pickup"
-    ? copy.orderPickupHeadingText
-    : copy.orderReceiptDeliveryText;
+const receiptDeliveryRow = receiptDiscounts && deliveryBlock
+  ? orderDeliveryRow({
+      mode: deliveryBlock.mode,
+      methodName: order?.shippingMethodName,
+      ...receiptDiscounts.delivery,
+    }, copy, formatReceiptAmount)
+  : null;
+// An order-level promotion is one line in the totals, never an "Item discount" on each line.
+const showsLineDiscounts = orderShowsLineDiscounts(order?.discounts);
 // Nothing to deliver and nothing charged: no delivery row and no "method not recorded" note.
 const showsReceiptDeliveryRow = !(deliveryBlock?.mode === "none"
   && !order?.shippingMethodName
@@ -593,7 +599,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{copy.orderReceiptPaymentText}</span>
-            <span class="text-right font-medium">{formatOrderSuccessPaymentMethod(order.paymentMethod, copy)}</span>
+            <span class="text-right font-medium">{formatOrderSuccessPaymentMethod(order.paymentMethod, copy, order)}</span>
           </div>
           <div class="flex justify-between">
             <span class="text-muted-foreground">{copy.orderReceiptPaymentStatusText}</span>
@@ -608,13 +614,13 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                 <span class="text-muted-foreground">{copy.subtotalText}</span>
                 <span class="font-medium">{formatReceiptAmount(receiptMoney.subtotal)}</span>
               </div>
-              {showsReceiptDeliveryRow && <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">{receiptDeliveryLabel}</span>
+              {showsReceiptDeliveryRow && receiptDeliveryRow && <div class="flex justify-between gap-4">
+                <span class="text-muted-foreground">{receiptDeliveryRow.label}</span>
                 <span class="text-right font-medium">
-                  {receiptDiscounts.delivery.charged < receiptDiscounts.delivery.fee && <s class="mr-1.5 font-normal text-muted-foreground">{formatReceiptAmount(receiptDiscounts.delivery.fee)}</s>}
-                  {receiptDiscounts.delivery.charged === 0 ? copy.freeText : formatReceiptAmount(receiptDiscounts.delivery.charged)}
-                  {receiptDiscounts.delivery.codes && (
-                    <span class="ml-1 font-normal text-muted-foreground">({receiptDiscounts.delivery.codes})</span>
+                  {receiptDeliveryRow.struck && <s class="mr-1.5 font-normal text-muted-foreground">{receiptDeliveryRow.struck}</s>}
+                  {receiptDeliveryRow.value}
+                  {receiptDeliveryRow.codes && (
+                    <span class="ml-1 font-normal text-muted-foreground">({receiptDeliveryRow.codes})</span>
                   )}
                 </span>
               </div>}
@@ -635,8 +641,14 @@ const orderRecommendations = order && showsSuccessHero && !statusView
               </div>
             </div>
           )}
+          {receiptGiftCardTenders.map((tender) => (
+            <div class="flex justify-between gap-4" data-receipt-gift-card>
+              <span class="text-muted-foreground">{receiptGiftCardTenderLabel(tender, copy)}</span>
+              <span class="shrink-0 whitespace-nowrap font-medium text-foreground">−{formatReceiptAmount(tender.amount)}</span>
+            </div>
+          ))}
           {
-            order.paidAmount > 0 && visibleBalanceDue > 0 && (
+            order.paidAmount > 0 && visibleBalanceDue > 0 && receiptGiftCardTenders.length === 0 && (
               <div class="flex justify-between">
                 <span class="text-muted-foreground">{copy.orderReceiptPaidText}</span>
                 <span class="font-medium text-foreground">
@@ -648,7 +660,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           {
             visibleBalanceDue > 0 && (
               <div class="flex justify-between">
-                <span class="text-muted-foreground">{order.paymentMethod === "cod" ? codDueText(order, copy) : copy.orderReceiptBalanceDueText}</span>
+                <span class="text-muted-foreground">{receiptPayment?.balanceLabel ?? copy.orderReceiptBalanceDueText}</span>
                 <span class="font-medium">
                   {formatReceiptAmount(visibleBalanceDue)}
                 </span>
@@ -723,7 +735,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
           </svg>
           {copy.orderReceiptItemsText}
         </h2>
-        <div class={showOrderLineGroupHeadings ? "space-y-6" : undefined}>
+        <div class={showOrderLineGroupHeadings ? "space-y-6" : undefined} data-receipt-lines>
         {orderLineGroups.map((group) => (
         <div data-order-line-group={group.type}>
           {showOrderLineGroupHeadings && (
@@ -741,8 +753,10 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                 (property) => savedMoneySummary ? formatReceiptMinor(property.priceMinor) : formatReceiptAmount(property.price),
                 copy,
               );
+              const preparing = Boolean(order && isDigitalLinePreparing(item, order));
               return (
-                <div class="order-success-print-item flex items-center justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
+                <div class="order-success-print-item border-b border-border pb-3 last:border-0 last:pb-0">
+                <div class="flex items-center justify-between gap-3">
                   <div class="flex min-w-0 items-center gap-3">
                     {item.productImage && (
                       <img
@@ -777,7 +791,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                         ? formatReceiptMinor(savedLine.unitPriceMinor)
                         : formatReceiptAmount(item.price)}
                     </p>
-                    {savedLine && savedMoneySummary && savedLine.discountMinor > 0 && (
+                    {savedLine && savedMoneySummary && showsLineDiscounts && savedLine.discountMinor > 0 && (
                       <p class="mt-1 text-xs text-muted-foreground">
                         {formatCheckoutLanguageText(copy.orderReceiptItemDiscountText, {
                           amount: formatReceiptMinor(savedLine.discountMinor),
@@ -802,11 +816,27 @@ const orderRecommendations = order && showsSuccessHero && !statusView
                   <div class="shrink-0 text-right">
                     {savedLine && savedMoneySummary && <p class="text-xs text-muted-foreground">{copy.orderReceiptLineTotalText}</p>}
                     <p class="font-medium">
-                      {savedLine
-                        ? formatReceiptMinor(savedLine.totalMinor)
+                      {savedLine && savedMoneySummary
+                        ? formatReceiptMinor(presentedLineTotalMinor(savedLine, showsLineDiscounts, savedMoneySummary.pricesIncludeTax))
                         : formatReceiptAmount(item.quantity * item.price)}
                     </p>
                   </div>
+                </div>
+                {/* Downloads, gift cards and the review form get the line's full
+                    width (under its text from sm up), not the column beside the total. */}
+                {(item.extras || preparing) && (
+                  <div class={item.productImage ? "sm:pl-[3.75rem]" : undefined}>
+                    <LineExtras line={item} context={{ orderId, access: "receipt" }} />
+                    {preparing && (
+                      <p class="mt-3 flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 p-3 text-sm text-foreground" data-download-preparing data-later-text={copy.orderReceiptDownloadLaterText}>
+                        <span class="size-4 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground motion-reduce:animate-none" aria-hidden="true" data-download-preparing-spinner></span>
+                        <span class="min-w-0 flex-1" role="status" data-download-preparing-text>{copy.orderReceiptDownloadPreparingText}</span>
+                        {/* Without JavaScript the buyer checks again; with it the page does. */}
+                        <a href={`${Astro.url.pathname}${Astro.url.search}`} class="shrink-0 font-medium underline underline-offset-2">{copy.orderReceiptRefreshText}</a>
+                      </p>
+                    )}
+                  </div>
+                )}
                 </div>
               );
             })
@@ -869,6 +899,16 @@ const orderRecommendations = order && showsSuccessHero && !statusView
     )}
   </section>
 </Layout>
+
+<script>
+  // A paid download is prepared in the background: the receipt checks back
+  // and shows it when it is ready (lib/receipt-download-poll.ts).
+  import { pollPreparingDownloads } from "@/lib/receipt-download-poll";
+
+  const orderId = document.querySelector<HTMLElement>("[data-order-success-state][data-order-id]")?.dataset.orderId;
+  const laterText = document.querySelector<HTMLElement>("[data-download-preparing]")?.dataset.laterText ?? "";
+  if (orderId) void pollPreparingDownloads({ root: document, orderId, laterText });
+</script>
 
 <script is:inline set:html={`window.__CHECKOUT_CONFIG__=${serializedRecoveryCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}></script>
 

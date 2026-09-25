@@ -1,0 +1,282 @@
+---
+// src/pages/compare.astro
+// Up to four products side by side (Star Tech's compare): their specs
+// grouped by attribute group, rows that differ highlighted, missing values
+// "—", and a buy action per column. One public read joins the render's
+// storefront batch. The page is a tool, not content: noindex,follow, never
+// in a sitemap, and canonical to /compare without the ids.
+import Layout from "@/layouts/Layout.astro";
+import CompareTray from "@/components/compare/CompareTray.astro";
+import {
+  compareRowDiffers,
+  getComparison,
+  parseCompareIds,
+  type CompareProduct,
+} from "@/components/compare/compare-data";
+import { loadPageWithLayout } from "@/lib/page-data";
+import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
+import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
+import { formatMoney } from "@/lib/currency";
+import { getProductImageSrcSet, getProductImageUrl } from "@/lib/product-media";
+import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+
+const ids = parseCompareIds(Astro.url.searchParams.get("ids"));
+const { layoutData, pageData: comparison } = await loadPageWithLayout(() => getComparison(ids));
+if (!layoutData || !comparison) {
+  const response = storefrontDataUnavailableResponse("We could not load the comparison. Please try again shortly.");
+  response.headers.set("X-Storefront-Data-State", "unavailable");
+  return response;
+}
+
+const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
+const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
+const money = (amount: number) => formatMoney(amount, { symbol: currencySymbol, code: currencyCode });
+const { products, groups } = comparison;
+const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/compare") ?? undefined;
+const withoutProduct = (id: string) => {
+  const rest = products.filter((product) => product.id !== id).map((product) => product.id);
+  return rest.length > 0 ? `/compare?ids=${rest.map(encodeURIComponent).join(",")}` : "/compare";
+};
+const photo = (product: CompareProduct) =>
+  product.imageUrl && !isUnrenderedMediaOriginal(product.imageUrl)
+    ? { src: getProductImageUrl(product.imageUrl, 320), srcset: getProductImageSrcSet(product.imageUrl) }
+    : null;
+---
+
+<Layout
+  title="Compare products"
+  description="Compare products side by side: prices and specifications."
+  layoutData={layoutData}
+  canonicalUrl={canonicalUrl}
+  noindex={true}
+>
+  <section class="compare-page container mx-auto px-4 py-6 sm:py-8">
+    <h1 class="text-2xl font-semibold text-foreground">Compare products</h1>
+
+    {
+      products.length === 0 ? (
+        <div class="mt-6 rounded-md border border-border p-6 text-muted-foreground">
+          <p>Nothing to compare yet. Choose "Add to Compare" on up to four products.</p>
+          <a href="/" class="mt-3 inline-flex text-primary underline underline-offset-4">Continue shopping</a>
+        </div>
+      ) : (
+        <div class="compare-scroll mt-6" role="region" aria-label="Product comparison" tabindex="0">
+          <table class="compare-table">
+            <caption class="sr-only">Specifications of {products.map((product) => product.name).join(", ")}</caption>
+            <thead>
+              <tr>
+                <td class="compare-label"></td>
+                {products.map((product) => {
+                  const image = photo(product);
+                  const discounted = product.discountedPrice < product.price;
+                  return (
+                    <th scope="col" class="compare-product">
+                      <a href={`/products/${product.slug}`} class="compare-photo">
+                        {image ? (
+                          <img
+                            src={image.src}
+                            srcset={image.srcset}
+                            sizes={image.srcset ? "(max-width: 639px) 44vw, 220px" : undefined}
+                            alt={product.imageAlt || product.name}
+                            width="220"
+                            height="220"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        ) : (
+                          <span aria-hidden="true" class="compare-placeholder">{product.name.trim().charAt(0)}</span>
+                        )}
+                      </a>
+                      <a href={`/products/${product.slug}`} class="compare-name">{product.name}</a>
+                      {product.brand && <span class="compare-brand">{product.brand.name}</span>}
+                      <span class="compare-price">
+                        <span class="sr-only">{discounted ? "Sale price " : "Price "}</span>
+                        {product.priceVaries ? "From " : ""}{money(product.discountedPrice)}
+                        {discounted && <s class="compare-regular"><span class="sr-only">Regular price </span>{money(product.price)}</s>}
+                      </span>
+                      {!product.availableForSale ? (
+                        <span class="compare-action compare-action-muted">Sold out</span>
+                      ) : product.hasVariants ? (
+                        <a href={`/products/${product.slug}`} class="compare-action compare-action-outline">
+                          Choose options<span class="sr-only">: {product.name}</span>
+                        </a>
+                      ) : (
+                        <a href={`/buy/${encodeURIComponent(product.slug)}`} rel="nofollow" data-astro-prefetch="false" class="compare-action">
+                          Buy now<span class="sr-only">: {product.name}</span>
+                        </a>
+                      )}
+                      <a href={withoutProduct(product.id)} rel="nofollow" class="compare-remove">
+                        Remove<span class="sr-only">: {product.name}</span>
+                      </a>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            {groups.map((group) => (
+              <tbody>
+                <tr class="compare-group">
+                  <th scope="rowgroup" colspan={products.length + 1}>{group.name ?? "Other"}</th>
+                </tr>
+                {group.rows.map((row) => {
+                  const differs = products.length > 1 && compareRowDiffers(row.values);
+                  return (
+                    <tr class:list={["compare-row", differs && "compare-row-differs"]}>
+                      <th scope="row" class="compare-label">
+                        {row.name}
+                        {differs && <span class="sr-only"> (differs)</span>}
+                      </th>
+                      {products.map((_, index) => {
+                        const value = row.values[index]?.trim();
+                        return <td>{value || <span aria-label="Not listed">—</span>}</td>;
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            ))}
+          </table>
+          {groups.length === 0 && (
+            <p class="mt-4 text-sm text-muted-foreground">These products have no specifications listed yet.</p>
+          )}
+        </div>
+      )
+    }
+  </section>
+  <CompareTray />
+</Layout>
+
+<style>
+  .compare-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .compare-scroll:focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .compare-table {
+    width: 100%;
+    min-width: calc(9rem + 11rem * 2);
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    color: var(--foreground);
+  }
+
+  .compare-table th,
+  .compare-table td {
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    text-align: start;
+    vertical-align: top;
+  }
+
+  .compare-label {
+    width: 12rem;
+    color: var(--muted-foreground);
+    font-weight: 500;
+  }
+
+  .compare-product {
+    font-weight: 400;
+  }
+
+  .compare-product > * + * {
+    margin-top: 0.5rem;
+  }
+
+  .compare-photo {
+    display: block;
+    aspect-ratio: 1;
+    max-width: 13.75rem;
+    background: var(--card);
+  }
+
+  .compare-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .compare-placeholder {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: 2.5rem;
+  }
+
+  .compare-name,
+  .compare-brand,
+  .compare-price,
+  .compare-remove {
+    display: block;
+  }
+
+  .compare-name {
+    font-weight: 600;
+  }
+
+  .compare-brand {
+    color: var(--muted-foreground);
+  }
+
+  .compare-price {
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--destructive);
+  }
+
+  .compare-regular {
+    margin-inline-start: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+
+  .compare-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    width: 100%;
+    max-width: 13.75rem;
+    border-radius: 0.3125rem;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-weight: 600;
+  }
+
+  .compare-action-outline {
+    background: transparent;
+    color: var(--primary);
+    box-shadow: inset 0 0 0 1px var(--primary);
+  }
+
+  .compare-action-muted {
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  .compare-remove {
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+
+  .compare-group th {
+    background: var(--muted);
+    color: var(--foreground);
+    font-weight: 700;
+  }
+
+  .compare-row-differs td {
+    background: color-mix(in oklab, var(--primary) 7%, var(--background));
+    font-weight: 600;
+  }
+</style>

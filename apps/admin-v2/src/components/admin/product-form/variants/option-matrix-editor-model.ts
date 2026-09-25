@@ -185,6 +185,36 @@ export function optionCombinations(options: DraftOption[]): string[][] {
   );
 }
 
+/** The hidden SKU's draft as saved; a new product tracks quantity by default. */
+export function initialSimpleSku(defaultSku: ProductVariant | undefined): SimpleSkuDraft {
+  return {
+    sku: defaultSku?.sku ?? "",
+    trackInventory: defaultSku ? defaultSku.trackInventory ?? false : true,
+    stock: defaultSku?.stock ?? 0,
+    barcode: defaultSku?.barcode ?? null,
+    barcodeType: (defaultSku?.barcodeType as SimpleSkuDraft["barcodeType"]) ?? null,
+    weight: defaultSku?.weight ?? null,
+  };
+}
+
+/**
+ * The variant draft in one comparable form, so an edit changed back is no
+ * change: rows by id (the table order follows the options, which count) and
+ * keys in a fixed order.
+ */
+export function draftSignature(
+  simpleSku: SimpleSkuDraft,
+  options: readonly DraftOption[],
+  variants: readonly DraftVariant[],
+): string {
+  const rows = [...variants].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return JSON.stringify({ simpleSku, options, variants: rows }, (_key, value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(record).sort().map((name) => [name, record[name]]));
+  });
+}
+
 export function initialVariants(variants: ProductVariant[]): DraftVariant[] {
   return variants
     .filter((variant) => !variant.deletedAt && !variant.isDefault)
@@ -204,10 +234,7 @@ export function initialVariants(variants: ProductVariant[]): DraftVariant[] {
       discountType: variant.discountType === "flat" ? "flat" : "percentage",
       discountPercentage: variant.discountPercentage ?? null,
       discountAmount: variant.discountAmount ?? null,
-      // Only kinds the editor offers; a digital SKU (Wave B) keeps its kind (omitted).
-      ...(variant.fulfillmentKind === "physical" || variant.fulfillmentKind === "service"
-        ? { fulfillmentKind: variant.fulfillmentKind }
-        : {}),
+      ...(variant.fulfillmentKind ? { fulfillmentKind: variant.fulfillmentKind } : {}),
     }));
 }
 

@@ -3,6 +3,12 @@ import { ValidationError } from "@scalius/core/errors";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
+import {
+  previewStorefrontBundleSavings,
+  resolveBundlePromotionInterplay,
+  selectStorefrontCartProductRows,
+} from "@scalius/core/modules/checkout";
+import type { Database } from "@scalius/database/client";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 
@@ -25,6 +31,9 @@ const cartItemSchema = z.object({
   price: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE),
   quantity: z.number().int().positive().max(10_000),
   variantId: z.string().trim().min(1).max(100).optional(),
+  basePrice: z.number().finite().nonnegative().max(MAX_PRODUCT_PRICE).optional().openapi({
+    description: "Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`.",
+  }),
 });
 
 const validateDiscountSchema = z.object({
@@ -35,6 +44,13 @@ const validateDiscountSchema = z.object({
   }),
   customerPhone: phoneNumberSchema.optional().openapi({ description: "Customer phone for per-customer limits" }),
 });
+
+/** The cart's gift-card products: promotions never apply to them (Wave B §4.2). */
+async function selectGiftCardProductIds(db: Database, productIds: readonly string[]): Promise<Set<string>> {
+  if (productIds.length === 0) return new Set();
+  const rows = await selectStorefrontCartProductRows(db, productIds);
+  return new Set(rows.filter((row) => row.isGiftCard).map((row) => row.id));
+}
 
 // POST /discounts/validate: buyer/cart data stays in the body, never the URL.
 const validateDiscountRoute = createRoute({
@@ -54,6 +70,13 @@ const validateDiscountRoute = createRoute({
       description: "Cart discount preview",
       content: { "application/json": { schema: successEnvelope(z.object({
         totalDiscount: z.number(),
+        bundleDiscountAmount: z.number().openapi({ description: "Quantity-bundle saving included in totalDiscount (0 when the promotions save more)." }),
+        bundles: z.array(z.object({
+          productId: z.string(),
+          quantity: z.number().int(),
+          discountType: z.enum(["percentage", "fixed_price"]),
+          label: z.string().nullable(),
+        })),
         discounts: z.array(quotedDiscountLineSchema),
         offers: z.array(discountOfferSchema),
         rejectedCodes: z.array(rejectedDiscountCodeSchema),
@@ -71,8 +94,18 @@ app.openapi(validateDiscountRoute, async (c) => {
   if (lines.length !== items.length) {
     throw new ValidationError("Refresh the cart before applying a discount.");
   }
-  const currency = await getCurrencyConfig(db);
-  const quote = await quoteStorefrontDiscount(db, {
+  const [currency, giftCardProductIds] = await Promise.all([
+    getCurrencyConfig(db),
+    selectGiftCardProductIds(db, lines.map(({ item }) => item.id)),
+  ]);
+  const cartLines = lines.map(({ item, index, variantId }) => ({
+    id: `cart:${index}:${variantId}`,
+    productId: item.id,
+    unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
+    baseUnitPriceMinor: toMinor(item.basePrice ?? item.price, currency.decimalPlaces),
+    quantity: item.quantity,
+  }));
+  const discount = await quoteStorefrontDiscount(db, {
     codes,
     customerPhone,
     shippingKnown: shippingCost !== undefined,
@@ -84,12 +117,37 @@ app.openapi(validateDiscountRoute, async (c) => {
         variantId,
         unitPriceMinor: toMinor(item.price, currency.decimalPlaces),
         quantity: item.quantity,
+        // Gift-card lines are outside every promotion (Wave B §4.2).
+        ...(giftCardProductIds.has(item.id) ? { giftCard: true } : {}),
       })),
       shippingAmountMinor: toMinor(shippingCost ?? 0, currency.decimalPlaces),
     },
   });
+  // The same rule as the tax quote and the order: promotions or bundles,
+  // whichever saves more (checkout/bundle-discounts.ts).
+  const bundleSavings = await previewStorefrontBundleSavings(db, cartLines, currency.code);
+  const interplay = resolveBundlePromotionInterplay(
+    cartLines.map((line) => ({
+      lineId: line.id,
+      unitPriceMinor: line.unitPriceMinor,
+      quantity: line.quantity,
+      bundleDiscountMinor: bundleSavings.lineSavings.get(line) ?? 0,
+    })),
+    discount,
+  );
+  const quote = interplay.discount;
   return ok(c, {
-    totalDiscount: fromMinor(quote.applied?.totalDiscountMinor ?? 0, currency.decimalPlaces),
+    totalDiscount: fromMinor(
+      (quote.applied?.totalDiscountMinor ?? 0) + interplay.bundleDiscountMinor,
+      currency.decimalPlaces,
+    ),
+    bundleDiscountAmount: fromMinor(interplay.bundleDiscountMinor, currency.decimalPlaces),
+    bundles: (interplay.bundleDiscountMinor > 0 ? bundleSavings.bundles : []).map((bundle) => ({
+      productId: bundle.productId,
+      quantity: bundle.quantity,
+      discountType: bundle.discountType,
+      label: bundle.label,
+    })),
     ...presentStorefrontDiscountQuote(quote, currency.decimalPlaces),
   });
 });

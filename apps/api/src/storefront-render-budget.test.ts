@@ -121,6 +121,25 @@ const HOME_SEED = `
   INSERT INTO order_items (id, order_id, product_id, quantity) VALUES ('oi_1', 'o_1', 'p_linen', 1), ('oi_2', 'o_2', 'p_linen', 1);
 `;
 
+/**
+ * Six delivered orders of the linen panjabi, handed over through the real
+ * fulfilment ledger, each with a published review: the product page shows
+ * five and a cursor, and listings get a card rating and the rating facet.
+ */
+const REVIEW_SEED = Array.from({ length: 6 }, (_, index) => {
+  const n = index + 1;
+  return `
+    INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, created_at, updated_at)
+      VALUES ('o_rev${n}', 'Buyer ${n}', '0170000010${n}', 'Road', 'city', 'zone', 'confirmed', unixepoch(), unixepoch());
+    INSERT INTO order_items (id, order_id, product_id, quantity, fulfillment_type) VALUES ('oi_rev${n}', 'o_rev${n}', 'p_linen', 1, 'ship');
+    INSERT INTO order_fulfillments (id, order_id, kind, request_key, actor_type) VALUES ('ful_rev${n}', 'o_rev${n}', 'ship', 'key_rev${n}', 'admin');
+    INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity) VALUES ('fln_rev${n}', 'ful_rev${n}', 'o_rev${n}', 'oi_rev${n}', 1);
+    UPDATE orders SET status = 'delivered' WHERE id = 'o_rev${n}';
+    INSERT INTO product_reviews (id, product_id, order_id, order_item_id, reviewer_key, author_type, author_display_name, rating, title, body, status, published_at)
+      VALUES ('rev_budget_${n}', 'p_linen', 'o_rev${n}', 'oi_rev${n}', 'order:o_rev${n}', 'guest_receipt', 'Buyer ${n}.', ${n === 6 ? 3 : 5}, 'Fits well', 'Soft linen.', 'published', unixepoch() - ${n * 60});
+  `;
+}).join("");
+
 interface Meter {
   binding: D1Database;
   roundTrips: number;
@@ -185,9 +204,10 @@ class MemoryCache {
   }
 }
 
-async function renderPage(page: keyof typeof PAGE_PARTS) {
+async function renderPage(page: keyof typeof PAGE_PARTS, extraSeed = "") {
   const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
+  if (extraSeed) sqlite.exec(extraSeed);
   if (page === "home") {
     sqlite.exec(HOME_SEED);
     sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
@@ -282,6 +302,26 @@ describe("storefront page render D1 budget", () => {
     ]);
     // ৳2,500 + 3% = ৳2,575 over 6 months = ৳429.17 -> ৳430.
     expect(product.emi).toEqual({ provider: "City Bank", months: 6, monthly: 430, monthlyMinor: 43_000 });
+  });
+
+  it("reads a reviewed product's summary and first five reviews in its existing waves (22 round trips, 3 waves)", async () => {
+    const result = await renderPage("product", REVIEW_SEED);
+    const product = (result.bodies[1] as { data: { product: { reviews: { summary: { count: number; average: number }; items: unknown[]; nextCursor: string | null } } } }).data.product;
+    expect(product.reviews.summary).toMatchObject({ count: 6, average: 4.66 });
+    expect(product.reviews.items).toHaveLength(5);
+    expect(product.reviews.nextCursor).toEqual(expect.any(String));
+    expect(result.roundTrips).toBeLessThanOrEqual(22);
+    expect(result.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.product.waves);
+  });
+
+  it("gives listing cards their rating and counts the rating facet without a new round trip", async () => {
+    const reviewed = await renderPage("category", REVIEW_SEED);
+    const body = (reviewed.bodies[1] as { data: { products: Array<{ id: string; rating: unknown }>; ratingFacet: Array<{ min: number; count: number }> } }).data;
+    expect(body.products.find((product) => product.id === "p_linen")?.rating).toEqual({ average: 4.66, count: 6 });
+    expect(body.products.find((product) => product.id === "p_cotton")?.rating).toBeNull();
+    expect(body.ratingFacet).toEqual([{ min: 4, count: 1 }, { min: 3, count: 1 }, { min: 2, count: 1 }]);
+    expect(reviewed.roundTrips).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.roundTrips);
+    expect(reviewed.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.waves);
   });
 
   // Load every route module first: a first dynamic import would otherwise

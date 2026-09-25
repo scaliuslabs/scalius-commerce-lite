@@ -121,4 +121,11 @@ describe("cart page first paint", () => {
     expect(cartPage).toMatch(/group-data-\[delivery-need=none\]:hidden" data-delivery-section/);
     expect(cartPage).toMatch(/group-data-\[delivery-need=none\]:block"[\s\S]{0,40}data-no-delivery-note/);
   });
+
+  it("without scripts shows only the note, never an endless loading skeleton", () => {
+    const noscript = cartPage.match(/<noscript>([\s\S]*?)<\/noscript>/)?.[1] ?? "";
+    expect(noscript).toContain("#cartPageRoot [data-cart-grid] { display: none; }");
+    expect(noscript).toContain("copy.noScriptText");
+    expect(cartPage).toMatch(/<div class="grid [^"]*" data-cart-grid>/);
+  });
 });

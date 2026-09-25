@@ -1,6 +1,6 @@
 // Registry completeness for the dependency-validated cache (CACHE-DESIGN.md
 // §7.3): every table that a cached public read touches is either registered
-// in `@scalius/shared/cache-deps` (so the 0093 triggers advance a key when it
+// in `@scalius/shared/cache-deps` (so the 0100 triggers advance a key when it
 // changes) or explicitly exempt with a reason. The reads are the real API
 // routes of `PUBLIC_API_CACHE_ROUTES`, rendered in-process on the migrated
 // schema; the tables are taken from every executed statement.

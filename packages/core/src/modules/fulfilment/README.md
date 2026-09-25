@@ -35,8 +35,8 @@ row linked to a fulfilment can't be deleted.
 | `delivery-outcomes.ts` | `processCodAction()`, `markOrderDelivered()` | Delivered, and COD collected/failed/returned |
 | `ledger.ts` | `recordOrderFulfilment()`, `voidOrderFulfilment()`, `recordCourierBookingFulfilment()`, `syncCourierFulfilmentFromShipment()`, `assertShipmentDeletable()`, `deriveOrderFulfilmentStatus()` | The fulfilment ledger (Wave A): the only writer of `order_fulfillments` and their lines |
 | `pickup.ts` | `markOrderReadyForPickup()` | Ready for pickup: `pickup_ready_at` plus the `order_ready_for_pickup` outbox row in one batch |
-| `registry.ts` | `FULFILLER_REGISTRY`, `hasFulfiller()` | Which line types can be handed over (manual: ship, pickup, service; automatic: none until Wave B) |
-| `auto-fulfil.ts` | `autoFulfilOrder()`, `sweepAutoFulfilment()` | Digital and gift-card lines after settlement (queue `order.auto_fulfil` and the 15-minute sweep) |
+| `registry.ts` | `FULFILLER_REGISTRY`, `hasFulfiller()` | Which line types can be handed over (manual: ship, pickup, service; automatic: composed from `auto/digital.ts` and `auto/gift-card.ts`, `null` until B3/B4 fill them, so those lines fail closed) |
+| `auto-fulfil.ts` | `autoFulfilOrder()`, `sweepAutoFulfilment()` | Digital and gift-card lines after settlement, or after staff confirmation when `checkout.autoFulfilMode` is `after_confirmation` (queue `order.auto_fulfil` and the 15-minute sweep, driven by the partial index `order_items_auto_pending_idx`, at most 50 orders) |
 | `shared.ts` | -- | Helpers shared by the files above (not exported) |
 
 ### Fulfillment Flow

@@ -82,7 +82,7 @@ export const cacheGeneration = sqliteTable("cache_generation", {
 
 /**
  * Commit-ordered change clock of the dependency-validated cache (migration
- * 0093). One row. `seq` is the highest `cache_dep.seq` committed; a render
+ * 0100). One row. `seq` is the highest `cache_dep.seq` committed; a render
  * reads it first (`s0`). `floor` is raised when old `cache_dep` rows are
  * pruned (an entry below it is invalid). `coarse` is 1 only inside a
  * catalogue-wide rebuild batch, where every trigger advances `store` instead

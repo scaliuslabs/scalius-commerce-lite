@@ -40,6 +40,7 @@ import {
   type NotificationQueueMessage,
   type OrderNotificationQueueMessage,
   composeAuthOtpMessage,
+  flushPendingNotificationOutbox,
   readStoreIdentity,
   getNotificationProviderBlock,
   isNotificationProviderBreakerFailure,
@@ -81,6 +82,7 @@ import {
 } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { bumpCacheGeneration } from "./utils/cache-generation";
+import { enqueueOrderAutoFulfil } from "./utils/auto-fulfil-queue";
 import { autoFulfilOrder, type OrderAutoFulfilQueueMessage } from "@scalius/core/modules/fulfilment";
 import { logOpsEvent } from "./utils/ops-log";
 import {
@@ -716,8 +718,24 @@ async function processQueueMessage(
     // Idempotent: the ledger's unique request keys make redeliveries safe.
 
     case "order.auto_fulfil": {
-      const outcome = await autoFulfilOrder(db, payload.orderId);
+      // Hand the messages it wrote (gift-card codes, downloads, or the staff
+      // key-exhausted alert of a failed run) to the queue now instead of
+      // waiting for the 15-minute outbox flush.
+      const flushOutbox = () =>
+        flushPendingNotificationOutbox({ db, queue: env.JOBS_QUEUE, limit: 50 }).catch((error: unknown) => {
+          console.warn(`[Queue] auto-fulfil outbox flush for ${payload.orderId.slice(0, 12)} failed:`, error instanceof Error ? error.message : "unknown error");
+        });
+      let outcome: Awaited<ReturnType<typeof autoFulfilOrder>>;
+      try {
+        outcome = await autoFulfilOrder(db, payload.orderId, undefined, {
+          credentialEncryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
+        });
+      } catch (error) {
+        await flushOutbox();
+        throw error;
+      }
       if (outcome.delivered) await bumpCacheGeneration({ env, executionCtx });
+      if (outcome.fulfilledTypes.length > 0) await flushOutbox();
       break;
     }
 
@@ -811,6 +829,7 @@ async function applyPaymentEvent(
           amount: fromMinor(event.amountMinor ?? 0, getDecimalPlaces(currency)),
         });
         scheduleMetaPurchaseAfterPaymentConfirmed(db, env, executionCtx, { orderId: event.orderId, gateway: provider });
+        await enqueueOrderAutoFulfil(env.JOBS_QUEUE, event.orderId, "payment-confirmed");
       }
       console.log(`[Queue] ${provider} payment confirmed for order ${event.orderId}`);
       return {

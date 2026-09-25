@@ -1,0 +1,404 @@
+/*
+ * The product page's reviews module and the /products/<slug>/reviews page,
+ * after Amazon's "Customer reviews" (summary column with star bars beside
+ * the list) and Daraz's "Ratings & Reviews" (the same, stacked on phones).
+ * Theme colours only, except the amber of the stars and bars, which every
+ * reference shares.
+ */
+.product-reviews {
+  --review-bar: #f59e0b;
+  border-top: 1px solid var(--border);
+}
+
+.product-reviews-heading {
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--foreground);
+}
+
+.product-reviews-empty {
+  border: 1px dashed var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+
+.product-reviews-layout {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .product-reviews-heading {
+    font-size: 1.5rem;
+  }
+  .product-reviews-layout {
+    grid-template-columns: minmax(16rem, 19rem) minmax(0, 1fr);
+    gap: 3rem;
+    align-items: start;
+  }
+  .product-reviews-summary {
+    position: sticky;
+    top: calc(var(--header-height, 3.5rem) + 1rem);
+  }
+}
+
+.product-reviews-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--foreground);
+}
+
+.product-reviews-score-stars {
+  --sc-star: 1.25rem;
+}
+
+.product-reviews-total {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.product-reviews-histogram {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.product-reviews-bar {
+  display: grid;
+  grid-template-columns: minmax(3.25rem, max-content) minmax(0, 1fr) 2.75rem;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 1.75rem;
+  font-size: 0.875rem;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.product-reviews-bar.is-empty {
+  color: var(--muted-foreground);
+}
+
+.product-reviews-bar-track {
+  display: block;
+  height: 1.125rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: var(--muted);
+}
+
+.product-reviews-bar-track > span {
+  display: block;
+  height: 100%;
+  background: var(--review-bar);
+}
+
+.product-reviews-bar-share {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+a.product-reviews-bar:hover .product-reviews-bar-label,
+a.product-reviews-bar:hover .product-reviews-bar-share,
+a.product-reviews-bar:focus-visible .product-reviews-bar-label {
+  text-decoration: underline;
+}
+
+a.product-reviews-bar:hover .product-reviews-bar-track,
+.product-reviews-bar.is-selected .product-reviews-bar-track {
+  border-color: var(--review-bar);
+}
+
+.product-reviews-bar.is-selected {
+  font-weight: 700;
+}
+
+.product-reviews-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.product-reviews-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.product-reviews-sort-label {
+  margin-right: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.product-reviews-sort-option {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.product-reviews-sort-option:hover {
+  background: var(--muted);
+}
+
+.product-reviews-sort-option[aria-current] {
+  border-color: var(--foreground);
+  font-weight: 600;
+}
+
+.product-reviews-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--foreground);
+}
+
+.product-reviews-filter[hidden],
+.product-reviews-status[hidden],
+.product-reviews-more-button[hidden],
+.product-reviews-all[hidden] {
+  display: none;
+}
+
+.product-reviews-filter-clear {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.product-reviews-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.product-reviews-list > .review {
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.product-reviews-status {
+  padding: 1rem 0;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.review-author {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.review-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.review-stars {
+  --sc-star: 0.9375rem;
+}
+
+.review-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.review-meta,
+.review-facts {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.review-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+.review-sep {
+  color: var(--border);
+}
+
+.review-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.review-verified::before {
+  content: "";
+  width: 0.875rem;
+  height: 0.875rem;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1.2 14.2-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1.2 14.2-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.review-body {
+  margin-top: 0.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+
+.review-body > p + p {
+  margin-top: 0.5rem;
+}
+
+.review-reply {
+  margin-top: 0.875rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: var(--muted);
+}
+
+.review-reply-title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.review-reply-date {
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+
+.review-reply .review-body {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.product-reviews-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding-top: 1rem;
+}
+
+.product-reviews-more-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.product-reviews-more-button:hover {
+  background: var(--muted);
+}
+
+.product-reviews-all {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.product-reviews-all:hover {
+  text-decoration: underline;
+}
+
+.product-reviews[aria-busy="true"] .product-reviews-list {
+  opacity: 0.55;
+}
+
+/* The review call to action beside the heading, and the buyer's own review or
+   form beneath it (review-cta.ts fills both after hydration). */
+.product-reviews-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.product-reviews-head .product-reviews-heading {
+  margin-bottom: 0;
+}
+
+.product-reviews-write {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--theme-button-radius, var(--radius));
+  background: var(--background);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.product-reviews-write:hover {
+  background: var(--muted);
+}
+
+.product-reviews-write[hidden],
+.product-reviews-cta-note[hidden],
+.product-reviews-own[hidden] {
+  display: none;
+}
+
+.product-reviews-cta-note {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.product-reviews-own {
+  max-width: 42rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  padding: 1rem 1.25rem;
+}

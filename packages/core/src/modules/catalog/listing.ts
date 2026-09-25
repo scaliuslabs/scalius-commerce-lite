@@ -19,18 +19,26 @@ import {
 } from "../products/money";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { publicCategorySubtreeCondition } from "../categories/categories.tree";
-import { loadProductMediaProjections, resolveProductCardImages } from "../products/media";
+import { resolveProductCardImages } from "../products/media";
+import { loadCatalogCardData } from "./card-facts";
 import {
     buildCatalogFacetCountQuery,
     catalogFacetFilterConditions,
     declareFacetReadWithoutProducts,
     groupCatalogFacets,
+    groupCatalogRatingFacet,
+    type CatalogFacetCountInput,
     type CatalogFacetCountRow,
 } from "./facets";
 import {
     priceFilterBoundsMinor,
     buildStorefrontBuyerStateConditions,
     getPagination,
+    normalizeMinRating,
+    presentCardRating,
+    reviewStatsJoin,
+    productMinRatingCondition,
+    reviewStats,
     STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
     publishedCategoryIdSet,
 } from "./shared";
@@ -76,6 +84,8 @@ type StorefrontProductListRow = {
     freeDelivery: boolean;
     categoryId: string | null;
     createdAt: number;
+    ratingAvgCenti: number | null;
+    reviewCount: number | null;
 };
 
 type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
@@ -106,6 +116,12 @@ export interface StorefrontCategoryProductCategory {
  * sortable index (newest, price) would otherwise win and walk every public
  * row filtering by the set; the unary `+` keeps the order from choosing it,
  * which bounds the read by the scope's own size.
+ *
+ * `rating` reads the review stats projection the page left-joins by primary
+ * key (`rating_rank_milli`, Bayesian, so one 5★ never outranks many 4.8★):
+ * no buyer-state index gives that order, so the scope's own index drives
+ * and the page is sorted after it; unreviewed products come last, newest
+ * first.
  */
 function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest", sortAfterScope = false): SQL {
     const column = (value: SQLWrapper) => sortAfterScope ? sql`+${value}` : sql`${value}`;
@@ -114,6 +130,9 @@ function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest", sor
     if (sort === "name-asc") return sql`${products.name}`;
     if (sort === "name-desc") return desc(products.name);
     if (sort === "discount") return sql`${column(buyerState.discountDepthBps)} DESC`;
+    if (sort === "rating") {
+        return sql`${reviewStats.ratingRankMilli} DESC NULLS LAST, COALESCE(${reviewStats.reviewCount}, 0) DESC, ${column(buyerState.productCreatedAt)} DESC`;
+    }
     return sql`${column(buyerState.productCreatedAt)} DESC`;
 }
 
@@ -136,6 +155,11 @@ type StorefrontCatalogScope = {
     withoutBrandFacet?: boolean;
     /** The cache keys of the scope's set; the whole public catalogue when left out. */
     dependencies?: ListingDependencySet;
+    /**
+     * The category-tree facet: a category's children with subtree counts;
+     * by default the categories the listed products sit in.
+     */
+    categoryFacet?: CatalogFacetCountInput["categoryFacet"] | null;
 };
 
 /**
@@ -199,6 +223,9 @@ async function readStorefrontCatalogResults(
     // Selected facet values, ranges, option axes and brands: probes of the
     // stored facet rows and buyer state, never a `products` read.
     const facetConditions = catalogFacetFilterConditions(params.attributeFilters);
+    // "N★ & up": a primary-key probe of the review stats per scoped product.
+    const minRating = normalizeMinRating(params.minRating);
+    if (minRating !== undefined) facetConditions.push(productMinRatingCondition(buyerState.productId, minRating));
     const conditions = [...facetBaseConditions, ...facetConditions];
     priceRangeConditions.push(...facetConditions);
     // The count and price range join `products` only when a condition reads it.
@@ -223,10 +250,14 @@ async function readStorefrontCatalogResults(
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("createdAt"),
             hasCustomerOptions: buyerState.hasCustomerOptions,
             availableForSale: buyerState.availableForSale,
+            ratingAvgCenti: reviewStats.ratingAvgCenti,
+            reviewCount: reviewStats.reviewCount,
         })
         .from(buyerState)
         .innerJoin(products, eq(products.id, buyerState.productId))
         .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        // The card rating (and the `rating` order): the page's rows by primary key.
+        .leftJoin(reviewStats, reviewStatsJoin(buyerState.productId))
         .where(and(...conditions))
         .$dynamic();
     const rankJoin = !scope.orderBy && sort === "relevance" && search
@@ -277,6 +308,9 @@ async function readStorefrontCatalogResults(
         categoryId: scope.fixedCategory?.id,
         categoryAncestorsDeclared: ancestorsCategoryId !== null,
         brandFacet: !scope.withoutBrandFacet,
+        ratingFacet: true,
+        minRating,
+        categoryFacet: scope.categoryFacet === undefined ? "product-categories" : scope.categoryFacet ?? undefined,
     });
     const noFacets = Promise.resolve([] as CatalogFacetCountRow[]);
     // A scoped listing counts its facets in the first wave; the unscoped one
@@ -292,7 +326,6 @@ async function readStorefrontCatalogResults(
     const shopAllFacetsLive = unscoped
         && Number(totalCount?.publicCatalogueSize ?? 0) <= SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT;
 
-    const productIds = productsList.map((product) => product.id);
     // A fixed category names every row in it; a subtree listing still reads
     // the sub-categories its other rows sit in (none on a flat store).
     const categoryIds = [...new Set(
@@ -300,11 +333,34 @@ async function readStorefrontCatalogResults(
             .map((product) => product.categoryId)
             .filter((id): id is string => Boolean(id) && id !== scope.fixedCategory?.id),
     )];
-    const [mediaMap, categoriesData, facetRows] = await Promise.all([
-        loadProductMediaProjections(db, productIds),
+    // A subtree listing also names, for each row's category, the listing
+    // category's child whose subtree holds it (shelves group by it).
+    const subtreeParentId = scope.categoryFacet && typeof scope.categoryFacet === "object"
+        ? scope.categoryFacet.parentId
+        : null;
+    type ListedCategory = { id: string; name: string; slug: string; subcategoryId: string | null };
+    const productIds = productsList.map((product) => product.id);
+    // Card media and card facts share one batch (card-facts.ts).
+    const [cardData, categoriesData, facetRows] = await Promise.all([
+        loadCatalogCardData(db, productsList, decimalPlaces),
         categoryIds.length > 0
             ? db
-                .select({ id: categories.id, name: categories.name, slug: categories.slug })
+                .select({
+                    id: categories.id,
+                    name: categories.name,
+                    slug: categories.slug,
+                    subcategoryId: subtreeParentId
+                        ? sql<string | null>`(
+                            SELECT child_link.ancestor_id FROM category_closure AS child_link
+                            INNER JOIN category_closure AS listing_child
+                                ON listing_child.descendant_id = child_link.ancestor_id
+                               AND listing_child.ancestor_id = ${subtreeParentId}
+                               AND listing_child.depth = 1
+                            WHERE child_link.descendant_id = ${categories.id}
+                            LIMIT 1
+                        )`
+                        : sql<string | null>`NULL`,
+                })
                 .from(categories)
                 .where(and(
                     // One JSON parameter: a 100-card page can name 100 categories,
@@ -312,14 +368,14 @@ async function readStorefrontCatalogResults(
                     sql`${categories.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(categoryIds)}))`,
                     ...publicCategoryConditions(),
                 ))
-                .all() as Promise<Array<{ id: string; name: string; slug: string }>>
-            : Promise.resolve([] as Array<{ id: string; name: string; slug: string }>),
+                .all() as Promise<ListedCategory[]>
+            : Promise.resolve([] as ListedCategory[]),
         shopAllFacetsLive ? facetReads() : Promise.resolve(scopedFacets),
     ]);
     declareListing(scope.dependencies ?? { scopes: ["all"] }, params, {
         facets: !unscoped || shopAllFacetsLive,
     });
-    declareProductCards(productIds, mediaMap);
+    declareProductCards(productIds, cardData.media);
     if (productIds.length === 0) {
         // An empty page shows no product, yet its statements name the card
         // SKU (and the facet axis lookup): only coarse keys cover those reads.
@@ -334,10 +390,13 @@ async function readStorefrontCatalogResults(
         deps.categories(ancestors ? ancestors.split(",") : []);
     }
     deps.category(scope.fixedCategory?.id);
-    const categoryMap = new Map(categoriesData.map((category) => [category.id, category]));
+    const categoryMap = new Map(categoriesData.map(({ subcategoryId: _subcategoryId, ...category }) => [category.id, category]));
+    const subcategoryIds = new Map(categoriesData.map((category) => [category.id, category.subcategoryId]));
     const productsWithImages = productsList.map(({
         hasCustomerOptions,
         availableForSale,
+        ratingAvgCenti,
+        reviewCount,
         ...product
     }) => {
         // A card names its category (id, name, slug), never the page's whole
@@ -350,8 +409,13 @@ async function readStorefrontCatalogResults(
             categoryId: category?.id ?? null,
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),
-            ...resolveProductCardImages(mediaMap.get(product.id) ?? []),
+            ...resolveProductCardImages(cardData.media.get(product.id) ?? []),
+            rating: presentCardRating(ratingAvgCenti, reviewCount),
+            cardFacts: cardData.facts(product.id),
             category,
+            ...(subtreeParentId
+                ? { subcategoryId: product.categoryId ? subcategoryIds.get(product.categoryId) ?? null : null }
+                : {}),
             createdAt: unixToDate(product.createdAt)?.toISOString() ?? null,
         };
     });
@@ -364,6 +428,7 @@ async function readStorefrontCatalogResults(
             max: fromMinor(rawPriceRange?.max ?? 0, decimalPlaces),
         },
         facets: groupCatalogFacets(facetRows, params.attributeFilters),
+        ratingFacet: groupCatalogRatingFacet(facetRows, minRating),
     };
 }
 
@@ -397,6 +462,8 @@ export async function getStorefrontCategoryProducts(
             : eq(buyerState.categoryId, category.id),
         sortAfterScope: options.includeDescendants === true,
         fixedCategory: category,
+        // Its sub-categories with their subtree counts; a leaf has none.
+        categoryFacet: options.includeDescendants ? { parentId: category.id } : null,
     });
 }
 

@@ -1,10 +1,10 @@
 // src/components/admin/product-form/hooks/useProductSubmit.ts
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProductFormValues } from "../types";
-import { formatFormValuesForSubmission } from "../utils";
+import { formatFormValuesForSubmission, productSubmitChanges } from "../utils";
 import { useNavigate } from "@tanstack/react-router";
 import {
   postApiV1AdminProducts,
@@ -20,7 +20,7 @@ import {
   type ProductMediaSkuReferenceConflict,
   type ProductRevisionConflict,
 } from "~/lib/admin-api-error";
-import { SaveNotCompleted } from "../../shared/use-form-save-bar";
+import { SaveNotCompleted, copyValues, rebaseForm } from "../../shared/use-form-save-bar";
 import type { ProductCreateComposition } from "../variants/option-matrix-editor-model";
 import { queryKeys } from "~/lib/query-keys";
 import { translate } from "~/i18n";
@@ -37,6 +37,8 @@ const FIELD_LABELS: Partial<Record<keyof ProductFormValues, ProductMessageKey>> 
   discountPercentage: "discount",
   categoryId: "category",
   slug: "webAddress",
+  isGiftCard: "giftCardProduct",
+  warrantyPolicyId: "warranty",
 };
 
 interface UseProductSubmitOptions {
@@ -87,13 +89,16 @@ export function useProductSubmit({
   const queryClient = useQueryClient();
   const [mediaRemovalConflict, setMediaRemovalConflict] = useState<ProductMediaSkuReferenceConflict | null>(null);
   const [pendingValues, setPendingValues] = useState<ProductFormValues | null>(null);
+  // The form as the save sent it: it becomes the saved values, and edits typed meanwhile stay unsaved.
+  const sent = useRef<ProductFormValues | null>(null);
+  const markSaved = () => {
+    if (sent.current) rebaseForm(form, sent.current, sent.current);
+  };
 
   const mutation = useMutation({
     mutationFn: async ({ values, acknowledgedSkuImageRemovalIds }: ProductMutationVariables) => {
       const dirty = form.formState.dirtyFields;
-      const formattedValues = formatFormValuesForSubmission(values, isEdit
-        ? { customizationSchema: Boolean(dirty.customizationSchema), fulfillmentKind: Boolean(dirty.fulfillmentKind) }
-        : undefined);
+      const formattedValues = formatFormValuesForSubmission(values, isEdit ? productSubmitChanges(dirty) : undefined);
       if (isEdit) {
         const entityId = productId || values.id;
         if (!entityId || !aggregateRevision) throw new Error(t("saveFailed"));
@@ -115,7 +120,7 @@ export function useProductSubmit({
       setMediaRemovalConflict(null);
       setPendingValues(null);
       if (isEdit) {
-        form.reset(form.getValues());
+        markSaved();
         onAggregateRevisionChange?.(result.aggregateRevision);
         onProductSaved?.(values, result.aggregateRevision);
       }
@@ -136,7 +141,7 @@ export function useProductSubmit({
       ]);
       if (!isEdit && savedProductId) {
         // The new product's page takes over; its fields are saved.
-        form.reset(form.getValues());
+        markSaved();
         void navigate({ to: "/admin/products/$productId/edit", params: { productId: savedProductId } });
       }
     },
@@ -177,6 +182,7 @@ export function useProductSubmit({
 
   const submit = async (values: ProductFormValues): Promise<number> => {
     try {
+      sent.current = copyValues(form.getValues());
       const result = await mutation.mutateAsync({ values });
       return result.aggregateRevision;
     } catch (error) {
@@ -187,6 +193,7 @@ export function useProductSubmit({
   const confirmMediaRemoval = async () => {
     if (!pendingValues || !mediaRemovalConflict) return;
     try {
+      sent.current = copyValues(form.getValues());
       await mutation.mutateAsync({
         values: pendingValues,
         acknowledgedSkuImageRemovalIds: mediaRemovalConflict.affectedAssociationIds,

@@ -1,12 +1,17 @@
 ---
-// The desktop header menu for the `menu` and `mega` navigation styles: one
-// row of top-level links. A parent opens a dropdown list (menu) or a
-// full-width panel of columns (mega) through a disclosure button beside its
-// link (WAI-ARIA disclosure navigation, not role=menu). Items that don't fit
-// move into "More". Behaviour lives in ./nav-disclosure.ts.
+// The desktop header menu for the `menu` and `mega` navigation styles, and
+// plain link rows (the drill-in row beside "All"): one row of top-level
+// links. A parent opens a dropdown list (menu) or a panel of columns (mega)
+// through a disclosure button beside its link (WAI-ARIA disclosure
+// navigation, not role=menu). Items that don't fit move, as they are, into
+// "More", which also lists the roots past the theme's `maxTopItems` and "All
+// categories" (nav-disclosure.ts). Without JavaScript the row wraps instead
+// of clipping (header.astro's <noscript> rule); an inline row too narrow to
+// wrap shows its first items by a server estimate and "All categories".
 import type { NavigationItem } from "@/lib/api";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import RecursiveDesktopNav from "./RecursiveDesktopNav.astro";
+import { navigationPanelKey } from "./nav-tree";
 import MegaMenuPanel from "./MegaMenuPanel.astro";
 import {
   ariaCurrent,
@@ -22,35 +27,58 @@ interface Props {
   navStyle: "menu" | "mega";
   /** Mega panels show linked items that have photos as 120px tiles (Fabrilife). */
   promoImages?: boolean;
+  /** Roots past `maxTopItems`: named in "More" only. */
+  extras?: NavigationItem[];
+  /** "More" ends with "All categories" (/categories). */
+  allCategories?: boolean;
+  /** Without JavaScript, items from this index on stay hidden (a row too narrow to wrap). */
+  noScriptFit?: number;
+  align?: "center" | "start";
+  label?: string;
+  /** The panels here are cut to the link budget; this URL serves them whole (filled on intent, nav-panels.ts). */
+  panelsSrc?: string;
 }
 
-const { navigation = [], id, navStyle, promoImages = false } = Astro.props;
+const {
+  navigation = [],
+  id,
+  navStyle,
+  promoImages = false,
+  extras = [],
+  allCategories = false,
+  noScriptFit,
+  align = "center",
+  label = "Main navigation",
+  panelsSrc,
+} = Astro.props;
 const items = (Array.isArray(navigation) ? navigation : []).filter((item) => item?.title);
 const moreId = `${id}-more`;
+const hasExtras = extras.length > 0 || allCategories;
+const link = (item: NavigationItem) => ({
+  href: item.href,
+  "aria-current": ariaCurrent(navigationCurrent(item, Astro.url)),
+  "data-astro-prefetch": getStorefrontPrefetchAttribute(item.href, Astro.url),
+  ...navigationLinkAttributes(item),
+});
 ---
 
-<nav id={id} aria-label="Main navigation" class="desktop-nav" data-nav-style={navStyle}>
+<nav id={id} aria-label={label} class="desktop-nav" data-nav-style={navStyle} data-nav-align={align} data-nav-panels={panelsSrc}>
   <ul class="desktop-nav-list" data-nav-overflow data-nav-pending>
     {
       items.map((item, index) => {
         const children = navigationChildren(item);
         const panelId = `${id}-panel-${index}`;
-        const current = ariaCurrent(navigationCurrent(item, Astro.url));
         return (
           <li
             class="desktop-nav-item"
             data-nav-index={index}
             data-disclosure-item={children.length > 0 ? "" : undefined}
+            data-nav-key={panelsSrc && children.length > 0 ? navigationPanelKey(item) : undefined}
+            data-nav-nojs-hidden={noScriptFit !== undefined && index >= noScriptFit ? "" : undefined}
           >
             {item.href ? (
-              <a
-                href={item.href}
-                class="desktop-nav-link"
-                aria-current={current}
-                data-astro-prefetch={getStorefrontPrefetchAttribute(item.href, Astro.url)}
-                {...navigationLinkAttributes(item)}
-              >
-                {item.title}
+              <a class="desktop-nav-link" title={item.title.length > 24 ? item.title : undefined} {...link(item)}>
+                <span class="nav-label">{item.title}</span>
               </a>
             ) : children.length === 0 ? (
               <span class="desktop-nav-link">{item.title}</span>
@@ -64,9 +92,7 @@ const moreId = `${id}-more`;
                 data-disclosure="popup"
               >
                 {item.href ? <span class="sr-only">{item.title} submenu</span> : item.title}
-                <svg class="desktop-nav-chevron" viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="m4 6 4 4 4-4" />
-                </svg>
+                <i class="nav-chevron desktop-nav-chevron" aria-hidden="true"></i>
               </button>
             )}
             {children.length > 0 &&
@@ -81,7 +107,7 @@ const moreId = `${id}-more`;
         );
       })
     }
-    <li class="desktop-nav-item desktop-nav-more" data-nav-more data-disclosure-item hidden>
+    <li class="desktop-nav-item desktop-nav-more" data-nav-more data-disclosure-item hidden={!hasExtras}>
       <button
         type="button"
         class="desktop-nav-toggle desktop-nav-link"
@@ -90,24 +116,35 @@ const moreId = `${id}-more`;
         data-disclosure="popup"
       >
         More
-        <svg class="desktop-nav-chevron" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="m4 6 4 4 4-4" />
-        </svg>
+        <i class="nav-chevron desktop-nav-chevron" aria-hidden="true"></i>
       </button>
       <div id={moreId} class="desktop-nav-dropdown" hidden>
-        {/* Filled from the row by nav-disclosure.ts, so each link is in the HTML once. */}
-        <ul class="nav-dropdown-list" data-nav-more-list></ul>
+        {/* Row items that don't fit are moved in here first (nav-disclosure.ts). */}
+        <ul class="nav-dropdown-list nav-more-list" data-nav-more-list>
+          {extras.map((item) => (
+            <li class="nav-more-extra">
+              <a class="nav-dropdown-link" {...link(item)}>{item.title}</a>
+            </li>
+          ))}
+          {allCategories && (
+            <li class="nav-more-extra nav-more-all">
+              <a class="nav-dropdown-link" href="/categories">All categories</a>
+            </li>
+          )}
+        </ul>
       </div>
     </li>
+    {
+      allCategories && (
+        <li class="desktop-nav-item desktop-nav-nojs" data-nav-nojs-only>
+          <a class="desktop-nav-link" href="/categories">All categories</a>
+        </li>
+      )
+    }
   </ul>
-  <template data-nav-more-template>
-    <li data-nav-more-index="" hidden>
-      <RecursiveDesktopNav items={[{ title: "More", href: "#", subMenu: [{ title: "More", href: "#" }] }]} />
-    </li>
-  </template>
 </nav>
 
-<style>
+<style is:global>
   .desktop-nav {
     display: none;
     width: 100%;
@@ -131,8 +168,14 @@ const moreId = `${id}-more`;
     transition: opacity 150ms ease;
   }
 
-  /* Until the script has moved what doesn't fit into "More"; revealed anyway
-     after 1.2s so the menu never stays hidden without JavaScript. */
+  .desktop-nav[data-nav-align="start"] .desktop-nav-list {
+    justify-content: flex-start;
+  }
+
+  /* Until the script has moved what doesn't fit into "More" (revealed after
+     1.2s anyway should it fail). Without JavaScript a <noscript> rule
+     (header.astro) reveals the row at once and lets it wrap, so nothing is
+     ever clipped. */
   .desktop-nav-list[data-nav-pending] {
     opacity: 0;
     animation: desktop-nav-reveal 0s linear 1.2s forwards;
@@ -150,11 +193,12 @@ const moreId = `${id}-more`;
     align-items: center;
   }
 
-  .desktop-nav-item[hidden] {
+  .desktop-nav-item[hidden],
+  .desktop-nav-nojs {
     display: none;
   }
 
-  /* Dropdowns hang from their item; mega panels span the whole header row. */
+  /* Dropdowns hang from their item; mega panels hang from the menu row. */
   .desktop-nav[data-nav-style="menu"] .desktop-nav-item,
   .desktop-nav-more {
     position: relative;
@@ -290,8 +334,71 @@ const moreId = `${id}-more`;
     }
   }
 
-  .desktop-nav-more .nav-dropdown-list > li + li:not([hidden]) {
-    margin-top: 0.25rem;
+  /* A row item moved into "More" is a plain row there: its link (or, for a
+     parent without one, its name over its own links); its own panel and
+     toggle stay out of the way. */
+  .nav-more-list > .desktop-nav-item {
+    display: block;
+  }
+
+  .nav-more-list > .desktop-nav-item > button.desktop-nav-toggle:not(.desktop-nav-link),
+  .nav-more-list > .desktop-nav-item > .mega-panel,
+  .nav-more-list > .desktop-nav-item:has(> a) > .desktop-nav-dropdown {
+    display: none !important;
+  }
+
+  .nav-more-list > .desktop-nav-item > .desktop-nav-link {
+    display: flex;
+    width: 100%;
+    height: auto;
+    padding: 0.5rem 0.75rem;
+    line-height: 1.25rem;
+    background-image: none;
+    color: var(--card-foreground);
+    font-weight: 500 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    white-space: normal;
+  }
+
+  .nav-more-list > .desktop-nav-item > button.desktop-nav-link {
+    pointer-events: none;
+    font-weight: 600;
+  }
+
+  .nav-more-list > .desktop-nav-item > button.desktop-nav-link .desktop-nav-chevron {
+    display: none;
+  }
+
+  .nav-more-list > .desktop-nav-item:not(:has(> a)) > .desktop-nav-dropdown {
+    display: block !important;
+    position: static;
+    min-width: 0;
+    max-width: none;
+    padding: 0 0 0 0.75rem;
+    border: 0;
+    box-shadow: none;
+    animation: none;
+  }
+
+  .nav-more-list > .desktop-nav-item > a.desktop-nav-link:hover,
+  .nav-more-list > .desktop-nav-item > a.desktop-nav-link:focus-visible {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .nav-more-list > li + li {
+    margin-top: 0.125rem;
+  }
+
+  .nav-more-all {
+    margin-top: 0.25rem !important;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .nav-more-all a {
+    font-weight: 600;
   }
 
   @media (prefers-reduced-motion: reduce) {

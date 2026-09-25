@@ -116,6 +116,8 @@ export interface RejectedDiscountCode {
     conflictsWith?: string;
     offer?: StorefrontDiscountOffer;
     requiresCustomerPhone?: boolean;
+    /** The code applies, but the order's quantity-bundle saving is bigger, so the bundle is used. */
+    bundleSavesMore?: true;
 }
 
 /**
@@ -471,8 +473,17 @@ function describeOffer(offer: StorefrontDiscountOffer): string {
  */
 export async function quoteStorefrontDiscount(
     db: Database,
-    input: StorefrontDiscountInput,
+    submittedInput: StorefrontDiscountInput,
 ): Promise<StorefrontDiscountQuote> {
+    // Gift-card lines are outside every promotion (Wave B §4.2): no target,
+    // no threshold, no share of an order discount. Dropping them here keeps
+    // the snapshot (and its commit re-check) to the lines promotions priced.
+    const input: StorefrontDiscountInput = submittedInput.cart.lines.some((line) => line.giftCard === true)
+        ? {
+            ...submittedInput,
+            cart: { ...submittedInput.cart, lines: submittedInput.cart.lines.filter((line) => line.giftCard !== true) },
+        }
+        : submittedInput;
     const codes = normalizeCodes(input.codes);
     const now = input.evaluatedAtEpochSeconds ?? Math.floor(Date.now() / 1_000);
     const { currencyCode } = input.cart;

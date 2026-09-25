@@ -91,9 +91,10 @@ export type CacheDepScope = "all" | `cat:${string}` | `brand:${string}`;
  * Ordering and filter facts of a listing member, each its own key per scope.
  * `sale` is only ever `lo:sale:all`: the set of discount-marked products and
  * live SKUs (and their newest order) that the on-sale home list takes its
- * candidate window from.
+ * candidate window from. `rating` is a member's published-review rating
+ * (the rating facet and the `rating` order).
  */
-export const CACHE_DEP_LIST_ORDER_FACETS = ["price", "band", "disc", "name", "sale"] as const;
+export const CACHE_DEP_LIST_ORDER_FACETS = ["price", "band", "disc", "name", "sale", "rating"] as const;
 export type CacheDepListOrderFacet = (typeof CACHE_DEP_LIST_ORDER_FACETS)[number];
 
 /** Suffix of the "any row of this kind" key (`c:*`, `b:*`, ...). */
@@ -473,6 +474,24 @@ const CACHE_DEP_TABLE_RULES = {
   product_rich_content: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
   product_content_blocks: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
   product_bundles: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
+  product_reviews: {
+    kinds: ["p"],
+    noise: ["updated_at", "version", "edit_count_day", "edit_day", "check_flags", "moderation_reason", "reply_user_id", "reviewer_key"],
+    note: "Published reviews on the product page and its review pages. A review exists only on a real order line, so no key is shared across products.",
+    rules: everyChange([p("product_id")]),
+  },
+  product_review_stats: {
+    kinds: ["p", "lo"],
+    noise: ["updated_at"],
+    note: "The review projection (triggers on product_reviews keep it): the product's summary and card rating, and the rating facet and order of its scopes. Every review write that changes a published count advances the keys at commit, so reviews need no scheduled bump.",
+    rules: everyChange([p("product_id"), { scopes: "lo:rating", from: { product: "product_id" } }]),
+  },
+  warranty_policies: {
+    kinds: ["p"],
+    noise: ["version", "current_revision_id", ...TIMESTAMPS],
+    note: "The product page shows its live policy's current terms; a policy edit advances every product that points at it (policy edits are rare).",
+    rules: everyChange([{ prefix: "p:", rows: "SELECT warranty_product.id AS ref FROM products AS warranty_product WHERE warranty_product.warranty_policy_id = R.id" }]),
+  },
 
   // --- Catalogue structure ------------------------------------------------------
   categories: {
@@ -726,6 +745,16 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   agent_storefront_contexts: PRIVATE,
   agent_storefront_order_grants: PRIVATE,
   agent_storefront_continuations: PRIVATE,
+  order_review_requests: PRIVATE,
+  digital_assets: PRIVATE,
+  digital_asset_uploads: PRIVATE,
+  digital_entitlements: PRIVATE,
+  digital_licence_keys: PRIVATE,
+  gift_cards: PRIVATE,
+  gift_card_transactions: PRIVATE,
+  warranty_policy_revisions: "Frozen onto order lines at checkout; public reads show the live policy row (warranty_policies), which is registered.",
+  order_item_warranties: PRIVATE,
+  warranty_claims: PRIVATE,
 };
 
 export function isCacheDepTable(table: string): table is CacheDepTable {

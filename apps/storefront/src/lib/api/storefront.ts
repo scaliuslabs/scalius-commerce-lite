@@ -79,7 +79,7 @@ export interface HomepageProductList {
     Product,
     | "id" | "name" | "slug" | "price" | "discountType" | "discountPercentage" | "discountAmount"
     | "discountedPrice" | "priceVaries" | "availableForSale" | "freeDelivery" | "categoryId"
-    | "hasVariants" | "imageUrl" | "imageAlt"
+    | "hasVariants" | "imageUrl" | "imageAlt" | "cardFacts"
   > & { imageMediaId: string | null; secondaryImageUrl: string | null }>;
   category: { id: string; name: string; slug: string; canonicalPath: string | null } | null;
   collection: { id: string; title: string } | null;
@@ -110,14 +110,34 @@ export interface CurrencyData {
   decimalPlaces?: number;
 }
 
+export interface CategoryNavigationNode {
+  id: string;
+  name: string;
+  slug: string;
+  parentId: string | null;
+  canonicalPath: string | null;
+  imageUrl: string | null;
+}
+
+export interface CategoryNavigationTree {
+  nodes: CategoryNavigationNode[];
+  /** More categories exist than these (the /categories index lists them). */
+  truncated: boolean;
+}
+
 export interface LayoutData {
   analytics: AnalyticsConfig[];
   header: HeaderData;
   navigation: NavigationItem[];
+  /**
+   * The reachable category tree, flat with parentId, top levels first, cut to
+   * the header's link budget (absent from an older API: renders as none).
+   */
+  categoryTree?: CategoryNavigationTree | null;
   footer: FooterData;
   currency?: CurrencyData;
   /**
-   * The published theme document (v4). Untrusted until
+   * The published theme document (v5). Untrusted until
    * `readStorefrontTheme` (lib/storefront-theme-context) validates it.
    */
   theme?: unknown;

@@ -37,7 +37,7 @@ interface ResponseBody {
   error?: unknown;
 }
 
-const ALL_ON = { showEmailField: true, showOrderNotesField: true, showAreaField: true };
+const ALL_ON = { showOrderNotesField: true, showAreaField: true };
 
 describe("checkout language revision", () => {
   it("refuses the second tab's stale form-field save and keeps the first tab's change", async () => {

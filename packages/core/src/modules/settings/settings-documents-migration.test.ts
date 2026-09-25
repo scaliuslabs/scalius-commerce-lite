@@ -12,10 +12,7 @@ import { compileSqliteMigrationForProvider } from "@scalius/database/migration-a
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { parseSeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { parseSeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
-import {
-  getCustomerAuthPolicyForMethod,
-  getLegacyCustomerAuthMethodForPolicy,
-} from "@scalius/shared/customer-auth-policy";
+import { DEFAULT_CUSTOMER_IDENTITY } from "@scalius/shared/customer-auth-policy";
 
 import { encodeEncryptedCredential, encryptCredentials } from "../../utils/credential-encryption";
 import { getEmailRuntimeSettings } from "../../integrations/email/settings";
@@ -240,11 +237,8 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       authTemplateName: "otp_login",
     });
     expect(await getAllowedCountries(db)).toEqual({ allowedCountries: ["BD", "IN"], allowedCountriesMode: "exclude" });
-    // A stored policy wins; the legacy method is derived from it, as before.
-    expect(await customerAuthDocument.read(db)).toEqual({
-      authVerificationMethod: getLegacyCustomerAuthMethodForPolicy({ otpChannels: ["sms", "whatsapp"] }),
-      policy: expect.objectContaining({ otpChannels: ["sms", "whatsapp"], defaultOtpChannel: "sms" }),
-    });
+    // The pre-accounts sign-in shape is not carried over: Customer accounts starts from its defaults.
+    expect(await customerAuthDocument.read(db)).toEqual(DEFAULT_CUSTOMER_IDENTITY);
     expect(await getStripeSettings(db, KEY)).toEqual({
       secretKey: "sk_test_51shop",
       publishableKey: "pk_test_51shop",
@@ -299,10 +293,7 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
     // The pre-encryption plaintext token stays readable until the next save.
     expect((await getWhatsAppCloudApiSettings(db, KEY)).accessToken).toBe("EAAG-plain-token");
     expect(await getAllowedCountries(db)).toEqual({ allowedCountries: ["BD"], allowedCountriesMode: "include" });
-    expect(await customerAuthDocument.read(db)).toEqual({
-      authVerificationMethod: "sms_otp",
-      policy: getCustomerAuthPolicyForMethod("sms_otp"),
-    });
+    expect(await customerAuthDocument.read(db)).toEqual(DEFAULT_CUSTOMER_IDENTITY);
     // All keys and no saved switch: the dashboard showed Stripe enabled.
     expect((await getStripeSettings(db, KEY))?.enabled).toBe(true);
     expect(await getSSLCommerzSettings(db, KEY)).toBeNull();
@@ -324,6 +315,7 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       checkoutMode: "all",
       partialPaymentEnabled: false,
       partialPaymentAmount: 0,
+      autoFulfilMode: "after_payment",
       revision: 0,
     });
     expect(await getCurrencySettings(db)).toEqual({ currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "1" });
@@ -343,6 +335,7 @@ async function expectCommonSettings(db: Parameters<typeof getBusinessSettings>[0
     checkoutMode: "gateways_only",
     partialPaymentEnabled: true,
     partialPaymentAmount: 250,
+    autoFulfilMode: "after_payment",
     revision: 7,
   });
   expect(await getCustomerRequestPolicy(db)).toEqual({

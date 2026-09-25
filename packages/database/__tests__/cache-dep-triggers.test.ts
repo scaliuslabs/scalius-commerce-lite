@@ -1,4 +1,4 @@
-// Migration 0093 (dependency-validated cache, phase P0): the checked-in SQL
+// Migration 0100 (dependency-validated cache, phase P0): the checked-in SQL
 // equals the generator output, every registered rule has its trigger on every
 // provider, every table is registered or exempt, and the triggers advance
 // exactly the registry's keys on D1, node:sqlite Turso and the real Turso
@@ -43,7 +43,7 @@ const expectedTriggerNames = () => Object.entries(CACHE_DEP_TABLES as Record<str
   .flatMap(([table, spec]) => spec.rules.map((rule) => `${CACHE_DEP_TRIGGER_PREFIX}${table}_${rule.name}`))
   .sort();
 
-describe("0093_cache_dependencies", () => {
+describe("0100_cache_dependencies", () => {
   it("is exactly the generator output from the registry, for D1/Turso and PostgreSQL", () => {
     const rendered = renderCacheDepMigration();
     expect(readFileSync(CACHE_DEP_MIGRATION_PATHS.sqlite, "utf8")).toBe(rendered.sqlite);
@@ -177,14 +177,14 @@ describe("0093_cache_dependencies", () => {
   it("runs unchanged on the real Turso engine (0.7), including coarse mode and same-band stock", async () => {
     const database = await connect(":memory:");
     const migrations = compiledMigrationSql("turso").split(BREAKPOINT);
-    const own = new Set(compiledMigrationSql("turso", undefined, "0093_").split(BREAKPOINT).map((statement) => statement.trim()));
+    const own = new Set(compiledMigrationSql("turso", undefined, "0100_").split(BREAKPOINT).map((statement) => statement.trim()));
     const failures: string[] = [];
     for (const statement of migrations) {
       try {
         await database.exec(statement);
       } catch (error) {
-        // Two pre-0093 backfills use SQL the local engine does not parse yet;
-        // hosted Turso applies them. Every 0093 statement must apply.
+        // Two pre-0100 backfills use SQL the local engine does not parse yet;
+        // hosted Turso applies them. Every 0100 statement must apply.
         if (own.has(statement.trim())) throw error;
         failures.push((error as Error).message);
       }

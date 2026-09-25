@@ -26,6 +26,7 @@ import {
   orderPaymentLine,
 } from "@/lib/account-format";
 import { addOrderToCart } from "@/lib/account-buy-again";
+import { accountPill, orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
 import { getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
@@ -36,6 +37,10 @@ import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
 import { summarizeOrderDiscounts } from "@/lib/order-discount-summary";
+import { orderDeliveryRow } from "@/lib/order-delivery-row";
+import { orderShowsLineDiscounts, presentedLineTotalMinor } from "@/lib/order-line-discounts";
+import { readReceiptGiftCardTenders, receiptGiftCardTenderLabel } from "@/lib/order-success-state";
+import { lineExtrasMarkup } from "@/lib/order-line-extras";
 import {
   orderProgressMarkup,
   orderShipmentMarkup,
@@ -57,6 +62,14 @@ import {
 
 /** The customer order-detail payload, including the buyer tracking fields. */
 export type AccountOrderDetail = CustomerOrderDetail;
+
+/**
+ * The order's payment facts plus the detail's `giftCardTenders` (optional:
+ * read defensively until every client carries it).
+ */
+function paymentFacts(detail: AccountOrderDetail) {
+  return { ...detail.order, giftCardTenders: (detail as { giftCardTenders?: unknown }).giftCardTenders };
+}
 
 interface StripeCardElement {
   mount(selector: string): void;
@@ -406,8 +419,13 @@ function openSupportForm(type: CustomerOrderSupportRequestType): void {
 }
 
 function renderSupport(detail: AccountOrderDetail): void {
+  // A closed order (cancelled, refunded) offers no request: no "Send a request" line for it.
+  const canRequest = detail.supportRequestActions.length > 0;
   const intro = byId("orderSupportIntro");
-  if (intro) intro.textContent = detail.supportRequestIntro;
+  if (intro) {
+    intro.textContent = canRequest ? detail.supportRequestIntro : "";
+    intro.hidden = !canRequest;
+  }
   const requests = byId("orderSupportRequests");
   if (requests) {
     requests.innerHTML = detail.supportRequests.map((request) => `
@@ -419,6 +437,7 @@ function renderSupport(detail: AccountOrderDetail): void {
   }
   const actions = byId("orderSupportActions");
   if (actions) {
+    actions.hidden = !canRequest;
     actions.innerHTML = detail.supportRequestActions.map((action) => `
       <button type="button" data-support-request-type="${escapeHtml(action.type)}" ${action.eligible ? "" : "disabled"} class="min-h-11 rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors ${action.eligible ? "text-foreground hover:bg-muted" : "cursor-not-allowed text-muted-foreground"}">
         <span class="font-medium">${escapeHtml(action.label)}</span>
@@ -501,27 +520,35 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
   const places = order.currencyDecimalPlaces ?? 2;
   const minor = (value: number) => accountMoney(fromMinor(value, places), order.currencyCode);
   const items = byId("orderItems");
+  // An order-level promotion is one line in the summary, never a discount on each item.
+  const showsLineDiscounts = orderShowsLineDiscounts(detail.discounts);
   if (items) {
     const lineMarkup = (item: AccountOrderDetail["items"][number]) => {
       const hasMinor = item.lineSubtotalMinor != null && item.unitPriceMinor != null;
       const lineTotal = hasMinor
-        ? minor(item.lineSubtotalMinor! - (item.discountAmountMinor ?? 0) + (order.pricesIncludeTax ? 0 : item.taxAmountMinor ?? 0))
+        ? minor(presentedLineTotalMinor({
+            grossSubtotalMinor: item.lineSubtotalMinor!,
+            discountMinor: item.discountAmountMinor ?? 0,
+            taxMinor: item.taxAmountMinor ?? 0,
+          }, showsLineDiscounts, Boolean(order.pricesIncludeTax)))
         : accountMoney(item.lineTotal, order.currencyCode);
       const unit = hasMinor ? minor(item.unitPriceMinor!) : accountMoney(item.unitPrice, order.currencyCode);
       const name = escapeHtml(item.productName || "Product");
       // Buyer inputs: display only, escaped, never in links or data attributes.
       const properties = orderLinePropertyRows(item.properties, (property) => minor(property.priceMinor), copy);
-      return `<li class="flex gap-3 py-4 first:pt-0 last:pb-0">
+      // Files, keys, card codes and the review form get the line's full width.
+      const extras = lineExtrasMarkup(item, { orderId: order.id, access: "account" });
+      return `<li class="py-4 first:pt-0 last:pb-0"><div class="flex gap-3">
         <img src="${escapeHtml(getProductImageUrl(item.productImage, 128))}" alt="" class="h-16 w-16 shrink-0 rounded-lg border border-border bg-card object-contain" loading="lazy" />
         <div class="min-w-0 flex-1 text-sm">
           ${item.productSlug ? `<a href="/products/${encodeURIComponent(item.productSlug)}" class="font-medium text-foreground hover:underline">${name}</a>` : `<p class="font-medium text-foreground">${name}</p>`}
           ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
           ${properties.length > 0 ? `<ul class="text-muted-foreground">${properties.map((row) => `<li class="break-words"><span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}</li>`).join("")}</ul>` : ""}
           <p class="text-muted-foreground">Qty ${item.quantity} × ${escapeHtml(unit)}</p>
-          ${(item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}
+          ${showsLineDiscounts && (item.discountAmountMinor ?? 0) > 0 ? `<p class="text-muted-foreground">Discount -${escapeHtml(minor(item.discountAmountMinor!))}</p>` : ""}
         </div>
         <p class="shrink-0 text-sm font-medium tabular-nums text-foreground">${escapeHtml(lineTotal)}</p>
-      </li>`;
+      </div>${extras ? `<div class="text-sm sm:pl-[4.75rem]">${extras}</div>` : ""}</li>`;
     };
     const groups = groupOrderLines(detail.items, order, copy);
     items.innerHTML = showsOrderLineGroupHeadings(groups)
@@ -546,6 +573,8 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
     const major = (value: number) => fromMinor(value, places);
     const money = (value: number) => accountMoney(value, order.currencyCode);
     const tax = order.taxAmountMinor ?? 0;
+    const giftCardTenders = readReceiptGiftCardTenders(paymentFacts(detail));
+    const paymentLine = orderPaymentLine(paymentFacts(detail));
     const { delivery, lines } = summarizeOrderDiscounts({
       discounts: detail.discounts,
       shipping: major(order.shippingAmountMinor ?? 0),
@@ -555,22 +584,28 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       discountText: copy.discountText,
     });
     const deliveryMode = resolveOrderDeliveryBlock(order, copy).mode;
-    const deliveryWord = deliveryMode === "pickup" ? copy.orderPickupHeadingText : copy.orderReceiptDeliveryText;
     // Nothing to deliver and nothing charged: no delivery row.
     const showsDeliveryRow = !(deliveryMode === "none" && !order.shippingMethodName && delivery.charged === 0 && delivery.fee === 0);
+    const deliveryRow = orderDeliveryRow({ mode: deliveryMode, methodName: order.shippingMethodName, ...delivery }, copy, money);
     summary.innerHTML = [
       row("Subtotal", cell(minor(order.subtotalAmountMinor ?? 0))),
       !showsDeliveryRow ? "" : row(
-        order.shippingMethodName ? `${deliveryWord} (${order.shippingMethodName})` : deliveryWord,
+        deliveryRow.label,
         [
-          delivery.charged < delivery.fee ? `<s class="mr-1.5">${escapeHtml(money(delivery.fee))}</s>` : "",
-          cell(delivery.charged === 0 ? copy.freeText : money(delivery.charged), "text-foreground"),
-          delivery.codes ? ` ${cell(`(${delivery.codes})`)}` : "",
+          deliveryRow.struck ? `<s class="mr-1.5">${escapeHtml(deliveryRow.struck)}</s>` : "",
+          cell(deliveryRow.value, "text-foreground"),
+          deliveryRow.codes ? ` ${cell(`(${deliveryRow.codes})`)}` : "",
         ].join(""),
       ),
       ...lines.map((line) => row(line.label, cell(`−${money(line.amount)}`, "text-foreground"))),
       tax > 0 ? row(`${order.taxLabel || "Tax"}${order.pricesIncludeTax ? " (included)" : ""}`, cell(minor(tax))) : "",
       row("Total", cell(minor(order.totalAmountMinor ?? 0)), true),
+      // Gift cards are payment: one row per card after the total, then what is left.
+      ...giftCardTenders.map((tender) =>
+        row(receiptGiftCardTenderLabel(tender, copy), cell(`−${money(tender.amount)}`, "text-foreground"))),
+      giftCardTenders.length > 0 && paymentLine.balanceDue > 0
+        ? row(paymentLine.balanceLabel, cell(money(paymentLine.balanceDue), "font-medium text-foreground"))
+        : "",
     ].join("");
   }
 }
@@ -628,7 +663,9 @@ function renderDelivery(detail: AccountOrderDetail): void {
 
 function renderPayment(detail: AccountOrderDetail): void {
   const { order } = detail;
-  const line = orderPaymentLine(order);
+  // "Gift card + Cash on delivery" and "৳800 due on delivery" when cards paid part.
+  const line = orderPaymentLine(paymentFacts(detail));
+  const paidByGiftCards = readReceiptGiftCardTenders(paymentFacts(detail)).length > 0;
   const money = (value: number) => accountMoney(value, order.currencyCode);
   const refunds = detail.refundAttempts.map((refund) => `
     <div class="border-t border-border pt-2">
@@ -640,7 +677,8 @@ function renderPayment(detail: AccountOrderDetail): void {
     payment.innerHTML = [
       `<p class="font-medium text-foreground">${escapeHtml(line.method)}</p>`,
       `<p class="text-muted-foreground">${escapeHtml(line.state)}</p>`,
-      line.balanceDue > 0 && order.paidAmount > 0 ? `<p class="text-muted-foreground">${escapeHtml(money(order.paidAmount))} paid</p>` : "",
+      // The card rows in the summary already say what the gift cards paid.
+      line.balanceDue > 0 && order.paidAmount > 0 && !paidByGiftCards ? `<p class="text-muted-foreground">${escapeHtml(money(order.paidAmount))} paid</p>` : "",
       detail.cod?.collectedAmount ? `<p class="text-muted-foreground">${escapeHtml(money(detail.cod.collectedAmount))} collected</p>` : "",
       detail.paymentPlan ? `<p class="text-muted-foreground">Advance ${escapeHtml(money(detail.paymentPlan.depositAmount))}</p>` : "",
       refunds,
@@ -678,6 +716,7 @@ export function renderOrderDetail(detail: AccountOrderDetail, checkoutConfig: Ch
   const status = byId("orderStatus");
   // A finished pickup order reads "Picked up"; a service/digital-only one "Completed", never "Delivered".
   if (status) {
+    status.className = accountPill(orderStatusTone(order.status));
     status.textContent = orderCompletionWording(order, copy)?.statusLabel
       ?? order.statusLabel ?? detail.progress?.outcome?.label ?? order.status;
   }
@@ -704,7 +743,10 @@ function showError(title: string, message: string, retry = true): void {
   const messageEl = byId("orderErrorMessage");
   if (titleEl) titleEl.textContent = title;
   if (messageEl) messageEl.textContent = message;
-  byId("orderRetry")?.classList.toggle("hidden", !retry);
+  // The hidden attribute, not the class: the button's `inline-flex` utility
+  // sorts after `hidden` and would keep it on screen.
+  const retryButton = byId("orderRetry");
+  if (retryButton) retryButton.hidden = !retry;
   showOnly("error");
 }
 

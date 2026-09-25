@@ -361,9 +361,51 @@ describe("provider-neutral schema upgrades", () => {
       },
       {
         version: 93,
-        name: "0093_cache_dependencies",
-        sqliteStatements: 202,
-        postgresStatements: 201,
+        name: "0093_theme_document_v5",
+        sqliteStatements: 5,
+        postgresStatements: 5,
+      },
+      {
+        version: 94,
+        name: "0094_media_rendition_ladder",
+        sqliteStatements: 2,
+        postgresStatements: 2,
+      },
+      {
+        version: 95,
+        name: "0095_reviews",
+        sqliteStatements: 22,
+        postgresStatements: 30,
+      },
+      {
+        version: 96,
+        name: "0096_digital_goods",
+        sqliteStatements: 20,
+        postgresStatements: 22,
+      },
+      {
+        version: 97,
+        name: "0097_gift_cards",
+        sqliteStatements: 23,
+        postgresStatements: 33,
+      },
+      {
+        version: 98,
+        name: "0098_warranty",
+        sqliteStatements: 24,
+        postgresStatements: 30,
+      },
+      {
+        version: 99,
+        name: "0099_customer_whatsapp",
+        sqliteStatements: 2,
+        postgresStatements: 2,
+      },
+      {
+        version: 100,
+        name: "0100_cache_dependencies",
+        sqliteStatements: 214,
+        postgresStatements: 213,
       },
     ]);
   });
@@ -506,7 +548,14 @@ describe("provider-neutral schema upgrades", () => {
           { version: 90, name: "0090_catalogue_schema" },
           { version: 91, name: "0091_catalogue_projection_fill" },
           { version: 92, name: "0092_attribute_option_presets" },
-          { version: 93, name: "0093_cache_dependencies" },
+          { version: 93, name: "0093_theme_document_v5" },
+          { version: 94, name: "0094_media_rendition_ladder" },
+          { version: 95, name: "0095_reviews" },
+          { version: 96, name: "0096_digital_goods" },
+          { version: 97, name: "0097_gift_cards" },
+          { version: 98, name: "0098_warranty" },
+          { version: 99, name: "0099_customer_whatsapp" },
+          { version: 100, name: "0100_cache_dependencies" },
         ],
       });
     } finally {

@@ -22,34 +22,65 @@ import {
 import { productGridColumnCount } from "./product-card-layout";
 
 describe("listing presentation", () => {
-  it("maps each layout to where the facets live and how results lay out", () => {
+  const TREE = { ...EMPTY_STORE_SHAPE, productCount: 3780, hasCollections: true, categoryDepth: 4 };
+  const resolve = (id: (typeof STOREFRONT_TEMPLATE_IDS)[number], shape = TREE) =>
+    resolveStorefrontTheme(storefrontTemplateTheme(id), shape);
+
+  it("places the facets by the template's filter style, with its measured numbers", () => {
     const presentation = (id: (typeof STOREFRONT_TEMPLATE_IDS)[number]) => {
-      const { filters, results, shelves, layout } = catalogListingPresentation(
-        resolveStorefrontTheme(storefrontTemplateTheme(id), { ...EMPTY_STORE_SHAPE, hasCollections: true }).blocks.listing,
-      );
-      return { layout, filters, results, shelves };
+      const { filters, results, shelves, layout } = catalogListingPresentation(resolve(id));
+      return { layout, placement: filters.placement, style: filters.style, open: filters.openByDefault, results, shelves };
     };
-    expect(presentation("department-mall")).toEqual({ layout: "sidebar-grid", filters: "sidebar", results: "grid", shelves: false });
-    expect(presentation("boutique")).toEqual({ layout: "bar-drawer", filters: "drawer", results: "grid", shelves: false });
-    expect(presentation("heritage-editorial")).toEqual({ layout: "shelves", filters: "drawer", results: "grid", shelves: true });
-    expect(presentation("daily-essentials")).toEqual({ layout: "quick-grid", filters: "drawer", results: "quick", shelves: false });
-    const list = catalogListingPresentation({
-      ...resolveStorefrontTheme(DEFAULT_STOREFRONT_THEME, EMPTY_STORE_SHAPE).blocks.listing,
-      layout: { variant: "list", settings: {}, requested: "list" },
+    expect(presentation("department-mall")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
+    expect(presentation("rounded-tech")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-comfortable", open: true, results: "grid", shelves: false });
+    expect(presentation("spec-catalogue")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
+    expect(presentation("marketplace")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
+    expect(presentation("mass-retail")).toEqual({ layout: "grid", placement: "sidebar", style: "sidebar-dense", open: true, results: "grid", shelves: false });
+    expect(presentation("boutique")).toEqual({ layout: "grid", placement: "bar", style: "bar-dropdowns", open: false, results: "grid", shelves: false });
+    expect(presentation("heritage-editorial")).toEqual({ layout: "shelves", placement: "bar", style: "bar-dropdowns", open: false, results: "grid", shelves: true });
+    expect(presentation("daily-essentials")).toEqual({ layout: "quick-grid", placement: "drawer", style: "drawer", open: false, results: "quick", shelves: false });
+    // Each template carries its reference's numbers: Daraz 190/18/13, Star Tech 225/32/14, Amazon 262/22/14.
+    expect(catalogListingPresentation(resolve("marketplace")).filters).toMatchObject({
+      styleVars: "--catalog-filter-column:190px;--catalog-filter-row:18px;--catalog-filter-label:13px",
+      columnPx: 190,
     });
-    expect(list).toMatchObject({ filters: "sidebar", results: "list" });
+    expect(catalogListingPresentation(resolve("spec-catalogue")).filters.styleVars)
+      .toBe("--catalog-filter-column:225px;--catalog-filter-row:32px;--catalog-filter-label:14px");
+    expect(catalogListingPresentation(resolve("department-mall")).filters.columnPx).toBe(262);
+    // A style without a template override keeps its own (mass-retail: the dense 240/22/14).
+    expect(catalogListingPresentation(resolve("mass-retail")).filters.styleVars)
+      .toBe("--catalog-filter-column:240px;--catalog-filter-row:22px;--catalog-filter-label:14px");
+    expect(catalogListingPresentation(resolve("boutique")).filters).toMatchObject({ styleVars: "", barFacets: 4, columnPx: 0 });
   });
 
-  it("shows filters only when there is something to narrow", () => {
-    const facets = { refinementCount: 0, facetCount: 2, showsPrice: true };
+  it("honours a listing's own listing_template when the store fits it", () => {
+    const spec = resolve("spec-catalogue");
+    expect(catalogListingPresentation(spec, "list")).toMatchObject({ layout: "list", results: "list" });
+    expect(catalogListingPresentation(spec, "shelves")).toMatchObject({ layout: "shelves", shelves: true, maxShelves: 8 });
+    expect(catalogListingPresentation(spec, "bar-dropdowns").filters).toMatchObject({ placement: "bar", openByDefault: false });
+    expect(catalogListingPresentation(spec, "drawer").filters.placement).toBe("drawer");
+    // The quick grid needs the quick-add card; shelves need a tree or collections.
+    expect(catalogListingPresentation(spec, "quick-grid").layout).toBe("grid");
+    const flat = resolve("spec-catalogue", { ...EMPTY_STORE_SHAPE, productCount: 40, categoryDepth: 1 });
+    expect(catalogListingPresentation(flat, "shelves").layout).toBe("grid");
+    // Anything else is the theme's own listing.
+    expect(catalogListingPresentation(spec, "spec-grid")).toMatchObject({ layout: "grid", filters: { style: "sidebar-dense" } });
+    expect(catalogListingPresentation(resolveStorefrontTheme(DEFAULT_STOREFRONT_THEME, TREE), null).layout).toBe("grid");
+  });
+
+  it("shows filters only with eight results and a facet that narrows (the small-catalogue rule)", () => {
+    const facets = { refinementCount: 0, facetValueCounts: [3, 2] };
     expect(catalogListingControls({ ...facets, total: 0 })).toEqual({ sort: false, filters: false });
     expect(catalogListingControls({ ...facets, total: 2 })).toEqual({ sort: true, filters: false });
-    expect(catalogListingControls({ ...facets, total: 3 })).toEqual({ sort: true, filters: false });
-    expect(catalogListingControls({ ...facets, total: 4 })).toEqual({ sort: true, filters: true });
-    expect(catalogListingControls({ total: 40, refinementCount: 0, facetCount: 0, showsPrice: false }))
+    expect(catalogListingControls({ ...facets, total: 7 })).toEqual({ sort: true, filters: false });
+    expect(catalogListingControls({ ...facets, total: 8 })).toEqual({ sort: true, filters: true });
+    // Every facet with one value: nothing to narrow.
+    expect(catalogListingControls({ total: 40, refinementCount: 0, facetValueCounts: [1, 1] }))
       .toEqual({ sort: true, filters: false });
+    // A store below the threshold shows no filters on any listing.
+    expect(catalogListingControls({ ...facets, total: 40, storeShown: false })).toEqual({ sort: true, filters: false });
     // A refinement keeps both, so the buyer can undo it (even with no results).
-    expect(catalogListingControls({ total: 0, refinementCount: 1, facetCount: 0, showsPrice: false }))
+    expect(catalogListingControls({ total: 0, refinementCount: 1, facetValueCounts: [] }))
       .toEqual({ sort: true, filters: true });
   });
 });

@@ -1,14 +1,11 @@
 import {
-  getCustomerAuthRequestOptions,
-  getDefaultCustomerAuthOtpChannel,
-  isContactFieldRequiredForAuthChannel,
-  isContactFieldVisibleForAuthChannel,
+  DEFAULT_CUSTOMER_IDENTITY,
+  channelRequestMethod,
   isCustomerAuthOtpChannel,
-  normalizeCustomerAuthPolicy,
   type CustomerAuthOtpChannel,
-  type CustomerAuthPolicyConfig,
   type CustomerAuthRequestMethod,
-  type CustomerAuthRequestOption,
+  type CustomerIdentitySettings,
+  type FieldNeed,
 } from "@scalius/shared/customer-auth-policy";
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import { BD_MOBILE_REQUIRED_MESSAGE, isBangladeshNumber, normalizeBdMobile } from "@scalius/shared/phone-input";
@@ -16,20 +13,25 @@ import { validateStorefrontPhone } from "@/lib/phone-country-policy";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export type FieldNeed = "required" | "optional" | "hidden";
+export type { FieldNeed };
+
+export interface CustomerAuthRequestOption {
+  channel: CustomerAuthOtpChannel;
+  method: CustomerAuthRequestMethod;
+}
 
 export interface CustomerAuthUiModel {
-  policy: CustomerAuthPolicyConfig;
   otpChannel: CustomerAuthOtpChannel;
   requestMethod: CustomerAuthRequestMethod;
   requestOptions: CustomerAuthRequestOption[];
-  currentOption: CustomerAuthRequestOption;
   showMethodSwitcher: boolean;
-  /** False when the store can't text or WhatsApp a code: sign-in is by email only. */
+  /** False when no chosen channel can send right now: sign-in says so and sends nothing. */
+  available: boolean;
+  /** False when the store sends no phone codes: sign-in is by email only. */
   phoneSignIn: boolean;
   /**
    * What a new buyer adds after proving this email/phone. The proven
-   * contact itself is never asked again.
+   * contact itself is never asked again; phone is always required.
    */
   newAccount: { phone: FieldNeed; email: FieldNeed };
 }
@@ -38,32 +40,31 @@ export function isValidEmail(value: string): boolean {
   return EMAIL_PATTERN.test(value.trim());
 }
 
-/** One sign-in flow; the store's policy only decides channels and extra fields. */
+/**
+ * One sign-in flow. Customer accounts decides the channels (only those that
+ * can send are published) and which extra fields a new account gives.
+ */
 export function resolveCustomerAuthUi(
-  authPolicyInput: unknown,
+  identityInput: CustomerIdentitySettings | null | undefined,
   otpChannelInput?: CustomerAuthOtpChannel,
 ): CustomerAuthUiModel {
-  const policy = normalizeCustomerAuthPolicy(authPolicyInput, authPolicyInput);
-  const requestOptions = getCustomerAuthRequestOptions(policy);
-  const otpChannel = isCustomerAuthOtpChannel(otpChannelInput) && policy.otpChannels.includes(otpChannelInput)
+  const identity = identityInput ?? DEFAULT_CUSTOMER_IDENTITY;
+  const requestOptions = identity.channels.map((channel) => ({ channel, method: channelRequestMethod(channel) }));
+  const otpChannel = isCustomerAuthOtpChannel(otpChannelInput) && identity.channels.includes(otpChannelInput)
     ? otpChannelInput
-    : getDefaultCustomerAuthOtpChannel(policy);
-  const currentOption = requestOptions.find((option) => option.channel === otpChannel) ?? requestOptions[0]!;
-  const need = (field: "email" | "phone"): FieldNeed => {
-    if (currentOption.destinationField === field) return "hidden";
-    if (isContactFieldRequiredForAuthChannel(policy, otpChannel, field)) return "required";
-    return isContactFieldVisibleForAuthChannel(policy, otpChannel, field) ? "optional" : "hidden";
-  };
-
+    : identity.channels[0] ?? "email";
+  const requestMethod = channelRequestMethod(otpChannel);
   return {
-    policy,
     otpChannel,
-    requestMethod: currentOption.method,
+    requestMethod,
     requestOptions,
-    currentOption,
     showMethodSwitcher: requestOptions.length > 1,
+    available: requestOptions.length > 0,
     phoneSignIn: requestOptions.some((option) => option.method === "phone"),
-    newAccount: { phone: need("phone"), email: need("email") },
+    newAccount: {
+      phone: requestMethod === "phone" ? "hidden" : "required",
+      email: requestMethod === "email" ? "hidden" : identity.email,
+    },
   };
 }
 

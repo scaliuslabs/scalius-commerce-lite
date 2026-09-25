@@ -45,7 +45,8 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => mocks.navigate,
 }));
 
-vi.mock("../utils", () => ({
+vi.mock("../utils", async (importOriginal) => ({
+  productSubmitChanges: (await importOriginal<typeof import("../utils")>()).productSubmitChanges,
   formatFormValuesForSubmission: (values: unknown, changed: unknown) => {
     mocks.formatted(values, changed);
     return values;
@@ -134,15 +135,19 @@ describe("useProductSubmit", () => {
     expect(mocks.serverMutation.mock.calls[1]?.[0]?.body?.slug).toBe("tea-green");
   });
 
-  it("tells the payload which of buyer inputs and fulfilment the merchant changed", async () => {
+  it("tells the payload which omit-to-keep fields the merchant changed", async () => {
     renderHarness({ isEdit: true, aggregateRevision: 4 });
     mocks.serverMutation.mockResolvedValue({ aggregateRevision: 5 });
     await requireResult(result).submit(productValues());
-    expect(mocks.formatted.mock.calls[0]![1]).toEqual({ customizationSchema: false, fulfillmentKind: false });
+    expect(mocks.formatted.mock.calls[0]![1]).toEqual({
+      customizationSchema: false, fulfillmentKind: false, isGiftCard: false, warrantyPolicyId: false,
+    });
 
-    dirty.fields = { customizationSchema: [{ label: true }], fulfillmentKind: true };
+    dirty.fields = { customizationSchema: [{ label: true }], fulfillmentKind: true, isGiftCard: true, warrantyPolicyId: true };
     await requireResult(result).submit(productValues());
-    expect(mocks.formatted.mock.calls[1]![1]).toEqual({ customizationSchema: true, fulfillmentKind: true });
+    expect(mocks.formatted.mock.calls[1]![1]).toEqual({
+      customizationSchema: true, fulfillmentKind: true, isGiftCard: true, warrantyPolicyId: true,
+    });
   });
 
   it("sends a new product's buyer inputs and fulfilment as they are", async () => {
@@ -314,6 +319,8 @@ function productValues(): ProductFormValues {
     attributes: [],
     additionalInfo: [],
     fulfillmentKind: "physical",
+    isGiftCard: false,
+    warrantyPolicyId: null,
     customizationSchema: [],
   };
 }

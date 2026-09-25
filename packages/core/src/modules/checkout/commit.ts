@@ -15,7 +15,9 @@ import {
     orderTaxSnapshots,
     orders,
     codTracking,
+    products,
     promotionRedemptions,
+    warrantyPolicies,
 } from "@scalius/database/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -56,6 +58,11 @@ import {
 } from "./attempts";
 import { MAX_ORDER_LINE_ITEMS } from "../orders/validation";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";
+import {
+    GiftCardChangedError,
+    buildGiftCardRedemptionStatements,
+    isGiftCardLedgerError,
+} from "../gift-cards";
 
 type ReservationPool = "regular" | "preorder" | "backorder";
 
@@ -104,9 +111,10 @@ type ReservationEntry = {
 const CHECKOUT_RESERVATION_KEY = "checkout-ingest:v1";
 const INVENTORY_COMMIT_MAX_CONFLICTS = 3;
 const INVENTORY_COMMIT_BASE_BACKOFF_MS = 5;
-// Bound values per order line (the constant columns are SQL literals); the
-// D1 limit is 100 per statement, so 5 rows a statement.
-export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 18;
+// Bound values per order line (the constant columns are SQL literals, the
+// warranty lookup binds the product id once more); the D1 limit is 100 per
+// statement, so 5 rows a statement (95 values).
+export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 19;
 // order_item_id, order_id, tax_class_id, tax_class_name, prices_include_tax, rate_snapshot.
 const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 6;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
@@ -120,6 +128,10 @@ const AGENT_CONTEXT_CHECKOUT_CONFLICT = "AGENT_STOREFRONT_CONTEXT_CHECKOUT_CONFL
 function checkoutGuardError(error: unknown): Error | null {
     if (isBatchGuardError(error, CHECKOUT_AUTHORITY_CHANGED)) {
         return new ValidationError(CHECKOUT_AUTHORITY_CHANGED_MESSAGE);
+    }
+    // A card spent, disabled or expired since the quote (the ledger guards, G2).
+    if (isGiftCardLedgerError(error)) {
+        return new GiftCardChangedError();
     }
     if (isBatchGuardError(error, AGENT_CONTEXT_CHECKOUT_CONFLICT)) {
         return new ConflictError(
@@ -296,6 +308,22 @@ async function prepareOrderInventory(
     return result;
 }
 
+/**
+ * The product's warranty as bought: its policy's current revision, read in
+ * the commit batch itself (no round trip) so the line freezes whatever is
+ * current at commit (design §5.1). No policy or an archived one is NULL.
+ * The warranty is not price-relevant, so it is outside the authority fence.
+ */
+function currentWarrantyRevisionSql(productId: string) {
+    return sql<string | null>`(
+        SELECT ${warrantyPolicies.currentRevisionId}
+        FROM ${products}
+        JOIN ${warrantyPolicies} ON ${warrantyPolicies.id} = ${products.warrantyPolicyId}
+        WHERE ${products.id} = ${productId}
+          AND ${warrantyPolicies.archivedAt} IS NULL
+    )`;
+}
+
 function buildOrderWriteBatch(
     db: Database,
     payload: StorefrontOrderCommitPayload,
@@ -372,6 +400,7 @@ function buildOrderWriteBatch(
             customerName: od.customerName,
             customerPhone: od.customerPhone,
             customerEmail: od.customerEmail,
+            customerWhatsapp: od.customerWhatsapp ?? null,
             shippingAddress: od.shippingAddress,
             city: od.city,
             zone: od.zone,
@@ -447,6 +476,7 @@ function buildOrderWriteBatch(
             propertiesPriceMinor: item.propertiesPriceMinor ?? 0,
             baseUnitPriceMinor: item.baseUnitPriceMinor
                 ?? item.unitPriceMinor - (item.propertiesPriceMinor ?? 0),
+            warrantyRevisionId: currentWarrantyRevisionSql(item.productId),
             createdAt: sql`unixepoch()`,
         }));
         for (const chunk of chunkRowsForD1(
@@ -623,6 +653,20 @@ function buildOrderWriteBatch(
                 createdAt: sql`unixepoch()`,
             }));
         }
+    }
+
+    // The gift-card hold (§4.3): after the order row, which it references.
+    const redemptions = payload.giftCardRedemptions ?? [];
+    if (redemptions.length > 0) {
+        const redeemedMinor = redemptions.reduce((total, redemption) => total + redemption.appliedMinor, 0);
+        if (redeemedMinor !== od.paidAmountMinor || od.paidAmountMinor + od.balanceDueMinor !== od.totalAmountMinor) {
+            throw new ValidationError("Committed gift-card tender does not match the order payment state.");
+        }
+        writes.push(...buildGiftCardRedemptionStatements(db, {
+            orderId: od.id,
+            currencyCode: od.currencyCode,
+            redemptions,
+        }) as SQLiteBatchItem[]);
     }
 
     if (

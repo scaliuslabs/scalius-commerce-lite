@@ -9,9 +9,13 @@ import {
   getBuyerOrderTracking,
   getCustomerVisibleBalanceDueMinor,
   issueAccountOwnerReceipt,
+  listOrderCodeOptions,
+  readCustomerIdentity,
 } from "@scalius/core/modules/customers";
 import { buyerOrderTrackingSchema } from "../../schemas/order-tracking";
 import {
+  findOrderByReference,
+  ORDER_LOOKUP_NOT_FOUND_MESSAGE,
   sendOrderLookupOtp,
   verifyOrderLookupOtp,
   deleteOrderPaymentRecoveryChallenge,
@@ -35,7 +39,8 @@ import { fromMinor } from "@scalius/shared/money";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "@scalius/core/modules/media";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
-import { NotFoundError, UnauthorizedError, ServiceUnavailableError } from "../../utils/api-error";
+import { NotFoundError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../../utils/api-error";
+import { isWithinRateLimit } from "../../utils/rate-limit";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { ok } from "../../utils/api-response";
@@ -47,6 +52,13 @@ import {
 } from "../../schemas/responses";
 import { authMiddleware } from "../../middleware/auth";
 import { getTrustedClientIp } from "../../utils/client-ip";
+import {
+  composeOrderLineExtras,
+  orderGiftCardTenderSchema,
+  orderLineExtrasShape,
+  presentOrderGiftCardTenders,
+  withOrderLineExtras,
+} from "../shared/order-line-extras";
 import {
   receiptSupportRequestSchema,
   receiptSupportRequestActionSchema,
@@ -119,6 +131,8 @@ const orderReceiptSchema = z.object({
   paymentStatus: z.string(),
   paidAmount: z.number(),
   balanceDue: z.number(),
+  /** Gift cards still paying for the order, in commit order (released or refunded ones are left out). */
+  giftCardTenders: z.array(orderGiftCardTenderSchema),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
   items: z.array(z.object({
@@ -136,6 +150,7 @@ const orderReceiptSchema = z.object({
     taxableAmountMinor: z.number().int().nullable(),
     taxAmountMinor: z.number().int(),
     ...orderLineFulfilmentShape,
+    ...orderLineExtrasShape,
   })),
   supportRequests: z.array(receiptSupportRequestSchema),
   supportRequestActions: z.array(receiptSupportRequestActionSchema),
@@ -143,19 +158,188 @@ const orderReceiptSchema = z.object({
 });
 
 // ─── Track your order (public lookup) ──────────────────────────────────────
+// The order number alone opens a status-only view: no address, phone, email
+// or surname. Order numbers are guessable, so every miss is the same 404 and
+// each buyer IP gets a strict budget. Full details, requests, downloads and
+// messages need a code through a channel the merchant chose, sent to a
+// contact saved on the order.
 
-const orderLookupBodySchema = z.object({
-  reference: z.string().trim().min(1).max(64).openapi({ description: 'Order number ("#1001") or order id' }),
-  phone: z.string().trim().min(1).max(32).openapi({ description: "Phone number used for the order" }),
-}).strict();
+const orderLookupReferenceSchema = z.string().trim().min(1).max(64)
+  .openapi({ description: 'Order number ("#1001") or order id' });
+
+const orderCodeOptionSchema = z.object({
+  channel: z.enum(CUSTOMER_AUTH_OTP_CHANNELS),
+  destination: z.string().openapi({ description: 'Masked contact on the order ("01•••••678")' }),
+});
+
+const orderLookupStatusSchema = z.object({
+  orderNumber: z.number().int().nullable(),
+  /** First name only; nothing else that identifies the buyer. */
+  firstName: z.string().nullable(),
+  status: z.string(),
+  paymentStatus: z.string(),
+  createdAt: z.string().nullable(),
+  requiresShipping: z.boolean(),
+  shippingMethodKind: z.string().nullable(),
+  shippingMethodName: z.string().nullable(),
+  currencyCode: z.string().nullable(),
+  currencyDecimalPlaces: z.number().int().nullable(),
+  subtotal: z.number(),
+  shipping: z.number(),
+  discount: z.number(),
+  tax: z.number(),
+  total: z.number(),
+  paid: z.number(),
+  balanceDue: z.number(),
+  items: z.array(z.object({
+    productName: z.string().nullable(),
+    variantLabel: z.string().nullable(),
+    quantity: z.number().int(),
+    productImage: z.string().nullable(),
+  })),
+  tracking: buyerOrderTrackingSchema,
+  /** Where a code to open the full order can go: the store's chosen channels that reach this order. */
+  codeOptions: z.array(orderCodeOptionSchema),
+});
+
+async function enforceOrderLookupRateLimit(env: Env, ip: string): Promise<void> {
+  const [strict, standard] = await Promise.all([
+    isWithinRateLimit(env, "RL_STRICT", "order-lookup-ip", ip),
+    isWithinRateLimit(env, "RL_STANDARD", "order-lookup-ip-minute", ip),
+  ]);
+  if (!strict || !standard) {
+    throw new RateLimitError("Too many order lookups.", 60);
+  }
+}
+
+function firstNameOf(name: string | null): string | null {
+  const first = name?.trim().split(/\s+/)[0] ?? "";
+  return first ? first.slice(0, 40) : null;
+}
+
+const orderLookupStatusRoute = createRoute({
+  method: "post",
+  path: "/lookup/status",
+  tags: ["Orders"],
+  summary: "Status-only view of an order by its number (no personal data)",
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: z.object({ reference: orderLookupReferenceSchema }).strict() } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Where the order is",
+      content: { "application/json": { schema: successEnvelope(z.object({ order: orderLookupStatusSchema })) } },
+    },
+    ...errorResponses,
+  },
+});
+
+// Storefront-server only: the storefront forwards the buyer's IP for the limit.
+app.use("/lookup/status", authMiddleware);
+app.openapi(orderLookupStatusRoute, async (c) => {
+  const db = c.get("db");
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  await enforceOrderLookupRateLimit(c.env, getTrustedClientIp(c));
+
+  const found = await findOrderByReference(db, c.req.valid("json").reference);
+  if (!found) throw new NotFoundError(ORDER_LOOKUP_NOT_FOUND_MESSAGE);
+  const order = await db
+    .select({
+      id: orders.id,
+      orderNumber: orders.orderNumber,
+      customerName: orders.customerName,
+      status: orders.status,
+      paymentStatus: orders.paymentStatus,
+      requiresShipping: orders.requiresShipping,
+      shippingMethodKind: orders.shippingMethodKind,
+      shippingMethodName: orders.shippingMethodName,
+      currencyCode: orders.currencyCode,
+      subtotalAmountMinor: orders.subtotalAmountMinor,
+      taxAmountMinor: orders.taxAmountMinor,
+      ...orderMoneySelection(orders),
+      createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
+    })
+    .from(orders)
+    .where(eq(orders.id, found.id))
+    .get();
+  if (!order) throw new NotFoundError(ORDER_LOOKUP_NOT_FOUND_MESSAGE);
+
+  const [items, tracking, identity] = await Promise.all([
+    db
+      .select({
+        productName: orderItems.productName,
+        variantLabel: orderItems.variantLabel,
+        quantity: orderItems.quantity,
+        productImageObjectKey: publishedMediaObjectKey(),
+        productImageStatus: media.status,
+      })
+      .from(orderItems)
+      .leftJoin(media, eq(media.id, orderItems.productImageMediaId))
+      .where(eq(orderItems.orderId, order.id)),
+    getBuyerOrderTracking(db, order),
+    readCustomerIdentity(db),
+  ]);
+  const money = orderMoneyAmounts(order);
+  const places = order.currencyDecimalPlaces;
+  return ok(c, {
+    order: {
+      orderNumber: order.orderNumber ?? null,
+      firstName: firstNameOf(order.customerName),
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      createdAt: unixToDate(order.createdAt)?.toISOString() || null,
+      requiresShipping: order.requiresShipping,
+      shippingMethodKind: presentShippingMethodKind(order.shippingMethodKind),
+      shippingMethodName: order.shippingMethodName,
+      currencyCode: order.currencyCode,
+      currencyDecimalPlaces: places,
+      subtotal: fromMinor(order.subtotalAmountMinor ?? 0, places),
+      shipping: money.shippingCharge,
+      discount: money.discountAmount,
+      tax: fromMinor(order.taxAmountMinor, places),
+      total: money.totalAmount,
+      paid: money.paidAmount,
+      balanceDue: money.balanceDue,
+      items: items.map((item) => ({
+        productName: item.productName,
+        variantLabel: item.variantLabel,
+        quantity: item.quantity,
+        productImage:
+          item.productImageObjectKey && (item.productImageStatus === "ready" || item.productImageStatus === "trashed")
+            ? getCurrentPublicMediaUrl(item.productImageObjectKey)
+            : null,
+      })),
+      // Request and refund notes can carry the buyer's words (labels only),
+      // and entry ids carry the internal order id.
+      tracking: {
+        ...tracking,
+        timeline: tracking.timeline.map((entry, index) => ({ ...entry, id: `t${index}`, details: null })),
+      },
+      codeOptions: listOrderCodeOptions(identity, found),
+    },
+  });
+});
 
 const sendOrderLookupOtpRoute = createRoute({
   method: "post",
   path: "/lookup/send-otp",
   tags: ["Orders"],
-  summary: "Send a code to the contact saved on an order (order number + its phone)",
+  summary: "Send a code to the contact saved on an order, through a channel the store chose",
   request: {
-    body: { required: true, content: { "application/json": { schema: orderLookupBodySchema } } },
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            reference: orderLookupReferenceSchema,
+            channel: z.enum(CUSTOMER_AUTH_OTP_CHANNELS).optional(),
+          }).strict(),
+        },
+      },
+    },
   },
   responses: {
     200: {
@@ -185,7 +369,7 @@ app.openapi(sendOrderLookupOtpRoute, async (c) => {
 
   const result = await sendOrderLookupOtp(db, {
     reference: body.reference,
-    phone: body.phone,
+    channel: body.channel,
     ip: getTrustedClientIp(c),
     emailEnv: env,
     encryptionKey: getCredentialEncryptionKey(env),
@@ -221,7 +405,7 @@ const verifyOrderLookupOtpRoute = createRoute({
       required: true,
       content: {
         "application/json": {
-          schema: orderLookupBodySchema.extend({ code: z.string().trim().min(4).max(12) }).strict(),
+          schema: z.object({ reference: orderLookupReferenceSchema, code: z.string().trim().min(4).max(12) }).strict(),
         },
       },
     },
@@ -249,7 +433,6 @@ app.openapi(verifyOrderLookupOtpRoute, async (c) => {
   c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
   const result = await verifyOrderLookupOtp(c.get("db"), {
     reference: body.reference,
-    phone: body.phone,
     code: body.code,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
   });
@@ -376,6 +559,15 @@ app.openapi(getOrderReceiptRoute, async (c) => {
     listBuyerOrderFulfilments(db, id),
     findOrderConversationId(db, id),
   ]);
+  const lineExtras = await composeOrderLineExtras(db, {
+    orderId: id,
+    orderItemIds: items.map((item) => item.id),
+    audience: "buyer",
+    currencyDecimalPlaces: order.currencyDecimalPlaces,
+  });
+  const giftCardTenders = order.paidAmountMinor > 0
+    ? await presentOrderGiftCardTenders(db, id, order.currencyDecimalPlaces)
+    : [];
 
   const money = orderMoneyAmounts(order);
   return ok(c, {
@@ -423,6 +615,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       paymentStatus: order.paymentStatus,
       paidAmount: money.paidAmount,
       balanceDue: fromMinor(getCustomerVisibleBalanceDueMinor(order), order.currencyDecimalPlaces),
+      giftCardTenders,
       createdAt: unixToDate(order.createdAt)?.toISOString() || null,
       updatedAt: unixToDate(order.updatedAt)?.toISOString() || null,
       items: items.map(({
@@ -434,7 +627,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
         propertiesPriceMinor,
         baseUnitPriceMinor,
         ...item
-      }) => ({
+      }) => withOrderLineExtras({
         ...item,
         ...presentOrderLineFulfilment({
           fulfillmentType,
@@ -449,7 +642,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
           (productImageStatus === "ready" || productImageStatus === "trashed")
             ? getCurrentPublicMediaUrl(productImageObjectKey)
             : null,
-      })),
+      }, lineExtras)),
       supportRequests: supportState.supportRequests,
       supportRequestActions: supportState.supportRequestActions,
       supportRequestIntro: supportState.supportRequestIntro,

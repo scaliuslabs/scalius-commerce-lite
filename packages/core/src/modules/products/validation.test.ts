@@ -227,4 +227,53 @@ describe("product validation", () => {
             expectedAggregateRevision: 1,
         }).success).toBe(false);
     });
+
+    it("accepts digital kinds, the gift-card flag and a warranty policy id (Wave B)", () => {
+        expect(createProductSchema.safeParse({ ...productInput, fulfillmentKind: "digital" }).success).toBe(true);
+        expect(createVariantSchema.shape.fulfillmentKind.safeParse("digital").success).toBe(true);
+        expect(createProductSchema.safeParse({ ...productInput, warrantyPolicyId: "wrp_policy_0001" }).success).toBe(true);
+        expect(createProductSchema.safeParse({ ...productInput, warrantyPolicyId: "brd_nope" }).success).toBe(false);
+        expect(updateProductSchema.parse({ ...productInput, id: "prod_1", expectedAggregateRevision: 1 }))
+            .not.toHaveProperty("warrantyPolicyId");
+        expect(updateProductSchema.parse({ ...productInput, id: "prod_1", expectedAggregateRevision: 1, warrantyPolicyId: null }))
+            .toMatchObject({ warrantyPolicyId: null });
+    });
+
+    it("refuses gift-card input that is discounted, tracked, stocked or not digital", () => {
+        const giftCard = { ...productInput, isGiftCard: true };
+        expect(createProductSchema.safeParse(giftCard).success).toBe(true);
+        expect(createProductSchema.safeParse({
+            ...giftCard,
+            defaultSku: { trackInventory: false, stock: 0, fulfillmentKind: "digital" },
+        }).success).toBe(true);
+
+        const issues = (input: unknown) => {
+            const parsed = createProductSchema.safeParse(input);
+            return parsed.success ? [] : parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
+        };
+        expect(issues({ ...giftCard, discountPercentage: 10 })).toEqual([
+            "discountPercentage: Gift cards can't be discounted. Set the discount to 0.",
+        ]);
+        expect(issues({ ...giftCard, fulfillmentKind: "physical" })).toEqual(["fulfillmentKind: Gift cards are delivered digitally."]);
+        expect(issues({ ...giftCard, defaultSku: { trackInventory: true, stock: 5 } })).toEqual([
+            "defaultSku.trackInventory: Gift cards don't track quantity. Turn off quantity tracking.",
+        ]);
+        expect(issues({
+            ...giftCard,
+            optionMatrix: {
+                options: [{ id: "opt", name: "Value", standardMapping: "none", values: [{ id: "v500", value: "500" }] }],
+                variants: [{
+                    id: "var", selectedOptionValueIds: ["v500"], imageId: null, weight: null, sku: "GC-500", price: 500,
+                    stock: 0, trackInventory: false, barcode: null, barcodeType: null,
+                    discountType: "flat", discountPercentage: null, discountAmount: 50, fulfillmentKind: "service",
+                }],
+            },
+        })).toEqual([
+            "optionMatrix.variants.0.fulfillmentKind: Gift cards are delivered digitally.",
+            "optionMatrix.variants.0.discountPercentage: Gift cards can't be discounted. Set the discount to 0.",
+        ]);
+        expect(updateProductSchema.safeParse({
+            ...giftCard, id: "prod_1", expectedAggregateRevision: 1, discountType: "flat", discountAmount: 100,
+        }).success).toBe(false);
+    });
 });

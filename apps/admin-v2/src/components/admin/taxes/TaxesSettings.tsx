@@ -24,7 +24,7 @@ import { deliveryLocationLoader } from "~/lib/api-query-options/delivery";
 import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
-import { isAdminApiConflictError } from "~/lib/admin-api-error";
+import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-error";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData } from "~/lib/api";
 import {
@@ -139,7 +139,6 @@ function useGroupName() {
 export function TaxCollectionCard() {
   const t = useMessages(taxesMessages);
   const common = useMessages(settingsMessages);
-  const queryClient = useQueryClient();
   const canEdit = useCanManageTaxes();
   const groupName = useGroupName();
   const configuration = useQuery(configurationQuery);
@@ -165,8 +164,17 @@ export function TaxCollectionCard() {
         return saved.settings;
       } catch (error) {
         if (!isAdminApiConflictError(error)) throw new Error(common("saveFailed"));
-        await queryClient.invalidateQueries({ queryKey: queryKeys.settings.taxes() });
-        throw new Error(t("conflict"));
+        // A 409 is either the version check (someone else saved first) or a rule the
+        // draft breaks (a taxed group without a rate), whose own words say what to fix.
+        // Only a moved version is the settings conflict whose banner offers
+        // "Reload and keep my edits" (the card's reload merges the newer version under the edits).
+        const latest = await fetchTaxSettings().catch(() => null);
+        if (!latest || latest.version === draft.version) throw error;
+        throw new AdminApiResponseError(t("conflict"), 409, "SETTINGS_REVISION_CONFLICT", {
+          document: "tax",
+          expectedRevision: draft.version,
+          currentRevision: latest.version,
+        });
       }
     },
     resolveSavedValues: (saved) => saved,

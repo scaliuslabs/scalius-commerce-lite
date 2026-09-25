@@ -56,12 +56,19 @@ export function formatOrderSuccessLabel(
   return labels[normalize(value)] ?? copy.orderReceiptStatusNotAvailableText;
 }
 
+/**
+ * The order's payment method in the buyer's words. Cash is named for where it
+ * is paid: on delivery, at pickup, or on service (nothing is delivered).
+ */
 export function formatOrderSuccessPaymentMethod(
   value: string | null | undefined,
   copy: CheckoutLanguageData,
+  delivery?: { shippingMethodKind?: string | null; requiresShipping?: boolean | null },
 ): string {
   switch (normalize(value)) {
     case "cod":
+      if (delivery?.shippingMethodKind === "pickup") return copy.orderReceiptPaymentMethodPayAtPickupText;
+      if (delivery?.requiresShipping === false) return copy.orderReceiptPaymentMethodPayOnServiceText;
       return copy.cashOnDeliveryText;
     case "stripe":
       return copy.orderReceiptPaymentMethodCardText;

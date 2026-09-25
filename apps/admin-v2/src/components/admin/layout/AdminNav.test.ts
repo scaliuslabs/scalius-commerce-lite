@@ -17,6 +17,20 @@ describe("admin sidebar", () => {
     expect(nav[1]!.children.map((child) => child.key)).toEqual(["pages", "blogPosts"]);
   });
 
+  it("lists Reviews under Products", () => {
+    const [products] = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.REVIEWS_VIEW, PERMISSIONS.GIFT_CARDS_VIEW));
+
+    expect(products!.children.find((child) => child.key === "reviews")).toMatchObject({ to: "/admin/reviews", badge: "reviews" });
+  });
+
+  it("shows Gift cards under Products only to staff who can view gift cards", () => {
+    const [withGiftCards] = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.GIFT_CARDS_VIEW));
+    const [withoutGiftCards] = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW));
+
+    expect(withGiftCards!.children.map((child) => child.key)).toContain("giftCards");
+    expect(withoutGiftCards!.children.map((child) => child.key)).not.toContain("giftCards");
+  });
+
   it("keeps a section active on its sub-pages and detail routes", () => {
     const [products] = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.COLLECTIONS_VIEW));
 

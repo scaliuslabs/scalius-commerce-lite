@@ -657,7 +657,56 @@
       "idx": 93,
       "version": "6",
       "when": 1790300024000,
-      "tag": "0093_cache_dependencies",
+      "tag": "0093_theme_document_v5",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "6",
+      "when": 1790300025000,
+      "tag": "0094_media_rendition_ladder",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1790300026000,
+      "tag": "0095_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "6",
+      "when": 1790300027000,
+      "tag": "0096_digital_goods",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1790300028000,
+      "tag": "0097_gift_cards",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1790300029000,
+      "tag": "0098_warranty",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "6",
+      "when": 1790300030000,
+      "tag": "0099_customer_whatsapp",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "6",
+      "when": 1790300031000,
+      "tag": "0100_cache_dependencies",
       "breakpoints": true
     }
   ]

@@ -1,5 +1,559 @@
-/* Listing templates (lib/catalog-listing.ts). Sizes, radius and colour come
-   from the theme tokens; this file only arranges the listing's parts. */
+/* Listing templates (lib/catalog-listing.ts). Colours, radius and type come
+   from the theme tokens; this file arranges the listing's parts and the
+   filter styles' measured numbers (fidelity AUDIT.md section 0: Amazon
+   262px / 22px rows / 14px labels, Daraz 190 / 18 / 13, Star Tech
+   225-265 / 32 / 14), which arrive from the theme as
+   --catalog-filter-column, --catalog-filter-row and --catalog-filter-label. */
+
+/* ─── Title band ─────────────────────────────────────────────────────────
+   Breadcrumb, h1, result count and the view controls on one line on
+   computers (Amazon's results bar, Star Tech's toolbar), never a hero. */
+.catalog-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 1rem;
+  row-gap: 0.25rem;
+  padding-block: 0.5rem;
+  min-height: 3rem;
+}
+
+.catalog-band-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.625rem;
+  row-gap: 0.125rem;
+  min-width: 0;
+}
+
+/* The page title reads the theme's type scale (Theme -> Typography: the
+   template's reference size by default, Star Tech 22/400 on `flat`, Target
+   32/700 on `retail`, Dawn 40/400 on `display`), so the merchant's heading
+   size choice changes listing titles too. */
+.catalog-band-title {
+  font-size: var(--theme-h1-size, 1.5rem);
+  font-weight: var(--theme-h1-weight, 700);
+  line-height: 1.2;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.catalog-band-crumbs {
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+.catalog-band-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.catalog-band-crumbs a:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+.catalog-band-count {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+
+.catalog-band-tools {
+  display: none;
+}
+
+@media (min-width: 64rem) {
+  .catalog-band {
+    flex-wrap: nowrap;
+  }
+
+  .catalog-band-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+}
+
+/* ─── Filter form ────────────────────────────────────────────────────────
+   One GET form; its placement (sidebar, bar or drawer) is decided on
+   computers. On phones and tablets it is a bottom sheet with 44px rows. */
+.catalog-filter-form {
+  --catalog-row: 2.75rem;
+  --catalog-label: 0.9375rem;
+}
+
+.catalog-filter-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 1rem 7rem;
+}
+
+.catalog-filter-form[data-placement="drawer"] .catalog-filter-groups {
+  padding-bottom: 1rem;
+}
+
+.catalog-filter-search {
+  margin-bottom: 0.5rem;
+}
+
+.catalog-facet {
+  border-bottom: 1px solid var(--border);
+}
+
+.catalog-facet-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: var(--foreground);
+}
+
+.catalog-facet-summary::-webkit-details-marker {
+  display: none;
+}
+
+.catalog-facet-selected {
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.catalog-facet-chevron {
+  width: 1rem;
+  height: 1rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  transition: transform 150ms;
+}
+
+.catalog-facet[open] > .catalog-facet-summary .catalog-facet-chevron {
+  transform: rotate(180deg);
+}
+
+.catalog-facet-body {
+  padding-bottom: 0.625rem;
+  min-width: 0;
+}
+
+.catalog-facet-values--swatch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.catalog-facet-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--catalog-row);
+  font-size: var(--catalog-label);
+  line-height: 1.25;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.catalog-facet-row:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.catalog-facet-row[hidden] {
+  display: none;
+}
+
+.catalog-facet-check {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+}
+
+.catalog-facet-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-facet-count {
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+.catalog-facet-link:is(a):hover .catalog-facet-label {
+  text-decoration: underline;
+}
+
+/* Customer rating ("4★ & up"): the stars then "& up", as Amazon and Daraz list them. */
+.catalog-rating-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.catalog-rating-stars {
+  --sc-star: 0.9375rem;
+}
+
+.catalog-facet-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.catalog-swatch {
+  flex: 0 0 auto;
+  gap: 0.375rem;
+  padding: 0.125rem 0.625rem 0.125rem 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.catalog-swatch:has(input:checked) {
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 1px var(--foreground);
+}
+
+.catalog-swatch:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.catalog-swatch .catalog-facet-label {
+  flex: 0 1 auto;
+}
+
+.catalog-swatch-dot {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--foreground) 15%, transparent);
+}
+
+.catalog-facet-more {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--catalog-row);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.catalog-facet-more:hover {
+  text-decoration: underline;
+}
+
+.catalog-facet-note {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+.catalog-facet-search {
+  margin-bottom: 0.375rem;
+}
+
+.catalog-filter-input {
+  width: 100%;
+  min-width: 0;
+  height: 2.75rem;
+  padding-inline: 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 1rem;
+}
+
+/* Leading currency symbol or search icon inside the field. */
+.catalog-filter-input.catalog-filter-input--lead {
+  padding-left: 1.5rem;
+}
+
+.catalog-filter-input.catalog-filter-input--icon {
+  padding-left: 2rem;
+}
+
+/* The compact sort in the phone chip row keeps its label's width. */
+[data-catalog-phone-bar].catalog-chip-row label {
+  flex-shrink: 0;
+}
+
+.catalog-filter-input:focus {
+  border-color: var(--primary);
+  outline: 2px solid var(--ring);
+  outline-offset: 0;
+}
+
+.catalog-price-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.catalog-filter-form[data-placement="drawer"] .catalog-price-fields {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.catalog-filter-go {
+  height: 2.75rem;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.catalog-filter-go:hover {
+  background: var(--muted);
+}
+
+/* Star Tech's price slider: two thumbs on one track (JavaScript only). */
+.catalog-price-slider {
+  position: relative;
+  height: 1.75rem;
+  margin-bottom: 0.375rem;
+}
+
+.catalog-price-slider::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0.5rem;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+
+.catalog-price-slider input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.catalog-price-slider input[type="range"]::-webkit-slider-thumb {
+  pointer-events: auto;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  border: 3px solid var(--primary);
+  background: var(--background);
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.catalog-price-slider input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  border: 3px solid var(--primary);
+  background: var(--background);
+  cursor: pointer;
+}
+
+.catalog-price-slider input[type="range"]::-webkit-slider-runnable-track {
+  background: transparent;
+}
+
+.catalog-filter-clear {
+  display: none;
+}
+
+.catalog-bar-more {
+  display: none;
+}
+
+/* ─── Computers ──────────────────────────────────────────────────────── */
+@media (min-width: 64rem) {
+  /* The column: sidebar-dense (Amazon, Daraz, Star Tech) is flat rows under
+     bold headings; sidebar-comfortable (Apple Gadgets, Fabrilife, Game
+     Ghor) sets each group on its own surface. */
+  #filter-section[data-placement="sidebar"] {
+    width: var(--catalog-filter-column, 16.875rem);
+  }
+
+  .catalog-filter-form:is([data-placement="sidebar"], [data-placement="bar"]) {
+    --catalog-row: var(--catalog-filter-row, 1.75rem);
+    --catalog-label: var(--catalog-filter-label, 0.875rem);
+    overflow: visible;
+  }
+
+  .catalog-filter-form[data-placement="sidebar"] .catalog-filter-groups {
+    padding: 0;
+    gap: 0;
+  }
+
+  .catalog-filter-form[data-placement="sidebar"] .catalog-facet-summary {
+    min-height: 2rem;
+    font-size: 0.875rem;
+  }
+
+  .catalog-filter-form[data-placement="sidebar"] .catalog-facet-check {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+
+  .catalog-filter-form[data-placement="sidebar"] .catalog-facet-body {
+    padding-bottom: 0.5rem;
+  }
+
+  .catalog-filter-form[data-filter-style="sidebar-dense"] .catalog-facet {
+    border-bottom: 0;
+    padding-bottom: 0.25rem;
+  }
+
+  /* Amazon's and Daraz's group headings sit one row above their values. */
+  .catalog-filter-form[data-filter-style="sidebar-dense"] .catalog-facet-summary {
+    min-height: calc(var(--catalog-row) + 0.25rem);
+  }
+
+  .catalog-filter-form[data-filter-style="sidebar-dense"] .catalog-facet-body {
+    padding-bottom: 0.25rem;
+  }
+
+  /* A dense column searches a long list once it is unfolded (See more),
+     so the first screen stays values. */
+  .catalog-filter-form[data-filter-style="sidebar-dense"]
+    .catalog-facet-body:not(:has([data-catalog-facet-more][aria-expanded="true"])) [data-catalog-facet-search] {
+    display: none;
+  }
+
+  .catalog-filter-form[data-filter-style="sidebar-comfortable"] .catalog-filter-groups {
+    gap: 0.5rem;
+  }
+
+  .catalog-filter-form[data-filter-style="sidebar-comfortable"] .catalog-facet {
+    padding-inline: 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card, var(--background));
+  }
+
+  .catalog-filter-form[data-filter-style="sidebar-comfortable"] .catalog-facet-summary {
+    min-height: 2.5rem;
+    font-size: 1rem;
+  }
+
+  .catalog-filter-form:is([data-placement="sidebar"], [data-placement="bar"]) :is(.catalog-filter-input, .catalog-filter-go) {
+    height: 2rem;
+    font-size: 0.875rem;
+  }
+
+  .catalog-filter-form[data-placement="sidebar"] .catalog-filter-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.25rem;
+    margin-top: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  /* The bar (Dawn, Aarong): the groups become dropdown buttons in one row
+     above a full-width grid; groups past the bar's count wait behind
+     "More filters". */
+  #filter-section[data-placement="bar"] {
+    width: 100%;
+  }
+
+  .catalog-filter-form[data-placement="bar"] .catalog-filter-groups {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0;
+  }
+
+  .catalog-filter-form[data-placement="bar"] .catalog-facet {
+    position: relative;
+    border: 0;
+  }
+
+  .catalog-filter-form[data-placement="bar"] .catalog-facet-summary {
+    min-height: 2.25rem;
+    padding-inline: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--background);
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .catalog-filter-form[data-placement="bar"] .catalog-facet[open] > .catalog-facet-summary,
+  .catalog-filter-form[data-placement="bar"] .catalog-facet-summary:hover {
+    border-color: var(--foreground);
+  }
+
+  .catalog-filter-form[data-placement="bar"] .catalog-facet-chevron {
+    margin-left: 0.125rem;
+  }
+
+  .catalog-filter-form[data-placement="bar"] .catalog-facet-body {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    z-index: 40;
+    width: max-content;
+    min-width: 15rem;
+    max-width: 22rem;
+    max-height: 24rem;
+    overflow-y: auto;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--background);
+    box-shadow: 0 12px 32px -12px color-mix(in oklab, var(--foreground) 35%, transparent);
+  }
+
+  .catalog-filter-form[data-placement="bar"]:not([data-bar-open]) [data-bar-overflow] {
+    display: none;
+  }
+
+  .catalog-filter-form[data-placement="bar"] .catalog-bar-more,
+  .catalog-filter-form[data-placement="bar"] .catalog-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding-inline: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--foreground);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .catalog-filter-form[data-placement="drawer"] .catalog-filter-groups {
+    padding: 1.25rem;
+  }
+}
 
 /* The filter panel: a bottom sheet over a dimmed page on phones and
    tablets (tapping the dim area closes it), and for the drawer layouts a
@@ -20,8 +574,11 @@
   }
 }
 
+/* ─── Results ────────────────────────────────────────────────────────── */
+
 /* List results (the list layout, or the grid/list toggle): one product per
-   row, the photo beside the text (Amazon, eBay, Star Tech phones). Every
+   row, the photo beside its facts (Amazon: a 258px photo column, title,
+   rating, bought count, price, delivery and the action down the row). Every
    card variant keeps its own anatomy. */
 .product-grid-frame[data-catalog-results="list"] > .product-grid {
   --listing-row-media: 7.5rem;
@@ -32,13 +589,13 @@
 @container product-grid (min-width: 36rem) {
   .product-grid-frame[data-catalog-results="list"] > .product-grid {
     --listing-row-media: 11rem;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 }
 
 @container product-grid (min-width: 60rem) {
   .product-grid-frame[data-catalog-results="list"] > .product-grid {
-    --listing-row-media: 14rem;
+    --listing-row-media: 16rem;
   }
 }
 
@@ -50,13 +607,22 @@
 
 .site-root .product-grid-frame[data-catalog-results="list"] .product-card-body {
   min-height: 100%;
-  padding-inline: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  gap: 0.25rem;
 }
 
-/* A row reads top to bottom (title, price, action) instead of pinning the
-   price to the bottom of a tall photo. */
+/* A row reads top to bottom (title, facts, price, action) instead of
+   pinning the price to the bottom of a tall photo; the action keeps its
+   own width (Amazon's 272px "Add to cart"), not the row's. */
 .site-root .product-grid-frame[data-catalog-results="list"] .product-card-body > .mt-auto {
   margin-top: 0.5rem;
+}
+
+@container product-grid (min-width: 60rem) {
+  .site-root .product-grid-frame[data-catalog-results="list"] .product-card-body {
+    padding: 0.75rem 1rem;
+    max-width: 44rem;
+  }
 }
 
 /* Shelves (Aarong): one horizontal row per sub-listing, CSS scroll-snap

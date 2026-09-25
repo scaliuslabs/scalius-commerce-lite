@@ -217,7 +217,7 @@ export function calculateTaxQuote(input: CalculateTaxQuoteInput): TaxQuote {
     const lines = input.lines.map((line) => {
         const grossAmountMinor = line.unitPriceMinor * line.quantity;
         const lineDiscountMinor = allocations.get(`line:${line.lineId}`) ?? 0;
-        const configuredClassId = line.taxClassId ?? input.settings.defaultTaxClassId;
+        const configuredClassId = line.taxExempt === true ? null : line.taxClassId ?? input.settings.defaultTaxClassId;
         const taxClass = taxEnabled && configuredClassId ? classMap.get(configuredClassId) ?? null : null;
         const rates = taxEnabled ? applicableRates(taxClass, input.rates, input.destination) : [];
         const result = calculateAmountTax(

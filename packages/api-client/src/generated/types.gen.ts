@@ -4,10 +4,59 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type ProductCardFacts = {
+    /**
+     * The published brand entity.
+     */
+    brand: {
+        name: string;
+        slug: string;
+    } | null;
+    /**
+     * Up to four "Name: value" lines from key-spec attributes, in spec-table order.
+     */
+    keySpecs: Array<string>;
+    /**
+     * Option axes with two or more values, in position order.
+     */
+    options: Array<{
+        /**
+         * The merchant's option axis name.
+         */
+        name: string;
+        kind: 'color' | 'size' | 'other';
+        /**
+         * Values sold on at least one live SKU.
+         */
+        count: number;
+        swatches: Array<{
+            label: string;
+            /**
+             * `#rrggbb` when a swatch attribute value of the same name has one.
+             */
+            hex: string | null;
+        }>;
+    }>;
+    /**
+     * Units sold in the last 30 days from real orders; null below 10.
+     */
+    soldLast30Days: number | null;
+    packSize: string | null;
+    /**
+     * Free when the product ships free, else the cheapest active delivery rate; null without a rate.
+     */
+    delivery: {
+        free: true;
+    } | {
+        free: false;
+        feeFrom: number;
+    } | unknown;
+};
+
 export type NullableTimestamp = string | number | null;
 
 export type StorefrontThemeDocument = {
-    version: 4;
+    version: 5;
     template: 'boutique' | 'heritage-editorial' | 'fashion-value' | 'spec-catalogue' | 'rounded-tech' | 'marketplace' | 'mass-retail' | 'department-mall' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -106,6 +155,11 @@ export type StorefrontThemeDocument = {
                 [key: string]: never;
             };
         };
+        navigation: {
+            source: 'menu' | 'category-tree' | 'tree+menu';
+            maxTopItems: number;
+            linkBudget: number;
+        };
         desktopNav: {
             variant: 'dropdown';
             settings: {
@@ -199,15 +253,15 @@ export type StorefrontThemeDocument = {
             settings: {
                 [key: string]: never;
             };
+        } | {
+            variant: 'detailed';
+            settings: {
+                [key: string]: never;
+            };
         };
         listing: {
             layout: {
-                variant: 'sidebar-grid';
-                settings: {
-                    [key: string]: never;
-                };
-            } | {
-                variant: 'bar-drawer';
+                variant: 'grid';
                 settings: {
                     [key: string]: never;
                 };
@@ -226,6 +280,13 @@ export type StorefrontThemeDocument = {
                 settings: {
                     [key: string]: never;
                 };
+            };
+            filters: {
+                style: 'sidebar-dense' | 'sidebar-comfortable' | 'bar-dropdowns' | 'drawer';
+                openByDefault: boolean;
+                column?: number;
+                rowPitch?: number;
+                label?: number;
             };
             toolbar: Array<'breadcrumb' | 'category-banner' | 'subcategory-pills' | 'popular-filter-chips' | 'aspect-chips' | 'result-count' | 'sort' | 'per-page' | 'applied-chips' | 'grid-list-toggle'>;
             phoneLayout: 'grid' | 'list-row';
@@ -584,6 +645,7 @@ export type StorefrontStoreShape = {
     skuCount: number;
     topCategoryCount: number;
     categoryDepth: number;
+    categoryGroups: number;
     menuTopItems: number;
     menuDepth: number;
     menuGroups: number;
@@ -596,6 +658,257 @@ export type StorefrontStoreShape = {
     hasReviews: boolean;
     hasQuestions: boolean;
     hasContentBlocks: boolean;
+};
+
+export type AppliedGiftCard = {
+    /**
+     * Opaque, short-lived apply handle. Send it as `giftCards[].handle` with the tax quote and the order; never the code.
+     */
+    handle: string;
+    handleExpiresAt: string;
+    last4: string;
+    balance: number;
+    balanceMinor: number;
+    currencyCode: string;
+    expiresAt: string | null;
+};
+
+export type GiftCardBalance = {
+    last4: string;
+    balance: number;
+    balanceMinor: number;
+    currencyCode: string;
+    expiresAt: string | null;
+    status: 'active' | 'disabled' | 'expired';
+};
+
+export type OrderLineExtras = {
+    review?: OrderLineReviewExtra;
+    downloads?: Array<OrderLineDownloadExtra>;
+    licenceKeys?: Array<OrderLineLicenceKeyExtra>;
+    giftCards?: Array<OrderLineGiftCardExtra>;
+    warranty?: Array<OrderLineWarrantyExtra>;
+};
+
+export type OrderLineReviewExtra = {
+    eligible: boolean;
+    review: {
+        id: string;
+        rating: number;
+        status: string;
+    } | null;
+};
+
+export type OrderLineDownloadExtra = {
+    entitlementId: string;
+    displayName: string;
+    downloadCount: number;
+    downloadLimit: number | null;
+    expiresAt: string | null;
+    revoked: boolean;
+};
+
+export type OrderLineLicenceKeyExtra = {
+    keyId: string;
+    last4: string;
+};
+
+export type OrderLineGiftCardExtra = {
+    giftCardId: string;
+    last4: string;
+    initialAmount: number;
+    initialAmountMinor: number;
+    currencyCode: string;
+    sentTo: string | null;
+};
+
+export type OrderLineWarrantyExtra = {
+    warrantyId: string;
+    policyName: string;
+    provider: string;
+    quantity: number;
+    startsAt: string;
+    expiresAt: string;
+    replacementUntil: string | null;
+    voided: boolean;
+    openClaimId: string | null;
+};
+
+export type OrderGiftCardTender = {
+    last4: string;
+    amount: number;
+    amountMinor: number;
+};
+
+export type CustomerAccountSummary = {
+    unreadInbox: number;
+    reviewsToWrite: number;
+    reviewsWritten: number;
+    downloads: number;
+    giftCards: number;
+    activeWarranties: number;
+};
+
+export type BuyerReviews = {
+    toReview: Array<ReviewableLine>;
+    reviews: Array<BuyerReview>;
+};
+
+export type ReviewableLine = {
+    orderId: string;
+    orderNumber: string;
+    orderItemId: string;
+    productId: string;
+    productName: string;
+    productSlug: string | null;
+    variantLabel: string | null;
+    imageUrl: string | null;
+    fulfilledAt: string | null;
+};
+
+export type BuyerReview = {
+    id: string;
+    orderId: string;
+    orderItemId: string;
+    productId: string;
+    productName: string;
+    productSlug: string | null;
+    variantLabel: string | null;
+    rating: number;
+    title: string | null;
+    body: string | null;
+    displayName: string;
+    status: 'pending' | 'published' | 'rejected' | 'withdrawn';
+    reply: {
+        body: string;
+        repliedAt: string;
+    } | null;
+    createdAt: string;
+    publishedAt: string | null;
+    editedAt: string | null;
+    version: number;
+    canEdit: boolean;
+};
+
+export type BuyerProductReviewState = {
+    state: 'eligible';
+    orderItemId: string;
+    displayName: string;
+} | {
+    state: 'reviewed';
+    review: BuyerReview;
+} | {
+    state: 'ineligible';
+} | {
+    state: 'disabled';
+};
+
+export type ReviewWriteResult = {
+    review: BuyerReview;
+    created: boolean;
+    published: boolean;
+};
+
+export type SubmitReviewBody = {
+    orderItemId: string;
+    rating: number;
+    title?: string | null;
+    body?: string | null;
+    displayName?: string | null;
+    clientKey?: string;
+};
+
+export type EditReviewBody = {
+    version: number;
+    withdraw?: true;
+    rating?: number;
+    title?: string | null;
+    body?: string | null;
+    displayName?: string | null;
+};
+
+export type BuyerDigitalLine = {
+    orderId: string;
+    orderNumber: number | null;
+    orderItemId: string;
+    productName: string | null;
+    variantLabel: string | null;
+    deliveredAt: string;
+    files: Array<BuyerDownloadFile>;
+    licenceKeys: Array<BuyerLicenceKey>;
+};
+
+export type BuyerDownloadFile = {
+    entitlementId: string;
+    displayName: string;
+    filename: string | null;
+    sizeBytes: number | null;
+    downloadCount: number;
+    /**
+     * Null: unlimited.
+     */
+    downloadLimit: number | null;
+    /**
+     * When access ends; null: never.
+     */
+    expiresAt: string | null;
+    revoked: boolean;
+    /**
+     * Downloadable right now (not revoked, expired or used up).
+     */
+    available: boolean;
+};
+
+export type BuyerLicenceKey = {
+    keyId: string;
+    /**
+     * The key's last characters; reveal the key with a POST.
+     */
+    last4: string;
+};
+
+export type DownloadTicket = {
+    /**
+     * Storefront path of the 10-minute download, bound to this browser's cookie.
+     */
+    href: string;
+    expiresAt: string;
+    downloadCount: number;
+    downloadLimit: number | null;
+};
+
+export type RevealedLicenceKey = {
+    keyId: string;
+    key: string;
+    last4: string;
+};
+
+export type BuyerGiftCard = {
+    id: string;
+    last4: string;
+    currencyCode: string;
+    initialAmount: number;
+    initialAmountMinor: number;
+    balance: number;
+    balanceMinor: number;
+    status: 'active' | 'disabled';
+    expiresAt: string | null;
+    expired: boolean;
+    source: 'purchase' | 'manual' | 'refund';
+    createdAt: string;
+    transactions: Array<BuyerGiftCardTransaction>;
+};
+
+export type BuyerGiftCardTransaction = {
+    id: string;
+    kind: 'issue' | 'redeem' | 'release' | 'refund' | 'adjust';
+    amount: number;
+    amountMinor: number;
+    balanceAfter: number;
+    balanceAfterMinor: number;
+    orderId: string | null;
+    orderNumber: string | null;
+    createdAt: string;
 };
 
 export type ProductPageContentBlock = {
@@ -769,6 +1082,255 @@ export type ProductBundleTier = {
     price: number | null;
     label: string | null;
     isActive: boolean;
+};
+
+export type PublicReviewSummary = {
+    /**
+     * Average of published reviews, truncated to two decimals; 0 with none.
+     */
+    average: number;
+    count: number;
+    /**
+     * Published reviews per star, 5★ first.
+     */
+    histogram: Array<{
+        rating: number;
+        count: number;
+    }>;
+};
+
+export type PublicReview = {
+    id: string;
+    rating: number;
+    title: string | null;
+    body: string | null;
+    authorName: string;
+    variantLabel: string | null;
+    verifiedPurchase: true;
+    publishedAt: string;
+    editedAt: string | null;
+    /**
+     * The merchant's public reply ("Response from <store>").
+     */
+    reply: {
+        body: string;
+        repliedAt: string;
+    } | null;
+};
+
+export type ProductReviews = {
+    summary: PublicReviewSummary;
+    items: Array<PublicReview>;
+    nextCursor: string | null;
+};
+
+export type DigitalAsset = {
+    id: string;
+    productId: string;
+    /**
+     * Null: every digital variant of the product receives this file.
+     */
+    variantId: string | null;
+    kind: 'file' | 'licence_keys';
+    /**
+     * `draft` until the file is uploaded; `archived` items are not delivered to new orders.
+     */
+    status: 'draft' | 'ready' | 'archived';
+    displayName: string;
+    filename: string | null;
+    mediaType: string | null;
+    sizeBytes: number | null;
+    hasFile: boolean;
+    downloadLimit: number | null;
+    accessDays: number | null;
+    version: number;
+    /**
+     * Licence-key pools: keys by status (available = the variant's unsold keys).
+     */
+    keys: {
+        available: number;
+        assigned: number;
+        revoked: number;
+    };
+    deliveredCount: number;
+    createdAt: number;
+    updatedAt: number;
+};
+
+export type DigitalUploadSession = {
+    id: string;
+    assetId: string;
+    /**
+     * Every part but the last is exactly this many bytes (50 MiB).
+     */
+    partSize: number;
+    partCount: number;
+    sizeBytes: number;
+    uploadedParts: Array<number>;
+} | null;
+
+export type AdminReviewPage = {
+    items: Array<AdminReview>;
+    nextCursor: string | null;
+};
+
+export type AdminReview = {
+    id: string;
+    status: 'pending' | 'published' | 'rejected' | 'withdrawn';
+    rating: number;
+    title: string | null;
+    body: string | null;
+    authorName: string;
+    authorType: 'customer' | 'guest_receipt';
+    variantLabel: string | null;
+    product: {
+        id: string;
+        name: string;
+        slug: string | null;
+        imageUrl: string | null;
+    };
+    order: {
+        id: string;
+        orderNumber: string;
+    };
+    /**
+     * Why the automatic check held it: url, email, phone, repeated_characters, block_word.
+     */
+    checkFlags: Array<string>;
+    moderationReason: 'spam' | 'abusive' | 'personal_info' | 'off_topic' | 'not_about_product' | null;
+    reply: {
+        body: string;
+        repliedAt: string;
+        authorName: string | null;
+    } | null;
+    conversationId: string | null;
+    createdAt: string;
+    publishedAt: string | null;
+    editedAt: string | null;
+    updatedAt: string;
+    version: number;
+};
+
+export type AdminReviewSummary = {
+    pending: number;
+    published: number;
+    rejected: number;
+    product: {
+        productId: string;
+        productName: string;
+        count: number;
+        average: number;
+        histogram: Array<{
+            rating: number;
+            count: number;
+        }>;
+    } | null;
+};
+
+export type ReviewSettings = {
+    enabled: boolean;
+    moderation: 'auto' | 'hold';
+    requestsEnabled: boolean;
+    requestDelayDays: number;
+    blockWords: Array<string>;
+    revision: number;
+};
+
+export type ReviewSettingsBody = {
+    enabled?: boolean;
+    moderation?: 'auto' | 'hold';
+    requestsEnabled?: boolean;
+    requestDelayDays?: number;
+    blockWords?: Array<string>;
+    expectedRevision: number;
+};
+
+export type ModerateReviewsResult = {
+    updated: Array<{
+        id: string;
+        previousStatus: 'pending' | 'published' | 'rejected' | 'withdrawn';
+    }>;
+    skipped: Array<string>;
+};
+
+export type ModerateReviewsBody = {
+    ids: Array<string>;
+    action: 'publish' | 'reject' | 'restore';
+    /**
+     * Required to reject. A content reason; a low rating is never one.
+     */
+    reason?: 'spam' | 'abusive' | 'personal_info' | 'off_topic' | 'not_about_product';
+    requestKey: string;
+};
+
+export type ReviewReplyBody = {
+    body: string | null;
+    version: number;
+};
+
+export type LicenceKeyAdmin = {
+    id: string;
+    /**
+     * The key's last characters; the full key is never shown to staff after import.
+     */
+    last4: string;
+    status: 'available' | 'assigned' | 'revoked';
+    orderItemId: string | null;
+    assignedAt: number | null;
+    revokedAt: number | null;
+    createdAt: number;
+};
+
+export type AdminGiftCardSummary = {
+    id: string;
+    last4: string;
+    currencyCode: string;
+    initialAmount: number;
+    initialAmountMinor: number;
+    balance: number;
+    balanceMinor: number;
+    status: 'active' | 'disabled';
+    expiresAt: string | null;
+    expired: boolean;
+    source: 'purchase' | 'manual' | 'refund';
+    customer: {
+        id: string;
+        name: string;
+    } | null;
+    recipientName: string | null;
+    recipientContactMasked: string | null;
+    createdAt: string;
+    version: number;
+};
+
+export type AdminGiftCardDetail = AdminGiftCardSummary & {
+    note: string | null;
+    message: string | null;
+    recipientEmail: string | null;
+    recipientPhone: string | null;
+    sourceOrder: {
+        id: string;
+        orderNumber: string;
+    } | null;
+    issuedBy: {
+        id: string;
+        name: string;
+    } | null;
+};
+
+export type AdminGiftCardTransaction = {
+    id: string;
+    kind: 'issue' | 'redeem' | 'release' | 'refund' | 'adjust';
+    amount: number;
+    amountMinor: number;
+    balanceAfter: number;
+    balanceAfterMinor: number;
+    orderId: string | null;
+    orderNumber: string | null;
+    actorType: 'system' | 'admin' | 'customer';
+    actorName: string | null;
+    reason: string | null;
+    createdAt: string;
 };
 
 export type GetApiV1AuthTokenData = {
@@ -1414,15 +1976,15 @@ export type GetApiV1AttributesCategoryByCategoryIdResponses = {
         data: {
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -1431,6 +1993,9 @@ export type GetApiV1AttributesCategoryByCategoryIdResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -1505,15 +2070,15 @@ export type GetApiV1AttributesCategorySlugByCategorySlugResponses = {
         data: {
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -1522,6 +2087,9 @@ export type GetApiV1AttributesCategorySlugByCategorySlugResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -1592,15 +2160,15 @@ export type GetApiV1AttributesSearchFiltersResponses = {
         data: {
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -1609,6 +2177,9 @@ export type GetApiV1AttributesSearchFiltersResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -1691,6 +2262,50 @@ export type GetApiV1CollectionsResponses = {
 
 export type GetApiV1CollectionsResponse = GetApiV1CollectionsResponses[keyof GetApiV1CollectionsResponses];
 
+export type GetApiV1CollectionsDirectoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/collections/directory';
+};
+
+export type GetApiV1CollectionsDirectoryErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CollectionsDirectoryError = GetApiV1CollectionsDirectoryErrors[keyof GetApiV1CollectionsDirectoryErrors];
+
+export type GetApiV1CollectionsDirectoryResponses = {
+    /**
+     * Collection directory
+     */
+    200: {
+        success: true;
+        data: {
+            collections: Array<{
+                id: string;
+                name: string;
+                canonicalPath: string | null;
+                productCount: number;
+                imageUrl: string | null;
+                imageAlt: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CollectionsDirectoryResponse = GetApiV1CollectionsDirectoryResponses[keyof GetApiV1CollectionsDirectoryResponses];
+
 export type GetApiV1CollectionsSitemapData = {
     body?: never;
     path?: never;
@@ -1740,12 +2355,17 @@ export type GetApiV1CollectionsByIdData = {
     query?: {
         page?: number;
         limit?: number;
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+        /**
+         * Only products whose published-review average is at least this many whole stars (1-4).
+         */
+        minRating?: number;
         search?: string;
         minPrice?: number | null;
         maxPrice?: number | null;
         freeDelivery?: 'true' | 'false';
         hasDiscount?: 'true' | 'false';
+        inStock?: 'true';
     };
     url: '/api/v1/collections/{id}';
 };
@@ -1822,12 +2442,26 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
                 freeDelivery: boolean;
                 categoryId: string | null;
                 hasVariants: boolean;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
             featuredProduct?: {
                 id: string;
@@ -1841,12 +2475,26 @@ export type GetApiV1CollectionsByIdResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 discountedPrice: number;
                 priceVaries: boolean;
                 availableForSale: boolean;
                 freeDelivery: boolean;
                 categoryId: string | null;
                 hasVariants: boolean;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             };
             pagination: {
                 page: number;
@@ -1860,15 +2508,15 @@ export type GetApiV1CollectionsByIdResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -1877,6 +2525,9 @@ export type GetApiV1CollectionsByIdResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -1899,6 +2550,19 @@ export type GetApiV1CollectionsByIdResponses = {
                     min: number;
                     max: number;
                 } | null;
+            }>;
+            /**
+             * "N★ & up" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.
+             */
+            ratingFacet: Array<{
+                /**
+                 * Whole stars: products averaging at least this (`minRating`).
+                 */
+                min: number;
+                /**
+                 * Products matching the other selections and this threshold.
+                 */
+                count: number;
             }>;
         };
     };
@@ -2090,9 +2754,13 @@ export type GetApiV1BrandsBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Sort order
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last.
          */
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+        /**
+         * Only products whose published-review average is at least this many whole stars (1-4).
+         */
+        minRating?: number;
         /**
          * Search within the brand
          */
@@ -2113,6 +2781,10 @@ export type GetApiV1BrandsBySlugProductsData = {
          * Has discount filter
          */
         hasDiscount?: 'true' | 'false';
+        /**
+         * Only products a buyer can buy now (exclude sold out)
+         */
+        inStock?: 'true';
     };
     url: '/api/v1/brands/{slug}/products';
 };
@@ -2201,12 +2873,26 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
                     slug: string;
                 } | null;
                 createdAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
             pagination: {
                 page: number;
@@ -2220,15 +2906,15 @@ export type GetApiV1BrandsBySlugProductsResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -2237,6 +2923,9 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -2260,6 +2949,19 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                     max: number;
                 } | null;
             }>;
+            /**
+             * "N★ & up" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.
+             */
+            ratingFacet: Array<{
+                /**
+                 * Whole stars: products averaging at least this (`minRating`).
+                 */
+                min: number;
+                /**
+                 * Products matching the other selections and this threshold.
+                 */
+                count: number;
+            }>;
             appliedFilters: {
                 attributes: Array<{
                     id: string;
@@ -2271,12 +2973,14 @@ export type GetApiV1BrandsBySlugProductsResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+                minRating?: number;
                 search?: string;
                 minPrice?: number;
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
+                inStock?: 'true';
             };
         };
     };
@@ -2723,6 +3427,51 @@ export type GetApiV1NavigationResponses = {
 };
 
 export type GetApiV1NavigationResponse = GetApiV1NavigationResponses[keyof GetApiV1NavigationResponses];
+
+export type GetApiV1NavigationCategoriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/navigation/categories';
+};
+
+export type GetApiV1NavigationCategoriesErrors = {
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1NavigationCategoriesError = GetApiV1NavigationCategoriesErrors[keyof GetApiV1NavigationCategoriesErrors];
+
+export type GetApiV1NavigationCategoriesResponses = {
+    /**
+     * Category tree
+     */
+    200: {
+        success: true;
+        data: {
+            nodes: Array<{
+                id: string;
+                name: string;
+                slug: string;
+                parentId: string | null;
+                canonicalPath: string | null;
+                imageUrl: string | null;
+            }>;
+            truncated: boolean;
+        };
+    };
+};
+
+export type GetApiV1NavigationCategoriesResponse = GetApiV1NavigationCategoriesResponses[keyof GetApiV1NavigationCategoriesResponses];
 
 export type GetApiV1NavigationPlacementsData = {
     body?: never;
@@ -3556,6 +4305,10 @@ export type PostApiV1DiscountsValidateData = {
             price: number;
             quantity: number;
             variantId?: string;
+            /**
+             * Unit price before buyer-input surcharges, which quantity bundles price from; defaults to `price`.
+             */
+            basePrice?: number;
         }>;
         /**
          * Delivery charge of the chosen delivery option. Omit it before the buyer has one: delivery discounts then wait (`needs_delivery`) instead of failing.
@@ -3606,6 +4359,16 @@ export type PostApiV1DiscountsValidateResponses = {
         success: true;
         data: {
             totalDiscount: number;
+            /**
+             * Quantity-bundle saving included in totalDiscount (0 when the promotions save more).
+             */
+            bundleDiscountAmount: number;
+            bundles: Array<{
+                productId: string;
+                quantity: number;
+                discountType: 'percentage' | 'fixed_price';
+                label: string | null;
+            }>;
             discounts: Array<{
                 promotionId: string;
                 title: string;
@@ -3675,6 +4438,10 @@ export type PostApiV1DiscountsValidateResponses = {
                     }>;
                 };
                 requiresCustomerPhone?: boolean;
+                /**
+                 * The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).
+                 */
+                bundleSavesMore?: true;
             }>;
         };
     };
@@ -3934,6 +4701,14 @@ export type GetApiV1StorefrontHomepageResponses = {
                     imageMediaId: string | null;
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
+                    /**
+                     * Published-review average and count; null without a published review.
+                     */
+                    rating: {
+                        average: number;
+                        count: number;
+                    } | null;
+                    cardFacts?: ProductCardFacts;
                 }>;
                 featuredProduct: {
                     id: string;
@@ -3953,6 +4728,14 @@ export type GetApiV1StorefrontHomepageResponses = {
                     imageMediaId: string | null;
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
+                    /**
+                     * Published-review average and count; null without a published review.
+                     */
+                    rating: {
+                        average: number;
+                        count: number;
+                    } | null;
+                    cardFacts?: ProductCardFacts;
                 } | null;
             }>;
             presentation: {
@@ -4001,6 +4784,14 @@ export type GetApiV1StorefrontHomepageResponses = {
                         imageMediaId: string | null;
                         imageAlt: string | null;
                         secondaryImageUrl: string | null;
+                        /**
+                         * Published-review average and count; null without a published review.
+                         */
+                        rating: {
+                            average: number;
+                            count: number;
+                        } | null;
+                        cardFacts?: ProductCardFacts;
                     }>;
                     category: {
                         id: string;
@@ -4197,6 +4988,17 @@ export type GetApiV1StorefrontLayoutResponses = {
                     }>;
                 }>;
             }>;
+            categoryTree: {
+                nodes: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    parentId: string | null;
+                    canonicalPath: string | null;
+                    imageUrl: string | null;
+                }>;
+                truncated: boolean;
+            };
             footer: {
                 logo: {
                     src: string;
@@ -4331,6 +5133,8 @@ export type GetApiV1StorefrontLayoutResponses = {
                 pickupAvailableText: string;
                 noDeliveryNeededBadgeText: string;
                 payAtServiceText: string;
+                productBundleTierText: string;
+                productBundleSetPriceText: string;
             };
         };
     };
@@ -4525,6 +5329,14 @@ export type PostApiV1StorefrontThemePreviewHomepageResponses = {
                     imageMediaId: string | null;
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
+                    /**
+                     * Published-review average and count; null without a published review.
+                     */
+                    rating: {
+                        average: number;
+                        count: number;
+                    } | null;
+                    cardFacts?: ProductCardFacts;
                 }>;
                 category: {
                     id: string;
@@ -9029,12 +9841,10 @@ export type GetApiV1CheckoutConfigResponses = {
             }>;
             activeDefaultMethod?: string;
             guestCheckoutEnabled: boolean;
-            authVerificationMethod: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
-            customerAuthPolicy: {
-                otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
-                requiredContactFields: Array<'email' | 'phone'>;
-                optionalContactFields: Array<'email' | 'phone'>;
-                defaultOtpChannel: 'email' | 'sms' | 'whatsapp';
+            customerIdentity: {
+                email: 'required' | 'optional' | 'hidden';
+                whatsapp: 'off' | 'same_as_phone' | 'separate';
+                channels: Array<'email' | 'sms' | 'whatsapp'>;
             };
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
@@ -9065,6 +9875,218 @@ export type GetApiV1CheckoutConfigResponses = {
 };
 
 export type GetApiV1CheckoutConfigResponse = GetApiV1CheckoutConfigResponses[keyof GetApiV1CheckoutConfigResponses];
+
+export type PostApiV1CheckoutGiftCardsApplyData = {
+    body: {
+        /**
+         * The gift-card code as the buyer typed it. Only ever sent in a POST body.
+         */
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/checkout/gift-cards/apply';
+};
+
+export type PostApiV1CheckoutGiftCardsApplyErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsApplyError = PostApiV1CheckoutGiftCardsApplyErrors[keyof PostApiV1CheckoutGiftCardsApplyErrors];
+
+export type PostApiV1CheckoutGiftCardsApplyResponses = {
+    /**
+     * The card can pay
+     */
+    200: {
+        success: true;
+        data: AppliedGiftCard;
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsApplyResponse = PostApiV1CheckoutGiftCardsApplyResponses[keyof PostApiV1CheckoutGiftCardsApplyResponses];
+
+export type PostApiV1CheckoutGiftCardsBalanceData = {
+    body: {
+        /**
+         * The gift-card code as the buyer typed it. Only ever sent in a POST body.
+         */
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/checkout/gift-cards/balance';
+};
+
+export type PostApiV1CheckoutGiftCardsBalanceErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsBalanceError = PostApiV1CheckoutGiftCardsBalanceErrors[keyof PostApiV1CheckoutGiftCardsBalanceErrors];
+
+export type PostApiV1CheckoutGiftCardsBalanceResponses = {
+    /**
+     * Gift card balance
+     */
+    200: {
+        success: true;
+        data: GiftCardBalance;
+    };
+};
+
+export type PostApiV1CheckoutGiftCardsBalanceResponse = PostApiV1CheckoutGiftCardsBalanceResponses[keyof PostApiV1CheckoutGiftCardsBalanceResponses];
 
 export type PostApiV1CustomerAuthSendOtpData = {
     body?: {
@@ -10337,6 +11359,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 propertiesPrice: number;
                 propertiesPriceMinor: number;
                 baseUnitPriceMinor: number | null;
+                extras?: OrderLineExtras;
                 createdAt: NullableTimestamp;
                 [key: string]: unknown;
             }>;
@@ -10518,6 +11541,7 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 requiresCardForm: boolean;
                 hostedRedirect: boolean;
             };
+            giftCardTenders: Array<OrderGiftCardTender>;
         };
     };
 };
@@ -12043,6 +13067,1122 @@ export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdRespon
 
 export type GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponse = GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponses[keyof GetApiV1CustomerAuthConversationsByIdAttachmentsByAttachmentIdResponses];
 
+export type GetApiV1CustomerAuthAccountSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/account-summary';
+};
+
+export type GetApiV1CustomerAuthAccountSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthAccountSummaryError = GetApiV1CustomerAuthAccountSummaryErrors[keyof GetApiV1CustomerAuthAccountSummaryErrors];
+
+export type GetApiV1CustomerAuthAccountSummaryResponses = {
+    /**
+     * Account summary
+     */
+    200: {
+        success: true;
+        data: CustomerAccountSummary;
+    };
+};
+
+export type GetApiV1CustomerAuthAccountSummaryResponse = GetApiV1CustomerAuthAccountSummaryResponses[keyof GetApiV1CustomerAuthAccountSummaryResponses];
+
+export type GetApiV1CustomerAuthReviewsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/reviews';
+};
+
+export type GetApiV1CustomerAuthReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthReviewsError = GetApiV1CustomerAuthReviewsErrors[keyof GetApiV1CustomerAuthReviewsErrors];
+
+export type GetApiV1CustomerAuthReviewsResponses = {
+    /**
+     * Reviews
+     */
+    200: {
+        success: true;
+        data: BuyerReviews;
+    };
+};
+
+export type GetApiV1CustomerAuthReviewsResponse = GetApiV1CustomerAuthReviewsResponses[keyof GetApiV1CustomerAuthReviewsResponses];
+
+export type PostApiV1CustomerAuthReviewsData = {
+    body: SubmitReviewBody;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/reviews';
+};
+
+export type PostApiV1CustomerAuthReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthReviewsError = PostApiV1CustomerAuthReviewsErrors[keyof PostApiV1CustomerAuthReviewsErrors];
+
+export type PostApiV1CustomerAuthReviewsResponses = {
+    /**
+     * This line already had its review (idempotent retry)
+     */
+    200: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+    /**
+     * Review submitted
+     */
+    201: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+};
+
+export type PostApiV1CustomerAuthReviewsResponse = PostApiV1CustomerAuthReviewsResponses[keyof PostApiV1CustomerAuthReviewsResponses];
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdData = {
+    body?: never;
+    path: {
+        productId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/reviews/products/{productId}';
+};
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdError = GetApiV1CustomerAuthReviewsProductsByProductIdErrors[keyof GetApiV1CustomerAuthReviewsProductsByProductIdErrors];
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdResponses = {
+    /**
+     * Review state
+     */
+    200: {
+        success: true;
+        data: BuyerProductReviewState;
+    };
+};
+
+export type GetApiV1CustomerAuthReviewsProductsByProductIdResponse = GetApiV1CustomerAuthReviewsProductsByProductIdResponses[keyof GetApiV1CustomerAuthReviewsProductsByProductIdResponses];
+
+export type PatchApiV1CustomerAuthReviewsByIdData = {
+    body: EditReviewBody;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/reviews/{id}';
+};
+
+export type PatchApiV1CustomerAuthReviewsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1CustomerAuthReviewsByIdError = PatchApiV1CustomerAuthReviewsByIdErrors[keyof PatchApiV1CustomerAuthReviewsByIdErrors];
+
+export type PatchApiV1CustomerAuthReviewsByIdResponses = {
+    /**
+     * The review
+     */
+    200: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+};
+
+export type PatchApiV1CustomerAuthReviewsByIdResponse = PatchApiV1CustomerAuthReviewsByIdResponses[keyof PatchApiV1CustomerAuthReviewsByIdResponses];
+
+export type GetApiV1CustomerAuthDownloadsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/downloads';
+};
+
+export type GetApiV1CustomerAuthDownloadsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthDownloadsError = GetApiV1CustomerAuthDownloadsErrors[keyof GetApiV1CustomerAuthDownloadsErrors];
+
+export type GetApiV1CustomerAuthDownloadsResponses = {
+    /**
+     * Delivered items
+     */
+    200: {
+        success: true;
+        data: {
+            lines: Array<BuyerDigitalLine>;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthDownloadsResponse = GetApiV1CustomerAuthDownloadsResponses[keyof GetApiV1CustomerAuthDownloadsResponses];
+
+export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketData = {
+    body?: never;
+    path: {
+        entitlementId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/downloads/{entitlementId}/ticket';
+};
+
+export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketError = PostApiV1CustomerAuthDownloadsByEntitlementIdTicketErrors[keyof PostApiV1CustomerAuthDownloadsByEntitlementIdTicketErrors];
+
+export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketResponses = {
+    /**
+     * Ticket minted
+     */
+    200: {
+        success: true;
+        data: DownloadTicket;
+    };
+};
+
+export type PostApiV1CustomerAuthDownloadsByEntitlementIdTicketResponse = PostApiV1CustomerAuthDownloadsByEntitlementIdTicketResponses[keyof PostApiV1CustomerAuthDownloadsByEntitlementIdTicketResponses];
+
+export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealData = {
+    body?: never;
+    path: {
+        keyId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/licence-keys/{keyId}/reveal';
+};
+
+export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealError = PostApiV1CustomerAuthLicenceKeysByKeyIdRevealErrors[keyof PostApiV1CustomerAuthLicenceKeysByKeyIdRevealErrors];
+
+export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses = {
+    /**
+     * The licence key
+     */
+    200: {
+        success: true;
+        data: RevealedLicenceKey;
+    };
+};
+
+export type PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponse = PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses[keyof PostApiV1CustomerAuthLicenceKeysByKeyIdRevealResponses];
+
+export type GetApiV1CustomerAuthGiftCardsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/gift-cards';
+};
+
+export type GetApiV1CustomerAuthGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthGiftCardsError = GetApiV1CustomerAuthGiftCardsErrors[keyof GetApiV1CustomerAuthGiftCardsErrors];
+
+export type GetApiV1CustomerAuthGiftCardsResponses = {
+    /**
+     * Gift cards saved to the account, newest first
+     */
+    200: {
+        success: true;
+        data: {
+            giftCards: Array<BuyerGiftCard>;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthGiftCardsResponse = GetApiV1CustomerAuthGiftCardsResponses[keyof GetApiV1CustomerAuthGiftCardsResponses];
+
+export type PostApiV1CustomerAuthGiftCardsSaveData = {
+    body: {
+        code: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/gift-cards/save';
+};
+
+export type PostApiV1CustomerAuthGiftCardsSaveErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsSaveError = PostApiV1CustomerAuthGiftCardsSaveErrors[keyof PostApiV1CustomerAuthGiftCardsSaveErrors];
+
+export type PostApiV1CustomerAuthGiftCardsSaveResponses = {
+    /**
+     * The saved card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: BuyerGiftCard;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsSaveResponse = PostApiV1CustomerAuthGiftCardsSaveResponses[keyof PostApiV1CustomerAuthGiftCardsSaveResponses];
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealData = {
+    body?: never;
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/gift-cards/{giftCardId}/reveal';
+};
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealError = PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealErrors[keyof PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealErrors];
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponses = {
+    /**
+     * The formatted code (XXXX-XXXX-XXXX-XXXX)
+     */
+    200: {
+        success: true;
+        data: {
+            code: string;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponse = PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponses[keyof PostApiV1CustomerAuthGiftCardsByGiftCardIdRevealResponses];
+
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
     path?: never;
@@ -12142,7 +14282,6 @@ export type GetApiV1CheckoutLanguagesActiveResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -12886,9 +15025,13 @@ export type GetApiV1ProductsData = {
          */
         limit?: number;
         /**
-         * Sort order. Defaults to relevance when `search` is set, otherwise newest.
+         * Sort order. Defaults to relevance when `search` is set, otherwise newest. `rating`: the Bayesian review rank, unreviewed products last.
          */
-        sort?: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'relevance' | 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+        /**
+         * Only products whose published-review average is at least this many whole stars (1-4).
+         */
+        minRating?: number;
         /**
          * Minimum effective buyer-SKU price
          */
@@ -12905,6 +15048,10 @@ export type GetApiV1ProductsData = {
          * Discount filter
          */
         hasDiscount?: 'true' | 'false';
+        /**
+         * Only products a buyer can buy now (exclude sold out)
+         */
+        inStock?: 'true';
         /**
          * Comma-separated product IDs
          */
@@ -12966,6 +15113,7 @@ export type GetApiV1ProductsResponses = {
                  * The next photo in gallery order, for a card's hover swap. Never a video.
                  */
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
@@ -12974,6 +15122,19 @@ export type GetApiV1ProductsResponses = {
                 createdAt: string | null;
                 discountedPrice: number;
                 priceVaries: boolean;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
                 [key: string]: unknown;
             }>;
             pagination: {
@@ -12988,15 +15149,15 @@ export type GetApiV1ProductsResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -13005,6 +15166,9 @@ export type GetApiV1ProductsResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -13027,6 +15191,19 @@ export type GetApiV1ProductsResponses = {
                     min: number;
                     max: number;
                 } | null;
+            }>;
+            /**
+             * "N★ & up" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.
+             */
+            ratingFacet: Array<{
+                /**
+                 * Whole stars: products averaging at least this (`minRating`).
+                 */
+                min: number;
+                /**
+                 * Products matching the other selections and this threshold.
+                 */
+                count: number;
             }>;
             /**
              * Set when `search` matched nothing and these products are for the closest catalog words instead (typo or Bangla correction).
@@ -13442,6 +15619,19 @@ export type GetApiV1ProductsRecommendationsResponses = {
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
                 createdAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
         };
     };
@@ -13778,6 +15968,19 @@ export type GetApiV1ProductsBySlugSectionsBySectionResponses = {
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
                 createdAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
             total: number;
             offset: number;
@@ -13939,6 +16142,27 @@ export type GetApiV1ProductsBySlugResponses = {
                     monthlyMinor: number;
                 } | null;
                 /**
+                 * Published reviews: the summary and the five most recent (the same reviews the page shows and describes in JSON-LD). Null when the store's reviews are off; `count: 0` shows the zero state.
+                 */
+                reviews: {
+                    summary: PublicReviewSummary;
+                    items: Array<PublicReview>;
+                    nextCursor: string | null;
+                } | null;
+                /**
+                 * The product's warranty policy (its current terms); null without one.
+                 */
+                warranty: {
+                    name: string;
+                    provider: 'brand' | 'store';
+                    duration: {
+                        value: number;
+                        unit: 'days' | 'months' | 'years';
+                    };
+                    replacementDays: number | null;
+                    terms: string | null;
+                } | null;
+                /**
                  * Active automatic Buy X get Y discounts this product counts toward or is given by.
                  */
                 offers: Array<{
@@ -14054,6 +16278,19 @@ export type GetApiV1ProductsBySlugResponses = {
                     imageAlt: string | null;
                     secondaryImageUrl: string | null;
                     createdAt: string | null;
+                    /**
+                     * Published-review rating; null when the product has no published review.
+                     */
+                    rating: {
+                        /**
+                         * Average of the published reviews, two decimals truncated (4.66).
+                         */
+                        average: number;
+                        /**
+                         * Published reviews.
+                         */
+                        count: number;
+                    } | null;
                 }>;
             };
         };
@@ -14061,6 +16298,106 @@ export type GetApiV1ProductsBySlugResponses = {
 };
 
 export type GetApiV1ProductsBySlugResponse = GetApiV1ProductsBySlugResponses[keyof GetApiV1ProductsBySlugResponses];
+
+export type GetApiV1ProductsByIdReviewsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        sort?: 'recent' | 'highest' | 'lowest';
+        /**
+         * Only reviews with this many stars.
+         */
+        rating?: number;
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/products/{id}/reviews';
+};
+
+export type GetApiV1ProductsByIdReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1ProductsByIdReviewsError = GetApiV1ProductsByIdReviewsErrors[keyof GetApiV1ProductsByIdReviewsErrors];
+
+export type GetApiV1ProductsByIdReviewsResponses = {
+    /**
+     * Reviews
+     */
+    200: {
+        success: true;
+        data: ProductReviews;
+    };
+};
+
+export type GetApiV1ProductsByIdReviewsResponse = GetApiV1ProductsByIdReviewsResponses[keyof GetApiV1ProductsByIdReviewsResponses];
 
 export type GetApiV1CategoriesData = {
     body?: never;
@@ -14547,9 +16884,13 @@ export type GetApiV1CategoriesBySlugProductsData = {
          */
         limit?: number;
         /**
-         * Sort order
+         * Sort order. `rating`: the Bayesian review rank, unreviewed products last.
          */
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+        /**
+         * Only products whose published-review average is at least this many whole stars (1-4).
+         */
+        minRating?: number;
         /**
          * Search within category
          */
@@ -14570,6 +16911,10 @@ export type GetApiV1CategoriesBySlugProductsData = {
          * Has discount filter
          */
         hasDiscount?: 'true' | 'false';
+        /**
+         * Only products a buyer can buy now (exclude sold out)
+         */
+        inStock?: 'true';
         /**
          * List products of the category's published sub-categories too (default). "false" lists the category's own products only.
          */
@@ -14678,12 +17023,30 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
                     slug: string;
                 } | null;
+                /**
+                 * A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself).
+                 */
+                subcategoryId?: string | null;
                 createdAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
             pagination: {
                 page: number;
@@ -14697,15 +17060,15 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -14714,6 +17077,9 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -14737,6 +17103,19 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                     max: number;
                 } | null;
             }>;
+            /**
+             * "N★ & up" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.
+             */
+            ratingFacet: Array<{
+                /**
+                 * Whole stars: products averaging at least this (`minRating`).
+                 */
+                min: number;
+                /**
+                 * Products matching the other selections and this threshold.
+                 */
+                count: number;
+            }>;
             appliedFilters: {
                 attributes: Array<{
                     id: string;
@@ -14748,12 +17127,14 @@ export type GetApiV1CategoriesBySlugProductsResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+                minRating?: number;
                 search?: string;
                 minPrice?: number;
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
+                inStock?: 'true';
             };
         };
     };
@@ -14773,12 +17154,17 @@ export type GetApiV1CategoriesBySlugProductSummariesData = {
         includeSubcategories?: 'true' | 'false';
         page?: number;
         limit?: number;
-        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+        sort?: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+        /**
+         * Only products whose published-review average is at least this many whole stars (1-4).
+         */
+        minRating?: number;
         search?: string;
         minPrice?: number | null;
         maxPrice?: number | null;
         freeDelivery?: 'true' | 'false';
         hasDiscount?: 'true' | 'false';
+        inStock?: 'true';
     };
     url: '/api/v1/categories/{slug}/product-summaries';
 };
@@ -14857,12 +17243,30 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                 imageMediaId: string | null;
                 imageAlt: string | null;
                 secondaryImageUrl: string | null;
+                cardFacts?: ProductCardFacts;
                 category: {
                     id: string;
                     name: string;
                     slug: string;
                 } | null;
+                /**
+                 * A listing that includes sub-categories: the listed category's child whose subtree holds the product (null in the category itself).
+                 */
+                subcategoryId?: string | null;
                 createdAt: string | null;
+                /**
+                 * Published-review rating; null when the product has no published review.
+                 */
+                rating: {
+                    /**
+                     * Average of the published reviews, two decimals truncated (4.66).
+                     */
+                    average: number;
+                    /**
+                     * Published reviews.
+                     */
+                    count: number;
+                } | null;
             }>;
             pagination: {
                 page: number;
@@ -14876,15 +17280,15 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
             };
             facets: Array<{
                 /**
-                 * The attribute id, `option.<axis>`, or `brand`.
+                 * The attribute id, `option.<axis>`, `brand`, or `category`.
                  */
                 id: string;
                 name: string;
                 /**
-                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs).
+                 * Query key for this facet: an attribute slug (with `<slug>.min` / `<slug>.max` for a range), `option.<axis>` for a product option such as Size, or `brand` (values are brand slugs). `category` is the category-tree facet: its values are category slugs to link to (a sub-category page), not a filter.
                  */
                 slug: string;
-                kind: 'attribute' | 'option' | 'brand';
+                kind: 'attribute' | 'option' | 'brand' | 'category';
                 /**
                  * The merchant's filter widget for attribute facets; `checkbox` for options and brands.
                  */
@@ -14893,6 +17297,9 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                  * Number attributes: the unit of the values and range bounds.
                  */
                 unit: string | null;
+                /**
+                 * At most 100 values (500 for brands), the most common first and every selected value kept.
+                 */
                 values: Array<{
                     /**
                      * The normalised URL value: lowercase text, a canonical number, `1`/`0`, or a brand slug.
@@ -14916,6 +17323,19 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                     max: number;
                 } | null;
             }>;
+            /**
+             * "N★ & up" rating facet, highest first: empty when no product in scope has a published review, otherwise 4, 3, 2 (plus a selected `minRating`), counts may be 0.
+             */
+            ratingFacet: Array<{
+                /**
+                 * Whole stars: products averaging at least this (`minRating`).
+                 */
+                min: number;
+                /**
+                 * Products matching the other selections and this threshold.
+                 */
+                count: number;
+            }>;
             appliedFilters: {
                 attributes: Array<{
                     id: string;
@@ -14927,12 +17347,14 @@ export type GetApiV1CategoriesBySlugProductSummariesResponses = {
                         max: number | null;
                     };
                 }>;
-                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount';
+                sort: 'newest' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc' | 'discount' | 'rating';
+                minRating?: number;
                 search?: string;
                 minPrice?: number;
                 maxPrice?: number;
                 freeDelivery?: 'true' | 'false';
                 hasDiscount?: 'true' | 'false';
+                inStock?: 'true';
             };
         };
     };
@@ -15311,16 +17733,173 @@ export type PostApiV1OrdersPaymentRecoveryVerifyOtpResponses = {
 
 export type PostApiV1OrdersPaymentRecoveryVerifyOtpResponse = PostApiV1OrdersPaymentRecoveryVerifyOtpResponses[keyof PostApiV1OrdersPaymentRecoveryVerifyOtpResponses];
 
+export type PostApiV1OrdersLookupStatusData = {
+    body: {
+        /**
+         * Order number ("#1001") or order id
+         */
+        reference: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/orders/lookup/status';
+};
+
+export type PostApiV1OrdersLookupStatusErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersLookupStatusError = PostApiV1OrdersLookupStatusErrors[keyof PostApiV1OrdersLookupStatusErrors];
+
+export type PostApiV1OrdersLookupStatusResponses = {
+    /**
+     * Where the order is
+     */
+    200: {
+        success: true;
+        data: {
+            order: {
+                orderNumber: number | null;
+                firstName: string | null;
+                status: string;
+                paymentStatus: string;
+                createdAt: string | null;
+                requiresShipping: boolean;
+                shippingMethodKind: string | null;
+                shippingMethodName: string | null;
+                currencyCode: string | null;
+                currencyDecimalPlaces: number | null;
+                subtotal: number;
+                shipping: number;
+                discount: number;
+                tax: number;
+                total: number;
+                paid: number;
+                balanceDue: number;
+                items: Array<{
+                    productName: string | null;
+                    variantLabel: string | null;
+                    quantity: number;
+                    productImage: string | null;
+                }>;
+                tracking: {
+                    progress: {
+                        steps: Array<{
+                            key: 'placed' | 'confirmed' | 'shipped' | 'delivered';
+                            label: string;
+                            done: boolean;
+                            happenedAt: NullableTimestamp;
+                        }>;
+                        outcome: {
+                            key: string;
+                            label: string;
+                            happenedAt: NullableTimestamp;
+                        } | null;
+                    };
+                    timeline: Array<{
+                        id: string;
+                        type: 'order' | 'payment' | 'refund' | 'request';
+                        status: string;
+                        label: string;
+                        happenedAt: NullableTimestamp;
+                        details?: string | null;
+                    }>;
+                    shipments: Array<{
+                        statusLabel: string;
+                        courierName: string | null;
+                        trackingId: string | null;
+                        /**
+                         * http(s) courier tracking link
+                         */
+                        trackingUrl: string | null;
+                    }>;
+                };
+                codeOptions: Array<{
+                    channel: 'email' | 'sms' | 'whatsapp';
+                    /**
+                     * Masked contact on the order ("01•••••678")
+                     */
+                    destination: string;
+                }>;
+            };
+        };
+    };
+};
+
+export type PostApiV1OrdersLookupStatusResponse = PostApiV1OrdersLookupStatusResponses[keyof PostApiV1OrdersLookupStatusResponses];
+
 export type PostApiV1OrdersLookupSendOtpData = {
     body: {
         /**
          * Order number ("#1001") or order id
          */
         reference: string;
-        /**
-         * Phone number used for the order
-         */
-        phone: string;
+        channel?: 'email' | 'sms' | 'whatsapp';
     };
     path?: never;
     query?: never;
@@ -15443,10 +18022,6 @@ export type PostApiV1OrdersLookupVerifyOtpData = {
          * Order number ("#1001") or order id
          */
         reference: string;
-        /**
-         * Phone number used for the order
-         */
-        phone: string;
         code: string;
     };
     path?: never;
@@ -15692,6 +18267,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 paymentStatus: string;
                 paidAmount: number;
                 balanceDue: number;
+                giftCardTenders: Array<OrderGiftCardTender>;
                 createdAt: string | null;
                 updatedAt: string | null;
                 items: Array<{
@@ -15725,6 +18301,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                     propertiesPrice: number;
                     propertiesPriceMinor: number;
                     baseUnitPriceMinor: number | null;
+                    extras?: OrderLineExtras;
                 }>;
                 supportRequests: Array<{
                     id: string;
@@ -16040,6 +18617,12 @@ export type PostApiV1OrdersCartValidationData = {
         zone?: string | null;
         area?: string | null;
         shippingMethodId?: string | null;
+        /**
+         * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
+         */
+        giftCards?: Array<{
+            handle: string;
+        }>;
     };
     path?: never;
     query?: never;
@@ -16144,6 +18727,11 @@ export type PostApiV1OrdersCartValidationResponses = {
              * Payment methods this cart may use. Cash on delivery is offered only when something is shipped, collected or performed.
              */
             allowedPaymentMethods: Array<string>;
+            giftCardIssues: Array<{
+                handle: string | null;
+                code: 'GIFT_CARD_UNUSABLE' | 'GIFT_CARD_DUPLICATE' | 'GIFT_CARD_NOT_NEEDED' | 'GIFT_CARD_NOT_ELIGIBLE';
+                message: string;
+            }>;
             delivery?: {
                 /**
                  * `delivery` ships to the buyer's address; `pickup` is collected at the store.
@@ -16198,6 +18786,12 @@ export type PostApiV1OrdersTaxQuoteData = {
          */
         discountCodes?: Array<string>;
         customerPhone?: string | null;
+        /**
+         * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
+         */
+        giftCards?: Array<{
+            handle: string;
+        }>;
     };
     path?: never;
     query?: never;
@@ -16256,6 +18850,27 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             taxAmount: number;
             totalMinor: number;
             totalAmount: number;
+            amountDueMinor: number;
+            amountDue: number;
+            /**
+             * The gift cards that pay part of this order, in the order they were added. A gift card never pays for gift-card lines; tender never changes taxes or discounts.
+             */
+            giftCardTenders: Array<{
+                handle: string;
+                last4: string;
+                applied: number;
+                appliedMinor: number;
+                balance: number;
+                balanceMinor: number;
+            }>;
+            /**
+             * Gift cards that apply nothing, with the reason. An unusable card always reads "This gift card can't be used."
+             */
+            giftCardIssues: Array<{
+                handle: string | null;
+                code: 'GIFT_CARD_UNUSABLE' | 'GIFT_CARD_DUPLICATE' | 'GIFT_CARD_NOT_NEEDED' | 'GIFT_CARD_NOT_ELIGIBLE';
+                message: string;
+            }>;
             shippingMethod: {
                 id: string;
                 name: string;
@@ -16273,7 +18888,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 hours: string | null;
             } | null;
             /**
-             * Payment methods this cart may use. Cash on delivery is offered only when something is shipped, collected or performed.
+             * Payment methods for the amount due. Exactly ["gift_card"] when gift cards cover the whole order; cash on delivery only when something is shipped, collected or performed.
              */
             allowedPaymentMethods: Array<string>;
             /**
@@ -16354,6 +18969,10 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                     }>;
                 };
                 requiresCustomerPhone?: boolean;
+                /**
+                 * The code applies, but the quantity-bundle saving is bigger, so the bundle prices the order (reason `lower_savings`).
+                 */
+                bundleSavesMore?: true;
             }>;
             /**
              * Quantity-bundle savings in `discountMinor`. An order is priced by its promotions or by its bundles, never both: a typed code wins, otherwise whichever saves more (promotions on a tie).
@@ -16412,6 +19031,7 @@ export type PostApiV1OrdersData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
+        customerWhatsapp?: string | null;
         shippingAddress?: string | null;
         city?: string | null;
         zone?: string | null;
@@ -16442,8 +19062,18 @@ export type PostApiV1OrdersData = {
         discountCodes?: Array<string>;
         shippingCharge: number;
         shippingMethodId?: string | null;
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod' | 'gift_card';
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
+        /**
+         * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
+         */
+        giftCards?: Array<{
+            handle: string;
+        }>;
+        /**
+         * The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.
+         */
+        expectedAmountDueMinor?: number;
     };
     path?: never;
     query?: never;
@@ -16542,6 +19172,14 @@ export type PostApiV1OrdersResponses = {
             currencyCode: string;
             decimalPlaces: number;
             requiresShipping?: boolean;
+            amountDue?: number;
+            amountDueMinor?: number;
+            paidAmountMinor?: number;
+            giftCardTenders?: Array<{
+                last4: string;
+                applied: number;
+                appliedMinor: number;
+            }>;
             message: string;
         };
     };
@@ -17144,6 +19782,711 @@ export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdRespon
 };
 
 export type GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponse = GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses[keyof GetApiV1OrdersReceiptByIdConversationAttachmentsByAttachmentIdResponses];
+
+export type GetApiV1OrdersReceiptByIdReviewsData = {
+    body?: never;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/reviews';
+};
+
+export type GetApiV1OrdersReceiptByIdReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdReviewsError = GetApiV1OrdersReceiptByIdReviewsErrors[keyof GetApiV1OrdersReceiptByIdReviewsErrors];
+
+export type GetApiV1OrdersReceiptByIdReviewsResponses = {
+    /**
+     * Reviews
+     */
+    200: {
+        success: true;
+        data: BuyerReviews;
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdReviewsResponse = GetApiV1OrdersReceiptByIdReviewsResponses[keyof GetApiV1OrdersReceiptByIdReviewsResponses];
+
+export type PostApiV1OrdersReceiptByIdReviewsData = {
+    body: SubmitReviewBody;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/reviews';
+};
+
+export type PostApiV1OrdersReceiptByIdReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdReviewsError = PostApiV1OrdersReceiptByIdReviewsErrors[keyof PostApiV1OrdersReceiptByIdReviewsErrors];
+
+export type PostApiV1OrdersReceiptByIdReviewsResponses = {
+    /**
+     * This line already had its review (idempotent retry)
+     */
+    200: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+    /**
+     * Review submitted
+     */
+    201: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdReviewsResponse = PostApiV1OrdersReceiptByIdReviewsResponses[keyof PostApiV1OrdersReceiptByIdReviewsResponses];
+
+export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdData = {
+    body: EditReviewBody;
+    headers?: {
+        'x-receipt-token'?: string;
+    };
+    path: {
+        id: string;
+        reviewId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/reviews/{reviewId}';
+};
+
+export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdError = PatchApiV1OrdersReceiptByIdReviewsByReviewIdErrors[keyof PatchApiV1OrdersReceiptByIdReviewsByReviewIdErrors];
+
+export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdResponses = {
+    /**
+     * The review
+     */
+    200: {
+        success: true;
+        data: ReviewWriteResult;
+    };
+};
+
+export type PatchApiV1OrdersReceiptByIdReviewsByReviewIdResponse = PatchApiV1OrdersReceiptByIdReviewsByReviewIdResponses[keyof PatchApiV1OrdersReceiptByIdReviewsByReviewIdResponses];
+
+export type GetApiV1OrdersReceiptByIdDownloadsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/downloads';
+};
+
+export type GetApiV1OrdersReceiptByIdDownloadsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdDownloadsError = GetApiV1OrdersReceiptByIdDownloadsErrors[keyof GetApiV1OrdersReceiptByIdDownloadsErrors];
+
+export type GetApiV1OrdersReceiptByIdDownloadsResponses = {
+    /**
+     * Delivered items
+     */
+    200: {
+        success: true;
+        data: {
+            lines: Array<BuyerDigitalLine>;
+        };
+    };
+};
+
+export type GetApiV1OrdersReceiptByIdDownloadsResponse = GetApiV1OrdersReceiptByIdDownloadsResponses[keyof GetApiV1OrdersReceiptByIdDownloadsResponses];
+
+export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketData = {
+    body?: never;
+    path: {
+        id: string;
+        entitlementId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/downloads/{entitlementId}/ticket';
+};
+
+export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Refused: DOWNLOAD_LIMIT_REACHED, DOWNLOAD_REVOKED (removed by the store, or the order was cancelled or refunded) or DOWNLOAD_EXPIRED
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketError = PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketErrors[keyof PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketErrors];
+
+export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketResponses = {
+    /**
+     * Ticket minted
+     */
+    200: {
+        success: true;
+        data: DownloadTicket;
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketResponse = PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketResponses[keyof PostApiV1OrdersReceiptByIdDownloadsByEntitlementIdTicketResponses];
+
+export type PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealData = {
+    body?: never;
+    path: {
+        id: string;
+        keyId: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/receipt/{id}/licence-keys/{keyId}/reveal';
+};
+
+export type PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealError = PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealErrors[keyof PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealErrors];
+
+export type PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealResponses = {
+    /**
+     * The licence key
+     */
+    200: {
+        success: true;
+        data: RevealedLicenceKey;
+    };
+};
+
+export type PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealResponse = PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealResponses[keyof PostApiV1OrdersReceiptByIdLicenceKeysByKeyIdRevealResponses];
+
+export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigData = {
+    body?: never;
+    path: {
+        entitlementId: string;
+        exp?: number | null;
+        sig: string;
+    };
+    query?: never;
+    url: '/api/v1/orders/downloads/{entitlementId}/{exp}/{sig}';
+};
+
+export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigErrors = {
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Range not satisfiable
+     */
+    416: unknown;
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigError = GetApiV1OrdersDownloadsByEntitlementIdByExpBySigErrors[keyof GetApiV1OrdersDownloadsByEntitlementIdByExpBySigErrors];
+
+export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponses = {
+    /**
+     * The file
+     */
+    200: Blob | File;
+    /**
+     * Part of the file
+     */
+    206: Blob | File;
+};
+
+export type GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponse = GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponses[keyof GetApiV1OrdersDownloadsByEntitlementIdByExpBySigResponses];
 
 export type GetApiV1AdminCategoriesFormOptionsData = {
     body?: never;
@@ -24750,6 +28093,7 @@ export type PostApiV1AdminDiscountsByIdPreviewData = {
                 unitPriceMinor: number;
                 quantity: number;
                 collectionIds?: Array<string>;
+                giftCard?: boolean;
             }>;
             shippingAmountMinor: number;
             submittedCodes: Array<string>;
@@ -38925,6 +42269,7 @@ export type GetApiV1AdminSettingsCheckoutFlowResponses = {
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
             partialPaymentAmount: number;
+            autoFulfilMode: 'after_payment' | 'after_confirmation';
             revision: number;
         };
     };
@@ -38938,6 +42283,7 @@ export type PutApiV1AdminSettingsCheckoutFlowData = {
         checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
         partialPaymentEnabled: boolean;
         partialPaymentAmount: number;
+        autoFulfilMode?: 'after_payment' | 'after_confirmation';
         expectedRevision: number;
     };
     path?: never;
@@ -39038,6 +42384,7 @@ export type PutApiV1AdminSettingsCheckoutFlowResponses = {
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
             partialPaymentAmount: number;
+            autoFulfilMode: 'after_payment' | 'after_confirmation';
             revision: number;
         };
     };
@@ -39134,12 +42481,10 @@ export type GetApiV1AdminSettingsAuthResponses = {
                 customerAuth: number;
                 whatsapp: number;
             };
-            authVerificationMethod: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
-            customerAuthPolicy: {
-                otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
-                requiredContactFields?: Array<'email' | 'phone'>;
-                optionalContactFields?: Array<'email' | 'phone'>;
-                defaultOtpChannel?: 'email' | 'sms' | 'whatsapp';
+            customerIdentity: {
+                email: 'required' | 'optional' | 'hidden';
+                whatsapp: 'off' | 'same_as_phone' | 'separate';
+                channels: Array<'email' | 'sms' | 'whatsapp'>;
             };
             whatsappAccessToken: string;
             whatsappPhoneNumberId: string;
@@ -39156,12 +42501,10 @@ export type PostApiV1AdminSettingsAuthData = {
             customerAuth?: number;
             whatsapp?: number;
         };
-        authVerificationMethod?: 'email' | 'sms_otp' | 'whatsapp_otp' | 'both';
-        customerAuthPolicy?: {
-            otpChannels: Array<'email' | 'sms' | 'whatsapp'>;
-            requiredContactFields?: Array<'email' | 'phone'>;
-            optionalContactFields?: Array<'email' | 'phone'>;
-            defaultOtpChannel?: 'email' | 'sms' | 'whatsapp';
+        customerIdentity?: {
+            email: 'required' | 'optional' | 'hidden';
+            whatsapp: 'off' | 'same_as_phone' | 'separate';
+            channels: Array<'email' | 'sms' | 'whatsapp'>;
         };
         whatsappAccessToken?: string;
         whatsappPhoneNumberId?: string | null;
@@ -43365,6 +46708,22 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    order_digital_delivered: {
+                        subject: string;
+                        body: string;
+                    };
+                    gift_card_issued: {
+                        subject: string;
+                        body: string;
+                    };
+                    gift_card_sent: {
+                        subject: string;
+                        body: string;
+                    };
+                    review_request: {
+                        subject: string;
+                        body: string;
+                    };
                 };
                 sms: {
                     order_created: {
@@ -43415,6 +46774,18 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     support_request_status_updated: {
                         body: string;
                     };
+                    order_digital_delivered: {
+                        body: string;
+                    };
+                    gift_card_issued: {
+                        body: string;
+                    };
+                    gift_card_sent: {
+                        body: string;
+                    };
+                    review_request: {
+                        body: string;
+                    };
                 };
             };
             revision: number;
@@ -43433,7 +46804,7 @@ export type GetApiV1AdminSettingsNotificationChannelsTemplatesResponse = GetApiV
 
 export type PutApiV1AdminSettingsNotificationChannelsTemplatesData = {
     body: {
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         email?: {
             subject: string;
             body: string;
@@ -43603,6 +46974,22 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                         subject: string;
                         body: string;
                     };
+                    order_digital_delivered: {
+                        subject: string;
+                        body: string;
+                    };
+                    gift_card_issued: {
+                        subject: string;
+                        body: string;
+                    };
+                    gift_card_sent: {
+                        subject: string;
+                        body: string;
+                    };
+                    review_request: {
+                        subject: string;
+                        body: string;
+                    };
                 };
                 sms: {
                     order_created: {
@@ -43653,6 +47040,18 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponses = {
                     support_request_status_updated: {
                         body: string;
                     };
+                    order_digital_delivered: {
+                        body: string;
+                    };
+                    gift_card_issued: {
+                        body: string;
+                    };
+                    gift_card_sent: {
+                        body: string;
+                    };
+                    review_request: {
+                        body: string;
+                    };
                 };
             };
             revision: number;
@@ -43666,12 +47065,12 @@ export type PutApiV1AdminSettingsNotificationChannelsTemplatesResponse = PutApiV
 export type PostApiV1AdminSettingsNotificationChannelsTemplatesTestData = {
     body: {
         channel: 'email';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         subject: string;
         body: string;
     } | {
         channel: 'sms';
-        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated';
+        event: 'order_created' | 'order_confirmed' | 'order_processing' | 'order_shipped' | 'order_ready_for_pickup' | 'order_delivered' | 'order_completed' | 'order_cancelled' | 'order_returned' | 'refund_processing' | 'refund_failed' | 'order_refunded' | 'order_partially_refunded' | 'payment_balance_paid' | 'support_request_submitted' | 'support_request_status_updated' | 'order_digital_delivered' | 'gift_card_issued' | 'gift_card_sent' | 'review_request';
         body: string;
         phone: string;
     };
@@ -43920,6 +47319,10 @@ export type PutApiV1AdminSettingsNotificationChannelsData = {
             support_request_submitted: Array<'email' | 'sms' | 'whatsapp'>;
             support_request_status_updated: Array<'email' | 'sms' | 'whatsapp'>;
             conversation_reply?: Array<'email' | 'sms'>;
+            order_digital_delivered?: Array<'email' | 'sms'>;
+            gift_card_issued?: Array<'email' | 'sms'>;
+            gift_card_sent?: Array<'email' | 'sms'>;
+            review_request?: Array<'email' | 'sms'>;
         };
         whatsappTemplate?: {
             templateName: string;
@@ -44091,6 +47494,8 @@ export type PutApiV1AdminSettingsNotificationChannelsAdminChannelsData = {
             support_request_submitted: Array<'push'>;
             support_request_status_updated: Array<'push'>;
             conversation_message?: Array<'push' | 'email'>;
+            review_pending?: Array<'push' | 'email'>;
+            digital_keys_exhausted?: Array<'push' | 'email'>;
         };
         emailRecipients: Array<string>;
         expectedRevision: number;
@@ -46365,8 +49770,15 @@ export type PostApiV1AdminOrdersByIdRefundData = {
     body: {
         amount?: number;
         reason?: string;
-        gateway?: 'stripe' | 'sslcommerz' | 'cod';
+        /**
+         * Refund only payments taken by this method (gift_card: only the gift-card tenders).
+         */
+        gateway?: 'gift_card' | 'stripe' | 'sslcommerz' | 'cod';
         manualSettlementConfirmed?: boolean;
+        /**
+         * original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.
+         */
+        settlement?: 'original' | 'store_credit';
         /**
          * One key per refund (per dialog opening). Repeating it returns the first refund.
          */
@@ -46464,6 +49876,16 @@ export type PostApiV1AdminOrdersByIdRefundResponses = {
             isFullRefund: boolean;
             manualSettlementRecorded?: boolean;
             replayed?: boolean;
+            settlement?: 'original' | 'store_credit';
+            /**
+             * The store-credit gift card this refund issued (last 4 only; the code is sent to the customer).
+             */
+            storeCredit?: {
+                giftCardId: string;
+                last4: string;
+                amount: number;
+                amountMinor: number;
+            };
             notificationCount: number;
             sideEffectErrors: number;
             error?: string;
@@ -50139,6 +53561,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
             customerName: string;
             customerPhone: string;
             customerEmail: string | null;
+            customerWhatsapp: string | null;
             customerId: string | null;
             customerRecord: {
                 id: string;
@@ -50223,6 +53646,7 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 discountAmountMinor: number | null;
                 taxableAmountMinor: number | null;
                 taxAmountMinor: number;
+                extras?: OrderLineExtras;
             }>;
             latestShipment: {
                 id: string;
@@ -50663,6 +54087,14 @@ export type GetApiV1AdminOrdersByIdPaymentsResponses = {
                 codReceiptUrl: string | null;
                 createdAt: string | number;
                 updatedAt: string | number;
+                /**
+                 * The gift card this row moved money on (last 4 only): a tender, a refund to that card, or (storeCredit) the card a store-credit refund issued.
+                 */
+                giftCard: {
+                    id: string;
+                    last4: string;
+                    storeCredit: boolean;
+                } | null;
             }>;
             plan: {
                 id: string;
@@ -51427,6 +54859,114 @@ export type PostApiV1AdminOrdersByIdPickupReadyResponses = {
 
 export type PostApiV1AdminOrdersByIdPickupReadyResponse = PostApiV1AdminOrdersByIdPickupReadyResponses[keyof PostApiV1AdminOrdersByIdPickupReadyResponses];
 
+export type PostApiV1AdminOrdersByIdDigitalResendData = {
+    body: {
+        requestKey: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/digital/resend';
+};
+
+export type PostApiV1AdminOrdersByIdDigitalResendErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdDigitalResendError = PostApiV1AdminOrdersByIdDigitalResendErrors[keyof PostApiV1AdminOrdersByIdDigitalResendErrors];
+
+export type PostApiV1AdminOrdersByIdDigitalResendResponses = {
+    /**
+     * Message queued
+     */
+    200: {
+        success: true;
+        data: {
+            outboxId: string;
+            queued: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdDigitalResendResponse = PostApiV1AdminOrdersByIdDigitalResendResponses[keyof PostApiV1AdminOrdersByIdDigitalResendResponses];
+
 export type GetApiV1AdminConversationsData = {
     body?: never;
     path?: never;
@@ -51436,7 +54976,10 @@ export type GetApiV1AdminConversationsData = {
          * `me`, `none` or a staff user id
          */
         assignee?: string;
-        subjectType?: 'order' | 'store';
+        /**
+         * What the conversation is about: an order, a store question, a review or a warranty claim
+         */
+        subjectType?: 'order' | 'store' | 'warranty_claim' | 'review';
         /**
          * Subject, customer name or order number
          */
@@ -51527,6 +55070,7 @@ export type GetApiV1AdminConversationsResponses = {
             items: Array<{
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -51857,6 +55401,7 @@ export type GetApiV1AdminConversationsOrderByOrderIdResponses = {
             conversation: {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -52026,6 +55571,7 @@ export type PostApiV1AdminConversationsOrderByOrderIdMessagesResponses = {
             conversation: {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -52181,6 +55727,7 @@ export type GetApiV1AdminConversationsByIdResponses = {
             conversation: {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -52349,6 +55896,7 @@ export type PatchApiV1AdminConversationsByIdResponses = {
             conversation: {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -52518,6 +56066,7 @@ export type PostApiV1AdminConversationsByIdMessagesResponses = {
             conversation: {
                 id: string;
                 subjectType: 'order' | 'store' | 'warranty_claim' | 'review';
+                subjectId: string | null;
                 subject: string | null;
                 status: 'open' | 'pending' | 'closed';
                 orderId: string | null;
@@ -53221,9 +56770,17 @@ export type PostApiV1AdminProductsData = {
             }>;
         } | null;
         /**
-         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
          */
-        fulfillmentKind?: 'physical' | 'service';
+        fulfillmentKind?: 'physical' | 'digital' | 'service';
+        /**
+         * Gift-card product: every SKU is a fixed denomination, delivered digitally, untracked and never discounted. Omit to keep.
+         */
+        isGiftCard?: boolean;
+        /**
+         * A live warranty policy id (wrp_…). Omit to keep the current warranty; null removes it.
+         */
+        warrantyPolicyId?: string | null;
         optionMatrix?: {
             options: Array<{
                 id: string;
@@ -53259,9 +56816,9 @@ export type PostApiV1AdminProductsData = {
                 discountPercentage: number | null;
                 discountAmount: number | null;
                 /**
-                 * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+                 * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
                  */
-                fulfillmentKind?: 'physical' | 'service';
+                fulfillmentKind?: 'physical' | 'digital' | 'service';
             }>;
         };
         /**
@@ -53287,9 +56844,9 @@ export type PostApiV1AdminProductsData = {
              */
             weight?: number | null;
             /**
-             * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+             * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
              */
-            fulfillmentKind?: 'physical' | 'service';
+            fulfillmentKind?: 'physical' | 'digital' | 'service';
         };
     };
     path?: never;
@@ -54868,6 +58425,7 @@ export type GetApiV1AdminProductsByIdResponses = {
                 attributeId: string;
                 value: string;
             }>;
+            warrantyPolicyId: string | null;
         };
     };
 };
@@ -54939,9 +58497,17 @@ export type PutApiV1AdminProductsByIdData = {
             }>;
         } | null;
         /**
-         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
          */
-        fulfillmentKind?: 'physical' | 'service';
+        fulfillmentKind?: 'physical' | 'digital' | 'service';
+        /**
+         * Gift-card product: every SKU is a fixed denomination, delivered digitally, untracked and never discounted. Omit to keep.
+         */
+        isGiftCard?: boolean;
+        /**
+         * A live warranty policy id (wrp_…). Omit to keep the current warranty; null removes it.
+         */
+        warrantyPolicyId?: string | null;
         id: string;
         expectedAggregateRevision: number;
         acknowledgedSkuImageRemovalIds?: Array<string>;
@@ -55523,9 +59089,9 @@ export type PostApiV1AdminProductsByIdVariantsData = {
         discountPercentage?: number | null;
         discountAmount?: number | null;
         /**
-         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
          */
-        fulfillmentKind?: 'physical' | 'service';
+        fulfillmentKind?: 'physical' | 'digital' | 'service';
         expectedAggregateRevision: number;
     };
     path: {
@@ -55851,9 +59417,9 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdData = {
         discountPercentage?: number | null;
         discountAmount?: number | null;
         /**
-         * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+         * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
          */
-        fulfillmentKind?: 'physical' | 'service';
+        fulfillmentKind?: 'physical' | 'digital' | 'service';
         /**
          * The SKU stockVersion the new quantity was based on. Required with stock.
          */
@@ -56066,9 +59632,9 @@ export type PutApiV1AdminProductsByIdOptionsMatrixData = {
             discountPercentage: number | null;
             discountAmount: number | null;
             /**
-             * physical: shipped or picked up. service: performed, nothing delivered (no address needed).
+             * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
              */
-            fulfillmentKind?: 'physical' | 'service';
+            fulfillmentKind?: 'physical' | 'digital' | 'service';
         }>;
         expectedAggregateRevision: number;
     };
@@ -56199,6 +59765,239 @@ export type PutApiV1AdminProductsByIdOptionsMatrixResponses = {
 };
 
 export type PutApiV1AdminProductsByIdOptionsMatrixResponse = PutApiV1AdminProductsByIdOptionsMatrixResponses[keyof PutApiV1AdminProductsByIdOptionsMatrixResponses];
+
+export type GetApiV1AdminProductsByIdDigitalAssetsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/products/{id}/digital-assets';
+};
+
+export type GetApiV1AdminProductsByIdDigitalAssetsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsByIdDigitalAssetsError = GetApiV1AdminProductsByIdDigitalAssetsErrors[keyof GetApiV1AdminProductsByIdDigitalAssetsErrors];
+
+export type GetApiV1AdminProductsByIdDigitalAssetsResponses = {
+    /**
+     * Digital items
+     */
+    200: {
+        success: true;
+        data: {
+            assets: Array<DigitalAsset>;
+        };
+    };
+};
+
+export type GetApiV1AdminProductsByIdDigitalAssetsResponse = GetApiV1AdminProductsByIdDigitalAssetsResponses[keyof GetApiV1AdminProductsByIdDigitalAssetsResponses];
+
+export type PostApiV1AdminProductsByIdDigitalAssetsData = {
+    body: {
+        filename: string;
+        mediaType?: string;
+        /**
+         * Exact file size; at most 40 parts of 52428800 bytes.
+         */
+        sizeBytes: number;
+        kind: 'file';
+        variantId?: string | null;
+        displayName?: string;
+        /**
+         * Downloads per purchase (1–100), or null for unlimited. Default 5.
+         */
+        downloadLimit?: number | null;
+        /**
+         * Days of access after delivery (1–3650), or null for forever (the default).
+         */
+        accessDays?: number | null;
+    } | {
+        kind: 'licence_keys';
+        variantId: string;
+        displayName?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/products/{id}/digital-assets';
+};
+
+export type PostApiV1AdminProductsByIdDigitalAssetsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsByIdDigitalAssetsError = PostApiV1AdminProductsByIdDigitalAssetsErrors[keyof PostApiV1AdminProductsByIdDigitalAssetsErrors];
+
+export type PostApiV1AdminProductsByIdDigitalAssetsResponses = {
+    /**
+     * Digital item added
+     */
+    201: {
+        success: true;
+        data: {
+            asset: DigitalAsset;
+            upload: DigitalUploadSession;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsByIdDigitalAssetsResponse = PostApiV1AdminProductsByIdDigitalAssetsResponses[keyof PostApiV1AdminProductsByIdDigitalAssetsResponses];
 
 export type GetApiV1AdminAuthUsersData = {
     body?: never;
@@ -57059,6 +60858,212 @@ export type PostApiV1AdminAuthUpdateProfileResponses = {
 };
 
 export type PostApiV1AdminAuthUpdateProfileResponse = PostApiV1AdminAuthUpdateProfileResponses[keyof PostApiV1AdminAuthUpdateProfileResponses];
+
+export type GetApiV1AdminAuthShortcutsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/shortcuts';
+};
+
+export type GetApiV1AdminAuthShortcutsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAuthShortcutsError = GetApiV1AdminAuthShortcutsErrors[keyof GetApiV1AdminAuthShortcutsErrors];
+
+export type GetApiV1AdminAuthShortcutsResponses = {
+    /**
+     * Keyboard shortcuts
+     */
+    200: {
+        success: true;
+        data: {
+            shortcuts: {
+                [key: string]: string;
+            };
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminAuthShortcutsResponse = GetApiV1AdminAuthShortcutsResponses[keyof GetApiV1AdminAuthShortcutsResponses];
+
+export type PutApiV1AdminAuthShortcutsData = {
+    body: {
+        expectedRevision: number;
+        shortcuts: {
+            [key: string]: string;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/auth/shortcuts';
+};
+
+export type PutApiV1AdminAuthShortcutsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminAuthShortcutsError = PutApiV1AdminAuthShortcutsErrors[keyof PutApiV1AdminAuthShortcutsErrors];
+
+export type PutApiV1AdminAuthShortcutsResponses = {
+    /**
+     * Keyboard shortcuts saved
+     */
+    200: {
+        success: true;
+        data: {
+            shortcuts: {
+                [key: string]: string;
+            };
+            revision: number;
+        };
+    };
+};
+
+export type PutApiV1AdminAuthShortcutsResponse = PutApiV1AdminAuthShortcutsResponses[keyof PutApiV1AdminAuthShortcutsResponses];
 
 export type PostApiV1AdminAuthScannerLinkData = {
     body?: never;
@@ -64044,6 +68049,2752 @@ export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses = {
 
 export type PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponse = PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses[keyof PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses];
 
+export type GetApiV1AdminReviewsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: 'pending' | 'published' | 'rejected' | 'withdrawn';
+        rating?: number;
+        productId?: string;
+        q?: string;
+        cursor?: string;
+    };
+    url: '/api/v1/admin/reviews';
+};
+
+export type GetApiV1AdminReviewsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReviewsError = GetApiV1AdminReviewsErrors[keyof GetApiV1AdminReviewsErrors];
+
+export type GetApiV1AdminReviewsResponses = {
+    /**
+     * Reviews
+     */
+    200: {
+        success: true;
+        data: AdminReviewPage;
+    };
+};
+
+export type GetApiV1AdminReviewsResponse = GetApiV1AdminReviewsResponses[keyof GetApiV1AdminReviewsResponses];
+
+export type GetApiV1AdminReviewsSummaryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        productId?: string;
+    };
+    url: '/api/v1/admin/reviews/summary';
+};
+
+export type GetApiV1AdminReviewsSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReviewsSummaryError = GetApiV1AdminReviewsSummaryErrors[keyof GetApiV1AdminReviewsSummaryErrors];
+
+export type GetApiV1AdminReviewsSummaryResponses = {
+    /**
+     * Counts
+     */
+    200: {
+        success: true;
+        data: AdminReviewSummary;
+    };
+};
+
+export type GetApiV1AdminReviewsSummaryResponse = GetApiV1AdminReviewsSummaryResponses[keyof GetApiV1AdminReviewsSummaryResponses];
+
+export type GetApiV1AdminReviewsSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/reviews/settings';
+};
+
+export type GetApiV1AdminReviewsSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReviewsSettingsError = GetApiV1AdminReviewsSettingsErrors[keyof GetApiV1AdminReviewsSettingsErrors];
+
+export type GetApiV1AdminReviewsSettingsResponses = {
+    /**
+     * Settings
+     */
+    200: {
+        success: true;
+        data: ReviewSettings;
+    };
+};
+
+export type GetApiV1AdminReviewsSettingsResponse = GetApiV1AdminReviewsSettingsResponses[keyof GetApiV1AdminReviewsSettingsResponses];
+
+export type PutApiV1AdminReviewsSettingsData = {
+    body: ReviewSettingsBody;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/reviews/settings';
+};
+
+export type PutApiV1AdminReviewsSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminReviewsSettingsError = PutApiV1AdminReviewsSettingsErrors[keyof PutApiV1AdminReviewsSettingsErrors];
+
+export type PutApiV1AdminReviewsSettingsResponses = {
+    /**
+     * Saved settings
+     */
+    200: {
+        success: true;
+        data: ReviewSettings;
+    };
+};
+
+export type PutApiV1AdminReviewsSettingsResponse = PutApiV1AdminReviewsSettingsResponses[keyof PutApiV1AdminReviewsSettingsResponses];
+
+export type PostApiV1AdminReviewsModerateData = {
+    body: ModerateReviewsBody;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/reviews/moderate';
+};
+
+export type PostApiV1AdminReviewsModerateErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminReviewsModerateError = PostApiV1AdminReviewsModerateErrors[keyof PostApiV1AdminReviewsModerateErrors];
+
+export type PostApiV1AdminReviewsModerateResponses = {
+    /**
+     * Moderated
+     */
+    200: {
+        success: true;
+        data: ModerateReviewsResult;
+    };
+};
+
+export type PostApiV1AdminReviewsModerateResponse = PostApiV1AdminReviewsModerateResponses[keyof PostApiV1AdminReviewsModerateResponses];
+
+export type GetApiV1AdminReviewsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/reviews/{id}';
+};
+
+export type GetApiV1AdminReviewsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminReviewsByIdError = GetApiV1AdminReviewsByIdErrors[keyof GetApiV1AdminReviewsByIdErrors];
+
+export type GetApiV1AdminReviewsByIdResponses = {
+    /**
+     * Review
+     */
+    200: {
+        success: true;
+        data: AdminReview;
+    };
+};
+
+export type GetApiV1AdminReviewsByIdResponse = GetApiV1AdminReviewsByIdResponses[keyof GetApiV1AdminReviewsByIdResponses];
+
+export type PutApiV1AdminReviewsByIdReplyData = {
+    body: ReviewReplyBody;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/reviews/{id}/reply';
+};
+
+export type PutApiV1AdminReviewsByIdReplyErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminReviewsByIdReplyError = PutApiV1AdminReviewsByIdReplyErrors[keyof PutApiV1AdminReviewsByIdReplyErrors];
+
+export type PutApiV1AdminReviewsByIdReplyResponses = {
+    /**
+     * The review
+     */
+    200: {
+        success: true;
+        data: AdminReview;
+    };
+};
+
+export type PutApiV1AdminReviewsByIdReplyResponse = PutApiV1AdminReviewsByIdReplyResponses[keyof PutApiV1AdminReviewsByIdReplyResponses];
+
+export type PostApiV1AdminReviewsByIdConversationData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/reviews/{id}/conversation';
+};
+
+export type PostApiV1AdminReviewsByIdConversationErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminReviewsByIdConversationError = PostApiV1AdminReviewsByIdConversationErrors[keyof PostApiV1AdminReviewsByIdConversationErrors];
+
+export type PostApiV1AdminReviewsByIdConversationResponses = {
+    /**
+     * The review's thread
+     */
+    201: {
+        success: true;
+        data: {
+            conversationId: string;
+        };
+    };
+};
+
+export type PostApiV1AdminReviewsByIdConversationResponse = PostApiV1AdminReviewsByIdConversationResponses[keyof PostApiV1AdminReviewsByIdConversationResponses];
+
+export type DeleteApiV1AdminDigitalAssetsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}';
+};
+
+export type DeleteApiV1AdminDigitalAssetsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminDigitalAssetsByIdError = DeleteApiV1AdminDigitalAssetsByIdErrors[keyof DeleteApiV1AdminDigitalAssetsByIdErrors];
+
+export type DeleteApiV1AdminDigitalAssetsByIdResponses = {
+    /**
+     * Deleted
+     */
+    200: {
+        success: true;
+        data: {
+            deleted: true;
+        };
+    };
+};
+
+export type DeleteApiV1AdminDigitalAssetsByIdResponse = DeleteApiV1AdminDigitalAssetsByIdResponses[keyof DeleteApiV1AdminDigitalAssetsByIdResponses];
+
+export type PatchApiV1AdminDigitalAssetsByIdData = {
+    body: {
+        version: number;
+        displayName?: string;
+        /**
+         * Downloads per purchase (1–100), or null for unlimited. Default 5.
+         */
+        downloadLimit?: number | null;
+        /**
+         * Days of access after delivery (1–3650), or null for forever (the default).
+         */
+        accessDays?: number | null;
+        status?: 'ready' | 'archived';
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}';
+};
+
+export type PatchApiV1AdminDigitalAssetsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminDigitalAssetsByIdError = PatchApiV1AdminDigitalAssetsByIdErrors[keyof PatchApiV1AdminDigitalAssetsByIdErrors];
+
+export type PatchApiV1AdminDigitalAssetsByIdResponses = {
+    /**
+     * Digital item saved
+     */
+    200: {
+        success: true;
+        data: {
+            asset: DigitalAsset;
+        };
+    };
+};
+
+export type PatchApiV1AdminDigitalAssetsByIdResponse = PatchApiV1AdminDigitalAssetsByIdResponses[keyof PatchApiV1AdminDigitalAssetsByIdResponses];
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsData = {
+    body: {
+        filename: string;
+        mediaType?: string;
+        /**
+         * Exact file size; at most 40 parts of 52428800 bytes.
+         */
+        sizeBytes: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/uploads';
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsError = PostApiV1AdminDigitalAssetsByIdUploadsErrors[keyof PostApiV1AdminDigitalAssetsByIdUploadsErrors];
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsResponses = {
+    /**
+     * Upload started
+     */
+    201: {
+        success: true;
+        data: {
+            upload: DigitalUploadSession;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsResponse = PostApiV1AdminDigitalAssetsByIdUploadsResponses[keyof PostApiV1AdminDigitalAssetsByIdUploadsResponses];
+
+export type GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdData = {
+    body?: never;
+    path: {
+        id: string;
+        uploadId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}';
+};
+
+export type GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdError = GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdErrors[keyof GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdErrors];
+
+export type GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponses = {
+    /**
+     * Upload session
+     */
+    200: {
+        success: true;
+        data: {
+            upload: DigitalUploadSession & {
+                status: string;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponse = GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponses[keyof GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponses];
+
+export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberData = {
+    body: Blob | File;
+    path: {
+        id: string;
+        uploadId: string;
+        partNumber: number;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}/parts/{partNumber}';
+};
+
+export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberError = PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberErrors[keyof PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberErrors];
+
+export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberResponses = {
+    /**
+     * Part stored
+     */
+    200: {
+        success: true;
+        data: {
+            partNumber: number;
+            size: number;
+        };
+    };
+};
+
+export type PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberResponse = PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberResponses[keyof PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberResponses];
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteData = {
+    body?: never;
+    path: {
+        id: string;
+        uploadId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}/complete';
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteError = PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteErrors[keyof PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteErrors];
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponses = {
+    /**
+     * Upload complete
+     */
+    200: {
+        success: true;
+        data: {
+            asset: DigitalAsset;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponse = PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponses[keyof PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponses];
+
+export type GetApiV1AdminDigitalAssetsByIdLicenceKeysData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        status?: 'available' | 'assigned' | 'revoked';
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/digital-assets/{id}/licence-keys';
+};
+
+export type GetApiV1AdminDigitalAssetsByIdLicenceKeysErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminDigitalAssetsByIdLicenceKeysError = GetApiV1AdminDigitalAssetsByIdLicenceKeysErrors[keyof GetApiV1AdminDigitalAssetsByIdLicenceKeysErrors];
+
+export type GetApiV1AdminDigitalAssetsByIdLicenceKeysResponses = {
+    /**
+     * Licence keys
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<LicenceKeyAdmin>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminDigitalAssetsByIdLicenceKeysResponse = GetApiV1AdminDigitalAssetsByIdLicenceKeysResponses[keyof GetApiV1AdminDigitalAssetsByIdLicenceKeysResponses];
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysData = {
+    body: {
+        /**
+         * Retry key: repeating the request returns the first result instead of acting twice.
+         */
+        requestKey: string;
+        keys: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/licence-keys';
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysError = PostApiV1AdminDigitalAssetsByIdLicenceKeysErrors[keyof PostApiV1AdminDigitalAssetsByIdLicenceKeysErrors];
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysResponses = {
+    /**
+     * Keys imported
+     */
+    200: {
+        success: true;
+        data: {
+            imported: number;
+            alreadyInPool: number;
+            rejected: Array<{
+                line: number;
+                reason: 'too_long' | 'invalid_characters' | 'duplicate';
+            }>;
+            replayed: boolean;
+            stock: number;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysResponse = PostApiV1AdminDigitalAssetsByIdLicenceKeysResponses[keyof PostApiV1AdminDigitalAssetsByIdLicenceKeysResponses];
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeData = {
+    body: {
+        /**
+         * Retry key: repeating the request returns the first result instead of acting twice.
+         */
+        requestKey: string;
+        keyIds: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-assets/{id}/licence-keys/revoke';
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeError = PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeErrors[keyof PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeErrors];
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeResponses = {
+    /**
+     * Keys removed
+     */
+    200: {
+        success: true;
+        data: {
+            revoked: number;
+            stock: number;
+            replayed: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeResponse = PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeResponses[keyof PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeResponses];
+
+export type PostApiV1AdminDigitalEntitlementsByIdResetData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-entitlements/{id}/reset';
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdResetErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdResetError = PostApiV1AdminDigitalEntitlementsByIdResetErrors[keyof PostApiV1AdminDigitalEntitlementsByIdResetErrors];
+
+export type PostApiV1AdminDigitalEntitlementsByIdResetResponses = {
+    /**
+     * Saved
+     */
+    200: {
+        success: true;
+        data: {
+            entitlementId: string;
+            orderId: string;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdResetResponse = PostApiV1AdminDigitalEntitlementsByIdResetResponses[keyof PostApiV1AdminDigitalEntitlementsByIdResetResponses];
+
+export type PostApiV1AdminDigitalEntitlementsByIdRevokeData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/digital-entitlements/{id}/revoke';
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdRevokeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdRevokeError = PostApiV1AdminDigitalEntitlementsByIdRevokeErrors[keyof PostApiV1AdminDigitalEntitlementsByIdRevokeErrors];
+
+export type PostApiV1AdminDigitalEntitlementsByIdRevokeResponses = {
+    /**
+     * Saved
+     */
+    200: {
+        success: true;
+        data: {
+            entitlementId: string;
+            orderId: string;
+        };
+    };
+};
+
+export type PostApiV1AdminDigitalEntitlementsByIdRevokeResponse = PostApiV1AdminDigitalEntitlementsByIdRevokeResponses[keyof PostApiV1AdminDigitalEntitlementsByIdRevokeResponses];
+
+export type GetApiV1AdminGiftCardsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        q?: string;
+        status?: 'active' | 'disabled' | 'expired' | 'empty';
+        limit?: number;
+        cursor?: string;
+    };
+    url: '/api/v1/admin/gift-cards';
+};
+
+export type GetApiV1AdminGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsError = GetApiV1AdminGiftCardsErrors[keyof GetApiV1AdminGiftCardsErrors];
+
+export type GetApiV1AdminGiftCardsResponses = {
+    /**
+     * Gift cards
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<AdminGiftCardSummary>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsResponse = GetApiV1AdminGiftCardsResponses[keyof GetApiV1AdminGiftCardsResponses];
+
+export type PostApiV1AdminGiftCardsData = {
+    body: {
+        requestKey: string;
+        amount: number;
+        expiresAt?: string | null;
+        customerId?: string | null;
+        recipient?: {
+            name?: string | null;
+            email?: string | null;
+            phone?: string | null;
+        } | null;
+        message?: string | null;
+        note?: string | null;
+        notify?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/gift-cards';
+};
+
+export type PostApiV1AdminGiftCardsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsError = PostApiV1AdminGiftCardsErrors[keyof PostApiV1AdminGiftCardsErrors];
+
+export type PostApiV1AdminGiftCardsResponses = {
+    /**
+     * Gift card issued
+     */
+    201: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardSummary;
+            /**
+             * XXXX-XXXX-XXXX-XXXX, shown once.
+             */
+            code: string;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsResponse = PostApiV1AdminGiftCardsResponses[keyof PostApiV1AdminGiftCardsResponses];
+
+export type GetApiV1AdminGiftCardsSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/gift-cards/summary';
+};
+
+export type GetApiV1AdminGiftCardsSummaryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsSummaryError = GetApiV1AdminGiftCardsSummaryErrors[keyof GetApiV1AdminGiftCardsSummaryErrors];
+
+export type GetApiV1AdminGiftCardsSummaryResponses = {
+    /**
+     * Outstanding balance per currency
+     */
+    200: {
+        success: true;
+        data: {
+            outstanding: Array<{
+                currencyCode: string;
+                balance: number;
+                balanceMinor: number;
+                cards: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsSummaryResponse = GetApiV1AdminGiftCardsSummaryResponses[keyof GetApiV1AdminGiftCardsSummaryResponses];
+
+export type GetApiV1AdminGiftCardsByGiftCardIdData = {
+    body?: never;
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}';
+};
+
+export type GetApiV1AdminGiftCardsByGiftCardIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsByGiftCardIdError = GetApiV1AdminGiftCardsByGiftCardIdErrors[keyof GetApiV1AdminGiftCardsByGiftCardIdErrors];
+
+export type GetApiV1AdminGiftCardsByGiftCardIdResponses = {
+    /**
+     * Gift card detail
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardDetail;
+            transactions: Array<AdminGiftCardTransaction>;
+        };
+    };
+};
+
+export type GetApiV1AdminGiftCardsByGiftCardIdResponse = GetApiV1AdminGiftCardsByGiftCardIdResponses[keyof GetApiV1AdminGiftCardsByGiftCardIdResponses];
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdData = {
+    body: {
+        version: number;
+        status?: 'active' | 'disabled';
+        expiresAt?: string | null;
+        customerId?: string | null;
+        note?: string | null;
+    };
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}';
+};
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdError = PatchApiV1AdminGiftCardsByGiftCardIdErrors[keyof PatchApiV1AdminGiftCardsByGiftCardIdErrors];
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdResponses = {
+    /**
+     * Updated gift card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardSummary;
+        };
+    };
+};
+
+export type PatchApiV1AdminGiftCardsByGiftCardIdResponse = PatchApiV1AdminGiftCardsByGiftCardIdResponses[keyof PatchApiV1AdminGiftCardsByGiftCardIdResponses];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustData = {
+    body: {
+        requestKey: string;
+        amount: number;
+        reason: string;
+    };
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}/adjust';
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustError = PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors[keyof PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses = {
+    /**
+     * Adjusted gift card
+     */
+    200: {
+        success: true;
+        data: {
+            giftCard: AdminGiftCardSummary;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdAdjustResponse = PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses[keyof PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendData = {
+    body?: never;
+    path: {
+        giftCardId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/gift-cards/{giftCardId}/resend';
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendError = PostApiV1AdminGiftCardsByGiftCardIdResendErrors[keyof PostApiV1AdminGiftCardsByGiftCardIdResendErrors];
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendResponses = {
+    /**
+     * Queued
+     */
+    200: {
+        success: true;
+        data: {
+            queued: boolean;
+        };
+    };
+};
+
+export type PostApiV1AdminGiftCardsByGiftCardIdResendResponse = PostApiV1AdminGiftCardsByGiftCardIdResendResponses[keyof PostApiV1AdminGiftCardsByGiftCardIdResendResponses];
+
 export type DeleteApiV1AdminAbandonedCheckoutsData = {
     body: {
         ids: Array<string>;
@@ -65706,7 +72457,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesActiveResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -65840,7 +72590,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -65885,7 +72634,6 @@ export type PostApiV1AdminSettingsCheckoutLanguagesData = {
          * Field visibility settings
          */
         fieldVisibility?: {
-            showEmailField?: boolean;
             showOrderNotesField?: boolean;
             showAreaField?: boolean;
         };
@@ -65981,7 +72729,6 @@ export type PostApiV1AdminSettingsCheckoutLanguagesResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };
@@ -66162,7 +72909,6 @@ export type GetApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
                 [key: string]: string;
             };
             fieldVisibility: {
-                showEmailField: boolean;
                 showOrderNotesField: boolean;
                 showAreaField: boolean;
             };
@@ -66270,7 +73016,6 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdData = {
          * Field visibility settings
          */
         fieldVisibility?: {
-            showEmailField?: boolean;
             showOrderNotesField?: boolean;
             showAreaField?: boolean;
         };
@@ -66383,7 +73128,6 @@ export type PutApiV1AdminSettingsCheckoutLanguagesByIdResponses = {
                     [key: string]: string;
                 };
                 fieldVisibility: {
-                    showEmailField: boolean;
                     showOrderNotesField: boolean;
                     showAreaField: boolean;
                 };

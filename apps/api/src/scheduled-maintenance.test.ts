@@ -1,9 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const db = { id: "db" };
+  const cacheGenerationRow = { current: { updatedAt: 1_750_000_000 } as { updatedAt: number } | undefined };
+  // The one direct read: the cache generation's timestamp.
+  const db = {
+    id: "db",
+    select: () => ({ from: () => ({ where: () => ({ get: async () => cacheGenerationRow.current }) }) }),
+  };
   return {
     db,
+    cacheGenerationRow,
+    sweepReviewRequests: vi.fn(),
+    reviewsChangedSince: vi.fn(),
+    sweepDigitalUploads: vi.fn(),
+    sweepAutoFulfilment: vi.fn(),
     getDb: vi.fn(() => db),
     releaseExpiredReservations: vi.fn(),
     cleanupStaleAbandonedCheckouts: vi.fn(),
@@ -23,6 +33,7 @@ const mocks = vi.hoisted(() => {
     enqueueOrderRefundNotificationForOrder: vi.fn(),
     failStaleQueuedPaymentWebhookEvents: vi.fn(),
     backfillMissingMediaVariants: vi.fn(),
+    enqueueMediaVariantsBacklog: vi.fn(),
   };
 });
 
@@ -47,6 +58,20 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
 
 vi.mock("@scalius/core/modules/notifications", () => ({
   flushPendingNotificationOutbox: mocks.flushPendingNotificationOutbox,
+}));
+
+vi.mock("@scalius/core/modules/reviews", () => ({
+  sweepReviewRequests: mocks.sweepReviewRequests,
+  reviewsChangedSince: mocks.reviewsChangedSince,
+}));
+
+vi.mock("@scalius/core/modules/digital", () => ({
+  sweepDigitalUploads: mocks.sweepDigitalUploads,
+}));
+
+// The real fulfillers are registered (Wave B); the sweep itself has its own D1 tests.
+vi.mock("@scalius/core/modules/fulfilment", () => ({
+  sweepAutoFulfilment: mocks.sweepAutoFulfilment,
 }));
 
 vi.mock("@scalius/core/modules/conversations", () => ({
@@ -76,6 +101,7 @@ vi.mock("@scalius/core/modules/payments", () => ({
 
 vi.mock("@scalius/core/modules/media", () => ({
   backfillMissingMediaVariants: mocks.backfillMissingMediaVariants,
+  enqueueMediaVariantsBacklog: mocks.enqueueMediaVariantsBacklog,
 }));
 
 vi.mock("./utils/cache-generation", () => ({
@@ -99,12 +125,14 @@ import {
   MEDIA_RENDITION_BACKFILL_CONCURRENCY,
   MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
   MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
+  MEDIA_RENDITION_FANOUT_MAX_PER_RUN,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
   CUSTOMER_SESSION_SWEEP_LIMIT,
   META_PURCHASE_OUTBOX_SWEEP_LIMIT,
   ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT,
   ORDER_PAYMENT_RECOVERY_OTP_SWEEP_LIMIT,
+  REVIEW_REQUEST_SWEEP_LIMIT,
   REFUND_ATTEMPT_RECONCILIATION_LIMIT,
   SCANNER_TOKEN_CLAIM_SWEEP_LIMIT,
   EXTERNAL_REFUND_RECONCILIATION_LIMIT,
@@ -245,6 +273,12 @@ describe("runScheduledMaintenance", () => {
       hasMore: false,
     });
     mocks.backfillMissingMediaVariants.mockResolvedValue({ scanned: 0, generated: 0, failed: 0, hasMore: false });
+    mocks.enqueueMediaVariantsBacklog.mockResolvedValue({ queued: 0, hasMore: false });
+    mocks.sweepReviewRequests.mockResolvedValue({ queued: 0, skipped: 0 });
+    mocks.reviewsChangedSince.mockResolvedValue(false);
+    mocks.sweepDigitalUploads.mockResolvedValue({ aborted: 0 });
+    mocks.sweepAutoFulfilment.mockResolvedValue({ scanned: 0, fulfilled: 0, failed: 0 });
+    mocks.cacheGenerationRow.current = { updatedAt: 1_750_000_000 };
   });
 
   afterEach(() => {
@@ -544,6 +578,48 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.cleanupExpiredScannerTokenClaims).toHaveBeenCalled();
   });
 
+  it("queues due review requests before the outbox flush sends up to 200 rows", async () => {
+    const env = createEnv();
+    await runScheduledMaintenance(env, createExecutionContext());
+
+    expect(mocks.sweepReviewRequests).toHaveBeenCalledWith(mocks.db, { limit: REVIEW_REQUEST_SWEEP_LIMIT });
+    expect(mocks.sweepReviewRequests.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.flushPendingNotificationOutbox.mock.invocationCallOrder[0]!);
+    expect(ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT).toBe(200);
+    expect(mocks.sweepDigitalUploads).toHaveBeenCalledWith(mocks.db, env.BUCKET);
+  });
+
+  it("bumps the cache generation once when published reviews changed since it last moved", async () => {
+    await runScheduledMaintenance(createEnv(), createExecutionContext());
+    expect(mocks.reviewsChangedSince).toHaveBeenCalledWith(mocks.db, 1_750_000_000);
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
+    const env = createEnv();
+    const executionCtx = createExecutionContext();
+    mocks.reviewsChangedSince.mockResolvedValueOnce(true);
+    await runScheduledMaintenance(env, executionCtx);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
+    expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith({ env, executionCtx });
+
+    // A store that never bumped compares against 0.
+    mocks.cacheGenerationRow.current = undefined;
+    await runScheduledMaintenance(createEnv(), createExecutionContext());
+    expect(mocks.reviewsChangedSince).toHaveBeenLastCalledWith(mocks.db, 0);
+  });
+
+  it("keeps running the other sweeps when a Wave B sweep fails", async () => {
+    const first = new Error("review requests broken");
+    mocks.sweepReviewRequests.mockRejectedValueOnce(first);
+    mocks.reviewsChangedSince.mockRejectedValueOnce(new Error("stats read failed"));
+    mocks.sweepDigitalUploads.mockRejectedValueOnce(new Error("R2 down"));
+
+    await expect(runScheduledMaintenance(createEnv(), createExecutionContext())).rejects.toBe(first);
+    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalled();
+    expect(mocks.flushPendingMetaPurchaseOutbox).toHaveBeenCalled();
+    expect(mocks.cleanupExpiredCustomerSessions).toHaveBeenCalled();
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+  });
+
   it("backfills media renditions only with the Images binding and bumps the generation only when one was saved", async () => {
     const images = { info: vi.fn() };
     const env = { ...createEnv(), IMAGES: images } as unknown as Env;
@@ -566,12 +642,31 @@ describe("runScheduledMaintenance", () => {
       },
     );
     expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+    // The backlog goes to the jobs queue first; nothing queued, the run renders inline.
+    expect(mocks.enqueueMediaVariantsBacklog).toHaveBeenCalledWith(mocks.db, env.JOBS_QUEUE, {
+      skip: 0,
+      limit: MEDIA_RENDITION_FANOUT_MAX_PER_RUN,
+    });
 
     const executionCtx = createExecutionContext();
     mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 158, generated: 157, failed: 1, hasMore: false });
     await runScheduledMaintenance(env, executionCtx);
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledTimes(1);
     expect(mocks.bumpCacheGeneration).toHaveBeenCalledWith({ env, executionCtx });
+  });
+
+  it("fans a rendition backlog out to the jobs queue instead of rendering it inline", async () => {
+    const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
+    mocks.enqueueMediaVariantsBacklog.mockResolvedValueOnce({ queued: 1_000, hasMore: true });
+    await runScheduledMaintenance(env, createExecutionContext());
+    expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
+    // Each queued job bumps the generation when it renders; the run does not.
+    expect(mocks.bumpCacheGeneration).not.toHaveBeenCalled();
+
+    // A queue that refuses the batch leaves the inline backfill to render.
+    mocks.enqueueMediaVariantsBacklog.mockRejectedValueOnce(new Error("queue down"));
+    await runScheduledMaintenance(env, createExecutionContext());
+    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledTimes(1);
   });
 
   it("runs the time-budgeted rendition backfill last, after every commerce sweep", async () => {

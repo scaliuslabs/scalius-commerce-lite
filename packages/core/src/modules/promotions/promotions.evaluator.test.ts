@@ -155,6 +155,32 @@ describe("discount evaluator", () => {
         expect(evaluate({}, [subtotal]).rejected).toEqual([{ promotionId: "t", reason: "minimum_subtotal_not_met" }]);
     });
 
+    it("G7: gift-card lines are never a target, never counted toward a threshold, never given a share", () => {
+        const giftCard = line("gc", 5_000, 1, { giftCard: true });
+        // An order discount spreads over the other lines only.
+        const order = evaluate({ lines: [line("a", 500, 2), giftCard] }, [candidate("o", orderEffect({ basisPoints: 1_000 }))]);
+        expect(lineDiscounts(order)).toEqual({ a: 100 });
+        // A product discount scoped to the gift card finds nothing to discount.
+        const scoped = evaluate({ lines: [line("a", 500, 2), giftCard] }, [
+            candidate("s", lineEffect({ basisPoints: 5_000, productIds: ["prod_gc"] })),
+        ]);
+        expect(scoped.applied).toBeNull();
+        // The gift card's 5,000 does not reach a 1,600 minimum.
+        const minimum = candidate("m", orderEffect({ basisPoints: 1_000 }), {
+            conditions: [{ id: "c", kind: "minimum_merchandise_subtotal", config: { amountMinor: 1_600, currencyCode: "USD" } }],
+        });
+        expect(evaluate({ lines: [line("a", 500, 2), giftCard] }, [minimum]).rejected)
+            .toEqual([{ promotionId: "m", reason: "minimum_subtotal_not_met" }]);
+        // Nor does it count toward a minimum quantity.
+        const quantity = candidate("q", orderEffect({ basisPoints: 1_000 }), {
+            conditions: [{ id: "c", kind: "minimum_item_quantity", config: { quantity: 3 } }],
+        });
+        expect(evaluate({ lines: [line("a", 500, 2), { ...giftCard, quantity: 5 }] }, [quantity]).rejected)
+            .toEqual([{ promotionId: "q", reason: "minimum_quantity_not_met" }]);
+        // A cart of gift cards only gets nothing.
+        expect(evaluate({ lines: [giftCard] }, [candidate("o", orderEffect({ basisPoints: 1_000 }))]).applied).toBeNull();
+    });
+
     it("applies a fixed product amount once per order or to each item, never above the price", () => {
         const lines = [line("a", 300, 2), line("b", 50, 1)];
         const once = evaluate({ lines }, [candidate("once", lineEffect({ amountMinor: 100, currencyCode: "USD" }, "fixed_amount_off"))]);

@@ -39,6 +39,7 @@ export const STOREFRONT_CATALOG_OPERATIONS = {
     reason: "XML discovery source of up to 5,000 category URLs for the storefront sitemap; use storefront.categories.list_summaries.",
   },
   "storefront.categories.tree": { limits: { request: 16_384 } },
+  "storefront.collections.directory": { limits: { request: 16_384 } },
   "storefront.collections.get": { limits: { request: 16_384 } },
   "storefront.collections.list": { limits: { request: 16_384 } },
   "storefront.collections.sitemap": {

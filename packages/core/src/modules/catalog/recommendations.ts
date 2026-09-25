@@ -41,6 +41,7 @@ import {
 } from "../products/money";
 import { operationalSkuRowPredicate } from "../products/public-eligibility";
 import { loadProductMediaProjections, resolveProductCardImages } from "../products/media";
+import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
 import {
     buyerState,
     buyerStateCardSku,
@@ -89,6 +90,8 @@ export interface ProductRecommendationItem {
     imageAlt: string | null;
     secondaryImageUrl: string | null;
     createdAt: string | null;
+    /** Published-review average and count; null without a published review. */
+    rating: CardRating;
 }
 
 export interface ProductRecommendations {
@@ -211,6 +214,8 @@ type RecommendationCardRow = {
     availableForSale: number | boolean;
     createdAt: number;
     storeCurrencyCode: string | null;
+    ratingAvgCenti: number | null;
+    reviewCount: number | null;
 };
 
 /** One ranked product: its id and the signals that placed it (no card columns). */
@@ -418,10 +423,13 @@ async function loadRecommendationCards(
             availableForSale: buyerState.availableForSale,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("rec_created_at"),
             storeCurrencyCode: storeCurrencyCodeSql().as("rec_store_currency_code"),
+            ratingAvgCenti: reviewStats.ratingAvgCenti,
+            reviewCount: reviewStats.reviewCount,
         })
         .from(buyerState)
         .innerJoin(products, eq(products.id, buyerState.productId))
         .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        .leftJoin(reviewStats, reviewStatsJoin(products.id))
         .where(sql`${buyerState.productId} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`)
         .all() as RecommendationCardRow[];
     return new Map(rows.map((row) => [row.id, row]));
@@ -494,11 +502,14 @@ async function readStoredRecommendations(
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`.as("rec_created_at"),
             reason: productRecommendations.reason,
             storeCurrencyCode: storeCurrencyCodeSql().as("rec_store_currency_code"),
+            ratingAvgCenti: reviewStats.ratingAvgCenti,
+            reviewCount: reviewStats.reviewCount,
         })
         .from(productRecommendations)
         .leftJoin(buyerState, eq(buyerState.productId, productRecommendations.recommendedProductId))
         .leftJoin(products, eq(products.id, productRecommendations.recommendedProductId))
         .leftJoin(cardSku, eq(cardSku.id, buyerState.skuId))
+        .leftJoin(reviewStats, reviewStatsJoin(productRecommendations.recommendedProductId))
         .where(eq(productRecommendations.productId, productId))
         .orderBy(asc(productRecommendations.position))
         .all() as StoredRecommendationRow[];
@@ -559,9 +570,12 @@ export async function getStorefrontProductRecommendations(
             availableForSale,
             createdAt,
             storeCurrencyCode: _storeCurrencyCode,
+            ratingAvgCenti,
+            reviewCount,
             ...row
         }) => ({
             ...presentBuyerPricing(row, decimalPlaces),
+            rating: presentCardRating(ratingAvgCenti, reviewCount),
             freeDelivery: Boolean(row.freeDelivery),
             hasVariants: Boolean(hasCustomerOptions),
             availableForSale: Boolean(availableForSale),

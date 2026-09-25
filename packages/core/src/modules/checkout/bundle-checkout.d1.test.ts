@@ -16,7 +16,7 @@ import { loadStorefrontCheckoutAuthority } from "./authority";
 import { resolveBundlePromotionInterplay } from "./bundle-discounts";
 import { commitStorefrontOrderPayload } from "./commit";
 import { createStorefrontOrder, createTrustedStorefrontCheckoutPolicySnapshot } from "./prepare";
-import { validateStorefrontCartItems } from "./cart-validation";
+import { previewStorefrontBundleSavings, validateStorefrontCartItems } from "./cart-validation";
 import { quoteStorefrontDiscount } from "../promotions";
 import { readPromotionRefundSnapshot } from "../promotions/promotions.refunds";
 import type { CreateStorefrontOrderInput } from "../orders/types";
@@ -137,13 +137,14 @@ describe("quantity bundles at checkout", () => {
             cart.items.map((item, index) => ({ lineId: lines[index]!.id, unitPriceMinor: item.unitPriceMinor, quantity: item.quantity, bundleDiscountMinor: item.bundleDiscountMinor ?? 0 })),
             discount,
         );
-        return calculateStorefrontTaxQuote(db, {
+        const quote = await calculateStorefrontTaxQuote(db, {
             destination: { city: "city_1", zone: "zone_1", area: null, cityName: "Dhaka", zoneName: "North", areaName: null },
             lines: lines.map((each) => ({ lineId: each.id, productId: each.productId, variantId: each.variantId, unitPriceMinor: each.unitPriceMinor, quantity: each.quantity, taxClassId: null })),
             shippingMinor: 6000,
             promotionDiscountAllocation: bundle.allocation,
             currency: { code: "BDT", decimalPlaces: 2 },
         });
+        return Object.assign(quote, { rejectedCodes: bundle.discount.rejectedCodes, bundleDiscountMinor: bundle.bundleDiscountMinor });
     }
 
     const order = (id: string) => one<{ subtotal: number; discount: number; total: number }>(
@@ -213,6 +214,20 @@ describe("quantity bundles at checkout", () => {
         expect(one("SELECT count(*) AS n FROM orders")).toEqual({ n: 0 });
     });
 
+    it("previews bundle savings for the cart with the same pricing rule", async () => {
+        await setTiers("p_honey", [pair]);
+        const lines = [
+            { productId: "p_honey", baseUnitPriceMinor: 90_000, quantity: 1 },
+            { productId: "p_honey", baseUnitPriceMinor: 90_000, quantity: 1 },
+            { productId: "p_ghee", baseUnitPriceMinor: 120_000, quantity: 3 },
+        ];
+        const preview = await previewStorefrontBundleSavings(db, lines, "BDT");
+        expect(lines.map((line) => preview.lineSavings.get(line) ?? 0)).toEqual([9_000, 9_000, 0]);
+        expect(preview.bundles).toEqual([expect.objectContaining({ productId: "p_honey", quantity: 2, label: "Pair", savingMinor: 18_000 })]);
+        const cart = await validateStorefrontCartItems(db, [line("p_honey", "v_honey", 1, 900), line("p_honey", "v_honey", 1, 900)], { currencyCode: "BDT" });
+        expect(cart.items.map((item) => item.bundleDiscountMinor)).toEqual([9_000, 9_000]);
+    });
+
     it("prices an order by its promotions or its bundles, never both", async () => {
         await setTiers("p_honey", [pair]);
         const now = Math.floor(Date.now() / 1_000);
@@ -235,12 +250,32 @@ describe("quantity bundles at checkout", () => {
         await expect(reconciles(bundled.orderId)).resolves.toBeNull();
         expect((await buyerQuote(twoJars)).totalMinor).toBe(168_000);
 
-        // A typed code always wins, even when the bundle would save more: 7% (৳126) against the pair's ৳180.
+        // A typed code that saves less loses to the bundle, and says so: 7% (৳126) against the pair's ৳180.
         await activate({ name: "JAR7", method: "code", codes: [{ code: "JAR7" }], effects: percentOff(700) });
-        const coded = await checkout(twoJars, ["JAR7"]);
-        expect(order(coded.orderId)).toEqual({ subtotal: 180_000, discount: 12_600, total: 173_400 });
-        await expect(reconciles(coded.orderId)).resolves.toMatchObject({ totalDiscountMinor: 12_600 });
-        expect((await buyerQuote(twoJars, ["JAR7"])).totalMinor).toBe(173_400);
+        const beaten = await checkout(twoJars, ["JAR7"]);
+        expect(order(beaten.orderId)).toEqual({ subtotal: 180_000, discount: 18_000, total: 168_000 });
+        expect(one("SELECT count(*) AS n FROM order_discount_allocations WHERE order_id = ?", beaten.orderId)).toEqual({ n: 0 });
+        await expect(reconciles(beaten.orderId)).resolves.toBeNull();
+        const beatenQuote = await buyerQuote(twoJars, ["JAR7"]);
+        expect(beatenQuote.totalMinor).toBe(168_000);
+        expect(beatenQuote.bundleDiscountMinor).toBe(18_000);
+        expect(beatenQuote.rejectedCodes).toEqual([{
+            code: "JAR7",
+            reason: "lower_savings",
+            conflictsWith: "Bundle saving",
+            bundleSavesMore: true,
+            message: "Bundle saving applied: better than JAR7.",
+        }]);
+
+        // A typed code that saves more wins: 15% (৳270) against the pair's ৳180.
+        await activate({ name: "JAR15", method: "code", codes: [{ code: "JAR15" }], effects: percentOff(1_500) });
+        const coded = await checkout(twoJars, ["JAR15"]);
+        expect(order(coded.orderId)).toEqual({ subtotal: 180_000, discount: 27_000, total: 159_000 });
+        await expect(reconciles(coded.orderId)).resolves.toMatchObject({ totalDiscountMinor: 27_000 });
+        const codedQuote = await buyerQuote(twoJars, ["JAR15"]);
+        expect(codedQuote.totalMinor).toBe(159_000);
+        expect(codedQuote.bundleDiscountMinor).toBe(0);
+        expect(codedQuote.rejectedCodes).toEqual([]);
 
         // A 10% automatic promotion ties the pair: promotions keep the order.
         await activate({ name: "Ten off", method: "automatic", effects: percentOff(1_000) });

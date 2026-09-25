@@ -32,9 +32,11 @@ import type {
 import {
   ADVANCED_FIELDS,
   draftId,
+  draftSignature,
   getOptionMatrixIssue,
   getSimpleSkuIssue,
   initialOptions,
+  initialSimpleSku,
   initialVariants,
   combinationKey,
   materializeCombination,
@@ -57,6 +59,7 @@ import {
   type VariantPriceRange,
   withFulfilmentMode,
 } from "./option-matrix-editor-model";
+import { constrainSkuForKind, productKindRules, useProductKindRules } from "../product-kind-rules";
 import { barcodePatch, Field, InventoryQuantityInput, type IssueFor } from "./variant-fields";
 import { VariantTable } from "./VariantTable";
 
@@ -125,20 +128,16 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   const t = useMessages(productMessages);
   const queryClient = useQueryClient();
   const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
-  const [simpleSku, setSimpleSku] = React.useState<SimpleSkuDraft>(() => ({
-    sku: defaultSku?.sku ?? "",
-    // New products track quantity by default; saved SKUs keep their setting.
-    trackInventory: defaultSku ? defaultSku.trackInventory ?? false : true,
-    stock: defaultSku?.stock ?? 0,
-    barcode: defaultSku?.barcode ?? null,
-    barcodeType: (defaultSku?.barcodeType as SimpleSkuDraft["barcodeType"]) ?? null,
-    weight: defaultSku?.weight ?? null,
-  }));
+  const [simpleSku, setSimpleSku] = React.useState<SimpleSkuDraft>(() => initialSimpleSku(defaultSku));
   const [simpleStockEdited, setSimpleStockEdited] = React.useState(false);
   const [options, setOptions] = React.useState<DraftOption[]>(() => initialOptions(savedOptions));
   const [variants, setVariants] = React.useState<DraftVariant[]>(() => initialVariants(savedVariants));
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
-  const [dirty, setDirty] = React.useState(false);
+  // Dirty is the draft against the last saved one: an edit changed back is no change.
+  const draft = React.useMemo(() => draftSignature(simpleSku, options, variants), [simpleSku, options, variants]);
+  const [savedDraft, setSavedDraft] = React.useState(draft);
+  const sentDraft = React.useRef(draft);
+  const dirty = draft !== savedDraft;
   const [revealed, setRevealed] = React.useState(false);
   const [revealNonce, setRevealNonce] = React.useState(0);
   const [serverIssue, setServerIssue] = React.useState<DraftIssue | null>(null);
@@ -148,6 +147,30 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     missingOptionCombinations(initialOptions(savedOptions), initialVariants(savedVariants)).map(combinationKey),
   ));
   const [omittedVariantsByKey, setOmittedVariantsByKey] = React.useState<Map<string, DraftVariant>>(() => new Map());
+  // The product's kind (a gift card) limits what its SKUs may be: the table, the checks and
+  // the save all use these constrained rows, while the drafts keep what the merchant typed
+  // (switching the kind back restores it). Saved SKUs keep their recorded quantity, so a
+  // save never writes stock; new rows start at 0.
+  // The form provides the gift-card flag; the kind comes with this editor's own Fulfilment prop.
+  const { giftCard } = useProductKindRules();
+  const kindRules = React.useMemo(
+    () => productKindRules({ isGiftCard: giftCard, fulfillmentKind: fulfilmentMode }),
+    [fulfilmentMode, giftCard],
+  );
+  // One constrained row per draft row and rules, so an edit re-renders only the edited row.
+  const constrained = React.useMemo(() => ({ rules: kindRules, rows: new WeakMap<DraftVariant, DraftVariant>() }), [kindRules]);
+  const shownVariants = React.useMemo(() => variants.map((variant) => {
+    let shown = constrained.rows.get(variant);
+    if (!shown) {
+      shown = constrainSkuForKind(variant, constrained.rules, !variant.id.startsWith("draft_"));
+      constrained.rows.set(variant, shown);
+    }
+    return shown;
+  }), [constrained, variants]);
+  const shownSimpleSku = React.useMemo(
+    () => constrainSkuForKind(simpleSku, kindRules, Boolean(defaultSku)),
+    [defaultSku, kindRules, simpleSku],
+  );
   const savedOptionDraft = React.useMemo(() => initialOptions(savedOptions), [savedOptions]);
   const savedTopology = React.useMemo(() => optionTopologySignature(savedOptionDraft), [savedOptionDraft]);
   // Stock that must reach the new rows (the server's rule): a simple product's stock when
@@ -158,7 +181,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     ? savedVariants.filter((variant) => !variant.isDefault && !variant.deletedAt && !liveIds.has(variant.id))
     : [];
   const simpleConversion = savedOptions.length === 0 && Boolean(defaultSku?.trackInventory);
-  const requiredStockAllocation = simpleConversion
+  // Untracked kinds (gift cards) carry no quantity to new rows.
+  const requiredStockAllocation = !kindRules.showInventory ? 0 : simpleConversion
     ? defaultSku!.stock
     : replacedVariants.reduce((total, variant) => total + (variant.trackInventory ? variant.stock : 0), 0);
   const blockedCommittedStock = savedOptions.length === 0 ? defaultSku?.reservedStock ?? 0 : 0;
@@ -173,7 +197,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     ? options.reduce((total, option) => total * option.values.length, 1)
     : 0;
   const validShape = options.length > 0 && options.every((option) => option.name.trim() && option.values.length > 0);
-  const matrixIssue = getOptionMatrixIssue(options, variants, images, combinationsPending, {
+  const matrixIssue = getOptionMatrixIssue(options, shownVariants, images, combinationsPending, {
     committedByVariantId,
     requiredStockAllocation,
     allocationScope: simpleConversion ? "all" : "new",
@@ -186,7 +210,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   const simpleCommitted = defaultSku?.reservedStock ?? 0;
   const draftIssue = !simpleMode
     ? matrixIssue
-    : dirty || !productId ? getSimpleSkuIssue(simpleSku, simpleCommitted, Boolean(productId)) : null;
+    : dirty || !productId ? getSimpleSkuIssue(shownSimpleSku, simpleCommitted, Boolean(productId)) : null;
   const lineFor = (issue: DraftIssue) => {
     const variant = issue.variantId ? variants.find((row) => row.id === issue.variantId) : undefined;
     return variant ? `${nameOf(variant)}: ${issue.message}` : simpleMode && issue.field ? `${t("inventory")}: ${issue.message}` : issue.message;
@@ -199,21 +223,21 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
 
   React.useEffect(() => {
     if (!onDraftChange) return;
-    const sku = simpleSku.sku.trim();
+    const sku = shownSimpleSku.sku.trim();
     onDraftChange(draftIssue
       ? null
       : simpleMode
         ? {
             defaultSku: {
               ...(sku ? { sku } : {}),
-              trackInventory: simpleSku.trackInventory,
-              stock: simpleSku.trackInventory ? simpleSku.stock : 0,
-              ...(simpleSku.barcode ? { barcode: simpleSku.barcode, barcodeType: simpleSku.barcodeType } : {}),
-              ...(simpleSku.weight !== null ? { weight: simpleSku.weight } : {}),
+              trackInventory: shownSimpleSku.trackInventory,
+              stock: shownSimpleSku.trackInventory ? shownSimpleSku.stock : 0,
+              ...(shownSimpleSku.barcode ? { barcode: shownSimpleSku.barcode, barcodeType: shownSimpleSku.barcodeType } : {}),
+              ...(kindRules.showWeight && shownSimpleSku.weight !== null ? { weight: shownSimpleSku.weight } : {}),
             },
           }
-        : options.length > 0 ? { optionMatrix: { options, variants: withFulfilmentMode(variants, fulfilmentMode) } } : null);
-  }, [draftIssue, fulfilmentMode, onDraftChange, options, simpleMode, simpleSku, variants]);
+        : options.length > 0 ? { optionMatrix: { options, variants: withFulfilmentMode(shownVariants, fulfilmentMode) } } : null);
+  }, [draftIssue, fulfilmentMode, kindRules, onDraftChange, options, simpleMode, shownSimpleSku, shownVariants]);
 
   React.useEffect(() => onDraftIssueChange?.(draftLine), [draftLine, onDraftIssueChange]);
   React.useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
@@ -243,7 +267,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   const stageOptions = React.useCallback((nextOptions: DraftOption[]) => {
     setOptions(nextOptions);
     setCombinationsPending(true);
-    setDirty(true);
   }, []);
 
   const applyOptions = React.useCallback(() => {
@@ -260,7 +283,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     setExcludedCombinationKeys(new Set(missingOptionCombinations(options, next).map(combinationKey)));
     setTopologyChanged(optionTopologySignature(options) !== savedTopology);
     setCombinationsPending(false);
-    setDirty(true);
   }, [combinationCount, defaultSku, excludedCombinationKeys, options, productName, productPrice, savedTopology, simpleConversion, validShape, variants]);
 
   // Variants follow the options as soon as every option has a name and a value.
@@ -289,7 +311,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       ? { ...variant, ...(typeof patch === "function" ? patch(variant) : patch) }
       : variant));
     setServerIssue((current) => (current?.variantId && ids.has(current.variantId) ? null : current));
-    setDirty(true);
   }, []);
   // The page rebuilds the photo list on every render; keep one identity while it is the same.
   const imagesKey = images.map((image) => `${image.id}:${image.url}:${image.status}:${image.altText}`).join("|");
@@ -299,7 +320,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   const updateSimple = (patch: Partial<SimpleSkuDraft>) => {
     setSimpleSku((current) => ({ ...current, ...patch }));
     setServerIssue(null);
-    setDirty(true);
   };
 
   const removeVariants = React.useCallback((ids: ReadonlySet<string>) => {
@@ -316,7 +336,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       ...removed.map((variant) => combinationKey(variant.selectedOptionValueIds)),
     ]));
     setExpandedId((current) => current && ids.has(current) ? null : current);
-    setDirty(true);
   }, [variants]);
 
   const restoreCombination = React.useCallback((selectedOptionValueIds: string[]) => {
@@ -340,7 +359,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       next.delete(key);
       return next;
     });
-    setDirty(true);
   }, [omittedVariantsByKey, options, productName, productPrice, variants]);
 
   const restoreAllCombinations = React.useCallback(() => {
@@ -351,7 +369,6 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     setVariants(materializeVariants(options, [...variants, ...restorableOriginals], productName, productPrice, 0));
     setExcludedCombinationKeys(new Set());
     setOmittedVariantsByKey(new Map());
-    setDirty(true);
   }, [omittedVariantsByKey, options, productName, productPrice, variants]);
 
   const missingCombinations = React.useMemo(
@@ -369,11 +386,11 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
             weight: simpleSku.weight,
             sku: simpleSku.sku.trim(),
             price: productPrice,
-            trackInventory: simpleSku.trackInventory,
+            trackInventory: shownSimpleSku.trackInventory,
             barcode: simpleSku.barcode,
             barcodeType: simpleSku.barcodeType,
             // Unedited quantity is omitted so a concurrent sale is never overwritten.
-            ...(simpleStockEdited && simpleSku.trackInventory
+            ...(simpleStockEdited && shownSimpleSku.trackInventory
               ? { stock: simpleSku.stock, expectedStockVersion: defaultSku.stockVersion }
               : {}),
             discountType: "percentage",
@@ -386,13 +403,14 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           path: { id: productId! },
           body: {
             options,
-            variants: matrixSaveVariants(variants, savedVariants, fulfilmentMode),
+            variants: matrixSaveVariants(shownVariants, savedVariants, fulfilmentMode),
             expectedAggregateRevision: revisionOverride ?? aggregateRevision!,
           },
         })),
     onSuccess: async (result) => {
       onAggregateRevisionChange?.(result.aggregateRevision);
-      setDirty(false);
+      // Edits made while the save was on its way stay unsaved.
+      setSavedDraft(sentDraft.current);
       setRevealed(false);
       setCombinationsPending(false);
       setTopologyChanged(false);
@@ -445,6 +463,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         throw new SaveNotCompleted(lineFor(draftIssue));
       }
       try {
+        sentDraft.current = draft;
         await mutation.mutateAsync(revisionOverride);
       } catch (error) {
         const conflict = readProductRevisionConflict(error);
@@ -460,22 +479,25 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     reveal,
     showServerIssue,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [dirty, draftIssue, mutation, productId, reveal, showServerIssue]);
+  }), [dirty, draft, draftIssue, mutation, productId, reveal, showServerIssue]);
 
   return (
     <section data-option-matrix data-variant-editor tabIndex={-1} className="space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
       {simpleMode ? (
         <div className="space-y-3">
           <h3 className="text-body font-medium">{t("inventory")}</h3>
-          <label className="flex min-h-11 items-center gap-2 text-body md:min-h-0">
-            <Checkbox
-              checked={simpleSku.trackInventory}
-              onCheckedChange={(checked) => updateSimple({ trackInventory: checked === true })}
-            />
-            {t("trackQuantity")}
-          </label>
+          {/* Untracked kinds (gift cards) have no quantity to track. */}
+          {kindRules.showInventory ? (
+            <label className="flex min-h-11 items-center gap-2 text-body md:min-h-0">
+              <Checkbox
+                checked={simpleSku.trackInventory}
+                onCheckedChange={(checked) => updateSimple({ trackInventory: checked === true })}
+              />
+              {t("trackQuantity")}
+            </label>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
-            {simpleSku.trackInventory ? (
+            {shownSimpleSku.trackInventory ? (
               <Field label={t("quantity")} error={issueFor(undefined, "stock")}>
                 {(invalid) => (
                   <InventoryQuantityInput
@@ -512,8 +534,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                 />
               )}
             </Field>
-            {/* A service is never packed or weighed. */}
-            {fulfilmentMode === "service" ? null : (
+            {/* A service or a gift card is never packed or weighed. */}
+            {!kindRules.showWeight ? null : (
               <Field label={t("weightGrams")} error={issueFor(undefined, "weight")}>
                 {(invalid) => (
                   <NumberInput
@@ -596,7 +618,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       {variants.length ? (
         <VariantTable
           options={options}
-          variants={variants}
+          variants={shownVariants}
           images={stableImages}
           productName={productName}
           nameOf={nameOf}

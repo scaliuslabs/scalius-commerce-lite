@@ -26,6 +26,8 @@ import {
 } from "../products/media";
 import { categoryScope, declareProductCards, deps } from "./declare-deps";
 import { publicProductHasBuyerResolvableSku } from "../products/public-eligibility";
+import { storeDecimalPlacesFromCode } from "../products/money";
+import { resolveProductCardFacts, selectProductCardFactRows, type ProductCardFactRow } from "./card-facts";
 import { publicCategoryConditions, publishedCategoryIdExists } from "../categories/categories.publication";
 import {
     buildCollectionProductSelect,
@@ -134,7 +136,7 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
     resolve(results: readonly unknown[], offset: number): HomeProductList[];
 } {
     const statements: BatchStatement[] = [];
-    const slots: Array<{ key: string; rows: number; media: number; members: number }> = [];
+    const slots: Array<{ key: string; rows: number; media: number; facts: number; members: number }> = [];
     const categoryIds: string[] = [];
 
     /**
@@ -144,8 +146,9 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
     const add = (key: string, rows: BatchStatement, ids: SQLWrapper, members: BatchStatement) => {
         const rowsSlot = statements.push(rows) - 1;
         const mediaSlot = statements.push(selectProductMediaProjectionRows(db, ids)) - 1;
+        const factsSlot = statements.push(selectProductCardFactRows(db, ids)) - 1;
         const membersSlot = statements.push(members) - 1;
-        slots.push({ key, rows: rowsSlot, media: mediaSlot, members: membersSlot });
+        slots.push({ key, rows: rowsSlot, media: mediaSlot, facts: factsSlot, members: membersSlot });
     };
 
     for (const list of lists) {
@@ -228,10 +231,18 @@ export function planHomeProductLists(db: Database, lists: readonly HomeProductLi
                 ? []
                 : results[offset + categorySlot] as NonNullable<HomeProductList["category"]>[];
             const categoryById = new Map(categoryRows.map((row) => [row.id, row]));
-            return slots.map(({ key, rows, media, members }) => {
+            return slots.map(({ key, rows, media, facts, members }) => {
                 const productRows = results[offset + rows] as RawProduct[];
                 const mediaByProduct = resolveProductMediaProjectionRows(results[offset + media] as ProductMediaProjectionRow[]);
-                const cards = resolveProductCards(productRows, mediaByProduct);
+                const cards = resolveProductCards(
+                    productRows,
+                    mediaByProduct,
+                    resolveProductCardFacts(
+                        results[offset + facts] as ProductCardFactRow[],
+                        storeDecimalPlacesFromCode(productRows[0]?.storeCurrencyCode),
+                        new Set(productRows.filter((row) => row.freeDelivery).map((row) => row.id)),
+                    ),
+                );
                 const source = lists.find((list) => list.key === key)!.source;
                 const memberIds = (results[offset + members] as Array<{ id: string }>).map((row) => row.id);
                 declareHomeProductList(source, productRows.map((row) => row.id), mediaByProduct, memberIds);

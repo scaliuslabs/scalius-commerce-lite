@@ -417,12 +417,7 @@ describe("system settings cache invalidation", () => {
     const { app, env, executionCtx, database } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
-      customerAuthPolicy: {
-        otpChannels: ["sms"],
-        requiredContactFields: ["phone"],
-        optionalContactFields: [],
-        defaultOtpChannel: "sms",
-      },
+      customerIdentity: { email: "optional", whatsapp: "off", channels: ["sms"] },
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
@@ -452,12 +447,7 @@ describe("system settings cache invalidation", () => {
     const { app, env, executionCtx, database } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
-      customerAuthPolicy: {
-        otpChannels: ["email"],
-        requiredContactFields: ["phone"],
-        optionalContactFields: [],
-        defaultOtpChannel: "email",
-      },
+      customerIdentity: { email: "required", whatsapp: "off", channels: ["email"] },
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
@@ -470,12 +460,7 @@ describe("system settings cache invalidation", () => {
     const { app, env, executionCtx, database } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
-      customerAuthPolicy: {
-        otpChannels: ["email"],
-        requiredContactFields: ["phone"],
-        optionalContactFields: [],
-        defaultOtpChannel: "email",
-      },
+      customerIdentity: { email: "required", whatsapp: "off", channels: ["email"] },
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
@@ -484,28 +469,14 @@ describe("system settings cache invalidation", () => {
       env,
       encryptionKey: CREDENTIAL_KEY,
     });
-    // Codes by email only: the server makes email required even though the request left it out.
-    expect(stored(database, "customer_auth")).toEqual({
-      authVerificationMethod: "email",
-      policy: {
-        otpChannels: ["email"],
-        requiredContactFields: ["phone", "email"],
-        optionalContactFields: [],
-        defaultOtpChannel: "email",
-      },
-    });
+    expect(stored(database, "customer_auth")).toEqual({ email: "required", whatsapp: "off", channels: ["email"] });
   });
 
   it("rejects WhatsApp customer auth policy before writes when WhatsApp is not ready", async () => {
     const { app, env, executionCtx, database } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
-      customerAuthPolicy: {
-        otpChannels: ["whatsapp"],
-        requiredContactFields: ["phone"],
-        optionalContactFields: [],
-        defaultOtpChannel: "whatsapp",
-      },
+      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"] },
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
@@ -519,12 +490,7 @@ describe("system settings cache invalidation", () => {
     (env as Record<string, unknown>).JWT_SECRET = "jwt-fallback-key";
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
-      customerAuthPolicy: {
-        otpChannels: ["whatsapp"],
-        requiredContactFields: ["phone"],
-        optionalContactFields: [],
-        defaultOtpChannel: "whatsapp",
-      },
+      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"] },
       whatsappAccessToken: "EAAG_meta_token",
       whatsappPhoneNumberId: "phone_id_1",
       whatsappTemplateName: "auth_otp",
@@ -688,14 +654,7 @@ describe("system settings cache invalidation", () => {
       authTemplateName: "auth_otp",
     });
     const { app, env, executionCtx, database } = await createTestApp(({ db }) =>
-      customerAuthDocument.write(db, {
-        policy: {
-          otpChannels: ["whatsapp"],
-          requiredContactFields: ["phone"],
-          optionalContactFields: [],
-          defaultOtpChannel: "whatsapp",
-        },
-      }).then(() => undefined));
+      customerAuthDocument.write(db, { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"] }).then(() => undefined));
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
       whatsappAccessToken: "",
@@ -1004,14 +963,7 @@ describe("system settings cache invalidation", () => {
 
   it("rejects removing the configured email provider while Email OTP remains enabled", async () => {
     const { app, env, executionCtx, database } = await createTestApp(({ db }) =>
-      customerAuthDocument.write(db, {
-        policy: {
-          otpChannels: ["email"],
-          requiredContactFields: ["phone"],
-          optionalContactFields: [],
-          defaultOtpChannel: "email",
-        },
-      }).then(() => undefined));
+      customerAuthDocument.write(db, { email: "required", whatsapp: "off", channels: ["email"] }).then(() => undefined));
 
     const response = await requestJson(app, env, executionCtx, "/email", {
       provider: "resend",

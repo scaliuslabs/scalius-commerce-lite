@@ -4,6 +4,7 @@
 // "Message the store" for verified accounts. Server-rendered from the session
 // cookie, so it works without JavaScript; the form is a plain POST.
 import Layout from "@/layouts/Layout.astro";
+import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
 import {
   CONVERSATION_COPY as copy,
@@ -15,59 +16,48 @@ import {
   renderInboxItems,
 } from "@/lib/account-inbox";
 import { readInbox } from "@/lib/account-inbox-server";
-import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { readAccountSummaryForRequest } from "@/lib/account-server";
+import { accountUi as ui } from "@/lib/account-ui";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
 
 const cursor = readInboxCursor(Astro.url.searchParams.get("cursor"));
-const [layoutData, inbox] = await Promise.all([getLayoutData(), readInbox(Astro.request, cursor)]);
+const [layoutData, inbox, summary] = await Promise.all([
+  getLayoutData(),
+  readInbox(Astro.request, cursor),
+  readAccountSummaryForRequest(Astro.request),
+]);
 const flag = readConversationStatusFlag(Astro.url);
 const status = flag ? conversationStatusMessage(flag) : null;
 const startFailed = Boolean(flag && status?.tone === "error");
 const clientMessageKey = newClientMessageKey();
-const accountPrefetch = getStorefrontPrefetchAttribute("/account", Astro.url);
+Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
 if (!inbox.ok && inbox.reason === "unavailable") Astro.response.status = 503;
 
 const items = inbox.ok ? inbox.data.items : [];
 const olderHref = inbox.ok && inbox.data.nextCursor
   ? `/account/inbox?${new URLSearchParams({ cursor: inbox.data.nextCursor })}`
   : null;
-const field = "w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20";
-const label = "mb-1.5 block text-sm font-medium text-foreground";
-const tab = "inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medium";
+const shellState = inbox.ok ? "ok" : inbox.reason === "signed_out" ? "signed_out" : "unavailable";
 ---
 
 <Layout title={copy.inboxTitle} layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <section class="container mx-auto max-w-3xl px-4 py-8" data-account-inbox>
-    <nav aria-label="Account" class="mb-6 flex gap-1 border-b border-border">
-      <a href="/account" data-astro-prefetch={accountPrefetch} class={`${tab} border-transparent text-muted-foreground hover:text-foreground`}>{copy.accountTab}</a>
-      <a href="/account/inbox" aria-current="page" data-astro-prefetch="false" class={`${tab} border-primary text-foreground`}>{copy.inboxTitle}</a>
-    </nav>
-
-    {!inbox.ok && inbox.reason === "signed_out" && (
-      <div class="mx-auto max-w-md py-12 text-center">
-        <h1 class="mb-2 text-2xl font-semibold text-foreground">{copy.signInTitle}</h1>
-        <p class="mb-6 text-muted-foreground">{copy.signInBody}</p>
-        <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class="inline-flex min-h-11 items-center rounded-lg bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90">{copy.signIn}</button>
-      </div>
-    )}
-
-    {!inbox.ok && inbox.reason !== "signed_out" && (
-      <div class="mx-auto max-w-md py-12 text-center" role="alert">
-        <h1 class="mb-2 text-2xl font-semibold text-foreground">{copy.inboxTitle}</h1>
-        <p class="mb-6 text-foreground">{copy.unavailable}</p>
-        <a href="/account/inbox" data-astro-prefetch="false" class="inline-flex min-h-11 items-center rounded-lg bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90">{copy.retry}</a>
-      </div>
-    )}
-
+  <AccountShell
+    current="inbox"
+    summary={summary}
+    state={shellState}
+    title={copy.inboxTitle}
+    signedOut={{ title: copy.signInTitle, body: copy.signInBody, action: copy.signIn }}
+    unavailable={{ text: copy.unavailable, retryHref: "/account/inbox", retryText: copy.retry }}
+  >
     {inbox.ok && (
       <div class="space-y-6">
-        <h1 class="text-2xl font-semibold text-foreground sm:text-3xl">{copy.inboxTitle}</h1>
 
         {status && (
           <p role="status" class:list={["text-sm", status.tone === "error" ? "text-destructive" : "text-primary"]}>{status.text}</p>
         )}
 
-        <details class="group rounded-xl border border-border bg-card" open={startFailed || (items.length === 0 && !cursor && inbox.data.canStartStoreConversation)}>
+        <details class={`group ${ui.card}`} open={startFailed || (items.length === 0 && !cursor && inbox.data.canStartStoreConversation)}>
           <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-base font-semibold text-foreground">
             {copy.startTitle}
             <svg aria-hidden="true" class="h-4 w-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -78,12 +68,12 @@ const tab = "inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medi
                 <p class="text-sm text-muted-foreground">{copy.startIntro}</p>
                 <input type="hidden" name="clientMessageKey" value={clientMessageKey} />
                 <div>
-                  <label for="storeThreadSubject" class={label}>{copy.subjectLabel}</label>
-                  <input id="storeThreadSubject" name="subject" type="text" required maxlength={CONVERSATION_LIMITS.subjectLength} autocomplete="off" class={field} />
+                  <label for="storeThreadSubject" class={ui.label}>{copy.subjectLabel}</label>
+                  <input id="storeThreadSubject" name="subject" type="text" required maxlength={CONVERSATION_LIMITS.subjectLength} autocomplete="off" class={ui.field} />
                 </div>
                 <div>
-                  <label for="storeThreadBody" class={label}>{copy.messageLabel}</label>
-                  <textarea id="storeThreadBody" name="body" required rows="4" maxlength={CONVERSATION_LIMITS.bodyLength} class={`${field} min-h-28`}></textarea>
+                  <label for="storeThreadBody" class={ui.label}>{copy.messageLabel}</label>
+                  <textarea id="storeThreadBody" name="body" required rows="4" maxlength={CONVERSATION_LIMITS.bodyLength} class={`${ui.field} min-h-28`}></textarea>
                 </div>
                 <div class="flex justify-end">
                   <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">{copy.startSubmit}</button>
@@ -92,7 +82,7 @@ const tab = "inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medi
             ) : (
               <p class="text-sm text-muted-foreground">
                 {copy.startNeedsVerification}{" "}
-                <a href="/account" data-astro-prefetch={accountPrefetch} class="font-medium text-primary hover:underline">{copy.startNeedsVerificationLink}</a>
+                <a href="/account" data-astro-prefetch="false" class="font-medium text-primary hover:underline">{copy.startNeedsVerificationLink}</a>
               </p>
             )}
           </div>
@@ -101,8 +91,10 @@ const tab = "inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medi
         {items.length > 0 ? (
           <ul class="space-y-3" aria-label="Conversations" set:html={renderInboxItems(items)} />
         ) : (
-          <div class="rounded-xl border border-dashed border-border p-10 text-center">
-            <p class="text-sm text-muted-foreground">{copy.inboxEmpty}</p>
+          <div class={ui.empty}>
+            <h2 class={ui.emptyTitle}>No messages yet</h2>
+            <p class={ui.emptyBody}>{copy.inboxEmpty}</p>
+            <a href="/account" data-astro-prefetch="false" class={`${ui.secondaryButton} mt-6`}>Go to your orders</a>
           </div>
         )}
 
@@ -113,17 +105,5 @@ const tab = "inline-flex min-h-11 items-center border-b-2 px-3 text-sm font-medi
         )}
       </div>
     )}
-  </section>
+  </AccountShell>
 </Layout>
-
-<script>
-  // Signing in from the prompt above shows the inbox.
-  type InboxWindow = Window & { __scaliusInboxLoginBound?: boolean };
-  const inboxWindow = window as InboxWindow;
-  if (!inboxWindow.__scaliusInboxLoginBound) {
-    inboxWindow.__scaliusInboxLoginBound = true;
-    window.addEventListener("customer-login", () => {
-      if (document.querySelector("[data-account-inbox]")) window.location.reload();
-    });
-  }
-</script>

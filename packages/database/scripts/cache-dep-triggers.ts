@@ -1,5 +1,5 @@
 /**
- * Generates migration 0093_cache_dependencies (D1/Turso SQL and its
+ * Generates migration 0100_cache_dependencies (D1/Turso SQL and its
  * PostgreSQL sidecar) from the dependency registry in
  * `@scalius/shared/cache-deps`: the `cache_clock` and `cache_dep` tables and
  * one trigger per registered table and rule. The checked-in files must equal
@@ -35,8 +35,8 @@ import {
 } from "../../shared/src/cache-deps";
 
 export const CACHE_DEP_MIGRATION = {
-  version: 93,
-  name: "0093_cache_dependencies",
+  version: 100,
+  name: "0100_cache_dependencies",
 } as const;
 
 const BREAKPOINT = "--> statement-breakpoint";

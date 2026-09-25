@@ -93,6 +93,8 @@ export function declareListing(
             deps.listOrder("disc", scope);
         }
         if (sort === "name-asc" || sort === "name-desc") deps.listOrder("name", scope);
+        // Every listing counts the rating facet (and may sort by rating).
+        deps.listOrder("rating", scope);
         if (options.facets || filteredByFacets) deps.listFacets(scope);
     }
     if (set.members) {

@@ -17,7 +17,7 @@ import {
 } from "./order-currency";
 import { COD_PAYMENT_METHOD, getPaymentGateway } from "./gateways/registry";
 import type { GatewayProviderRefund, GatewayRefundProbe } from "./gateways/port";
-import { finalizeAcceptedRefundAttemptIds } from "./refund-service";
+import { finalizeAcceptedRefundAttemptIds, isInternalRefundProviderStatus } from "./refund-service";
 import type { RefundNotificationFact } from "./refund-service";
 
 const REFUND_RECONCILIATION_LEASE_SECONDS = 5 * 60;
@@ -52,7 +52,7 @@ type RefundAttemptProbeRow = Pick<
   | "providerRefundId"
   | "providerIdempotencyKey"
   | "refundReference"
->;
+> & { providerStatus?: string | null };
 
 interface RefundProviderReconciliationContext {
   currency: OrderCurrencySnapshot;
@@ -349,6 +349,11 @@ async function probeProviderRefund(
   context: RefundProviderReconciliationContext,
   encryptionKey?: string,
 ): Promise<ProviderProbeOutcome> {
+  // A gift-card credit or store-credit card committed with the refund claim:
+  // the money already moved, so recovery only finalizes the order.
+  if (isInternalRefundProviderStatus(attempt.providerStatus)) {
+    return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: attempt.providerStatus! };
+  }
   if (attempt.gateway === COD_PAYMENT_METHOD) {
     return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" };
   }
@@ -796,6 +801,7 @@ export async function reconcileRefundAttemptById(
       providerRefundId: refundAttempts.providerRefundId,
       providerIdempotencyKey: refundAttempts.providerIdempotencyKey,
       refundReference: refundAttempts.refundReference,
+      providerStatus: refundAttempts.providerStatus,
     })
     .from(refundAttempts)
     .where(eq(refundAttempts.id, attemptId))
@@ -820,7 +826,9 @@ export async function reconcileRefundAttemptById(
     ? {
         outcome: "accepted",
         providerRefundId: attempt.providerRefundId,
-        providerStatus: attempt.gateway === COD_PAYMENT_METHOD ? "manual_confirmed" : "accepted",
+        providerStatus: isInternalRefundProviderStatus(attempt.providerStatus)
+          ? attempt.providerStatus!
+          : attempt.gateway === COD_PAYMENT_METHOD ? "manual_confirmed" : "accepted",
       } satisfies ProviderProbeOutcome
     : await probeProviderRefund(db, attempt, context, options.encryptionKey);
 

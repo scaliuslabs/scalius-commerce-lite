@@ -35,6 +35,7 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
     reason:
       "Browser analytics ingestion forwards browser-derived events and user data to Meta CAPI; agents must not fabricate browser telemetry.",
   },
+  "storefront.navigation.categories_get": {},
   "storefront.navigation.get": {},
   "storefront.navigation.items_list": {},
   "storefront.navigation.menu_get": {},

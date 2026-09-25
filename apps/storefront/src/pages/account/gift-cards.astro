@@ -1,0 +1,198 @@
+---
+// Account "Gift cards": the cards saved to the signed-in buyer, with balance,
+// expiry, status and history (order numbers). "Show code" and "Save a card"
+// are plain POST forms handled here, so the page works without JavaScript; a
+// saved code is never echoed and a revealed code is rendered in this no-store
+// response only (never a URL, never storage). Session: the cs_tok cookie.
+import Layout from "@/layouts/Layout.astro";
+import AccountShell from "@/components/account/AccountShell.astro";
+import { getLayoutData } from "@/lib/api";
+import {
+  listAccountGiftCards,
+  revealAccountGiftCardCode,
+  saveAccountGiftCard,
+  type AccountGiftCard,
+  type GiftCardApiResult,
+} from "@/lib/api/gift-cards";
+import {
+  GIFT_CARD_PAGE_COPY as copy,
+  accountGiftCardStatus,
+  giftCardExpiryText,
+  giftCardMoney,
+  giftCardPageStatus,
+  giftCardRevealFailureText,
+  giftCardSaveFailureText,
+  giftCardStatusText,
+  giftCardStatusTone,
+  giftCardTitle,
+  giftCardTransactionAmount,
+  giftCardTransactionText,
+  maskedGiftCard,
+  readGiftCardFormFields,
+} from "@/lib/account-gift-cards";
+import { formatAccountDate } from "@/lib/account-format";
+import { CONVERSATION_COPY } from "@/lib/account-inbox";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
+import { readAccountSummaryForRequest } from "@/lib/account-server";
+import { accountUi as ui } from "@/lib/account-ui";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+
+Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
+const isPost = Astro.request.method === "POST";
+if (isPost && shouldRejectCrossOriginCookieRequest(Astro.request)) {
+  return new Response(null, { status: 403, headers: { "Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL } });
+}
+
+let saveMessage: { tone: "error" | "status"; text: string } | null = null;
+let revealed: { giftCardId: string; code: string } | null = null;
+let revealError: { giftCardId: string; text: string } | null = null;
+let actionResult: GiftCardApiResult<unknown> | null = null;
+
+if (isPost) {
+  const fields = await readGiftCardFormFields(Astro.request);
+  if (fields.intent === "reveal" && fields.giftCardId) {
+    const result = await revealAccountGiftCardCode(fields.giftCardId, Astro.request);
+    actionResult = result;
+    if (result.ok) revealed = { giftCardId: fields.giftCardId, code: result.data };
+    else revealError = { giftCardId: fields.giftCardId, text: giftCardRevealFailureText(result.reason) };
+  } else if (fields.intent === "save") {
+    const result = await saveAccountGiftCard(fields.code ?? null, Astro.request);
+    actionResult = result;
+    saveMessage = result.ok
+      ? { tone: "status", text: copy.saved.replace("{card}", maskedGiftCard(result.data.last4)) }
+      : { tone: "error", text: giftCardSaveFailureText(result.reason) };
+  }
+}
+
+// Read after the action, so a card just saved is listed.
+const [layoutData, cards, summary] = await Promise.all([
+  getLayoutData(),
+  listAccountGiftCards(Astro.request),
+  readAccountSummaryForRequest(Astro.request),
+]);
+const signedOut = !cards.ok && cards.reason === "signed_out";
+if (!cards.ok && !signedOut) Astro.response.status = 503;
+else if (actionResult && !actionResult.ok) Astro.response.status = giftCardPageStatus(actionResult);
+const list: AccountGiftCard[] = cards.ok ? cards.data : [];
+const shellState = cards.ok ? "ok" : signedOut ? "signed_out" : "unavailable";
+
+const field =
+  "min-h-11 w-full min-w-0 flex-1 rounded-lg border border-input bg-background px-3 font-mono text-base uppercase tracking-wide text-foreground outline-none transition-colors placeholder:normal-case placeholder:tracking-normal placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 aria-[invalid=true]:border-destructive";
+const secondaryButton = `${ui.secondaryButton} shrink-0`;
+---
+
+<Layout title={copy.accountTitle} layoutData={layoutData}>
+  <meta slot="head" name="robots" content="noindex,nofollow" />
+  <AccountShell
+    current="gift-cards"
+    summary={summary}
+    state={shellState}
+    title={copy.accountTitle}
+    signedOut={{ title: copy.signInTitle, body: copy.signInBody, action: CONVERSATION_COPY.signIn }}
+    unavailable={{ text: CONVERSATION_COPY.unavailable, retryHref: "/account/gift-cards", retryText: CONVERSATION_COPY.retry }}
+  >
+    {cards.ok && (
+      <div class="space-y-6">
+
+        {list.length === 0 ? (
+          <div class={`${ui.empty} py-8`}>
+            <p class={ui.emptyBody}>{copy.accountEmpty}</p>
+          </div>
+        ) : (
+          <ul class="space-y-4" aria-label={copy.accountTitle}>
+            {list.map((card) => {
+              const status = accountGiftCardStatus(card);
+              const code = revealed?.giftCardId === card.id ? revealed.code : null;
+              const cardRevealError = revealError?.giftCardId === card.id ? revealError.text : null;
+              const headingId = `gift-card-${card.id}`;
+              return (
+                <li class={`${ui.card} ${ui.cardBody}`}>
+                  <article aria-labelledby={headingId}>
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div class="min-w-0">
+                        <h2 id={headingId} class="font-mono text-base font-semibold tracking-wide text-foreground">{giftCardTitle(card.last4)}</h2>
+                        <p class="mt-1 text-sm text-muted-foreground">{copy.valueLabel} {giftCardMoney(card.initialAmount, card.currencyCode)} · {copy.expiresLabel}: {giftCardExpiryText(card.expiresAt)}</p>
+                      </div>
+                      <div class="text-right">
+                        <p class="text-lg font-semibold tabular-nums text-foreground">{giftCardMoney(card.balance, card.currencyCode)}</p>
+                        <span class:list={["mt-1 inline-block rounded-md px-2 py-0.5 text-sm font-medium", giftCardStatusTone(status)]}>{giftCardStatusText(status)}</span>
+                      </div>
+                    </div>
+
+                    {code ? (
+                      <div class="mt-4 rounded-lg border border-border bg-muted/40 p-3" role="status">
+                        <p class="text-sm text-muted-foreground">{copy.codeTitle.replace("{card}", maskedGiftCard(card.last4))}</p>
+                        <p class="mt-1 select-all break-all font-mono text-lg font-semibold tracking-wider text-foreground">{code}</p>
+                        <p class="mt-2 text-xs text-muted-foreground">{copy.codeHint}</p>
+                      </div>
+                    ) : (
+                      <form method="post" action="/account/gift-cards" class="mt-4">
+                        <input type="hidden" name="intent" value="reveal" />
+                        <input type="hidden" name="giftCardId" value={card.id} />
+                        <button type="submit" class={secondaryButton} aria-describedby={cardRevealError ? `${headingId}-reveal-error` : undefined}>{copy.showCode}</button>
+                        {cardRevealError && (
+                          <p id={`${headingId}-reveal-error`} class="mt-2 text-sm text-destructive" role="alert">{cardRevealError}</p>
+                        )}
+                      </form>
+                    )}
+
+                    {card.transactions.length > 0 && (
+                      <details class="group mt-4 border-t border-border pt-3">
+                        <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-medium text-foreground">
+                          {copy.history}
+                          <svg aria-hidden="true" class="h-4 w-4 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </summary>
+                        <ul class="divide-y divide-border text-sm">
+                          {card.transactions.map((transaction) => (
+                            <li class="flex items-start justify-between gap-3 py-2">
+                              <div class="min-w-0">
+                                <p class="text-foreground">
+                                  {transaction.orderId ? (
+                                    <a href={`/account/orders/${encodeURIComponent(transaction.orderId)}`} data-astro-prefetch="false" class="hover:underline">{giftCardTransactionText(transaction)}</a>
+                                  ) : giftCardTransactionText(transaction)}
+                                </p>
+                                <p class="text-muted-foreground">{formatAccountDate(transaction.createdAt, { time: false })}</p>
+                              </div>
+                              <p class:list={["shrink-0 tabular-nums", transaction.amount < 0 ? "text-foreground" : "text-primary"]}>{giftCardTransactionAmount(transaction.amount, card.currencyCode)}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </article>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <section class={`${ui.card} ${ui.cardBody}`} aria-labelledby="giftCardSaveHeading">
+          <h2 id="giftCardSaveHeading" class="text-base font-semibold text-foreground">{copy.saveTitle}</h2>
+          <p class="mt-1 text-sm text-muted-foreground">{copy.saveIntro}</p>
+          <form method="post" action="/account/gift-cards" class="mt-4 flex flex-col gap-2 sm:flex-row">
+            <input type="hidden" name="intent" value="save" />
+            <label for="giftCardSaveCode" class="sr-only">{copy.codeLabel}</label>
+            <input
+              id="giftCardSaveCode"
+              name="code"
+              type="text"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              required
+              maxlength="32"
+              placeholder="XXXX-XXXX-XXXX-XXXX"
+              class={field}
+              aria-invalid={saveMessage?.tone === "error" ? "true" : undefined}
+              aria-describedby={saveMessage ? "giftCardSaveMessage" : undefined}
+            />
+            <button type="submit" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">{copy.save}</button>
+          </form>
+          {saveMessage && (
+            <p id="giftCardSaveMessage" role={saveMessage.tone === "error" ? "alert" : "status"} class:list={["mt-2 text-sm", saveMessage.tone === "error" ? "text-destructive" : "text-primary"]}>{saveMessage.text}</p>
+          )}
+        </section>
+      </div>
+    )}
+  </AccountShell>
+</Layout>

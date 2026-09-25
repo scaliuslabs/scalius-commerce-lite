@@ -39,7 +39,6 @@ import type { CheckoutConfig, PaymentContext } from "../types";
 const partialConfig: CheckoutConfig = {
   gateways: [],
   guestCheckoutEnabled: true,
-  authVerificationMethod: "email",
   checkoutMode: "all",
   partialPaymentEnabled: true,
   partialPaymentAmount: 50,

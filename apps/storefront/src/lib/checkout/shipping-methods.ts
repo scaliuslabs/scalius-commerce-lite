@@ -104,6 +104,9 @@ export async function fetchDeliveryRates(
   }
 }
 
+/** One delivery option's height; its loading and empty stand-ins match it. */
+const OPTION_HEIGHT = "min-h-[4.25rem]";
+
 const addressKey = (address: DeliveryAddress) =>
   `${address.cityId}|${address.zoneId}|${address.areaId}`;
 
@@ -180,6 +183,9 @@ export function enhanceShippingMethods(
   let address: DeliveryAddress = { cityId: "", zoneId: "", areaId: "" };
   let sequence = 0;
   const rejected = new Set<string>();
+  // What the totals were last told: the same rate for the same address is
+  // not announced twice (each announcement re-quotes the order).
+  let announced: string | undefined;
 
   const emit = () => {
     const rate = rates.find((candidate) => candidate.id === selectedId) ?? null;
@@ -196,6 +202,9 @@ export function enhanceShippingMethods(
         }
       : null;
     window.lastShippingEventDetail = detail ?? undefined;
+    const key = detail ? `${JSON.stringify(detail)}|${addressKey(address)}` : "none";
+    if (key === announced) return;
+    announced = key;
     window.dispatchEvent(new CustomEvent("shippingLocationChange", { detail }));
   };
 
@@ -207,6 +216,7 @@ export function enhanceShippingMethods(
 
   const setNote = (text: string, retry = false) => {
     note.textContent = text;
+    note.classList.remove("sr-only");
     note.classList.toggle("hidden", !text);
     if (retry) {
       const button = document.createElement("button");
@@ -252,11 +262,33 @@ export function enhanceShippingMethods(
     }
   };
 
+  // Loading and "choose an address" take a delivery option's place at its
+  // size, so the options arrive without moving the page.
+  const placeholder = (text: string) => {
+    const box = document.createElement("p");
+    box.className = `${OPTION_HEIGHT} flex items-center rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground`;
+    box.textContent = text;
+    return box;
+  };
+  const showSkeleton = () => {
+    const count = Math.max(1, list.children.length);
+    list.setAttribute("aria-busy", "true");
+    list.replaceChildren(...Array.from({ length: count }, () => {
+      const bone = document.createElement("div");
+      bone.setAttribute("aria-hidden", "true");
+      bone.className = `theme-skeleton ${OPTION_HEIGHT} rounded-lg`;
+      return bone;
+    }));
+    setNote(copy.loadingText);
+    note.classList.add("sr-only");
+  };
+
   const render = () => {
+    list.removeAttribute("aria-busy");
     list.replaceChildren(...rates.map((rate) => {
       const option = document.createElement("label");
       option.dataset.rateId = rate.id;
-      option.className = "flex min-h-11 cursor-pointer gap-3 rounded-lg border border-border bg-background p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring";
+      option.className = `${OPTION_HEIGHT} flex cursor-pointer gap-3 rounded-lg border border-border bg-background p-3 transition-colors hover:bg-muted/50 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring`;
       const input = document.createElement("input");
       input.type = "radio";
       input.name = "shippingLocation";
@@ -268,7 +300,7 @@ export function enhanceShippingMethods(
       const head = document.createElement("span");
       head.className = "flex items-start justify-between gap-2";
       const name = document.createElement("span");
-      name.className = "text-sm font-medium leading-snug text-foreground";
+      name.className = "min-w-0 truncate text-sm font-medium leading-snug text-foreground";
       name.textContent = rate.name;
       const fee = document.createElement("span");
       fee.className = "whitespace-nowrap text-sm font-semibold text-foreground";
@@ -282,7 +314,8 @@ export function enhanceShippingMethods(
         element.textContent = text;
         body.append(element);
       };
-      line(rate.description);
+      // One line, so every option is the height its loading stand-in holds.
+      line(rate.description, "truncate text-muted-foreground");
       if (rate.kind === "pickup" && rate.pickupAddress) {
         line(formatCheckoutLanguageText(copy.pickupFromText, { address: rate.pickupAddress }), "text-foreground");
       }
@@ -379,22 +412,19 @@ export function enhanceShippingMethods(
       // A single pickup location is simply chosen.
       selectedId = keptId ?? (mode === "pickup" && rates.length === 1 ? rates[0]!.id : null);
       render();
-      setNote(mode === "pickup" ? "" : copy.chooseAddressText);
+      setNote("");
+      if (mode !== "pickup") list.append(placeholder(copy.chooseAddressText));
       emit();
       return;
     }
     if (!force && list.dataset.addressKey === addressKey(address)) return;
     list.dataset.addressKey = addressKey(address);
-    // Nothing is quoted against the previous address's rate while the new ones load.
-    const keep = selectedId;
-    selectedId = null;
-    emit();
-    selectedId = keep;
-    list.setAttribute("aria-busy", "true");
-    setNote(copy.loadingText);
+    // Nothing is quoted against the previous address's rate while the new
+    // ones load; the totals hear once, when they arrive.
+    window.lastShippingEventDetail = undefined;
+    showSkeleton();
     const loaded = await options.loadRates(address);
     if (current !== sequence) return;
-    list.removeAttribute("aria-busy");
     if (!loaded) {
       rates = addressFreeRates();
       delete list.dataset.addressKey;

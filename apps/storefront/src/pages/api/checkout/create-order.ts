@@ -34,9 +34,13 @@ type InitialPaymentSessionResult =
   | { session: Record<string, unknown>; error?: never }
   | { session?: never; error: string };
 
-/** Every payment method except cash on delivery is an online gateway id. */
+/**
+ * Every payment method except cash on delivery and a gift-card-paid order
+ * (nothing left to collect) is an online gateway id.
+ */
 function isOnlinePaymentMethod(value: unknown): value is string {
-  return typeof value === "string" && value !== "cod" && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
+  return typeof value === "string" && value !== "cod" && value !== "gift_card" &&
+    /^[a-z][a-z0-9_-]{0,63}$/.test(value);
 }
 
 async function createInitialPaymentSession(

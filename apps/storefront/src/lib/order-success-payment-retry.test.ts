@@ -188,4 +188,21 @@ describe("order success payment retry", () => {
     expect(normalizeRetryDepositAmount("0")).toBeNull();
     expect(normalizeRetryDepositAmount("not-a-number")).toBeNull();
   });
+
+  it("never treats a gift-card-paid order as a hosted gateway to retry", () => {
+    expect(isRetryableHostedPaymentMethod("gift_card")).toBe(false);
+    expect(getOrderSuccessRetryEndpoint("gift_card")).toBeNull();
+    // Even a (hypothetical) unpaid gift_card order with money due offers no gateway.
+    const order = makeRetryOrder({ paymentMethod: "gift_card", paymentStatus: "unpaid", paidAmount: 0, balanceDue: 500 });
+    expect(canRetryOrderSuccessPayment(order, "payment_issue", "failed")).toBe(false);
+    expect(getOrderSuccessRetryOptions(order, "payment_issue", "failed", [{ id: "gift_card" }, { id: "sslcommerz" }])).toEqual([]);
+    // A card + gateway order keeps its gateway retry for the amount due.
+    expect(isRetryableHostedPaymentMethod("sslcommerz")).toBe(true);
+    expect(getOrderSuccessRetryOptions(
+      makeRetryOrder({ paymentMethod: "sslcommerz", status: "incomplete", paymentStatus: "partial", paidAmount: 400, balanceDue: 800 }),
+      "payment_issue",
+      null,
+      [{ id: "gift_card" }, { id: "sslcommerz" }],
+    ).map(({ gateway }) => gateway)).toEqual(["sslcommerz"]);
+  });
 });

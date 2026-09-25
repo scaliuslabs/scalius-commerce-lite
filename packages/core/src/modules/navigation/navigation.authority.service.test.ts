@@ -405,4 +405,57 @@ describe("navigation authority D1 commands", () => {
     });
     await expect(getPublishedNavigationPlacements(db)).resolves.toEqual([]);
   });
+
+  it("never blanks a placed menu: publishing past the placement budget is refused, an older over-budget publication renders its first items", async () => {
+    const db = createDatabase();
+    const menu = await createNavigationMenu(db, { name: "Departments" });
+    const first = await createNavigationMenuItem(db, menu.id, {
+      expectedRevision: 1,
+      label: "Top 0",
+      labelMode: "custom",
+      target: { type: "internal_path", path: "/t0" },
+    });
+    await publishNavigationMenu(db, menu.id, { expectedRevision: first.revision });
+    await saveNavigationPlacement(db, {
+      id: "placement_header",
+      expectedRevision: 0,
+      surface: "header",
+      slot: "primary",
+      position: 0,
+      menuId: menu.id,
+    });
+
+    // 25 top items with 7 children each: 200 items.
+    const rows: Array<[string, string | null, number, string, string]> = [];
+    for (let top = 0; top < 25; top += 1) {
+      rows.push([`nmi_t${top}`, null, top, `Top ${top}`, `/t${top}`]);
+      for (let child = 0; child < 7; child += 1) rows.push([`nmi_t${top}_c${child}`, `nmi_t${top}`, child, `Child ${top}.${child}`, `/t${top}/c${child}`]);
+    }
+    sqlite!.exec("DELETE FROM navigation_menu_items");
+    const insertItem = sqlite!.prepare(
+      "INSERT INTO navigation_menu_items (id, menu_id, parent_id, position, label, label_mode, target_type, target_value) VALUES (?, ?, ?, ?, ?, 'custom', 'internal_path', ?)",
+    );
+    for (const [id, parent, position, label, path] of rows) insertItem.run(id, menu.id, parent, position, label, path);
+    const { revision } = sqlite!.prepare("SELECT revision FROM navigation_menus WHERE id = ?").get(menu.id) as { revision: number };
+    await expect(publishNavigationMenu(db, menu.id, { expectedRevision: revision }))
+      .rejects.toThrow("renders at most 150 items; it contains 200");
+
+    // A publication written before the guard (or by an older release).
+    const legacy = revision + 1;
+    sqlite!.prepare("INSERT INTO navigation_menu_publications (menu_id, revision, item_count, checksum) VALUES (?, ?, ?, 'legacy')").run(menu.id, legacy, rows.length);
+    const insertPublished = sqlite!.prepare(
+      "INSERT INTO navigation_menu_publication_items (menu_id, revision, item_id, parent_id, position, label, label_mode, target_type, target_value, open_in_new_tab, is_enabled) VALUES (?, ?, ?, ?, ?, ?, 'custom', 'internal_path', ?, 0, 1)",
+    );
+    for (const [id, parent, position, label, path] of rows) insertPublished.run(menu.id, legacy, id, parent, position, label, path);
+    sqlite!.prepare("UPDATE navigation_menus SET revision = ?, published_revision = ? WHERE id = ?").run(legacy, legacy, menu.id);
+
+    const [header] = await getPublishedNavigationPlacements(db);
+    const items = header!.items as Array<{ title: string; subMenu?: Array<{ title: string }> }>;
+    const count = (list: typeof items): number => list.reduce((sum, item) => sum + 1 + count((item.subMenu ?? []) as typeof items), 0);
+    expect(count(items)).toBe(150);
+    // Every top item stays, in menu order, and each keeps its first children.
+    expect(items.map((item) => item.title)).toEqual(Array.from({ length: 25 }, (_, top) => `Top ${top}`));
+    expect(items.every((item) => item.subMenu?.length === 5)).toBe(true);
+    expect(items[3]!.subMenu!.map((child) => child.title)).toEqual(["Child 3.0", "Child 3.1", "Child 3.2", "Child 3.3", "Child 3.4"]);
+  });
 });

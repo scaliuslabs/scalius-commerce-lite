@@ -307,7 +307,7 @@ function facetRefreshStatements(db: Database, scope: ProductScope): SQLiteBatchI
  * The per-write facet refresh: deletes only the stored rows that no live row
  * equals, then inserts the live rows that are missing. Rows that did not
  * change are neither deleted nor rewritten, so a product save whose facets
- * are unchanged fires no cache dependency trigger on them (migration 0093).
+ * are unchanged fires no cache dependency trigger on them (migration 0100).
  * `EXCEPT` compares every column with NULLs equal, on SQLite and PostgreSQL.
  */
 function facetDiffRefreshStatements(db: Database, scope: ProductScope): SQLiteBatchItem[] {
@@ -430,7 +430,7 @@ export async function rebuildCatalogProjections(
         const ids = rows.map((row) => row.id);
         // Coarse: inside this batch every cache dependency trigger advances
         // `store` once per fire instead of each product's keys (migration
-        // 0093); a rebuild that finds no drift writes no key at all. The flag
+        // 0100); a rebuild that finds no drift writes no key at all. The flag
         // is set and cleared in the same transaction, so no other write sees it.
         await safeBatch(db, [
             db.update(cacheClock).set({ coarse: 1 }).where(eq(cacheClock.id, 1)),

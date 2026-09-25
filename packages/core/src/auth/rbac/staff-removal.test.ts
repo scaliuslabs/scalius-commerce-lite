@@ -33,6 +33,9 @@ beforeEach(async () => {
     -- History the staff member left behind: an invite they sent.
     INSERT INTO admin_invitations (id, user_id, invited_by_user_id, name, email, status)
       VALUES ('inv_other', 'manager', 'staff', 'Mina Manager', 'mina@shop.test', 'accepted');
+    INSERT INTO settings (id, key, value, type, category, revision)
+      VALUES ('set_staff_keys', 'document', '{"shortcuts":{}}', 'json', 'staff-shortcuts:staff', 1),
+             ('set_manager_keys', 'document', '{"shortcuts":{}}', 'json', 'staff-shortcuts:manager', 1);
   `);
 });
 
@@ -46,6 +49,8 @@ describe("remove staff", () => {
       expect(count(`SELECT COUNT(*) AS n FROM ${table} WHERE user_id = ?`, "staff")).toBe(0);
     }
     expect(count("SELECT COUNT(*) AS n FROM verification WHERE value = ?", "staff")).toBe(0);
+    expect(count("SELECT COUNT(*) AS n FROM settings WHERE category = ?", "staff-shortcuts:staff")).toBe(0);
+    expect(count("SELECT COUNT(*) AS n FROM settings WHERE category = ?", "staff-shortcuts:manager")).toBe(1);
     expect(await getFreshUserPermissionsFromD1(database.db, "staff")).toEqual(new Set());
 
     const person = database.sqlite.prepare("SELECT name, email, banned, role FROM user WHERE id = 'staff'").get();

@@ -44,9 +44,13 @@ import { PricingCard } from "./product-form/PricingCard";
 import { AttributesSection } from "./product-form/AttributesSection";
 import { ProductSearchListing } from "./product-form/ProductSearchListing";
 import { FulfilmentCard } from "./product-form/FulfilmentCard";
+import { DigitalDeliveryCard } from "./product-form/DigitalDeliveryCard";
+import { GiftCardProductCard } from "./product-form/GiftCardProductCard";
 import { BuyerInputsCard } from "./product-form/BuyerInputsCard";
 import { StatusCard } from "./product-form/StatusCard";
+import { ProductKindRulesContext, productKindRules } from "./product-form/product-kind-rules";
 import { OrganizationCard } from "./product-form/OrganizationCard";
+import { WarrantyCard } from "./product-form/WarrantyCard";
 import { useProductSubmit } from "./product-form/hooks/useProductSubmit";
 import { productFieldLabel } from "./product-form/utils";
 import { autoHandleFor } from "./search-listing/SearchListingCard";
@@ -199,6 +203,8 @@ function ProductEditor({
       attributes: [],
       additionalInfo: [],
       fulfillmentKind: "physical",
+      isGiftCard: false,
+      warrantyPolicyId: null,
       customizationSchema: [],
       ...defaultValues,
     },
@@ -364,6 +370,7 @@ function ProductEditor({
           className="flex flex-col gap-4 pb-6"
         >
           <SaveErrorBanner />
+          <ProductKindRulesProvider form={form}>
           <fieldset disabled={readOnly} className="grid min-w-0 gap-4 lg:grid-cols-3">
             <div className="min-w-0 space-y-4 lg:col-span-2">
               <TitleDescriptionSection form={form} readOnly={readOnly} />
@@ -390,6 +397,8 @@ function ProductEditor({
                 </CardContent>
               </Card>
               <FulfilmentCard form={form} hasOptions={variantPrices !== null} />
+              <GiftCardProductCard form={form} productId={productId} readOnly={readOnly} />
+              <DigitalDeliveryCard form={form} productId={productId} readOnly={readOnly} />
               <BuyerInputsCard
                 form={form}
                 readOnly={readOnly}
@@ -408,8 +417,10 @@ function ProductEditor({
                 <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} />
               </div>
               <OrganizationCard form={form} categories={categories} />
+              <WarrantyCard form={form} readOnly={readOnly} />
             </div>
           </fieldset>
+          </ProductKindRulesProvider>
           {readOnly ? null : (
             // Shopify repeats Save at the end of the page, under a divider.
             <div className="flex justify-end border-t pt-4">
@@ -472,6 +483,20 @@ function ProductEditor({
       />
     </>
   );
+}
+
+/**
+ * Which editor sections apply to this kind of product (a gift card hides
+ * shipping, discounts and inventory). Only the gift-card switch or the
+ * fulfilment kind re-renders it, and then only the cards that read the rules.
+ */
+function ProductKindRulesProvider({ form, children }: {
+  form: UseFormReturn<ProductFormValues>;
+  children: React.ReactNode;
+}) {
+  const [isGiftCard, fulfillmentKind] = useWatch({ control: form.control, name: ["isGiftCard", "fulfillmentKind"] });
+  const rules = React.useMemo(() => productKindRules({ isGiftCard, fulfillmentKind }), [isGiftCard, fulfillmentKind]);
+  return <ProductKindRulesContext.Provider value={rules}>{children}</ProductKindRulesContext.Provider>;
 }
 
 // The editor's root must not re-render while the merchant types: these two

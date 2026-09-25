@@ -9,8 +9,10 @@ import type {
   StorefrontHeaderRenderer,
   StorefrontMobileNavigationRenderer,
   StorefrontNavigationRenderer,
+  StorefrontHeadingCase,
   StorefrontSectionType,
   StorefrontThemeTokens,
+  StorefrontTypeScale,
 } from "@scalius/shared/storefront-theme";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
@@ -35,7 +37,8 @@ export function VisualChoice<Value extends string>({
   showLabel?: boolean;
   /** Null when no option matches (a fine-tuned Style). */
   value: Value | null;
-  options: ReadonlyArray<{ value: Value; label: string; help?: string; sketch: ReactNode }>;
+  /** `badge` sits beside the name (a template's default, say). */
+  options: ReadonlyArray<{ value: Value; label: string; help?: string; badge?: ReactNode; sketch: ReactNode }>;
   onChange: (value: Value) => void;
   /** Grid columns. */
   className?: string;
@@ -58,7 +61,12 @@ export function VisualChoice<Value extends string>({
           >
             {option.sketch}
             <span className="flex items-start justify-between gap-1 px-1 pt-1.5 text-body font-medium">
-              {option.label}
+              {option.badge ? (
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {option.label}
+                  {option.badge}
+                </span>
+              ) : option.label}
               <span className="hidden h-lh items-center group-data-[state=checked]:flex">
                 <Check className="size-4 shrink-0" aria-hidden="true" />
               </span>
@@ -484,12 +492,12 @@ export function ProductTile({
       >
         {/* The second photo that shows on hover. */}
         {spec.hoverImage ? <span className="ml-auto w-1/3 bg-(--sk-edge)" /> : null}
-        {badge && spec.badge === "image" ? <span className="absolute top-0.5 left-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
+        {badge && spec.badge !== "price" ? <span className="absolute top-0.5 left-0.5 h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
       </span>
       <Line className="w-full" />
       <span className="flex items-center gap-0.5">
         <span className="h-1 w-2.5 rounded-xs bg-(--sk-ink)" />
-        {badge && spec.badge === "price" ? <span className="h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
+        {badge && spec.badge !== "image" ? <span className="h-1 w-2 rounded-xs bg-(--sk-accent)" /> : null}
       </span>
       {spec.quickBuy ? <span className={cn("h-1.5 w-full bg-(--sk-accent)", CORNERS[radius])} /> : null}
     </span>
@@ -567,6 +575,39 @@ export function ProductPageSketch({ layout }: { layout: StorefrontGalleryRendere
     <Sketch className="flex-row gap-1.5">
       <span className="w-1/2 shrink-0">{photo}</span>
       <Details />
+    </Sketch>
+  );
+}
+
+/**
+ * Section titles against body text: small (flat), today's size (retail) and
+ * large display titles, as a bar over two lines of text.
+ */
+const TYPE_SCALE_TITLE: Record<StorefrontTypeScale, string> = {
+  flat: "h-1.5 w-8",
+  retail: "h-2.5 w-12",
+  display: "h-4 w-16",
+};
+
+export function TypeScaleSketch({ scale }: { scale: StorefrontTypeScale }) {
+  return (
+    <Sketch className="justify-center gap-1.5">
+      <span className={cn("shrink-0 rounded-xs bg-(--sk-ink)", TYPE_SCALE_TITLE[scale])} />
+      <Line className="w-full" />
+      <Line className="w-2/3" />
+    </Sketch>
+  );
+}
+
+/** A section title as buyers read it: sentence case or all capitals (product names never change). */
+export function HeadingCaseSketch({ headingCase, sample }: { headingCase: StorefrontHeadingCase; sample: string }) {
+  return (
+    <Sketch className="justify-center gap-1.5">
+      <span className="truncate text-body font-medium text-(--sk-ink)">
+        {headingCase === "uppercase" ? sample.toLocaleUpperCase("en") : sample}
+      </span>
+      <Line className="w-full" />
+      <Line className="w-2/3" />
     </Sketch>
   );
 }

@@ -248,6 +248,22 @@ describe("calculateTaxQuote", () => {
         expect(quote.totalMinor).toBe(15_000);
     });
 
+    it("G7: a tax-exempt line (a gift card) takes no rate whatever its class, exclusive or inclusive", () => {
+        const lines = [
+            input().lines[0]!,
+            { lineId: "line-gc", productId: "product-gc", variantId: "variant-gc", unitPriceMinor: 50_000, quantity: 2, taxClassId: "class-standard", taxExempt: true },
+        ];
+        const exclusive = calculateTaxQuote(input({ lines }));
+        expect(exclusive.lines.map((line) => [line.lineId, line.taxClassId, line.taxMinor, line.taxableAmountMinor, line.totalMinor])).toEqual([
+            ["line-1", "class-standard", 1_500, 10_000, 11_500],
+            ["line-gc", null, 0, 0, 100_000],
+        ]);
+        expect(exclusive.totalMinor).toBe(111_500);
+        const inclusive = calculateTaxQuote(input({ lines, settings: { ...input().settings, pricesIncludeTax: true } }));
+        expect(inclusive.lines[1]).toMatchObject({ taxClassId: null, taxMinor: 0, totalMinor: 100_000, components: [] });
+        expect(inclusive.totalMinor).toBe(110_000);
+    });
+
     it("taxes shipping only through the explicitly configured shipping class", () => {
         const quote = calculateTaxQuote(input({
             shippingMinor: 2_000,

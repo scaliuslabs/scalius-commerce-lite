@@ -17,3 +17,4 @@ export * from "./store-policies.service";
 export * from "./emi-settings.service";
 export * from "./store-money";
 export * from "./phone-country-policy";
+export * from "./staff-shortcuts";

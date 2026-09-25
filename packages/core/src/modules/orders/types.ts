@@ -283,6 +283,8 @@ export interface CreateStorefrontOrderInput {
     customerName: string;
     customerPhone: string;
     customerEmail: string | null;
+    /** A separate WhatsApp number, kept only when Customer accounts asks for one. */
+    customerWhatsapp?: string | null;
     /** Required only when a line ships (a `delivery` rate for physical items). */
     shippingAddress?: string | null;
     city?: string | null;
@@ -299,6 +301,44 @@ export interface CreateStorefrontOrderInput {
     shippingMethodId?: string | null;
     paymentMethod: string;
     inventoryPool: string;
+    /**
+     * Gift-card apply handles (≤ 5), in the order the buyer added them
+     * (Wave B §4.3). Absent or empty: no tender, exactly as before.
+     */
+    giftCards?: Array<{ handle: string }>;
+    /** The amount due the buyer reviewed (minor units); required with gift cards. */
+    expectedAmountDueMinor?: number;
+}
+
+/** One buyer-facing reason a gift card is not (fully) used on an order. */
+export interface StorefrontGiftCardIssue {
+    /** The handle it is about; null for an order-level issue. */
+    handle: string | null;
+    code: "GIFT_CARD_UNUSABLE" | "GIFT_CARD_DUPLICATE" | "GIFT_CARD_NOT_NEEDED" | "GIFT_CARD_NOT_ELIGIBLE";
+    message: string;
+}
+
+/** Gift cards as a tender on one priced order (Wave B §4.3). */
+export interface StorefrontGiftCardTenderSummary {
+    /** The handles the buyer sent, in order. */
+    handles: string[];
+    /** What gift cards can never pay: the gift-card lines' totals. */
+    giftCardLineTotalMinor: number;
+    /** Positive applications, in buyer order: exactly the `redeem` debits the commit writes. */
+    applied: Array<{
+        giftCardId: string;
+        handle: string;
+        last4: string;
+        appliedMinor: number;
+        /** The card's balance before this order. */
+        balanceMinor: number;
+    }>;
+    appliedTotalMinor: number;
+    /** `totalMinor − appliedTotalMinor`: what cash on delivery or a gateway collects. */
+    amountDueMinor: number;
+    /** Handles that no longer name a usable card. */
+    unusableHandles: string[];
+    issues: StorefrontGiftCardIssue[];
 }
 
 export interface CreateStorefrontOrderIdentity {
@@ -321,6 +361,8 @@ export interface CreateStorefrontOrderResult {
     requiresShipping: boolean;
     /** `propertiesHash` per line, in cart order, for the quote fingerprint. */
     linePropertiesHashes: string[];
+    /** The gift-card tender; no handles means none (amount due = total). */
+    giftCardTender: StorefrontGiftCardTenderSummary;
 }
 
 /** Immutable buyer-reviewed delivery method facts captured for a storefront order. */
@@ -360,6 +402,7 @@ export interface StorefrontOrderCommitPayload {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
+        customerWhatsapp?: string | null;
         /** Null unless something ships. */
         shippingAddress: string | null;
         city: string | null;
@@ -430,6 +473,12 @@ export interface StorefrontOrderCommitPayload {
     }[];
     /** The applied discount (code or automatic); re-verified during the order commit. */
     promotion?: PromotionCheckoutSnapshot | null;
+    /**
+     * Gift-card debits (the hold), written in the commit batch after the
+     * order; the ledger guards refuse a card that changed since the quote.
+     * Absent when no card applies.
+     */
+    giftCardRedemptions?: Array<{ giftCardId: string; appliedMinor: number }>;
     requestUrl: string;
     taxQuote: TaxQuote;
 }

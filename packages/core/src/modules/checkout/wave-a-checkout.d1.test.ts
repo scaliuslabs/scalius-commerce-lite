@@ -237,7 +237,7 @@ describe("Wave A checkout", () => {
         expect(batches).toHaveLength(1);
         const [batch] = batches;
         const count = (prefix: string) => batch!.filter((statement) => statement.query.startsWith(prefix)).length;
-        // order_items: 18 bound values a row → 5 rows a statement → 20;
+        // order_items: 19 bound values a row → 5 rows a statement → 20;
         // order_item_tax_snapshots: 6 a row → 16 rows a statement → 7;
         // the rest: 3 guards, customer + history, order, COD, one SKU hold
         // (movement + counter), the SKU's product buyer-state refresh, tax
@@ -253,7 +253,7 @@ describe("Wave A checkout", () => {
     });
 
     it("keeps cache dependency writes inside the commit: none for stock within its band, one product for a sell-out", async () => {
-        // Count what the 0093 triggers write, per commit.
+        // Count what the 0100 triggers write, per commit.
         sqlite.exec(`
             CREATE TABLE amp (k TEXT PRIMARY KEY, n INTEGER NOT NULL);
             CREATE TRIGGER amp_dep_ins AFTER INSERT ON cache_dep BEGIN INSERT INTO amp VALUES ('dep', 1) ON CONFLICT (k) DO UPDATE SET n = n + 1; END;

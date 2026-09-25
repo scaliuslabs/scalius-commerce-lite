@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -42,7 +43,7 @@ import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 
 type Language = ApiResult<typeof getApiV1AdminSettingsCheckoutLanguages>["languages"][number];
-type FieldKey = "showEmailField" | "showOrderNotesField" | "showAreaField";
+type FieldKey = "showOrderNotesField" | "showAreaField";
 
 const TEXT_FIELDS = [
   "pageTitle",
@@ -62,6 +63,30 @@ const TEXT_FIELDS = [
   "placeOrderText",
   "processingText",
 ] as const;
+/** Gift cards as a tender (Wave B §4.3): the payment step's field, chips, messages and amount due. */
+export const GIFT_CARD_TEXT_FIELDS = [
+  "giftCardTitleText",
+  "giftCardCodeLabelText",
+  "giftCardEnterCodeText",
+  "giftCardApplyText",
+  "giftCardApplyingText",
+  "giftCardRemoveText",
+  "giftCardAppliedText",
+  "giftCardRemovedText",
+  "giftCardUnusableText",
+  "giftCardDuplicateText",
+  "giftCardNotNeededText",
+  "giftCardLimitText",
+  "giftCardChangedText",
+  "giftCardRateLimitedText",
+  "giftCardUnavailableText",
+  "giftCardLineText",
+  "amountDueText",
+  "paidWithGiftCardText",
+  "paidWithGiftCardDescriptionText",
+  "giftCardPayOnDeliveryText",
+  "giftCardCheckoutStepText",
+] as const;
 /** The agreement line's link placeholders; the storefront links each to its policy page. */
 const TERMS_TOKENS = ["{terms}", "{privacy}"] as const;
 
@@ -77,8 +102,7 @@ export function termsTextKeepsLinks(copy: Record<string, string>): boolean {
   return names.every((name) => name !== "" && text.includes(name));
 }
 
-const FORM_FIELDS: Array<[FieldKey, "askEmail" | "orderNotes" | "area"]> = [
-  ["showEmailField", "askEmail"],
+const FORM_FIELDS: Array<[FieldKey, "orderNotes" | "area"]> = [
   ["showOrderNotesField", "orderNotes"],
   ["showAreaField", "area"],
 ];
@@ -184,7 +208,9 @@ export function CustomerContactCard() {
       {!values.guestCheckoutEnabled && !signInReady ? (
         <p role="alert" className="text-body text-destructive">{t("signInNotReady")}</p>
       ) : null}
-      <p className="text-body text-muted-foreground">{t("phoneAlways")}</p>
+      <p className="text-body text-muted-foreground">
+        <Link to="/admin/settings/customer-accounts" className="underline underline-offset-2">{t("contactFieldsPointer")}</Link>
+      </p>
       <div className="border-t border-border pt-2">
         <FormFields
           key={language?.id ?? "none"}
@@ -299,6 +325,19 @@ function LanguageForm({ language }: { language: Language | null }) {
           </SettingsField>
         ))}
       </div>
+      <section aria-labelledby="language-gift-cards" className="space-y-4 border-t border-border pt-4">
+        <div className="space-y-1">
+          <h3 id="language-gift-cards" className="text-heading-sm">{t("giftCardTextTitle")}</h3>
+          <p className="text-body text-muted-foreground">{t("giftCardTextHelp")}</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {GIFT_CARD_TEXT_FIELDS.map((key) => (
+            <SettingsField key={key} id={`language-${key}`} label={t(key)}>
+              <Input id={`language-${key}`} value={draft.languageData[key] ?? ""} onChange={(event) => setText(key, event.target.value)} />
+            </SettingsField>
+          ))}
+        </div>
+      </section>
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"

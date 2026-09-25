@@ -47,6 +47,7 @@ import {
 const SQLITE = process.env.CATALOG_FACETS_SQLITE;
 const OUT = process.env.CATALOG_FACETS_OUT;
 const VALUE_CAP = 100;
+const BRAND_VALUE_CAP = 500;
 
 type Query = Record<string, string[]>;
 type ProductFacts = {
@@ -62,6 +63,10 @@ const facts = new Map<string, ProductFacts>();
 const attributeMeta = new Map<string, { slug: string; type: string; display: string }>();
 const urlValue = new Map<string, string>();
 const brandSlugs = new Map<string, string>();
+/** Published, live categories (id to slug), every category's parent, and each product's category. */
+const categorySlugs = new Map<string, string>();
+const categoryParents = new Map<string, string | null>();
+const productCategory = new Map<string, string | null>();
 const report: Array<Record<string, unknown>> = [];
 
 const slugify = (value: string) => value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -137,7 +142,13 @@ async function loadFacts(): Promise<Map<string, { isPublic: boolean; categoryId:
   for (const row of all<{ id: string; slug: string }>("SELECT id, slug FROM brands WHERE status = 'published' AND deleted_at IS NULL")) {
     brandSlugs.set(row.id, row.slug);
   }
+  for (const row of all<{ id: string; slug: string; parentId: string | null; live: number }>(`SELECT id, slug, parent_id AS parentId,
+    (status = 'published' AND deleted_at IS NULL) AS live FROM categories`)) {
+    categoryParents.set(row.id, row.parentId);
+    if (row.live) categorySlugs.set(row.id, row.slug);
+  }
   for (const [productId, row] of state) {
+    productCategory.set(productId, row.categoryId);
     facts.set(productId, { attributes: new Map(), skus: [], brandId: row.brandId && brandSlugs.has(row.brandId) ? row.brandId : null });
   }
   for (const row of all<{ id: string; slug: string; type: string; display: string }>(`SELECT id, slug, value_type AS type, facet_display AS display
@@ -235,6 +246,18 @@ function bruteForce(scope: Scope, filters: Filter[]) {
       for (const value of values) bump(axis, value, optionHits.get(axis)?.has(value) ?? false);
     }
     if (!scope.brandId && product.brandId) bump("brand", product.brandId, inAttributes && inOptions);
+    // The category-tree facet: a subtree listing counts each child of the
+    // listing category over its subtree; a flat category none; a brand page
+    // the published category each product sits in.
+    const categoryId = productCategory.get(productId) ?? null;
+    const everySelection = inAttributes && inOptions && inBrand;
+    if (scope.category?.subtree) {
+      let node = categoryId;
+      while (node && categoryParents.get(node) !== scope.category.id) node = categoryParents.get(node) ?? null;
+      if (node && categorySlugs.has(node)) bump("category", node, everySelection);
+    } else if (!scope.category && categoryId && categorySlugs.has(categoryId)) {
+      bump("category", categoryId, everySelection);
+    }
   }
   return { counts, numbers, total };
 }
@@ -244,7 +267,7 @@ function compareFacets(label: string, scope: Scope, filters: Filter[], facets: P
   expect(apiTotal, `${label}: total`).toBe(brute.total);
   let values = 0;
   for (const facet of facets) {
-    const key = facet.kind === "brand" ? "brand" : facet.id;
+    const key = facet.kind === "brand" || facet.kind === "category" ? facet.kind : facet.id;
     const expected = brute.counts.get(key);
     const selected = filters.find((filter) => (filter.kind === "brand" ? "brand" : filter.id) === key);
     if (!expected) {
@@ -261,6 +284,7 @@ function compareFacets(label: string, scope: Scope, filters: Filter[], facets: P
     }
     const toUrl = (value: string) => facet.kind === "brand"
       ? brandSlugs.get(value)!
+      : facet.kind === "category" ? categorySlugs.get(value)!
       : facet.kind === "attribute" ? urlValue.get(`${facet.id}\u0000${value}`)! : value;
     const want = new Map([...expected].map(([value, count]) => [toUrl(value), count]));
     for (const value of facet.values) {
@@ -270,9 +294,10 @@ function compareFacets(label: string, scope: Scope, filters: Filter[], facets: P
     }
     const shown = new Set(facet.values.map((value) => value.value));
     const omitted = [...want].filter(([value]) => !shown.has(value));
-    if (want.size <= VALUE_CAP) expect(omitted, `${label}: ${key} omitted values`).toEqual([]);
+    const cap = facet.kind === "brand" ? BRAND_VALUE_CAP : VALUE_CAP;
+    if (want.size <= cap) expect(omitted, `${label}: ${key} omitted values`).toEqual([]);
     else {
-      expect(facet.values.length, `${label}: ${key} cap`).toBeGreaterThanOrEqual(VALUE_CAP);
+      expect(facet.values.length, `${label}: ${key} cap`).toBeGreaterThanOrEqual(cap);
       const lowestShown = Math.min(...facet.values.filter((value) => !selected?.values.includes(value.value)).map((value) => value.count));
       for (const [, count] of omitted) expect(count, `${label}: ${key} kept the most common values`).toBeLessThanOrEqual(lowestShown);
     }
@@ -280,8 +305,8 @@ function compareFacets(label: string, scope: Scope, filters: Filter[], facets: P
   // Every brute-force facet with a public value is offered (below the attribute cap).
   for (const [key, values] of brute.counts) {
     if (key.startsWith("attr") && facets.filter((facet) => facet.kind === "attribute").length >= 50) continue;
-    if (attributeMeta.get(key) || key.startsWith("option.") || key === "brand") {
-      expect(facets.some((facet) => (facet.kind === "brand" ? "brand" : facet.id) === key) || values.size === 0, `${label}: facet ${key} missing`).toBe(true);
+    if (attributeMeta.get(key) || key.startsWith("option.") || key === "brand" || key === "category") {
+      expect(facets.some((facet) => (facet.kind === "brand" || facet.kind === "category" ? facet.kind : facet.id) === key) || values.size < (key === "category" ? 2 : 1), `${label}: facet ${key} missing`).toBe(true);
     }
   }
   return { facets: facets.length, values, total: brute.total };
@@ -297,7 +322,16 @@ describe.skipIf(!SQLITE)("catalogue-scale facet counts equal brute force", () =>
     const state = await loadFacts();
     const publicIn = (predicate: (row: { categoryId: string | null; brandId: string | null }) => boolean) =>
       [...state].filter(([, row]) => row.isPublic && predicate(row)).map(([id]) => id);
-    const subtree = new Set([laptop, ...children]);
+    // A subtree listing holds the category and every published descendant (closure).
+    const publishedSubtree = (id: string) => new Set(all<{ id: string }>(`SELECT cc.descendant_id AS id FROM category_closure cc
+      JOIN categories c ON c.id = cc.descendant_id AND c.status = 'published' AND c.deleted_at IS NULL
+      WHERE cc.ancestor_id = ?`, id).map((row) => row.id));
+    const subtree = publishedSubtree(laptop);
+    void children;
+    const [bigRoot] = all<{ id: string }>(`SELECT cc.ancestor_id AS id FROM products p JOIN category_closure cc ON cc.descendant_id = p.category_id
+      JOIN categories r ON r.id = cc.ancestor_id AND r.parent_id IS NULL AND r.status = 'published'
+      GROUP BY cc.ancestor_id ORDER BY count(*) DESC LIMIT 1`);
+    const rootSubtree = publishedSubtree(bigRoot!.id);
     const [smallLeaf] = all<{ id: string }>(`SELECT p.category_id AS id FROM products p JOIN categories c ON c.id = p.category_id
       WHERE c.status = 'published' GROUP BY p.category_id HAVING count(*) BETWEEN 20 AND 60 ORDER BY p.category_id LIMIT 1`);
     const [bigBrand] = all<{ id: string }>(`SELECT p.brand_id AS id FROM products p JOIN brands b ON b.id = p.brand_id AND b.status = 'published'
@@ -306,6 +340,7 @@ describe.skipIf(!SQLITE)("catalogue-scale facet counts equal brute force", () =>
     scopes = [
       { name: "largest category", productIds: publicIn((row) => row.categoryId === laptop), category: { id: laptop, subtree: false } },
       { name: "largest category subtree", productIds: publicIn((row) => subtree.has(row.categoryId ?? "")), category: { id: laptop, subtree: true } },
+      { name: "largest root subtree", productIds: publicIn((row) => rootSubtree.has(row.categoryId ?? "")), category: { id: bigRoot!.id, subtree: true } },
       { name: "small leaf", productIds: publicIn((row) => row.categoryId === smallLeaf!.id), category: { id: smallLeaf!.id, subtree: false } },
       { name: "category with an attribute set", productIds: publicIn((row) => row.categoryId === setCategory), category: { id: setCategory, subtree: false, setAttributeIds: setIds } },
       { name: "largest brand", productIds: publicIn((row) => row.brandId === bigBrand!.id), brandId: bigBrand!.id },
@@ -363,7 +398,8 @@ describe.skipIf(!SQLITE)("catalogue-scale facet counts equal brute force", () =>
           if (axes.length) await run(scope, { brand: brands.slice(0, 1), [axes[0]!]: common(scope, axes[0]!, 1) });
         }
       }
-      await run(scope, { [slug(ram)]: ["no-such-value"], [slug(maker)]: ["No Such Maker"] });
+      // The seeded Brand attribute keeps the reserved slug "brand" once brand entities exist: never a facet.
+      await run(scope, { [slug(ram)]: ["no-such-value"], ...(attributeMeta.has(maker) ? { [slug(maker)]: ["No Such Maker"] } : {}) });
     }
     if (OUT) writeFileSync(OUT, JSON.stringify(report, null, 2));
   }, 1_800_000);

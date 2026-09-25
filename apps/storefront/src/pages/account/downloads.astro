@@ -1,0 +1,64 @@
+---
+// Account Downloads: every file and licence key the account's orders
+// delivered, newest first. Server-rendered from the session cookie, so it works
+// without JavaScript: Download and Show key are plain POST forms carrying ids
+// only. A refused download comes back here with `?download=<flag>` and the
+// file's anchor.
+import Layout from "@/layouts/Layout.astro";
+import AccountShell from "@/components/account/AccountShell.astro";
+import { getLayoutData } from "@/lib/api";
+import {
+  DOWNLOAD_COPY as copy,
+  downloadStatusText,
+  readDownloadNotice,
+  renderDownloadLines,
+} from "@/lib/account-downloads";
+import { readAccountDownloads } from "@/lib/account-downloads-server";
+import { readAccountSummaryForRequest } from "@/lib/account-server";
+import { accountUi as ui } from "@/lib/account-ui";
+
+export const prerender = false;
+
+const [layoutData, downloads, summary] = await Promise.all([
+  getLayoutData(),
+  readAccountDownloads(Astro.request),
+  readAccountSummaryForRequest(Astro.request),
+]);
+const notice = readDownloadNotice(Astro.url.search);
+Astro.response.headers.set("Cache-Control", "private, no-store");
+if (!downloads.ok && downloads.reason !== "signed_out") Astro.response.status = 503;
+const lines = downloads.ok ? downloads.data : [];
+const shellState = downloads.ok ? "ok" : downloads.reason === "signed_out" ? "signed_out" : "unavailable";
+const listMarkup = downloads.ok ? renderDownloadLines(lines, { returnTo: "/account/downloads" }) : "";
+---
+
+<Layout title={copy.pageTitle} layoutData={layoutData}>
+  <meta slot="head" name="robots" content="noindex,nofollow" />
+  <AccountShell
+    current="downloads"
+    summary={summary}
+    state={shellState}
+    title={copy.pageTitle}
+    intro={copy.pageIntro}
+    signedOut={{ title: copy.signInTitle, body: copy.signInBody, action: copy.signIn }}
+    unavailable={{ text: copy.unavailable, retryHref: "/account/downloads", retryText: copy.retry }}
+  >
+    {downloads.ok && (
+      <div class="space-y-6">
+
+        {notice && (
+          <p role="status" class={ui.errorNotice}>{downloadStatusText(notice.flag)}</p>
+        )}
+
+        {lines.length > 0 ? (
+          <ul class="space-y-4" aria-label={copy.pageTitle} set:html={listMarkup} />
+        ) : (
+          <div class={ui.empty}>
+            <p class={ui.emptyBody}>{copy.empty}</p>
+            <a href="/account" data-astro-prefetch="false" class={`${ui.secondaryButton} mt-6`}>Go to your orders</a>
+          </div>
+        )}
+      </div>
+    )}
+  </AccountShell>
+</Layout>
