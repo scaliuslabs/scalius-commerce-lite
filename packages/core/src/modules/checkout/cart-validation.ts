@@ -1,4 +1,5 @@
 import type { Database } from "@scalius/database/client";
+import { withGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient";
 import { products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
@@ -572,7 +573,11 @@ export function resolveStorefrontCartValidationFromRows(
             return;
         }
 
-        const schemaRead = parseStoredCustomizationSchema(product.customizationSchema);
+        const storedSchemaRead = parseStoredCustomizationSchema(product.customizationSchema);
+        // A gift card also takes the recipient inputs the product page shows.
+        const schemaRead = storedSchemaRead.ok && isGiftCard
+            ? { ok: true as const, schema: withGiftCardRecipientFields(storedSchemaRead.schema) }
+            : storedSchemaRead;
         if (!schemaRead.ok) {
             // A malformed stored schema is a product error, never "no inputs".
             addIssue(issues, item, index, {
