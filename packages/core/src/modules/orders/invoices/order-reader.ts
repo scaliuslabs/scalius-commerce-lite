@@ -13,6 +13,7 @@ import { fromMinor } from "@scalius/shared/money";
 import type { InvoiceOrderSnapshot } from "./snapshot";
 import { listOrderDiscountLines } from "../../promotions/order-discount-lines";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
+import { parseOrderLineProperties } from "../line-presentation";
 
 /**
  * Invoice-only order projection. This deliberately reads the product and
@@ -103,6 +104,7 @@ export async function readInvoiceOrderSource(
       discountAmountMinor: orderItems.discountAmountMinor,
       taxableAmountMinor: orderItems.taxableAmountMinor,
       taxAmountMinor: orderItems.taxAmountMinor,
+      properties: orderItems.properties,
     })
     .from(orderItems)
     .where(eq(orderItems.orderId, orderId))
@@ -143,8 +145,10 @@ export async function readInvoiceOrderSource(
       amount: fromMinor(row.amountMinor + row.shippingAmountMinor, order.currencyDecimalPlaces),
       shippingAmount: fromMinor(row.shippingAmountMinor, order.currencyDecimalPlaces),
     })),
-    items: items.map((item) => ({
+    items: items.map(({ properties, ...item }) => ({
       ...item,
+      // The frozen buyer inputs, labels as the buyer saw them.
+      properties: parseOrderLineProperties(properties),
       returnedQuantity: returnedByItem.get(item.id) ?? 0,
       price: fromMinor(item.unitPriceMinor, order.currencyDecimalPlaces),
     })),

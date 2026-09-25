@@ -156,10 +156,42 @@ export interface BuyerOrderFulfilmentView {
     tracking: OrderFulfilmentTrackingView | null;
 }
 
+/** Why a fulfilment can't be voided right now; the dashboard words each one. */
+export const FULFILMENT_VOID_BLOCKED_REASONS = [
+    "voided",
+    "courier",
+    "delivered",
+    "order_not_confirmed",
+] as const;
+export type FulfilmentVoidBlockedReason = (typeof FULFILMENT_VOID_BLOCKED_REASONS)[number];
+
 export interface AdminOrderFulfilmentView extends BuyerOrderFulfilmentView {
     status: "active" | "voided";
     actorType: "admin" | "system";
     /** Cash taken in the same action (pickup counter or service), in major units. */
     cashCollected: number | null;
     voidedAt: string | null;
+    /** The void action is allowed now (the same rule the void route enforces). */
+    canVoid: boolean;
+    voidBlockedReason: FulfilmentVoidBlockedReason | null;
+}
+
+/**
+ * The void rule (fulfilment/ledger.ts `voidOrderFulfilment`): an active
+ * own-rider parcel, pickup or service fulfilment of an order still
+ * confirmed. Courier-booked parcels follow the courier's status.
+ */
+export function fulfilmentVoidBlockedReason(input: {
+    status: "active" | "voided";
+    shipmentId: string | null;
+    shipmentProviderType: string | null;
+    shipmentProviderId: string | null;
+    shipmentStatus: string | null;
+    orderStatus: string;
+}): FulfilmentVoidBlockedReason | null {
+    if (input.status === "voided") return "voided";
+    if (input.shipmentId && (input.shipmentProviderType !== "manual" || input.shipmentProviderId)) return "courier";
+    if (input.shipmentStatus === "delivered") return "delivered";
+    if (input.orderStatus !== "confirmed") return "order_not_confirmed";
+    return null;
 }

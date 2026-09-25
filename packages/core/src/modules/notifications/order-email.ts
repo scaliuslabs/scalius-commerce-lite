@@ -73,6 +73,7 @@ async function readOrderFacts(db: Database, orderId: string) {
     quantity: orderItems.quantity,
     unitPriceMinor: orderItems.unitPriceMinor,
     lineSubtotalMinor: orderItems.lineSubtotalMinor,
+    properties: orderItems.properties,
   } }).from(orders)
     .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
     .where(eq(orders.id, orderId))
@@ -104,6 +105,32 @@ async function readOrderFacts(db: Database, orderId: string) {
 }
 
 type OrderFacts = Awaited<ReturnType<typeof readOrderFacts>>;
+
+/**
+ * The line's frozen buyer inputs as "Engraving: Anika (+৳200)", read from the
+ * immutable `order_items.properties` snapshot. Plain text: the email template
+ * escapes it. Emails only; SMS variables never carry buyer inputs.
+ */
+function linePropertiesText(stored: string | null, money: ((minor: number) => string) | null): string[] {
+  if (!stored) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stored);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((entry: unknown) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const { label, value, displayValue, priceMinor } = entry as Record<string, unknown>;
+    const shown = typeof displayValue === "string" ? displayValue : typeof value === "string" ? value : null;
+    if (typeof label !== "string" || shown === null) return [];
+    const surcharge = money && typeof priceMinor === "number" && Number.isSafeInteger(priceMinor) && priceMinor > 0
+      ? ` (+${money(priceMinor)})`
+      : "";
+    return [`${label}: ${shown}${surcharge}`];
+  });
+}
 
 /**
  * The summary's discount and delivery lines: each promotion by name and code,
@@ -251,6 +278,7 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
         quantity: item.quantity,
         unitPrice: money ? money(item.unitPriceMinor) : null,
         subtotal: money ? money(item.lineSubtotalMinor) : null,
+        properties: linePropertiesText(item.properties, money),
       })),
       amounts: money ? {
         subtotal: money(order.subtotalAmountMinor),

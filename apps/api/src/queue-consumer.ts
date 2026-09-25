@@ -79,6 +79,7 @@ import {
 } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { bumpCacheGeneration } from "./utils/cache-generation";
+import { autoFulfilOrder, type OrderAutoFulfilQueueMessage } from "@scalius/core/modules/fulfilment";
 import { logOpsEvent } from "./utils/ops-log";
 import {
   markWebhookEventFailed,
@@ -709,6 +710,15 @@ async function processQueueMessage(
       break;
     }
 
+    // ── Automatic fulfilment (Wave A §2.6) ─────────────────────────────────
+    // Idempotent: the ledger's unique request keys make redeliveries safe.
+
+    case "order.auto_fulfil": {
+      const outcome = await autoFulfilOrder(db, payload.orderId);
+      if (outcome.delivered) await bumpCacheGeneration({ env, executionCtx });
+      break;
+    }
+
     // ── Media renditions ───────────────────────────────────────────────────
     // Delayed after an upload; skips media whose renditions already exist.
     // A render failure is acked: the scheduled backfill retries it.
@@ -739,7 +749,8 @@ export type QueueBody =
   | AuthOtpQueueMessage
   | OrderNotificationQueueMessage
   | NotificationQueueMessage
-  | MediaVariantsQueueMessage;
+  | MediaVariantsQueueMessage
+  | OrderAutoFulfilQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 
 function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {

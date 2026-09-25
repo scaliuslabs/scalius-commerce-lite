@@ -602,3 +602,48 @@ describe("product feed diagnostics", () => {
         });
     });
 });
+
+describe("product feed diagnostics for services and gift cards", () => {
+    function scan(variantStrategy: "products" | "variants") {
+        return buildProductFeedDiagnosticsFromScan({
+            products: [
+                product("service"),
+                product("gift", { isGiftCard: true }),
+                product("mixed"),
+            ],
+            primaryImageUrls: new Map([
+                ["service", "https://cdn.example.test/service.jpg"],
+                ["gift", "https://cdn.example.test/gift.jpg"],
+                ["mixed", "https://cdn.example.test/mixed.jpg"],
+            ]),
+            variants: new Map([
+                ["service", [variant("var_service", "service", { isDefault: true, fulfillmentKind: "service" })]],
+                ["gift", [variant("var_gift", "gift", { isDefault: true, fulfillmentKind: "digital" })]],
+                ["mixed", [
+                    variant("var_shirt", "mixed", { optionCombinationKey: "shirt" }),
+                    variant("var_fitting", "mixed", { optionCombinationKey: "fitting", fulfillmentKind: "service" }),
+                ]],
+            ]),
+            feedsPolicy: { ...baseFeedsPolicy, variantStrategy },
+            scanLimit: 500,
+            truncated: false,
+            sampleLimitPerReason: 5,
+            storefrontBaseUrl: "https://store.example.test",
+        });
+    }
+
+    it("reports service-only products, gift cards and service SKUs as left out on purpose", () => {
+        const report = scan("variants");
+        expect(reasonCount(report, "non_physical_excluded")).toMatchObject({ products: 3, rows: 1 });
+        expect(reasonCount(report, "non_physical_excluded").samples.map((sample) => sample.id))
+            .toEqual(["service", "gift", "mixed"]);
+        expect(reasonCount(report, "no_buyer_sku").products).toBe(0);
+        expect(report.totals).toMatchObject({ emittedVariantRows: 1, emittedProductRows: 0 });
+    });
+
+    it("keeps the physical product row of a mixed product in product mode", () => {
+        const report = scan("products");
+        expect(reasonCount(report, "non_physical_excluded")).toMatchObject({ products: 3, rows: 0 });
+        expect(report.totals).toMatchObject({ emittedProductRows: 1, emittedVariantRows: 0 });
+    });
+});

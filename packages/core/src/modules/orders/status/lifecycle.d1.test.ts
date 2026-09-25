@@ -142,16 +142,19 @@ describe("dashboard order lifecycle on D1 storage", () => {
         expect(one("SELECT count(*) AS n FROM delivery_shipments WHERE order_id = ?", id)).toEqual({ n: 1 });
         expect(one("SELECT status, fulfillment_status FROM orders WHERE id = ?", id))
             .toEqual({ status: "confirmed", fulfillment_status: "partial" });
-        expect(one("SELECT shipped_quantity, fulfillment_status FROM order_items WHERE id = ?", itemId))
-            .toEqual({ shipped_quantity: 2, fulfillment_status: "pending" });
+        // The ledger records what left; the projection is the only counter.
+        expect(one("SELECT fulfilled_quantity FROM order_items WHERE id = ?", itemId))
+            .toEqual({ fulfilled_quantity: 2 });
+        expect(one("SELECT count(*) AS n FROM order_fulfillments WHERE order_id = ? AND kind = 'ship'", id))
+            .toEqual({ n: 1 });
 
         await expect(createFulfillmentShipment(db, id, { items: [{ itemId, quantity: 2 }] }))
-            .rejects.toThrow("Only 1 of that item is left to send.");
+            .rejects.toThrow("Only 1 of that item is left.");
         await createFulfillmentShipment(db, id, {});
         expect(one("SELECT status, fulfillment_status FROM orders WHERE id = ?", id))
             .toEqual({ status: "shipped", fulfillment_status: "complete" });
-        expect(one("SELECT shipped_quantity, fulfillment_status FROM order_items WHERE id = ?", itemId))
-            .toEqual({ shipped_quantity: 3, fulfillment_status: "shipped" });
+        expect(one("SELECT fulfilled_quantity FROM order_items WHERE id = ?", itemId))
+            .toEqual({ fulfilled_quantity: 3 });
     });
 
     it("closes a return to sender at once and restocks only what is received", async () => {
