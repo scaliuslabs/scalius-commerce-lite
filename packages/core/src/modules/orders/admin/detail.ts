@@ -237,6 +237,11 @@ async function getOrderDetailsOnce(
         ...publicOrder,
         ...orderMoneyAmounts(order),
         ...presentOrderListFacts(order),
+        // The address columns are nullable from migration 0083, but no order is
+        // written without one until the address-optional contract (Wave A S3).
+        shippingAddress: order.shippingAddress ?? "",
+        city: order.city ?? "",
+        zone: order.zone ?? "",
         createdAt: new Date(order.createdAt * 1000),
         updatedAt: new Date(order.updatedAt * 1000),
         deletedAt: order.deletedAt ? new Date(order.deletedAt * 1000) : null,

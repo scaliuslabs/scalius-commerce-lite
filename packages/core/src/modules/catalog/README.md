@@ -16,7 +16,7 @@ Public entry: `index.ts`.
 | `sitemap.ts` | `getStorefrontSitemapProducts()` | Product sitemap rows (noIndex and sitemap exclusions filtered before paging) |
 | `recommendations.ts` | `getStorefrontProductRecommendations()` | Ranked recommendations |
 | `storefront-sections.ts` | homepage/section product resolution | Storefront sections |
-| `home-lists.ts` | `planHomeProductLists()` | Homepage section product lists (newest, on sale, popular, a category) planned into the homepage's second D1 batch, each scoped to its own products and paired with the media statement of exactly those rows |
+| `home-lists.ts` | `planHomeProductLists()` | Homepage section product lists (newest, on sale, popular, a category) planned into the homepage's second D1 batch, each scoped to its own products and paired with the media statement of exactly those rows. On sale reads its window from two partial indexes of discounted rows (migration 0087; the queries repeat the index predicates word for word); popular aggregates the 30-day order window once per statement and checks eligibility on its top candidates only. At 30k products: on sale 7k rows (1.8k with ten old sales), popular 71k rows (grows with 30-day orders, not the catalogue) |
 | `cards.ts` | `buildCollectionProductSelect()`, `resolveProductCards()` | Buyer cards for curated lists (homepage collections and section lists) |
 | `feed-diagnostics.ts`, `feed-row-preview.ts` | bounded read-only feed diagnostics and row preview | Dashboard feed tools, same policy as the XML feed |
 | `shared.ts` | -- | Helpers shared by the reads (not exported) |
