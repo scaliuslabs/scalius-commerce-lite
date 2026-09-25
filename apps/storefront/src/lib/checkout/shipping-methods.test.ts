@@ -9,6 +9,7 @@ import {
   type DeliveryRate,
   type ShippingMethodDetail,
 } from "./shipping-methods";
+import type { CheckoutDeliveryMode } from "./delivery-mode";
 
 const rate = (id: string, fee: number, extra: Partial<DeliveryRate> = {}): DeliveryRate => ({
   id,
@@ -39,9 +40,11 @@ function setup(options: {
   subtotal?: () => number;
   waived?: () => boolean;
   loadRates?: (address: DeliveryAddress) => Promise<DeliveryRate[] | null>;
+  modeSwitch?: boolean;
+  readMode?: () => CheckoutDeliveryMode;
 } = {}) {
   document.body.innerHTML = `
-    <div data-shipping-methods data-free-text="Free" data-free-over-text="Free over {amount}"
+    <div data-shipping-methods data-mode-switch="${options.modeSwitch ? "true" : "false"}" data-delivery-legend-text="Choose delivery option" data-pickup-legend-text="Choose a pickup location" data-pickup-hours-text="Open {hours}" data-free-text="Free" data-free-over-text="Free over {amount}"
       data-waived-text="Normally {fee}; waived." data-pickup-from-text="Pick up from {address}"
       data-choose-address-text="Choose your city and zone." data-no-delivery-text="We don't deliver here yet."
       data-failed-text="Couldn't load." data-retry-text="Retry" data-loading-text="Loading…"
@@ -49,7 +52,7 @@ function setup(options: {
       data-replaced-same-fee-text="{old} is gone, so {new} ({fee}) is selected."
       data-gone-text="{old} is gone.">
       <script type="application/json" data-shipping-rates>${JSON.stringify([standard, ctg, pickup])}</script>
-      <fieldset id="shippingMethods"><p data-shipping-note></p><p data-shipping-notice class="hidden"></p><div data-shipping-options></div></fieldset>
+      <fieldset id="shippingMethods"><legend data-shipping-legend>Choose delivery option</legend><p data-shipping-note></p><p data-shipping-notice class="hidden"></p><div data-shipping-options></div></fieldset>
     </div>`;
   const events: Array<ShippingMethodDetail | null> = [];
   window.addEventListener("shippingLocationChange", (event) =>
@@ -62,6 +65,7 @@ function setup(options: {
     readSubtotal: options.subtotal ?? (() => 1000),
     isFeeWaived: options.waived ?? (() => false),
     formatMoney: (amount) => `৳${amount.toLocaleString("en-IN")}`,
+    ...(options.readMode ? { readMode: options.readMode } : {}),
   })!;
   const options_ = () =>
     [...document.querySelectorAll<HTMLElement>("[data-rate-id]")].map((option) => ({
@@ -83,7 +87,7 @@ describe("delivery options follow the address", () => {
     expect(note()).toBe("Choose your city and zone.");
     expect(events).toEqual([null]);
     expect(window.lastShippingEventDetail).toBeUndefined();
-    expect(document.body.textContent).toContain("Pick up from Shop 12, Dhanmondi · 10am–8pm");
+    expect(document.body.textContent).toContain("Pick up from Shop 12, Dhanmondi");
   });
 
   it("re-reads the rates for each address and replaces a rate that no longer applies", async () => {
@@ -226,6 +230,48 @@ describe("delivery options follow the address", () => {
     waived = true;
     methods.refreshFees();
     expect(options()[0]).toMatchObject({ fee: "Free", note: "Normally ৳80; waived." });
+  });
+});
+
+describe("delivery options follow the Delivery/Pickup switch", () => {
+  it("lists only pickup locations on the pickup path, with no address, and chooses a single one", async () => {
+    let mode: CheckoutDeliveryMode = "delivery";
+    const { methods, options, note, events } = setup({
+      modeSwitch: true,
+      readMode: () => mode,
+      byCity: { dhaka: [standard, pickup] },
+    });
+    // Delivery before an address: nothing to choose, pickup is on its own tab.
+    expect(options()).toEqual([]);
+    expect(note()).toBe("Choose your city and zone.");
+
+    mode = "pickup";
+    await methods.setMode("pickup");
+    expect(options()).toEqual([{ id: "pickup", checked: true, fee: "Free", note: "" }]);
+    expect(note()).toBe("");
+    expect(document.querySelector("[data-shipping-legend]")?.textContent).toBe("Choose a pickup location");
+    expect(document.body.textContent).toContain("Open 10am–8pm");
+    expect(events.at(-1)).toMatchObject({ id: "pickup", kind: "pickup", pickupAddress: "Shop 12, Dhanmondi" });
+
+    // Back to delivery: the address's rates, never the pickup location.
+    mode = "delivery";
+    await methods.setMode("delivery");
+    await methods.setAddress(DHAKA);
+    expect(options().map(({ id }) => id)).toEqual(["standard"]);
+    expect(events.at(-1)).toMatchObject({ id: "standard", kind: "delivery" });
+  });
+
+  it("chooses nothing when nothing in the cart is physical", async () => {
+    let mode: CheckoutDeliveryMode = "delivery";
+    const { methods, options, events } = setup({ modeSwitch: true, readMode: () => mode, byCity: { dhaka: [standard] } });
+    await methods.setAddress(DHAKA);
+    expect(events.at(-1)).toMatchObject({ id: "standard" });
+    mode = "none";
+    await methods.setMode("none");
+    expect(options()).toEqual([]);
+    expect(events.at(-1)).toBeNull();
+    expect(window.lastShippingEventDetail).toBeUndefined();
+    await expect(methods.recheck()).resolves.toBe(false);
   });
 });
 

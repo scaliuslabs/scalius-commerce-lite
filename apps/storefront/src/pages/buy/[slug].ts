@@ -10,20 +10,43 @@ import type { ProductVariant } from "@/lib/api/types";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { resolveBuyerVariants } from "@/lib/product-sellable-variants";
 import { calculateVariantPrice } from "@/components/product/lib/pricing-engine";
+import {
+  cartLinePropertiesFromOrderLine,
+  customizationSchemaFromView,
+  moneyPlaces,
+  readPostedBuyerInputs,
+  unitPriceWithSurcharge,
+} from "@/components/product/lib/buyer-inputs";
+import {
+  canonicalizeLineProperties,
+  resolveLineProperties,
+  type LinePropertyInput,
+} from "@scalius/shared/line-properties";
+import { toLatinDigits } from "@scalius/shared/phone-input";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 
 export const prerender = false;
 
+/** The no-JavaScript buyer-inputs form is small; anything larger is not it. */
+const MAX_FORM_BODY_BYTES = 32 * 1024;
+
 function parseQuickBuyQuantity(value: string | null): number | null {
   if (!value) return 1;
+  value = toLatinDigits(value).trim();
   if (!/^\d+$/.test(value)) return null;
   const quantity = Number.parseInt(value, 10);
   if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 99) return null;
   return quantity;
 }
 
-function productRedirect(slug: string, error: string): Response {
+/**
+ * Back to the product page with a notice code. Only the code travels in the
+ * URL, never a buyer input. A form POST answers 303 so the page is fetched
+ * with GET.
+ */
+function productRedirectWithStatus(slug: string, error: string, status: 303 | 307): Response {
   return new Response(null, {
-    status: 307,
+    status,
     headers: { Location: `/products/${slug}?error=${encodeURIComponent(error)}` },
   });
 }
@@ -44,6 +67,10 @@ function issueToQuickBuyError(issue: CartValidationIssue | undefined): string {
         : "out_of_stock";
     case "PRICE_CHANGED":
       return "price_changed";
+    case "PROPERTIES_REQUIRED":
+      return "customization_required";
+    case "PROPERTIES_INVALID":
+      return "customization_invalid";
     default:
       return "validation_unavailable";
   }
@@ -62,22 +89,112 @@ function cartItemOptions(
   return variant.selectedOptions.map((option) => ({ name: option.name, label: option.value }));
 }
 
+interface QuickBuyRequest {
+  slug: string;
+  requestedVariantId: string | null;
+  quantity: string | null;
+  /** Buyer inputs from the product-page form (POST); null for a quick-buy link. */
+  properties: LinePropertyInput[] | null;
+  redirectStatus: 303 | 307;
+}
+
 export const GET: APIRoute = async ({ params, url }) => {
   const { slug } = params;
   if (!slug) {
     return new Response(null, { status: 307, headers: { Location: "/cart" } });
   }
+  return quickBuy({
+    slug,
+    requestedVariantId: url.searchParams.get("variant"),
+    quantity: url.searchParams.get("qty"),
+    properties: null,
+    redirectStatus: 307,
+  });
+};
 
+function isFormBody(request: Request): boolean {
+  const type = request.headers.get("Content-Type")?.split(";", 1)[0]?.trim().toLowerCase();
+  return type === "application/x-www-form-urlencoded" || type === "multipart/form-data";
+}
+
+/**
+ * The product page's buyer-inputs form, before the product script runs or
+ * without JavaScript: the inputs arrive in the body, are checked against the
+ * product's schema and priced by cart validation, then join the cart through
+ * the same page as a quick-buy link.
+ */
+export const POST: APIRoute = async ({ params, request }) => {
+  const { slug } = params;
+  if (shouldRejectCrossOriginCookieRequest(request)) {
+    return new Response(null, { status: 403 });
+  }
+  if (!slug) {
+    return new Response(null, { status: 303, headers: { Location: "/cart" } });
+  }
+  if (!isFormBody(request)) {
+    return new Response(null, { status: 415 });
+  }
+  const length = Number(request.headers.get("Content-Length") ?? "0");
+  if (Number.isFinite(length) && length > MAX_FORM_BODY_BYTES) {
+    return new Response(null, { status: 413 });
+  }
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return new Response(null, { status: 400 });
+  }
+  const posted = readPostedBuyerInputs(form.entries());
+  if (!posted.ok) {
+    return productRedirectWithStatus(slug, "customization_invalid", 303);
+  }
+  return quickBuy({
+    slug,
+    requestedVariantId: posted.variantId,
+    quantity: posted.quantity,
+    properties: posted.properties,
+    redirectStatus: 303,
+  });
+};
+
+async function quickBuy({
+  slug,
+  requestedVariantId,
+  quantity: requestedQuantity,
+  properties: postedProperties,
+  redirectStatus,
+}: QuickBuyRequest): Promise<Response> {
+  const productRedirect = (target: string, error: string) =>
+    productRedirectWithStatus(target, error, redirectStatus);
   try {
     const productData = await getProductBySlug(slug, false);
     if (!productData) {
       return new Response(null, {
-        status: 307,
+        status: redirectStatus,
         headers: { Location: "/?error=product_not_found" },
       });
     }
 
     const { product, variants, category } = productData;
+    // A broken buyer-input setup can't be bought; a required input can only
+    // be filled on the product page (a quick-buy link has none).
+    if (product.customizationUnavailable) {
+      return productRedirect(slug, "customization_unavailable");
+    }
+    const schema = customizationSchemaFromView(product.customization);
+    if (postedProperties === null && product.requiresCustomization) {
+      return productRedirect(slug, "customization_required");
+    }
+    const canonicalProperties = postedProperties === null
+      ? []
+      : canonicalizeLineProperties(schema, postedProperties);
+    const resolvedProperties = resolveLineProperties(schema, canonicalProperties);
+    if (!resolvedProperties.ok) {
+      return productRedirect(
+        slug,
+        resolvedProperties.code === "PROPERTIES_REQUIRED" ? "customization_required" : "customization_invalid",
+      );
+    }
     const buyerVariantResolution = resolveBuyerVariants(variants);
     const buyerVariants = buyerVariantResolution.variants;
     const hasCustomerOptions = buyerVariantResolution.hasCustomerOptions;
@@ -87,9 +204,7 @@ export const GET: APIRoute = async ({ params, url }) => {
     const layoutData = await getLayoutData();
     setRuntimeImageCdnPolicy(layoutData?.media);
     const currencyCode = layoutData?.currency?.code ?? "BDT";
-    const searchParams = url.searchParams;
-    const requestedVariantId = searchParams.get("variant");
-    const quantity = parseQuickBuyQuantity(searchParams.get("qty"));
+    const quantity = parseQuickBuyQuantity(requestedQuantity);
     if (quantity === null) {
       return productRedirect(slug, "invalid_quantity");
     }
@@ -124,6 +239,12 @@ export const GET: APIRoute = async ({ params, url }) => {
         discountAmount: itemToAdd.discountAmount,
       },
     ).finalPrice;
+    // One unit with its inputs: the sale price of the SKU plus the surcharges.
+    finalPrice = unitPriceWithSurcharge(
+      finalPrice,
+      resolvedProperties.propertiesPriceMinor,
+      moneyPlaces(layoutData?.currency?.decimalPlaces, currencyCode),
+    );
 
     const validation = await validateCartItems([{
       cartKey: `quick_buy:${product.id}:${itemToAdd.id}`,
@@ -133,6 +254,7 @@ export const GET: APIRoute = async ({ params, url }) => {
       price: finalPrice,
       productName: product.name,
       variantLabel: variantLabel(itemToAdd),
+      ...(resolvedProperties.canonical.length > 0 ? { properties: resolvedProperties.canonical } : {}),
     }]);
     if (!validation.success) {
       return productRedirect(slug, "validation_unavailable");
@@ -155,6 +277,13 @@ export const GET: APIRoute = async ({ params, url }) => {
     // checked price and stock. It is always an image/poster, never video.
     const cartImageUrl = getProductImageUrl(validatedItem.productImage ?? "", 160);
     const options = cartItemOptions(itemToAdd);
+    // The server's resolved inputs (labels, display values, surcharges) are
+    // what the cart line keeps; the cart page hashes them into the line key.
+    const properties = cartLinePropertiesFromOrderLine(validatedItem.properties);
+    if (resolvedProperties.canonical.length > 0 && properties.length === 0) {
+      return productRedirect(slug, "validation_unavailable");
+    }
+    const fulfillmentKind = validatedItem.fulfillmentKind ?? itemToAdd.fulfillmentKind;
     const cartItem: CartItem = {
       id: product.id,
       slug: product.slug,
@@ -168,8 +297,11 @@ export const GET: APIRoute = async ({ params, url }) => {
       variantId: persistedVariantId,
       ...(options.length > 0 ? { options } : {}),
       freeDelivery: validatedItem.freeDelivery,
+      ...(properties.length > 0 ? { properties } : {}),
+      ...(fulfillmentKind ? { fulfillmentKind } : {}),
     };
 
+    // Analytics carry the SKU, quantity and price only, never the buyer inputs.
     const variantIdForAnalytics = cartItem.variantId || cartItem.id;
     const totalValue = cartItem.price * cartItem.quantity;
     const eventContents = [
@@ -259,13 +391,14 @@ export const GET: APIRoute = async ({ params, url }) => {
 
     return new Response(html, {
       status: 200,
-      headers: { "Content-Type": "text/html" },
+      // The page carries the cart line (and any buyer inputs): never cached.
+      headers: { "Content-Type": "text/html", "Cache-Control": "private, no-store" },
     });
   } catch (error: unknown) {
     console.error(`Error in /buy handler for slug ${slug}:`, error);
     return new Response(null, {
-      status: 307,
+      status: redirectStatus,
       headers: { Location: "/cart?error=processing_failed" },
     });
   }
-};
+}

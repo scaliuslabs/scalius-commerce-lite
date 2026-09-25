@@ -7,6 +7,8 @@ import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   formatCheckoutLanguageText,
   getCheckoutLanguagePreset,
+  pickProductPageCopy,
+  PRODUCT_PAGE_COPY_KEYS,
   resolveCheckoutLanguageData,
 } from "./checkout-language";
 
@@ -138,6 +140,18 @@ describe("checkout language presets", () => {
 
     expect(resolved.pageTitle).toBe("দ্রুত চেকআউট");
     expect(resolved.paymentStepText).toBe("পেমেন্ট ধাপ");
+  });
+
+  it("carries merchant edits of the product-page copy (buy box, buyer inputs, fulfilment) with the layout", () => {
+    const stored = { customizationInvalidText: "Your engraving can't be used.", pickupAvailableText: "Collect in store" };
+    const copy = pickProductPageCopy("bn-BD", resolveCheckoutLanguageData("bn", stored));
+    expect(copy.languageCode).toBe("bn");
+    expect(Object.keys(copy).sort()).toEqual(["languageCode", ...PRODUCT_PAGE_COPY_KEYS].sort());
+    expect(copy.customizationInvalidText).toBe("Your engraving can't be used.");
+    expect(copy.pickupAvailableText).toBe("Collect in store");
+    expect(copy.noDeliveryNeededBadgeText).toBe(BANGLA_CHECKOUT_LANGUAGE_DATA.noDeliveryNeededBadgeText);
+    // Refused and missing inputs have their own words.
+    expect(ENGLISH_CHECKOUT_LANGUAGE_DATA.customizationInvalidText).not.toBe(ENGLISH_CHECKOUT_LANGUAGE_DATA.customizationNeededText);
   });
 
   it("interpolates known values and leaves missing placeholders visible", () => {

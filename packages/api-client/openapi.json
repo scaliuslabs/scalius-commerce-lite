@@ -13736,6 +13736,51 @@
                             },
                             "percentBenefitText": {
                               "type": "string"
+                            },
+                            "customizationRequiredText": {
+                              "type": "string"
+                            },
+                            "customizationRequiredChoiceText": {
+                              "type": "string"
+                            },
+                            "customizationRequiredCheckText": {
+                              "type": "string"
+                            },
+                            "customizationTooLongText": {
+                              "type": "string"
+                            },
+                            "customizationCounterText": {
+                              "type": "string"
+                            },
+                            "customizationSurchargeText": {
+                              "type": "string"
+                            },
+                            "customizationOptionalText": {
+                              "type": "string"
+                            },
+                            "customizationChoosePlaceholderText": {
+                              "type": "string"
+                            },
+                            "customizationUnavailableText": {
+                              "type": "string"
+                            },
+                            "customizationNeededText": {
+                              "type": "string"
+                            },
+                            "customizationInvalidText": {
+                              "type": "string"
+                            },
+                            "updateCartItemText": {
+                              "type": "string"
+                            },
+                            "pickupAvailableText": {
+                              "type": "string"
+                            },
+                            "noDeliveryNeededBadgeText": {
+                              "type": "string"
+                            },
+                            "payAtServiceText": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -13752,7 +13797,22 @@
                             "saleOfferGetText",
                             "saleOfferGetSpendText",
                             "freeBenefitText",
-                            "percentBenefitText"
+                            "percentBenefitText",
+                            "customizationRequiredText",
+                            "customizationRequiredChoiceText",
+                            "customizationRequiredCheckText",
+                            "customizationTooLongText",
+                            "customizationCounterText",
+                            "customizationSurchargeText",
+                            "customizationOptionalText",
+                            "customizationChoosePlaceholderText",
+                            "customizationUnavailableText",
+                            "customizationNeededText",
+                            "customizationInvalidText",
+                            "updateCartItemText",
+                            "pickupAvailableText",
+                            "noDeliveryNeededBadgeText",
+                            "payAtServiceText"
                           ]
                         }
                       },

@@ -14,8 +14,11 @@ import {
   clearCart,
   addToCart,
   restoreCart,
+  cartLinePropertyInputs,
   type CartStore,
 } from "@/store/cart";
+import { cartLineEditHref, cartLinePropertyText } from "@/lib/cart/line-properties-view";
+import { writeCartLineEdit } from "@/lib/cart/line-edit";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@nanostores/react";
 import { atom } from "nanostores";
@@ -145,6 +148,7 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
             price: item.price,
             productName: item.name,
             variantLabel: cartItemVariantLabel(item.options),
+            ...(item.properties?.length ? { properties: cartLinePropertyInputs(item) } : {}),
           })),
         }),
       })
@@ -263,9 +267,9 @@ export default function CartFlyout({ onReady }: Props) {
   useEffect(() => {
     hydrateCartFromStorage();
 
-    const handleAddToCartEvent = (event: CustomEvent<AddToCartEventDetail>) => {
+    const handleAddToCartEvent = async (event: CustomEvent<AddToCartEventDetail>) => {
       if (!event.detail) return;
-      if (!addToCart(event.detail)) return;
+      if (!(await addToCart(event.detail))) return;
       if (event.detail.redirectToCart) {
         window.location.href = "/cart";
       } else {
@@ -287,17 +291,16 @@ export default function CartFlyout({ onReady }: Props) {
       setCartOpen(true);
     };
 
-    document.addEventListener(
-      "add-to-cart",
-      handleAddToCartEvent as EventListener,
-    );
+    const onAddToCart: EventListener = (event) =>
+      void handleAddToCartEvent(event as CustomEvent<AddToCartEventDetail>);
+    document.addEventListener("add-to-cart", onAddToCart);
     document.addEventListener("open-cart", handleOpenCartEvent);
     window.addEventListener("resize", checkScroll);
 
     const pendingEvents = window.__scaliusCartPendingEvents?.splice(0) ?? [];
     for (const pendingEvent of pendingEvents) {
       if (pendingEvent.type === "add") {
-        handleAddToCartEvent(
+        void handleAddToCartEvent(
           new CustomEvent<AddToCartEventDetail>("add-to-cart", {
             detail: pendingEvent.detail,
           }),
@@ -309,10 +312,7 @@ export default function CartFlyout({ onReady }: Props) {
     onReady?.();
 
     return () => {
-      document.removeEventListener(
-        "add-to-cart",
-        handleAddToCartEvent as EventListener,
-      );
+      document.removeEventListener("add-to-cart", onAddToCart);
       document.removeEventListener("open-cart", handleOpenCartEvent);
       window.removeEventListener("resize", checkScroll);
       clearAutoCloseTimer();
@@ -466,6 +466,36 @@ export default function CartFlyout({ onReady }: Props) {
                                   {option.name}: {option.label}
                                 </span>
                               ))}
+                            </div>
+                          )}
+                          {item.properties && item.properties.length > 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              <ul>
+                                {item.properties.map((property) => (
+                                  <li key={property.key} className="break-words">
+                                    {cartLinePropertyText(property, "+{price}")}
+                                  </li>
+                                ))}
+                              </ul>
+                              {cartLineEditHref(item) && (
+                                <a
+                                  href={cartLineEditHref(item)!}
+                                  className="inline-flex min-h-9 items-center font-medium text-foreground underline underline-offset-2"
+                                  aria-label={`Edit ${item.name}`}
+                                  onClick={() => {
+                                    // Session storage, not the URL: the inputs are buyer content.
+                                    writeCartLineEdit({
+                                      lineKey: key,
+                                      productId: item.id,
+                                      variantId: item.variantId,
+                                      quantity: item.quantity,
+                                      properties: cartLinePropertyInputs(item),
+                                    });
+                                  }}
+                                >
+                                  Edit
+                                </a>
+                              )}
                             </div>
                           )}
                           {issues[key] && (
@@ -632,7 +662,7 @@ export default function CartFlyout({ onReady }: Props) {
                     onClick={() => {
                       const product = offer.products[0]!;
                       disableAutoClose();
-                      addToCart({
+                      void addToCart({
                         id: product.id,
                         slug: product.slug,
                         name: product.name,

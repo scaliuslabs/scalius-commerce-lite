@@ -1,4 +1,6 @@
-import { addToCart, type CartItemOption } from "@/store/cart";
+import { addToCart, replaceCartLine, type CartItemOption } from "@/store/cart";
+import { clearCartLineEdit, readCartLineEdit, type CartLineEdit } from "@/lib/cart/line-edit";
+import { getCurrencyCode } from "@/lib/currency";
 import {
   calculateVariantPrice,
   formatPrice,
@@ -42,6 +44,8 @@ import {
   getProductActionsPresentation,
   type ProductActionPresentation,
 } from "../lib/product-actions";
+import { moneyPlaces, unitPriceWithSurcharge } from "../lib/buyer-inputs";
+import { initBuyerInputs, type BuyerInputsController } from "./buyer-inputs-controller";
 
 const state = {
   variants: [] as Variant[],
@@ -51,6 +55,12 @@ const state = {
   unavailableRequestedVariant: null as Variant | null,
   hasRequestedVariant: false,
   hasVariantSelectionInteraction: false,
+  buyerInputs: null as BuyerInputsController | null,
+  /** A cart line being edited ("Edit" in the cart): the add button updates it. */
+  edit: null as CartLineEdit | null,
+  /** The store product is not buyable: its buyer-input setup is broken. */
+  customizationUnavailable: false,
+  adding: false,
 };
 
 const cache = {
@@ -145,6 +155,20 @@ export function init() {
   state.selection = requested?.selection ??
     createInitialSelection(state.options, state.variants);
   hideExpiredOffers();
+
+  state.customizationUnavailable = Boolean(
+    document.getElementById("product-customization-unavailable"),
+  );
+  state.buyerInputs = initBuyerInputs(document, refresh);
+  state.edit = null;
+  const productId = cache.container.dataset.productId;
+  if (state.buyerInputs && productId) {
+    state.edit = readCartLineEdit(productId);
+    if (state.edit) {
+      if (cache.quantity) cache.quantity.value = String(state.edit.quantity);
+      state.buyerInputs.prefill(state.edit.properties);
+    }
+  }
 
   initQuantity();
   bindOptions();
@@ -256,8 +280,21 @@ function bindOptions() {
 function bindActions() {
   cache.actions?.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
-    if (target.closest('[data-action="add-to-cart"]')) add(false);
-    if (target.closest('[data-action="buy-now"]')) add(true);
+    // With buyer inputs the buttons submit the form, which the script replaces.
+    if (target.closest('[data-action="add-to-cart"]')) {
+      event.preventDefault();
+      void add(false);
+    }
+    if (target.closest('[data-action="buy-now"]')) {
+      event.preventDefault();
+      void add(true);
+    }
+  });
+  // Enter in a text field submits through the first button; anything else still lands here.
+  state.buyerInputs?.form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const submitter = (event as SubmitEvent).submitter;
+    void add(Boolean(submitter?.closest('[data-action="buy-now"]')));
   });
 }
 
@@ -276,6 +313,7 @@ function replaceVariantUrl() {
 
 function refresh() {
   requestAnimationFrame(() => {
+    state.buyerInputs?.setVariant(exactVariant()?.id ?? null);
     updateOptionButtons();
     updateStockAndActions();
     updatePrice();
@@ -410,6 +448,22 @@ function updateStockAndActions() {
   );
   // Like Shopify, a sold-out product shows one "Sold out" button, not two.
   if (cache.buyButton) cache.buyButton.hidden = actions.buyNow.disabled;
+  if (state.customizationUnavailable) {
+    if (cache.addButton) cache.addButton.disabled = true;
+    if (cache.buyButton) {
+      cache.buyButton.disabled = true;
+      cache.buyButton.hidden = true;
+    }
+  } else if (state.edit && !actions.addToCart.disabled) {
+    // Editing a cart line: one "Update cart" button replaces that line.
+    const label = state.buyerInputs?.copy.updateCartItemText ?? "";
+    if (cache.addLabel) cache.addLabel.textContent = label;
+    cache.addButton?.setAttribute(
+      "aria-label",
+      `${label} — ${cache.container?.dataset.productName ?? "Product"}`,
+    );
+    if (cache.buyButton) cache.buyButton.hidden = true;
+  }
 }
 
 function setButton(
@@ -435,7 +489,7 @@ function updatePrice() {
   // "From" only while the remaining choices are priced differently.
   const starting =
     shouldShowStartingVariantPrice(state.options.length > 0, exact) && presentation.isStartingAt;
-  const pricing = exact
+  const basePricing = exact
     ? calculateVariantPrice(state.productPricing, {
         price: exact.price,
         discountType: exact.discountType,
@@ -443,6 +497,17 @@ function updatePrice() {
         discountAmount: exact.discountAmount,
       } satisfies VariantPricing)
     : presentation.pricing;
+  // Filled buyer inputs add their surcharges to the base (sale price) and the
+  // struck-through price alike; the product's discount applies to the base only.
+  const surcharge = state.buyerInputs?.surchargeMinor() ?? 0;
+  const places = moneyPlaces(state.productPricing.currencyDecimalPlaces, getCurrencyCode());
+  const pricing = surcharge > 0
+    ? {
+        ...basePricing,
+        finalPrice: unitPriceWithSurcharge(basePricing.finalPrice, surcharge, places),
+        originalPrice: unitPriceWithSurcharge(basePricing.originalPrice, surcharge, places),
+      }
+    : basePricing;
   cache.priceElements.forEach((element) => {
     const price = formatPrice(pricing.finalPrice);
     element.textContent = starting
@@ -501,7 +566,17 @@ function showMissingOption(definitionId: string, message: string) {
   }
 }
 
-function add(redirect: boolean) {
+async function add(redirect: boolean) {
+  if (state.adding || state.customizationUnavailable) return;
+  state.adding = true;
+  try {
+    await addSelected(redirect);
+  } finally {
+    state.adding = false;
+  }
+}
+
+async function addSelected(redirect: boolean) {
   if (!cache.container || !state.productPricing) return;
   const validation = validateSelection(
     state.selection,
@@ -518,6 +593,9 @@ function add(redirect: boolean) {
   }
   if (!validation.valid || !validation.variant)
     return showError(validation.error || "That option combination is unavailable.");
+  const inputs = state.buyerInputs?.validate() ?? null;
+  if (inputs && !inputs.ok) return;
+  const properties = inputs?.ok ? inputs.properties : [];
   const quantity = readQuantity();
   const pricing = calculateVariantPrice(state.productPricing, {
     price: validation.variant.price,
@@ -533,7 +611,12 @@ function add(redirect: boolean) {
     productId: cache.container.dataset.productId,
     slug: cache.container.dataset.productSlug,
     name: cache.container.dataset.productName,
-    price: pricing.finalPrice,
+    // One unit as the buyer sees it: base plus the surcharges of the inputs.
+    price: unitPriceWithSurcharge(
+      pricing.finalPrice,
+      inputs?.ok ? inputs.propertiesPriceMinor : 0,
+      moneyPlaces(state.productPricing.currencyDecimalPlaces, getCurrencyCode()),
+    ),
     quantity,
     stock: validation.variant.stock,
     reservedStock: validation.variant.reservedStock,
@@ -545,13 +628,23 @@ function add(redirect: boolean) {
   });
   if (!cartData.valid || !cartData.data)
     return showError(cartData.errors[0] || "Unable to add this product");
-  const added = addToCart({
+  const line = {
     ...cartData.data,
     variantId: validation.variant.id,
     options: selectedCartOptions(validation.variant),
-  });
+    ...(properties.length > 0 ? { properties } : {}),
+    ...(validation.variant.fulfillmentKind ? { fulfillmentKind: validation.variant.fulfillmentKind } : {}),
+  };
+  const edit = state.edit;
+  const added = edit ? await replaceCartLine(edit.lineKey, line) : await addToCart(line);
   if (!added)
     return showError("This product option could not be added. Please refresh and try again.");
+  if (edit) {
+    clearCartLineEdit();
+    window.location.href = "/cart";
+    return;
+  }
+  // Analytics get the product, SKU, quantity and price, never the buyer inputs.
   const product = extractProductDataFromDOM(cache.container);
   if (product)
     trackProductAddToCart({
