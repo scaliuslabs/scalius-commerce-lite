@@ -6,7 +6,7 @@
 // JavaScript: every form is a plain POST to /api/reviews/submit and comes
 // back here with only an outcome flag and the line's anchor.
 import Layout from "@/layouts/Layout.astro";
-import AccountTabs from "@/components/account/AccountTabs.astro";
+import AccountShell from "@/components/account/AccountShell.astro";
 import { getLayoutData } from "@/lib/api";
 import {
   pickReviewFormCopy,
@@ -16,7 +16,8 @@ import {
   writtenReviewListMarkup,
 } from "@/lib/account-reviews";
 import { readBuyerReviewsForRequest } from "@/lib/account-reviews-server";
-import { readAccountSummaryForRequest } from "@/lib/account-tabs-server";
+import { readAccountSummaryForRequest } from "@/lib/account-server";
+import { accountUi as ui } from "@/lib/account-ui";
 import { formatAccountDate } from "@/lib/account-format";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { resolveStoreName } from "@/lib/store-identity";
@@ -49,31 +50,21 @@ const placed = notice?.lineId
   ? data.toReview.some((line) => line.orderItemId === notice.lineId) || data.reviews.some((review) => review.orderItemId === notice.lineId)
   : false;
 const topNotice = notice && !placed ? reviewNoticeMarkup(notice, copy) : "";
+const shellState = reviews.ok ? "ok" : reviews.reason === "signed_out" ? "signed_out" : "unavailable";
 ---
 
 <Layout title={copy.reviewsAccountTitleText} layoutData={layoutData}>
   <meta slot="head" name="robots" content="noindex,nofollow" />
-  <section class="container mx-auto max-w-3xl px-4 py-8" data-account-reviews>
-    <AccountTabs current="reviews" summary={summary} />
-
-    {!reviews.ok && reviews.reason === "signed_out" && (
-      <div class="mx-auto max-w-md py-12 text-center">
-        <h1 class="mb-6 text-2xl font-semibold text-foreground">{copy.reviewsSignInTitleText}</h1>
-        <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-auth-modal'))" class="inline-flex min-h-11 items-center rounded-lg bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90">{copy.reviewsSignInText}</button>
-      </div>
-    )}
-
-    {!reviews.ok && reviews.reason !== "signed_out" && (
-      <div class="mx-auto max-w-md py-12 text-center" role="alert">
-        <h1 class="mb-2 text-2xl font-semibold text-foreground">{copy.reviewsAccountTitleText}</h1>
-        <p class="mb-6 text-foreground">{copy.reviewsUnavailableText}</p>
-        <a href="/account/reviews" data-astro-prefetch="false" class="inline-flex min-h-11 items-center rounded-lg bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90">{copy.reviewsRetryText}</a>
-      </div>
-    )}
-
+  <AccountShell
+    current="reviews"
+    summary={summary}
+    state={shellState}
+    title={copy.reviewsAccountTitleText}
+    signedOut={{ title: copy.reviewsSignInTitleText, action: copy.reviewsSignInText }}
+    unavailable={{ text: copy.reviewsUnavailableText, retryHref: "/account/reviews", retryText: copy.reviewsRetryText }}
+  >
     {reviews.ok && (
       <div class="space-y-8">
-        <h1 class="text-2xl font-semibold text-foreground sm:text-3xl">{copy.reviewsAccountTitleText}</h1>
         {topNotice && <Fragment set:html={topNotice} />}
 
         <section aria-labelledby="to-review-heading" id="to-review">
@@ -84,7 +75,10 @@ const topNotice = notice && !placed ? reviewNoticeMarkup(notice, copy) : "";
           {data.toReview.length > 0 ? (
             <ul class="space-y-4" set:html={toReviewMarkup} />
           ) : (
-            <p class="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{copy.reviewsNothingToReviewText}</p>
+            <div class={`${ui.empty} py-8`}>
+              <p class={ui.emptyBody}>{copy.reviewsNothingToReviewText}</p>
+              <a href="/account" data-astro-prefetch="false" class={`${ui.secondaryButton} mt-4`}>Go to your orders</a>
+            </div>
           )}
         </section>
 
@@ -93,25 +87,16 @@ const topNotice = notice && !placed ? reviewNoticeMarkup(notice, copy) : "";
           {data.reviews.length > 0 ? (
             <ul class="space-y-4" set:html={writtenMarkup} />
           ) : (
-            <p class="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">{copy.reviewsNoneWrittenText}</p>
+            <p class={`${ui.empty} py-8 text-sm text-muted-foreground`}>{copy.reviewsNoneWrittenText}</p>
           )}
         </section>
       </div>
     )}
-  </section>
+  </AccountShell>
 </Layout>
 
 <script>
   import { setupReviewForms } from "@/components/order/review-form-client";
 
   setupReviewForms();
-  // Signing in from the prompt above shows the reviews.
-  type ReviewsWindow = Window & { __scaliusReviewsLoginBound?: boolean };
-  const reviewsWindow = window as ReviewsWindow;
-  if (!reviewsWindow.__scaliusReviewsLoginBound) {
-    reviewsWindow.__scaliusReviewsLoginBound = true;
-    window.addEventListener("customer-login", () => {
-      if (document.querySelector("[data-account-reviews]")) window.location.reload();
-    });
-  }
 </script>

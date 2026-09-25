@@ -14,11 +14,13 @@ import {
   defaultReviewReturnPath,
   isReviewId,
   readBuyerReviews,
+  readProductReviewState,
   reviewFlagForApi,
   reviewNoticeText,
   safeReviewReturnPath,
   withReviewStatus,
   type BuyerReviews,
+  type ProductReviewState,
   type ReviewAccess,
   type ReviewFormCopy,
   type ReviewNoticeFlag,
@@ -128,6 +130,26 @@ export async function readBuyerReviewsForRequest(request: Request, access: Revie
   }
   const reviews = readBuyerReviews((await readEnvelope(response)).data);
   return reviews ? { ok: true, data: reviews } : { ok: false, reason: "unavailable" };
+}
+
+/**
+ * The product page's review call to action for this browser's account
+ * session. The API resolves the line to review; nothing but the public
+ * product id travels in a URL, and the answer is private and never cached.
+ */
+export async function readProductReviewStateForRequest(request: Request, productId: string): Promise<ProductReviewState> {
+  const headers = reviewProofHeaders(request, { kind: "account" });
+  if (!headers) return { state: "signed_out" };
+  const response = await callApi(
+    `/api/v1/customer-auth/reviews/products/${encodeURIComponent(productId)}`,
+    { method: "GET", headers },
+    READ_TIMEOUT_MS,
+  );
+  if (!response?.ok) {
+    await response?.body?.cancel().catch(() => undefined);
+    return response?.status === 401 || response?.status === 403 ? { state: "signed_out" } : { state: "unavailable" };
+  }
+  return readProductReviewState((await readEnvelope(response)).data);
 }
 
 // ---------------------------------------------------------------------------
