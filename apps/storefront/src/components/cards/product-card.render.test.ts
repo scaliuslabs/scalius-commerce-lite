@@ -13,6 +13,7 @@ import { Window } from "happy-dom";
 import type { ViteDevServer } from "vite";
 import {
   DEFAULT_STOREFRONT_THEME,
+  EMPTY_STORE_SHAPE,
   STOREFRONT_DENSITIES,
   STOREFRONT_IMAGE_FITS,
   STOREFRONT_IMAGE_RATIOS,
@@ -161,8 +162,15 @@ function themeWith(card: string, tokens: Partial<StorefrontThemeDocument["tokens
   return storefrontThemeDocumentSchema.parse(theme);
 }
 
-async function renderCards(theme: StorefrontThemeDocument, props: object = {}): Promise<Record<Fixture, Element>> {
-  const locals = { storefrontTheme: Promise.resolve(requestThemeFor(theme)) };
+/** A store that takes reviews and has a published one (cards may show ratings). */
+const REVIEWED_STORE = { ...EMPTY_STORE_SHAPE, hasReviews: true };
+
+async function renderCards(
+  theme: StorefrontThemeDocument,
+  props: object = {},
+  shape = REVIEWED_STORE,
+): Promise<Record<Fixture, Element>> {
+  const locals = { storefrontTheme: Promise.resolve(requestThemeFor(theme, shape)) };
   const html = await Promise.all(
     FIXTURES.map((fixture, index) =>
       container.renderToString(ProductCard, {
@@ -367,6 +375,17 @@ describe("product card matrix", () => {
       request: new Request("https://shop.test/"),
     });
     expect(text(parse(retail).querySelector('[data-card-fact="delivery"]'))).toBe("Delivery from ৳60");
+  });
+
+  it("shows no rating on any card while the store has no published review or reviews are off", async () => {
+    for (const card of ["standard", "retail", "marketplace", "detailed"]) {
+      const cards = await renderCards(card === "standard" ? DEFAULT_STOREFRONT_THEME : themeWith(card, {}), {}, EMPTY_STORE_SHAPE);
+      expect(cards.allFacts.querySelector('[data-card-fact="rating"]'), card).toBeNull();
+      expect(cards.allFacts.querySelector(".sc-stars"), card).toBeNull();
+    }
+    const standard = await renderCards(DEFAULT_STOREFRONT_THEME);
+    expect(text(standard.allFacts.querySelector('[data-card-fact="rating"]'))).toContain("(128)");
+    expect(standard.zeroFacts.querySelector('[data-card-fact="rating"]')).toBeNull();
   });
 
   it("keeps the standard card's markup (the protected Department mall look)", async () => {
